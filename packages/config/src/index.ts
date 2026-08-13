@@ -7,7 +7,7 @@ const booleanEnvironmentValueSchema = z
 const serverConfigSchema = z.object({
   DATABASE_URL: z
     .url()
-    .default("postgresql://veolms:veolms@localhost:5433/veolms"),
+    .default("postgresql://neondb_owner:npg_EgJdqNf1WI3l@ep-calm-bar-aze943wa-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"),
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   NODE_ENV: z
