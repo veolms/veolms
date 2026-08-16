@@ -7,14 +7,14 @@ const database = createDatabase(config.DATABASE_URL);
 const logger =
   config.NODE_ENV === "development" && config.API_DEV_PRETTY_LOGS
     ? {
-        transport: {
-          target: "pino-pretty",
-          options: {
-            translateTime: "HH:MM:ss",
-            ignore: "pid,hostname",
-          },
+      transport: {
+        target: "pino-pretty",
+        options: {
+          translateTime: "HH:MM:ss",
+          ignore: "pid,hostname",
         },
-      }
+      },
+    }
     : true;
 const app = await createApp({ database, logger });
 let shuttingDown = false;

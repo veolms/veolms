@@ -85,7 +85,7 @@ export function loadServerConfig(environment: Record<string, string | undefined>
     if (offenders.length > 0) {
       throw new Error(
         `Refusing to start in production with default value(s) for: ${offenders.join(", ")}. ` +
-          `Set real secrets via environment variables.`,
+        `Set real secrets via environment variables.`,
       );
     }
   }

@@ -28,7 +28,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     if (hasZodFastifySchemaValidationErrors(error)) {
       return reply.code(400).send(
         httpError(
-          400,
+          400, 
           "REQUEST_VALIDATION_FAILED",
           "The request does not match the documented schema.",
           error.validation.map((issue) => ({
