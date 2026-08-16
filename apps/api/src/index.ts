@@ -30,7 +30,7 @@ async function shutdown(signal: string): Promise<void> {
     app.log.info("Graceful shutdown completed successfully.");
     process.exit(0);
   } catch (error) {
-    app.log.error({ error }, "Error occurred during graceful shutdown.");
+    app.log.error({ err: error }, "Error occurred during graceful shutdown.");
     process.exit(1);
   }
 }
