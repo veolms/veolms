@@ -98,7 +98,6 @@ export function AcademyPaletteMenu({
     >
       <div>
         <strong>Color theme</strong>
-        <span>Independent from light and dark mode</span>
       </div>
       {themes.map((item, index) => (
         <button

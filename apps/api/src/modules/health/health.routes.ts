@@ -1,16 +1,13 @@
 import { z } from "zod";
 
-import { jsonResponse } from "../lib/responses.ts";
-import type { RoutePlugin } from "../lib/route-plugin.ts";
+import { jsonResponse } from "../../lib/responses.ts";
+import type { RoutePlugin } from "../../lib/route-plugin.ts";
 
 const healthResponseSchema = z
   .object({
     status: z.literal("ok"),
   })
-  .meta({
-    id: "HealthResponse",
-    description: "The API is running and able to serve requests.",
-  });
+  .describe("The API is running and able to serve requests.");
 
 const healthRoutes: RoutePlugin = async (app) => {
   app.get(

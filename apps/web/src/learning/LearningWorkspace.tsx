@@ -11,6 +11,9 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { SidebarToggleIcon } from "../shell/SidebarToggleIcon";
+import { isEditingShortcutTarget } from "../keyboardShortcuts";
+import { useShortcutPlatform } from "../useShortcutPlatform";
 import { VideoPlayer as YouTubeVideoPlayer } from "../VideoPlayer";
 import { getInitialAcademyTheme, persistAcademyTheme } from "../themes";
 import { courseVideos, lessonsById, lessonVideoMap } from "./courseContent";
@@ -18,25 +21,31 @@ import { Curriculum } from "./Curriculum";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import { Discussion } from "./Discussion";
 
-const CURRICULUM_COLLAPSE_DRAG_DISTANCE = 80;
-const CURRICULUM_EXPAND_DRAG_DISTANCE = 10;
+const CURRICULUM_COLLAPSED_WIDTH = 0;
 const CURRICULUM_MIN_WIDTH = 300;
+const CURRICULUM_DEFAULT_WIDTH = 400;
+const CURRICULUM_MAX_WIDTH = 560;
+const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
-  onNavigateCourses: () => void;
+  lessonId: number;
+  backLabel: string;
+  onSelectLesson: (lessonId: number) => void;
+  onNavigateBack: () => void;
 }
 
 interface CurriculumResize {
   pointerId: number;
   startX: number;
   startWidth: number;
+  expandedWidthAtStart: number;
   collapsedAtStart: boolean;
-  collapsedDuringDrag: boolean;
-  collapsedAtX: number | null;
-  expandedFromRail: boolean;
-  expandedAtX: number | null;
-  width: number;
+  collapsed: boolean;
+  collapsedAnchorX: number;
+  collapsedAnchorWidth: number;
+  expandedAnchorX: number | null;
+  previewWidth: number;
   handle: HTMLDivElement;
 }
 
@@ -47,30 +56,49 @@ interface CurriculumPointerEvent {
 
 type LearningWorkspaceStyle = CSSProperties & {
   "--learning-curriculum-width": string;
+  "--learning-curriculum-expanded-width": string;
 };
 
 export function LearningWorkspace({
   courseSlug,
-  onNavigateCourses,
+  lessonId,
+  backLabel,
+  onSelectLesson,
+  onNavigateBack,
 }: LearningWorkspaceProps) {
-  const [theme] = useState(
-    () => localStorage.getItem("veolms-theme") || "dark",
-  );
-  const [academyTheme] = useState(getInitialAcademyTheme);
-  const [selectedLesson, setSelectedLesson] = useState(() => {
-    const savedLesson = Number(localStorage.getItem("veolms-last-lesson"));
-    return lessonsById.has(savedLesson) ? savedLesson : 1;
+  const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
+  const [theme] = useState(() => {
+    try {
+      return localStorage.getItem("veolms-theme") || "dark";
+    } catch {
+      return "dark";
+    }
   });
+  const shortcutPlatform = useShortcutPlatform();
+  const [academyTheme] = useState(getInitialAcademyTheme);
+  const [selectedLesson, setSelectedLesson] = useState(lessonId);
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const courseTitle = getCourseTitle(courseSlug);
+  const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
+  const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
   const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
   const [curriculumWidth, setCurriculumWidth] = useState(() => {
-    const saved = Number(localStorage.getItem("veolms-curriculum-width"));
-    return Number.isFinite(saved) ? Math.min(560, Math.max(300, saved)) : 400;
+    try {
+      const storedWidth = localStorage.getItem("veolms-curriculum-width");
+      if (storedWidth === null) return CURRICULUM_DEFAULT_WIDTH;
+      const saved = Number(storedWidth);
+      return Number.isFinite(saved)
+        ? Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, saved))
+        : CURRICULUM_DEFAULT_WIDTH;
+    } catch {
+      return CURRICULUM_DEFAULT_WIDTH;
+    }
   });
   const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
+  const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
+    useState<number | null>(null);
   const [theaterMode, setTheaterMode] = useState(false);
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
   const lessonDialogRef = useRef<HTMLDivElement>(null);
@@ -84,12 +112,21 @@ export function LearningWorkspace({
   >(null);
   const currentLesson = lessonsById.get(selectedLesson) || lessonsById.get(9)!;
   const courseThumbnail = getCourseThumbnail(courseSlug);
+  const curriculumShortcutLabel =
+    shortcutPlatform === "mac" ? "⌘+⌥+C" : "Ctrl+Alt+C";
 
   const selectLesson = (lessonNumber: number) => {
     if (lessonNumber === selectedLesson) return;
     setAutoPlayOnLessonChange(true);
     setSelectedLesson(lessonNumber);
+    onSelectLesson(lessonNumber);
   };
+
+  useEffect(() => {
+    if (lessonId === selectedLesson) return;
+    setAutoPlayOnLessonChange(true);
+    setSelectedLesson(lessonId);
+  }, [lessonId, selectedLesson]);
 
   const toggleTheaterMode = () => {
     setLessonDrawer(false);
@@ -127,13 +164,58 @@ export function LearningWorkspace({
     );
   };
 
+  useEffect(() => {
+    const handleCurriculumShortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        !(event.ctrlKey || event.metaKey) ||
+        !event.altKey ||
+        event.shiftKey ||
+        (event.code !== "KeyC" && event.key.toLowerCase() !== "c") ||
+        isEditingShortcutTarget(event.target)
+      )
+        return;
+
+      event.preventDefault();
+      if (window.matchMedia("(max-width: 1080px)").matches) {
+        if (lessonDrawer) {
+          setLessonDrawer(false);
+          window.setTimeout(
+            () =>
+              (previousFocusRef.current || lessonTriggerRef.current)?.focus?.(),
+            0,
+          );
+        } else {
+          previousFocusRef.current =
+            document.activeElement as HTMLElement | null;
+          setLessonDrawer(true);
+        }
+        return;
+      }
+
+      setCurriculumCollapsed((collapsed) => !collapsed);
+    };
+
+    window.addEventListener("keydown", handleCurriculumShortcut, true);
+    return () =>
+      window.removeEventListener("keydown", handleCurriculumShortcut, true);
+  }, [lessonDrawer]);
+
   const commitCurriculumWidth = useCallback((value: number) => {
-    const nextWidth = Math.min(560, Math.max(300, value));
-    setCurriculumWidth(nextWidth);
-    localStorage.setItem(
-      "veolms-curriculum-width",
-      String(Math.round(nextWidth)),
+    const nextWidth = Math.min(
+      CURRICULUM_MAX_WIDTH,
+      Math.max(CURRICULUM_MIN_WIDTH, value),
     );
+    setCurriculumWidth(nextWidth);
+    try {
+      localStorage.setItem(
+        "veolms-curriculum-width",
+        String(Math.round(nextWidth)),
+      );
+    } catch {
+      // Resizing remains available when browser storage is unavailable.
+    }
   }, []);
 
   const startCurriculumResize = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -144,120 +226,99 @@ export function LearningWorkspace({
     curriculumResizeRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
-      startWidth: curriculumWidth,
+      startWidth: curriculumCollapsed
+        ? CURRICULUM_COLLAPSED_WIDTH
+        : curriculumWidth,
+      expandedWidthAtStart: curriculumWidth,
       collapsedAtStart: curriculumCollapsed,
-      collapsedDuringDrag: false,
-      collapsedAtX: null,
-      expandedFromRail: false,
-      expandedAtX: null,
-      width: curriculumWidth,
+      collapsed: curriculumCollapsed,
+      collapsedAnchorX: event.clientX,
+      collapsedAnchorWidth: curriculumCollapsed
+        ? CURRICULUM_COLLAPSED_WIDTH
+        : curriculumWidth,
+      expandedAnchorX: null,
+      previewWidth: curriculumCollapsed
+        ? CURRICULUM_COLLAPSED_WIDTH
+        : curriculumWidth,
       handle: event.currentTarget,
     };
+    setCurriculumResizePreviewWidth(
+      curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
+    );
     setCurriculumResizing(true);
   };
 
-  const collapseCurriculumFromDrag = useCallback(
-    (resize: CurriculumResize, pointerX: number) => {
-      // Keep the active resize session and pointer capture alive. The rail stays
-      // interactive while collapsed so the same held gesture can move back left
-      // and expand the curriculum again without a second pointer-down.
-      resize.collapsedDuringDrag = true;
-      resize.collapsedAtX = pointerX;
-      resize.expandedFromRail = false;
-      resize.expandedAtX = null;
-      setCurriculumCollapsed(true);
-    },
-    [],
-  );
+  const moveCurriculumResize = useCallback((event: CurriculumPointerEvent) => {
+    const resize = curriculumResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
 
-  const moveCurriculumResize = useCallback(
-    (event: CurriculumPointerEvent) => {
-      const resize = curriculumResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
+    let previewWidth: number;
 
-      if (resize.collapsedDuringDrag && !resize.expandedFromRail) {
-        const expandDelta = resize.collapsedAtX! - event.clientX;
-        if (expandDelta < CURRICULUM_EXPAND_DRAG_DISTANCE) return;
-        resize.collapsedDuringDrag = false;
-        resize.expandedFromRail = true;
-        resize.expandedAtX = event.clientX;
-        resize.width = CURRICULUM_MIN_WIDTH;
-        setCurriculumCollapsed(false);
-        setCurriculumWidth(CURRICULUM_MIN_WIDTH);
-        return;
-      }
-
-      if (resize.collapsedAtStart && !resize.expandedFromRail) {
-        const expandDelta = resize.startX - event.clientX;
-        if (expandDelta < CURRICULUM_EXPAND_DRAG_DISTANCE) return;
-        resize.expandedFromRail = true;
-        resize.expandedAtX = event.clientX;
-        resize.width = CURRICULUM_MIN_WIDTH;
-        setCurriculumCollapsed(false);
-        setCurriculumWidth(CURRICULUM_MIN_WIDTH);
-        return;
-      }
-
-      // The rail sits on the curriculum's left edge: dragging right narrows the
-      // panel, while dragging left gives it more room.
-      const dragStartX = resize.expandedFromRail
-        ? resize.expandedAtX!
-        : resize.startX;
-      const widthDelta = dragStartX - event.clientX;
-      const baseWidth = resize.expandedFromRail
-        ? CURRICULUM_MIN_WIDTH
-        : resize.startWidth;
-      const widthPastMinimum = baseWidth + widthDelta - CURRICULUM_MIN_WIDTH;
-      const forceClose = widthPastMinimum <= -CURRICULUM_COLLAPSE_DRAG_DISTANCE;
-      if (forceClose) {
-        collapseCurriculumFromDrag(resize, event.clientX);
-        return;
-      }
-
-      resize.width = Math.min(
-        560,
-        Math.max(CURRICULUM_MIN_WIDTH, baseWidth + widthDelta),
+    if (resize.collapsed) {
+      const candidateWidth = Math.min(
+        CURRICULUM_MAX_WIDTH,
+        Math.max(
+          CURRICULUM_COLLAPSED_WIDTH,
+          resize.collapsedAnchorWidth + resize.collapsedAnchorX - event.clientX,
+        ),
       );
-      setCurriculumWidth(resize.width);
-    },
-    [collapseCurriculumFromDrag],
-  );
+
+      if (candidateWidth >= CURRICULUM_SNAP_WIDTH) {
+        resize.collapsed = false;
+        resize.expandedAnchorX = event.clientX;
+        previewWidth = CURRICULUM_MIN_WIDTH;
+        setCurriculumCollapsed(false);
+      } else {
+        previewWidth = candidateWidth;
+      }
+    } else {
+      const candidateWidth =
+        resize.expandedAnchorX === null
+          ? resize.startWidth + resize.startX - event.clientX
+          : CURRICULUM_MIN_WIDTH + resize.expandedAnchorX - event.clientX;
+      previewWidth = Math.min(
+        CURRICULUM_MAX_WIDTH,
+        Math.max(CURRICULUM_COLLAPSED_WIDTH, candidateWidth),
+      );
+
+      if (candidateWidth <= CURRICULUM_SNAP_WIDTH) {
+        resize.collapsed = true;
+        resize.collapsedAnchorX = event.clientX;
+        resize.collapsedAnchorWidth = previewWidth;
+        resize.expandedAnchorX = null;
+        setCurriculumCollapsed(true);
+      }
+    }
+
+    resize.previewWidth = previewWidth;
+    setCurriculumResizePreviewWidth(previewWidth);
+
+    if (!resize.collapsed && previewWidth >= CURRICULUM_MIN_WIDTH) {
+      setCurriculumWidth(previewWidth);
+    }
+  }, []);
 
   const endCurriculumResize = useCallback(
     (event: CurriculumPointerEvent, cancelled = false) => {
       const resize = curriculumResizeRef.current;
       if (!resize || resize.pointerId !== event.pointerId) return;
-      const dragStartX = resize.expandedFromRail
-        ? resize.expandedAtX!
-        : resize.startX;
-      const widthDelta = dragStartX - event.clientX;
       curriculumResizeRef.current = null;
       setCurriculumResizing(false);
+      setCurriculumResizePreviewWidth(null);
       resize.handle?.releasePointerCapture?.(resize.pointerId);
 
       if (cancelled) {
         setCurriculumCollapsed(resize.collapsedAtStart);
-        setCurriculumWidth(resize.startWidth);
+        setCurriculumWidth(resize.expandedWidthAtStart);
         return;
       }
-      if (resize.collapsedDuringDrag) {
+      if (resize.collapsed) {
         setCurriculumCollapsed(true);
-        return;
-      }
-      if (resize.collapsedAtStart && !resize.expandedFromRail) {
-        setCurriculumCollapsed(true);
-        return;
-      }
-      const baseWidth = resize.expandedFromRail
-        ? CURRICULUM_MIN_WIDTH
-        : resize.startWidth;
-      const widthPastMinimum = baseWidth + widthDelta - CURRICULUM_MIN_WIDTH;
-      if (widthPastMinimum <= -CURRICULUM_COLLAPSE_DRAG_DISTANCE) {
-        setCurriculumCollapsed(true);
+        setCurriculumWidth(resize.expandedWidthAtStart);
         return;
       }
       setCurriculumCollapsed(false);
-      commitCurriculumWidth(resize.width);
+      commitCurriculumWidth(resize.previewWidth);
     },
     [commitCurriculumWidth],
   );
@@ -301,7 +362,7 @@ export function LearningWorkspace({
       event.preventDefault();
       if (curriculumCollapsed && event.key === "ArrowLeft") {
         setCurriculumCollapsed(false);
-        commitCurriculumWidth(400);
+        commitCurriculumWidth(CURRICULUM_MIN_WIDTH);
         return;
       }
       if (!curriculumCollapsed) {
@@ -314,8 +375,17 @@ export function LearningWorkspace({
     } else if (event.key === "End") {
       event.preventDefault();
       setCurriculumCollapsed(false);
-      commitCurriculumWidth(560);
+      commitCurriculumWidth(CURRICULUM_MAX_WIDTH);
     }
+  };
+
+  const toggleCurriculumFromResizeRail = () => {
+    if (window.matchMedia("(max-width: 1080px)").matches) return;
+    setCurriculumCollapsed((collapsed) => !collapsed);
+  };
+
+  const toggleCurriculumFromPlayer = () => {
+    setCurriculumCollapsed((collapsed) => !collapsed);
   };
 
   useEffect(() => {
@@ -337,12 +407,21 @@ export function LearningWorkspace({
   }, [academyTheme]);
 
   useEffect(() => {
-    localStorage.setItem("veolms-last-lesson", String(selectedLesson));
-  }, [selectedLesson]);
+    try {
+      localStorage.setItem(lessonStorageKey, String(selectedLesson));
+      localStorage.setItem("veolms-last-lesson", String(selectedLesson));
+    } catch {
+      // Lesson selection remains usable when browser storage is unavailable.
+    }
+  }, [lessonStorageKey, selectedLesson]);
 
   useEffect(() => {
-    sessionStorage.removeItem("veolms-course-autostart");
-    localStorage.removeItem("veolms-player-autoplay");
+    try {
+      sessionStorage.removeItem("veolms-course-autostart");
+      localStorage.removeItem("veolms-player-autoplay");
+    } catch {
+      // Retired preferences are cleaned up on a best-effort basis.
+    }
   }, []);
 
   useEffect(() => {
@@ -354,7 +433,7 @@ export function LearningWorkspace({
 
     const dialog = lessonDialogRef.current;
     const focusableSelector =
-      '.lesson-drawer-panel button:not([disabled]):not([tabindex="-1"]), .lesson-drawer-panel input:not([disabled]), .lesson-drawer-panel [tabindex]:not([tabindex="-1"])';
+      '.lesson-drawer-panel button:not([disabled]):not([tabindex="-1"]):not([inert] *), .lesson-drawer-panel input:not([disabled]):not([inert] *), .lesson-drawer-panel [tabindex]:not([tabindex="-1"]):not([inert] *)';
     const initialFocusFrame = window.requestAnimationFrame(() => {
       dialog
         ?.querySelector<HTMLElement>(focusableSelector)
@@ -390,17 +469,26 @@ export function LearningWorkspace({
     };
   }, [lessonDrawer]);
 
+  const curriculumViewportWidth =
+    curriculumResizePreviewWidth ??
+    (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth);
+  const curriculumAccessibleWidth = Math.max(
+    CURRICULUM_MIN_WIDTH,
+    curriculumResizePreviewWidth ?? curriculumWidth,
+  );
+
   return (
     <div
       className={`learning-workspace ${theaterMode ? "is-theater" : ""} ${curriculumResizing ? "is-curriculum-resizing" : ""}`}
     >
       <main
-        className="learning-workspace__main"
+        className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
         style={
           {
-            "--learning-curriculum-width": `${curriculumCollapsed ? 8 : curriculumWidth}px`,
+            "--learning-curriculum-width": `${curriculumViewportWidth}px`,
+            "--learning-curriculum-expanded-width": `${curriculumWidth}px`,
           } as LearningWorkspaceStyle
         }
       >
@@ -409,10 +497,46 @@ export function LearningWorkspace({
             <button
               type="button"
               className="learning-workspace__back"
-              aria-label="Return to all courses"
-              onClick={onNavigateCourses}
+              aria-label={backLabel}
+              onClick={onNavigateBack}
             >
               <ArrowLeft size={22} />
+            </button>
+            <button
+              type="button"
+              className="learning-workspace__curriculum-toggle"
+              aria-label={
+                curriculumCollapsed
+                  ? "Expand course content"
+                  : "Collapse course content"
+              }
+              aria-expanded={!curriculumCollapsed}
+              aria-controls="learning-course-content"
+              aria-keyshortcuts="Control+Alt+C Meta+Alt+C"
+              aria-describedby="learning-curriculum-toggle-tooltip"
+              onClick={toggleCurriculumFromPlayer}
+            >
+              <span
+                className="learning-workspace__curriculum-toggle-icon"
+                aria-hidden="true"
+              >
+                <SidebarToggleIcon
+                  direction={curriculumCollapsed ? "left" : "right"}
+                />
+              </span>
+              <span
+                id="learning-curriculum-toggle-tooltip"
+                className="learning-workspace__curriculum-toggle-tooltip"
+                role="tooltip"
+              >
+                <span>
+                  {curriculumCollapsed
+                    ? "Expand course content"
+                    : "Collapse course content"}
+                </span>
+                <span aria-hidden="true">|</span>
+                <kbd>{curriculumShortcutLabel}</kbd>
+              </span>
             </button>
             <YouTubeVideoPlayer
               media={lessonVideoMap[selectedLesson] || courseVideos[0]!}
@@ -435,7 +559,10 @@ export function LearningWorkspace({
               <h1>{currentLesson[1]}</h1>
             </div>
           </button>
-          <Discussion />
+          <Discussion
+            key={discussionPersistenceKey}
+            persistenceKey={discussionPersistenceKey}
+          />
         </section>
 
         <div
@@ -446,30 +573,46 @@ export function LearningWorkspace({
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize course curriculum"
-            aria-valuemin={300}
-            aria-valuemax={560}
+            aria-keyshortcuts="Control+Alt+C Meta+Alt+C"
+            title={`Resize course content | ${curriculumShortcutLabel}`}
+            aria-valuemin={CURRICULUM_MIN_WIDTH}
+            aria-valuemax={CURRICULUM_MAX_WIDTH}
             aria-valuenow={
-              curriculumCollapsed ? undefined : Math.round(curriculumWidth)
+              curriculumCollapsed
+                ? undefined
+                : Math.round(curriculumAccessibleWidth)
             }
             aria-valuetext={
               curriculumCollapsed
                 ? "Course curriculum collapsed"
-                : `${Math.round(curriculumWidth)} pixels wide`
+                : `${Math.round(curriculumAccessibleWidth)} pixels wide${
+                    curriculumResizing &&
+                    curriculumViewportWidth < CURRICULUM_MIN_WIDTH
+                      ? ", sliding closed"
+                      : ""
+                  }`
             }
             tabIndex={0}
             onKeyDown={handleCurriculumResizeKeyDown}
+            onDoubleClick={toggleCurriculumFromResizeRail}
             onPointerDown={startCurriculumResize}
             onPointerMove={moveCurriculumResize}
             onPointerUp={endCurriculumResize}
             onPointerCancel={(event) => endCurriculumResize(event, true)}
           />
-          <Curriculum
-            selectedLesson={selectedLesson}
-            onSelectLesson={selectLesson}
-            courseTitle={courseTitle}
-            courseThumbnail={courseThumbnail}
-            focusRequest={curriculumFocusRequest}
-          />
+          <div
+            id="learning-course-content"
+            className="learning-curriculum__viewport"
+          >
+            <Curriculum
+              selectedLesson={selectedLesson}
+              onSelectLesson={selectLesson}
+              courseTitle={courseTitle}
+              courseThumbnail={courseThumbnail}
+              focusRequest={curriculumFocusRequest}
+              persistenceKey={coursePersistenceKey}
+            />
+          </div>
         </div>
       </main>
 
@@ -496,6 +639,7 @@ export function LearningWorkspace({
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
               focusRequest={curriculumFocusRequest}
+              persistenceKey={coursePersistenceKey}
               onClose={closeLessonDrawer}
             />
           </div>

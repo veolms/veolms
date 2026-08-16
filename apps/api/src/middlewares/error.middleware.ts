@@ -4,7 +4,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 
-import { httpError } from "./lib/errors.ts";
+import { httpError } from "../lib/errors.ts";
 
 /**
  * Makes every failure share the documented `ErrorResponse` shape, so the error

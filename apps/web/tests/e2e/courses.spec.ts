@@ -3,17 +3,96 @@ import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
 
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
-  await openApp(page, "/courses");
+  await openApp(page, "/explore-courses");
+});
+
+test("home replaces the duplicate TypeScript card with the enrolled JavaScript course", async ({
+  page,
+}) => {
+  await openApp(page, "/");
+
+  await expect(
+    page
+      .locator(".home-resume-card")
+      .getByRole("heading", { name: "The Ultimate TypeScript Course" }),
+  ).toBeVisible();
+
+  const continueLearning = page.locator(".home-continue-panel");
+  await expect(
+    continueLearning.getByRole("heading", {
+      name: "The Complete JavaScript Course",
+    }),
+  ).toBeVisible();
+  await expect(
+    continueLearning.getByRole("heading", {
+      name: "The Ultimate TypeScript Course",
+    }),
+  ).toHaveCount(0);
+
+  await continueLearning
+    .getByRole("article")
+    .filter({ hasText: "The Complete JavaScript Course" })
+    .getByRole("button", { name: "Continue Learning" })
+    .click();
+  await expect(page).toHaveURL(
+    /\/learn\/javascript-course\/[^/?]+\?from=home$/,
+  );
+  await expect(
+    page.getByRole("heading", { name: "The Complete JavaScript Course" }),
+  ).toBeVisible();
+});
+
+test("learning progress follows the selected application theme", async ({
+  page,
+}) => {
+  const themeAccent = () =>
+    page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--accent)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+  const expectThemeProgress = async (selector: string) => {
+    const javascriptCourse = page
+      .getByRole("article")
+      .filter({ hasText: "The Complete JavaScript Course" });
+    const progressFill = javascriptCourse.locator(selector);
+
+    await expect
+      .poll(() =>
+        progressFill.evaluate(
+          (element) => getComputedStyle(element).backgroundColor,
+        ),
+      )
+      .toBe(await themeAccent());
+  };
+
+  await expectThemeProgress(".course-progress__track > span");
+
+  await openApp(page, "/my-courses");
+
+  await expectThemeProgress(".learning-progress-track > span");
+
+  await page
+    .getByRole("button", { name: /mode active\. Switch to .* mode/ })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectThemeProgress(".learning-progress-track > span");
+
+  await openApp(page, "/explore-courses");
+  await expectThemeProgress(".course-progress__track > span");
 });
 
 test("course enrollment, search, category, and sort controls derive the visible catalogue", async ({
   page,
 }) => {
-  const grid = page.getByRole("region", { name: "Courses" });
-  await expect(grid.getByRole("article")).toHaveCount(6);
+  const grid = page.getByRole("region", { name: "Explore Courses" });
+  await expect(grid.getByRole("article")).toHaveCount(7);
 
   await page.getByRole("tab", { name: "Enrolled", exact: true }).click();
-  await expect(grid.getByRole("article")).toHaveCount(4);
+  await expect(grid.getByRole("article")).toHaveCount(5);
   await page.getByRole("tab", { name: "Not Enrolled" }).click();
   await expect(grid.getByRole("article")).toHaveCount(2);
   await page.getByRole("tab", { name: "All" }).click();
@@ -27,12 +106,15 @@ test("course enrollment, search, category, and sort controls derive the visible 
 
   await page.getByRole("combobox", { name: "Filter by category" }).click();
   await page.getByRole("option", { name: "Development", exact: true }).click();
-  await expect(grid.getByRole("article")).toHaveCount(2);
+  await expect(grid.getByRole("article")).toHaveCount(3);
   await expect(
     grid.getByRole("article", { name: /Complete Backend with Node.js/ }),
   ).toBeVisible();
   await expect(
     grid.getByRole("article", { name: /The Ultimate TypeScript Course/ }),
+  ).toBeVisible();
+  await expect(
+    grid.getByRole("article", { name: /The Complete JavaScript Course/ }),
   ).toBeVisible();
 
   await page.getByRole("combobox", { name: "Filter by category" }).click();
@@ -61,6 +143,7 @@ test("course enrollment, search, category, and sort controls derive the visible 
     "Complete Backend with Node.js",
     "Figma UI Essentials",
     "MongoDB & Database Design",
+    "The Complete JavaScript Course",
     "The Ultimate TypeScript Course",
     "UI/UX Design Mastery",
   ]);
@@ -80,9 +163,9 @@ test("wishlist state is shared across catalogue routes and survives reload", asy
     name: "Student navigation",
   });
   await expect(
-    navigation.getByRole("button", { name: "Wishlist (1)" }),
+    navigation.getByRole("button", { name: "Wishlist, 1 saved" }),
   ).toBeVisible();
-  await navigation.getByRole("button", { name: "Wishlist (1)" }).click();
+  await navigation.getByRole("button", { name: "Wishlist, 1 saved" }).click();
   await expect(page).toHaveURL(/\/wishlist$/);
 
   const wishlist = page.getByRole("region", { name: "Wishlist" });
@@ -117,7 +200,9 @@ test("unenrolled courses open their course overview from Explore Course", async 
 
   await figmaCourse.getByRole("button", { name: "Explore Course" }).click();
 
-  await expect(page).toHaveURL(/\/courses\/figma-ui-essentials\/overview$/);
+  await expect(page).toHaveURL(
+    /\/explore-courses\/figma-ui-essentials\/overview$/,
+  );
   await expect(
     page.getByRole("heading", { name: "Course Overview", level: 1 }),
   ).toBeVisible();

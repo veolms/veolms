@@ -19,15 +19,15 @@ const select = (overrides: Partial<CourseCatalogueFilters> = {}) =>
   getVisibleCourses(courses, { ...defaultFilters, ...overrides });
 
 describe("course catalogue selector", () => {
-  it("returns all six courses in the existing catalogue order by default", () => {
+  it("returns all seven courses in the existing catalogue order by default", () => {
     const result = select();
 
-    expect(result).toHaveLength(6);
+    expect(result).toHaveLength(7);
     expect(result.map(({ id }) => id)).toEqual(courses.map(({ id }) => id));
   });
 
   it("filters enrolled and not-enrolled student courses", () => {
-    expect(select({ enrollmentFilter: "enrolled" })).toHaveLength(4);
+    expect(select({ enrollmentFilter: "enrolled" })).toHaveLength(5);
     expect(select({ enrollmentFilter: "not-enrolled" })).toHaveLength(2);
   });
 
@@ -50,6 +50,7 @@ describe("course catalogue selector", () => {
     expect(select({ category: "Development" }).map(({ id }) => id)).toEqual([
       "backend-nodejs",
       "typescript-course",
+      "javascript-course",
     ]);
   });
 
@@ -59,6 +60,7 @@ describe("course catalogue selector", () => {
       "Complete Backend with Node.js",
       "Figma UI Essentials",
       "MongoDB & Database Design",
+      "The Complete JavaScript Course",
       "The Ultimate TypeScript Course",
       "UI/UX Design Mastery",
     ]);
@@ -66,6 +68,7 @@ describe("course catalogue selector", () => {
       "backend-nodejs",
       "ui-ux-design-mastery",
       "typescript-course",
+      "javascript-course",
       "mongodb-database-design",
       "figma-ui-essentials",
       "aws-cloud-practitioner",
@@ -78,7 +81,7 @@ describe("course catalogue selector", () => {
         role: "creator",
         enrollmentFilter: "not-enrolled",
       }),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
   });
 
   it("selects from the catalogue supplied by the caller", () => {

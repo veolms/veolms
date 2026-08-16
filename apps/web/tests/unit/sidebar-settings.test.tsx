@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SidebarSettings } from "../../src/settings/SidebarSettings";
 import type { SidebarPreferences } from "../../src/settings/settingsPreferences";
@@ -20,7 +21,41 @@ const renderSettings = (onChange: (next: SidebarPreferences) => void) =>
     />,
   );
 
+function StatefulSidebarSettings() {
+  const [state, setState] = useState<SidebarPreferences>({
+    ...preferences,
+    headerLayout: "fixed",
+    dockItems: ["appearance", "theme", "reading-mode", "fullscreen"],
+    dockOrder: [
+      "appearance",
+      "theme",
+      "reading-mode",
+      "fullscreen",
+      "settings",
+    ],
+  });
+  return (
+    <SidebarSettings
+      sidebarPreferences={state}
+      onSidebarPreferencesChange={setState}
+      academyTheme="veo-onyx"
+      sidebarMode="expanded"
+    />
+  );
+}
+
 describe("sidebar settings draft inputs", () => {
+  it("uses the shared themed slider for sidebar width", () => {
+    renderSettings(vi.fn());
+    const slider = screen.getByRole("slider", { name: "Sidebar max width" });
+
+    expect(slider).toHaveClass("app-slider", "app-slider--accent");
+    expect(slider).toHaveAttribute("aria-valuetext", "300 pixels");
+    expect(slider.getAttribute("style")).toContain(
+      "--app-slider-progress: 26.666666666666668%",
+    );
+  });
+
   it("commits a normalized width only on blur or Enter", () => {
     const onChange = vi.fn();
     renderSettings(onChange);
@@ -68,5 +103,100 @@ describe("sidebar settings draft inputs", () => {
       monochromeColor: "#abcdef",
     });
     expect(input).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("separates header, menu, and draggable dock settings", () => {
+    render(<StatefulSidebarSettings />);
+
+    expect(
+      screen.getByRole("heading", { name: "Sidebar header" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Sidebar menus" }),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Sidebar dock" })).toBeVisible();
+
+    const fixedHeader = screen.getByRole("switch", {
+      name: "Fixed collapse control",
+    });
+    expect(fixedHeader).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(
+      fixedHeader
+        .closest(".settings-row")!
+        .querySelector(".settings-row__copy")!,
+    );
+    expect(fixedHeader).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(fixedHeader);
+    expect(fixedHeader).toHaveAttribute("aria-checked", "true");
+
+    const keyboardShortcuts = screen.getByRole("switch", {
+      name: "Show keyboard shortcuts",
+    });
+    expect(keyboardShortcuts).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(keyboardShortcuts);
+    expect(keyboardShortcuts).toHaveAttribute("aria-checked", "false");
+
+    const sidebarDepth = screen.getByRole("switch", {
+      name: "Elevate sidebar menus",
+    });
+    expect(sidebarDepth).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(sidebarDepth);
+    expect(sidebarDepth).toHaveAttribute("aria-checked", "true");
+
+    const readingMode = screen.getByRole("switch", {
+      name: "Show Reading mode in sidebar dock",
+    });
+    expect(readingMode).toBeEnabled();
+    expect(readingMode).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("4 visible")).toBeVisible();
+
+    const reorderHandles = screen.getAllByRole("button", {
+      name: /^Reorder /,
+    });
+    expect(
+      reorderHandles.map((handle) => handle.getAttribute("aria-label")),
+    ).toEqual([
+      "Reorder Light / dark mode",
+      "Reorder Color theme",
+      "Reorder Reading mode",
+      "Reorder Fullscreen",
+      "Reorder Settings",
+    ]);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reorder Reading mode" }),
+    );
+    expect(readingMode).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "Reorder Fullscreen" }),
+      { key: "Home" },
+    );
+    expect(
+      screen
+        .getAllByRole("button", { name: /^Reorder / })
+        .map((handle) => handle.getAttribute("aria-label")),
+    ).toEqual([
+      "Reorder Fullscreen",
+      "Reorder Light / dark mode",
+      "Reorder Color theme",
+      "Reorder Reading mode",
+      "Reorder Settings",
+    ]);
+
+    const settings = screen.getByRole("switch", {
+      name: "Show Settings in sidebar dock",
+    });
+    expect(settings).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(settings);
+    expect(settings).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("5 visible")).toBeVisible();
+
+    fireEvent.click(
+      readingMode
+        .closest(".settings-row")!
+        .querySelector(".settings-row__copy")!,
+    );
+    expect(readingMode).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("4 visible")).toBeVisible();
   });
 });

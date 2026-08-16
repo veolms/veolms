@@ -10,7 +10,7 @@ import type { Kysely } from "kysely";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 
-import { registerErrorHandler } from "./error-handler.ts";
+import { registerErrorHandler } from "./middlewares/error.middleware.ts";
 import type { RoutePluginOptions } from "./lib/route-plugin.ts";
 import { registerOpenApi } from "./openapi.ts";
 import { config } from "./config.ts";
@@ -79,11 +79,11 @@ export async function createApp({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   });
 
-  // Every module in src/routes is registered automatically, so adding a route
-  // file is all it takes for the endpoint — and its OpenAPI entry — to exist.
-  // Files whose name starts with `_` are skipped, for route-local helpers.
+  // Every module in src/modules is scanned, and only files ending in .routes.ts
+  // are loaded as Fastify plugins.
   await app.register(fastifyAutoload, {
-    dir: fileURLToPath(new URL("./routes", import.meta.url)),
+    dir: fileURLToPath(new URL("./modules", import.meta.url)),
+    matchFilter: /\.routes\.ts$/,
     dirNameRoutePrefix: false,
     ignorePattern: /(?:^|[\\/])_/u,
     options: {

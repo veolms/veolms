@@ -1,4 +1,5 @@
 import nodeThumbnail from "../assets/course-thumbnails/nodejs.jpg";
+import javascriptThumbnail from "../assets/course-thumbnails/javascript.jpg";
 import typescriptThumbnail from "../assets/course-thumbnails/typescript.jpg";
 import figmaThumbnail from "../assets/course-thumbnails/figma.jpg";
 import mongodbThumbnail from "../assets/course-thumbnails/mongodb.jpg";
@@ -80,6 +81,21 @@ export const courses: readonly Course[] = [
     duration: "28h 10m",
     students: 967,
     thumbnail: typescriptThumbnail,
+  },
+  {
+    id: "javascript-course",
+    title: "The Complete JavaScript Course",
+    description:
+      "Learn modern JavaScript from core language fundamentals to asynchronous application patterns.",
+    level: "Beginner",
+    category: "Development",
+    sections: 20,
+    lectures: 142,
+    progress: 38,
+    enrolled: true,
+    duration: "24h 35m",
+    students: 1584,
+    thumbnail: javascriptThumbnail,
   },
   {
     id: "figma-ui-essentials",

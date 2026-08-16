@@ -192,7 +192,7 @@
   .student-surface-main {
     min-height: calc(100vh - 16px);
     min-height: calc(100dvh - 16px);
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
   }
 
   .mobile-bottom-nav {
@@ -202,21 +202,35 @@
     left: 0;
     z-index: 140;
     display: grid;
-    min-height: calc(68px + env(safe-area-inset-bottom));
+    min-height: calc(58px + env(safe-area-inset-bottom));
     grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: stretch;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border: 0;
     border-radius: 0;
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    padding: 2px 2px calc(2px + env(safe-area-inset-bottom));
     background: rgba(15, 15, 15, 0.7);
     -webkit-backdrop-filter: blur(24px);
     backdrop-filter: blur(24px);
     box-shadow: none;
     isolation: isolate;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 150ms ease-out;
+    will-change: transform;
+  }
+
+  .mobile-bottom-nav.is-scroll-hidden {
+    pointer-events: none;
+    opacity: 0;
+    transform: translate3d(0, calc(100% + 4px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.4, 0, 1, 1),
+      opacity 110ms ease-in;
   }
 
   :root[data-theme="light"] .mobile-bottom-nav {
-    border-top-color: rgba(15, 18, 20, 0.16);
     background: color-mix(in srgb, var(--app-shell) 72%, transparent);
   }
 
@@ -232,12 +246,12 @@
     position: relative;
     display: flex;
     min-width: 0;
-    min-height: 56px;
+    min-height: 54px;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 4px;
-    border-radius: 10px;
+    gap: 2px;
+    border-radius: 0;
     color: var(--muted);
   }
 
@@ -250,6 +264,15 @@
 
   .mobile-bottom-nav > button svg {
     color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-bottom-nav .courses-nav__resume-indicator {
+    top: -6px;
+    left: -10px;
+  }
+
+  .mobile-bottom-nav .courses-nav__resume-indicator > svg {
+    color: var(--on-accent);
   }
 
   .mobile-bottom-nav > button small {
@@ -279,13 +302,13 @@
   }
 
   .mobile-bottom-nav > button.is-active {
-    color: var(--text);
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 14%, var(--surface)),
-      color-mix(in srgb, var(--surface) 48%, transparent)
-    );
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 24%, transparent);
+    color: var(--nav-icon-color, var(--accent));
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-bottom-nav > button.is-active svg {
+    color: currentColor;
   }
 
   .mobile-menu-layer {
@@ -374,6 +397,11 @@
     border-radius: 13px;
     padding: 10px 12px;
     background: var(--surface-strong);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
+      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
   }
 
   .mobile-menu-sheet__profile > .shell-profile-avatar,
@@ -416,6 +444,7 @@
   }
 
   .mobile-menu-sheet__list > button {
+    position: relative;
     display: grid;
     min-height: 50px;
     grid-template-columns: 28px minmax(0, 1fr) auto;
@@ -425,10 +454,15 @@
     padding: 0 13px;
     color: var(--text-secondary);
     text-align: left;
+    touch-action: pan-y;
   }
 
   .mobile-menu-sheet__list > button svg {
     color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-menu-sheet__list .courses-nav__resume-indicator > svg {
+    color: var(--on-accent);
   }
 
   .mobile-menu-sheet__list > button span {
@@ -465,12 +499,17 @@
   .mobile-menu-sheet__appearance {
     display: grid;
     flex: 0 0 auto;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
     gap: 5px;
     margin-top: 10px;
     border-radius: 13px;
     padding: 5px;
     background: var(--surface-strong);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
+      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
   }
 
   .mobile-menu-sheet__appearance > button {
@@ -480,7 +519,7 @@
     min-height: 44px;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 0;
     border-radius: 9px;
     color: var(--muted);
     font-size: 0.7rem;
@@ -950,6 +989,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
       transparent 58%
     ),
     color-mix(in srgb, var(--surface) 76%, var(--main-surface));
+  box-shadow: var(--card-shadow);
   text-align: center;
 }
 
@@ -1047,9 +1087,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   min-height: calc(100vh - 28px);
   border-radius: 18px;
   background: var(--main-surface);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.025),
-    0 20px 50px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--card-shadow);
 }
 
 /* The learning workspace owns its inner breathing room; keep the shell flush only on this route. */
@@ -1113,6 +1151,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .sidebar-collapse__asset {
   line-height: 0;
   color: var(--sidebar-toggle-ink);
+  transform: translateX(1px);
 }
 
 .sidebar-collapse:hover {
@@ -1170,6 +1209,22 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   outline: none;
 }
 
+@media (min-width: 821px) and (any-pointer: coarse) {
+  .courses-app {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .sidebar-resize-handle {
+    right: -22px;
+    width: 44px;
+  }
+
+  .sidebar-resize-handle::after {
+    right: 21px;
+    left: 21px;
+  }
+}
+
 .courses-sidebar__label {
   margin: 12px 14px 10px;
   opacity: 0.72;
@@ -1177,6 +1232,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .courses-nav {
   gap: 4px;
+  margin: 5px -14px -5px;
+  padding: 5px 14px;
   overflow-x: visible;
   scrollbar-width: none;
   -webkit-mask-repeat: no-repeat;
@@ -1239,6 +1296,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   min-height: 47px;
   border-radius: 10px;
   padding-inline: 14px;
+  box-shadow: none;
   transition:
     background-color 150ms ease,
     color 150ms ease,
@@ -1247,17 +1305,12 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .courses-nav button:hover {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: none;
 }
 
 .courses-nav button.is-active {
-  background: linear-gradient(
-    108deg,
-    color-mix(in srgb, var(--canvas) 88%, var(--accent) 12%) 0%,
-    color-mix(in srgb, var(--surface) 82%, var(--accent) 18%) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
-    0 8px 28px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
 }
 
 .courses-nav button > svg {
@@ -1267,16 +1320,144 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   );
 }
 
-.courses-nav button.is-dragging {
+.courses-nav__resume-indicator {
+  position: absolute;
+  z-index: 1;
+  top: var(--resume-indicator-top, 3px);
+  left: var(--resume-indicator-left, 2px);
+  display: inline-grid;
+  width: 14px;
+  min-width: 14px;
+  max-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  max-height: 14px;
+  aspect-ratio: 1;
+  flex: 0 0 14px;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--surface) 92%, transparent),
+    0 3px 9px color-mix(in srgb, var(--accent-shadow) 52%, transparent);
+  font-style: normal;
+  line-height: 0;
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .courses-nav__resume-indicator {
+  box-shadow: 0 3px 9px
+    color-mix(in srgb, var(--accent-shadow) 52%, transparent);
+}
+
+/* Phosphor navigation glyphs use different painted bounds inside the same
+   256px viewBox. Normalize the resume badge optically against the approved
+   GraduationCap relationship instead of aligning only their SVG boxes. */
+.courses-nav button[data-navigation-label="Home"] {
+  --resume-indicator-top: 2px;
+}
+
+.courses-nav button[data-navigation-label="Explore Courses"] {
+  --resume-indicator-top: 4.5px;
+  --resume-indicator-left: 0.5px;
+}
+
+.courses-nav__resume-indicator > svg {
+  display: block;
+  width: 8px;
+  height: 8px;
+  overflow: visible;
+  color: currentColor;
+  filter: none;
+  shape-rendering: geometricPrecision;
   transform: none;
 }
 
-.courses-nav button.is-dragging {
+.shortcut-keys,
+.shortcut-keys__part {
+  display: inline-flex;
+  align-items: center;
+}
+
+.shortcut-keys {
+  gap: 2px;
+  color: inherit;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.shortcut-keys__part {
+  gap: 2px;
+}
+
+.shortcut-keys__join {
+  opacity: 0.48;
+  font-size: 0.58rem;
+}
+
+.shortcut-keys kbd {
+  display: inline-grid;
+  min-width: 17px;
+  min-height: 18px;
+  place-items: center;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 5px;
+  padding: 2px 4px;
+  color: inherit;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  font: inherit;
+}
+
+.courses-nav__shortcut {
+  margin-left: auto;
+  max-width: 0;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    max-width 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 120ms ease,
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 150ms;
+}
+
+.courses-nav button:hover .courses-nav__shortcut,
+.courses-nav button:focus-visible .courses-nav__shortcut {
+  max-width: 76px;
+  visibility: visible;
+  opacity: 0.82;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+
+.courses-nav button[data-sortable="true"],
+.mobile-menu-sheet__list > button[data-sortable="true"] {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+.courses-nav button.is-dragging,
+.mobile-menu-sheet__list > button.is-dragging {
+  transform: none;
+}
+
+.courses-nav button.is-dragging,
+.mobile-menu-sheet__list > button.is-dragging {
   opacity: 0.46;
 }
 
 .courses-nav button.is-drop-target::before,
-.courses-nav button.is-drop-target::after {
+.courses-nav button.is-drop-target::after,
+.mobile-menu-sheet__list > button.is-drop-target::before,
+.mobile-menu-sheet__list > button.is-drop-target::after {
   content: "";
   position: absolute;
   right: 13px;
@@ -1287,25 +1468,34 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent-shadow) 76%, transparent);
 }
 
-.courses-nav button.is-drop-target::before {
+.courses-nav button.is-drop-target::before,
+.mobile-menu-sheet__list > button.is-drop-target::before {
   top: -2px;
 }
-.courses-nav button.is-drop-target::after {
+.courses-nav button.is-drop-target::after,
+.mobile-menu-sheet__list > button.is-drop-target::after {
   bottom: -2px;
 }
-.courses-nav button.is-drop-target.is-drop-after::before {
+.courses-nav button.is-drop-target.is-drop-after::before,
+.mobile-menu-sheet__list > button.is-drop-target.is-drop-after::before {
   display: none;
 }
-.courses-nav button.is-drop-target:not(.is-drop-after)::after {
+.courses-nav button.is-drop-target:not(.is-drop-after)::after,
+.mobile-menu-sheet__list > button.is-drop-target:not(.is-drop-after)::after {
   display: none;
 }
 
-.courses-app--navigation-dragging .courses-nav button:not(.is-dragging) {
+.courses-app--navigation-dragging .courses-nav button:not(.is-dragging),
+.courses-app--navigation-dragging
+  .mobile-menu-sheet__list
+  > button:not(.is-dragging) {
   transition-duration: 90ms;
 }
 
 .courses-profile {
+  position: relative;
   margin-top: 12px;
+  margin-inline: -4.5px;
 }
 
 .shell-profile-avatar {
@@ -1330,22 +1520,27 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 
 .courses-profile__button {
-  min-height: 64px;
+  position: relative;
+  z-index: 140;
+  height: 57px;
+  min-height: 57px;
   border: 0;
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: 7px;
   background: color-mix(in srgb, var(--surface) 74%, transparent);
+  box-shadow: var(--sidebar-dock-depth-shadow);
 }
 
 .courses-profile__button:hover {
   border-color: transparent;
   background: var(--surface);
+  box-shadow: var(--sidebar-dock-depth-hover-shadow);
 }
 
 .courses-profile__button > .shell-profile-avatar,
 .courses-profile__button img {
-  width: 39px;
-  height: 39px;
+  width: 43px;
+  height: 43px;
 }
 
 .courses-profile__button > .shell-profile-avatar {
@@ -1369,11 +1564,12 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .sidebar-appearance {
   position: relative;
   display: flex;
-  gap: 4px;
+  gap: 8px;
   margin-top: 8px;
   border-radius: 12px;
-  padding: 4px;
+  padding: 6px 8px;
   background: color-mix(in srgb, var(--surface) 62%, transparent);
+  box-shadow: var(--sidebar-dock-depth-shadow);
 }
 
 .sidebar-appearance > button,
@@ -1408,16 +1604,43 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   background: var(--hover);
 }
 
-.sidebar-appearance > button.is-active {
+.sidebar-appearance > button.is-active,
+.sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
-  background: var(--app-shell);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.12);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+.sidebar-appearance > button > svg,
+.sidebar-palette-trigger > svg,
+.mobile-menu-sheet__appearance > button > svg {
+  color: var(--accent-ink, var(--accent));
+  filter: drop-shadow(
+    0 2px 6px
+      color-mix(in srgb, var(--accent-ink, var(--accent)) 38%, transparent)
+  );
+  transition:
+    color 160ms ease,
+    filter 160ms ease;
+}
+
+.sidebar-appearance > button.sidebar-appearance__settings > svg,
+.mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
+  color: var(--nav-icon-color, var(--accent-ink, var(--accent)));
 }
 
 .sidebar-palette-wrap {
   position: relative;
-  width: 42px;
-  flex: 0 0 42px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-appearance
+  > .sidebar-palette-menu--dock-attached:not(.sidebar-palette-menu--collapsed) {
+  right: 0;
+  bottom: calc(100% - 4px);
+  left: auto;
+  width: min(264px, 100%);
 }
 
 .sidebar-palette-trigger {
@@ -1437,35 +1660,30 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .sidebar-palette-menu {
   position: absolute;
   right: auto;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + 2px);
   left: 0;
   z-index: 130;
   width: 276px;
-  max-height: min(68dvh, 570px);
+  max-height: calc(100dvh - 28px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 13px;
   padding: 8px;
 }
 
 .sidebar-palette-menu > div {
   display: grid;
-  gap: 3px;
-  padding: 7px 8px 9px;
+  padding: 5px 8px 7px;
 }
 
 .sidebar-palette-menu > div strong {
   font-size: 0.78rem;
 }
 
-.sidebar-palette-menu > div span {
-  color: var(--muted);
-  font-size: 0.65rem;
-}
-
 .sidebar-palette-menu > button {
   display: grid;
   width: 100%;
-  min-height: 46px;
+  min-height: 44px;
   grid-template-columns: 27px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 10px;
@@ -1572,14 +1790,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 :root[data-theme="light"] .courses-nav button.is-active {
   color: var(--text);
-  background: linear-gradient(
-    108deg,
-    color-mix(in srgb, var(--surface-strong) 92%, var(--accent) 8%) 0%,
-    color-mix(in srgb, var(--surface) 88%, var(--accent) 12%) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
-    0 8px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
 }
 
 :root[data-theme="light"] .courses-nav button.is-active .courses-nav__text {
@@ -1620,8 +1832,10 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 :root[data-theme="light"] .courses-profile__button {
   background: var(--sidebar-control-surface);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent),
-    0 6px 16px color-mix(in srgb, var(--text) 7%, transparent);
+    inset 0 1px 0 color-mix(in srgb, white 72%, transparent),
+    inset 1px 0 0 color-mix(in srgb, white 42%, transparent),
+    0 9px 22px color-mix(in srgb, var(--text) 10%, transparent),
+    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
 }
 
 :root[data-theme="light"] .courses-profile__button small,
@@ -1632,15 +1846,18 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 :root[data-theme="light"] .sidebar-appearance {
   background: var(--sidebar-control-surface);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 72%, transparent),
+    inset 1px 0 0 color-mix(in srgb, white 42%, transparent),
+    0 9px 22px color-mix(in srgb, var(--text) 10%, transparent),
+    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
 }
 
-:root[data-theme="light"] .sidebar-appearance > button.is-active {
+:root[data-theme="light"] .sidebar-appearance > button.is-active,
+:root[data-theme="light"] .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 5px 14px color-mix(in srgb, var(--text) 10%, transparent);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
 }
 
 .courses-app--collapsed .courses-sidebar {
@@ -1684,27 +1901,25 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
      viewBox. Offset the clipping window so the rendered glyph—not merely its
      box—shares the expand button's optical center. */
   top: 3px;
-  left: calc(50% + 2.4px);
-  width: 20px;
-  max-width: 20px;
+  left: calc(50% + 3.4px);
+  width: 21px;
+  max-width: 21px;
   height: 36px;
   overflow: hidden;
   opacity: 1;
   clip-path: inset(0 0 0 0);
   pointer-events: none;
   transform: translateX(-50%);
-  transition:
-    opacity 150ms ease,
-    clip-path 150ms ease;
+  transition: none;
 }
 
 :root[data-collapsed-sidebar-logo="true"]
   .courses-app--collapsed
   .courses-logo-clip
   svg {
-  width: 113px;
+  width: 156px;
   max-width: none;
-  height: 36px;
+  height: 38px;
 }
 
 :root[data-collapsed-sidebar-logo="true"]
@@ -1749,11 +1964,12 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .courses-app--collapsed .courses-nav {
   align-items: stretch;
-  /* Keep the first icon at its established y-position while reserving a
-     breathing band for the permanent rail fade. */
-  margin: -5px 4px 0;
+  /* The expanded brand is 38px tall while the compact brand slot is 36px.
+     This offset keeps the navigation's content box on the identical pixel row
+     in both states while preserving the permanent rail fade. */
+  margin: -4px -10px 0;
   min-height: 0;
-  padding: 16px 0;
+  padding: 16px 14px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1789,21 +2005,23 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 
 .courses-app--collapsed .courses-nav button > .courses-nav__text,
-.courses-app--collapsed .courses-nav button > b {
+.courses-app--collapsed .courses-nav button > b,
+.courses-app--collapsed .courses-nav button > .courses-nav__shortcut {
   display: none;
 }
 
 .courses-app--collapsed .courses-profile__button {
-  min-height: 55px;
+  height: 57px;
+  min-height: 57px;
   gap: 0;
   justify-content: flex-start;
-  padding: 6px;
+  padding: 7px;
 }
 
 .courses-app--collapsed .courses-profile__button > .shell-profile-avatar,
 .courses-app--collapsed .courses-profile__button img {
-  width: 39px;
-  height: 39px;
+  width: 43px;
+  height: 43px;
 }
 
 .courses-app--collapsed .courses-profile__button > .shell-profile-avatar {
@@ -1822,28 +2040,34 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .courses-app--collapsed .sidebar-appearance {
   align-items: center;
   flex-direction: column;
-  padding: 4px;
+  padding: 8px;
 }
 
 .courses-app--collapsed .sidebar-appearance > button {
-  display: none;
+  display: inline-flex;
   width: 42px;
   flex: 0 0 38px;
 }
 
-.courses-app--collapsed .sidebar-appearance > button.is-active {
-  display: inline-flex;
-  gap: 0;
-}
-
-.courses-app--collapsed .sidebar-appearance > button span {
-  display: none;
+.courses-app--collapsed .sidebar-palette-wrap {
+  width: 42px;
+  flex: 0 0 38px;
 }
 
 .courses-app--collapsed .sidebar-palette-menu {
   right: auto;
-  bottom: 0;
-  left: calc(100% + 14px);
+  bottom: -9px;
+  left: calc(100% + 2px);
+}
+
+.courses-app--collapsed
+  .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
+  top: auto;
+  bottom: calc(
+    -5px +
+      (var(--sidebar-dock-count, 1) - var(--palette-menu-dock-index, 0) - 1) *
+      42px
+  );
 }
 
 .courses-app--hidden .courses-sidebar {
@@ -2048,75 +2272,81 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 
 .learning-summary-row {
-  position: relative;
   display: grid;
-  overflow: hidden;
   grid-template-columns:
     minmax(0, 1.12fr) minmax(0, 0.96fr) minmax(0, 0.96fr)
     minmax(0, 1.08fr);
-  gap: 0;
-  border-radius: 14px;
-  background: var(--card-surface);
-  box-shadow: var(--card-shadow);
-  isolation: isolate;
+  gap: 12px;
 }
 
 .learning-summary-row article {
+  --summary-tone: var(--accent);
   position: relative;
   display: grid;
   min-width: 0;
-  min-height: 84px;
-  grid-template-columns: 40px minmax(0, 1fr);
+  min-height: 92px;
+  overflow: hidden;
+  grid-template-columns: 42px minmax(0, 1fr);
   grid-template-rows: min-content min-content;
   align-content: center;
   align-items: center;
-  column-gap: 12px;
-  row-gap: 3px;
+  column-gap: 13px;
+  row-gap: 5px;
   border: 0;
-  border-radius: 0;
-  padding: 15px 18px;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 14px;
+  padding: 16px 17px;
+  background:
+    linear-gradient(
+      132deg,
+      color-mix(in srgb, var(--summary-tone) 9%, transparent),
+      transparent 58%
+    ),
+    var(--card-surface-raised);
+  box-shadow: var(--card-shadow);
 }
 
-.learning-summary-row article:first-child {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+.learning-summary-row article.tone-violet {
+  --summary-tone: #8c6aff;
 }
 
-.learning-summary-row article + article::before {
-  position: absolute;
-  top: 16px;
-  bottom: 16px;
-  left: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
-  content: "";
+.learning-summary-row article.tone-cyan {
+  --summary-tone: #21d4f3;
+}
+
+.learning-summary-row article.tone-green {
+  --summary-tone: #5eea7c;
+}
+
+.learning-summary-row article.tone-gold {
+  --summary-tone: #f6c945;
 }
 
 .learning-summary-row article > span {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   grid-row: 1 / 3;
-  border-radius: 11px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
+    0 8px 18px color-mix(in srgb, var(--summary-tone) 13%, transparent);
 }
 
 .learning-summary-row article strong {
   align-self: end;
   color: var(--text);
-  font-size: 1.18rem;
+  font-size: 1.24rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 720;
-  letter-spacing: -0.02em;
+  font-weight: 740;
+  letter-spacing: -0.025em;
   line-height: 1;
 }
 
 .learning-summary-row article p {
   align-self: start;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.72rem;
-  line-height: 1.25;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2124,15 +2354,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 @media (max-width: 900px) {
   .learning-summary-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .learning-summary-row article:nth-child(odd)::before {
-    display: none;
-  }
-
-  .learning-summary-row article:nth-child(n + 3) {
-    border-top: 1px solid
-      color-mix(in srgb, var(--surface-strong) 72%, transparent);
+    gap: 10px;
   }
 }
 
@@ -2142,16 +2364,16 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   }
 
   .learning-summary-row article {
-    min-height: 78px;
-    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 82px;
+    grid-template-columns: 38px minmax(0, 1fr);
     column-gap: 10px;
-    padding: 13px 12px;
+    padding: 13px;
   }
 
   .learning-summary-row article > span {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
   }
 
   .learning-summary-row article strong {
@@ -2161,6 +2383,12 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .learning-summary-row article p {
     font-size: 0.66rem;
     white-space: normal;
+  }
+}
+
+@media (max-width: 350px) {
+  .learning-summary-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2177,9 +2405,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .learning-card:hover {
   border-color: transparent;
   background: var(--card-surface-hover);
-  box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.14),
-    0 0 26px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: var(--card-hover-shadow);
   transform: none;
 }
 
@@ -2252,7 +2478,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   }
 
   .courses-nav button > .courses-nav__text,
-  .courses-nav button > b {
+  .courses-nav button > b,
+  .courses-nav button > .courses-nav__shortcut {
     display: none;
   }
 
@@ -2260,7 +2487,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     display: flex;
     align-items: center;
     flex-direction: column;
-    padding: 4px;
+    padding: 8px;
   }
 
   .sidebar-appearance > button {
@@ -2280,7 +2507,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .sidebar-palette-menu {
     right: auto;
     bottom: 0;
-    left: calc(100% + 14px);
+    left: calc(100% + 2px);
   }
 }
 
@@ -2302,6 +2529,10 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     transition: none;
   }
 
+  .courses-app--resizing .courses-sidebar {
+    overflow: clip;
+  }
+
   .courses-sidebar {
     padding-top: 0;
   }
@@ -2317,7 +2548,17 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   }
 
   .courses-app--collapsed {
-    grid-template-columns: 76px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
+        0,
+        1fr
+      );
+  }
+
+  .courses-app.courses-app--resizing {
+    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
+        0,
+        1fr
+      );
   }
 
   .courses-app--hidden {
@@ -2332,11 +2573,23 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
      at full scale. This keeps collapse feeling like the main surface is
      covering the labels instead of shrinking the artwork and text. */
   .courses-sidebar__brand {
+    position: relative;
     min-height: 38px;
     flex-direction: row;
+    justify-content: flex-start;
     gap: 8px;
     min-width: 0;
+    /* Matches the navigation label anchor: button inset + icon + row gap. */
+    padding-left: 50.5px;
     overflow: visible;
+  }
+
+  .sidebar-collapse {
+    position: absolute;
+    top: 0;
+    right: auto;
+    left: 6px;
+    z-index: 2;
   }
 
   .courses-logo-clip {
@@ -2348,10 +2601,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     max-width: 156px;
     opacity: 1;
     clip-path: inset(0 0 0 0);
-    transition:
-      max-width 220ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease,
-      clip-path 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: none;
   }
 
   .courses-logo-clip svg {
@@ -2401,16 +2651,16 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   }
 
   .courses-profile__button {
-    padding-left: 4px;
+    padding-left: 7px;
   }
 
   .courses-app--collapsed .courses-profile {
-    margin-inline: 4px;
+    margin-inline: -0.5px;
   }
 
   .courses-app--collapsed .courses-profile__button {
     justify-content: flex-start;
-    padding: 6px 0 6px 4px;
+    padding: 7px;
   }
 
   .courses-nav button > .courses-nav__text,
@@ -2433,8 +2683,18 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .courses-app--collapsed .courses-sidebar__brand {
     min-height: 36px;
     flex-direction: row;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0;
+    padding-left: 0;
+  }
+
+  .courses-app--collapsed .sidebar-collapse {
+    left: 10px;
+  }
+
+  .courses-app--collapsed .sidebar-collapse__asset {
+    /* Match the compact P's optical center without shifting the shared logo axis. */
+    transform: translateX(1.5px);
   }
 
   .courses-app--collapsed .courses-logo-clip {
@@ -2495,6 +2755,233 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .courses-app--collapsed .sidebar-appearance > button > span {
     display: inline-block;
   }
+
+  :root[data-collapsed-sidebar-logo="true"]
+    .courses-app--collapsed
+    .sidebar-collapse {
+    right: auto;
+    left: 10px;
+    transform: none;
+  }
+
+  :root[data-collapsed-sidebar-logo="true"]
+    .courses-app--collapsed
+    .courses-logo-clip {
+    left: 19.375px;
+    transform: none;
+  }
+
+  /* While the rail crosses its collapse snap, keep the full-scale wordmark in
+     the same coordinate space and let the sidebar edge crop it. The compact P
+     (or the user's hidden-logo preference) takes over only after release. */
+  :root
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-sidebar__brand {
+    min-height: 38px;
+    align-items: flex-end;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-left: 54.5px;
+  }
+
+  /* Revealing the 38px wordmark temporarily adds 2px to the compact brand
+     slot. Cancel that growth here so the navigation icons keep their exact
+     settled y-axis throughout pointer-down and the pre-snap drag. */
+  :root
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-nav {
+    margin-top: -6px;
+  }
+
+  :root
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-logo-clip {
+    position: static;
+    display: block !important;
+    width: 156px;
+    max-width: 156px;
+    height: 38px;
+    flex: 0 0 156px;
+    overflow: visible;
+    opacity: 1 !important;
+    clip-path: inset(0 0 0 0) !important;
+    pointer-events: none;
+    transform: none;
+    transition: none;
+  }
+
+  :root
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-logo-clip
+    svg {
+    width: 156px;
+    max-width: none;
+    height: 38px;
+    transform: none;
+  }
+
+  /* With the fixed-control preference off, the logo owns the stable leading
+     position and the collapse control follows the sidebar edge. */
+  :root[data-sidebar-header-layout="inline"] .courses-sidebar__brand {
+    justify-content: space-between;
+    gap: 12px;
+    /* The logo's cyan vertical stroke shares the Home glyph's painted left
+       edge. The fractional inset compensates for the House icon's viewBox
+       whitespace without moving the navigation icon axis. */
+    padding-left: 15.375px;
+    overflow: hidden;
+  }
+
+  :root[data-sidebar-header-layout="inline"] .courses-logo-clip {
+    position: static;
+    order: 1;
+    width: 156px;
+    max-width: 156px;
+    flex: 0 1 156px;
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+
+  :root[data-sidebar-header-layout="inline"] .sidebar-collapse {
+    position: static;
+    order: 2;
+    inset: auto;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  /* At rest, the compact logo and expand control share one slot. The control
+     replaces the logo on rail hover/focus; it never sits beside it. When the
+     compact logo preference is disabled, the control remains available. */
+  :root[data-sidebar-header-layout="inline"]
+    .courses-app--collapsed
+    .courses-sidebar__brand {
+    justify-content: flex-start;
+    gap: 0;
+    padding-left: 0;
+    overflow: visible;
+  }
+
+  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="true"]
+    .courses-app--collapsed
+    .courses-logo-clip {
+    /* Keep the compact P on the same page coordinate as the expanded
+       wordmark. Only the sidebar edge reveals more of the artwork. */
+    left: 19.375px;
+    width: 21px;
+    max-width: 21px;
+  }
+
+  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="true"]
+    .courses-app--collapsed
+    .courses-logo-clip
+    svg {
+    width: 156px;
+    height: 38px;
+  }
+
+  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="false"]
+    .courses-app--collapsed
+    .sidebar-collapse {
+    position: absolute;
+    top: 0;
+    right: auto;
+    left: 10px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  :root[data-sidebar-header-layout="inline"]
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-sidebar__brand {
+    justify-content: space-between;
+    gap: 12px;
+    /* The compact rail has 4px less outer padding than the expanded sidebar.
+       Add that difference here so pointer-down, drag, and release never move
+       the logo's left edge. */
+    padding-left: 19.375px;
+    overflow: hidden;
+  }
+
+  :root[data-sidebar-header-layout="inline"]
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-logo-clip {
+    order: 1;
+  }
+
+  :root[data-sidebar-header-layout="inline"]
+    .courses-app--resize-content-visible.courses-app--collapsed
+    .sidebar-collapse {
+    position: static;
+    order: 2;
+    inset: auto;
+  }
+
+  .sidebar-appearance {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    flex-direction: column;
+  }
+
+  .sidebar-appearance > button,
+  .sidebar-palette-wrap {
+    width: 40px;
+    flex: 0 0 38px;
+  }
+
+  .sidebar-appearance--horizontal {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .sidebar-appearance--horizontal > button,
+  .sidebar-appearance--horizontal > .sidebar-palette-wrap {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .courses-app--resizing .sidebar-appearance--horizontal {
+    flex-direction: row;
+  }
+
+  .courses-app--resizing .sidebar-appearance--horizontal > button,
+  .courses-app--resizing
+    .sidebar-appearance--horizontal
+    > .sidebar-palette-wrap {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .courses-app--resizing .courses-sidebar {
+    overflow: hidden;
+  }
+
+  .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-profile__button {
+    /* Keep the expanded profile rhythm while the remaining text width clips. */
+    gap: 12px;
+  }
+
+  .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-nav
+    button
+    > .courses-nav__text,
+  .courses-app--resize-content-visible.courses-app--collapsed
+    .courses-profile__button
+    > span {
+    display: block;
+    max-width: 190px;
+    margin-left: initial;
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    pointer-events: none;
+  }
 }
 
 @media (max-width: 820px) {
@@ -2532,7 +3019,9 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     bottom: calc(78px + env(safe-area-inset-bottom));
     left: auto;
     width: min(276px, calc(100% - 24px));
-    max-height: calc(100% - 96px);
+    max-height: calc(
+      100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -3531,11 +4020,12 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     z-index: 180;
     display: inline-flex;
     min-height: 38px;
-    max-width: 210px;
+    max-width: 280px;
     align-items: center;
     box-sizing: border-box;
     border-radius: 6px;
-    padding: 0 14px;
+    gap: 12px;
+    padding: 0 10px 0 14px;
     color: var(--sidebar-tooltip-ink);
     background: var(--sidebar-tooltip-surface);
     box-shadow:
@@ -3566,6 +4056,24 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .sidebar-nav-tooltip__label {
     position: relative;
     z-index: 1;
+  }
+
+  .sidebar-nav-tooltip__shortcuts {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sidebar-nav-tooltip .shortcut-keys {
+    opacity: 0.82;
+  }
+
+  .sidebar-nav-tooltip .shortcut-keys kbd {
+    border-color: color-mix(in srgb, currentColor 28%, transparent);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
   }
 
   .sidebar-nav-tooltip.is-active {
@@ -3627,10 +4135,15 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 
 /* Settings workspace */
+.courses-main.student-surface-main.courses-main--settings {
+  padding-inline: 0;
+}
+
 .settings-page {
+  --settings-page-inline-gutter: calc(25px + clamp(16px, 2.4vw, 30px));
   min-width: 0;
   min-height: 100%;
-  padding: clamp(20px, 2.5vw, 32px) clamp(16px, 2.4vw, 30px) 36px;
+  padding: clamp(20px, 2.5vw, 32px) 0 36px;
   color: var(--text);
 }
 
@@ -3639,6 +4152,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  padding-inline: var(--settings-page-inline-gutter);
 }
 
 .settings-page__header h1 {
@@ -3672,13 +4186,186 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     color-mix(in srgb, var(--accent-shadow) 30%, transparent);
 }
 
+/* Page/content tabs share one semantic color contract. Monochrome remains the
+   safe base; multicolor is enabled explicitly or inherited from the sidebar. */
+.page-tabs [role="tab"] {
+  --page-tab-active-ink: var(--accent-ink, var(--accent));
+  --page-tab-active-indicator: var(--accent);
+}
+
+.page-tabs {
+  --page-tab-indicator-left: 0px;
+  --page-tab-indicator-width: 0px;
+  --page-tab-indicator-color: var(--accent);
+  position: relative;
+}
+
+.page-tabs__indicator {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 0;
+  width: var(--page-tab-indicator-width);
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--page-tab-indicator-color);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(var(--page-tab-indicator-left), 0, 0);
+  transition:
+    width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms ease-out;
+  will-change: width, transform;
+}
+
+.page-tabs[data-tab-swipe-active] .page-tabs__indicator {
+  opacity: 1;
+}
+
+.page-tabs[data-tab-swipe-tracking] .page-tabs__indicator {
+  transition: none;
+}
+
+.page-tabs[data-tab-swipe-active] button.is-active {
+  border-bottom-color: transparent;
+}
+
+.page-tabs[data-tab-swipe-active] .lesson-tool-tab.is-active::after {
+  opacity: 0;
+}
+
+.swipeable-tab-panel {
+  --tab-swipe-offset: 0px;
+  position: relative;
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y pinch-zoom;
+}
+
+.swipeable-tab-panel__layer {
+  min-width: 0;
+}
+
+.swipeable-tab-panel[data-tab-swipe-active]
+  .swipeable-tab-panel__layer.is-current {
+  transform: translate3d(var(--tab-swipe-offset), 0, 0);
+  will-change: transform;
+}
+
+.swipeable-tab-panel__layer.is-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.swipeable-tab-panel[data-tab-swipe-active]
+  .swipeable-tab-panel__layer.is-preview {
+  visibility: visible;
+}
+
+.swipeable-tab-panel__layer.is-preview.is-next {
+  transform: translate3d(calc(100% + var(--tab-swipe-offset)), 0, 0);
+}
+
+.swipeable-tab-panel__layer.is-preview.is-previous {
+  transform: translate3d(calc(-100% + var(--tab-swipe-offset)), 0, 0);
+}
+
+.swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-tabs__indicator,
+  .swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
+    transition: none;
+  }
+}
+
+.page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #5da9ff;
+}
+.page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #ad7cff;
+}
+.page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #63c8d5;
+}
+.page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #55d98b;
+}
+.page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #f1be4b;
+}
+.page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #f09c4e;
+}
+.page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #ff6684;
+}
+
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #1769aa;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #6741b8;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #0b6d79;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #14763f;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #7b5b00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #9a4d00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #b82b52;
+}
+
+:root[data-page-tab-colors="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone] {
+  --page-tab-active-ink: var(--page-tab-tone);
+  --page-tab-active-indicator: var(--page-tab-tone);
+}
+
+.lesson-tool-tab.is-active {
+  color: var(--page-tab-active-ink);
+}
+
+.lesson-tool-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--page-tab-active-indicator);
+  content: "";
+}
+
 .settings-tabs {
   position: sticky;
   top: 0;
   z-index: 25;
   display: flex;
   min-width: 0;
-  margin-top: 26px;
+  margin: 26px var(--settings-page-inline-gutter) 0;
   padding-top: 6px;
   gap: 8px;
   overflow-x: auto;
@@ -3724,17 +4411,28 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   outline-offset: -2px;
 }
 .settings-tabs button.is-active {
-  border-bottom-color: var(--accent);
-  color: var(--accent-ink, var(--accent));
+  border-bottom-color: var(--page-tab-active-indicator);
+  color: var(--page-tab-active-ink);
 }
 
 .settings-tab-content {
   min-width: 0;
+  margin-top: 14px;
 }
 .settings-content {
   display: grid;
   gap: 14px;
-  margin-top: 14px;
+  margin-top: 0;
+  padding-inline: var(--settings-page-inline-gutter);
+}
+
+.settings-tab-content
+  :is(.settings-profile, .settings-learning, .settings-detail) {
+  width: auto;
+  max-width: none;
+  margin-top: 0;
+  margin-right: var(--settings-page-inline-gutter);
+  margin-left: var(--settings-page-inline-gutter);
 }
 
 .settings-section {
@@ -3742,7 +4440,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 14px;
   padding: 16px;
   background: var(--surface);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-section h2 {
@@ -3785,7 +4483,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   text-align: left;
   color: var(--text-secondary);
   background: var(--surface-strong);
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--canvas) 30%, transparent);
+  box-shadow: var(--card-shadow);
   transition:
     background-color 150ms ease,
     box-shadow 150ms ease,
@@ -3794,8 +4492,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .settings-choice-card:hover {
   background: color-mix(in srgb, var(--surface-strong) 86%, var(--accent) 14%);
-  box-shadow: 0 12px 28px
-    color-mix(in srgb, var(--accent-shadow) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .settings-choice-card:focus-visible {
   outline: 2px solid var(--accent);
@@ -3808,8 +4505,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
     var(--selected) 72%,
     var(--surface-strong) 28%
   );
-  box-shadow: 0 14px 30px
-    color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+  box-shadow: var(--card-selected-shadow);
 }
 
 .settings-choice-card__copy {
@@ -4210,13 +4906,6 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   font-weight: 650;
 }
 
-.settings-sidebar-width__range input[type="range"] {
-  width: 100%;
-  height: 22px;
-  accent-color: var(--accent);
-  cursor: auto;
-}
-
 .settings-sidebar-width__range-labels {
   display: flex;
   justify-content: space-between;
@@ -4240,8 +4929,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   font-weight: 700;
 }
 
-.settings-sidebar-width__number input:focus-visible,
-.settings-sidebar-width__range input[type="range"]:focus-visible {
+.settings-sidebar-width__number input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -4260,6 +4948,13 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
+}
+.settings-row:has(.settings-toggle:not(:disabled)) {
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.settings-row:has(.settings-toggle:not(:disabled)):hover {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 .settings-row + .settings-row {
   border-top: 1px solid
@@ -4350,6 +5045,11 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .settings-toggle.is-on > span {
   transform: translateX(18px);
   background: var(--on-accent);
+}
+
+:root[data-theme="light"] .settings-toggle > span {
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(25 32 45 / 22%);
 }
 
 .settings-theme-pool {
@@ -4506,6 +5206,23 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 .settings-segmented--text-size button {
   min-width: 0;
   padding-inline: 4px;
+  white-space: nowrap;
+}
+
+.settings-segmented--page-tabs {
+  width: 340px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-segmented--shortcut-platform {
+  width: 300px;
+  grid-template-columns: 1.25fr 1fr 0.75fr;
+}
+
+.settings-segmented--page-tabs button,
+.settings-segmented--shortcut-platform button {
+  min-width: 0;
+  padding-inline: 8px;
   white-space: nowrap;
 }
 
@@ -4747,6 +5464,160 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+}
+
+.settings-sidebar-settings {
+  gap: 16px;
+}
+
+.settings-sidebar-category-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 4px 0;
+}
+
+.settings-sidebar-category-heading:first-child {
+  margin-top: 0;
+}
+
+.settings-sidebar-category-heading > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.settings-sidebar-category-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-sidebar-category-heading h2,
+.settings-sidebar-category-heading p {
+  margin: 0;
+}
+
+.settings-sidebar-category-heading h2 {
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.settings-sidebar-category-heading p {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.settings-sidebar-category-heading output {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  font-size: 0.7rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.settings-sidebar-header-options {
+  margin-top: 16px;
+}
+
+.settings-choice-card--header-layout {
+  min-height: 104px;
+}
+
+.settings-sidebar-header-options__rows {
+  margin-top: 12px;
+}
+
+.settings-sidebar-dock-row {
+  position: relative;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+
+.settings-sidebar-dock-row.is-dragging {
+  opacity: 0.46;
+}
+
+.settings-sidebar-dock-row.is-drop-target::before,
+.settings-sidebar-dock-row.is-drop-target::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-shadow) 76%, transparent);
+}
+
+.settings-sidebar-dock-row.is-drop-before::before {
+  top: -1px;
+}
+
+.settings-sidebar-dock-row.is-drop-after::after {
+  bottom: -1px;
+}
+
+.settings-sidebar-dock-row.is-drop-before::after,
+.settings-sidebar-dock-row.is-drop-after::before {
+  display: none;
+}
+
+.settings-sidebar-dock-row .settings-row__control {
+  gap: 8px;
+}
+
+.settings-dock-reorder-handle {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.settings-dock-reorder-handle:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.settings-dock-reorder-handle:active {
+  cursor: grabbing;
+}
+
+.settings-dock-reorder-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .settings-section__heading-row h2 {
@@ -5009,9 +5880,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   padding: clamp(16px, 2vw, 22px);
   color: var(--text);
   background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent),
-    0 16px 34px color-mix(in srgb, var(--canvas) 26%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-learning__header {
@@ -5064,9 +5933,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 13px;
   padding: 16px;
   background: color-mix(in srgb, var(--surface-strong) 78%, var(--surface));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent),
-    0 10px 24px color-mix(in srgb, var(--canvas) 18%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-learning-card__heading {
@@ -5162,6 +6029,9 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .settings-learning-toggle-row .settings-toggle {
   justify-self: end;
+}
+.settings-learning-toggle-row:has(.settings-toggle:not(:disabled)) {
+  cursor: pointer;
 }
 .settings-toggle:disabled {
   cursor: not-allowed;
@@ -5329,9 +6199,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 14px;
   padding: 18px;
   background: color-mix(in srgb, var(--surface-strong) 80%, var(--surface));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent),
-    0 12px 28px color-mix(in srgb, var(--canvas) 18%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-profile__identity-heading,
@@ -5875,10 +6743,13 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   height: auto;
   border-right: 0;
 }
-:root[data-collapsed-tooltips="false"] .sidebar-nav-tooltip {
+:root[data-collapsed-tooltips="false"]
+  .sidebar-nav-tooltip.is-preference-controlled {
   display: none !important;
 }
-:root[data-active-fill="false"] .courses-nav button.is-active {
+:root[data-active-fill="false"] .courses-nav button.is-active,
+:root[data-active-fill="false"] .sidebar-appearance > button.is-active,
+:root[data-active-fill="false"] .sidebar-palette-trigger[aria-pressed="true"] {
   background: transparent;
   box-shadow: none;
 }
@@ -5964,7 +6835,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 @media (max-width: 640px) {
   .settings-page {
-    padding: 22px 14px 28px;
+    --settings-page-inline-gutter: 15px;
+    padding: 22px 0 28px;
   }
   .settings-page__marker {
     width: 42px;
@@ -6021,6 +6893,25 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   .settings-segmented--text-size button {
     padding-inline: 6px;
     font-size: 0.66rem;
+  }
+  .settings-row--page-tab-colors,
+  .settings-row--shortcut-platform {
+    grid-template-columns: 32px minmax(0, 1fr);
+    row-gap: 8px;
+  }
+  .settings-row--page-tab-colors .settings-row__control,
+  .settings-row--shortcut-platform .settings-row__control {
+    grid-column: 2;
+    justify-content: stretch;
+  }
+  .settings-segmented--page-tabs,
+  .settings-segmented--shortcut-platform {
+    width: 100%;
+  }
+  .settings-segmented--page-tabs button,
+  .settings-segmented--shortcut-platform button {
+    padding-inline: 4px;
+    font-size: 0.63rem;
   }
   .settings-row__copy small {
     max-width: 24ch;
@@ -6169,6 +7060,26 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 
 @media (max-width: 640px) {
+  .settings-sidebar-category-heading {
+    grid-template-columns: 34px minmax(0, 1fr);
+    margin-inline: 1px;
+  }
+
+  .settings-sidebar-category-heading > span {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .settings-sidebar-category-heading output {
+    grid-column: 2;
+    width: max-content;
+  }
+
+  .settings-choice-card--header-layout {
+    min-height: 92px;
+  }
+
   .settings-section__heading-row {
     flex-direction: column;
     gap: 10px;
@@ -6573,6 +7484,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 11px;
   padding: 11px;
   background: var(--surface-strong);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-session__icon {
@@ -6619,6 +7531,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 11px;
   padding: 14px;
   background: var(--surface-strong);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-account-plan > div {
@@ -6751,9 +7664,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   min-width: 0;
   border-radius: 16px;
   background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
-    0 12px 28px color-mix(in srgb, var(--card-shadow) 43%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .workspace-signout__icon {
@@ -6941,8 +7852,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   background: color-mix(in srgb, var(--surface) 46%, transparent);
 }
 .discussion-hub__tabs button.is-active {
-  border-bottom-color: var(--accent);
-  color: var(--accent-ink, var(--accent));
+  border-bottom-color: var(--page-tab-active-indicator);
+  color: var(--page-tab-active-ink);
 }
 .discussion-hub__tabs button:focus-visible {
   outline: 2px solid var(--accent);
@@ -6970,7 +7881,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   padding: 10px;
   border-radius: 14px;
   background: var(--card-surface);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .discussion-hub__search,
@@ -7052,9 +7963,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 15px;
   padding: 16px;
   background: var(--card-surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
-    0 14px 28px color-mix(in srgb, var(--card-shadow) 45%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .discussion-hub__composer-heading,
@@ -7155,9 +8064,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 15px;
   padding: 17px;
   background: var(--card-surface-raised);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
-    0 10px 22px color-mix(in srgb, var(--card-shadow) 30%, transparent);
+  box-shadow: var(--card-shadow);
   transition:
     background-color 160ms ease,
     box-shadow 160ms ease;
@@ -7165,9 +8072,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 
 .discussion-thread:hover {
   background: var(--card-surface-hover);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent),
-    0 16px 26px color-mix(in srgb, var(--card-shadow) 70%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 
 .discussion-thread__open {
@@ -7350,9 +8255,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 15px;
   padding: 18px;
   background: var(--card-surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
-    0 12px 24px color-mix(in srgb, var(--card-shadow) 34%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-side-card header {
   display: flex;
@@ -7507,7 +8410,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   color: var(--muted);
   text-align: center;
   background: var(--card-surface);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-hub__empty svg {
   color: var(--accent-ink, var(--accent));
@@ -7685,9 +8588,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: 14px;
   background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
-    0 14px 28px color-mix(in srgb, var(--card-shadow) 22%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-profile__identity,
@@ -7755,7 +8656,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 14px;
   background: var(--canvas);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .settings-profile__public-art {
@@ -7828,8 +8729,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   border-radius: 50%;
   color: var(--text);
   background: var(--surface-strong);
-  box-shadow: 0 10px 22px
-    color-mix(in srgb, var(--card-shadow) 38%, transparent);
+  box-shadow: var(--card-compact-shadow);
 }
 
 .settings-profile__avatar img {
@@ -7869,7 +8769,8 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   padding: 0;
   color: var(--on-accent, #fff);
   background: var(--accent);
-  box-shadow: 0 7px 14px color-mix(in srgb, var(--card-shadow) 38%, transparent);
+  box-shadow: 0 7px 14px
+    color-mix(in srgb, var(--accent-shadow) 52%, transparent);
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
@@ -8566,8 +9467,7 @@ html:has(.settings-profile__privacy-dialog[open]) {
   padding: 24px;
   color: var(--text);
   background: var(--surface);
-  box-shadow: 0 24px 70px
-    color-mix(in srgb, var(--card-shadow) 65%, transparent);
+  box-shadow: var(--card-floating-shadow);
 }
 
 .settings-profile__privacy-dialog::backdrop {
@@ -8795,20 +9695,6 @@ html:has(.settings-profile__privacy-dialog[open]) {
     position: sticky;
     scroll-padding-inline: 18px;
   }
-
-  .settings-tabs::after {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 22px;
-    border-radius: 0 8px 0 0;
-    background: color-mix(in srgb, var(--main-surface) 92%, transparent);
-    box-shadow: -8px 0 12px
-      color-mix(in srgb, var(--main-surface) 55%, transparent);
-    content: "";
-    pointer-events: none;
-  }
 }
 
 @media (max-width: 470px) {
@@ -8875,4 +9761,196 @@ html:has(.settings-profile__privacy-dialog[open]) {
   .settings-profile__privacy-dialog-actions button {
     width: 100%;
   }
+}
+
+/* Mobile routes already inherit the Home/My Courses page gutter from
+   student-surface-main. Avoid stacking a second page-level inset inside it. */
+@media (max-width: 820px) {
+  .courses-main.student-surface-main.courses-main--settings {
+    padding-inline: 15px;
+  }
+
+  .student-surface-main
+    > :is(
+      .settings-page,
+      .discussion-hub,
+      .workspace-page,
+      .courses-placeholder-page
+    ) {
+    padding: 0;
+  }
+
+  .student-surface-main > .settings-page {
+    --settings-page-inline-gutter: 0px;
+  }
+
+  .student-surface-main > .discussion-hub .discussion-hub__tabs {
+    margin-right: 0;
+    margin-left: 0;
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
+
+/* Surface depth is an application preference, not a theme choice. The default
+   recreates the sidebar profile dock's subtle top/left edge light and soft
+   two-stage lift for every card family that uses --card-shadow. */
+:root {
+  --sidebar-menu-active-background: linear-gradient(
+    108deg,
+    color-mix(in srgb, var(--canvas) 88%, var(--accent) 12%) 0%,
+    color-mix(in srgb, var(--surface) 82%, var(--accent) 18%) 100%
+  );
+  --surface-depth-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+    0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
+    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+  --surface-depth-hover-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 5%, transparent),
+    0 13px 30px color-mix(in srgb, var(--canvas) 38%, transparent),
+    0 3px 12px color-mix(in srgb, var(--accent-shadow) 25%, transparent);
+  --surface-depth-selected-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 14px 30px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  --surface-depth-compact-shadow: 0 10px 22px
+    color-mix(in srgb, var(--text) 18%, transparent);
+  --surface-depth-floating-shadow: 0 24px 70px
+    color-mix(in srgb, var(--text) 28%, transparent);
+  --sidebar-menu-depth-shadow: none;
+  --sidebar-menu-depth-hover-shadow: none;
+  --sidebar-menu-active-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--accent) 18%, transparent);
+  --sidebar-dock-depth-shadow: none;
+  --sidebar-dock-depth-hover-shadow: none;
+}
+
+/* Dark surfaces need both a close contact shadow and a broader ambient cast to
+   separate neighboring charcoal layers. Keep the edge light restrained and
+   let neutral black create the lift so the result reads as depth, not glow. */
+:root[data-theme="dark"] {
+  --surface-depth-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 11%), inset 1px 0 0 rgb(255 255 255 / 5%),
+    0 3px 8px rgb(0 0 0 / 30%), 0 16px 36px rgb(0 0 0 / 42%),
+    0 5px 16px color-mix(in srgb, var(--accent-shadow) 26%, transparent);
+  --surface-depth-hover-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 15%), inset 1px 0 0 rgb(255 255 255 / 7%),
+    0 4px 10px rgb(0 0 0 / 36%), 0 20px 44px rgb(0 0 0 / 48%),
+    0 7px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  --surface-depth-selected-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 15%),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 21%, transparent),
+    0 4px 10px rgb(0 0 0 / 34%), 0 18px 40px rgb(0 0 0 / 45%),
+    0 6px 18px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+  --surface-depth-compact-shadow:
+    0 2px 5px rgb(0 0 0 / 34%), 0 11px 25px rgb(0 0 0 / 42%);
+  --surface-depth-floating-shadow:
+    0 8px 22px rgb(0 0 0 / 44%), 0 30px 76px rgb(0 0 0 / 58%);
+}
+
+/* Light surfaces need a foreground-derived neutral cast for separation.
+   Using --text rather than a palette's canvas or accent keeps the perceived
+   depth stable on every light palette, including low-contrast warm palettes
+   such as Copper Slate. The short contact shadow defines the edge while the
+   broader, softer layers provide lift without turning into an accent glow. */
+:root[data-theme="light"] {
+  --sidebar-menu-active-background: linear-gradient(
+    108deg,
+    color-mix(in srgb, var(--surface-strong) 92%, var(--accent) 8%) 0%,
+    color-mix(in srgb, var(--surface) 88%, var(--accent) 12%) 100%
+  );
+  --surface-depth-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%), inset 1px 0 0 rgb(255 255 255 / 68%),
+    0 1px 3px color-mix(in srgb, var(--text) 20%, transparent),
+    0 7px 17px color-mix(in srgb, var(--text) 14%, transparent),
+    0 19px 38px color-mix(in srgb, var(--text) 10%, transparent);
+  --surface-depth-hover-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 100%), inset 1px 0 0 rgb(255 255 255 / 76%),
+    0 2px 5px color-mix(in srgb, var(--text) 22%, transparent),
+    0 10px 22px color-mix(in srgb, var(--text) 17%, transparent),
+    0 24px 46px color-mix(in srgb, var(--text) 12%, transparent);
+  --surface-depth-selected-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 100%),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 2px 5px color-mix(in srgb, var(--text) 20%, transparent),
+    0 11px 24px color-mix(in srgb, var(--text) 16%, transparent),
+    0 24px 44px color-mix(in srgb, var(--text) 11%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent-shadow) 28%, transparent);
+  --surface-depth-compact-shadow:
+    0 2px 4px color-mix(in srgb, var(--text) 18%, transparent),
+    0 10px 24px color-mix(in srgb, var(--text) 14%, transparent);
+  --surface-depth-floating-shadow:
+    0 8px 22px color-mix(in srgb, var(--text) 20%, transparent),
+    0 30px 76px color-mix(in srgb, var(--text) 24%, transparent);
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 88%), 0 2px 4px rgb(25 32 45 / 9%),
+    0 8px 18px rgb(25 32 45 / 12%);
+}
+
+:root:not([data-elevated-surfaces="false"]) {
+  --card-shadow: var(--surface-depth-shadow);
+  --card-hover-shadow: var(--surface-depth-hover-shadow);
+  --card-selected-shadow: var(--surface-depth-selected-shadow);
+  --card-compact-shadow: var(--surface-depth-compact-shadow);
+  --card-floating-shadow: var(--surface-depth-floating-shadow);
+}
+
+:root[data-elevated-surfaces="false"] {
+  --card-shadow: none;
+  --card-hover-shadow: none;
+  --card-selected-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--accent) 18%, transparent);
+  --card-compact-shadow: none;
+  --card-floating-shadow: none;
+}
+
+.learning-comment-composer,
+.learning-comment-card,
+.settings-profile__preview-card,
+.settings-profile__verification-panel {
+  box-shadow: var(--card-shadow);
+}
+
+.learning-comment-composer:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+:root[data-sidebar-menu-elevation="true"] {
+  --sidebar-menu-depth-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+    0 4px 13px color-mix(in srgb, var(--canvas) 18%, transparent);
+  --sidebar-menu-depth-hover-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
+    0 7px 17px color-mix(in srgb, var(--canvas) 26%, transparent);
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 8px 28px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+  --sidebar-dock-depth-shadow: var(--surface-depth-shadow);
+  --sidebar-dock-depth-hover-shadow: var(--surface-depth-hover-shadow);
+}
+
+:root[data-theme="dark"][data-sidebar-menu-elevation="true"] {
+  --sidebar-menu-depth-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%), 0 3px 7px rgb(0 0 0 / 28%),
+    0 11px 25px rgb(0 0 0 / 34%);
+  --sidebar-menu-depth-hover-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%), 0 4px 9px rgb(0 0 0 / 34%),
+    0 15px 32px rgb(0 0 0 / 42%);
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 21%, transparent),
+    0 4px 10px rgb(0 0 0 / 34%), 0 16px 34px rgb(0 0 0 / 43%),
+    0 6px 18px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+}
+
+:root[data-theme="light"][data-sidebar-menu-elevation="true"] {
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%), 0 3px 7px rgb(25 32 45 / 12%),
+    0 14px 30px rgb(25 32 45 / 17%),
+    0 5px 15px color-mix(in srgb, var(--accent-shadow) 24%, transparent);
 }

@@ -1,9 +1,20 @@
 import { getCourseTitle } from "../learning/courseMetadata";
+import {
+  SETTINGS_DEFAULT_TAB,
+  readDiscussionTab,
+  readSettingsTab,
+  resolveSessionTabPath,
+} from "./tabSessionState";
 
 const productName = "ProCodrr";
 
 export type ShellPage =
-  "home" | "my-learning" | "courses" | "placeholder" | "settings" | "workspace";
+  | "home"
+  | "my-courses"
+  | "explore-courses"
+  | "placeholder"
+  | "settings"
+  | "workspace";
 
 export interface ShellRouteDescriptor {
   kind: "shell";
@@ -18,7 +29,7 @@ export interface ShellRouteDescriptor {
 export interface LearningRouteDescriptor {
   kind: "learning";
   page: "learning";
-  section: "Courses";
+  section: "Explore Courses";
   settingsTab?: undefined;
   discussionTab?: undefined;
 }
@@ -54,17 +65,16 @@ export const routeDescriptors = {
     title: "Dashboard",
     description: "Review academy performance and creator activity in ProCodrr.",
   },
-  "my-learning": {
+  "my-courses": {
     kind: "shell",
-    page: "my-learning",
-    title: "My Learning",
+    page: "my-courses",
+    title: "My Courses",
     description: "Review enrolled ProCodrr courses and learning progress.",
   },
-  courses: {
+  "explore-courses": {
     kind: "shell",
-    page: "courses",
-    section: "Courses",
-    title: "Courses",
+    page: "explore-courses",
+    title: "Explore Courses",
     description: "Browse enrolled and available ProCodrr courses.",
   },
   "course-create": {
@@ -83,7 +93,7 @@ export const routeDescriptors = {
   },
   wishlist: {
     kind: "shell",
-    page: "courses",
+    page: "explore-courses",
     section: "Wishlist",
     title: "Wishlist",
     description: "Review the courses saved to your ProCodrr wishlist.",
@@ -166,7 +176,7 @@ export const routeDescriptors = {
     kind: "shell",
     page: "settings",
     section: "Settings",
-    settingsTab: "appearance",
+    settingsTab: SETTINGS_DEFAULT_TAB,
     title: "Settings",
     description: "Manage your personal preferences and interface experience.",
   },
@@ -245,28 +255,28 @@ export const routeDescriptors = {
 const learningDescriptor = {
   kind: "learning",
   page: "learning",
-  section: "Courses",
+  section: "Explore Courses",
 } as const satisfies LearningRouteDescriptor;
 
 export const destinationPaths: Readonly<Record<string, string>> = {
   home: "/",
   dashboard: "/dashboard",
-  "my-learning": "/my-learning",
-  courses: "/courses",
+  "my-courses": "/my-courses",
+  "explore-courses": "/explore-courses",
   "create-course": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
   reviews: "/reviews",
-  discussions: "/discussions/q-and-a",
+  discussions: "/discussions",
   analytics: "/analytics",
   orders: "/orders",
   messages: "/messages",
-  settings: "/settings/appearance",
+  settings: "/settings",
   notifications: "/notifications",
   logout: "/logout",
   Students: "/students",
   Reviews: "/reviews",
-  Discussions: "/discussions/q-and-a",
+  Discussions: "/discussions",
   Analytics: "/analytics",
   Orders: "/orders",
   Messages: "/messages",
@@ -281,8 +291,8 @@ const canonicalPathsByRouteId = {
   home: "/",
   "home-alias": "/home",
   dashboard: "/dashboard",
-  "my-learning": "/my-learning",
-  courses: "/courses",
+  "my-courses": "/my-courses",
+  "explore-courses": "/explore-courses",
   "course-create": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
@@ -326,12 +336,16 @@ export const getEffectiveRouteId = (
 ): string => {
   const normalizedPath = normalizeNavigationPath(pathname);
 
-  if (routeId === "learning") {
-    const match = /^\/courses\/([^/]+)$/.exec(normalizedPath);
+  if (routeId === "learning" || routeId === "legacy-learning") {
+    const routePrefix = routeId === "learning" ? "learn" : "courses";
+    const match = new RegExp(`^/${routePrefix}/([^/]+)(?:/([^/]+))?$`).exec(
+      normalizedPath,
+    );
     const encodedSlug = match?.[1];
     if (!encodedSlug) return "home-fallback";
     try {
       decodeURIComponent(encodedSlug);
+      if (match?.[2]) decodeURIComponent(match[2]);
       return routeId;
     } catch {
       return "home-fallback";
@@ -339,7 +353,7 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "course-overview") {
-    const match = /^\/courses\/([^/]+)\/overview$/.exec(normalizedPath);
+    const match = /^\/explore-courses\/([^/]+)\/overview$/.exec(normalizedPath);
     const encodedSlug = match?.[1];
     if (!encodedSlug) return "home-fallback";
     try {
@@ -360,7 +374,17 @@ export const getEffectiveRouteId = (
 export const getRouteDescriptor = (
   routeId: string,
 ): RouteDescriptor | undefined => {
-  if (routeId === "learning") return learningDescriptor;
+  if (routeId === "learning" || routeId === "legacy-learning")
+    return learningDescriptor;
+  if (routeId === "settings") {
+    return { ...routeDescriptors.settings, settingsTab: readSettingsTab() };
+  }
+  if (routeId === "discussions") {
+    return {
+      ...routeDescriptors.discussions,
+      discussionTab: readDiscussionTab(),
+    };
+  }
   return hasOwn(routeDescriptors, routeId)
     ? routeDescriptors[routeId as StaticRouteId]
     : undefined;
@@ -388,7 +412,7 @@ export const getMatchedRouteDescriptor = (
 };
 
 export const getDestinationPath = (destination: string): string =>
-  destinationPaths[destination] ?? destination;
+  resolveSessionTabPath(destinationPaths[destination] ?? destination);
 
 interface RouteParams {
   courseSlug?: string;

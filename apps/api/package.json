@@ -20,10 +20,10 @@
     "@veolms/database": "workspace:*",
     "fastify": "^5.11.0",
     "fastify-type-provider-zod": "^7.0.0",
-    "kysely": "^0.29.4",
+    "kysely": "catalog:",
     "nodemailer": "^9.0.5",
     "openapi-types": "^12.1.3",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/nodemailer": "^8.0.1",

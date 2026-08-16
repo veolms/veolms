@@ -13,14 +13,14 @@ test("compiled client serves direct routes and bundled course artwork", async ({
     page.getByRole("heading", { name: /Good evening, Ashi/ }),
   ).toBeVisible();
 
-  await page.goto("/courses");
+  await page.goto("/explore-courses");
   await expect(
-    page.getByRole("heading", { name: "Courses", level: 1 }),
+    page.getByRole("heading", { name: "Explore Courses", level: 1 }),
   ).toBeVisible();
   const courseImages = page
-    .getByRole("region", { name: "Courses" })
+    .getByRole("region", { name: "Explore Courses" })
     .locator("img");
-  await expect(courseImages).toHaveCount(6);
+  await expect(courseImages).toHaveCount(7);
   await expect
     .poll(() =>
       courseImages.evaluateAll((images) =>
@@ -50,7 +50,7 @@ test("compiled client serves direct routes and bundled course artwork", async ({
 test("compiled learning route keeps the deployment-provided course-media URL contract", async ({
   page,
 }) => {
-  await openApp(page, "/courses/typescript-course");
+  await openApp(page, "/learn/typescript-course");
   await expect(
     page.getByRole("heading", {
       name: "The Beginning of a Design Journey",

@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-import { hashToken } from "../lib/auth-helpers.ts";
+import { hashToken } from "../modules/auth/auth.utils.ts";
 import { httpError } from "../lib/errors.ts";
 
 export interface AuthMiddleware {

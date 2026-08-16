@@ -20,6 +20,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import { ThemedSelect } from "./ThemedSelect";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
+import javascriptThumbnail from "./assets/course-thumbnails/javascript.jpg";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript.jpg";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs.jpg";
 import mongodbThumbnail from "./assets/course-thumbnails/mongodb.jpg";
@@ -29,6 +30,10 @@ import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
 import illustratorThumbnail from "./assets/learning-thumbnails/illustrator-course.webp";
 import reactThumbnail from "./assets/learning-thumbnails/react-course.webp";
 import d3Thumbnail from "./assets/learning-thumbnails/d3-course.webp";
+import {
+  isStoredString,
+  useSessionStorageState,
+} from "./learning/useSessionStorageState";
 
 export interface LearningCourse {
   id: string;
@@ -70,7 +75,7 @@ interface LearningCourseCardProps {
   setNotice: (notice: string) => void;
 }
 
-interface MyLearningPageProps {
+interface MyCoursesPageProps {
   onOpenCourse: (course: LearningCourse) => void;
   wishlisted: ReadonlySet<string>;
   onWishlist: (courseId: string) => void;
@@ -88,6 +93,17 @@ const learningCourses: readonly LearningCourse[] = [
     lastLesson: "Conditional Types",
     accessed: "2h ago",
     thumbnail: typescriptThumbnail,
+  },
+  {
+    id: "javascript-course",
+    title: "The Complete JavaScript Course",
+    sections: 20,
+    lectures: 142,
+    status: "in-progress",
+    progress: 38,
+    lastLesson: "Closures and the Event Loop",
+    accessed: "4h ago",
+    thumbnail: javascriptThumbnail,
   },
   {
     id: "backend-nodejs",
@@ -165,6 +181,8 @@ const learningCourses: readonly LearningCourse[] = [
   },
 ];
 
+const LEGACY_MY_COURSES_SEARCH_KEYS = ["veolms-my-learning-search"] as const;
+
 const resumeLessons = [
   { number: 84, title: "Conditional Types", duration: "18:35", active: true },
   { number: 85, title: "Mapped Types Deep Dive", duration: "22:10" },
@@ -224,8 +242,17 @@ export function StudentHome({
   onNavigatePage,
   studentName,
 }: NavigationCallbacks) {
-  const currentCourse = learningCourses[0]!;
-  const continueCourses = [learningCourses[0]!, learningCourses[1]!];
+  const currentCourse = learningCourses.find(
+    ({ id }) => id === "typescript-course",
+  )!;
+  const continueCourses = [
+    learningCourses.find(({ id }) => id === "javascript-course")!,
+    learningCourses.find(({ id }) => id === "backend-nodejs")!,
+  ];
+  const recentlyUpdatedCourses = [
+    currentCourse,
+    learningCourses.find(({ id }) => id === "backend-nodejs")!,
+  ];
   const goalCompletion = 72;
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
@@ -327,7 +354,7 @@ export function StudentHome({
             <button
               type="button"
               className="resume-view-all"
-              onClick={() => onNavigatePage("my-learning")}
+              onClick={() => onNavigatePage("my-courses")}
             >
               View all in this section <ArrowRight size={17} />
             </button>
@@ -341,7 +368,7 @@ export function StudentHome({
             icon={BookOpen}
             title="Continue Learning"
             action="View All"
-            onAction={() => onNavigatePage("my-learning")}
+            onAction={() => onNavigatePage("my-courses")}
           />
           <div className="home-mini-course-grid">
             {continueCourses.map((course) => (
@@ -357,7 +384,7 @@ export function StudentHome({
                   <p>
                     {course.id === "backend-nodejs"
                       ? "Section 14 · Performance & Optimization"
-                      : "Section 12 · Advanced Generics"}
+                      : "Section 8 · Modern JavaScript Patterns"}
                   </p>
                 </div>
                 <div className="home-mini-progress">
@@ -466,10 +493,10 @@ export function StudentHome({
             icon={Target}
             title="New in Your Courses"
             action="View All"
-            onAction={() => onNavigatePage("my-learning")}
+            onAction={() => onNavigatePage("my-courses")}
           />
           <div className="home-update-list">
-            {[learningCourses[0]!, learningCourses[1]!].map((course, index) => (
+            {recentlyUpdatedCourses.map((course, index) => (
               <button
                 type="button"
                 key={course.id}
@@ -594,14 +621,19 @@ function LearningCourseCard({
   );
 }
 
-export function MyLearningPage({
+export function MyCoursesPage({
   onOpenCourse,
   wishlisted,
   onWishlist,
   setNotice,
-}: MyLearningPageProps) {
+}: MyCoursesPageProps) {
   const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSessionStorageState(
+    "veolms-my-courses-search",
+    "",
+    isStoredString,
+    LEGACY_MY_COURSES_SEARCH_KEYS,
+  );
   const [sort, setSort] = useState("recent");
   const [status, setStatus] = useState("all");
 
@@ -621,17 +653,17 @@ export function MyLearningPage({
   }, [filter, search, sort, status]);
 
   const summary = [
-    { value: 8, label: "Enrolled Courses", icon: BookOpen, tone: "violet" },
-    { value: 5, label: "In Progress", icon: Clock, tone: "cyan" },
+    { value: 9, label: "Enrolled Courses", icon: BookOpen, tone: "violet" },
+    { value: 6, label: "In Progress", icon: Clock, tone: "cyan" },
     { value: 2, label: "Completed", icon: CheckCircle, tone: "green" },
     { value: 2, label: "Certificates Earned", icon: Certificate, tone: "gold" },
   ];
 
   return (
-    <div className="my-learning-page">
+    <div className="my-courses-page">
       <header className="learning-page-header">
         <div>
-          <h1>My Learning</h1>
+          <h1>My Courses</h1>
           <p>All your enrolled courses and learning progress in one place.</p>
         </div>
         <section

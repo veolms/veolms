@@ -5,6 +5,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
+    "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
     "preview": "vite preview --outDir build/client",
     "routes": "react-router routes",
     "typegen": "react-router typegen",
@@ -39,7 +40,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
-    "@typescript/native": "npm:typescript@7.0.2",
+    "@typescript/native": "catalog:",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.3.3",
     "vite": "8.2.1",

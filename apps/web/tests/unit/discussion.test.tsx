@@ -38,7 +38,7 @@ describe("CommentCard", () => {
 
 describe("Discussion", () => {
   it("rejects a blank comment and posts a trimmed valid comment", () => {
-    render(<Discussion />);
+    render(<Discussion persistenceKey="discussion-post-test" />);
 
     const post = screen.getByRole("button", { name: "Post comment" });
     fireEvent.click(post);
@@ -56,7 +56,7 @@ describe("Discussion", () => {
   });
 
   it("filters comments and resets search when changing tabs", () => {
-    render(<Discussion />);
+    render(<Discussion persistenceKey="discussion-filter-test" />);
 
     const [search] = screen.getAllByRole("searchbox", {
       name: "Search comments",

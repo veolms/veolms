@@ -8,8 +8,11 @@ export default [
     index(marker, { id: "home" }),
     route("home", marker, { id: "home-alias", caseSensitive: true }),
     route("dashboard", marker, { id: "dashboard", caseSensitive: true }),
-    route("my-learning", marker, { id: "my-learning", caseSensitive: true }),
-    route("courses", marker, { id: "courses", caseSensitive: true }),
+    route("my-courses", marker, { id: "my-courses", caseSensitive: true }),
+    route("explore-courses", marker, {
+      id: "explore-courses",
+      caseSensitive: true,
+    }),
     route("courses/create", marker, {
       id: "course-create",
       caseSensitive: true,
@@ -79,12 +82,16 @@ export default [
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
-    route("courses/:courseSlug/overview", marker, {
+    route("explore-courses/:courseSlug/overview", marker, {
       id: "course-overview",
       caseSensitive: true,
     }),
-    route("courses/:courseSlug", "routes/learning.tsx", {
+    route("learn/:courseSlug/:lectureSlug?", "routes/learning.tsx", {
       id: "learning",
+      caseSensitive: true,
+    }),
+    route("courses/:courseSlug/:lectureSlug?", "routes/legacy-learning.tsx", {
+      id: "legacy-learning",
       caseSensitive: true,
     }),
     route("*", marker, { id: "home-fallback", caseSensitive: true }),

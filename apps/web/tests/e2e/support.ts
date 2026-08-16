@@ -18,6 +18,7 @@ export const baselinePreferences: Readonly<Record<string, string>> = {
   "veolms-wishlist": "[]",
   "veolms-reduce-animations": "true",
   "veolms-player-ambient": "off",
+  "veolms-page-tab-colors": "follow-sidebar",
 };
 
 export async function installBaselineState(
@@ -62,6 +63,21 @@ export async function openApp(page: Page, path = "/") {
         ),
     );
   });
+}
+
+export async function getApplicationScrollTop(page: Page) {
+  return page.evaluate(() => window.scrollY);
+}
+
+export async function setApplicationScrollTop(page: Page, top: number) {
+  await page.evaluate(
+    (scrollTop) =>
+      window.scrollTo({
+        top: scrollTop,
+        behavior: "instant" as ScrollBehavior,
+      }),
+    top,
+  );
 }
 
 export async function expectStoredValue(

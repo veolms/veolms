@@ -22,6 +22,7 @@ describe("Curriculum", () => {
 
     render(
       <Curriculum
+        persistenceKey="curriculum-test-repeated"
         selectedLesson={1}
         onSelectLesson={onSelectLesson}
         courseTitle="UX Design Fundamentals"
@@ -57,9 +58,45 @@ describe("Curriculum", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(
+      screen.getByRole("button", { name: "Close lesson search" }),
+    );
+    expect(
+      screen.getByRole("button", { name: /Section 1: Introduction/ }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Search lessons" }));
+
+    fireEvent.click(
       screen.getByRole("button", { name: /10\.\s*Usability Testing\s*11:39/ }),
     );
     expect(onSelectLesson).toHaveBeenCalledWith(10);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens repeated dummy lectures from the remaining sections", () => {
+    const onSelectLesson = vi.fn();
+
+    render(
+      <Curriculum
+        persistenceKey="curriculum-test"
+        selectedLesson={1}
+        onSelectLesson={onSelectLesson}
+        courseTitle="UX Design Fundamentals"
+        courseThumbnail="/course-thumbnail.png"
+      />,
+    );
+
+    const informationArchitecture = screen.getByRole("button", {
+      name: /Section 3: Information Architecture/,
+    });
+    fireEvent.click(informationArchitecture);
+    expect(informationArchitecture).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /11\.\s*The Beginning of a Design Journey\s*09:13/,
+      }),
+    );
+    expect(onSelectLesson).toHaveBeenCalledWith(11);
   });
 });

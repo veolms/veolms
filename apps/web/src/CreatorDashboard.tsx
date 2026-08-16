@@ -594,7 +594,7 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
       className="creator-courses-panel"
       title="Your Courses"
       action="View all"
-      onAction={() => onNavigatePage?.("courses")}
+      onAction={() => onNavigatePage?.("explore-courses")}
     >
       <div className="creator-table creator-courses-table">
         <div className="creator-table-head">

@@ -181,7 +181,7 @@ export function CourseCatalogue({
               onOpen={onOpenCourse}
               onExplore={(selected) =>
                 onNavigatePage(
-                  `/courses/${encodeURIComponent(selected.id)}/overview`,
+                  `/explore-courses/${encodeURIComponent(selected.id)}/overview`,
                 )
               }
               menuOpen={courseMenu === course.id}

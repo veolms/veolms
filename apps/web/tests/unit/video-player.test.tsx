@@ -38,6 +38,24 @@ describe("video playback consent", () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
+  it("uses safe playback defaults when browser storage reads are blocked", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+
+    expect(() =>
+      render(
+        <VideoPlayer
+          media={{ fileName: "lesson.mp4", duration: 90, src: "/lesson.mp4" }}
+          lessonTitle="Storage-safe lesson"
+          theaterMode={false}
+          onTheaterToggle={() => {}}
+        />,
+      ),
+    ).not.toThrow();
+    expect(screen.getByRole("button", { name: "Mute" })).toBeVisible();
+  });
+
   it("autoplays a newly selected lecture while keeping the initial lecture paused", () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, "play")
@@ -70,7 +88,7 @@ describe("video playback consent", () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps shortcuts on the focusable player region and out of child controls", () => {
+  it("keeps shortcuts active on the player surface without stealing control navigation", () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, "play")
       .mockResolvedValue(undefined);
@@ -96,6 +114,21 @@ describe("video playback consent", () => {
       code: "Space",
     });
     expect(play).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Volume" }), {
+      key: " ",
+      code: "Space",
+    });
+    expect(play).toHaveBeenCalledTimes(1);
+
+    const separator = document.createElement("div");
+    separator.setAttribute("role", "separator");
+    separator.tabIndex = 0;
+    document.body.append(separator);
+    const video = document.querySelector("video")!;
+    fireEvent.keyDown(separator, { key: "End", code: "End" });
+    expect(video.currentTime).toBe(0);
+    separator.remove();
   });
 
   it("returns focus to the player before hiding the central play control", () => {

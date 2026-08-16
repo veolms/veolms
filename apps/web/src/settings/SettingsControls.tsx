@@ -1,5 +1,11 @@
 import { useRef } from "react";
-import type { ComponentType, KeyboardEvent, ReactNode } from "react";
+import type {
+  ComponentType,
+  HTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
 import { Check } from "@phosphor-icons/react";
 import { ThemedSelect } from "../ThemedSelect";
 import type { ThemedSelectOption } from "../ThemedSelect";
@@ -128,7 +134,21 @@ export function SettingsToggle({
   );
 }
 
-export interface SettingRowProps {
+const INTERACTIVE_ROW_TARGETS =
+  "button, a, input, select, textarea, [role='button'], [role='link'], [role='radio'], [role='slider'], [contenteditable='true']";
+
+export function clickContainedSettingsToggle(event: MouseEvent<HTMLElement>) {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest(INTERACTIVE_ROW_TARGETS)) {
+    return;
+  }
+
+  event.currentTarget
+    .querySelector<HTMLButtonElement>(".settings-toggle:not(:disabled)")
+    ?.click();
+}
+
+export interface SettingRowProps extends HTMLAttributes<HTMLDivElement> {
   icon: SettingsIcon;
   label: string;
   note: ReactNode;
@@ -142,9 +162,20 @@ export function SettingRow({
   note,
   children,
   className = "",
+  onClick,
+  ...rowProps
 }: SettingRowProps) {
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (!event.defaultPrevented) clickContainedSettingsToggle(event);
+  };
+
   return (
-    <div className={`settings-row ${className}`}>
+    <div
+      {...rowProps}
+      className={`settings-row ${className}`}
+      onClick={handleClick}
+    >
       <span className="settings-row__icon" aria-hidden="true">
         <Icon size={20} weight="duotone" />
       </span>
@@ -210,7 +241,10 @@ export function LearningToggleRow({
   disabled = false,
 }: LearningToggleRowProps) {
   return (
-    <div className="settings-learning-toggle-row">
+    <div
+      className="settings-learning-toggle-row"
+      onClick={clickContainedSettingsToggle}
+    >
       <span className="settings-learning-toggle-row__copy">
         <strong>{label}</strong>
         <small>{note}</small>

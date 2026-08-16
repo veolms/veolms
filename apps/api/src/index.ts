@@ -2,20 +2,9 @@ import { createDatabase } from "@veolms/database";
 
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
+import { logger } from "./lib/logger.ts";
 
 const database = createDatabase(config.DATABASE_URL);
-const logger =
-  config.NODE_ENV === "development" && config.API_DEV_PRETTY_LOGS
-    ? {
-      transport: {
-        target: "pino-pretty",
-        options: {
-          translateTime: "HH:MM:ss",
-          ignore: "pid,hostname",
-        },
-      },
-    }
-    : true;
 const app = await createApp({ database, logger });
 let shuttingDown = false;
 

@@ -65,22 +65,21 @@ import {
   verifyTotp,
   encryptSecret,
   decryptSecret,
-  generateOauthState,
   generatePkce,
-} from "../lib/auth-helpers.ts";
-import { sendEmail } from "../lib/email.ts";
-import { sendSMS } from "../lib/sms.ts";
-import { createAuthMiddleware } from "../middlewares/auth.ts";
-import { errorResponse, httpError } from "../lib/errors.ts";
-import { jsonResponse } from "../lib/responses.ts";
-import { config } from "../config.ts";
-import type { RoutePlugin } from "../lib/route-plugin.ts";
+} from "./auth.utils.ts";
+import { sendEmail } from "../../lib/email.ts";
+import { sendSMS } from "../../lib/sms.ts";
+import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
+import { errorResponse, httpError } from "../../lib/errors.ts";
+import { jsonResponse } from "../../lib/responses.ts";
+import { config } from "../../config.ts";
+import type { RoutePlugin } from "../../lib/route-plugin.ts";
 
 const sessionParamsSchema = z.object({
   id: z
     .string()
     .uuid()
-    .meta({ description: "The UUID of the session to revoke." }),
+    .describe("The UUID of the session to revoke."),
 });
 
 interface OauthProfile {
@@ -838,7 +837,7 @@ const authRoutes: RoutePlugin = async (app, { database }) => {
     },
     async (request, reply) => {
       const { provider, redirectUri } = request.body;
-      const state = generateOauthState();
+      const state = generateRandomToken();
 
       let oauthUrl = "";
       let codeVerifier: string | undefined = undefined;

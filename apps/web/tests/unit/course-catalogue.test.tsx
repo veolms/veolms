@@ -110,7 +110,7 @@ describe("CourseCatalogue", () => {
     fireEvent.click(screen.getByRole("button", { name: "Explore Course" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith(
-      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
+      `/explore-courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
     );
     expect(setNotice).not.toHaveBeenCalled();
   });

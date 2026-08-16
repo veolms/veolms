@@ -69,7 +69,7 @@ const PREVIEW_NAVIGATION: readonly (readonly [PreviewIcon, string, string])[] =
   [
     [House, "#2e9bff", "Dashboard"],
     [Heart, "#ee4f72", "Wishlist"],
-    [BookOpen, "#a26bff", "Courses"],
+    [BookOpen, "#a26bff", "Explore Courses"],
     [UsersThree, "#27c968", "Students"],
   ];
 

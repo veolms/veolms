@@ -5,10 +5,13 @@ import {
   Check,
   CircleHalf,
   DeviceMobile,
+  Keyboard,
   Moon,
   SidebarSimple,
   Sparkle,
+  Stack,
   Sun,
+  Tabs,
   TextAa,
 } from "@phosphor-icons/react";
 import {
@@ -24,7 +27,17 @@ import {
   SettingsToggle,
 } from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
-import { readStored, readStoredBoolean } from "./settingsPreferences";
+import { ReadingModeSettings } from "./ReadingModeSettings";
+import { persistShortcutPlatformPreference } from "../keyboardShortcuts";
+import type { ShortcutPlatformPreference } from "../keyboardShortcuts";
+import { useShortcutPlatformPreference } from "../useShortcutPlatform";
+import {
+  ELEVATED_SURFACES_KEY,
+  readElevatedSurfaces,
+  readStored,
+  readStoredBoolean,
+} from "./settingsPreferences";
+import type { PageTabColors } from "./settingsPreferences";
 
 export type DisplayMode = "light" | "dark" | "device";
 
@@ -55,6 +68,8 @@ export interface AppearanceSettingsProps {
   onThemeChange?: (theme: DisplayMode) => void;
   academyTheme: string;
   onAcademyThemeChange?: (themeId: AcademyTheme["id"]) => void;
+  pageTabColors: PageTabColors;
+  onPageTabColorsChange: (colors: PageTabColors) => void;
 }
 
 export function AppearanceSettings({
@@ -62,6 +77,8 @@ export function AppearanceSettings({
   onThemeChange,
   academyTheme,
   onAcademyThemeChange,
+  pageTabColors,
+  onPageTabColorsChange,
 }: AppearanceSettingsProps) {
   const [reduceAnimations, setReduceAnimations] = useState(() =>
     readStoredBoolean("veolms-reduce-animations", false),
@@ -75,9 +92,12 @@ export function AppearanceSettings({
   const [hideScrollbars, setHideScrollbars] = useState(() =>
     readStoredBoolean("veolms-hide-scrollbars", false),
   );
+  const [elevatedSurfaces, setElevatedSurfaces] =
+    useState(readElevatedSurfaces);
   const [textSize, setTextSize] = useState(() =>
     readStored("veolms-text-size", "default"),
   );
+  const shortcutPlatformPreference = useShortcutPlatformPreference();
   const [themeRotation, setThemeRotation] = useState(
     getThemeRotationPreferences,
   );
@@ -126,6 +146,14 @@ export function AppearanceSettings({
       String(hideScrollbars),
     );
   }, [hideScrollbars]);
+  useEffect(() => {
+    document.documentElement.dataset.elevatedSurfaces =
+      String(elevatedSurfaces);
+    window.localStorage.setItem(
+      ELEVATED_SURFACES_KEY,
+      String(elevatedSurfaces),
+    );
+  }, [elevatedSurfaces]);
   useEffect(() => {
     document.documentElement.dataset.textSize = textSize;
     window.localStorage.setItem("veolms-text-size", textSize);
@@ -180,6 +208,8 @@ export function AppearanceSettings({
           ))}
         </RadioGroup>
       </section>
+
+      <ReadingModeSettings />
 
       <section className="settings-section settings-theme-rotation">
         <h2>Theme rotation</h2>
@@ -302,6 +332,53 @@ export function AppearanceSettings({
             />
           </SettingRow>
           <SettingRow
+            icon={Stack}
+            label="Elevated surfaces"
+            note="Add subtle edge light and depth to cards and navigation"
+          >
+            <SettingsToggle
+              checked={elevatedSurfaces}
+              onChange={setElevatedSurfaces}
+              label="Elevated surfaces"
+            />
+          </SettingRow>
+          <SettingRow
+            className="settings-row--shortcut-platform"
+            icon={Keyboard}
+            label="Shortcut key style"
+            note="Follow your system or choose which modifier keys shortcut hints use"
+          >
+            <RadioGroup
+              label="Shortcut key style"
+              className="settings-segmented settings-segmented--shortcut-platform"
+            >
+              {(
+                [
+                  ["system", "Follow system"],
+                  ["windows", "Windows"],
+                  ["mac", "Mac"],
+                ] as const satisfies readonly (readonly [
+                  ShortcutPlatformPreference,
+                  string,
+                ])[]
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={shortcutPlatformPreference === value}
+                  tabIndex={shortcutPlatformPreference === value ? 0 : -1}
+                  className={
+                    shortcutPlatformPreference === value ? "is-selected" : ""
+                  }
+                  onClick={() => persistShortcutPlatformPreference(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </RadioGroup>
+          </SettingRow>
+          <SettingRow
             className="settings-row--text-size"
             icon={TextAa}
             label="Text size"
@@ -327,6 +404,37 @@ export function AppearanceSettings({
                   tabIndex={textSize === value ? 0 : -1}
                   className={textSize === value ? "is-selected" : ""}
                   onClick={() => setTextSize(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </RadioGroup>
+          </SettingRow>
+          <SettingRow
+            className="settings-row--page-tab-colors"
+            icon={Tabs}
+            label="Page tab colors"
+            note="Follow the sidebar or choose an independent tab style"
+          >
+            <RadioGroup
+              label="Page tab colors"
+              className="settings-segmented settings-segmented--page-tabs"
+            >
+              {(
+                [
+                  ["follow-sidebar", "Follow sidebar"],
+                  ["multicolor", "Multicolor"],
+                  ["monochrome", "Monochrome"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={pageTabColors === value}
+                  tabIndex={pageTabColors === value ? 0 : -1}
+                  className={pageTabColors === value ? "is-selected" : ""}
+                  onClick={() => onPageTabColorsChange(value)}
                 >
                   {label}
                 </button>

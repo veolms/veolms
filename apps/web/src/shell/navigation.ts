@@ -22,8 +22,8 @@ export const MESSAGES_NAVIGATION_ENABLED = false;
 
 const studentNavigation: readonly NavigationItem[] = [
   ["Home", House],
-  ["My Learning", GraduationCap],
-  ["Courses", BookOpen],
+  ["My Courses", GraduationCap],
+  ["Explore Courses", BookOpen],
   ["Wishlist", Heart],
   ["Discussions", ChatCircleDots],
   ["Order History", Tote],
@@ -56,7 +56,8 @@ const navigationByRole: Record<string, readonly NavigationItem[]> = {
 const navigationTones: Record<string, string> = {
   Home: "#5da9ff",
   Dashboard: "#5da9ff",
-  "My Learning": "#ad7cff",
+  "My Courses": "#ad7cff",
+  "Explore Courses": "#8f70ff",
   Courses: "#8f70ff",
   Students: "#55d98b",
   Wishlist: "#ff6684",
@@ -69,13 +70,21 @@ const navigationTones: Record<string, string> = {
   Messages: "#63c8d5",
   Notifications: "#f1be4b",
   Settings: "#a16cff",
+  Fullscreen: "#ff8a55",
   Logout: "#8c9294",
 };
 
 export function getNavigationDisplayLabel(label: string, page: string): string {
-  if (page !== "courses" && label === "Notifications") return "Notification";
+  if (page !== "explore-courses" && label === "Notifications")
+    return "Notification";
   return label;
 }
+
+const migrateStudentNavigationLabel = (label: string) => {
+  if (label === "My Learning") return "My Courses";
+  if (label === "Courses") return "Explore Courses";
+  return label;
+};
 
 export function getInitialNavigationOrder(role: string): string[] {
   const defaultOrder = (navigationByRole[role] || studentNavigation).map(
@@ -86,9 +95,11 @@ export function getInitialNavigationOrder(role: string): string[] {
       localStorage.getItem(`veolms-navigation-order-${role}`) || "[]",
     );
     if (!Array.isArray(parsedOrder)) return defaultOrder;
-    const savedOrder = parsedOrder.filter(
-      (label): label is string => typeof label === "string",
-    );
+    const savedOrder = parsedOrder
+      .filter((label): label is string => typeof label === "string")
+      .map((label) =>
+        role === "student" ? migrateStudentNavigationLabel(label) : label,
+      );
     const validSavedOrder = savedOrder.filter(
       (label, index) =>
         defaultOrder.includes(label) && savedOrder.indexOf(label) === index,
@@ -116,6 +127,16 @@ export function getOrderedNavigation(
       itemByLabel.has(label) && labels.indexOf(label) === index,
   );
   return orderedLabels.map((label) => itemByLabel.get(label)!);
+}
+
+export function getNavigationDestination(label: string): string {
+  if (label === "Home") return "home";
+  if (label === "Dashboard") return "dashboard";
+  if (label === "My Courses") return "my-courses";
+  if (label === "Explore Courses" || label === "Courses")
+    return "explore-courses";
+  if (label === "Wishlist") return "wishlist";
+  return label;
 }
 
 export function getNavigationIconColor(

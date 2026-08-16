@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import frameworkRoutes from "../../src/routes.ts";
 import {
   destinationPaths,
@@ -10,6 +10,18 @@ import {
   normalizeNavigationPath,
   routeDescriptors,
 } from "../../src/routing/routeDescriptors.ts";
+import {
+  DISCUSSIONS_DEFAULT_TAB,
+  DISCUSSIONS_TAB_SESSION_KEY,
+  readDiscussionTab,
+  readSettingsTab,
+  SETTINGS_DEFAULT_TAB,
+  SETTINGS_TAB_SESSION_KEY,
+} from "../../src/routing/tabSessionState.ts";
+
+beforeEach(() => {
+  sessionStorage.clear();
+});
 
 describe("React Router framework route configuration", () => {
   const academyLayout = frameworkRoutes[0]!;
@@ -28,8 +40,8 @@ describe("React Router framework route configuration", () => {
       home: "/",
       "home-alias": "home",
       dashboard: "dashboard",
-      "my-learning": "my-learning",
-      courses: "courses",
+      "my-courses": "my-courses",
+      "explore-courses": "explore-courses",
       "course-create": "courses/create",
       wishlist: "wishlist",
       students: "students",
@@ -54,8 +66,9 @@ describe("React Router framework route configuration", () => {
       "settings-security": "settings/security",
       "settings-account": "settings/account",
       logout: "logout",
-      "course-overview": "courses/:courseSlug/overview",
-      learning: "courses/:courseSlug",
+      "course-overview": "explore-courses/:courseSlug/overview",
+      learning: "learn/:courseSlug/:lectureSlug?",
+      "legacy-learning": "courses/:courseSlug/:lectureSlug?",
       "home-fallback": "*",
     });
   });
@@ -66,14 +79,21 @@ describe("React Router framework route configuration", () => {
       file: "routes/academy-marker.tsx",
     });
     expect(childRoutes.find(({ id }) => id === "learning")).toMatchObject({
-      path: "courses/:courseSlug",
+      path: "learn/:courseSlug/:lectureSlug?",
       file: "routes/learning.tsx",
+      caseSensitive: true,
+    });
+    expect(
+      childRoutes.find(({ id }) => id === "legacy-learning"),
+    ).toMatchObject({
+      path: "courses/:courseSlug/:lectureSlug?",
+      file: "routes/legacy-learning.tsx",
       caseSensitive: true,
     });
     expect(
       childRoutes.find(({ id }) => id === "course-overview"),
     ).toMatchObject({
-      path: "courses/:courseSlug/overview",
+      path: "explore-courses/:courseSlug/overview",
       file: "routes/academy-marker.tsx",
       caseSensitive: true,
     });
@@ -90,9 +110,22 @@ describe("React Router framework route configuration", () => {
   });
 });
 
+describe("session tab routing", () => {
+  it("falls back to each first tab when session storage reads are blocked", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+
+    expect(readSettingsTab()).toBe(SETTINGS_DEFAULT_TAB);
+    expect(readDiscussionTab()).toBe(DISCUSSIONS_DEFAULT_TAB);
+  });
+});
+
 describe("framework route descriptors", () => {
   it("normalizes same-route comparisons without changing leading path syntax", () => {
-    expect(normalizeNavigationPath("/courses///")).toBe("/courses");
+    expect(normalizeNavigationPath("/explore-courses///")).toBe(
+      "/explore-courses",
+    );
     expect(normalizeNavigationPath("///")).toBe("/");
     expect(normalizeNavigationPath("")).toBe("/");
     expect(normalizeNavigationPath("//home")).toBe("//home");
@@ -115,15 +148,21 @@ describe("framework route descriptors", () => {
     expect(getRouteDescriptor("learning")).toEqual({
       kind: "learning",
       page: "learning",
-      section: "Courses",
+      section: "Explore Courses",
     });
     expect(getRouteDescriptor("missing")).toBeUndefined();
   });
 
   it("preserves case-sensitive route behavior around framework hydration", () => {
-    expect(getEffectiveRouteId("courses", "/courses")).toBe("courses");
-    expect(getEffectiveRouteId("courses", "/courses/")).toBe("courses");
-    expect(getEffectiveRouteId("courses", "/COURSES")).toBe("home-fallback");
+    expect(getEffectiveRouteId("explore-courses", "/explore-courses")).toBe(
+      "explore-courses",
+    );
+    expect(getEffectiveRouteId("explore-courses", "/explore-courses/")).toBe(
+      "explore-courses",
+    );
+    expect(getEffectiveRouteId("explore-courses", "/EXPLORE-COURSES")).toBe(
+      "home-fallback",
+    );
     expect(getEffectiveRouteId("dashboard", "/DASHBOARD")).toBe(
       "home-fallback",
     );
@@ -136,30 +175,57 @@ describe("framework route descriptors", () => {
   });
 
   it("validates learning-route structure and encoding without changing course-slug casing", () => {
-    expect(getEffectiveRouteId("learning", "/courses/TypeScript-Course")).toBe(
+    expect(getEffectiveRouteId("learning", "/learn/TypeScript-Course")).toBe(
       "learning",
     );
-    expect(getEffectiveRouteId("learning", "/courses/c%2B%2B-basics/")).toBe(
+    expect(getEffectiveRouteId("learning", "/learn/c%2B%2B-basics/")).toBe(
       "learning",
     );
-    expect(getEffectiveRouteId("learning", "/courses/%2F")).toBe("learning");
+    expect(getEffectiveRouteId("learning", "/learn/%2F")).toBe("learning");
     expect(getEffectiveRouteId("learning", "/COURSES/typescript-course")).toBe(
       "home-fallback",
     );
     expect(
-      getEffectiveRouteId("learning", "/courses/typescript-course/lesson-1"),
+      getEffectiveRouteId("learning", "/learn/typescript-course/lesson-1"),
+    ).toBe("learning");
+    expect(
+      getEffectiveRouteId(
+        "learning",
+        "/learn/typescript-course/the-design-mindset",
+      ),
+    ).toBe("learning");
+    expect(
+      getEffectiveRouteId("learning", "/learn/typescript-course/a/b"),
     ).toBe("home-fallback");
-    expect(getEffectiveRouteId("learning", "/courses/%E0%A4%A")).toBe(
+    expect(
+      getEffectiveRouteId("learning", "/learn/typescript-course/%E0%A4%A"),
+    ).toBe("home-fallback");
+    expect(getEffectiveRouteId("learning", "/learn/%E0%A4%A")).toBe(
       "home-fallback",
     );
     expect(
       getEffectiveRouteId(
+        "legacy-learning",
+        "/courses/typescript-course/the-design-mindset",
+      ),
+    ).toBe("legacy-learning");
+    expect(
+      getEffectiveRouteId(
+        "legacy-learning",
+        "/courses/typescript-course/%E0%A4%A",
+      ),
+    ).toBe("home-fallback");
+    expect(
+      getEffectiveRouteId(
         "course-overview",
-        "/courses/typescript-course/overview",
+        "/explore-courses/typescript-course/overview",
       ),
     ).toBe("course-overview");
     expect(
-      getEffectiveRouteId("course-overview", "/courses/%E0%A4%A/overview"),
+      getEffectiveRouteId(
+        "course-overview",
+        "/explore-courses/%E0%A4%A/overview",
+      ),
     ).toBe("home-fallback");
   });
 
@@ -173,11 +239,17 @@ describe("framework route descriptors", () => {
     expect(getMatchedRouteDescriptor([{ id: "academy-layout" }])).toBe(
       routeDescriptors.home,
     );
+    expect(
+      getMatchedRouteDescriptor(
+        [{ id: "academy-layout" }, { id: "legacy-learning" }],
+        "/courses/typescript-course",
+      ),
+    ).toMatchObject({ kind: "learning", page: "learning" });
   });
 
   it("generates the existing static and course metadata", () => {
-    expect(getRouteMeta("courses")).toEqual({
-      title: "Courses \u00B7 ProCodrr",
+    expect(getRouteMeta("explore-courses")).toEqual({
+      title: "Explore Courses \u00B7 ProCodrr",
       description: "Browse enrolled and available ProCodrr courses.",
     });
     expect(
@@ -191,7 +263,7 @@ describe("framework route descriptors", () => {
       title: "Home \u00B7 ProCodrr",
       description: routeDescriptors.home.description,
     });
-    expect(getRouteMeta("courses", {}, "/COURSES")).toEqual({
+    expect(getRouteMeta("explore-courses", {}, "/EXPLORE-COURSES")).toEqual({
       title: "Home \u00B7 ProCodrr",
       description: routeDescriptors.home.description,
     });
@@ -200,16 +272,31 @@ describe("framework route descriptors", () => {
   it("preserves navigation destination aliases and direct paths", () => {
     expect(destinationPaths).toMatchObject({
       home: "/",
-      settings: "/settings/appearance",
+      settings: "/settings",
       Settings: "/settings",
-      discussions: "/discussions/q-and-a",
-      Discussions: "/discussions/q-and-a",
+      discussions: "/discussions",
+      Discussions: "/discussions",
       "Create Course": "/courses/create",
       Students: "/students",
       "Order History": "/order-history",
       Logout: "/logout",
     });
-    expect(getDestinationPath("Settings")).toBe("/settings");
+    expect(getDestinationPath("Settings")).toBe("/settings/profile");
+    expect(getDestinationPath("Discussions")).toBe("/discussions/q-and-a");
+    sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, "sidebar");
+    sessionStorage.setItem(DISCUSSIONS_TAB_SESSION_KEY, "mentions");
+    expect(getRouteDescriptor("settings")).toMatchObject({
+      settingsTab: "sidebar",
+    });
+    expect(getRouteDescriptor("discussions")).toMatchObject({
+      discussionTab: "mentions",
+    });
+    expect(getDestinationPath("Settings")).toBe("/settings/sidebar");
+    expect(getDestinationPath("Discussions")).toBe("/discussions/mentions");
+    sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, "invalid");
+    sessionStorage.setItem(DISCUSSIONS_TAB_SESSION_KEY, "invalid");
+    expect(getDestinationPath("Settings")).toBe("/settings/profile");
+    expect(getDestinationPath("Discussions")).toBe("/discussions/q-and-a");
     expect(getDestinationPath("/courses/custom-course")).toBe(
       "/courses/custom-course",
     );

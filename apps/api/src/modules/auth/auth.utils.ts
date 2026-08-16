@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { config } from "../config.ts";
+import { config } from "../../config.ts";
 
 
 
@@ -12,9 +12,6 @@ export function generateRandomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-export function generateOauthState(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
 
 export function generatePkce(): { verifier: string; challenge: string } {
   const verifier = crypto.randomBytes(32).toString("base64url");

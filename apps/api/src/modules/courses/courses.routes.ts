@@ -9,9 +9,9 @@ import {
 } from "@veolms/database";
 import { z } from "zod";
 
-import { errorResponse, httpError } from "../lib/errors.ts";
-import { jsonResponse } from "../lib/responses.ts";
-import type { RoutePlugin } from "../lib/route-plugin.ts";
+import { errorResponse, httpError } from "../../lib/errors.ts";
+import { jsonResponse } from "../../lib/responses.ts";
+import type { RoutePlugin } from "../../lib/route-plugin.ts";
 
 const courseSlugParamsSchema = z.object({ slug: courseSlugSchema });
 

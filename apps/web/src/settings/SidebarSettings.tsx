@@ -1,15 +1,28 @@
 import {
   Check,
   CircleHalf,
+  CornersOut,
+  DotsSixVertical,
+  Eye,
+  GearSix,
   Info,
+  Keyboard,
+  Moon,
   Palette,
   Plus,
   SidebarSimple,
+  Stack,
   TextT,
 } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
+import { AppSlider } from "../AppSlider";
 import { academyThemes } from "../themes";
 import type { AcademyTheme } from "../themes";
+import { useShortcutPlatform } from "../useShortcutPlatform";
 import {
   ChoiceCard,
   RadioGroup,
@@ -19,10 +32,16 @@ import {
 import { MiniSurface, SidebarIconPreview } from "./SettingsPreviews";
 import {
   normalizeSidebarMaxWidth,
+  normalizeSidebarDockItems,
+  normalizeSidebarDockOrder,
   SIDEBAR_MAX_WIDTH_LIMIT,
   SIDEBAR_MAX_WIDTH_MIN,
 } from "./settingsPreferences";
-import type { SidebarMode, SidebarPreferences } from "./settingsPreferences";
+import type {
+  SidebarDockItem,
+  SidebarMode,
+  SidebarPreferences,
+} from "./settingsPreferences";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
 // deliberately the shared registry rather than a display-only subset.
@@ -44,6 +63,59 @@ const SIDEBAR_ICON_COLORS: readonly SidebarIconColor[] = [
 ];
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+const SIDEBAR_DOCK_OPTIONS = [
+  {
+    id: "appearance",
+    label: "Light / dark mode",
+    note: "Switch between the light and dark display modes",
+    icon: Moon,
+  },
+  {
+    id: "theme",
+    label: "Color theme",
+    note: "Open the academy color theme picker",
+    icon: Palette,
+  },
+  {
+    id: "reading-mode",
+    label: "Reading mode",
+    note: "Apply or remove the configured paper-like reading mode",
+    icon: Eye,
+  },
+  {
+    id: "fullscreen",
+    label: "Fullscreen",
+    note: "Enter or exit browser fullscreen mode",
+    icon: CornersOut,
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    note: "Open settings from the dock instead of the navigation menu",
+    icon: GearSix,
+  },
+] as const satisfies readonly {
+  id: SidebarDockItem;
+  label: string;
+  note: string;
+  icon: typeof Moon;
+}[];
+
+type DockDropPosition = "before" | "after";
+
+interface DockDragState {
+  pointerId: number;
+  item: SidebarDockItem;
+  startX: number;
+  startY: number;
+  dragging: boolean;
+}
+
+interface DockDropTarget {
+  item: SidebarDockItem;
+  position: DockDropPosition;
+}
 
 export interface SidebarSettingsProps {
   sidebarPreferences?: SidebarPreferences;
@@ -76,15 +148,32 @@ export function SidebarSettings({
         : customColor;
   const layout = preferences.contentLayout || "framed";
   const sidebarMaxWidth = normalizeSidebarMaxWidth(preferences.sidebarMaxWidth);
+  const headerLayout =
+    preferences.headerLayout === "inline" ? "inline" : "fixed";
+  const dockItems = normalizeSidebarDockItems(preferences.dockItems);
+  const dockOrder = normalizeSidebarDockOrder(preferences.dockOrder);
+  const orderedDockOptions = dockOrder.map((item) =>
+    SIDEBAR_DOCK_OPTIONS.find((option) => option.id === item)!,
+  );
+  const showKeyboardShortcuts = preferences.showKeyboardShortcuts !== false;
   const showLabels = preferences.showCollapsedLabels !== false;
   const showCollapsedLogo = preferences.showCollapsedLogo !== false;
-  const showThemeIcon = preferences.showThemeIcon !== false;
   const highlightActive = preferences.highlightActive !== false;
+  const elevateMenus = preferences.elevateMenus === true;
+  const shortcutPlatform = useShortcutPlatform();
   const sidebarHidden = sidebarMode === "hidden";
   const [colorDraft, setColorDraft] = useState(displayColor);
   const [sidebarWidthDraft, setSidebarWidthDraft] = useState(
     String(sidebarMaxWidth),
   );
+  const [draggedDockItem, setDraggedDockItem] =
+    useState<SidebarDockItem | null>(null);
+  const [dockDropTarget, setDockDropTarget] = useState<DockDropTarget | null>(
+    null,
+  );
+  const [dockAnnouncement, setDockAnnouncement] = useState("");
+  const dockDragRef = useRef<DockDragState | null>(null);
+  const dockDropRef = useRef<DockDropTarget | null>(null);
   const selectedPreset =
     SIDEBAR_ICON_COLORS.find(
       (item) => item.color.toLowerCase() === displayColor.toLowerCase(),
@@ -114,8 +203,209 @@ export function SidebarSettings({
     update({ sidebarMaxWidth: normalizedWidth });
   };
 
+  const toggleDockItem = (item: SidebarDockItem, selected: boolean) => {
+    if (selected) {
+      update({ dockItems: dockItems.filter((current) => current !== item) });
+      return;
+    }
+    update({ dockItems: [...dockItems, item] });
+  };
+
+  const reorderDockItem = (
+    sourceItem: SidebarDockItem,
+    targetItem: SidebarDockItem,
+    position: DockDropPosition,
+  ) => {
+    if (sourceItem === targetItem) return;
+    const nextOrder = dockOrder.filter((item) => item !== sourceItem);
+    const targetIndex = nextOrder.indexOf(targetItem);
+    if (targetIndex < 0) return;
+    nextOrder.splice(
+      targetIndex + (position === "after" ? 1 : 0),
+      0,
+      sourceItem,
+    );
+    const nextPreferences: SidebarPreferences = { dockOrder: nextOrder };
+    if (!dockItems.includes(sourceItem)) {
+      nextPreferences.dockItems = [...dockItems, sourceItem];
+    }
+    update(nextPreferences);
+  };
+
+  const moveDockItemWithKeyboard = (
+    item: SidebarDockItem,
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+  ) => {
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    const currentIndex = dockOrder.indexOf(item);
+    if (currentIndex < 0) return;
+    const targetIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? dockOrder.length - 1
+          : currentIndex + (event.key === "ArrowUp" ? -1 : 1);
+    if (
+      targetIndex < 0 ||
+      targetIndex >= dockOrder.length ||
+      targetIndex === currentIndex
+    )
+      return;
+    event.preventDefault();
+    const nextOrder = [...dockOrder];
+    nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(targetIndex, 0, item);
+    update({ dockOrder: nextOrder });
+    const label = SIDEBAR_DOCK_OPTIONS.find(
+      (option) => option.id === item,
+    )?.label;
+    setDockAnnouncement(`${label} moved to position ${targetIndex + 1}.`);
+  };
+
+  const startDockPointerDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    item: SidebarDockItem,
+  ) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.currentTarget.focus({ preventScroll: true });
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dockDragRef.current = {
+      pointerId: event.pointerId,
+      item,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    dockDropRef.current = null;
+    setDockDropTarget(null);
+  };
+
+  const moveDockPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dockDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.dragging) {
+      if (
+        Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 7
+      )
+        return;
+      drag.dragging = true;
+      setDraggedDockItem(drag.item);
+    }
+    event.preventDefault();
+    const targetRow = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-dock-item]");
+    if (!targetRow) {
+      dockDropRef.current = null;
+      setDockDropTarget(null);
+      return;
+    }
+    const targetItem = targetRow?.dataset.dockItem as
+      SidebarDockItem | undefined;
+    if (!targetItem || targetItem === drag.item) {
+      dockDropRef.current = null;
+      setDockDropTarget(null);
+      return;
+    }
+    const targetRect = targetRow.getBoundingClientRect();
+    const position: DockDropPosition =
+      event.clientY >= targetRect.top + targetRect.height / 2
+        ? "after"
+        : "before";
+    const nextTarget = { item: targetItem, position };
+    dockDropRef.current = nextTarget;
+    setDockDropTarget((current) =>
+      current?.item === targetItem && current.position === position
+        ? current
+        : nextTarget,
+    );
+  };
+
+  const finishDockPointerDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    cancelled = false,
+  ) => {
+    const drag = dockDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dockDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    if (drag.dragging && !cancelled && dockDropRef.current) {
+      reorderDockItem(
+        drag.item,
+        dockDropRef.current.item,
+        dockDropRef.current.position,
+      );
+      setDockAnnouncement("Sidebar dock order saved.");
+    }
+    dockDropRef.current = null;
+    setDraggedDockItem(null);
+    setDockDropTarget(null);
+  };
+
   return (
-    <div className="settings-content">
+    <div className="settings-content settings-sidebar-settings">
+      <div className="settings-sidebar-category-heading">
+        <span aria-hidden="true">
+          <SidebarSimple size={21} weight="duotone" />
+        </span>
+        <div>
+          <h2>Sidebar header</h2>
+          <p>Control how the brand and collapse action share the header.</p>
+        </div>
+      </div>
+
+      <section className="settings-section settings-sidebar-header-section">
+        <div className="settings-section__heading-row">
+          <div>
+            <h2>Header behavior</h2>
+            <p>
+              Choose which header item stays anchored while the sidebar resizes.
+            </p>
+          </div>
+        </div>
+        <div className="settings-row-list settings-sidebar-header-options__rows">
+          <SettingRow
+            icon={SidebarSimple}
+            label="Fixed collapse control"
+            note="Keep the collapse control on the menu icon axis while the logo moves and clips"
+          >
+            <SettingsToggle
+              checked={headerLayout === "fixed"}
+              onChange={(value) =>
+                update({ headerLayout: value ? "fixed" : "inline" })
+              }
+              label="Fixed collapse control"
+            />
+          </SettingRow>
+          <SettingRow
+            icon={SidebarSimple}
+            label="Show logo when collapsed"
+            note="Keep the ProCodrr P visible in the compact rail"
+          >
+            <SettingsToggle
+              checked={showCollapsedLogo}
+              onChange={(value) => update({ showCollapsedLogo: value })}
+              label="Show logo when collapsed"
+            />
+          </SettingRow>
+        </div>
+      </section>
+
+      <div className="settings-sidebar-category-heading">
+        <span aria-hidden="true">
+          <TextT size={21} weight="regular" />
+        </span>
+        <div>
+          <h2>Sidebar menus</h2>
+          <p>
+            Customize the middle navigation area, its icons, labels, and layout.
+          </p>
+        </div>
+      </div>
+
       <section className="settings-section">
         <div className="settings-section__heading-row">
           <div>
@@ -313,9 +603,8 @@ export function SidebarSettings({
             htmlFor="sidebar-max-width-range"
           >
             <span>Drag to adjust the maximum width</span>
-            <input
+            <AppSlider
               id="sidebar-max-width-range"
-              type="range"
               min={SIDEBAR_MAX_WIDTH_MIN}
               max={SIDEBAR_MAX_WIDTH_LIMIT}
               step="1"
@@ -326,6 +615,7 @@ export function SidebarSettings({
                 })
               }
               aria-label="Sidebar max width"
+              aria-valuetext={`${sidebarMaxWidth} pixels`}
             />
             <span
               className="settings-sidebar-width__range-labels"
@@ -357,8 +647,19 @@ export function SidebarSettings({
       </section>
 
       <section className="settings-section">
-        <h2>Additional sidebar options</h2>
+        <h2>Menu behavior</h2>
         <div className="settings-row-list">
+          <SettingRow
+            icon={Keyboard}
+            label="Show keyboard shortcuts"
+            note="Display shortcut hints when hovering or focusing menu items"
+          >
+            <SettingsToggle
+              checked={showKeyboardShortcuts}
+              onChange={(value) => update({ showKeyboardShortcuts: value })}
+              label="Show keyboard shortcuts"
+            />
+          </SettingRow>
           <SettingRow
             icon={TextT}
             label="Show labels in collapsed mode"
@@ -368,28 +669,6 @@ export function SidebarSettings({
               checked={showLabels}
               onChange={(value) => update({ showCollapsedLabels: value })}
               label="Show labels in collapsed mode"
-            />
-          </SettingRow>
-          <SettingRow
-            icon={SidebarSimple}
-            label="Show logo when collapsed"
-            note="Keep the ProCodrr P visible in the compact rail"
-          >
-            <SettingsToggle
-              checked={showCollapsedLogo}
-              onChange={(value) => update({ showCollapsedLogo: value })}
-              label="Show logo when collapsed"
-            />
-          </SettingRow>
-          <SettingRow
-            icon={Palette}
-            label="Show theme icon"
-            note="Display the color theme picker in the sidebar"
-          >
-            <SettingsToggle
-              checked={showThemeIcon}
-              onChange={(value) => update({ showThemeIcon: value })}
-              label="Show theme icon"
             />
           </SettingRow>
           <SettingRow
@@ -404,13 +683,24 @@ export function SidebarSettings({
             />
           </SettingRow>
           <SettingRow
+            icon={Stack}
+            label="Elevate sidebar menus"
+            note="Add subtle edge light and depth to sidebar menu items"
+          >
+            <SettingsToggle
+              checked={elevateMenus}
+              onChange={(value) => update({ elevateMenus: value })}
+              label="Elevate sidebar menus"
+            />
+          </SettingRow>
+          <SettingRow
             icon={SidebarSimple}
             label="Hide sidebar"
             note={
               <>
-                Bring it back with <kbd>Ctrl+Alt+B</kbd> (or{" "}
-                <kbd>Command+Option+B</kbd> on Mac), or move the cursor to the
-                left edge of the screen.
+                Bring it back with{" "}
+                <kbd>{shortcutPlatform === "mac" ? "⌘+B" : "Ctrl+B"}</kbd>, or
+                move the cursor to the left edge of the screen.
               </>
             }
           >
@@ -423,6 +713,65 @@ export function SidebarSettings({
             />
           </SettingRow>
         </div>
+      </section>
+
+      <div className="settings-sidebar-category-heading">
+        <span aria-hidden="true">
+          <Palette size={21} weight="duotone" />
+        </span>
+        <div>
+          <h2>Sidebar dock</h2>
+          <p>Choose visible controls and drag their handles to reorder them.</p>
+        </div>
+        <output aria-live="polite">{dockItems.length} visible</output>
+      </div>
+
+      <section className="settings-section settings-sidebar-dock-section">
+        <div className="settings-row-list" aria-label="Sidebar dock controls">
+          {orderedDockOptions.map(({ id, label, note, icon }, index) => {
+            const selected = dockItems.includes(id);
+            const dropPosition =
+              dockDropTarget?.item === id ? dockDropTarget.position : null;
+            return (
+              <SettingRow
+                key={id}
+                icon={icon}
+                label={label}
+                note={note}
+                data-dock-item={id}
+                className={`settings-sidebar-dock-row${draggedDockItem === id ? " is-dragging" : ""}${dropPosition ? ` is-drop-target is-drop-${dropPosition}` : ""}`}
+              >
+                <button
+                  type="button"
+                  className="settings-dock-reorder-handle"
+                  aria-label={`Reorder ${label}`}
+                  aria-describedby={`sidebar-dock-position-${id}`}
+                  title="Drag to reorder. Use arrow keys, Home, or End for keyboard reordering."
+                  onKeyDown={(event) => moveDockItemWithKeyboard(id, event)}
+                  onPointerDown={(event) => startDockPointerDrag(event, id)}
+                  onPointerMove={moveDockPointerDrag}
+                  onPointerUp={finishDockPointerDrag}
+                  onPointerCancel={(event) =>
+                    finishDockPointerDrag(event, true)
+                  }
+                >
+                  <DotsSixVertical size={20} weight="bold" />
+                </button>
+                <span id={`sidebar-dock-position-${id}`} className="sr-only">
+                  Position {index + 1} of {orderedDockOptions.length}
+                </span>
+                <SettingsToggle
+                  checked={selected}
+                  onChange={() => toggleDockItem(id, selected)}
+                  label={`Show ${label} in sidebar dock`}
+                />
+              </SettingRow>
+            );
+          })}
+        </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {dockAnnouncement}
+        </p>
       </section>
     </div>
   );
