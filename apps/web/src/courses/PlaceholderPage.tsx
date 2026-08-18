@@ -22,7 +22,7 @@ interface PlaceholderContent {
   icon: PlaceholderIcon;
 }
 
-const placeholderContent: Record<string, PlaceholderContent > = {
+const placeholderContent: Record<string, PlaceholderContent> = {
   "Create Course": {
     title: "Create Course",
     description: "Create and publish a new course for your academy.",
