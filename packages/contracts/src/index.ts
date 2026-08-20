@@ -71,3 +71,26 @@ export type {
   TotpVerifyRequest,
   TotpEnableRequest,
 } from "./auth.ts";
+
+export {
+  systemConfigItemSchema,
+  systemConfigResponseSchema,
+  themePresetSchema,
+  themeListResponseSchema,
+  createThemePresetInputSchema,
+  updateThemePresetInputSchema,
+  userPreferencesSchema,
+  updateSystemConfigItemSchema,
+} from "./system-config.ts";
+
+export type {
+  SystemConfigItem,
+  SystemConfigResponse,
+  ThemePreset,
+  ThemeListResponse,
+  CreateThemePresetInput,
+  UpdateThemePresetInput,
+  UserPreferences,
+  UpdateSystemConfigItem,
+} from "./system-config.ts";
+
