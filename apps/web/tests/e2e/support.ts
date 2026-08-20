@@ -50,7 +50,10 @@ export async function installBaselineState(
 
 export async function openApp(page: Page, path = "/") {
   await page.goto(path);
-  await expect(page.locator("#root")).not.toBeEmpty({ timeout: 15_000 });
+  await expect(page.locator("[data-app-loading]")).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  await expect(page.locator(".courses-app")).toBeVisible({ timeout: 15_000 });
   await page.evaluate(async () => {
     await document.fonts?.ready;
     await Promise.all(
@@ -65,19 +68,69 @@ export async function openApp(page: Page, path = "/") {
   });
 }
 
+export async function updateSidebarPreferences(
+  page: Page,
+  path: string,
+  patch: Record<string, unknown>,
+) {
+  await page.evaluate((nextPatch) => {
+    const current = JSON.parse(
+      localStorage.getItem("veolms-sidebar-preferences") || "{}",
+    ) as Record<string, unknown>;
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ ...current, ...nextPatch }),
+    );
+  }, patch);
+  await openApp(page, path);
+}
+
+export async function revealDeferredAppearanceSettings(page: Page) {
+  const sentinel = page.locator(".settings-deferred-sentinel");
+  await expect(sentinel).toBeAttached();
+  await sentinel.scrollIntoViewIfNeeded();
+  await expect(page.locator(".settings-reading-mode")).toBeAttached({
+    timeout: 15_000,
+  });
+}
+
+export async function clickLearningBack(page: Page, label: string) {
+  await page.locator(".learning-workspace__player-wrap").hover();
+  await page.getByRole("button", { name: label }).click();
+}
+
+type ApplicationScrollOperation =
+  { kind: "read" } | { kind: "write"; top: number };
+
+async function accessApplicationScrollTarget(
+  page: Page,
+  operation: ApplicationScrollOperation,
+) {
+  return page.evaluate((input) => {
+    const main = document.querySelector<HTMLElement>("main.courses-main");
+    const scrollTarget =
+      main &&
+      ["auto", "scroll", "overlay"].includes(getComputedStyle(main).overflowY)
+        ? main
+        : window;
+    if (input.kind === "read") {
+      return scrollTarget instanceof HTMLElement
+        ? scrollTarget.scrollTop
+        : scrollTarget.scrollY;
+    }
+    scrollTarget.scrollTo({
+      top: input.top,
+      behavior: "instant" as ScrollBehavior,
+    });
+  }, operation);
+}
+
 export async function getApplicationScrollTop(page: Page) {
-  return page.evaluate(() => window.scrollY);
+  return (await accessApplicationScrollTarget(page, { kind: "read" })) ?? 0;
 }
 
 export async function setApplicationScrollTop(page: Page, top: number) {
-  await page.evaluate(
-    (scrollTop) =>
-      window.scrollTo({
-        top: scrollTop,
-        behavior: "instant" as ScrollBehavior,
-      }),
-    top,
-  );
+  await accessApplicationScrollTarget(page, { kind: "write", top });
 }
 
 export async function expectStoredValue(

@@ -111,7 +111,12 @@ export function VideoPlayer({
   const hudTimerRef = useRef<number | undefined>(undefined);
   const lastResumePersistedAtRef = useRef<number | null>(null);
   const lastKnownPlaybackTimeRef = useRef(0);
-  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => { });
+  const shortcutUpHandlerRef = useRef<(event: KeyboardEvent) => void>(() => { });
+  const blurHandlerRef = useRef<() => void>(() => { });
+  const lastClickTimeRef = useRef(0);
+  const wasPausedBeforeSpeedBoostRef = useRef(false);
+  const longPressTimerRef = useRef<number | undefined>(undefined);
 
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -130,6 +135,7 @@ export function VideoPlayer({
   // The server cannot read the saved device preference. Start from the same
   // deterministic value on both sides, then restore it after hydration.
   const [ambient, setAmbient] = useState(false);
+  const [tempSpeedActive, setTempSpeedActive] = useState(false);
 
   const showHud = (message: string) => {
     window.clearTimeout(hudTimerRef.current);
@@ -300,16 +306,53 @@ export function VideoPlayer({
   };
 
   const handleFramePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!settingsOpen) return;
-    const target = event.target;
+    if (settingsOpen) {
+      const target = event.target;
+      if (
+        settingsMenuRef.current?.contains(target as Node) ||
+        settingsButtonRef.current?.contains(target as Node)
+      )
+        return;
+      suppressNextPlayerActionRef.current = true;
+      setSettingsOpen(false);
+      setSettingsPage("main");
+      return;
+    }
+
     if (
-      settingsMenuRef.current?.contains(target as Node) ||
-      settingsButtonRef.current?.contains(target as Node)
+      event.target instanceof Element &&
+      event.target.closest("[data-player-control], [data-player-menu], input")
     )
       return;
-    suppressNextPlayerActionRef.current = true;
-    setSettingsOpen(false);
-    setSettingsPage("main");
+
+    const now = Date.now();
+    if (now - lastClickTimeRef.current < 400) {
+      setTempSpeedActive(true);
+      wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
+      if (videoRef.current?.paused) {
+        void videoRef.current.play().catch(() => { });
+      }
+    } else {
+      longPressTimerRef.current = window.setTimeout(() => {
+        setTempSpeedActive(true);
+        wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
+        if (videoRef.current?.paused) {
+          void videoRef.current.play().catch(() => { });
+        }
+      }, 500);
+    }
+    lastClickTimeRef.current = now;
+  };
+
+  const clearTempSpeed = () => {
+    window.clearTimeout(longPressTimerRef.current);
+    if (tempSpeedActive) {
+      setTempSpeedActive(false);
+      if (wasPausedBeforeSpeedBoostRef.current) {
+        videoRef.current?.pause();
+      }
+      suppressNextPlayerActionRef.current = true;
+    }
   };
 
   useEffect(() => {
@@ -341,8 +384,8 @@ export function VideoPlayer({
   }, [autoPlayOnMediaChange, media.duration, media.src]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = speed;
-  }, [speed]);
+    if (videoRef.current) videoRef.current.playbackRate = tempSpeedActive ? 2 : speed;
+  }, [speed, tempSpeedActive]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
@@ -508,7 +551,18 @@ export function VideoPlayer({
       return;
     }
 
-    if (event.code === "Space" || key === "k") {
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (event.repeat) {
+        if (!tempSpeedActive) {
+          setTempSpeedActive(true);
+          wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
+          if (videoRef.current?.paused) {
+            void videoRef.current.play().catch(() => { });
+          }
+        }
+      }
+    } else if (key === "k") {
       event.preventDefault();
       void togglePlay();
     } else if (event.code === "ArrowLeft") {
@@ -548,12 +602,56 @@ export function VideoPlayer({
   };
   shortcutHandlerRef.current = handlePlayerKeyDown;
 
+  const handlePlayerKeyUp = (event: KeyboardEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      isEditingShortcutTarget(event.target)
+    )
+      return;
+
+    const focusedInteractiveControl =
+      event.target instanceof Element
+        ? event.target.closest(PLAYER_INTERACTIVE_SHORTCUT_SELECTOR)
+        : null;
+    if (
+      focusedInteractiveControl &&
+      focusedInteractiveControl !== frameRef.current
+    )
+      return;
+
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (tempSpeedActive) {
+        clearTempSpeed();
+      } else {
+        // Only toggle play if it wasn't a long press
+        void togglePlay();
+      }
+    }
+  };
+  shortcutUpHandlerRef.current = handlePlayerKeyUp;
+
+  blurHandlerRef.current = clearTempSpeed;
+
   useEffect(() => {
     const handlePageKeyDown = (event: KeyboardEvent) => {
       shortcutHandlerRef.current(event);
     };
+    const handlePageKeyUp = (event: KeyboardEvent) => {
+      shortcutUpHandlerRef.current(event);
+    };
+    const handleBlur = () => {
+      blurHandlerRef.current();
+    };
     window.addEventListener("keydown", handlePageKeyDown, true);
-    return () => window.removeEventListener("keydown", handlePageKeyDown, true);
+    window.addEventListener("keyup", handlePageKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handlePageKeyDown, true);
+      window.removeEventListener("keyup", handlePageKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, []);
 
   return (
@@ -572,6 +670,9 @@ export function VideoPlayer({
         aria-label={`Lesson video player for ${lessonTitle}`}
         tabIndex={0}
         onPointerDownCapture={handleFramePointerDown}
+        onPointerUpCapture={clearTempSpeed}
+        onPointerCancelCapture={clearTempSpeed}
+        onPointerLeave={clearTempSpeed}
         onMouseMove={scheduleControlsHide}
         onMouseLeave={() =>
           playing && !settingsOpen && setControlsVisible(false)
@@ -609,12 +710,12 @@ export function VideoPlayer({
             event.currentTarget.currentTime =
               Number.isFinite(savedTime) && savedTime > 0
                 ? Math.min(
-                    savedTime,
-                    Math.max(0, event.currentTarget.duration - 1),
-                  )
+                  savedTime,
+                  Math.max(0, event.currentTarget.duration - 1),
+                )
                 : Math.min(0.01, event.currentTarget.duration || 0);
             lastKnownPlaybackTimeRef.current = event.currentTarget.currentTime;
-            event.currentTarget.playbackRate = speed;
+            event.currentTarget.playbackRate = tempSpeedActive ? 2 : speed;
             event.currentTarget.volume = volume;
           }}
           onLoadedData={paintAmbientFrame}
@@ -663,9 +764,9 @@ export function VideoPlayer({
           </div>
         )}
 
-        {hud && (
+        {(hud || tempSpeedActive) && (
           <div role="status" className="player-hud">
-            {hud}
+            {tempSpeedActive ? "2× ▶▶" : hud}
           </div>
         )}
 

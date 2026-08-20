@@ -3,6 +3,7 @@ import {
   normalizeSidebarDockOrder,
   SIDEBAR_DOCK_DEFAULT_ITEMS,
   SIDEBAR_DOCK_DEFAULT_ORDER,
+  SIDEBAR_HEADER_DEFAULT_VERSION,
 } from "../settings/settingsPreferences";
 import type {
   SidebarDockItem,
@@ -15,7 +16,20 @@ const SIDEBAR_MAX_WIDTH_LIMIT = 520;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
 const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
-const SIDEBAR_DOCK_DEFAULT_VERSION = "four-controls-v1";
+const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v2";
+const LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS = [
+  "appearance",
+  "theme",
+  "reading-mode",
+  "fullscreen",
+];
+const LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER = [
+  "appearance",
+  "theme",
+  "reading-mode",
+  "fullscreen",
+  "settings",
+];
 
 export const clampSidebarMaxWidth = (value: unknown): number => {
   const numericValue = Number(value);
@@ -51,19 +65,19 @@ export const getInitialSidebarWidth = (): number => {
 };
 
 export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
-    iconStyle: "monochrome",
-    monochromeMode: "theme",
-    monochromeColor: "#6c78ff",
-    contentLayout: "framed",
-    sidebarMaxWidth: SIDEBAR_MAX_WIDTH,
-    headerLayout: "fixed",
-    dockItems: [...SIDEBAR_DOCK_DEFAULT_ITEMS],
-    dockOrder: [...SIDEBAR_DOCK_DEFAULT_ORDER],
-    showKeyboardShortcuts: true,
-    showCollapsedLabels: true,
-    showCollapsedLogo: true,
-    highlightActive: true,
-    elevateMenus: false,
+  iconStyle: "monochrome",
+  monochromeMode: "theme",
+  monochromeColor: "#6c78ff",
+  contentLayout: "framed",
+  sidebarMaxWidth: SIDEBAR_MAX_WIDTH,
+  headerLayout: "inline",
+  dockItems: [...SIDEBAR_DOCK_DEFAULT_ITEMS],
+  dockOrder: [...SIDEBAR_DOCK_DEFAULT_ORDER],
+  showKeyboardShortcuts: true,
+  showCollapsedLabels: true,
+  showCollapsedLogo: true,
+  highlightActive: true,
+  elevateMenus: false,
 });
 
 export const getInitialSidebarPreferences = (): SidebarPreferences => {
@@ -82,8 +96,17 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       ...fallback,
       ...storedPreferences,
     } as SidebarPreferences;
+    const hasCurrentHeaderDefault =
+      localStorage.getItem("veolms-sidebar-header-default-version") ===
+      SIDEBAR_HEADER_DEFAULT_VERSION;
+    // There was no header-layout version marker before the inline default was
+    // introduced, so an existing "fixed" value cannot be distinguished from a
+    // deliberate user choice. Preserve explicit values and migrate only a
+    // missing preference to the new fallback.
+    const needsHeaderDefaultMigration =
+      !hasCurrentHeaderDefault && storedPreferences.headerLayout === undefined;
     preferences.headerLayout =
-      storedPreferences.headerLayout === "inline" ? "inline" : "fixed";
+      storedPreferences.headerLayout === "fixed" ? "fixed" : "inline";
     preferences.elevateMenus =
       storedPreferences.elevateMenus === true ||
       (storedPreferences.elevateMenus === undefined &&
@@ -97,22 +120,25 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     const hasCurrentDockDefault =
       localStorage.getItem("veolms-sidebar-dock-default-version") ===
       SIDEBAR_DOCK_DEFAULT_VERSION;
-    const usedPreviousDefault =
-      storedPreferences.dockItems === undefined ||
+    const usesKnownLegacyDockDefault =
+      localStorage.getItem("veolms-sidebar-dock-default-version") ===
+        "four-controls-v1" &&
       JSON.stringify(storedPreferences.dockItems) ===
-        JSON.stringify(["appearance", "theme", "fullscreen"]);
-    preferences.dockItems =
+        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS) &&
+      JSON.stringify(storedPreferences.dockOrder) ===
+        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER);
+    const needsDockDefaultMigration =
       !hasCurrentDockDefault &&
-      usedPreviousDefault &&
-      storedPreferences.showThemeIcon !== false
+      (storedPreferences.dockItems === undefined || usesKnownLegacyDockDefault);
+    preferences.dockItems =
+      needsDockDefaultMigration && storedPreferences.showThemeIcon !== false
         ? [...SIDEBAR_DOCK_DEFAULT_ITEMS]
         : legacyDockItems;
-    preferences.dockOrder =
-      !hasCurrentDockDefault && usedPreviousDefault
-        ? [...SIDEBAR_DOCK_DEFAULT_ORDER]
-        : normalizeSidebarDockOrder(
-            storedPreferences.dockOrder ?? storedPreferences.dockItems,
-          );
+    preferences.dockOrder = needsDockDefaultMigration
+      ? [...SIDEBAR_DOCK_DEFAULT_ORDER]
+      : normalizeSidebarDockOrder(
+          storedPreferences.dockOrder ?? storedPreferences.dockItems,
+        );
     const needsStructureMigration =
       storedPreferences.headerLayout !== preferences.headerLayout ||
       JSON.stringify(storedPreferences.dockItems) !==
@@ -150,7 +176,8 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       needsMaxWidthMigration ||
       needsIconMigration ||
       needsStructureMigration ||
-      !hasCurrentDockDefault
+      !hasCurrentDockDefault ||
+      !hasCurrentHeaderDefault
     ) {
       localStorage.setItem(
         "veolms-sidebar-preferences",
@@ -175,6 +202,13 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
         localStorage.setItem(
           "veolms-sidebar-dock-default-version",
           SIDEBAR_DOCK_DEFAULT_VERSION,
+        );
+      }
+
+      if (!hasCurrentHeaderDefault) {
+        localStorage.setItem(
+          "veolms-sidebar-header-default-version",
+          SIDEBAR_HEADER_DEFAULT_VERSION,
         );
       }
     }

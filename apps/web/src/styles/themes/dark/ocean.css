@@ -1,0 +1,27 @@
+/* ocean palette — dark mode. */
+:root[data-palette="ocean"] {
+  --canvas: #171b22;
+  --header: #161a20;
+  --surface: #282f39;
+  --hover: #333d49;
+  --selected: #293b58;
+  --track: #1d232c;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #f4f8ff;
+  --text-secondary: #dce6f6;
+  --muted: #a6b9d4;
+  --accent: #7193ff;
+  --accent-hover: #5f82ee;
+  --accent-soft: rgba(113, 147, 255, 0.16);
+  --accent-border: rgba(113, 147, 255, 0.42);
+  --accent-shadow: rgba(113, 147, 255, 0.22);
+  --on-accent: #07102a;
+  --app-shell: #12151a;
+  --main-surface: #1e242d;
+  --surface-strong: #303843;
+  --card-surface: #282f39;
+  --card-surface-raised: #303843;
+  --card-surface-soft: #1e242d;
+  --card-surface-hover: #333d49;
+}

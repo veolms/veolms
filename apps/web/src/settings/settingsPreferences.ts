@@ -21,7 +21,6 @@ export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
 ];
 export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
   "appearance",
-  "theme",
   "reading-mode",
   "fullscreen",
 ];
@@ -29,6 +28,7 @@ export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
 export const PAGE_TAB_COLORS_KEY = "veolms-page-tab-colors";
 export const PAGE_TAB_COLORS_DEFAULT: PageTabColors = "follow-sidebar";
 export const ELEVATED_SURFACES_KEY = "veolms-elevated-surfaces";
+export const SIDEBAR_HEADER_DEFAULT_VERSION = "inline-v1";
 
 export const normalizePageTabColors = (value: unknown): PageTabColors =>
   value === "multicolor" || value === "monochrome" || value === "follow-sidebar"
@@ -184,7 +184,7 @@ export const getSurfaceDepthBootstrapScript = (): string =>
     PAGE_TAB_COLORS_DEFAULT,
   )}}catch{root.dataset.pageTabColors=${JSON.stringify(
     PAGE_TAB_COLORS_DEFAULT,
-  )}}try{const sidebar=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");root.dataset.sidebarMenuElevation=String(sidebar.elevateMenus===true||(sidebar.elevateMenus===undefined&&sidebar.alwaysElevateMenus===true));root.dataset.sidebarIconStyle=sidebar.iconStyle==="multicolor"?"multicolor":"monochrome"}catch{root.dataset.sidebarIconStyle="monochrome"}})();`;
+  )}}try{const sidebar=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");root.dataset.sidebarMenuElevation=String(sidebar.elevateMenus===true||(sidebar.elevateMenus===undefined&&sidebar.alwaysElevateMenus===true));root.dataset.sidebarIconStyle=sidebar.iconStyle==="multicolor"?"multicolor":"monochrome";root.dataset.contentLayout=sidebar.contentLayout==="edge-to-edge"?"edge-to-edge":"framed";root.dataset.sidebarHeaderLayout=sidebar.headerLayout==="fixed"?"fixed":"inline"}catch{root.dataset.sidebarIconStyle="monochrome";root.dataset.contentLayout="framed";root.dataset.sidebarHeaderLayout="inline"}})();`;
 
 export const readPageTabColors = (): PageTabColors =>
   normalizePageTabColors(

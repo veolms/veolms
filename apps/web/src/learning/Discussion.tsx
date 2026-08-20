@@ -149,6 +149,22 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    setComments((current) => {
+      const currentById = new Map(
+        current.map((comment) => [comment.id, comment]),
+      );
+      return [
+        ...postedComments.map(
+          (comment) => currentById.get(comment.id) ?? comment,
+        ),
+        ...initialComments.map(
+          (comment) => currentById.get(comment.id) ?? comment,
+        ),
+      ];
+    });
+  }, [postedComments]);
+
+  useEffect(() => {
     if (!searchOpen) return undefined;
     const frame = window.requestAnimationFrame(() =>
       composerSearchInputRef.current?.focus(),

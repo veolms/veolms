@@ -32,6 +32,10 @@ import {
   getNavigationDestination,
   getOrderedNavigation,
 } from "../shell/navigation";
+import {
+  readApplicationScrollPosition,
+  scrollApplicationTo,
+} from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
 import {
@@ -105,9 +109,9 @@ export default function AcademyLayout() {
     if (!position) return undefined;
     preservedScrollPositionRef.current = null;
 
-    window.scrollTo({ ...position, behavior: "auto" });
+    scrollApplicationTo({ ...position, behavior: "auto" });
     const frame = window.requestAnimationFrame(() => {
-      window.scrollTo({ ...position, behavior: "auto" });
+      scrollApplicationTo({ ...position, behavior: "auto" });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [location.pathname]);
@@ -117,10 +121,10 @@ export default function AcademyLayout() {
       const destinationPath = getDestinationPath(destination);
       const path = getResumableCoursePlayerNavigationPath(destinationPath);
       if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
+        const currentScrollPosition = readApplicationScrollPosition();
         settingsReturnLocationRef.current = {
           path: locationPathRef.current,
-          left: window.scrollX,
-          top: window.scrollY,
+          ...currentScrollPosition,
         };
       }
       if (
@@ -128,10 +132,7 @@ export default function AcademyLayout() {
         normalizeNavigationPath(locationPathRef.current)
       ) {
         if (options?.preserveScroll) {
-          preservedScrollPositionRef.current = {
-            left: window.scrollX,
-            top: window.scrollY,
-          };
+          preservedScrollPositionRef.current = readApplicationScrollPosition();
         }
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
@@ -141,7 +142,7 @@ export default function AcademyLayout() {
         });
       }
       if (!options?.preserveScroll) {
-        window.scrollTo({ top: 0, behavior: "auto" });
+        scrollApplicationTo({ top: 0, behavior: "auto" });
       }
     },
     [navigate],

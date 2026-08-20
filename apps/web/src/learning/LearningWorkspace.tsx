@@ -12,6 +12,8 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { SidebarToggleIcon } from "../shell/SidebarToggleIcon";
+import { FloatingScrollbar } from "../shell/FloatingScrollbar";
+import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { VideoPlayer as YouTubeVideoPlayer } from "../VideoPlayer";
@@ -30,6 +32,25 @@ const CURRICULUM_MIN_WIDTH = 300;
 const CURRICULUM_DEFAULT_WIDTH = 400;
 const CURRICULUM_MAX_WIDTH = 560;
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
+
+const clampCurriculumWidth = (value: number) =>
+  Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, value));
+
+const getInitialCurriculumWidth = () => {
+  if (typeof window === "undefined") return CURRICULUM_DEFAULT_WIDTH;
+
+  try {
+    const storedWidth = window.localStorage.getItem("veolms-curriculum-width");
+    if (storedWidth === null) return CURRICULUM_DEFAULT_WIDTH;
+
+    const savedWidth = Number(storedWidth);
+    return Number.isFinite(savedWidth)
+      ? clampCurriculumWidth(savedWidth)
+      : CURRICULUM_DEFAULT_WIDTH;
+  } catch {
+    return CURRICULUM_DEFAULT_WIDTH;
+  }
+};
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
@@ -84,20 +105,12 @@ export function LearningWorkspace({
   const [lessonDrawer, setLessonDrawer] = useState(false);
   const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
   const [curriculumWidth, setCurriculumWidth] = useState(
-    CURRICULUM_DEFAULT_WIDTH,
+    getInitialCurriculumWidth,
   );
   useEffect(() => {
     try {
       setTheme(localStorage.getItem("veolms-theme") || "dark");
       setAcademyTheme(getInitialAcademyTheme());
-      const storedWidth = localStorage.getItem("veolms-curriculum-width");
-      if (storedWidth === null) return;
-      const saved = Number(storedWidth);
-      if (Number.isFinite(saved)) {
-        setCurriculumWidth(
-          Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, saved)),
-        );
-      }
     } catch {
       // The deterministic defaults remain usable without browser storage.
     }
@@ -124,6 +137,8 @@ export function LearningWorkspace({
   const [theaterMode, setTheaterMode] = useState(false);
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
   const lessonDialogRef = useRef<HTMLDivElement>(null);
+  const curriculumScrollportRef = useRef<HTMLElement>(null);
+  const lessonDrawerScrollportRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const curriculumResizeRef = useRef<CurriculumResize | null>(null);
   const curriculumResizeMoveRef = useRef<
@@ -157,7 +172,7 @@ export function LearningWorkspace({
 
     if (nextMode) {
       window.requestAnimationFrame(() => {
-        window.scrollTo({
+        scrollApplicationTo({
           top: 0,
           behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
             .matches
@@ -225,10 +240,7 @@ export function LearningWorkspace({
   }, [lessonDrawer]);
 
   const commitCurriculumWidth = useCallback((value: number) => {
-    const nextWidth = Math.min(
-      CURRICULUM_MAX_WIDTH,
-      Math.max(CURRICULUM_MIN_WIDTH, value),
-    );
+    const nextWidth = clampCurriculumWidth(value);
     setCurriculumWidth(nextWidth);
     try {
       localStorage.setItem(
@@ -634,6 +646,8 @@ export function LearningWorkspace({
             className="learning-curriculum__viewport"
           >
             <Curriculum
+              scrollportRef={curriculumScrollportRef}
+              scrollportId="learning-course-curriculum-scrollport"
               selectedLesson={selectedLesson}
               onSelectLesson={selectLesson}
               courseTitle={courseTitle}
@@ -644,6 +658,14 @@ export function LearningWorkspace({
           </div>
         </div>
       </main>
+
+      <FloatingScrollbar
+        scrollportRef={curriculumScrollportRef}
+        ariaControls="learning-course-curriculum-scrollport"
+        ariaLabel="Course curriculum scroll position"
+        className="floating-scrollbar--curriculum"
+        disabled={curriculumCollapsed || theaterMode || lessonDrawer}
+      />
 
       {lessonDrawer && (
         <div
@@ -663,6 +685,8 @@ export function LearningWorkspace({
           />
           <div className="lesson-drawer-panel">
             <Curriculum
+              scrollportRef={lessonDrawerScrollportRef}
+              scrollportId="lesson-drawer-curriculum-scrollport"
               selectedLesson={selectedLesson}
               onSelectLesson={selectLesson}
               courseTitle={courseTitle}
@@ -672,6 +696,12 @@ export function LearningWorkspace({
               onClose={closeLessonDrawer}
             />
           </div>
+          <FloatingScrollbar
+            scrollportRef={lessonDrawerScrollportRef}
+            ariaControls="lesson-drawer-curriculum-scrollport"
+            ariaLabel="Course curriculum scroll position"
+            className="floating-scrollbar--curriculum"
+          />
         </div>
       )}
     </div>

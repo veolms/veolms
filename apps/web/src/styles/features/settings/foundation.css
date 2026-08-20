@@ -1,0 +1,1702 @@
+/* Settings workspace */
+.courses-main.student-surface-main.courses-main--settings {
+  padding-inline: 0;
+}
+
+.settings-page {
+  --settings-page-inline-gutter: calc(25px + clamp(16px, 2.4vw, 30px));
+  min-width: 0;
+  min-height: 100%;
+  padding: clamp(20px, 2.5vw, 32px) 0 36px;
+  color: var(--text);
+}
+
+.settings-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-inline: var(--settings-page-inline-gutter);
+}
+
+.settings-page__header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.85rem, 3vw, 2.45rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.settings-page__header p {
+  max-width: 48rem;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.settings-page__marker {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  box-shadow: 0 10px 28px
+    color-mix(in srgb, var(--accent-shadow) 30%, transparent);
+}
+
+/* Page/content tabs share one semantic color contract. Monochrome remains the
+   safe base; multicolor is enabled explicitly or inherited from the sidebar. */
+.page-tabs [role="tab"] {
+  --page-tab-active-ink: var(--accent-ink, var(--accent));
+  --page-tab-active-indicator: var(--accent);
+}
+
+.page-tabs {
+  --page-tab-indicator-left: 0px;
+  --page-tab-indicator-width: 0px;
+  --page-tab-indicator-color: var(--accent);
+  position: relative;
+}
+
+.page-tabs__indicator {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 0;
+  width: var(--page-tab-indicator-width);
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--page-tab-indicator-color);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(var(--page-tab-indicator-left), 0, 0);
+  transition:
+    width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms ease-out;
+  will-change: width, transform;
+}
+
+.page-tabs[data-tab-swipe-active] .page-tabs__indicator {
+  opacity: 1;
+}
+
+.page-tabs[data-tab-swipe-tracking] .page-tabs__indicator {
+  transition: none;
+}
+
+.page-tabs[data-tab-swipe-active] button.is-active {
+  border-bottom-color: transparent;
+}
+
+.page-tabs[data-tab-swipe-active] .lesson-tool-tab.is-active::after {
+  opacity: 0;
+}
+
+.swipeable-tab-panel {
+  --tab-swipe-offset: 0px;
+  position: relative;
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y pinch-zoom;
+}
+
+.swipeable-tab-panel__layer {
+  min-width: 0;
+}
+
+.swipeable-tab-panel[data-tab-swipe-active]
+  .swipeable-tab-panel__layer.is-current {
+  transform: translate3d(var(--tab-swipe-offset), 0, 0);
+  will-change: transform;
+}
+
+.swipeable-tab-panel__layer.is-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.swipeable-tab-panel[data-tab-swipe-active]
+  .swipeable-tab-panel__layer.is-preview {
+  visibility: visible;
+}
+
+.swipeable-tab-panel__layer.is-preview.is-next {
+  transform: translate3d(calc(100% + var(--tab-swipe-offset)), 0, 0);
+}
+
+.swipeable-tab-panel__layer.is-preview.is-previous {
+  transform: translate3d(calc(-100% + var(--tab-swipe-offset)), 0, 0);
+}
+
+.swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-tabs__indicator,
+  .swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
+    transition: none;
+  }
+}
+
+.page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #5da9ff;
+}
+.page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #ad7cff;
+}
+.page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #63c8d5;
+}
+.page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #55d98b;
+}
+.page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #f1be4b;
+}
+.page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #f09c4e;
+}
+.page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #ff6684;
+}
+
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #1769aa;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #6741b8;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #0b6d79;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #14763f;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #7b5b00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #9a4d00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #b82b52;
+}
+
+:root[data-page-tab-colors="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone] {
+  --page-tab-active-ink: var(--page-tab-tone);
+  --page-tab-active-indicator: var(--page-tab-tone);
+}
+
+.lesson-tool-tab.is-active {
+  color: var(--page-tab-active-ink);
+}
+
+.lesson-tool-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--page-tab-active-indicator);
+  content: "";
+}
+
+.settings-tabs {
+  position: sticky;
+  top: var(--page-tabs-sticky-top, 0px);
+  z-index: 25;
+  display: flex;
+  min-width: 0;
+  margin: 26px var(--settings-page-inline-gutter) 0;
+  padding-top: 6px;
+  gap: 8px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--main-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  scrollbar-width: none;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+  padding: 0 14px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.settings-tabs button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 48%, transparent);
+}
+.settings-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.settings-tabs button.is-active {
+  border-bottom-color: var(--page-tab-active-indicator);
+  color: var(--page-tab-active-ink);
+}
+
+.settings-tab-content {
+  min-width: 0;
+  margin-top: 14px;
+}
+.settings-content {
+  display: grid;
+  gap: 14px;
+  margin-top: 0;
+  padding-inline: var(--settings-page-inline-gutter);
+}
+
+/* Skip layout and paint for settings sections that are still below the
+   viewport. Once visited, the browser remembers their real block size, which
+   keeps subsequent scrolling stable. */
+@supports (content-visibility: auto) {
+  .settings-content > .settings-section:nth-of-type(n + 2) {
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 720px;
+  }
+}
+
+.settings-tab-content
+  :is(.settings-profile, .settings-learning, .settings-detail) {
+  width: auto;
+  max-width: none;
+  margin-top: 0;
+  margin-right: var(--settings-page-inline-gutter);
+  margin-left: var(--settings-page-inline-gutter);
+}
+
+.settings-section {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.settings-section h2 {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.settings-choice-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-choice-grid--display {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.settings-choice-grid--colors {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.settings-choice-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.settings-choice-grid--sidebar-style-options {
+  margin-top: 10px;
+}
+
+.settings-choice-card {
+  display: flex;
+  min-width: 0;
+  min-height: 158px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 0;
+  border-radius: 11px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: var(--surface-strong);
+  box-shadow: var(--card-shadow);
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
+}
+
+.settings-choice-card:hover {
+  background: color-mix(in srgb, var(--surface-strong) 86%, var(--accent) 14%);
+  box-shadow: var(--card-hover-shadow);
+}
+.settings-choice-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-choice-card.is-selected {
+  color: var(--text);
+  background: color-mix(
+    in srgb,
+    var(--selected) 72%,
+    var(--surface-strong) 28%
+  );
+  box-shadow: var(--card-selected-shadow);
+}
+
+.settings-choice-card__copy {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-content: end;
+  gap: 5px;
+}
+.settings-choice-card__label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+.settings-choice-card__label strong {
+  min-width: 0;
+  color: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.settings-choice-card__copy small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.settings-radio {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 70%, transparent);
+  border-radius: 50%;
+  color: var(--on-accent);
+  background: transparent;
+}
+.settings-choice-card.is-selected .settings-radio,
+.settings-inline-options button.is-selected .settings-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settings-choice-card--horizontal {
+  min-height: 122px;
+  flex-direction: row;
+  align-items: center;
+  padding: 14px;
+}
+
+.settings-choice-card--horizontal .settings-choice-card__copy {
+  flex: 1 1 auto;
+  align-content: center;
+}
+
+.settings-choice-card--layout .settings-mini-surface {
+  width: 154px;
+  height: 82px;
+}
+
+.settings-mini-surface {
+  --mini-tone: var(--accent);
+  --mini-base: color-mix(in srgb, var(--canvas) 90%, #06152f);
+  --mini-panel: color-mix(in srgb, var(--surface-strong) 76%, var(--mini-tone));
+  --mini-line: color-mix(in srgb, var(--text) 23%, transparent);
+  --mini-frame: color-mix(in srgb, var(--canvas) 88%, var(--mini-tone) 12%);
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 84px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  padding: 7px;
+  background: var(--mini-frame);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.settings-mini-surface--light {
+  --mini-base: #f8faff;
+  --mini-panel: #e8effd;
+  --mini-line: #aebbd4;
+  --mini-tone: #6079e8;
+  --mini-frame: #eef3fc;
+  background: var(--mini-frame);
+}
+
+.settings-mini-surface--device {
+  padding: 0;
+  background: transparent;
+}
+
+.settings-mini-surface__device-split {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-mini-surface__device-pane {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 7px;
+}
+
+.settings-mini-surface__device-pane--light {
+  --mini-base: #f8faff;
+  --mini-panel: #e8effd;
+  --mini-line: #aebbd4;
+  --mini-frame: #eef3fc;
+  background: var(--mini-frame);
+}
+
+.settings-mini-surface__device-pane--dark {
+  --mini-base: #0c1528;
+  --mini-panel: #111c2e;
+  --mini-line: #7d8ca3;
+  --mini-frame: color-mix(in srgb, var(--mini-base) 88%, var(--mini-tone) 12%);
+  background: var(--mini-frame);
+}
+
+.settings-mini-surface--graphite {
+  --mini-tone: #8b68ff;
+}
+.settings-mini-surface--codex {
+  --mini-tone: #f4f4f5;
+}
+.settings-mini-surface--midnight {
+  --mini-tone: #4166d4;
+}
+.settings-mini-surface--violet {
+  --mini-tone: #d6875f;
+}
+.settings-mini-surface--ember {
+  --mini-tone: #ff8a34;
+}
+.settings-mini-surface--sunlit {
+  --mini-tone: #f6c945;
+}
+.settings-mini-surface--grove {
+  --mini-tone: #4dda85;
+}
+.settings-mini-surface--ocean {
+  --mini-tone: #7193ff;
+}
+.settings-mini-surface--rose {
+  --mini-tone: #fb6f92;
+}
+.settings-mini-surface--signal {
+  --mini-tone: #d92d4e;
+}
+.settings-mini-surface--barbie {
+  --mini-tone: #ec4d9b;
+}
+.settings-mini-surface--aurora {
+  --mini-tone: #28d8c6;
+}
+.settings-mini-surface--brainwave {
+  --mini-tone: #0085ff;
+}
+.settings-mini-surface--lilac {
+  --mini-tone: #c18cff;
+}
+.settings-mini-surface--champagne {
+  --mini-tone: #e6c98a;
+}
+.settings-mini-surface--lime {
+  --mini-tone: #a3e635;
+}
+
+.settings-mini-surface--forced-light {
+  --mini-base: color-mix(in srgb, white 96%, var(--mini-tone) 4%);
+  --mini-panel: color-mix(in srgb, white 82%, var(--mini-tone) 18%);
+  --mini-line: color-mix(in srgb, var(--mini-tone) 45%, #374151);
+  --mini-frame: color-mix(in srgb, white 90%, var(--mini-tone) 10%);
+  background: var(--mini-frame);
+}
+
+/* Veo Onyx deliberately uses a dark neutral accent in light mode, rather than
+   the soft-white accent from its dark palette. */
+.settings-mini-surface--forced-light.settings-mini-surface--codex {
+  --mini-tone: #252529;
+  --mini-base: #f3f3f5;
+  --mini-panel: #d9d9de;
+  --mini-line: #54545d;
+  --mini-frame: #e6e6ea;
+}
+
+.settings-mini-surface--forced-dark {
+  --mini-base: #0c1528;
+  --mini-panel: #111c2e;
+  --mini-line: #7d8ca3;
+  --mini-frame: color-mix(in srgb, var(--mini-base) 88%, var(--mini-tone) 12%);
+  background: var(--mini-frame);
+}
+
+/* Theme cards are real dark-shell snapshots, not generic dark swatches. Keep
+   their material tokens aligned with the corresponding live palette so the
+   Dark display preview and every color-theme preview agree with the app. */
+.settings-mini-surface--forced-dark.settings-mini-surface--graphite {
+  --mini-base: #181a1b;
+  --mini-panel: #333536;
+  --mini-line: #919592;
+  --mini-tone: #8b68ff;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--codex {
+  --mini-base: #0d0d0f;
+  --mini-panel: #29292d;
+  --mini-line: #a4a4aa;
+  --mini-tone: #f4f4f5;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--midnight {
+  --mini-base: #040b18;
+  --mini-panel: #102442;
+  --mini-line: #8fa1be;
+  --mini-tone: #4166d4;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--violet {
+  --mini-base: #191a1b;
+  --mini-panel: #363839;
+  --mini-line: #9e9994;
+  --mini-tone: #d6875f;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--ember {
+  --mini-base: #1c1815;
+  --mini-panel: #3a302a;
+  --mini-line: #bfa597;
+  --mini-tone: #ff8a34;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--sunlit {
+  --mini-base: #1c1b16;
+  --mini-panel: #3a382c;
+  --mini-line: #c1b68f;
+  --mini-tone: #f6c945;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--grove {
+  --mini-base: #171d18;
+  --mini-panel: #303c33;
+  --mini-line: #a4c3ae;
+  --mini-tone: #4dda85;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--ocean {
+  --mini-base: #171b22;
+  --mini-panel: #303843;
+  --mini-line: #a5b8d3;
+  --mini-tone: #7193ff;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--rose {
+  --mini-base: #1e181a;
+  --mini-panel: #3d3035;
+  --mini-line: #c5a2b0;
+  --mini-tone: #fb6f92;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--signal {
+  --mini-base: #190c10;
+  --mini-panel: #381b23;
+  --mini-line: #c9a3ac;
+  --mini-tone: #d92d4e;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--barbie {
+  --mini-base: #1b0915;
+  --mini-panel: #431a31;
+  --mini-line: #d8a7c3;
+  --mini-tone: #ec4d9b;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--aurora {
+  --mini-base: #081813;
+  --mini-panel: #15362e;
+  --mini-line: #9fc9be;
+  --mini-tone: #28d8c6;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--brainwave {
+  --mini-base: #202224;
+  --mini-panel: #3c4143;
+  --mini-line: #9ca4a8;
+  --mini-tone: #0085ff;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--lilac {
+  --mini-base: #1d1823;
+  --mini-panel: #3b3047;
+  --mini-line: #bea9c5;
+  --mini-tone: #c18cff;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--champagne {
+  --mini-base: #1d1b17;
+  --mini-panel: #3e392e;
+  --mini-line: #bdb19c;
+  --mini-tone: #e6c98a;
+}
+.settings-mini-surface--forced-dark.settings-mini-surface--lime {
+  --mini-base: #171d17;
+  --mini-panel: #333e32;
+  --mini-line: #a5b79d;
+  --mini-tone: #a3e635;
+}
+
+/* Existing miniature labels retained for the Sidebar and layout examples. */
+.settings-mini-surface--purple {
+  --mini-tone: #9b70ff;
+}
+.settings-mini-surface--green {
+  --mini-tone: #4dda85;
+}
+.settings-mini-surface--red {
+  --mini-tone: #fb6f92;
+}
+.settings-mini-surface--blue {
+  --mini-tone: #4f78ff;
+}
+.settings-mini-surface--edge {
+  padding: 0;
+  border-radius: 3px;
+}
+
+.settings-mini-surface--framed .settings-mini-app__rail {
+  background: var(--mini-frame);
+}
+
+.settings-mini-app {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: 18% minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--mini-base);
+}
+
+.settings-mini-surface--edge .settings-mini-app {
+  border-radius: 0;
+}
+
+.settings-mini-app__rail {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 8px 5px;
+  background: color-mix(in srgb, var(--mini-panel) 68%, var(--mini-base));
+}
+
+.settings-mini-app__rail i {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mini-tone) 84%, white 16%);
+}
+
+.settings-mini-app__rail i:nth-child(2),
+.settings-mini-app__rail i:nth-child(4) {
+  opacity: 0.55;
+}
+
+.settings-mini-app__body {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 8px;
+}
+
+.settings-mini-app__body > b,
+.settings-mini-app__body > em {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--mini-line);
+  opacity: 0.72;
+}
+
+.settings-mini-app__body > em {
+  width: 63%;
+  opacity: 0.42;
+}
+
+.settings-mini-app__body > span {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.settings-mini-app__body > span i {
+  display: block;
+  height: 32px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--mini-tone) 28%, var(--mini-panel));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+.settings-mini-app__body > span i:last-child {
+  background: color-mix(in srgb, var(--mini-tone) 43%, var(--mini-panel));
+}
+
+.settings-choice-grid--compact .settings-choice-card {
+  min-height: 72px;
+  flex-direction: row;
+  align-items: center;
+}
+.settings-choice-grid--compact .settings-choice-card__copy {
+  align-content: center;
+}
+
+.settings-sidebar-width__value {
+  display: inline-flex;
+  min-width: 68px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 0 10px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.settings-sidebar-width__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  align-items: end;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.settings-sidebar-width__range,
+.settings-sidebar-width__number {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.settings-sidebar-width__range-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 550;
+}
+
+.settings-sidebar-width__number input {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 11px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 42%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-sidebar-width__number input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-row-list {
+  overflow: hidden;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-strong) 18%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 62%, transparent);
+}
+.settings-row {
+  display: grid;
+  min-height: 60px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.settings-row:has(.settings-toggle:not(:disabled)) {
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.settings-row:has(.settings-toggle:not(:disabled)):hover {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.settings-row + .settings-row {
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 48%, transparent);
+}
+.settings-row__icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.settings-row__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.settings-row__copy strong {
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.settings-row__copy small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+.settings-row__copy kbd {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  margin: 0 2px;
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text) 14%, transparent);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: baseline;
+}
+.settings-row__control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.settings-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 42px;
+  height: 24px;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px;
+  background: color-mix(
+    in srgb,
+    var(--text-secondary) 32%,
+    var(--surface-strong)
+  );
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.settings-toggle:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.settings-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-toggle > span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 150ms ease;
+}
+.settings-toggle.is-on {
+  background: var(--accent);
+}
+.settings-toggle.is-on > span {
+  transform: translateX(18px);
+  background: var(--on-accent);
+}
+
+:root[data-theme="light"] .settings-toggle > span {
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(25 32 45 / 22%);
+}
+
+.settings-theme-pool {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 58%, transparent);
+}
+.settings-theme-pool__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.settings-theme-pool__heading h3 {
+  margin: 0 0 3px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.settings-theme-pool__heading p,
+.settings-theme-pool__footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+.settings-theme-pool__heading > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.settings-theme-pool__options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.settings-theme-pool__options > button {
+  display: grid;
+  min-width: 0;
+  min-height: 58px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 9px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.settings-theme-pool__options > button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--accent) 12%);
+}
+.settings-theme-pool__options > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-theme-pool__options > button.is-selected {
+  color: var(--text);
+  background: color-mix(
+    in srgb,
+    var(--selected) 62%,
+    var(--surface-strong) 38%
+  );
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+.settings-theme-pool__options > button[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.settings-theme-pool__swatch {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #ffffff;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 4px 10px color-mix(in srgb, var(--canvas) 32%, transparent);
+}
+.settings-theme-pool__swatch.has-dark-ink {
+  color: #171719;
+}
+.settings-theme-pool__name {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.settings-theme-pool__name strong,
+.settings-theme-pool__name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-theme-pool__name strong {
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.settings-theme-pool__name small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.settings-segmented {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(82px, 1fr));
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+.settings-segmented button {
+  min-height: 34px;
+  border: 0;
+  padding: 0 15px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.settings-segmented button:hover {
+  color: var(--text);
+}
+.settings-segmented button.is-selected {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.settings-segmented button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.settings-segmented--text-size {
+  width: 280px;
+  grid-template-columns: 0.7fr 1fr 1fr 1.3fr;
+}
+.settings-segmented--text-size button {
+  min-width: 0;
+  padding-inline: 4px;
+  white-space: nowrap;
+}
+
+.settings-segmented--page-tabs {
+  width: 340px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-segmented--shortcut-platform {
+  width: 300px;
+  grid-template-columns: 1.25fr 1fr 0.75fr;
+}
+
+.settings-segmented--page-tabs button,
+.settings-segmented--shortcut-platform button {
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.settings-inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.settings-inline-options button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.settings-inline-options button:hover,
+.settings-inline-options button.is-selected {
+  color: var(--text);
+}
+.settings-color-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 46%, transparent);
+  opacity: 0.52;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+.settings-color-tools.is-enabled {
+  opacity: 1;
+  pointer-events: auto;
+}
+.settings-preset-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.settings-preset-list button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 28%, transparent);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.settings-preset-list button:hover,
+.settings-preset-list button.is-selected {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
+}
+.settings-preset-list i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.settings-hex-input {
+  display: inline-flex;
+  min-width: 148px;
+  height: 38px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--surface-strong) 38%, transparent);
+}
+.settings-hex-input input[type="color"] {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+}
+.settings-hex-input input[type="text"],
+.settings-hex-input input:not([type]) {
+  width: 95px;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+/* Sidebar settings redesign: make the icon controls read as a visual
+   decision first, then expose the color system beneath it. */
+.settings-choice-card--sidebar-style {
+  min-height: 172px;
+  gap: 16px;
+  padding: 16px;
+}
+
+.settings-choice-card--sidebar-style .settings-mini-surface {
+  width: 207px;
+  height: 176px;
+  border-radius: 15px;
+  padding: 16px 17px;
+  background: color-mix(in srgb, var(--canvas) 87%, var(--accent) 13%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 8%, var(--text));
+}
+
+.settings-choice-card--sidebar-style .settings-choice-card__copy {
+  align-self: center;
+  align-content: center;
+  gap: 10px;
+}
+
+.settings-choice-card--sidebar-style .settings-choice-card__label {
+  gap: 9px;
+}
+
+.settings-choice-card--sidebar-style .settings-choice-card__label strong {
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.settings-choice-card--sidebar-style .settings-choice-card__copy small {
+  max-width: 23ch;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.settings-section__heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.settings-sidebar-settings {
+  gap: 16px;
+}
+
+/* Keep the complete settings markup available on first paint while allowing
+   the browser to skip layout and paint work for the long, off-screen tail. */
+.settings-sidebar-settings > :nth-child(n + 4) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+.settings-sidebar-category-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 4px 0;
+}
+
+.settings-sidebar-category-heading:first-child {
+  margin-top: 0;
+}
+
+.settings-sidebar-category-heading > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.settings-sidebar-category-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-sidebar-category-heading h2,
+.settings-sidebar-category-heading p {
+  margin: 0;
+}
+
+.settings-sidebar-category-heading h2 {
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.settings-sidebar-category-heading p {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.settings-sidebar-category-heading output {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  font-size: 0.7rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.settings-sidebar-header-options {
+  margin-top: 16px;
+}
+
+.settings-choice-card--header-layout {
+  min-height: 104px;
+}
+
+.settings-sidebar-header-options__rows {
+  margin-top: 12px;
+}
+
+.settings-sidebar-dock-row {
+  position: relative;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+
+.settings-sidebar-dock-row.is-dragging {
+  opacity: 0.46;
+}
+
+.settings-sidebar-dock-row.is-drop-target::before,
+.settings-sidebar-dock-row.is-drop-target::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-shadow) 76%, transparent);
+}
+
+.settings-sidebar-dock-row.is-drop-before::before {
+  top: -1px;
+}
+
+.settings-sidebar-dock-row.is-drop-after::after {
+  bottom: -1px;
+}
+
+.settings-sidebar-dock-row.is-drop-before::after,
+.settings-sidebar-dock-row.is-drop-after::before {
+  display: none;
+}
+
+.settings-sidebar-dock-row .settings-row__control {
+  gap: 8px;
+}
+
+.settings-dock-reorder-handle {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.settings-dock-reorder-handle:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.settings-dock-reorder-handle:active {
+  cursor: grabbing;
+}
+
+.settings-dock-reorder-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.settings-section__heading-row h2 {
+  margin-bottom: 5px;
+}
+
+.settings-section__heading-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.settings-section__hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.settings-icon-color-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.settings-icon-color-option {
+  display: flex;
+  min-width: 0;
+  min-height: 76px;
+  align-items: flex-start;
+  gap: 14px;
+  border: 0;
+  border-radius: 13px;
+  padding: 13px 15px;
+  color: var(--text-secondary);
+  text-align: left;
+  background: color-mix(in srgb, var(--surface) 32%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-icon-color-option:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.settings-icon-color-option.is-selected {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+}
+
+.settings-icon-color-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-icon-color-option .settings-radio {
+  width: 24px;
+  height: 24px;
+  border-color: color-mix(in srgb, var(--text-secondary) 72%, transparent);
+}
+
+.settings-icon-color-option.is-selected .settings-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.settings-icon-color-option > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.settings-icon-color-option strong {
+  font-size: 0.91rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.settings-icon-color-option small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.settings-color-tools--redesign {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.85fr);
+  align-items: start;
+  gap: 28px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-color-tools__quick,
+.settings-color-tools__value {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 15px;
+}
+
+.settings-color-tools__label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.settings-color-tools--redesign .settings-preset-list {
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.settings-color-tools--redesign .settings-color-swatch {
+  flex: 0 0 41px;
+}
+
+.settings-color-swatch {
+  position: relative;
+  display: inline-flex;
+  width: 41px;
+  height: 41px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.settings-color-swatch > i {
+  display: block;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  flex: 0 0 32px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.settings-color-swatch:hover > i,
+.settings-color-swatch.is-selected > i {
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 5px var(--accent);
+}
+
+/* The color itself and its circular selection ring are the affordance. Keep the
+   inherited preset-button treatment from drawing a square behind swatches. */
+.settings-preset-list
+  .settings-color-swatch:not(.settings-color-swatch--custom):hover,
+.settings-preset-list
+  .settings-color-swatch:not(.settings-color-swatch--custom).is-selected {
+  background: transparent;
+}
+
+.settings-color-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-color-swatch-divider {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 46px;
+  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
+}
+
+.settings-color-swatch--custom {
+  flex: 0 0 auto !important;
+  width: auto;
+  min-width: 94px;
+  height: 41px;
+  gap: 7px;
+  border-radius: 999px;
+  padding: 0 7px;
+  color: var(--text-secondary);
+}
+
+.settings-color-swatch--custom > span {
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.settings-color-swatch--custom:hover,
+.settings-color-swatch--custom.is-selected {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.settings-color-swatch--custom:hover > i,
+.settings-color-swatch--custom.is-selected > i {
+  box-shadow: none;
+}
+
+.settings-color-tools__value .settings-hex-input {
+  width: 100%;
+  min-width: 0;
+  height: 53px;
+  border-radius: 11px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--surface-strong) 24%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 68%, transparent);
+}
+
+.settings-color-tools__value .settings-hex-input input[type="color"] {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  order: 2;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.settings-color-tools__value .settings-hex-input input[type="text"],
+.settings-color-tools__value .settings-hex-input input:not([type]) {
+  width: 100%;
+  font-size: 0.83rem;
+  font-weight: 650;
+}
+
+.settings-color-tools__value small {
+  max-width: 23ch;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.settings-placeholder {
+  min-height: 420px;
+  margin-top: 14px;
+}
+
+@media (max-width: 820px) {
+  .courses-main.student-surface-main.courses-main--settings {
+    padding-inline: 15px;
+  }
+
+  .student-surface-main > .settings-page {
+    --settings-page-inline-gutter: 0px;
+    padding-inline: 0;
+  }
+}

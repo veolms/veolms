@@ -1,0 +1,23 @@
+/* grove palette — light mode. */
+:root[data-theme="light"][data-palette="grove"] {
+  --canvas: #e9f1eb;
+  --header: #e4ece6;
+  --surface: #fbfffc;
+  --hover: #e2eee6;
+  --selected: #d7ebde;
+  --track: #dbe7de;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #111e16;
+  --text-secondary: #36483d;
+  --muted: #586b5e;
+  --accent: #167343;
+  --accent-hover: #105e35;
+  --accent-soft: rgba(22, 115, 67, 0.12);
+  --accent-border: rgba(22, 115, 67, 0.3);
+  --accent-shadow: rgba(22, 115, 67, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #dfe8e2;
+  --main-surface: #f2f8f4;
+  --surface-strong: #e9f3ec;
+}

@@ -73,12 +73,7 @@ test("settings content swipes between adjacent tabs without moving the sidebar",
     ),
   ).toBeLessThan(1);
 
-  await expect(panel.locator(".is-preview.is-previous")).toContainText(
-    "Your public profile",
-  );
-  await expect(panel.locator(".is-preview.is-next")).toContainText(
-    "Sidebar header",
-  );
+  await expect(panel.locator(".is-preview")).toHaveCount(0);
   await expect(panel).not.toHaveAttribute("data-tab-swipe-active", "");
 
   const finishSwipe = await startTouchSwipe(page, panel, -190);
@@ -178,6 +173,26 @@ test("discussion content and lesson tools use the same adjacent swipe behavior",
 }) => {
   await openApp(page, "/discussions/q-and-a");
   const discussionPanel = page.locator("#discussion-panel");
+  const discussionMainBox = await page.locator(".courses-main").boundingBox();
+  const discussionPanelBox = await discussionPanel.boundingBox();
+  const discussionThreadBox = await discussionPanel
+    .locator(".discussion-thread")
+    .first()
+    .boundingBox();
+  expect(discussionMainBox).not.toBeNull();
+  expect(discussionPanelBox).not.toBeNull();
+  expect(discussionThreadBox).not.toBeNull();
+  expect(Math.abs(discussionPanelBox!.x - discussionMainBox!.x)).toBeLessThan(
+    1,
+  );
+  expect(
+    Math.abs(
+      discussionPanelBox!.x +
+        discussionPanelBox!.width -
+        (discussionMainBox!.x + discussionMainBox!.width),
+    ),
+  ).toBeLessThan(1);
+  expect(discussionThreadBox!.x - discussionPanelBox!.x).toBeGreaterThan(20);
   const finishDiscussionSwipe = await startTouchSwipe(
     page,
     discussionPanel,
@@ -198,6 +213,25 @@ test("discussion content and lesson tools use the same adjacent swipe behavior",
     "/learn/typescript-course/the-design-mindset?from=my-courses",
   );
   const lessonPanel = page.locator("#learning-discussion-tab-panel");
+  const lessonColumnBox = await page
+    .locator(".learning-workspace__lesson-column")
+    .boundingBox();
+  const lessonPanelBox = await lessonPanel.boundingBox();
+  const lessonComposerBox = await lessonPanel
+    .locator(".learning-comment-composer")
+    .boundingBox();
+  expect(lessonColumnBox).not.toBeNull();
+  expect(lessonPanelBox).not.toBeNull();
+  expect(lessonComposerBox).not.toBeNull();
+  // The panel intentionally extends beyond its lesson column on both sides so
+  // elevated cards can cast an unclipped shadow at the page edges.
+  expect(lessonPanelBox!.x - lessonColumnBox!.x).toBeCloseTo(-12, 0);
+  expect(
+    lessonColumnBox!.x +
+      lessonColumnBox!.width -
+      (lessonPanelBox!.x + lessonPanelBox!.width),
+  ).toBeCloseTo(-10, 0);
+  expect(lessonComposerBox!.x - lessonPanelBox!.x).toBeGreaterThanOrEqual(6);
   const finishLessonSwipe = await startTouchSwipe(page, lessonPanel, -190);
   await expect(lessonPanel.locator(".is-preview.is-next")).toContainText(
     "Your lesson notes",
@@ -209,6 +243,42 @@ test("discussion content and lesson tools use the same adjacent swipe behavior",
   );
 });
 
+test("discussion surfaces keep swipe clipping outside mobile content gutters", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const [path, panelSelector, contentSelector] of [
+    ["/discussions/q-and-a", "#discussion-panel", ".discussion-thread"],
+    [
+      "/learn/typescript-course/career-opportunities?from=home",
+      "#learning-discussion-tab-panel",
+      ".learning-comment-composer",
+    ],
+  ] as const) {
+    await openApp(page, path);
+    const panel = page.locator(panelSelector);
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    const mainBox = await page.locator(".courses-main").boundingBox();
+    const panelBox = await panel.boundingBox();
+    const contentBox = await panel
+      .locator(contentSelector)
+      .first()
+      .boundingBox();
+    expect(mainBox).not.toBeNull();
+    expect(panelBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+
+    expect(Math.abs(panelBox!.x - mainBox!.x), path).toBeLessThan(1);
+    expect(
+      Math.abs(panelBox!.x + panelBox!.width - (mainBox!.x + mainBox!.width)),
+      path,
+    ).toBeLessThan(1);
+    expect(contentBox!.x - panelBox!.x, path).toBeGreaterThanOrEqual(12);
+  }
+});
+
 test("a short slow swipe springs back and an edge swipe stays inside the tab panel", async ({
   page,
 }) => {
@@ -216,9 +286,7 @@ test("a short slow swipe springs back and an edge swipe stays inside the tab pan
   const app = page.locator(".courses-app");
   const panel = page.locator("#settings-tab-panel");
   await expect(panel.locator(".is-preview.is-previous")).toHaveCount(0);
-  await expect(panel.locator(".is-preview.is-next")).toContainText(
-    "Display mode",
-  );
+  await expect(panel.locator(".is-preview.is-next")).toHaveCount(0);
   const finishEdgeSwipe = await startTouchSwipe(page, panel, 52);
   await expect(panel.locator(".is-preview.is-previous")).toHaveCount(0);
   await finishEdgeSwipe();
@@ -227,7 +295,7 @@ test("a short slow swipe springs back and an edge swipe stays inside the tab pan
   await expect(panel).not.toHaveAttribute("data-tab-swipe-active", "");
 
   await openApp(page, "/settings/appearance");
-  await expect(panel.locator(".is-preview")).toHaveCount(2);
+  await expect(panel.locator(".is-preview")).toHaveCount(0);
   const finishShortSwipe = await startTouchSwipe(page, panel, -42);
   await expect(panel.locator(".is-preview.is-next")).toHaveCount(1);
   await finishShortSwipe();

@@ -1,0 +1,161 @@
+/* The collapsed rail uses a fixed, directional tooltip so its scroll area
+   never clips the label, pointer, or the source control's focus treatment. */
+@media (min-width: 821px) {
+  .courses-app--collapsed .courses-nav button:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 84%, white);
+  }
+
+  .sidebar-nav-tooltip {
+    /* Oppose the surrounding canvas for immediate legibility: an almost-white
+       raised slab on dark shells, then an almost-black slab on light shells.
+       The palette colors the material itself while the edge stays neutral. */
+    --sidebar-tooltip-surface-start: color-mix(
+      in srgb,
+      white 86%,
+      var(--accent) 14%
+    );
+    --sidebar-tooltip-surface-end: color-mix(
+      in srgb,
+      white 72%,
+      var(--accent) 28%
+    );
+    --sidebar-tooltip-edge-highlight: color-mix(
+      in srgb,
+      white 86%,
+      var(--accent) 14%
+    );
+    --sidebar-tooltip-edge-accent: color-mix(
+      in srgb,
+      #111827 18%,
+      transparent 82%
+    );
+    position: fixed;
+    top: var(--sidebar-tooltip-top);
+    left: var(--sidebar-tooltip-left);
+    z-index: 180;
+    display: inline-flex;
+    height: 38px;
+    max-width: 288px;
+    align-items: center;
+    box-sizing: border-box;
+    gap: 0;
+    color: #111827;
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 52%))
+      drop-shadow(0 9px 16px rgb(0 0 0 / 46%))
+      drop-shadow(0 22px 34px rgb(0 0 0 / 34%));
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.25;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateY(-50%);
+  }
+
+  /* One SVG owns the complete tooltip silhouette. React adjusts only the
+     source path's horizontal runs and right-edge coordinates; every supplied
+     Bézier curve remains at its original aspect ratio. */
+  .sidebar-nav-tooltip__surface {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: url("#sidebar-tooltip-material");
+    shape-rendering: geometricPrecision;
+    pointer-events: none;
+  }
+
+  .sidebar-nav-tooltip__surface path {
+    stroke: url("#sidebar-tooltip-edge");
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sidebar-nav-tooltip__surface-start {
+    stop-color: var(--sidebar-tooltip-surface-start);
+  }
+
+  .sidebar-nav-tooltip__surface-end {
+    stop-color: var(--sidebar-tooltip-surface-end);
+  }
+
+  .sidebar-nav-tooltip__edge-highlight {
+    stop-color: var(--sidebar-tooltip-edge-highlight);
+  }
+
+  .sidebar-nav-tooltip__edge-accent {
+    stop-color: var(--sidebar-tooltip-edge-accent);
+  }
+
+  .sidebar-nav-tooltip__body {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: max-content;
+    min-width: 0;
+    max-width: 288px;
+    height: 38px;
+    align-items: center;
+    gap: 0;
+    overflow: visible;
+    box-sizing: border-box;
+    /* The curved leading edge consumes roughly six visual pixels, so the
+       larger raw inset produces the same visible gap as the trailing 11px. */
+    padding: 0 11px 0 17px;
+  }
+
+  .sidebar-nav-tooltip__label {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    overflow: hidden;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+  }
+
+  :root[data-theme="light"] .sidebar-nav-tooltip {
+    --sidebar-tooltip-surface-start: color-mix(
+      in srgb,
+      #171a21 70%,
+      var(--accent) 30%
+    );
+    --sidebar-tooltip-surface-end: color-mix(
+      in srgb,
+      #07090d 78%,
+      var(--accent) 22%
+    );
+    --sidebar-tooltip-edge-highlight: color-mix(
+      in srgb,
+      white 24%,
+      var(--accent) 10%
+    );
+    --sidebar-tooltip-edge-accent: color-mix(
+      in srgb,
+      white 6%,
+      transparent 94%
+    );
+    color: #ffffff;
+    filter: drop-shadow(0 3px 5px rgb(15 23 42 / 28%))
+      drop-shadow(0 12px 22px rgb(15 23 42 / 22%))
+      drop-shadow(0 26px 44px rgb(15 23 42 / 16%));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sidebar-nav-tooltip {
+      animation: sidebar-nav-tooltip-in 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  }
+}
+
+@keyframes sidebar-nav-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translate(-5px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}

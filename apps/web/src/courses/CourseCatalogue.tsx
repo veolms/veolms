@@ -30,6 +30,7 @@ export interface CourseCatalogueProps {
   visibleCourses: readonly Course[];
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course) => void;
+  onEditCourse?: (course: Course) => void;
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -52,6 +53,7 @@ export function CourseCatalogue({
   visibleCourses,
   onWishlist,
   onOpenCourse,
+  onEditCourse,
   courseMenu,
   setCourseMenu,
   setNotice,
@@ -182,6 +184,15 @@ export function CourseCatalogue({
                   `/explore-courses/${encodeURIComponent(selected.id)}/overview`,
                 )
               }
+              onEdit={(selected) => {
+                if (onEditCourse) {
+                  onEditCourse(selected);
+                } else {
+                  onNavigatePage(
+                    `/courses/create?edit=${encodeURIComponent(selected.id)}`,
+                  );
+                }
+              }}
               menuOpen={courseMenu === course.id}
               setMenuOpen={setCourseMenu}
               setNotice={setNotice}

@@ -1,0 +1,28 @@
+/* lime palette — light mode. */
+:root[data-theme="light"][data-palette="lime"] {
+  --canvas: #edf5e8;
+  --header: #e8f0e2;
+  --surface: #fefffc;
+  --hover: #e0ecd9;
+  --selected: #dff2c6;
+  --track: #d9e5d3;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #15200f;
+  --text-secondary: #3f5038;
+  --muted: #63725c;
+  --accent: #4f7f0b;
+  --accent-hover: #416b07;
+  --accent-soft: rgba(79, 127, 11, 0.12);
+  --accent-border: rgba(79, 127, 11, 0.3);
+  --accent-shadow: rgba(65, 107, 7, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #dfe8d8;
+  --main-surface: #f6fbf2;
+  --surface-strong: #e9f2e3;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #fefffc;
+  --card-surface-raised: #e9f2e3;
+  --card-surface-soft: #f6fbf3;
+  --card-surface-hover: #ebf4e6;
+}

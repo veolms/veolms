@@ -58,22 +58,24 @@ export function AcademyPaletteMenu({
     key: "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp",
   ) => {
     if (themes.length === 0) return activeIndex;
-    const rowCount = Math.ceil(themes.length / PALETTE_GRID_COLUMNS);
-    const row = Math.floor(activeIndex / PALETTE_GRID_COLUMNS);
-    const column = activeIndex % PALETTE_GRID_COLUMNS;
 
     if (key === "ArrowLeft" || key === "ArrowRight") {
-      const nextColumn =
-        (column + (key === "ArrowRight" ? 1 : -1) + PALETTE_GRID_COLUMNS) %
-        PALETTE_GRID_COLUMNS;
-      const nextIndex = row * PALETTE_GRID_COLUMNS + nextColumn;
-      return nextIndex < themes.length ? nextIndex : activeIndex;
+      const step = key === "ArrowRight" ? 1 : -1;
+      return (activeIndex + step + themes.length) % themes.length;
     }
 
-    const nextRow =
-      (row + (key === "ArrowDown" ? 1 : -1) + rowCount) % rowCount;
-    const nextIndex = nextRow * PALETTE_GRID_COLUMNS + column;
-    return nextIndex < themes.length ? nextIndex : activeIndex;
+    const column = activeIndex % PALETTE_GRID_COLUMNS;
+    const nextIndex =
+      activeIndex +
+      (key === "ArrowDown" ? PALETTE_GRID_COLUMNS : -PALETTE_GRID_COLUMNS);
+    if (nextIndex >= 0 && nextIndex < themes.length) return nextIndex;
+
+    if (key === "ArrowDown") return column;
+    return (
+      column +
+      Math.floor((themes.length - 1 - column) / PALETTE_GRID_COLUMNS) *
+        PALETTE_GRID_COLUMNS
+    );
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -136,7 +138,7 @@ export function AcademyPaletteMenu({
           tabIndex={item.id === activeTheme ? 0 : -1}
           className={item.id === activeTheme ? "is-selected" : ""}
           key={item.id}
-          title={`${item.name} — ${item.note}`}
+          title={item.name}
           data-theme-swatch={item.id}
           style={{ "--theme-swatch": item.preview } as CSSProperties}
           onClick={() => {

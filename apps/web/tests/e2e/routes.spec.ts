@@ -1,5 +1,6 @@
 import { test, expect } from "./app.fixture.ts";
 import {
+  clickLearningBack,
   getApplicationScrollTop,
   installBaselineState,
   openApp,
@@ -105,6 +106,9 @@ test("My Courses overview metrics render as separate responsive cards", async ({
 test("discussion tabs use canonical routes and browser history", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("veolms-page-tab-colors", "multicolor");
+  });
   await page.setViewportSize({ width: 1440, height: 650 });
   await openApp(page, "/discussions/q-and-a");
 
@@ -112,10 +116,6 @@ test("discussion tabs use canonical routes and browser history", async ({
   const questions = tabs.getByRole("tab", { name: "Q&A" });
   const comments = tabs.getByRole("tab", { name: "Comments" });
   const mentions = tabs.getByRole("tab", { name: "Mentions" });
-
-  await page.locator("html").evaluate((root) => {
-    root.dataset.pageTabColors = "multicolor";
-  });
 
   await expect(questions).toHaveAttribute("aria-selected", "true");
   const questionStyle = await questions.evaluate((tab) => {
@@ -309,7 +309,11 @@ test("mobile workspace routes share the Home page gutter", async ({ page }) => {
     await test.step(path, async () => {
       await page.goto(path);
       const wrapper = page.locator(selector);
-      await expect(wrapper).toHaveCSS("padding-top", "0px");
+      const preservesVerticalSpacing = path === "/settings/appearance";
+      await expect(wrapper).toHaveCSS(
+        "padding-top",
+        preservesVerticalSpacing ? "22px" : "0px",
+      );
       await expect(wrapper).toHaveCSS("padding-right", "0px");
       await expect(wrapper).toHaveCSS("padding-left", "0px");
 
@@ -438,7 +442,7 @@ test("Explore Courses navigation resumes its player until explicit player back",
     /\/learn\/ui-ux-design-mastery\/[^/?]+\?from=explore-courses$/,
   );
 
-  await page.getByRole("button", { name: "Return to Explore Courses" }).click();
+  await clickLearningBack(page, "Return to Explore Courses");
   await expect(page).toHaveURL(/\/explore-courses$/);
   await expect(
     page.getByRole("heading", { name: "Explore Courses", level: 1 }),
@@ -516,7 +520,7 @@ test("My Courses resumes the same paused lesson until explicit player back", asy
   await expect(
     navigation.getByRole("button", { name: "My Courses" }),
   ).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "Return to My Courses" }).click();
+  await clickLearningBack(page, "Return to My Courses");
 
   await expect(page).toHaveURL(/\/my-courses$/);
   await expect(
@@ -756,7 +760,7 @@ test("opening a new course moves the single resumable session and navigation ind
   await expect(page).toHaveURL(
     /\/learn\/ui-ux-design-mastery\/[^/?]+\?from=wishlist$/,
   );
-  await page.getByRole("button", { name: "Return to Wishlist" }).click();
+  await clickLearningBack(page, "Return to Wishlist");
   await expect(page).toHaveURL(/\/wishlist$/);
   await expect(
     wishlistNavigation.locator(".courses-nav__resume-indicator"),
@@ -774,7 +778,7 @@ test("listing searches survive opening a player and returning explicitly", async
     .filter({ hasText: "The Ultimate TypeScript Course" })
     .getByRole("button", { name: "Continue Learning" })
     .click();
-  await page.getByRole("button", { name: "Return to My Courses" }).click();
+  await clickLearningBack(page, "Return to My Courses");
   await expect(page.getByPlaceholder("Search my courses...")).toHaveValue(
     "TypeScript",
   );
@@ -790,7 +794,7 @@ test("listing searches survive opening a player and returning explicitly", async
   const catalogueSearch = page.getByPlaceholder("Search your courses...");
   await catalogueSearch.fill("UI/UX");
   await page.getByRole("button", { name: "Open UI/UX Design Mastery" }).click();
-  await page.getByRole("button", { name: "Return to Wishlist" }).click();
+  await clickLearningBack(page, "Return to Wishlist");
   await expect(page.getByPlaceholder("Search your courses...")).toHaveValue(
     "UI/UX",
   );
@@ -807,7 +811,7 @@ test("direct course player links return to Explore Courses by default", async ({
   await expect(
     navigation.getByRole("button", { name: "Explore Courses" }),
   ).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "Return to Explore Courses" }).click();
+  await clickLearningBack(page, "Return to Explore Courses");
   await expect(page).toHaveURL(/\/explore-courses$/);
 });
 

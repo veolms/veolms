@@ -1,0 +1,52 @@
+/* graphite palette — light mode. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #f4f6fb;
+  --header: #ffffff;
+  --surface: #ffffff;
+  --hover: #eef1f7;
+  --selected: #eee9ff;
+  --track: #e6e9f0;
+  --border: #dfe4ee;
+  --border-strong: #bdc4d2;
+  --text: #181925;
+  --text-secondary: #393a47;
+  --muted: #626677;
+  --accent: #6542ea;
+  --accent-hover: #5735d2;
+  --accent-soft: rgba(101, 66, 234, 0.12);
+  --accent-border: rgba(101, 66, 234, 0.32);
+  --accent-shadow: rgba(101, 66, 234, 0.2);
+  --on-accent: #ffffff;
+  --on-accent-glyph: var(--on-accent);
+  --success: #16803b;
+  --danger: #c0263e;
+}
+
+:root[data-theme="light"],
+:root[data-theme="light"][data-palette="graphite"] {
+  --app-shell: #e4e6e6;
+  --main-surface: #f4f5f4;
+  --canvas: #edf0ef;
+  --header: #e9ebea;
+  --surface: #ffffff;
+  --surface-strong: #f1f2f1;
+  --hover: #e8eae9;
+  --selected: #e8e2fb;
+  --track: #dfe3e1;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #1c1f1d;
+  --text-secondary: #464b48;
+  --muted: #68706b;
+  --accent: #7150df;
+  --accent-hover: #6242ca;
+  --accent-soft: rgba(113, 80, 223, 0.12);
+  --accent-border: rgba(113, 80, 223, 0.28);
+  --accent-shadow: rgba(99, 65, 207, 0.16);
+  --on-accent: #ffffff;
+  --on-accent-glyph: #ffffff;
+  --sidebar-tooltip-surface: color-mix(in srgb, var(--accent) 64%, #101827);
+  --sidebar-tooltip-ink: #ffffff;
+  --sidebar-tooltip-edge: color-mix(in srgb, var(--accent) 72%, #101827);
+}

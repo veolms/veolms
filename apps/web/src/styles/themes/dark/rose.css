@@ -1,0 +1,27 @@
+/* rose palette — dark mode. */
+:root[data-palette="rose"] {
+  --canvas: #1e181a;
+  --header: #1c1719;
+  --surface: #34292d;
+  --hover: #42343a;
+  --selected: #4d2d39;
+  --track: #271e21;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fff5f8;
+  --text-secondary: #f0d9e1;
+  --muted: #c2a0ad;
+  --accent: #fb6f92;
+  --accent-hover: #ec5d82;
+  --accent-soft: rgba(251, 111, 146, 0.16);
+  --accent-border: rgba(251, 111, 146, 0.42);
+  --accent-shadow: rgba(251, 111, 146, 0.22);
+  --on-accent: #2b0712;
+  --app-shell: #181315;
+  --main-surface: #291f23;
+  --surface-strong: #3d3035;
+  --card-surface: #34292d;
+  --card-surface-raised: #3d3035;
+  --card-surface-soft: #251c20;
+  --card-surface-hover: #43343a;
+}

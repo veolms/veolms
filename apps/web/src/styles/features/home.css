@@ -1,0 +1,518 @@
+/* Home dashboard refinement and responsive student navigation */
+.courses-app {
+  grid-template-columns: 302px minmax(0, 1fr);
+}
+
+.courses-app--collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+.courses-app--hidden .courses-sidebar {
+  width: 302px;
+}
+
+.courses-nav {
+  margin-top: 10px;
+}
+
+.home-resume-card {
+  padding: 14px 15px;
+}
+
+/* Keep the unfilled resume progress segment legible on the near-black Veo
+   Onyx card without changing the appearance of other progress indicators. */
+.home-resume-card .learning-progress-track {
+  background: var(--progress-track, var(--track));
+}
+
+.home-dashboard-grid {
+  align-items: stretch;
+}
+
+.home-metric {
+  min-height: 96px;
+  padding: 11px 12px;
+}
+
+.home-metric__lead {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-metric__lead > span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.tone-violet .home-metric__lead > span {
+  color: #8c6aff;
+  background: rgba(113, 72, 255, 0.16);
+}
+.tone-green .home-metric__lead > span {
+  color: #5eea7c;
+  background: rgba(39, 192, 82, 0.14);
+}
+.tone-cyan .home-metric__lead > span {
+  color: #21d4f3;
+  background: rgba(19, 174, 216, 0.14);
+}
+.tone-gold .home-metric__lead > span {
+  color: #f6c945;
+  background: rgba(222, 169, 14, 0.14);
+}
+
+.home-metric__lead > strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.home-metric p {
+  margin-top: 8px;
+}
+
+.home-discussions-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.home-discussion-list {
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+
+.home-discussion-list article:nth-child(n + 4) {
+  display: none;
+}
+
+.mobile-bottom-nav,
+.mobile-menu-layer {
+  display: none;
+}
+
+@keyframes mobile-sheet-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mobile-sheet-rise {
+  from {
+    translate: 0 100%;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .courses-app,
+  .courses-app--collapsed,
+  .courses-app--hidden {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+    background: var(--main-surface);
+  }
+
+  .courses-sidebar,
+  .sidebar-edge-trigger {
+    display: none !important;
+  }
+
+  .courses-main,
+  .student-surface-main {
+    min-height: calc(100vh - 16px);
+    min-height: calc(100dvh - 16px);
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 140;
+    display: grid;
+    min-height: calc(58px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    border: 0;
+    border-radius: 0;
+    padding: 2px 2px calc(2px + env(safe-area-inset-bottom));
+    background: rgba(15, 15, 15, 0.7);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    box-shadow: none;
+    isolation: isolate;
+    visibility: visible;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 150ms ease-out,
+      visibility 0s linear 0s;
+    will-change: transform;
+  }
+
+  .mobile-bottom-nav.is-scroll-hidden {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate3d(0, calc(100% + 4px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.4, 0, 1, 1),
+      opacity 110ms ease-in,
+      visibility 0s linear 180ms;
+  }
+
+  :root[data-theme="light"] .mobile-bottom-nav {
+    background: color-mix(in srgb, var(--app-shell) 72%, transparent);
+  }
+
+  @supports not (
+    (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+  ) {
+    .mobile-bottom-nav {
+      background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
+    }
+  }
+
+  .mobile-bottom-nav > button {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 0;
+    color: var(--muted);
+  }
+
+  .mobile-bottom-nav > button > span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-bottom-nav > button svg {
+    color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-bottom-nav .courses-nav__resume-indicator {
+    top: -6px;
+    left: -10px;
+  }
+
+  .mobile-bottom-nav .courses-nav__resume-indicator > svg {
+    color: var(--on-accent);
+  }
+
+  .mobile-bottom-nav > button small {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.61rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-bottom-nav > button b {
+    position: absolute;
+    top: -7px;
+    right: -10px;
+    display: inline-flex;
+    min-width: 17px;
+    height: 17px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0 4px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 0.56rem;
+  }
+
+  .mobile-bottom-nav > button.is-active {
+    color: var(--nav-icon-color, var(--accent));
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-bottom-nav > button.is-active svg {
+    color: currentColor;
+  }
+
+  .mobile-menu-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: max(16px, env(safe-area-inset-top));
+    background: rgba(0, 0, 0, 0.62);
+    animation: mobile-sheet-backdrop-in 160ms ease-out both;
+  }
+
+  .mobile-menu-sheet {
+    position: relative;
+    display: flex;
+    width: min(100%, 560px);
+    max-height: min(82dvh, 720px);
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 22px 22px 0 0;
+    padding: 0 12px calc(14px + env(safe-area-inset-bottom));
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.42);
+    transform: translateY(var(--mobile-sheet-offset, 0));
+    transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: mobile-sheet-rise 230ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform;
+  }
+
+  .mobile-menu-sheet.is-dragging {
+    user-select: none;
+    transition: none;
+  }
+
+  .mobile-menu-sheet__drag-zone {
+    display: flex;
+    min-height: 30px;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .mobile-menu-sheet__drag-zone:active {
+    cursor: grabbing;
+  }
+
+  .mobile-menu-sheet__drag-zone > span {
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 58%, transparent);
+  }
+
+  .mobile-menu-sheet__heading {
+    display: flex;
+    min-height: 55px;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 3px 5px 10px;
+  }
+
+  .mobile-menu-sheet__heading h2 {
+    color: var(--text);
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .mobile-menu-sheet__heading p {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+
+  .mobile-menu-sheet__profile {
+    display: flex;
+    min-height: 64px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 11px;
+    border-radius: 13px;
+    padding: 10px 12px;
+    background: var(--surface-strong);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
+      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+  }
+
+  .mobile-menu-sheet__profile > .shell-profile-avatar,
+  .mobile-menu-sheet__profile img {
+    width: 43px;
+    height: 43px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .mobile-menu-sheet__profile > .shell-profile-avatar {
+    display: inline-flex;
+  }
+
+  .mobile-menu-sheet__profile > span {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .mobile-menu-sheet__profile strong {
+    font-size: 0.84rem;
+    font-weight: 650;
+  }
+
+  .mobile-menu-sheet__profile small {
+    color: var(--muted);
+    font-size: 0.69rem;
+  }
+
+  .mobile-menu-sheet__list {
+    min-height: 0;
+    display: grid;
+    gap: 3px;
+    margin-top: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: auto;
+  }
+
+  .mobile-menu-sheet__list > button {
+    position: relative;
+    display: grid;
+    min-height: 50px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border-radius: 11px;
+    padding: 0 13px;
+    color: var(--text-secondary);
+    text-align: left;
+    touch-action: pan-y;
+  }
+
+  .mobile-menu-sheet__list > button svg {
+    color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-menu-sheet__list .courses-nav__resume-indicator > svg {
+    color: var(--on-accent);
+  }
+
+  .mobile-menu-sheet__list > button span {
+    overflow: hidden;
+    font-size: 0.83rem;
+    font-weight: 550;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-menu-sheet__list > button b {
+    display: inline-flex;
+    min-width: 21px;
+    height: 21px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 0.63rem;
+  }
+
+  .mobile-menu-sheet__list > button.is-active {
+    color: var(--text);
+    background: linear-gradient(
+      96deg,
+      color-mix(in srgb, var(--accent) 19%, var(--surface-strong)),
+      color-mix(in srgb, var(--surface-strong) 88%, transparent)
+    );
+    box-shadow: 0 8px 24px
+      color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  }
+
+  .mobile-menu-sheet__appearance {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 5px;
+    margin-top: 10px;
+    border-radius: 13px;
+    padding: 5px;
+    background: var(--surface-strong);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
+      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+  }
+
+  .mobile-menu-sheet__appearance > button {
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .mobile-menu-sheet__appearance > button.is-active {
+    color: var(--text);
+    background: var(--app-shell);
+  }
+
+  .mobile-menu-sheet__appearance > button > i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .home-resume-card {
+    padding: 12px;
+  }
+
+  .home-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .home-resume-card {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 440px) {
+  .mobile-bottom-nav > button small {
+    font-size: 0.58rem;
+  }
+
+  .mobile-menu-sheet {
+    width: 100%;
+  }
+}

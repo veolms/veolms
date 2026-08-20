@@ -115,6 +115,21 @@ describe("CourseCatalogue", () => {
     expect(setNotice).not.toHaveBeenCalled();
   });
 
+  it("navigates to course edit page when edit course action is selected", () => {
+    const target = courses[0]!;
+    const { onNavigatePage } = renderCatalogue({
+      role: "creator",
+      visibleCourses: [target],
+      courseMenu: target.id,
+    });
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /Edit course/i }));
+
+    expect(onNavigatePage).toHaveBeenCalledWith(
+      `/courses/create?edit=${encodeURIComponent(target.id)}`,
+    );
+  });
+
   it("keeps wishlist empty copy and delegates reset to the parent", () => {
     const { onResetCatalogue } = renderCatalogue({
       activeSection: "Wishlist",

@@ -1,0 +1,23 @@
+/* ember palette — dark mode. */
+:root[data-palette="ember"] {
+  --canvas: #1c1815;
+  --header: #1b1714;
+  --surface: #322a25;
+  --hover: #40342d;
+  --selected: #493025;
+  --track: #251f1b;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fff8f3;
+  --text-secondary: #f1ddd1;
+  --muted: #c4a996;
+  --accent: #ff8a34;
+  --accent-hover: #f27a24;
+  --accent-soft: rgba(255, 138, 52, 0.16);
+  --accent-border: rgba(255, 138, 52, 0.42);
+  --accent-shadow: rgba(255, 138, 52, 0.24);
+  --on-accent: #241004;
+  --app-shell: #171412;
+  --main-surface: #27211d;
+  --surface-strong: #3a302a;
+}

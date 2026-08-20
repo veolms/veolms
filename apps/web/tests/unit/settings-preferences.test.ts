@@ -15,6 +15,11 @@ import {
   readPageTabColors,
 } from "../../src/settings/settingsPreferences.js";
 
+const runSurfaceDepthBootstrap = () => {
+  // biome-ignore lint/security/noGlobalEval: Execute the generated inline bootstrap in JSDOM.
+  window.eval(getSurfaceDepthBootstrapScript());
+};
+
 describe("surface depth preference", () => {
   it("defaults to enabled and respects an explicit stored opt-out", () => {
     expect(readElevatedSurfaces()).toBe(true);
@@ -32,22 +37,39 @@ describe("page tab color preferences", () => {
     localStorage.setItem(PAGE_TAB_COLORS_KEY, "multicolor");
     localStorage.setItem(
       "veolms-sidebar-preferences",
-      JSON.stringify({ iconStyle: "multicolor", elevateMenus: true }),
+      JSON.stringify({
+        iconStyle: "multicolor",
+        elevateMenus: true,
+        contentLayout: "edge-to-edge",
+      }),
     );
 
-    window.eval(getSurfaceDepthBootstrapScript());
+    runSurfaceDepthBootstrap();
 
     expect(document.documentElement.dataset.pageTabColors).toBe("multicolor");
     expect(document.documentElement.dataset.sidebarIconStyle).toBe(
       "multicolor",
     );
     expect(document.documentElement.dataset.sidebarMenuElevation).toBe("true");
+    expect(document.documentElement.dataset.contentLayout).toBe("edge-to-edge");
+    expect(document.documentElement.dataset.sidebarHeaderLayout).toBe("inline");
   });
 
   it("defaults missing and unsupported values to following the sidebar", () => {
     expect(readPageTabColors()).toBe(PAGE_TAB_COLORS_DEFAULT);
     expect(normalizePageTabColors("unsupported")).toBe("follow-sidebar");
     expect(normalizePageTabColors(null)).toBe("follow-sidebar");
+  });
+
+  it("preserves an explicitly fixed header without a version marker", () => {
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ headerLayout: "fixed" }),
+    );
+
+    runSurfaceDepthBootstrap();
+
+    expect(document.documentElement.dataset.sidebarHeaderLayout).toBe("fixed");
   });
 
   it.each(["follow-sidebar", "multicolor", "monochrome"] as const)(
@@ -76,10 +98,9 @@ describe("sidebar width preferences", () => {
 });
 
 describe("sidebar dock preferences", () => {
-  it("defaults to the four appearance controls in the requested order", () => {
+  it("defaults to mode, reading, and fullscreen controls", () => {
     expect(normalizeSidebarDockItems(undefined)).toEqual([
       "appearance",
-      "theme",
       "reading-mode",
       "fullscreen",
     ]);

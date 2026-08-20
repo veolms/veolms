@@ -1,0 +1,781 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Page Tab Colors integration
+   The wizard nav uses the .page-tabs contract so the user's "Page tab colors"
+   setting is respected. The indicator must always be visible (no swipe state).
+   ───────────────────────────────────────────────────────────────────────────── */
+.course-wizard-steps-nav .page-tabs__indicator {
+  opacity: 1;
+  transition:
+    width 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 200ms ease-out;
+}
+
+/* Active tab label + icon color follows the tone (same as settings tabs) */
+.course-wizard-steps-nav [role="tab"].is-active {
+  color: var(--page-tab-active-ink);
+}
+
+/* Non-focus border and shadow resets on tabs */
+.course-wizard-steps-nav [role="tab"],
+.course-wizard-steps-nav button {
+  box-shadow: none !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 2px solid transparent !important;
+}
+
+.course-wizard-steps-nav [role="tab"]:focus-visible,
+.course-wizard-steps-nav button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Mobile Bottom Action Bar
+   Synchronized with mobile-bottom-nav positioning & auto-hide behavior.
+   ───────────────────────────────────────────────────────────────────────────── */
+.course-wizard-mobile-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(58px + env(safe-area-inset-bottom));
+  z-index: 135;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  visibility: visible;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 150ms ease-out,
+    visibility 0s linear 0s;
+  will-change: transform;
+}
+
+@media (min-width: 769px) {
+  .course-wizard-mobile-action-bar {
+    display: none !important;
+  }
+}
+
+.course-wizard-mobile-action-bar.is-scroll-hidden {
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translate3d(
+    0,
+    calc(100% + 58px + env(safe-area-inset-bottom) + 4px),
+    0
+  );
+  transition:
+    transform 180ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 110ms ease-in,
+    visibility 0s linear 180ms;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RichTextEditor Scoped ProseMirror & Formatting Styles
+   ───────────────────────────────────────────────────────────────────────────── */
+.course-wizard-emoji-popover-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.editor-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.editor-btn:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.editor-btn.is-active {
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+@media (max-width: 640px) {
+  .course-wizard-editor__toolbar {
+    padding: 6px 8px;
+    row-gap: 5px;
+    column-gap: 2px;
+  }
+
+  .course-wizard-editor__select select {
+    padding: 4px 22px 4px 8px;
+    font-size: 0.78rem;
+  }
+
+  .course-wizard-editor__divider {
+    height: 16px;
+    margin: 0 1px;
+  }
+
+  .editor-btn {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+.course-wizard-emoji-popover {
+  position: fixed !important;
+  z-index: 99999 !important;
+  width: 320px;
+  height: 360px;
+  max-height: calc(100vh - 32px);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--text) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  animation: emojiPopoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .course-wizard-emoji-popover {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.course-wizard-emoji-popover .EmojiPickerReact {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+  border-radius: 0 !important;
+
+  /* Map library tokens to app surface tokens */
+  --epr-bg-color: var(--surface) !important;
+  --epr-picker-height: 360px !important;
+  --epr-picker-width: 320px !important;
+
+  /* Skin tone / preview / body color */
+  --epr-emoji-size: 26px !important;
+  --epr-header-padding: 8px 10px !important;
+  --epr-search-border-color: color-mix(
+    in srgb,
+    var(--text) 18%,
+    transparent
+  ) !important;
+  --epr-search-background-color: color-mix(
+    in srgb,
+    var(--canvas) 65%,
+    var(--surface)
+  ) !important;
+  --epr-search-input-bg-color-active: color-mix(
+    in srgb,
+    var(--canvas) 80%,
+    var(--surface)
+  ) !important;
+  --epr-search-input-text-color: var(--text) !important;
+  --epr-search-input-placeholder-color: var(--muted) !important;
+  --epr-category-label-bg-color: var(--surface) !important;
+  --epr-text-color: var(--text) !important;
+  --epr-hover-bg-color: color-mix(
+    in srgb,
+    var(--text) 8%,
+    transparent
+  ) !important;
+  --epr-focus-bg-color: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    transparent
+  ) !important;
+  --epr-highlight-color: var(--accent) !important;
+  --epr-category-icon-active-color: var(--accent) !important;
+}
+
+/* Hide the skin-tone square that appears as a yellow box next to the search */
+.course-wizard-emoji-popover .epr-skin-tones,
+.course-wizard-emoji-popover .epr-skin-tone-select,
+.course-wizard-emoji-popover .epr-skin-tones-btn,
+.course-wizard-emoji-popover [class*="skinTone"],
+.course-wizard-emoji-popover [class*="skin-tone"],
+.course-wizard-emoji-popover [class*="SkinTone"] {
+  display: none !important;
+}
+
+/* Search bar: match app input style */
+.course-wizard-emoji-popover .epr-search-container input,
+.course-wizard-emoji-popover input[type="text"] {
+  background: color-mix(in srgb, var(--canvas) 65%, var(--surface)) !important;
+  color: var(--text) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent) !important;
+  border-radius: 8px !important;
+  font-size: 0.84rem !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.course-wizard-emoji-popover .epr-search-container input:focus,
+.course-wizard-emoji-popover input[type="text"]:focus {
+  border-color: color-mix(in srgb, var(--text) 35%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Category icon nav bar */
+.course-wizard-emoji-popover .epr-category-nav,
+.course-wizard-emoji-popover [class*="categoryNav"] {
+  background: color-mix(in srgb, var(--canvas) 50%, var(--surface)) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent) !important;
+  padding: 6px 10px !important;
+}
+
+/* Category nav buttons */
+.course-wizard-emoji-popover .epr-category-nav button,
+.course-wizard-emoji-popover [class*="categoryNav"] button {
+  border-radius: 6px !important;
+  transition: background 0.12s ease !important;
+}
+
+.course-wizard-emoji-popover .epr-category-nav button:hover,
+.course-wizard-emoji-popover [class*="categoryNav"] button:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+}
+
+/* Category section labels */
+.course-wizard-emoji-popover .epr-emoji-category-label {
+  background: var(--surface) !important;
+  color: var(--muted) !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  padding: 6px 10px 4px !important;
+}
+
+/* Emoji list scrollbar */
+.course-wizard-emoji-popover .epr-body::-webkit-scrollbar {
+  width: 5px !important;
+}
+.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+  border-radius: 999px !important;
+}
+.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 65%, transparent) !important;
+}
+
+/* "What's your mood?" preview bar */
+.course-wizard-emoji-popover .epr-preview,
+.course-wizard-emoji-popover [class*="preview"] {
+  background: color-mix(in srgb, var(--canvas) 50%, var(--surface)) !important;
+  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent) !important;
+  color: var(--muted) !important;
+  font-size: 0.8rem !important;
+}
+
+/* Link Popover Styles */
+.course-wizard-link-popover {
+  position: fixed !important;
+  z-index: 99999 !important;
+  width: 310px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--text) 14%, transparent),
+    0 20px 48px color-mix(in srgb, var(--text) 16%, transparent);
+  padding: 12px;
+  animation: emojiPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .course-wizard-link-popover {
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 20px 48px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.course-wizard-link-popover__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.course-wizard-link-input {
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  background: color-mix(in srgb, var(--canvas) 65%, var(--surface));
+  color: var(--text);
+  font-size: 0.84rem;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.course-wizard-link-input:focus {
+  border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  box-shadow: none;
+}
+
+.course-wizard-link-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.course-wizard-link-btn-primary {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: var(--on-accent, #ffffff);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.course-wizard-link-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.course-wizard-link-btn-secondary {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.course-wizard-link-btn-secondary:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.course-wizard-link-btn-danger {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #f87171;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-right: auto;
+  transition: background 0.15s ease;
+}
+
+.course-wizard-link-btn-danger:hover {
+  background: color-mix(in srgb, #ef4444 22%, transparent);
+}
+
+@keyframes emojiPopoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.course-wizard-editor textarea,
+.course-wizard-editor__raw-markdown,
+.course-wizard-editor__content .ProseMirror {
+  width: 100%;
+  min-height: 140px;
+  border: none;
+  padding: 14px;
+  color: var(--text);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  resize: vertical;
+  overflow: auto;
+  outline: none;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent)
+    transparent;
+}
+
+.course-wizard-editor textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.course-wizard-editor textarea::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+
+.course-wizard-editor textarea::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.course-wizard-editor textarea::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.course-wizard-editor textarea::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.course-wizard-editor textarea::-webkit-resizer {
+  background: transparent;
+}
+
+.course-wizard-editor__content
+  .ProseMirror
+  p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Shared ProCodrr Rich Text & Markdown Typography */
+.course-wizard-editor__content .ProseMirror,
+.course-preview-markdown-content {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.88));
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+/* Preview wrapper — internal padding so content never touches card edges */
+.course-preview-markdown-content {
+  margin-top: 6px;
+  padding: 2px 2px 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Reset margins for first and last elements in preview */
+.course-preview-markdown-content > :first-child {
+  margin-top: 0 !important;
+}
+
+.course-preview-markdown-content > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* ── Typography Hierarchy ─────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror h1,
+.course-preview-markdown-content h1 {
+  font-size: 1.28rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text, #ffffff);
+  margin: 0.75em 0 0.25em 0;
+  line-height: 1.35;
+}
+
+.course-wizard-editor__content .ProseMirror h2,
+.course-preview-markdown-content h2 {
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text, #ffffff);
+  margin: 0.65em 0 0.2em 0;
+  line-height: 1.4;
+}
+
+.course-wizard-editor__content .ProseMirror h3,
+.course-preview-markdown-content h3 {
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text, #ffffff);
+  margin: 0.55em 0 0.18em 0;
+  line-height: 1.45;
+}
+
+.course-preview-markdown-content h4 {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--text, #ffffff);
+  margin: 0.5em 0 0.18em 0;
+}
+
+.course-preview-markdown-content h5,
+.course-preview-markdown-content h6 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  margin: 0.45em 0 0.15em 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Paragraphs & Inline Emphasis ─────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror p,
+.course-preview-markdown-content p {
+  margin: 0.35em 0;
+  line-height: 1.62;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.86));
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Tight contextual bridge when a heading follows a paragraph */
+.course-preview-markdown-content p + h1,
+.course-preview-markdown-content p + h2,
+.course-preview-markdown-content p + h3,
+.course-preview-markdown-content p + h4 {
+  margin-top: 0.55em;
+}
+
+.course-preview-markdown-content strong,
+.course-preview-markdown-content b {
+  font-weight: 650;
+  color: var(--text, #ffffff);
+}
+
+.course-preview-markdown-content em,
+.course-preview-markdown-content i {
+  font-style: italic;
+}
+
+.course-preview-markdown-content strong em,
+.course-preview-markdown-content em strong {
+  font-weight: 650;
+  font-style: italic;
+  color: var(--text, #ffffff);
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror ul,
+.course-preview-markdown-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.4em !important;
+  margin: 0.3em 0 0.5em !important;
+}
+
+.course-wizard-editor__content .ProseMirror ol,
+.course-preview-markdown-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.4em !important;
+  margin: 0.3em 0 0.5em !important;
+}
+
+/* Heading immediately preceding a list has a snug, cohesive connection */
+.course-preview-markdown-content h1 + ul,
+.course-preview-markdown-content h2 + ul,
+.course-preview-markdown-content h3 + ul,
+.course-preview-markdown-content h4 + ul,
+.course-preview-markdown-content h1 + ol,
+.course-preview-markdown-content h2 + ol,
+.course-preview-markdown-content h3 + ol,
+.course-preview-markdown-content h4 + ol {
+  margin-top: 0.18em !important;
+}
+
+/* Spacing when a new section heading follows a list */
+.course-preview-markdown-content ul + h1,
+.course-preview-markdown-content ul + h2,
+.course-preview-markdown-content ul + h3,
+.course-preview-markdown-content ul + h4,
+.course-preview-markdown-content ol + h1,
+.course-preview-markdown-content ol + h2,
+.course-preview-markdown-content ol + h3,
+.course-preview-markdown-content ol + h4 {
+  margin-top: 0.7em;
+}
+
+.course-wizard-editor__content .ProseMirror li,
+.course-preview-markdown-content li {
+  margin: 0.18em 0 !important;
+  padding-left: 0.2em !important;
+  line-height: 1.58;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.86));
+}
+
+.course-wizard-editor__content .ProseMirror li p,
+.course-preview-markdown-content li p {
+  margin: 0 !important;
+  display: inline !important;
+}
+
+/* Nested lists with progressive bullet styling */
+.course-preview-markdown-content ul ul,
+.course-preview-markdown-content ol ol,
+.course-preview-markdown-content ul ol,
+.course-preview-markdown-content ol ul {
+  margin: 0.25em 0 0.25em !important;
+  padding-left: 1.25em !important;
+}
+
+.course-preview-markdown-content ul ul {
+  list-style-type: circle !important;
+}
+
+.course-preview-markdown-content ul ul ul {
+  list-style-type: square !important;
+}
+
+.course-preview-markdown-content ol ol {
+  list-style-type: lower-alpha !important;
+}
+
+.course-preview-markdown-content ol ol ol {
+  list-style-type: lower-roman !important;
+}
+
+/* ── Blockquotes ──────────────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror blockquote,
+.course-preview-markdown-content blockquote {
+  border-left: 3.5px solid var(--accent);
+  padding: 10px 16px;
+  margin: 0.95em 0;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface, #18181b));
+  border-radius: 0 8px 8px 0;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.82));
+  font-style: italic;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Collapse paragraph margins inside blockquotes */
+.course-wizard-editor__content .ProseMirror blockquote p,
+.course-preview-markdown-content blockquote p {
+  margin: 0 !important;
+  color: inherit;
+  font-style: inherit;
+}
+
+/* Nested blockquotes */
+.course-preview-markdown-content blockquote blockquote {
+  margin: 0.6em 0 0.2em;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface, #18181b));
+  border-left-width: 2.5px;
+}
+
+/* ── Inline code ──────────────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror code,
+.course-preview-markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface, #18181b));
+  color: color-mix(in srgb, var(--accent) 88%, white 12%);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 0.84em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* ── Fenced code blocks (pre > code) ──────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror pre,
+.course-preview-markdown-content pre {
+  background: color-mix(in srgb, var(--surface, #18181b) 90%, var(--text) 10%);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 1em 0;
+  overflow-x: auto;
+  font-size: 0.84em;
+  line-height: 1.65;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent)
+    transparent;
+}
+
+.course-preview-markdown-content pre::-webkit-scrollbar {
+  height: 5px;
+}
+
+.course-preview-markdown-content pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.course-preview-markdown-content pre::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+}
+
+.course-preview-markdown-content pre::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* Reset inline code styles inside a pre block */
+.course-wizard-editor__content .ProseMirror pre code,
+.course-preview-markdown-content pre code {
+  background: transparent !important;
+  color: var(--text) !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror a,
+.course-preview-markdown-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+.course-preview-markdown-content a:hover {
+  color: color-mix(in srgb, var(--accent) 80%, white 20%);
+}
+
+/* ── Horizontal rules ─────────────────────────────────────────────────────── */
+.course-wizard-editor__content .ProseMirror hr,
+.course-preview-markdown-content hr {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  margin: 1.25rem 0;
+}

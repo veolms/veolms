@@ -1,0 +1,48 @@
+/* graphite palette — dark mode. */
+/* Graphite Studio provides the shared borderless material hierarchy. Palette
+   variants shift academy-owned hue and emphasis; Veo Onyx is selected by the
+   application as the product default. */
+:root,
+:root[data-palette="graphite"] {
+  --app-shell: #141616;
+  --main-surface: #222425;
+  --canvas: #181a1b;
+  --header: #191b1c;
+  --surface: #2b2d2e;
+  --surface-strong: #333536;
+  --hover: #353839;
+  --selected: #34323e;
+  --track: #202324;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #f6f6f4;
+  --text-secondary: #d4d5d2;
+  --muted: #919592;
+  --accent: #8b68ff;
+  --accent-hover: #8262f5;
+  --accent-ink: var(--accent);
+  --accent-soft: rgba(139, 104, 255, 0.15);
+  --accent-border: rgba(139, 104, 255, 0.38);
+  --accent-shadow: rgba(119, 80, 255, 0.24);
+  --on-accent: #0b0b0d;
+  --on-accent-glyph: #0b0b0d;
+  --card-surface: var(--surface);
+  --card-surface-raised: var(--surface-strong);
+  --card-surface-soft: color-mix(
+    in srgb,
+    var(--surface-strong) 70%,
+    var(--canvas)
+  );
+  --card-surface-hover: color-mix(
+    in srgb,
+    var(--surface) 94%,
+    var(--accent) 6%
+  );
+
+  /* Compact-rail tooltips intentionally invert the palette mode: dark shell
+     surfaces get a luminous theme tint, while light shells get a deeper
+     theme tint. The accent remains the source of truth for every palette. */
+  --sidebar-tooltip-surface: color-mix(in srgb, var(--accent) 74%, white);
+  --sidebar-tooltip-ink: color-mix(in srgb, var(--accent) 30%, #0b1020);
+  --sidebar-tooltip-edge: color-mix(in srgb, var(--accent) 68%, white);
+}

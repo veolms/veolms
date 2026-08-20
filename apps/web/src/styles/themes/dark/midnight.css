@@ -1,0 +1,28 @@
+/* midnight palette — dark mode. */
+:root[data-palette="midnight"] {
+  --canvas: #040b18;
+  --header: #030817;
+  --surface: #0b1a32;
+  --hover: #142d50;
+  --selected: #0d3563;
+  --track: #08172c;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #f7f9ff;
+  --text-secondary: #d4def2;
+  --muted: #8fa1be;
+  --accent: #4166d4;
+  --accent-hover: #3558c1;
+  --accent-soft: rgba(65, 102, 212, 0.17);
+  --accent-border: rgba(65, 102, 212, 0.46);
+  --accent-shadow: rgba(45, 79, 184, 0.34);
+  --on-accent: #ffffff;
+  --on-accent-glyph: #ffffff;
+  --app-shell: #020714;
+  --main-surface: #061226;
+  --surface-strong: #102442;
+  --card-surface: #0b1c35;
+  --card-surface-raised: #102643;
+  --card-surface-soft: #08182e;
+  --card-surface-hover: #122c50;
+}

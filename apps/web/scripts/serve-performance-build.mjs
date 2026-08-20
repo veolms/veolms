@@ -51,7 +51,7 @@ const resolveRequestPath = async (pathname) => {
       if (routeIndexDetails.isFile()) return routeIndex;
     }
   } catch {}
-  return path.join(root, "__spa-fallback.html");
+  return path.join(root, "index.html");
 };
 
 createServer(async (request, response) => {

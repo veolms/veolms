@@ -1,5 +1,9 @@
 import { test, expect } from "./app.fixture.ts";
-import { installBaselineState, openApp } from "./support.ts";
+import {
+  installBaselineState,
+  openApp,
+  revealDeferredAppearanceSettings,
+} from "./support.ts";
 
 const READING_MODE_STORAGE_KEY = "veolms-reading-mode-v1";
 
@@ -9,6 +13,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   test.setTimeout(60_000);
   await installBaselineState(page);
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   const toggle = page.getByRole("switch", {
     name: "Reading mode",
@@ -123,7 +128,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   await expect(effects).toHaveCSS("user-select", "none");
   await expect(page.locator(".reading-mode-effects__texture")).toHaveCSS(
     "background-image",
-    /reading-mode-grain\.png/,
+    /reading-mode-grain\.webp/,
   );
   const [effectBounds, viewport] = await Promise.all([
     effects.evaluate((element) => {
@@ -166,18 +171,19 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   await page.keyboard.press("Escape");
 
   await page.reload();
+  await revealDeferredAppearanceSettings(page);
   await expect(page.locator("html")).toHaveAttribute(
     "data-reading-mode",
     "true",
   );
   await expect(texture).toHaveValue("75");
 
-  await page.goto("/settings/learning");
+  await openApp(page, "/settings/learning");
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "data-settings-tab",
     "learning",
   );
-  await page.getByRole("combobox", { name: "Default video quality" }).click();
+  await page.getByRole("button", { name: "Default video quality" }).click();
   const portalledSelect = page.locator(".themed-select__content");
   await expect(portalledSelect).toBeVisible();
   expect(
@@ -195,7 +201,8 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
     ),
   );
   await page.keyboard.press("Escape");
-  await page.goto("/settings/appearance");
+  await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "data-settings-tab",
     "appearance",
@@ -255,6 +262,7 @@ test("reading mode effects and preview are disabled for print", async ({
     },
   });
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
   await expect(page.locator("[data-reading-mode-effects]")).toHaveCSS(
     "display",
     "block",

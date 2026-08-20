@@ -6,6 +6,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { Play } from "@phosphor-icons/react/Play";
 import { X } from "@phosphor-icons/react/X";
 import React, { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { lessonsById, sections } from "./courseContent";
 import { IconButton } from "./IconButton";
 import {
@@ -22,6 +23,8 @@ interface CurriculumProps {
   onClose?: () => void;
   focusRequest?: number;
   persistenceKey: string;
+  scrollportId?: string;
+  scrollportRef?: RefObject<HTMLElement | null>;
 }
 
 export function Curriculum({
@@ -32,6 +35,8 @@ export function Curriculum({
   onClose,
   focusRequest = 0,
   persistenceKey,
+  scrollportId,
+  scrollportRef,
 }: CurriculumProps) {
   const [expanded, setExpanded] = useState<number[]>([1, 2]);
   const storageBase = `veolms-learning-${persistenceKey}-curriculum`;
@@ -113,7 +118,12 @@ export function Curriculum({
   }, [focusRequest, currentSection.id]);
 
   return (
-    <aside className="learning-curriculum" aria-label="Course curriculum">
+    <aside
+      ref={scrollportRef}
+      id={scrollportId}
+      className="learning-curriculum"
+      aria-label="Course curriculum"
+    >
       <div className="learning-curriculum__hero">
         <img
           src={courseThumbnail}
@@ -172,7 +182,7 @@ export function Curriculum({
 
       <label
         className={`learning-curriculum__search ${searchOpen ? "is-visible" : ""}`}
-        aria-hidden={!searchOpen}
+        aria-hidden={!searchOpen ? true : undefined}
       >
         <MagnifyingGlass size={19} aria-hidden="true" />
         <span className="sr-only">Search lessons</span>
@@ -210,7 +220,9 @@ export function Curriculum({
                 aria-expanded={isOpen}
                 className="learning-curriculum__section-toggle"
               >
-                {isOpen ? <CaretDown size={17} /> : <CaretRight size={17} />}
+                <span className={`learning-curriculum__section-arrow${isOpen ? " is-open" : ""}`} aria-hidden="true">
+                  <CaretRight size={17} />
+                </span>
                 <span className="min-w-0 flex-1 truncate">
                   Section {section.id}: {section.title}
                 </span>
@@ -221,8 +233,8 @@ export function Curriculum({
               {matchingLessons.length > 0 && (
                 <div
                   className={`learning-curriculum__section-lessons ${isOpen ? "is-open" : ""}`}
-                  aria-hidden={!isOpen}
-                  inert={!isOpen}
+                  aria-hidden={!isOpen ? true : undefined}
+                  inert={!isOpen ? true : undefined}
                 >
                   <div className="learning-curriculum__section-lessons-inner">
                     {matchingLessons.map(

@@ -1,0 +1,42 @@
+/* Accent fills and accent-colored copy have different contrast needs on the
+   deepest palettes. Keep the brand fill intact while giving small text a
+   foreground value that clears WCAG AA on its card surface. */
+:root[data-palette] {
+  --accent-ink: var(--accent);
+}
+
+:root[data-theme="light"][data-palette="brainwave"] {
+  --accent-ink: #0067c5;
+}
+
+:root[data-theme="dark"][data-palette="midnight"] {
+  --accent-ink: #6b88e6;
+}
+
+:root[data-theme="dark"][data-palette="graphite"] {
+  --accent-ink: #a184ff;
+}
+
+:root[data-theme="dark"][data-palette="signal"] {
+  --accent-ink: #ed5972;
+}
+
+:root[data-theme="dark"][data-palette="barbie"] {
+  --accent-ink: #f071b4;
+}
+
+:root[data-theme="dark"][data-palette="brainwave"] {
+  --accent-ink: #3ca4ff;
+}
+
+:root[data-theme="dark"][data-palette="violet"] {
+  --accent-ink: #f0a27a;
+}
+
+:root[data-theme="light"][data-palette="lime"] {
+  --accent-ink: #3d6604;
+}
+
+:root[data-theme="light"][data-palette="violet"] {
+  --accent-ink: #914525;
+}

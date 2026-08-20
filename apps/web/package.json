@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build && node scripts/optimize-prerendered-landing.mjs",
+    "build": "react-router build",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
@@ -27,7 +27,14 @@
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "@react-router/node": "8.3.0",
+    "@tiptap/core": "^3.30.1",
+    "@tiptap/extension-link": "^3.30.1",
+    "@tiptap/extensions": "^3.30.1",
+    "@tiptap/markdown": "^3.30.1",
+    "@tiptap/react": "^3.30.0",
+    "@tiptap/starter-kit": "^3.30.1",
     "@veolms/config": "workspace:*",
+    "emoji-picker-react": "^4.19.1",
     "isbot": "^5",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -1,0 +1,28 @@
+/* champagne palette — light mode. */
+:root[data-theme="light"][data-palette="champagne"] {
+  --canvas: #f3eee4;
+  --header: #eee8dc;
+  --surface: #fffdf9;
+  --hover: #ece2d0;
+  --selected: #f2e3bd;
+  --track: #e5dccb;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #261f15;
+  --text-secondary: #554b3c;
+  --muted: #766b5a;
+  --accent: #896312;
+  --accent-hover: #735109;
+  --accent-soft: rgba(137, 99, 18, 0.12);
+  --accent-border: rgba(137, 99, 18, 0.3);
+  --accent-shadow: rgba(115, 81, 9, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #e8e0d0;
+  --main-surface: #fbf8f1;
+  --surface-strong: #f2eadb;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #fffdf9;
+  --card-surface-raised: #f2eadb;
+  --card-surface-soft: #fbf7ef;
+  --card-surface-hover: #f4ead8;
+}

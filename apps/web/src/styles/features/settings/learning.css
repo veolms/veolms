@@ -1,0 +1,234 @@
+/* Learning settings: dense, task-led controls that inherit every academy palette. */
+.settings-learning {
+  min-width: 0;
+  margin-top: 14px;
+  border-radius: 16px;
+  padding: clamp(16px, 2vw, 22px);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.settings-learning__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.settings-learning__header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.22rem, 1.8vw, 1.46rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.settings-learning__header p {
+  max-width: 58ch;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.settings-learning__saved {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border-radius: 10px;
+  padding: 0 11px;
+  color: color-mix(in srgb, var(--success) 82%, var(--text));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-strong));
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.settings-learning__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 425px), 1fr));
+  gap: 14px;
+}
+
+.settings-learning-card {
+  min-width: 0;
+  border-radius: 13px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--surface));
+  box-shadow: var(--card-shadow);
+}
+
+.settings-learning-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  color: var(--accent-ink, var(--accent));
+}
+
+.settings-learning-card__heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+}
+
+.settings-learning-card__rows {
+  display: grid;
+  min-width: 0;
+}
+
+.settings-learning-select-row,
+.settings-learning-toggle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(144px, 176px);
+  align-items: center;
+  gap: 14px;
+  min-height: 59px;
+  padding: 8px 0;
+}
+
+.settings-learning-select-row + .settings-learning-select-row,
+.settings-learning-toggle-row + .settings-learning-toggle-row,
+.settings-learning-select-row + .settings-learning-toggle-row,
+.settings-learning-toggle-row + .settings-learning-select-row {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.settings-learning-select-row__copy,
+.settings-learning-toggle-row__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-learning-select-row__copy strong,
+.settings-learning-toggle-row__copy strong {
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.settings-learning-select-row__copy small,
+.settings-learning-toggle-row__copy small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.settings-learning-select-row .themed-select__trigger,
+.settings-learning-reminder-selects .themed-select__trigger {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 600;
+}
+
+.settings-learning-select-row .themed-select__trigger:hover,
+.settings-learning-reminder-selects .themed-select__trigger:hover {
+  background: color-mix(in srgb, var(--canvas) 66%, var(--accent-soft));
+}
+.settings-learning-select-row
+  .themed-select__trigger:focus-visible:not([data-state="open"]),
+.settings-learning-reminder-selects
+  .themed-select__trigger:focus-visible:not([data-state="open"]) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-learning-select-row .themed-select__trigger:disabled,
+.settings-learning-reminder-fields:disabled {
+  opacity: 0.52;
+}
+
+.settings-learning-toggle-row .settings-toggle {
+  justify-self: end;
+}
+.settings-learning-toggle-row:has(.settings-toggle:not(:disabled)) {
+  cursor: pointer;
+}
+.settings-learning-reminder-fields {
+  min-width: 0;
+  margin: 6px 0 0;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--canvas) 22%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.settings-learning-reminder-fields legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-learning-field-label,
+.settings-learning-reminder-selects > div > span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.settings-learning-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.settings-learning-days button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 5px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--canvas) 66%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+  font-size: 0.63rem;
+  font-weight: 650;
+}
+
+.settings-learning-days button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+.settings-learning-days button[aria-pressed="true"] {
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 6px 15px
+    color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+}
+.settings-learning-days button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-learning-reminder-selects {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.72fr) minmax(0, 1.28fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.settings-learning-reminder-selects > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}

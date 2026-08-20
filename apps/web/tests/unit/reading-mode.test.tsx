@@ -194,7 +194,7 @@ describe("reading mode settings", () => {
     ).toHaveValue("30");
     expect(screen.getByRole("slider", { name: "Texture" })).toHaveValue("45");
     expect(
-      screen.getByRole("button", { name: "Reading mode colors" }),
+      screen.getByRole("button", { name: /Reading mode colors:/ }),
     ).toHaveTextContent("Light colors");
   });
 
@@ -207,7 +207,7 @@ describe("reading mode settings", () => {
     });
     const texture = screen.getByRole("slider", { name: "Texture" });
     const colors = screen.getByRole("button", {
-      name: "Reading mode colors",
+      name: /Reading mode colors:/,
     });
     const restore = screen.getByRole("button", { name: "Restore defaults" });
     const quickToggle = screen.getByRole("switch", {

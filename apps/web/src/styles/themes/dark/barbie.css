@@ -1,0 +1,34 @@
+/* barbie palette — dark mode. */
+:root[data-palette="barbie"] {
+  --canvas: #1b0915;
+  --header: #200a18;
+  --surface: #351326;
+  --hover: #55203e;
+  --selected: #642343;
+  --track: #29101f;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fff7fc;
+  --text-secondary: #ffdae9;
+  --muted: #d8a7c3;
+  --accent: #ec4d9b;
+  --accent-hover: #dd3b8c;
+  --accent-soft: rgba(236, 77, 155, 0.17);
+  --accent-border: rgba(236, 77, 155, 0.44);
+  --accent-shadow: rgba(190, 35, 117, 0.27);
+  --on-accent: #280317;
+  --app-shell: #1a0714;
+  --main-surface: #2a0e20;
+  --surface-strong: #431a31;
+  --on-accent-glyph: #280317;
+  --card-surface: #351326;
+  --card-surface-raised: #431a31;
+  --card-surface-soft: #270e1d;
+  --card-surface-hover: #461a34;
+}
+
+:root[data-high-contrast="true"][data-palette="barbie"] {
+  --text: #fff7fc;
+  --text-secondary: #ffdae9;
+  --muted: #d8a7c3;
+}

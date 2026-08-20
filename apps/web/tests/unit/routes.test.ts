@@ -145,10 +145,38 @@ describe("framework route descriptors", () => {
       section: "Discussions",
       discussionTab: "comments",
     });
+    expect(getRouteDescriptor("reviews")).toMatchObject({
+      kind: "shell",
+      page: "reviews",
+      section: "Reviews",
+      title: "Reviews",
+    });
+    expect(getRouteDescriptor("orders")).toMatchObject({
+      kind: "shell",
+      page: "orders",
+      section: "Orders",
+      title: "Orders",
+    });
+    expect(getRouteDescriptor("order-history")).toMatchObject({
+      kind: "shell",
+      page: "order-history",
+      section: "Order History",
+      title: "Order History",
+    });
+    expect(getRouteDescriptor("notifications")).toMatchObject({
+      kind: "shell",
+      page: "notifications",
+      section: "Notifications",
+      title: "Notifications",
+    });
     expect(getRouteDescriptor("learning")).toEqual({
       kind: "learning",
       page: "learning",
       section: "Explore Courses",
+    });
+    expect(getRouteDescriptor("course-overview")).toMatchObject({
+      kind: "course-overview",
+      page: "course-overview",
     });
     expect(getRouteDescriptor("missing")).toBeUndefined();
   });
@@ -303,21 +331,16 @@ describe("framework route descriptors", () => {
   });
 
   it("keeps deferred product surfaces on the shared empty state", () => {
-    for (const routeId of [
-      "students",
-      "reviews",
-      "course-create",
-      "course-overview",
-      "analytics",
-      "orders",
-      "messages",
-      "order-history",
-      "notifications",
-    ]) {
+    for (const routeId of ["students", "analytics", "messages"]) {
       expect(getRouteDescriptor(routeId)).toMatchObject({
         kind: "shell",
         page: "placeholder",
       });
     }
+
+    expect(getRouteDescriptor("course-create")).toMatchObject({
+      kind: "shell",
+      page: "course-create",
+    });
   });
 });

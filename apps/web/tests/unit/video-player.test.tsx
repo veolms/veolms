@@ -107,15 +107,24 @@ describe("video playback consent", () => {
     expect(player).toHaveAttribute("tabindex", "0");
 
     fireEvent.keyDown(player, { key: " ", code: "Space" });
+    fireEvent.keyUp(player, { key: " ", code: "Space" });
     expect(play).toHaveBeenCalledTimes(1);
 
     fireEvent.keyDown(screen.getByRole("button", { name: "Mute" }), {
       key: " ",
       code: "Space",
     });
+    fireEvent.keyUp(screen.getByRole("button", { name: "Mute" }), {
+      key: " ",
+      code: "Space",
+    });
     expect(play).toHaveBeenCalledTimes(1);
 
     fireEvent.keyDown(screen.getByRole("slider", { name: "Volume" }), {
+      key: " ",
+      code: "Space",
+    });
+    fireEvent.keyUp(screen.getByRole("slider", { name: "Volume" }), {
       key: " ",
       code: "Space",
     });

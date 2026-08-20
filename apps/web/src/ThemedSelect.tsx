@@ -1,6 +1,7 @@
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Check } from "@phosphor-icons/react/Check";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -65,9 +66,12 @@ export function ThemedSelect<Value extends string>({
     options.findIndex(([optionValue]) => optionValue === value),
   );
   const selectedLabel = options[selectedIndex]?.[1] ?? value;
+  const triggerLabel = ariaLabel
+    ? `${ariaLabel}: ${selectedLabel}`
+    : selectedLabel;
   const menuId = id ? `${id}-menu` : undefined;
 
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
@@ -97,7 +101,7 @@ export function ThemedSelect<Value extends string>({
       maxHeight,
       origin: useAbove ? "bottom" : "top",
     });
-  };
+  }, [options.length]);
 
   const openMenu = (focusIndex = selectedIndex) => {
     if (disabled) return;
@@ -116,7 +120,7 @@ export function ThemedSelect<Value extends string>({
 
   useLayoutEffect(() => {
     if (open) updatePosition();
-  }, [open, options.length]);
+  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -138,7 +142,7 @@ export function ThemedSelect<Value extends string>({
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
@@ -179,7 +183,7 @@ export function ThemedSelect<Value extends string>({
         type="button"
         id={id}
         className={joinClasses("themed-select__trigger", triggerClassName)}
-        aria-label={ariaLabel}
+        aria-label={triggerLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
@@ -209,6 +213,7 @@ export function ThemedSelect<Value extends string>({
                 left: position.left,
                 top: position.top,
                 width: position.width,
+                boxSizing: "border-box",
                 maxHeight: position.maxHeight,
                 overflowY: "auto",
                 transform:

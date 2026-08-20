@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import {
   loginResponseSchema,
   oauthCallbackRequestSchema,
@@ -178,18 +180,36 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
     async (request, reply) => {
       const profile = await resolveCallbackProfile(request, reply);
 
-      const user = await repository.findUserByOauthAccount(
+      let user = await repository.findUserByOauthAccount(
         database,
         request.body.provider,
         profile.providerUserId,
       );
 
       if (!user) {
-        throw new AppError(
-          400,
-          "REGISTRATION_REQUIRED",
-          "Please register first using your Google or GitHub account.",
+        // Fallback: check if a user with this verified email already exists
+        // (e.g. registered via email+OTP). Auto-link the OAuth provider.
+        const existingUser = await repository.findVerifiedUserByEmail(
+          database,
+          profile.email,
         );
+
+        if (!existingUser) {
+          throw new AppError(
+            400,
+            "REGISTRATION_REQUIRED",
+            "Please register first using your Google or GitHub account.",
+          );
+        }
+
+        await repository.insertOauthAccount(database, {
+          id: crypto.randomUUID(),
+          userId: existingUser.id,
+          provider: request.body.provider,
+          providerUserId: profile.providerUserId,
+        });
+
+        user = existingUser;
       }
 
       const session = await service.establishSession(user, {
@@ -212,6 +232,10 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
         description: "Registers a user with Google or GitHub OAuth.",
         body: oauthRegisterRequestSchema,
         response: {
+          200: jsonResponse(
+            "Existing account linked and logged in.",
+            loginResponseSchema,
+          ),
           201: jsonResponse("Registration successful.", loginResponseSchema),
           400: errorResponse(
             "Authentication failed, username taken, or account exists.",
@@ -237,14 +261,29 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
         );
       }
 
-      // A different provider may already own this address. The provider modules
-      // only return verified addresses, so matching on email is safe here.
-      if (await repository.findUserByEmail(database, profile.email)) {
-        throw new AppError(
-          400,
-          "USER_EXISTS",
-          "An account with this email already exists. Please log in instead.",
-        );
+      // If a verified account with this email already exists (e.g. registered
+      // via email+OTP), auto-link the OAuth provider and log in directly.
+      const existingUser = await repository.findVerifiedUserByEmail(
+        database,
+        profile.email,
+      );
+
+      if (existingUser) {
+        await repository.insertOauthAccount(database, {
+          id: crypto.randomUUID(),
+          userId: existingUser.id,
+          provider,
+          providerUserId: profile.providerUserId,
+        });
+
+        const session = await service.establishSession(existingUser, {
+          ip: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        });
+
+        setSessionCookie(reply, session.token);
+        reply.code(200);
+        return presentLogin(existingUser, session.mfa);
       }
 
       const localPart = profile.email.split("@")[0] || "oauth_user";

@@ -1,5 +1,6 @@
 import { Clock } from "@phosphor-icons/react/Clock";
 import { DotsThree } from "@phosphor-icons/react/DotsThree";
+import { Eye } from "@phosphor-icons/react/Eye";
 import { Heart } from "@phosphor-icons/react/Heart";
 import { List } from "@phosphor-icons/react/List";
 import { Sparkle } from "@phosphor-icons/react/Sparkle";
@@ -19,6 +20,7 @@ export interface CourseCardProps {
   onWishlist: (courseId: string) => void;
   onOpen: (course: Course) => void;
   onExplore: (course: Course) => void;
+  onEdit?: (course: Course) => void;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -32,6 +34,7 @@ export function CourseCard({
   onWishlist,
   onOpen,
   onExplore,
+  onEdit,
   menuOpen,
   setMenuOpen,
   setNotice,
@@ -124,9 +127,23 @@ export function CourseCard({
                     role="menuitem"
                     onClick={() => {
                       setMenuOpen(null);
-                      setNotice(
-                        `Edit ${course.title} selected. The editor will be added later.`,
-                      );
+                      onExplore(course);
+                    }}
+                  >
+                    <Eye size={17} /> View overview
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(null);
+                      if (onEdit) {
+                        onEdit(course);
+                      } else {
+                        setNotice(
+                          `Edit ${course.title} selected. The editor will be added later.`,
+                        );
+                      }
                     }}
                   >
                     <Sparkle size={17} /> Edit course

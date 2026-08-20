@@ -1,5 +1,9 @@
 import { expect, test } from "./app.fixture.ts";
-import { installBaselineState, openApp } from "./support.ts";
+import {
+  installBaselineState,
+  openApp,
+  revealDeferredAppearanceSettings,
+} from "./support.ts";
 
 test("sidebar shortcut hints and positional navigation stay in sync", async ({
   page,
@@ -236,7 +240,8 @@ test("Apple platforms receive Command shortcut labels", async ({ page }) => {
   await settings.hover();
   const settingsTooltip = page.locator(".sidebar-nav-tooltip");
   await expect(settingsTooltip).toBeVisible();
-  await expect(settingsTooltip.locator("kbd")).toHaveText(["⌘", ","]);
+  await expect(settingsTooltip).toHaveText("Settings");
+  await expect(settingsTooltip.locator("kbd")).toHaveCount(0);
 
   await openApp(page, "/settings/profile");
   await page.evaluate(() => {
@@ -257,6 +262,7 @@ test("shortcut key style overrides system labels across the application", async 
 }) => {
   await installBaselineState(page);
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   const shortcutStyle = page.getByRole("radiogroup", {
     name: "Shortcut key style",
@@ -296,6 +302,7 @@ test("shortcut key style overrides system labels across the application", async 
   ).toHaveAttribute("title", "Resize course content | ⌘+⌥+C");
 
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
   await page
     .getByRole("radiogroup", { name: "Shortcut key style" })
     .getByRole("radio", { name: "Windows" })

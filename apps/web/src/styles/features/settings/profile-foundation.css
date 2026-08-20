@@ -1,0 +1,604 @@
+/* Profile settings: identity, contact details, and connected profiles. */
+.settings-profile {
+  min-width: 0;
+  margin-top: 14px;
+  border-radius: 14px;
+  padding: clamp(16px, 2vw, 22px);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent),
+    0 16px 34px color-mix(in srgb, var(--canvas) 26%, transparent);
+}
+
+.settings-profile__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.settings-profile__header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.settings-profile__header p {
+  max-width: 58ch;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.settings-profile__status {
+  display: inline-flex;
+  min-height: 36px;
+  max-width: min(100%, 330px);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 8px 11px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.settings-profile__status--saved {
+  color: color-mix(in srgb, var(--success) 82%, var(--text));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-strong));
+}
+
+.settings-profile__status--error {
+  color: color-mix(in srgb, var(--danger) 76%, var(--text));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-strong));
+}
+
+.settings-profile__status--offline {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--canvas) 52%, var(--surface-strong));
+}
+
+.settings-profile__spinner {
+  animation: learning-spin 900ms linear infinite;
+}
+
+.settings-profile__layout {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(246px, 0.72fr) minmax(0, 1.45fr);
+  align-items: start;
+  gap: clamp(20px, 2.4vw, 30px);
+}
+
+.settings-profile__identity {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--surface-strong) 80%, var(--surface));
+  box-shadow: var(--card-shadow);
+}
+
+.settings-profile__identity-heading,
+.settings-profile__form-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--accent-ink, var(--accent));
+}
+
+.settings-profile__identity-heading > div,
+.settings-profile__form-heading > div {
+  min-width: 0;
+}
+
+.settings-profile__identity-heading h3,
+.settings-profile__form-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.3;
+}
+
+.settings-profile__identity-heading p,
+.settings-profile__form-heading p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.settings-profile__photo {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  margin: 22px auto 0;
+}
+
+.settings-profile__avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--on-accent);
+  background: linear-gradient(
+    145deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 62%, var(--surface-strong))
+  );
+}
+
+.settings-profile__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-profile__avatar strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-profile__avatar--large {
+  width: 116px;
+  height: 116px;
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent),
+    0 17px 38px color-mix(in srgb, var(--canvas) 42%, transparent);
+}
+
+.settings-profile__avatar--large strong {
+  font-size: 1.8rem;
+  font-weight: 720;
+  letter-spacing: -0.04em;
+}
+
+.settings-profile__camera {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 13px;
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 10px 22px
+    color-mix(in srgb, var(--accent-shadow) 62%, transparent);
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-profile__camera:focus-visible,
+.settings-profile__photo-actions button:focus-visible,
+.settings-profile__security-link:focus-visible,
+.settings-profile__verify-action:focus-visible,
+.settings-profile__verification-panel button:focus-visible,
+.settings-profile__secondary-action:focus-visible,
+.settings-profile__primary-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-profile__camera:active,
+.settings-profile__photo-actions button:active,
+.settings-profile__security-link:active,
+.settings-profile__verify-action:active,
+.settings-profile__verification-panel button:active,
+.settings-profile__secondary-action:active,
+.settings-profile__primary-action:active {
+  transform: scale(0.97);
+}
+
+.settings-profile__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-profile__photo-help {
+  max-width: 32ch;
+  margin: 14px auto 0;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.settings-profile__error {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--danger) !important;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.settings-profile__identity > .settings-profile__error {
+  text-align: center;
+}
+
+.settings-profile__photo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.settings-profile__photo-actions button,
+.settings-profile__secondary-action,
+.settings-profile__primary-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-profile__photo-actions button,
+.settings-profile__secondary-action {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--canvas) 58%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.settings-profile__photo-actions button:disabled,
+.settings-profile__secondary-action:disabled,
+.settings-profile__primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.settings-profile__form {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 2px 0;
+}
+
+.settings-profile__fields {
+  display: grid;
+  min-width: 0;
+  gap: 24px;
+  margin-top: 26px;
+}
+
+.settings-profile__fields--secondary {
+  gap: 20px;
+  margin-top: 18px;
+}
+
+.settings-profile__field-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-profile__form-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--accent-ink, var(--accent));
+}
+
+.settings-profile__form-section-heading > div {
+  min-width: 0;
+}
+
+.settings-profile__form-section-heading h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.3;
+}
+
+.settings-profile__form-section-heading p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.settings-profile__field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 0.73rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.settings-profile__field > label,
+.settings-profile__field--email > label {
+  color: var(--text-secondary);
+}
+
+.settings-profile__field > input,
+.settings-profile__readonly-input,
+.settings-profile__input-shell {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--canvas) 68%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 550;
+}
+
+.settings-profile__field > input {
+  padding: 0 13px;
+}
+
+.settings-profile__field input::placeholder {
+  color: var(--muted);
+}
+
+.settings-profile__field > input:focus-visible,
+.settings-profile__readonly-input:focus-within,
+.settings-profile__input-shell:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-profile__field > input[aria-invalid="true"],
+.settings-profile__input-shell:has(input[aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+.settings-profile__field > small {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.settings-profile__email-control {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.settings-profile__input-shell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  color: var(--muted);
+}
+
+.settings-profile__input-shell input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+}
+
+.settings-profile__readonly-input {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--canvas) 48%, var(--surface));
+}
+
+.settings-profile__readonly-input input {
+  min-height: 44px;
+  padding: 0;
+  outline: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-profile__phone-control {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.settings-profile__security-link,
+.settings-profile__verify-action {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 13px;
+  color: var(--text);
+  background: var(--accent-soft);
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 680;
+  white-space: nowrap;
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.settings-profile__verify-action {
+  min-width: 104px;
+}
+
+.settings-profile__verified-badge {
+  display: inline-flex;
+  min-width: 104px;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 0 13px;
+  color: color-mix(in srgb, var(--success) 80%, var(--text));
+  background: color-mix(in srgb, var(--success) 9%, var(--surface-strong));
+  font-size: 0.71rem;
+  font-weight: 680;
+}
+
+.settings-profile__verification-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border-radius: 11px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
+  box-shadow: var(--card-shadow);
+}
+
+.settings-profile__verification-panel > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.settings-profile__verification-panel label {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.settings-profile__verification-panel input {
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--canvas) 68%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.settings-profile__verification-panel input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-profile__verification-panel button {
+  align-self: end;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 14px;
+  color: var(--on-accent);
+  background: var(--accent-hover);
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 680;
+}
+
+.settings-profile__form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: auto;
+  padding-top: 28px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.settings-profile__form-footer p {
+  max-width: 32ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.settings-profile__form-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.settings-profile__primary-action {
+  min-width: 124px;
+  color: var(--on-accent);
+  background: var(--accent-hover);
+  box-shadow: 0 10px 22px
+    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-profile__camera:hover,
+  .settings-profile__primary-action:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 12px 26px
+      color-mix(in srgb, var(--accent-shadow) 62%, transparent);
+  }
+
+  .settings-profile__photo-actions button:hover:not(:disabled),
+  .settings-profile__secondary-action:hover:not(:disabled) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
+  }
+
+  .settings-profile__security-link:hover,
+  .settings-profile__verify-action:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface-strong));
+  }
+
+  .settings-profile__verification-panel button:hover {
+    box-shadow: 0 8px 18px
+      color-mix(in srgb, var(--accent-shadow) 56%, transparent);
+  }
+}

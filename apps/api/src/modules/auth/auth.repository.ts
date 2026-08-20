@@ -51,6 +51,20 @@ export function findUserByEmail(database: Executor, email: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Looks up a user by email, but only if their email has been verified.
+ * Used for OAuth auto-linking: we must not link an OAuth identity to an
+ * account that never proved ownership of the address.
+ */
+export function findVerifiedUserByEmail(database: Executor, email: string) {
+  return database
+    .selectFrom("users")
+    .selectAll()
+    .where("email", "=", email)
+    .where("email_verified_at", "is not", null)
+    .executeTakeFirst();
+}
+
 export async function usernameExists(
   database: Executor,
   username: string,
