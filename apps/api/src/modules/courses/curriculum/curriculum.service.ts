@@ -334,9 +334,11 @@ export function createCurriculumService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    const now = new Date();
-    await curriculumRepo.softDeleteLesson(database, lessonId, courseId, now);
-    await curriculumRepo.softDeleteResourcesByLessonId(database, lessonId, now);
+    await database.transaction().execute(async (trx) => {
+      const now = new Date();
+      await curriculumRepo.softDeleteLesson(trx, lessonId, courseId, now);
+      await curriculumRepo.softDeleteResourcesByLessonId(trx, lessonId, now);
+    });
 
     return { success: true };
   }
