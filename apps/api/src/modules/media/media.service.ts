@@ -3,10 +3,9 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 import type { Database, MediaAssetStatus } from "@veolms/database";
 import type { PresignMediaRequest } from "@veolms/contracts";
-import { AppError } from "../../../lib/errors.ts";
-import type { AppServices } from "../../../services/index.ts";
+import { AppError } from "../../lib/errors.ts";
+import type { AppServices } from "../../services/index.ts";
 import * as mediaRepo from "./media.repository.ts";
-import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
 
 export interface MediaServiceOptions {
   database: Kysely<Database>;
@@ -23,20 +22,60 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-export function createMediaService({ database, services }: MediaServiceOptions) {
+export function createMediaService({
+  database,
+  services,
+}: MediaServiceOptions) {
+  /**
+   * Pre-signs an S3/storage upload URL for media asset creation.
+   */
+  async function presignMediaUpload(
+    ownerId: string,
+    payload: PresignMediaRequest,
+  ) {
+    const mediaId = crypto.randomUUID();
+    const ext = payload.filename.includes(".")
+      ? payload.filename.split(".").pop()
+      : "";
+    const storageKey = `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
+
+    const uploadUrl = await services.storage.getPresignedPutUrl(
+      storageKey,
+      payload.contentType,
+      payload.fileSize,
+    );
+
+    await mediaRepo.insertMediaAsset(database, {
+      id: mediaId,
+      owner_id: ownerId,
+      type: payload.type,
+      storage_provider: "s3",
+      storage_key: storageKey,
+      original_filename: payload.filename,
+      mime_type: payload.contentType,
+      size_bytes: payload.fileSize,
+      status: "uploading",
+    });
+
+    return {
+      uploadUrl,
+      mediaAssetId: mediaId,
+    };
+  }
+
   /**
    * Verifies that a media file is uploaded and exists, then sets status to 'uploaded'.
    * If it's a video, automatically queues and triggers transcoding.
    */
   async function confirmUpload(
     mediaId: string,
-    creatorId: string,
+    ownerId: string,
     logger?: FastifyBaseLogger,
   ): Promise<{ status: MediaAssetStatus; jobId?: string | null }> {
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
-      creatorId,
+      ownerId,
     );
 
     if (!media) {
@@ -64,7 +103,7 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
 
     if (
       metadata.contentLength !== undefined &&
-      metadata.contentLength !== media.size_bytes
+      metadata.contentLength !== Number(media.size_bytes)
     ) {
       throw new AppError(
         400,
@@ -78,7 +117,7 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
     let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
     if (media.type === "video" && logger) {
-      const transcodeResult = await queueTranscodeJob(mediaId, creatorId, logger);
+      const transcodeResult = await queueTranscodeJob(mediaId, ownerId, logger);
       jobId = transcodeResult.jobId;
     }
 
@@ -92,13 +131,13 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
    */
   async function queueTranscodeJob(
     mediaId: string,
-    creatorId: string,
-    logger: FastifyBaseLogger,
+    ownerId: string,
+    logger?: FastifyBaseLogger,
   ): Promise<{ should202: boolean; jobId: string | null }> {
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
-      creatorId,
+      ownerId,
     );
 
     if (!media) {
@@ -128,16 +167,23 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
 
     // If job already exists and is active or completed, don't trigger again
     if (existingJob) {
-      if (existingJob.status === "queued" || existingJob.status === "processing") {
-        logger.info(
-          { jobId: existingJob.id, videoId: media.id, status: existingJob.status },
+      if (
+        existingJob.status === "queued" ||
+        existingJob.status === "processing"
+      ) {
+        logger?.info(
+          {
+            jobId: existingJob.id,
+            videoId: media.id,
+            status: existingJob.status,
+          },
           "Video job already active. Skipping duplicate trigger.",
         );
         return { should202: true, jobId: existingJob.id };
       }
 
       if (existingJob.status === "completed") {
-        logger.info(
+        logger?.info(
           { jobId: existingJob.id, videoId: media.id },
           "Video job already completed. Skipping duplicate trigger.",
         );
@@ -160,17 +206,13 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
         created_at: now,
       });
     } catch (insertErr) {
-      // A concurrent call (client retry, or a racing lesson update) may have
-      // won the insert first — `video_jobs_active_video_id_unique` rejects a
-      // second active job for the same video. Treat that as "already queued"
-      // instead of surfacing a 500.
       if (isUniqueViolation(insertErr)) {
         const raceWinner = await mediaRepo.findVideoJobByVideoId(
           database,
           media.id,
         );
         if (raceWinner) {
-          logger.info(
+          logger?.info(
             { jobId: raceWinner.id, videoId: media.id },
             "Lost the race to queue this video's transcode job. Reusing the concurrent job instead.",
           );
@@ -188,19 +230,17 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
         inputPath: media.storage_key,
         quality: [360, 720, 1080],
       });
-      logger.info(
+      logger?.info(
         { jobId, mediaId: media.id },
         "Video transcoding job queued and dispatched successfully",
       );
     } catch (dispatchErr) {
       const message =
         dispatchErr instanceof Error ? dispatchErr.message : "Dispatch failed.";
-      logger.error(
+      logger?.error(
         { err: dispatchErr, jobId, mediaId: media.id },
         "Failed to dispatch video transcoding job; marking job as failed",
       );
-      // Without this the job sits at status:'queued' forever with nothing to
-      // process it, and the creator has no visibility into the failure.
       await mediaRepo.updateVideoJobStatus(database, jobId, {
         status: "failed",
         current_stage: "failed",
@@ -213,56 +253,29 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
   }
 
   /**
-   * Pre-signs an S3/storage upload URL for media asset creation.
+   * Retrieves a single media asset by ID with optional owner verification.
+   * Inter-module API method (Rule 11 compliance).
    */
-  async function presignMediaUpload(
-    creatorId: string,
-    payload: PresignMediaRequest,
-  ) {
-    const mediaId = crypto.randomUUID();
-    const ext = payload.filename.includes(".")
-      ? payload.filename.split(".").pop()
-      : "";
-    const storageKey = `media/${creatorId}/${mediaId}${ext ? `.${ext}` : ""}`;
+  async function getMediaAsset(mediaId: string, ownerId?: string) {
+    return await mediaRepo.findMediaAssetById(database, mediaId, ownerId);
+  }
 
-    const uploadUrl = await services.storage.getPresignedPutUrl(
-      storageKey,
-      payload.contentType,
-      payload.fileSize,
-    );
-
-    await mediaRepo.insertMediaAsset(database, {
-      id: mediaId,
-      owner_id: creatorId,
-      type: payload.type,
-      storage_provider: "s3",
-      storage_key: storageKey,
-      original_filename: payload.filename,
-      mime_type: payload.contentType,
-      size_bytes: payload.fileSize,
-      status: "uploading",
-    });
-
-    return {
-      uploadUrl,
-      mediaAssetId: mediaId,
-    };
+  /**
+   * Retrieves multiple media assets by IDs with optional owner verification.
+   * Inter-module API method (Rule 11 compliance).
+   */
+  async function getMediaAssets(mediaIds: string[], ownerId?: string) {
+    return await mediaRepo.findMediaAssetsByIds(database, mediaIds, ownerId);
   }
 
   /**
    * Fetches transcoding progress for a video asset.
    */
-  async function getVideoJobProgress(
-    courseId: string,
-    videoId: string,
-    creatorId: string,
-  ) {
-    await verifyCourseOwner(database, courseId, creatorId);
-
+  async function getVideoJobProgress(videoId: string, ownerId?: string) {
     const media = await mediaRepo.findMediaAssetById(
       database,
       videoId,
-      creatorId,
+      ownerId,
     );
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
@@ -293,9 +306,11 @@ export function createMediaService({ database, services }: MediaServiceOptions) 
   }
 
   return {
+    presignMediaUpload,
     confirmUpload,
     queueTranscodeJob,
-    presignMediaUpload,
+    getMediaAsset,
+    getMediaAssets,
     getVideoJobProgress,
   };
 }

@@ -25,11 +25,6 @@ export * from "./configuration/configuration.repository.ts";
 export * from "./configuration/configuration.service.ts";
 export * from "./configuration/configuration.controller.ts";
 
-// Media
-export * from "./media/media.repository.ts";
-export * from "./media/media.service.ts";
-export * from "./media/media.controller.ts";
-
 // Lifecycle
 export * from "./lifecycle/lifecycle.service.ts";
 export * from "./lifecycle/lifecycle.controller.ts";

@@ -6,7 +6,7 @@ import type { AppServices } from "../../../services/index.ts";
 import * as courseRepo from "../course/course.repository.ts";
 import * as curriculumRepo from "../curriculum/curriculum.repository.ts";
 import * as configRepo from "../configuration/configuration.repository.ts";
-import * as mediaRepo from "../media/media.repository.ts";
+import { createMediaService } from "../../media/index.ts";
 import { createCourseService } from "../course/course.service.ts";
 import {
   assertOptimisticUpdate,
@@ -23,6 +23,7 @@ export function createLifecycleService({
   services,
 }: LifecycleServiceOptions) {
   const courseService = createCourseService({ database, services });
+  const mediaService = createMediaService({ database, services });
 
   function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
     return verifyCourseOwner(database, courseId, creatorId);
@@ -107,15 +108,16 @@ export function createLifecycleService({
       }
     }
 
-    const mediaAssets = await mediaRepo.findMediaAssetsByIds(
-      database,
-      Array.from(mediaIds),
-    );
+    const mediaAssets = await mediaService.getMediaAssets(Array.from(mediaIds));
     const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
 
     if (course.thumbnail_media_id) {
       const thumb = mediaMap.get(course.thumbnail_media_id);
-      if (!thumb || thumb.owner_id !== creatorId || thumb.status !== "uploaded") {
+      if (
+        !thumb ||
+        thumb.owner_id !== creatorId ||
+        thumb.status !== "uploaded"
+      ) {
         issues.push({
           code: "INVALID_THUMBNAIL",
           message: "Thumbnail media must be fully uploaded.",
@@ -222,10 +224,7 @@ export function createLifecycleService({
       shortDescription: course.short_description,
       description: course.description,
       difficulty: course.difficulty as
-        | "beginner"
-        | "intermediate"
-        | "advanced"
-        | null,
+        "beginner" | "intermediate" | "advanced" | null,
       status: "published" as const,
       creatorId: course.creator_id as string,
       categoryId: course.category_id,
@@ -261,10 +260,7 @@ export function createLifecycleService({
       shortDescription: course.short_description,
       description: course.description,
       difficulty: course.difficulty as
-        | "beginner"
-        | "intermediate"
-        | "advanced"
-        | null,
+        "beginner" | "intermediate" | "advanced" | null,
       status: "draft" as const,
       creatorId: course.creator_id as string,
       categoryId: course.category_id,

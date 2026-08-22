@@ -11,8 +11,7 @@ import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as curriculumRepo from "./curriculum.repository.ts";
 import * as courseRepo from "../course/course.repository.ts";
-import * as mediaRepo from "../media/media.repository.ts";
-import { createMediaService } from "../media/media.service.ts";
+import { createMediaService } from "../../media/index.ts";
 import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
@@ -118,11 +117,7 @@ export function createCurriculumService({
       const lessonIds = lessons.map((l) => l.id);
 
       if (lessonIds.length > 0) {
-        await curriculumRepo.softDeleteLessonsBySectionId(
-          trx,
-          sectionId,
-          now,
-        );
+        await curriculumRepo.softDeleteLessonsBySectionId(trx, sectionId, now);
         await curriculumRepo.softDeleteResourcesByLessonIds(
           trx,
           lessonIds,
@@ -268,8 +263,7 @@ export function createCurriculumService({
       payload.contentType !== lesson.content_type;
 
     if (effectiveMediaId && (mediaChanged || typeChanged)) {
-      const media = await mediaRepo.findMediaAssetById(
-        database,
+      const media = await mediaService.getMediaAsset(
         effectiveMediaId,
         creatorId,
       );
@@ -342,11 +336,7 @@ export function createCurriculumService({
 
     const now = new Date();
     await curriculumRepo.softDeleteLesson(database, lessonId, courseId, now);
-    await curriculumRepo.softDeleteResourcesByLessonId(
-      database,
-      lessonId,
-      now,
-    );
+    await curriculumRepo.softDeleteResourcesByLessonId(database, lessonId, now);
 
     return { success: true };
   }
@@ -438,8 +428,7 @@ export function createCurriculumService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    const media = await mediaRepo.findMediaAssetById(
-      database,
+    const media = await mediaService.getMediaAsset(
       payload.mediaAssetId,
       creatorId,
     );

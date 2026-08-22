@@ -6,16 +6,21 @@ import {
   videoJobProgressResponseSchema,
 } from "@veolms/contracts";
 
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { errorResponse } from "../../lib/errors.ts";
+import { jsonResponse } from "../../lib/responses.ts";
+import type { RoutePlugin } from "../../lib/route-plugin.ts";
+import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
 
-import { createCoursesContext } from "../shared/courses.context.ts";
 import { createMediaController } from "./media.controller.ts";
 import { createMediaService } from "./media.service.ts";
 
 const mediaRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createCoursesContext(options);
+  const authMiddleware = createAuthMiddleware(options.database);
+  const requireAuthenticated = [
+    authMiddleware.authenticate,
+    authMiddleware.requireAuthenticated,
+  ];
+
   const service = createMediaService({
     database: options.database,
     services: options.services,
@@ -27,7 +32,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     {
       schema: {
         operationId: "presignMediaUpload",
-        tags: ["Course Media"],
+        tags: ["Media"],
         summary: "Obtain pre-signed upload URL for files",
         body: presignMediaRequestSchema,
         response: {
@@ -37,7 +42,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           ),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: requireAuthenticated,
     },
     controller.presignMediaUpload,
   );
@@ -47,7 +52,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     {
       schema: {
         operationId: "confirmMediaUpload",
-        tags: ["Course Media"],
+        tags: ["Media"],
         summary: "Confirm that a media asset upload is complete",
         params: z.object({ mediaId: z.uuid() }),
         response: {
@@ -59,29 +64,28 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Media not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: requireAuthenticated,
     },
     controller.confirmMediaUpload,
   );
 
   app.get(
-    "/courses/:id/videos/:videoId/progress",
+    "/media/:mediaId/progress",
     {
       schema: {
         operationId: "getVideoJobProgress",
-        tags: ["Course Media"],
+        tags: ["Media"],
         summary: "Poll transcoding progress for a media asset",
-        params: z.object({ id: z.uuid(), videoId: z.uuid() }),
+        params: z.object({ mediaId: z.uuid() }),
         response: {
           200: jsonResponse(
             "Polling progress response",
             videoJobProgressResponseSchema,
           ),
-          403: errorResponse("Forbidden - not course owner"),
-          404: errorResponse("Job not found"),
+          404: errorResponse("Media or job not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: requireAuthenticated,
     },
     controller.getVideoJobProgress,
   );

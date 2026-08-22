@@ -20,8 +20,7 @@ import * as courseRepo from "./course.repository.ts";
 import * as categoryRepo from "../category/category.repository.ts";
 import * as curriculumRepo from "../curriculum/curriculum.repository.ts";
 import * as configRepo from "../configuration/configuration.repository.ts";
-import * as mediaRepo from "../media/media.repository.ts";
-import { createMediaService } from "../media/media.service.ts";
+import { createMediaService } from "../../media/index.ts";
 
 export interface CourseServiceOptions {
   database: Kysely<Database>;
@@ -71,10 +70,7 @@ export function createCourseService({
         shortDescription: row.short_description,
         description: row.description,
         difficulty: row.difficulty as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null,
+          "beginner" | "intermediate" | "advanced" | null,
         status: row.status as "draft" | "published" | "archived",
         creatorId: row.creator_id as string,
         categoryId: row.category_id,
@@ -143,10 +139,7 @@ export function createCourseService({
    * Lists all courses owned by the authenticated creator.
    */
   async function listMyCourses(creatorId: string) {
-    const rows = await courseRepo.listCoursesByCreator(
-      database,
-      creatorId,
-    );
+    const rows = await courseRepo.listCoursesByCreator(database, creatorId);
     const courses = rows.map((c) => ({
       id: c.id,
       slug: c.slug,
@@ -154,10 +147,7 @@ export function createCourseService({
       shortDescription: c.short_description,
       description: c.description,
       difficulty: c.difficulty as
-        | "beginner"
-        | "intermediate"
-        | "advanced"
-        | null,
+        "beginner" | "intermediate" | "advanced" | null,
       status: c.status as "draft" | "published" | "archived",
       creatorId: c.creator_id as string,
       categoryId: c.category_id,
@@ -218,8 +208,7 @@ export function createCourseService({
     }
 
     if (updates.thumbnailMediaId) {
-      const thumb = await mediaRepo.findMediaAssetById(
-        database,
+      const thumb = await mediaService.getMediaAsset(
         updates.thumbnailMediaId,
         creatorId,
       );
@@ -233,8 +222,7 @@ export function createCourseService({
     }
 
     if (updates.trailerMediaId) {
-      const trailer = await mediaRepo.findMediaAssetById(
-        database,
+      const trailer = await mediaService.getMediaAsset(
         updates.trailerMediaId,
         creatorId,
       );
@@ -303,10 +291,7 @@ export function createCourseService({
           updates.difficulty !== undefined
             ? updates.difficulty
             : (course.difficulty as
-                | "beginner"
-                | "intermediate"
-                | "advanced"
-                | null),
+                "beginner" | "intermediate" | "advanced" | null),
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id as string,
         categoryId:
@@ -395,10 +380,7 @@ export function createCourseService({
         shortDescription: course.short_description,
         description: course.description,
         difficulty: course.difficulty as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null,
+          "beginner" | "intermediate" | "advanced" | null,
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id as string,
         categoryId: course.category_id,
@@ -470,7 +452,9 @@ export function createCourseService({
     }
 
     const isOwner = Boolean(user && user.id === course.creator_id);
-    const isAdmin = Boolean(user && user.roles && user.roles.includes(ADMIN_ROLE));
+    const isAdmin = Boolean(
+      user && user.roles && user.roles.includes(ADMIN_ROLE),
+    );
 
     if (course.status !== "published") {
       if (!isOwner && !isAdmin) {
@@ -526,8 +510,7 @@ export function createCourseService({
     const lessonIds = lessons.map((l) => l.id);
     const [resources, mediaAssets] = await Promise.all([
       curriculumRepo.listResourcesForLessons(database, lessonIds),
-      mediaRepo.findMediaAssetsByIds(
-        database,
+      mediaService.getMediaAssets(
         lessons
           .map((l) => l.content_media_id)
           .filter((id): id is string => Boolean(id)),
@@ -602,10 +585,7 @@ export function createCourseService({
         shortDescription: course.short_description,
         description: course.description,
         difficulty: course.difficulty as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null,
+          "beginner" | "intermediate" | "advanced" | null,
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id,
         categoryId: course.category_id,
