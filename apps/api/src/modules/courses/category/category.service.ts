@@ -59,10 +59,21 @@ export function createCategoryService({ database }: CategoryServiceOptions) {
     return { success: true };
   }
 
+  async function findCategoryById(categoryId: string) {
+    return await categoryRepo.findCategoryById(database, categoryId);
+  }
+
+  async function findCategoryBySlug(slug: string) {
+    return await categoryRepo.findCategoryBySlug(database, slug);
+  }
+
   return {
     listCategories,
     createCategory,
     deleteCategory,
+    findCategoryById,
+    getCategoryById: findCategoryById,
+    findCategoryBySlug,
   };
 }
 

@@ -10,12 +10,14 @@ import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
+import { createSessionService } from "../auth/index.ts";
 
 import { createMediaController } from "./media.controller.ts";
 import { createMediaService } from "./media.service.ts";
 
 const mediaRoutes: RoutePlugin = async (app, options) => {
-  const authMiddleware = createAuthMiddleware(options.database);
+  const sessionService = createSessionService({ database: options.database });
+  const authMiddleware = createAuthMiddleware(sessionService);
   const requireAuthenticated = [
     authMiddleware.authenticate,
     authMiddleware.requireAuthenticated,

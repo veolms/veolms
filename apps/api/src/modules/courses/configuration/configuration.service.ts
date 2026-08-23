@@ -155,10 +155,28 @@ export function createConfigurationService({
     };
   }
 
+  async function findAccessRuleByCourseId(courseId: string) {
+    return await configRepo.findAccessRuleByCourseId(database, courseId);
+  }
+
+  async function findPricingByCourseId(courseId: string) {
+    return await configRepo.findPricingByCourseId(database, courseId);
+  }
+
+  async function findSettingsByCourseId(courseId: string) {
+    return await configRepo.findSettingsByCourseId(database, courseId);
+  }
+
   return {
     upsertCourseAccessRules,
     upsertCoursePricing,
     upsertCourseSettings,
+    findAccessRuleByCourseId,
+    getAccessRuleByCourseId: findAccessRuleByCourseId,
+    findPricingByCourseId,
+    getPricingByCourseId: findPricingByCourseId,
+    findSettingsByCourseId,
+    getSettingsByCourseId: findSettingsByCourseId,
   };
 }
 

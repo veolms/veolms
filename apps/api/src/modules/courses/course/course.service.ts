@@ -15,23 +15,44 @@ import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
-import { ADMIN_ROLE } from "../../auth/auth.constants.ts";
+import { ADMIN_ROLE, createAuthService, type AuthService } from "../../auth/index.ts";
 import * as courseRepo from "./course.repository.ts";
-import * as categoryRepo from "../category/category.repository.ts";
-import * as curriculumRepo from "../curriculum/curriculum.repository.ts";
-import * as configRepo from "../configuration/configuration.repository.ts";
-import { createMediaService } from "../../media/index.ts";
+import {
+  createCategoryService,
+  type CategoryService,
+} from "../category/category.service.ts";
+import {
+  createCurriculumService,
+  type CurriculumService,
+} from "../curriculum/curriculum.service.ts";
+import {
+  createConfigurationService,
+  type ConfigurationService,
+} from "../configuration/configuration.service.ts";
+import {
+  createMediaService,
+  type MediaService,
+} from "../../media/index.ts";
 
 export interface CourseServiceOptions {
   database: Kysely<Database>;
   services: AppServices;
+  authService?: AuthService;
+  categoryService?: CategoryService;
+  curriculumService?: CurriculumService;
+  configurationService?: ConfigurationService;
+  mediaService?: MediaService;
 }
 
 export function createCourseService({
   database,
   services,
+  authService = createAuthService({ database }),
+  categoryService = createCategoryService({ database }),
+  curriculumService = createCurriculumService({ database, services }),
+  configurationService = createConfigurationService({ database }),
+  mediaService = createMediaService({ database, services }),
 }: CourseServiceOptions) {
-  const mediaService = createMediaService({ database, services });
 
   /**
    * Verifies course existence and owner permissions.
@@ -194,8 +215,7 @@ export function createCourseService({
     }
 
     if (updates.categoryId) {
-      const category = await categoryRepo.findCategoryById(
-        database,
+      const category = await categoryService.findCategoryById(
         updates.categoryId,
       );
       if (!category) {
@@ -322,15 +342,14 @@ export function createCourseService({
 
     const [sections, lessons, accessRules, pricing, settings] =
       await Promise.all([
-        curriculumRepo.findSectionsByCourseId(database, courseId),
-        curriculumRepo.findLessonsByCourseId(database, courseId),
-        configRepo.findAccessRuleByCourseId(database, courseId),
-        configRepo.findPricingByCourseId(database, courseId),
-        configRepo.findSettingsByCourseId(database, courseId),
+        curriculumService.findSectionsByCourseId(courseId),
+        curriculumService.findLessonsByCourseId(courseId),
+        configurationService.findAccessRuleByCourseId(courseId),
+        configurationService.findPricingByCourseId(courseId),
+        configurationService.findSettingsByCourseId(courseId),
       ]);
     const lessonIds = lessons.map((l) => l.id);
-    const resources = await curriculumRepo.listResourcesForLessons(
-      database,
+    const resources = await curriculumService.listResourcesForLessons(
       lessonIds,
     );
 
@@ -474,16 +493,16 @@ export function createCourseService({
       settings,
     ] = await Promise.all([
       course.creator_id
-        ? courseRepo.findCourseCreator(database, course.creator_id)
+        ? authService.findUserById(course.creator_id)
         : null,
       course.category_id
-        ? categoryRepo.findCategoryById(database, course.category_id)
+        ? categoryService.findCategoryById(course.category_id)
         : null,
-      curriculumRepo.findSectionsByCourseId(database, courseId),
-      curriculumRepo.findLessonsByCourseId(database, courseId),
-      configRepo.findAccessRuleByCourseId(database, courseId),
-      configRepo.findPricingByCourseId(database, courseId),
-      configRepo.findSettingsByCourseId(database, courseId),
+      curriculumService.findSectionsByCourseId(courseId),
+      curriculumService.findLessonsByCourseId(courseId),
+      configurationService.findAccessRuleByCourseId(courseId),
+      configurationService.findPricingByCourseId(courseId),
+      configurationService.findSettingsByCourseId(courseId),
     ]);
 
     const creator = creatorUser
@@ -509,7 +528,7 @@ export function createCourseService({
 
     const lessonIds = lessons.map((l) => l.id);
     const [resources, mediaAssets] = await Promise.all([
-      curriculumRepo.listResourcesForLessons(database, lessonIds),
+      curriculumService.listResourcesForLessons(lessonIds),
       mediaService.getMediaAssets(
         lessons
           .map((l) => l.content_media_id)

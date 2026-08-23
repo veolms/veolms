@@ -4,10 +4,19 @@ import type { CourseValidationIssue } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as courseRepo from "../course/course.repository.ts";
-import * as curriculumRepo from "../curriculum/curriculum.repository.ts";
-import * as configRepo from "../configuration/configuration.repository.ts";
-import { createMediaService } from "../../media/index.ts";
-import { createCourseService } from "../course/course.service.ts";
+import {
+  createCurriculumService,
+  type CurriculumService,
+} from "../curriculum/curriculum.service.ts";
+import {
+  createConfigurationService,
+  type ConfigurationService,
+} from "../configuration/configuration.service.ts";
+import { createMediaService, type MediaService } from "../../media/index.ts";
+import {
+  createCourseService,
+  type CourseService,
+} from "../course/course.service.ts";
 import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
@@ -16,15 +25,20 @@ import {
 export interface LifecycleServiceOptions {
   database: Kysely<Database>;
   services: AppServices;
+  courseService?: CourseService;
+  curriculumService?: CurriculumService;
+  configurationService?: ConfigurationService;
+  mediaService?: MediaService;
 }
 
 export function createLifecycleService({
   database,
   services,
+  courseService = createCourseService({ database, services }),
+  curriculumService = createCurriculumService({ database, services }),
+  configurationService = createConfigurationService({ database }),
+  mediaService = createMediaService({ database, services }),
 }: LifecycleServiceOptions) {
-  const courseService = createCourseService({ database, services });
-  const mediaService = createMediaService({ database, services });
-
   function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
     return verifyCourseOwner(database, courseId, creatorId);
   }
@@ -67,10 +81,10 @@ export function createLifecycleService({
 
     // 2. Curriculum & Configuration concurrently
     const [sections, lessons, accessRules, pricing] = await Promise.all([
-      curriculumRepo.findSectionsByCourseId(database, courseId),
-      curriculumRepo.findLessonsByCourseId(database, courseId),
-      configRepo.findAccessRuleByCourseId(database, courseId),
-      configRepo.findPricingByCourseId(database, courseId),
+      curriculumService.findSectionsByCourseId(courseId),
+      curriculumService.findLessonsByCourseId(courseId),
+      configurationService.findAccessRuleByCourseId(courseId),
+      configurationService.findPricingByCourseId(courseId),
     ]);
 
     if (sections.length === 0) {

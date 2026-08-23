@@ -158,13 +158,3 @@ export async function updateCourse(
     .executeTakeFirst();
 }
 
-export async function findCourseCreator(
-  database: Kysely<Database>,
-  creatorId: string,
-) {
-  return await database
-    .selectFrom("users")
-    .select(["id", "display_name", "username"])
-    .where("id", "=", creatorId)
-    .executeTakeFirst();
-}

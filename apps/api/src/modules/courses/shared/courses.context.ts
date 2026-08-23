@@ -7,7 +7,8 @@ import {
   ADMIN_ROLE,
   CREATOR_ROLE,
   INSTRUCTOR_ROLE,
-} from "../../auth/auth.constants.ts";
+  createSessionService,
+} from "../../auth/index.ts";
 
 export interface CoursesContext {
   middleware: AuthMiddleware;
@@ -22,7 +23,8 @@ export interface CoursesContext {
 export function createCoursesContext({
   database,
 }: RoutePluginOptions): CoursesContext {
-  const middleware = createAuthMiddleware(database);
+  const sessionService = createSessionService({ database });
+  const middleware = createAuthMiddleware(sessionService);
 
   const requireAuthenticated = [
     middleware.authenticate,

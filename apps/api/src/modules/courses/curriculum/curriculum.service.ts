@@ -484,6 +484,32 @@ export function createCurriculumService({
     return { success: true };
   }
 
+  // --- Curriculum Read/Query Methods ---
+
+  async function findSectionsByCourseId(courseId: string) {
+    return await curriculumRepo.findSectionsByCourseId(database, courseId);
+  }
+
+  async function findLessonsByCourseId(courseId: string) {
+    return await curriculumRepo.findLessonsByCourseId(database, courseId);
+  }
+
+  async function listResourcesForLessons(lessonIds: string[]) {
+    return await curriculumRepo.listResourcesForLessons(database, lessonIds);
+  }
+
+  async function findSectionById(sectionId: string, courseId: string) {
+    return await curriculumRepo.findSectionById(database, sectionId, courseId);
+  }
+
+  async function findLessonById(lessonId: string, courseId: string) {
+    return await curriculumRepo.findLessonById(database, lessonId, courseId);
+  }
+
+  async function findResourceById(resourceId: string, courseId: string) {
+    return await curriculumRepo.findResourceById(database, resourceId, courseId);
+  }
+
   return {
     getCourseAndVerifyOwner,
     createCourseSection,
@@ -496,6 +522,12 @@ export function createCurriculumService({
     reorderSectionLessons,
     addLessonResource,
     removeLessonResource,
+    findSectionsByCourseId,
+    findLessonsByCourseId,
+    listResourcesForLessons,
+    findSectionById,
+    findLessonById,
+    findResourceById,
   };
 }
 

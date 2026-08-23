@@ -18,8 +18,8 @@ import type { SessionService } from "../session/session.service.ts";
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
-  otpService: OtpService;
-  sessionService: SessionService;
+  otpService?: OtpService;
+  sessionService?: SessionService;
 }
 
 export function createAuthService({
@@ -27,6 +27,10 @@ export function createAuthService({
   otpService,
   sessionService,
 }: AuthServiceOptions) {
+  function findUserById(userId: string) {
+    return userRepository.findUserById(database, userId);
+  }
+
   function findUserByIdentifier(
     identifier: string,
     identifierType: IdentifierType,
@@ -96,6 +100,14 @@ export function createAuthService({
       );
     }
 
+    if (!otpService || !sessionService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService and sessionService for login.",
+      );
+    }
+
     await otpService.verifyAndConsumeOtp(
       input.identifier,
       input.identifierType,
@@ -137,6 +149,14 @@ export function createAuthService({
 
     if (await usernameExists(input.username.toLowerCase())) {
       throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
+    }
+
+    if (!otpService || !sessionService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService and sessionService for registration.",
+      );
     }
 
     if (hasBothChannels) {
@@ -283,6 +303,7 @@ export function createAuthService({
   }
 
   return {
+    findUserById,
     findUserByIdentifier,
     findVerifiedUserByEmail,
     findUserByOauthAccount,
