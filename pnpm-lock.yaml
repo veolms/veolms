@@ -115,32 +115,9 @@ importers:
         specifier: ^13.1.3
         version: 13.1.3
 
-  apps/fleet-manager:
-    dependencies:
-      '@veolms/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@veolms/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      kysely:
-        specifier: 'catalog:'
-        version: 0.29.4
+  apps/fleet-manager: {}
 
-  apps/media-worker:
-    dependencies:
-      '@veolms/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@veolms/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@veolms/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      kysely:
-        specifier: 'catalog:'
-        version: 0.29.4
+  apps/media-worker: {}
 
   apps/web:
     dependencies:
