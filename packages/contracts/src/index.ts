@@ -42,6 +42,8 @@ export type {
   OtpVerifyRequest,
   RegisterRequest,
   LoginRequest,
+  LoginResponse,
+  AuthMessageResponse,
   OauthProvider,
   OauthUrlRequest,
   OauthUrlResponse,

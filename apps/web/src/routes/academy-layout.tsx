@@ -7,6 +7,8 @@ import {
 } from "react";
 import { Outlet, useLocation, useMatches, useNavigate } from "react-router";
 import { CoursesPage } from "../CoursesPage";
+import { useLogout } from "../services/auth";
+import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { Course } from "../courses/catalogue";
 import type { LearningCourse } from "../StudentPages";
 import {
@@ -92,8 +94,17 @@ export default function AcademyLayout() {
     }
   }, [currentLocationPath]);
 
+  const logoutMutation = useLogout();
+
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
+    if (pathname === "/logout") {
+      void logoutMutation.mutateAsync().finally(() => {
+        clearStoredProfilePreferences();
+        window.location.href = "/";
+      });
+      return;
+    }
     const destination =
       pathname === "/my-learning"
         ? "/my-courses"
@@ -102,7 +113,7 @@ export default function AcademyLayout() {
           : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, logoutMutation]);
 
   useLayoutEffect(() => {
     const position = preservedScrollPositionRef.current;

@@ -230,5 +230,15 @@ export const saveProfilePreferences = (
   }
 };
 
+export const clearStoredProfilePreferences = (): void => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PROFILE_STORAGE_KEYS.student);
+    window.localStorage.removeItem(PROFILE_STORAGE_KEYS.creator);
+  } catch {
+    // ignore
+  }
+};
+
 export const getProfileStorageKey = (role: ProfileRole) =>
   PROFILE_STORAGE_KEYS[role];
