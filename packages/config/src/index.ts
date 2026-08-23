@@ -74,6 +74,20 @@ const serverConfigSchema = z.object({
   SMS_BACKUP_SID: z.string().optional(),
   SMS_BACKUP_TOKEN: z.string().optional(),
   SMS_BACKUP_FROM: z.string().default("+1234567890"),
+
+  // Storage Configs
+  STORAGE_ENDPOINT: z.string().optional(),
+  STORAGE_REGION: z.string().default("us-east-1"),
+  STORAGE_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_BUCKET: z.string().min(1).default("veolms"),
+  STORAGE_FORCE_PATH_STYLE: booleanEnvironmentValueSchema.default(false),
+
+  // Fleet Manager & Video Processing Dispatch
+  FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
+  FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
+  FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
+  FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
 });
 
 const webConfigSchema = z.object({

@@ -15,6 +15,9 @@ export interface AuthMiddleware {
   requirePermission: (
     permission: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  requireRoles: (
+    roles: string[],
+  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
 export function createAuthMiddleware(
@@ -118,10 +121,35 @@ export function createAuthMiddleware(
     };
   }
 
+  /**
+   * Restricts a route to users holding at least one of the given roles. Must
+   * be used AFTER authenticate + requireAuthenticated in the preHandler chain.
+   */
+  function requireRoles(roles: string[]) {
+    return async (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<void> => {
+      const user = request.user;
+      if (!user || !roles.some((role) => user.roles.includes(role))) {
+        return reply
+          .code(403)
+          .send(
+            httpError(
+              403,
+              "FORBIDDEN",
+              "You do not have permission to access this resource.",
+            ),
+          );
+      }
+    };
+  }
+
   return {
     authenticate,
     requireAuthenticated,
     requireMfaVerified,
     requirePermission,
+    requireRoles,
   };
 }
