@@ -163,3 +163,18 @@ export function loadServerConfig(
 export function loadWebConfig(environment: Record<string, string | undefined>) {
   return webConfigSchema.parse(environment);
 }
+
+export {
+  resolveProviderName,
+  fleetManagerConfigSchema,
+  loadFleetManagerConfig,
+  type FleetManagerConfig,
+} from "./fleet-manager.ts";
+
+export {
+  resolveDefaultUploadConcurrency,
+  mediaWorkerConfigSchema,
+  loadMediaWorkerConfig,
+  type DefaultUploadConcurrency,
+  type MediaWorkerConfig,
+} from "./media-worker.ts";

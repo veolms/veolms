@@ -148,12 +148,18 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.750.0
         version: 3.1116.0
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@veolms/database':
         specifier: workspace:*
         version: link:../../packages/database
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../../packages/fleet-types
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       kysely:
         specifier: 'catalog:'
         version: 0.29.4
@@ -276,6 +282,10 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.13
+        version: 24.13.3
 
   packages/contracts:
     dependencies:
@@ -328,6 +338,9 @@ importers:
       '@aws-sdk/client-sts':
         specifier: ^3.1112.0
         version: 3.1116.0
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../config
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types

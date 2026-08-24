@@ -3,7 +3,7 @@ packages:
   - "packages/*"
 
 minimumReleaseAgeExclude:
-  - '@tiptap/core@3.30.1'
+  - "@tiptap/core@3.30.1"
 catalog:
   zod: "^4.4.3"
   kysely: "^0.29.4"
