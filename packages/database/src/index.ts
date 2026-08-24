@@ -1,21 +1,19 @@
 export { createDatabase } from "./client.ts";
-export { claimNextQueuedJob } from "./fleet/jobs.ts";
+export {  claimNextQueuedVideoJob } from "./fleet/video-jobs.ts";
 export type {
   AcademyTable,
   Architecture,
   CourseStatus,
   Database,
+  FleetTables,
   MediaAssetStatus,
   AccessType,
   AccessDurationType,
   PricingType,
-  VideoJobStatus,
-  VideoJobStage,
   VideoJobTable,
   VideoOutputTable,
   FleetEventType,
-  JobStatus,
-  JobTable,
+  VideoJobStatus,
   ProviderType,
   VideoQualityLevel,
   WorkerEventTable,

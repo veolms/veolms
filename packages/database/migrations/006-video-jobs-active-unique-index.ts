@@ -12,7 +12,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
   await sql`
     create unique index video_jobs_active_video_id_unique
       on video_jobs (video_id)
-      where status in ('queued', 'processing')
+      where status in ('QUEUED', 'PROCESSING')
   `.execute(database);
 }
 

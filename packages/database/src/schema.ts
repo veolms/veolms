@@ -1,6 +1,6 @@
-import type { Generated, JSONColumnType } from "kysely";
+import type { Generated } from "kysely";
 import type {
-  JobTable,
+  VideoJobTable,
   WorkerEventTable,
   WorkerMonitoringTable,
   WorkerTable,
@@ -284,33 +284,6 @@ export interface CourseSettingsTable {
   updated_at: Generated<Date>;
 }
 
-export type VideoJobStatus = "queued" | "processing" | "completed" | "failed";
-export type JobStatus = VideoJobStatus;
-export type VideoJobStage =
-  | "queued"
-  | "downloading"
-  | "transcoding"
-  | "uploading"
-  | "finalizing"
-  | "completed"
-  | "failed";
-
-export interface VideoJobTable {
-  id: string;
-  video_id: string;
-  input_path: string;
-  status: VideoJobStatus;
-  progress_percent: Generated<number>;
-  current_stage: VideoJobStage;
-  worker_id: string | null;
-  quality: number[];
-  created_at: Generated<Date>;
-  started_at: Date | null;
-  completed_at: Date | null;
-  failed_at: Date | null;
-  error: string | null;
-}
-
 export interface VideoOutputTable {
   id: string;
   video_id: string;
@@ -333,11 +306,9 @@ export interface Database {
   user_totp_credentials: UserTotpCredentialTable;
   mfa_backup_codes: MfaBackupCodeTable;
   webauthn_challenges: WebauthnChallengeTable;
-  jobs: JobTable;
   workers: WorkerTable;
   worker_monitoring: WorkerMonitoringTable;
   worker_events: WorkerEventTable;
-  
   categories: CategoryTable;
   media_assets: MediaAssetTable;
   course_sections: CourseSectionTable;
@@ -349,4 +320,3 @@ export interface Database {
   video_jobs: VideoJobTable;
   video_outputs: VideoOutputTable;
 }
-

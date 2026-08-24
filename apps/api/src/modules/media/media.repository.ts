@@ -1,9 +1,9 @@
-import { type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import type {
   Database,
   MediaAssetStatus,
   VideoJobStatus,
-  VideoJobStage,
+  VideoQualityLevel,
 } from "@veolms/database";
 
 export async function findMediaAssetById(
@@ -75,15 +75,24 @@ export async function insertVideoJob(
   values: {
     id: string;
     video_id: string;
-    input_path: string;
-    status: "queued";
-    current_stage: "queued";
+    video_key: string;
+    output_prefix: string;
+    video_size: number;
+    qualities: VideoQualityLevel[];
+    status?: VideoJobStatus;
+    worker_id?: string | null;
     progress_percent?: number;
-    quality: number[];
-    created_at: Date;
+    error_message?: string | null;
+    created_at?: Date;
   },
 ) {
-  await database.insertInto("video_jobs").values(values).execute();
+  await database
+    .insertInto("video_jobs")
+    .values({
+      status: "QUEUED",
+      ...values,
+    })
+    .execute();
 }
 
 export async function updateVideoJobStatus(
@@ -91,15 +100,17 @@ export async function updateVideoJobStatus(
   jobId: string,
   values: {
     status: VideoJobStatus;
-    current_stage?: VideoJobStage;
     progress_percent?: number;
-    error?: string | null;
+    error_message?: string | null;
     failed_at?: Date;
   },
 ) {
   await database
     .updateTable("video_jobs")
-    .set(values)
+    .set({
+      ...values,
+      updated_at: new Date(),
+    })
     .where("id", "=", jobId)
     .execute();
 }
