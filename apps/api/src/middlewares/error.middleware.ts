@@ -42,8 +42,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
     // The handler returned something its own response schema rejects. That is a
     // server bug, and swallowing it would let the docs drift from reality.
     if (isResponseSerializationError(error)) {
+      // The schema/field detail in `error.cause` is internal shape information —
+      // log it for debugging, but never hand it to the client.
       request.log.error(
-        { err: error },
+        { err: error, cause: error.cause },
         "Response did not match its documented schema",
       );
 
@@ -53,7 +55,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           httpError(
             500,
             "RESPONSE_SERIALIZATION_FAILED",
-            "The server produced a response that does not match its documented schema.",
+            "The server produced an invalid response.",
           ),
         );
     }

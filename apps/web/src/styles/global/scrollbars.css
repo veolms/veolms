@@ -1,0 +1,75 @@
+/* Use the same quiet, trackless scrollbar treatment for the document and
+   nested scrollports. The transparent channel leaves only a mobile-like thumb
+   visible, while component-level scrollbar-none rules remain authoritative. */
+:root {
+  --scrollbar-thumb-size: 6px;
+  --scrollbar-track-block-inset: 8px;
+  --scrollbar-thumb-color: color-mix(in srgb, var(--accent) 90%, transparent);
+  --scrollbar-thumb-hover-color: color-mix(
+    in srgb,
+    var(--accent-hover, var(--accent)) 96%,
+    transparent
+  );
+}
+
+html,
+:where(*) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-color) transparent;
+}
+
+::-webkit-scrollbar {
+  display: block;
+  width: var(--scrollbar-thumb-size);
+  height: var(--scrollbar-thumb-size);
+  background: transparent;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track-piece,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-track:vertical {
+  margin-block: var(--scrollbar-track-block-inset);
+}
+
+::-webkit-scrollbar-track:horizontal {
+  margin-inline: var(--scrollbar-track-block-inset);
+}
+
+::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb-color);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover-color);
+}
+
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  border: 0;
+  background: transparent;
+  -webkit-appearance: none;
+}
+
+/* The Appearance setting hides the scrollbar affordance without disabling
+   scrolling. Keep this global so nested panels and the document behave alike. */
+html[data-hide-scrollbars="true"],
+html[data-hide-scrollbars="true"] * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html[data-hide-scrollbars="true"]::-webkit-scrollbar,
+html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}

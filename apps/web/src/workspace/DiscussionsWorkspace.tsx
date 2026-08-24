@@ -1,22 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import {
-  ArrowRight,
-  ArrowSquareOut,
-  At,
-  Bell,
-  BookmarkSimple,
-  ChatCircleDots,
-  ChatTeardropText,
-  CheckCircle,
-  DotsThreeVertical,
-  Funnel,
-  MagnifyingGlass,
-  PaperPlaneTilt,
-  Question,
-  SealCheck,
-  UsersThree,
-} from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
+import { At } from "@phosphor-icons/react/At";
+import { Bell } from "@phosphor-icons/react/Bell";
+import { BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
+import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { Funnel } from "@phosphor-icons/react/Funnel";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { Question } from "@phosphor-icons/react/Question";
+import { SealCheck } from "@phosphor-icons/react/SealCheck";
+import { UsersThree } from "@phosphor-icons/react/UsersThree";
 import type { CourseRole } from "../courses/catalogue";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import type { NavigateTo } from "../routing/navigation";
@@ -85,7 +83,7 @@ const initialThreads: readonly DiscussionThread[] = [
       "I'm a bit confused about when and why we need to define explicit return types for functions. Could someone explain with an example?",
     course: "The Ultimate TypeScript Course",
     lesson: "Lecture 84: Conditional Types",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
     status: "answered",
     replies: 12,
     activity: "18 min ago",
@@ -98,7 +96,7 @@ const initialThreads: readonly DiscussionThread[] = [
       "Can someone help me understand how 'readonly' and 'optional' modifiers work together in mapped types?",
     course: "The Ultimate TypeScript Course",
     lesson: "Lecture 85: Mapped Types Deep Dive",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
     status: "mentioned",
     replies: 8,
     activity: "2h ago",
@@ -111,7 +109,7 @@ const initialThreads: readonly DiscussionThread[] = [
       "What folder structure and patterns do you follow for large-scale TypeScript applications?",
     course: "Complete Backend with Node.js",
     lesson: "Section 14: Performance & Optimization",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
     status: "solved",
     replies: 24,
     activity: "5h ago",
@@ -124,7 +122,7 @@ const initialThreads: readonly DiscussionThread[] = [
       "I know both can be used to define shapes, but when should we prefer one over the other?",
     course: "The Ultimate TypeScript Course",
     lesson: "Lecture 86: Template Literal Types",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
     status: "open",
     replies: 15,
     activity: "1d ago",
@@ -137,7 +135,7 @@ const initialThreads: readonly DiscussionThread[] = [
       "Could you share some practical examples of when to use INNER, LEFT, and RIGHT joins?",
     course: "Complete SQL Mastery",
     lesson: "Lecture 21: Joins and Relationships",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
     status: "open",
     replies: 6,
     activity: "2d ago",
@@ -306,7 +304,7 @@ export function DiscussionsWorkspace({
             ? "Creator community"
             : "The Ultimate TypeScript Course",
         lesson: "General discussion",
-        avatar: "/assets/sofia-avatar.jpg",
+        avatar: "/assets/sofia-avatar-160.webp",
         status: "open",
         replies: 0,
         activity: "Just now",
@@ -448,7 +446,13 @@ export function DiscussionsWorkspace({
                     <ThemedSelect
                       value={sort}
                       onValueChange={setSort}
-                      ariaLabel="Sort discussions"
+                      ariaLabel={`Sort discussions: ${
+                        sort === "activity"
+                          ? "Latest activity"
+                          : sort === "replies"
+                            ? "Most replies"
+                            : "Newest"
+                      }`}
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
                       options={
@@ -469,7 +473,6 @@ export function DiscussionsWorkspace({
                         <button
                           type="button"
                           className="discussion-thread__open"
-                          aria-label={`Open discussion: ${thread.title}`}
                           onClick={() => openThread(thread)}
                         >
                           <div className="discussion-thread__avatar">
@@ -600,7 +603,7 @@ export function DiscussionsWorkspace({
                     </button>
                   </header>
                   <div className="discussion-mention">
-                    <img src="/assets/sofia-avatar.jpg" alt="" />
+                    <img src="/assets/sofia-avatar-160.webp" alt="" />
                     <p>
                       <strong>Anurag Singh mentioned you</strong>
                       <span>
@@ -610,7 +613,7 @@ export function DiscussionsWorkspace({
                     <time>18 min ago</time>
                   </div>
                   <div className="discussion-mention">
-                    <img src="/assets/ethan-avatar.jpg" alt="" />
+                    <img src="/assets/ethan-avatar-160.webp" alt="" />
                     <p>
                       <strong>Instructor mentioned you</strong>
                       <span>

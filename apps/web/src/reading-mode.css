@@ -27,12 +27,7 @@
 
 .reading-mode-effects__texture {
   z-index: 2147483645;
-  background-image: url("/assets/reading-mode-grain.png");
-  background-image: image-set(
-    url("/assets/reading-mode-grain.png") 1x,
-    url("/assets/reading-mode-grain@2x.png") 2x,
-    url("/assets/reading-mode-grain@3x.png") 3x
-  );
+  background-image: url("/assets/reading-mode-grain.webp");
   background-repeat: repeat;
   background-position: 0 0;
   background-size: var(--reading-mode-texture-tile-size)
@@ -224,12 +219,7 @@
 
 .settings-reading-mode__preview-texture {
   z-index: 1;
-  background-image: url("/assets/reading-mode-grain.png");
-  background-image: image-set(
-    url("/assets/reading-mode-grain.png") 1x,
-    url("/assets/reading-mode-grain@2x.png") 2x,
-    url("/assets/reading-mode-grain@3x.png") 3x
-  );
+  background-image: url("/assets/reading-mode-grain.webp");
   background-repeat: repeat;
   background-position: 0 0;
   background-size: var(--reading-mode-texture-tile-size)

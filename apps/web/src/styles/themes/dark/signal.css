@@ -1,0 +1,34 @@
+/* signal palette — dark mode. */
+:root[data-palette="signal"] {
+  --canvas: #190c10;
+  --header: #1d0c10;
+  --surface: #2d161c;
+  --hover: #47222c;
+  --selected: #502130;
+  --track: #211116;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fff7f8;
+  --text-secondary: #f3d9de;
+  --muted: #c9a3ac;
+  --accent: #d92d4e;
+  --accent-hover: #c52343;
+  --accent-soft: rgba(217, 45, 78, 0.16);
+  --accent-border: rgba(217, 45, 78, 0.42);
+  --accent-shadow: rgba(181, 23, 58, 0.26);
+  --on-accent: #ffffff;
+  --app-shell: #17090d;
+  --main-surface: #240f15;
+  --surface-strong: #381b23;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #2d161c;
+  --card-surface-raised: #381b23;
+  --card-surface-soft: #231117;
+  --card-surface-hover: #3a1b24;
+}
+
+:root[data-high-contrast="true"][data-palette="signal"] {
+  --text: #ffffff;
+  --text-secondary: #ffe9ed;
+  --muted: #e7cbd1;
+}

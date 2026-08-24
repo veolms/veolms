@@ -1,4 +1,5 @@
-import { WarningCircle, X } from "@phosphor-icons/react";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import { useEffect, useRef } from "react";
 
 interface LearningSessionConflictDialogProps {

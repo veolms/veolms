@@ -104,7 +104,7 @@ test("course enrollment, search, category, and sort controls derive the visible 
   ).toBeVisible();
   await page.getByRole("button", { name: "Clear search" }).click();
 
-  await page.getByRole("combobox", { name: "Filter by category" }).click();
+  await page.getByRole("button", { name: /^Filter by category:/ }).click();
   await page.getByRole("option", { name: "Development", exact: true }).click();
   await expect(grid.getByRole("article")).toHaveCount(3);
   await expect(
@@ -117,9 +117,9 @@ test("course enrollment, search, category, and sort controls derive the visible 
     grid.getByRole("article", { name: /The Complete JavaScript Course/ }),
   ).toBeVisible();
 
-  await page.getByRole("combobox", { name: "Filter by category" }).click();
+  await page.getByRole("button", { name: /^Filter by category:/ }).click();
   await page.getByRole("option", { name: "All Categories" }).click();
-  await page.getByRole("combobox", { name: "Sort courses" }).click();
+  await page.getByRole("button", { name: /^Sort courses:/ }).click();
   const titleSortOption = page.getByRole("option", {
     name: "Sort by: Title",
   });

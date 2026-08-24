@@ -1,12 +1,10 @@
-import {
-  ChatCenteredDots,
-  MagnifyingGlass,
-  Notepad,
-  PaperPlaneTilt,
-  Question,
-  Toolbox,
-  X,
-} from "@phosphor-icons/react";
+import { ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { Notepad } from "@phosphor-icons/react/Notepad";
+import { PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { Question } from "@phosphor-icons/react/Question";
+import { Toolbox } from "@phosphor-icons/react/Toolbox";
+import { X } from "@phosphor-icons/react/X";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
@@ -23,7 +21,7 @@ const initialComments: Comment[] = [
     id: 1,
     name: "Ethan Park",
     time: "2 hours ago",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
     text: "That dashboard animation breakdown was super helpful! Could you share the easing curve used for the chart transitions?",
     likes: 12,
     replies: 3,
@@ -32,7 +30,7 @@ const initialComments: Comment[] = [
     id: 2,
     name: "Sofia Chen",
     time: "1 hour ago",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
     text: "Love how you explained the spacing system. The 8pt grid approach really makes things consistent.",
     likes: 8,
     replies: 1,
@@ -41,7 +39,7 @@ const initialComments: Comment[] = [
     id: 3,
     name: "Maya Rodriguez",
     time: "45 minutes ago",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
     text: "The pacing in this section made the research workflow much easier to follow. The examples were especially clear.",
     likes: 5,
     replies: 2,
@@ -50,7 +48,7 @@ const initialComments: Comment[] = [
     id: 4,
     name: "Noah Williams",
     time: "28 minutes ago",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
     text: "Could you revisit the part about choosing between qualitative and quantitative feedback in a future lesson?",
     likes: 4,
     replies: 1,
@@ -59,7 +57,7 @@ const initialComments: Comment[] = [
     id: 5,
     name: "Ava Patel",
     time: "12 minutes ago",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
     text: "I tried the exercise alongside the video and it helped me spot a few gaps in my own process.",
     likes: 2,
     replies: 0,
@@ -151,6 +149,22 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    setComments((current) => {
+      const currentById = new Map(
+        current.map((comment) => [comment.id, comment]),
+      );
+      return [
+        ...postedComments.map(
+          (comment) => currentById.get(comment.id) ?? comment,
+        ),
+        ...initialComments.map(
+          (comment) => currentById.get(comment.id) ?? comment,
+        ),
+      ];
+    });
+  }, [postedComments]);
+
+  useEffect(() => {
     if (!searchOpen) return undefined;
     const frame = window.requestAnimationFrame(() =>
       composerSearchInputRef.current?.focus(),
@@ -178,7 +192,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
       id: Date.now(),
       name: "Sofia Chen",
       time: "Just now",
-      avatar: "/assets/sofia-avatar.jpg",
+      avatar: "/assets/sofia-avatar-160.webp",
       text,
       likes: 0,
     };
@@ -280,7 +294,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
                 className={`learning-comment-composer ${searchOpen ? "is-search-open" : ""}`}
               >
                 <img
-                  src="/assets/sofia-avatar.jpg"
+                  src="/assets/sofia-avatar-160.webp"
                   alt=""
                   className="learning-comment-composer__avatar"
                 />

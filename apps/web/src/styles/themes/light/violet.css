@@ -1,0 +1,29 @@
+/* violet palette — light mode. */
+:root[data-theme="light"][data-palette="violet"] {
+  --app-shell: #e8e5e1;
+  --main-surface: #faf8f5;
+  --canvas: #f1eeea;
+  --header: #f3f0ec;
+  --surface: #fffefd;
+  --surface-strong: #eee9e4;
+  --hover: #e7e1da;
+  --selected: #f1ddd1;
+  --track: #dfd9d2;
+  --progress-track: #c5bdb5;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #272320;
+  --text-secondary: #514a45;
+  --muted: #766d66;
+  --accent: #a6532e;
+  --accent-hover: #914525;
+  --accent-soft: rgba(166, 83, 46, 0.1);
+  --accent-border: rgba(166, 83, 46, 0.28);
+  --accent-shadow: rgba(125, 58, 28, 0.17);
+  --on-accent: #ffffff;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #fffefd;
+  --card-surface-raised: #eee9e4;
+  --card-surface-soft: #f8f5f1;
+  --card-surface-hover: #ece5de;
+}

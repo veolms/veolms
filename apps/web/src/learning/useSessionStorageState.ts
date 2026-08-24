@@ -13,7 +13,15 @@ export function useSessionStorageState<T>(
   isValid?: StoredStateValidator<T>,
   legacyKeys: readonly string[] = NO_LEGACY_KEYS,
 ): [T, Dispatch<SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => {
+  // The server cannot see sessionStorage. Use the same deterministic value for
+  // SSR and the browser's first render, then restore the tab-local value after
+  // hydration. Reading storage in the initializer caused React to discard the
+  // prerender whenever a draft or search value already existed.
+  const [value, setValue] = useState<T>(initialValue);
+  const [storageReadyKey, setStorageReadyKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStorageReadyKey(null);
     try {
       const storage = getSessionStorage();
       const savedValue =
@@ -21,16 +29,25 @@ export function useSessionStorageState<T>(
         legacyKeys
           .map((legacyKey) => storage?.getItem(legacyKey))
           .find((candidate) => candidate !== null && candidate !== undefined);
-      if (savedValue === null || savedValue === undefined) return initialValue;
+      if (savedValue === null || savedValue === undefined) {
+        setValue(initialValue);
+        setStorageReadyKey(key);
+        return;
+      }
       const parsedValue: unknown = JSON.parse(savedValue);
-      if (isValid && !isValid(parsedValue)) return initialValue;
-      return parsedValue as T;
+      setValue(isValid && !isValid(parsedValue) ? initialValue : (parsedValue as T));
     } catch {
-      return initialValue;
+      setValue(initialValue);
     }
-  });
+    setStorageReadyKey(key);
+    // `initialValue` is the server snapshot for this keyed state. Consumers
+    // pass stable primitives or module constants; key changes intentionally
+    // trigger a fresh storage read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   useEffect(() => {
+    if (storageReadyKey !== key) return;
     try {
       const storage = getSessionStorage();
       storage?.setItem(key, JSON.stringify(value));
@@ -38,7 +55,7 @@ export function useSessionStorageState<T>(
     } catch {
       // Drafts remain usable in memory when browser storage is unavailable.
     }
-  }, [key, legacyKeys, value]);
+  }, [key, legacyKeys, storageReadyKey, value]);
 
   return [value, setValue];
 }

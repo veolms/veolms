@@ -38,7 +38,9 @@ describe("academy theme persistence", () => {
   it("keeps one shared order with the requested leading themes", () => {
     const ids = academyThemes.map(({ id }) => id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(16);
     expect(ids.slice(0, 3)).toEqual(["codex", "ocean", "midnight"]);
+    expect(ids.slice(-4)).toEqual(["brainwave", "lilac", "champagne", "lime"]);
     expect(academyThemes.find(({ id }) => id === "violet")?.name).toBe(
       "Copper Slate",
     );

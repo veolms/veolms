@@ -27,6 +27,30 @@ const OPENAPI_TAGS = [
     description:
       "Session management, registration, password recovery, and multi-factor authentication (TOTP).",
   },
+  {
+    name: "Course Categories",
+    description: "Category management for course creation.",
+  },
+  {
+    name: "Course Authoring",
+    description: "Course draft lifecycle and editor endpoints.",
+  },
+  {
+    name: "Course Media",
+    description: "Pre-signed uploads and media asset status tracking.",
+  },
+  {
+    name: "Course Curriculum",
+    description: "Section, lesson, and resource management.",
+  },
+  {
+    name: "Course Configuration",
+    description: "Access rules, pricing, and settings configuration.",
+  },
+  {
+    name: "Course Lifecycle",
+    description: "Validation, publishing, unpublishing, and previewing.",
+  },
 ];
 
 /**

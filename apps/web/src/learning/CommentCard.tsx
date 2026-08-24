@@ -1,8 +1,6 @@
-import {
-  ChatCenteredDots,
-  DotsThreeVertical,
-  ThumbsUp,
-} from "@phosphor-icons/react";
+import { ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import React, { useState } from "react";
 import { IconButton } from "./IconButton";
 
@@ -33,9 +31,9 @@ export function CommentCard({ comment, onLike }: CommentCardProps) {
         />
         <div className="min-w-0 flex-1">
           <div className="learning-comment-card__meta flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
-            <h3 className="learning-comment-card__name font-semibold">
+            <h2 className="learning-comment-card__name font-semibold">
               {comment.name}
-            </h3>
+            </h2>
             <span className="learning-comment-card__time text-[var(--muted)]">
               {comment.time}
             </span>

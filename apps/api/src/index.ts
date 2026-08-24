@@ -14,9 +14,40 @@ async function shutdown(signal: string): Promise<void> {
   }
 
   shuttingDown = true;
-  app.log.info({ signal }, "Shutting down");
-  await app.close();
-  await database.destroy();
+  app.log.info({ signal }, "Initiating graceful shutdown...");
+
+  const timeoutId = setTimeout(() => {
+    app.log.error("Shutdown timeout exceeded. Forcefully terminating process.");
+    process.exit(1);
+  }, 10000);
+
+  try {
+    let shutdownFailed = false;
+
+    try {
+      await app.close();
+    } catch (err) {
+      shutdownFailed = true;
+      app.log.error({ err }, "Failed to close application");
+    }
+
+    try {
+      await database.destroy();
+    } catch (err) {
+      shutdownFailed = true;
+      app.log.error({ err }, "Failed to destroy database");
+    }
+
+    if (shutdownFailed) {
+      process.exit(1);
+    }
+
+    app.log.info("Graceful shutdown completed successfully.");
+    clearTimeout(timeoutId);
+  } catch (error) {
+    app.log.error({ err: error }, "Unexpected error occurred during graceful shutdown.");
+    process.exit(1);
+  }
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

@@ -1,4 +1,5 @@
 import {
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -60,6 +61,7 @@ interface SwipeableTabPanelProps<T extends string> {
   labelledBy: string;
   className?: string;
   stateAttribute?: `data-${string}`;
+  onSwipePrepare?: () => void;
   children: (tab: T, preview: boolean) => ReactNode;
 }
 
@@ -141,6 +143,7 @@ export function SwipeableTabPanel<T extends string>({
   labelledBy,
   className = "",
   stateAttribute,
+  onSwipePrepare,
   children,
 }: SwipeableTabPanelProps<T>) {
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -154,6 +157,7 @@ export function SwipeableTabPanel<T extends string>({
   const activePropRef = useRef(activeTab);
   const [renderedTab, setRenderedTab] = useState(activeTab);
   const [settling, setSettling] = useState(false);
+  const [previewsReady, setPreviewsReady] = useState(false);
 
   onTabChangeRef.current = onTabChange;
   activePropRef.current = activeTab;
@@ -300,6 +304,9 @@ export function SwipeableTabPanel<T extends string>({
     )
       return;
 
+    onSwipePrepare?.();
+    setPreviewsReady(true);
+
     gestureRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -445,22 +452,22 @@ export function SwipeableTabPanel<T extends string>({
       <div className="swipeable-tab-panel__layer is-current">
         {children(renderedTab, false)}
       </div>
-      {previousTab && (
+      {previewsReady && previousTab && (
         <div
           className="swipeable-tab-panel__layer is-preview is-previous"
           aria-hidden="true"
           inert
         >
-          {children(previousTab, true)}
+          <Suspense fallback={null}>{children(previousTab, true)}</Suspense>
         </div>
       )}
-      {nextTab && (
+      {previewsReady && nextTab && (
         <div
           className="swipeable-tab-panel__layer is-preview is-next"
           aria-hidden="true"
           inert
         >
-          {children(nextTab, true)}
+          <Suspense fallback={null}>{children(nextTab, true)}</Suspense>
         </div>
       )}
     </div>

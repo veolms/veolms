@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  ArrowCounterClockwise,
-  Eye,
-  Grains,
-  ThermometerSimple,
-} from "@phosphor-icons/react";
+import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { Eye } from "@phosphor-icons/react/Eye";
+import { Grains } from "@phosphor-icons/react/Grains";
+import { ThermometerSimple } from "@phosphor-icons/react/ThermometerSimple";
 import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
 import {
@@ -156,12 +154,13 @@ function ReadingModePreview({
 }
 
 export function ReadingModeSettings() {
-  const [preferences, setPreferences] = useState(readReadingModePreferences);
+  const [preferences, setPreferences] = useState({ ...READING_MODE_DEFAULTS });
 
   useEffect(() => {
     const syncPreferences = () => {
       setPreferences(readReadingModePreferences());
     };
+    syncPreferences();
     const handleStorage = (event: StorageEvent) => {
       if (event.key === READING_MODE_STORAGE_KEY || event.key === null) {
         syncPreferences();

@@ -1,0 +1,35 @@
+/* brainwave palette — dark mode. */
+:root[data-palette="brainwave"] {
+  --canvas: #202224;
+  --header: #242627;
+  --surface: #343839;
+  --hover: #3b3f40;
+  --selected: #323337;
+  --track: #151718;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fefefe;
+  --text-secondary: #d9dddf;
+  --muted: #969ea2;
+  --accent: #0085ff;
+  --accent-hover: #2c9bff;
+  --accent-soft: rgba(0, 133, 255, 0.16);
+  --accent-border: rgba(0, 133, 255, 0.42);
+  --accent-shadow: rgba(0, 117, 224, 0.3);
+  --on-accent: #071829;
+  --app-shell: #151718;
+  --main-surface: #242627;
+  --surface-strong: #3c4143;
+  --progress-track: #45494a;
+  --on-accent-glyph: #071829;
+  --card-surface: #343839;
+  --card-surface-raised: #3c4143;
+  --card-surface-soft: #232526;
+  --card-surface-hover: #3a3f41;
+}
+
+:root[data-high-contrast="true"][data-palette="brainwave"] {
+  --text: #ffffff;
+  --text-secondary: #f1f5f9;
+  --muted: #d5dde1;
+}

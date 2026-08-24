@@ -1,0 +1,416 @@
+/* Settings preferences are semantic root attributes so they affect every route. */
+:root[data-content-layout="edge-to-edge"] .courses-app {
+  min-height: 100dvh;
+  padding: 0;
+  background: var(--app-shell);
+}
+
+:root[data-content-layout="edge-to-edge"] .courses-main {
+  min-height: 100dvh;
+  border-radius: 0;
+  box-shadow: inset 1px 0
+    color-mix(in srgb, var(--surface-strong) 60%, transparent);
+}
+
+:root[data-content-layout="edge-to-edge"] .courses-sidebar {
+  top: 0;
+  height: 100dvh;
+  border-right: 0;
+}
+:root[data-content-layout="edge-to-edge"]
+  .courses-app--hidden
+  .courses-sidebar {
+  top: 14px;
+  height: auto;
+  border-right: 0;
+}
+:root[data-collapsed-tooltips="false"]
+  .sidebar-nav-tooltip.is-preference-controlled {
+  display: none !important;
+}
+:root[data-active-fill="false"] .courses-nav button.is-active,
+:root[data-active-fill="false"] .sidebar-appearance > button.is-active,
+:root[data-active-fill="false"] .sidebar-palette-trigger[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-active-fill="false"] .mobile-bottom-nav > button.is-active,
+:root[data-active-fill="false"] .mobile-menu-sheet__list > button.is-active {
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme="light"][data-high-contrast="true"] {
+  --text: #101820;
+  --text-secondary: #1f354b;
+  --muted: #38546e;
+}
+:root[data-theme="dark"][data-high-contrast="true"] {
+  --text: #ffffff;
+  --text-secondary: #f1f5f9;
+  --muted: #d2dbe5;
+}
+:root[data-text-size="small"] {
+  font-size: 93.75%;
+}
+:root[data-text-size="large"] {
+  font-size: 112.5%;
+}
+:root[data-text-size="extra-large"] {
+  font-size: 125%;
+}
+:root[data-compact-layout="true"] .courses-app {
+  --shell-frame-block-space: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+:root[data-compact-layout="true"] .courses-main {
+  min-height: calc(100dvh - 16px);
+}
+:root[data-compact-layout="true"] .settings-page {
+  padding-top: 20px;
+  padding-bottom: 28px;
+}
+:root[data-reduce-animations="true"] *,
+:root[data-reduce-animations="true"] *::before,
+:root[data-reduce-animations="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}
+
+@media (max-width: 1120px) {
+  .settings-choice-grid--sidebar-style-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-choice-card--sidebar-style {
+    min-height: 172px;
+    gap: 16px;
+  }
+
+  .settings-choice-card--sidebar-style .settings-mini-surface {
+    width: 170px;
+    height: 176px;
+  }
+
+  .settings-color-tools--redesign {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.85fr);
+  }
+
+  .settings-color-tools--redesign .settings-preset-list {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .settings-color-tools__value {
+    max-width: 320px;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-choice-grid--display,
+  .settings-choice-grid--colors {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .settings-choice-grid--display .settings-choice-card:last-child {
+    grid-column: 1 / -1;
+  }
+  .settings-theme-pool__options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .settings-profile__layout {
+    grid-template-columns: minmax(220px, 0.68fr) minmax(0, 1.32fr);
+    gap: 18px;
+  }
+  .settings-profile__identity {
+    padding: 15px;
+  }
+  .settings-profile__field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-profile__email-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-profile__security-link {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-profile__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-profile__identity {
+    max-width: none;
+  }
+  .settings-profile__form {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+.settings-page {
+    --settings-page-inline-gutter: 15px;
+    padding: 22px 0 28px;
+  }
+  .settings-page__marker {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+  .settings-page__header p {
+    font-size: 0.8rem;
+  }
+  .settings-tabs {
+    margin-top: 20px;
+  }
+  .settings-tabs button {
+    min-height: 43px;
+    padding-inline: 10px;
+    font-size: 0.73rem;
+  }
+  .settings-section {
+    padding: 13px;
+    border-radius: 12px;
+  }
+  .settings-choice-grid--display,
+  .settings-choice-grid--colors,
+  .settings-choice-grid--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-choice-grid--display .settings-choice-card:last-child {
+    grid-column: auto;
+  }
+  .settings-theme-pool__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-theme-pool__heading {
+    align-items: center;
+  }
+  .settings-choice-card {
+    min-height: 116px;
+  }
+  .settings-row {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    padding-inline: 9px;
+  }
+  .settings-row--text-size {
+    grid-template-columns: 32px minmax(0, 1fr);
+    row-gap: 8px;
+  }
+  .settings-row--text-size .settings-row__control {
+    grid-column: 2;
+    justify-content: stretch;
+  }
+  .settings-segmented--text-size {
+    width: 100%;
+  }
+  .settings-segmented--text-size button {
+    padding-inline: 6px;
+    font-size: 0.66rem;
+  }
+  .settings-row--page-tab-colors,
+  .settings-row--shortcut-platform {
+    grid-template-columns: 32px minmax(0, 1fr);
+    row-gap: 8px;
+  }
+  .settings-row--page-tab-colors .settings-row__control,
+  .settings-row--shortcut-platform .settings-row__control {
+    grid-column: 2;
+    justify-content: stretch;
+  }
+  .settings-segmented--page-tabs,
+  .settings-segmented--shortcut-platform {
+    width: 100%;
+  }
+  .settings-segmented--page-tabs button,
+  .settings-segmented--shortcut-platform button {
+    padding-inline: 4px;
+    font-size: 0.63rem;
+  }
+  .settings-row__copy small {
+    max-width: 24ch;
+  }
+  .settings-color-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-hex-input {
+    width: 100%;
+  }
+  .settings-learning {
+    padding: 14px;
+    border-radius: 13px;
+  }
+  .settings-learning__header {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .settings-learning__saved {
+    min-height: 32px;
+    font-size: 0.66rem;
+  }
+  .settings-learning-card {
+    padding: 13px;
+    border-radius: 11px;
+  }
+  .settings-learning-select-row,
+  .settings-learning-toggle-row {
+    grid-template-columns: minmax(0, 1fr) minmax(128px, 148px);
+    gap: 10px;
+  }
+  .settings-learning-reminder-fields {
+    padding: 10px;
+  }
+  .settings-learning-days {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .settings-learning-reminder-selects {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .settings-profile {
+    padding: 14px;
+    border-radius: 13px;
+  }
+  .settings-profile__header {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .settings-profile__status {
+    min-height: 34px;
+    max-width: 100%;
+  }
+  .settings-profile__identity {
+    border-radius: 11px;
+    padding: 14px;
+  }
+  .settings-profile__photo {
+    margin-top: 18px;
+  }
+  .settings-profile__form {
+    min-height: 0;
+    padding-top: 4px;
+  }
+  .settings-profile__fields {
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .settings-profile__email-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-profile__security-link {
+    width: 100%;
+    justify-content: space-between;
+    white-space: normal;
+    text-align: left;
+  }
+  .settings-profile__phone-control,
+  .settings-profile__verification-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-profile__verify-action,
+  .settings-profile__verified-badge {
+    width: 100%;
+  }
+  .settings-profile__form-section-heading {
+    margin-top: 24px;
+    padding-top: 20px;
+  }
+  .settings-profile__form-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+  }
+  .settings-profile__form-footer p {
+    max-width: none;
+  }
+  .settings-profile__form-footer > div {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  }
+  .settings-profile__primary-action {
+    min-width: 0;
+  }
+
+.settings-sidebar-category-heading {
+    grid-template-columns: 34px minmax(0, 1fr);
+    margin-inline: 1px;
+  }
+
+  .settings-sidebar-category-heading > span {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .settings-sidebar-category-heading output {
+    grid-column: 2;
+    width: max-content;
+  }
+
+  .settings-choice-card--header-layout {
+    min-height: 92px;
+  }
+
+  .settings-section__heading-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .settings-section__hint {
+    padding-top: 0;
+  }
+
+  .settings-icon-color-options {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    margin-top: 16px;
+  }
+
+  .settings-icon-color-option {
+    min-height: 76px;
+    padding: 14px;
+  }
+
+  .settings-choice-card--sidebar-style {
+    min-height: 164px;
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .settings-choice-card--sidebar-style .settings-mini-surface {
+    width: 136px;
+    height: 168px;
+    padding: 11px 10px;
+  }
+
+  .settings-choice-card--sidebar-style .settings-choice-card__label strong {
+    font-size: 0.95rem;
+  }
+
+  .settings-choice-card--sidebar-style .settings-choice-card__copy small {
+    font-size: 0.74rem;
+  }
+
+  .settings-color-tools--redesign {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .settings-color-tools__value {
+    grid-column: auto;
+    max-width: none;
+  }
+
+  .settings-sidebar-width__controls {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

@@ -1,0 +1,28 @@
+/* lilac palette — light mode. */
+:root[data-theme="light"][data-palette="lilac"] {
+  --canvas: #f4eef9;
+  --header: #efe8f5;
+  --surface: #ffffff;
+  --hover: #ebdff4;
+  --selected: #ead9f8;
+  --track: #e3d8eb;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #25162d;
+  --text-secondary: #51405b;
+  --muted: #73637c;
+  --accent: #7f40b7;
+  --accent-hover: #6b329d;
+  --accent-soft: rgba(127, 64, 183, 0.12);
+  --accent-border: rgba(127, 64, 183, 0.3);
+  --accent-shadow: rgba(107, 50, 157, 0.17);
+  --on-accent: #ffffff;
+  --app-shell: #e7dff0;
+  --main-surface: #fbf7ff;
+  --surface-strong: #f1e8f7;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #ffffff;
+  --card-surface-raised: #f1e8f7;
+  --card-surface-soft: #faf5fd;
+  --card-surface-hover: #f2e8f8;
+}

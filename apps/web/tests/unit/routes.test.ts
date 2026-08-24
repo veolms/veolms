@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import frameworkRoutes from "../../src/routes.ts";
 import {
   destinationPaths,
+  getAuthRouteMeta,
   getDestinationPath,
   getEffectiveRouteId,
   getMatchedRouteDescriptor,
@@ -26,6 +27,8 @@ beforeEach(() => {
 describe("React Router framework route configuration", () => {
   const academyLayout = frameworkRoutes[0]!;
   const childRoutes = academyLayout.children!;
+  const authLayout = frameworkRoutes[1]!;
+  const authChildRoutes = authLayout.children!;
 
   it("keeps every app URL beneath one persistent academy layout", () => {
     expect(academyLayout).toMatchObject({
@@ -76,7 +79,7 @@ describe("React Router framework route configuration", () => {
   it("declares the root, learning, and fallback routes explicitly", () => {
     expect(childRoutes.find(({ id }) => id === "home")).toMatchObject({
       index: true,
-      file: "routes/academy-marker.tsx",
+      file: "routes/home-marker.tsx",
     });
     expect(childRoutes.find(({ id }) => id === "learning")).toMatchObject({
       path: "learn/:courseSlug/:lectureSlug?",
@@ -107,6 +110,43 @@ describe("React Router framework route configuration", () => {
         .filter(({ index }) => !index)
         .every(({ caseSensitive }) => caseSensitive),
     ).toBe(true);
+  });
+
+  it("serves authentication from a sibling layout, never from the academy shell", () => {
+    expect(frameworkRoutes).toHaveLength(2);
+    expect(authLayout).toMatchObject({
+      id: "auth-layout",
+      file: "routes/auth-layout.tsx",
+    });
+    expect(
+      Object.fromEntries(authChildRoutes.map(({ id, path }) => [id, path])),
+    ).toEqual({
+      login: "login",
+      register: "register",
+      "auth-callback": "auth/callback",
+      "mfa-setup": "mfa-setup",
+    });
+    expect(authChildRoutes.find(({ id }) => id === "login")).toMatchObject({
+      file: "routes/login.tsx",
+      caseSensitive: true,
+    });
+    expect(authChildRoutes.find(({ id }) => id === "register")).toMatchObject({
+      file: "routes/register.tsx",
+      caseSensitive: true,
+    });
+    expect(
+      authChildRoutes.find(({ id }) => id === "auth-callback"),
+    ).toMatchObject({
+      file: "routes/auth-callback.tsx",
+      caseSensitive: true,
+    });
+    expect(authChildRoutes.find(({ id }) => id === "mfa-setup")).toMatchObject({
+      file: "routes/mfa-setup.tsx",
+      caseSensitive: true,
+    });
+    expect(
+      childRoutes.some(({ id }) => id === "login" || id === "register"),
+    ).toBe(false);
   });
 });
 
@@ -145,10 +185,38 @@ describe("framework route descriptors", () => {
       section: "Discussions",
       discussionTab: "comments",
     });
+    expect(getRouteDescriptor("reviews")).toMatchObject({
+      kind: "shell",
+      page: "reviews",
+      section: "Reviews",
+      title: "Reviews",
+    });
+    expect(getRouteDescriptor("orders")).toMatchObject({
+      kind: "shell",
+      page: "orders",
+      section: "Orders",
+      title: "Orders",
+    });
+    expect(getRouteDescriptor("order-history")).toMatchObject({
+      kind: "shell",
+      page: "order-history",
+      section: "Order History",
+      title: "Order History",
+    });
+    expect(getRouteDescriptor("notifications")).toMatchObject({
+      kind: "shell",
+      page: "notifications",
+      section: "Notifications",
+      title: "Notifications",
+    });
     expect(getRouteDescriptor("learning")).toEqual({
       kind: "learning",
       page: "learning",
       section: "Explore Courses",
+    });
+    expect(getRouteDescriptor("course-overview")).toMatchObject({
+      kind: "course-overview",
+      page: "course-overview",
     });
     expect(getRouteDescriptor("missing")).toBeUndefined();
   });
@@ -269,6 +337,13 @@ describe("framework route descriptors", () => {
     });
   });
 
+  it("brands authentication metadata like every other route", () => {
+    expect(getAuthRouteMeta("Log in", "Log in or create an account.")).toEqual({
+      title: "Log in · ProCodrr",
+      description: "Log in or create an account.",
+    });
+  });
+
   it("preserves navigation destination aliases and direct paths", () => {
     expect(destinationPaths).toMatchObject({
       home: "/",
@@ -303,21 +378,16 @@ describe("framework route descriptors", () => {
   });
 
   it("keeps deferred product surfaces on the shared empty state", () => {
-    for (const routeId of [
-      "students",
-      "reviews",
-      "course-create",
-      "course-overview",
-      "analytics",
-      "orders",
-      "messages",
-      "order-history",
-      "notifications",
-    ]) {
+    for (const routeId of ["students", "analytics", "messages"]) {
       expect(getRouteDescriptor(routeId)).toMatchObject({
         kind: "shell",
         page: "placeholder",
       });
     }
+
+    expect(getRouteDescriptor("course-create")).toMatchObject({
+      kind: "shell",
+      page: "course-create",
+    });
   });
 });

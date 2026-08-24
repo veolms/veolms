@@ -128,7 +128,7 @@ describe("learning course content", () => {
 });
 
 describe("learning course metadata", () => {
-  it("prefers known slug titles over stored fallback titles", () => {
+  it("prefers known slug titles over the deterministic fallback title", () => {
     localStorage.setItem(
       "veolms-current-course-title",
       "Stored Academy Course",
@@ -140,7 +140,7 @@ describe("learning course metadata", () => {
     expect(getCourseTitle("javascript-course")).toBe(
       "The Complete JavaScript Course",
     );
-    expect(getCourseTitle("unknown-course")).toBe("Stored Academy Course");
+    expect(getCourseTitle("unknown-course")).toBe("UI/UX Design Mastery");
   });
 
   it("uses the existing title and thumbnail defaults", () => {
@@ -149,7 +149,7 @@ describe("learning course metadata", () => {
       getCourseThumbnail("typescript-course"),
     );
     expect(getCourseThumbnail("ui-ux-design-mastery")).toBe(
-      getCourseThumbnail("typescript-course"),
+      "/assets/instructor-poster-960.webp",
     );
     expect(getCourseThumbnail("javascript-course")).not.toBe(
       getCourseThumbnail("typescript-course"),

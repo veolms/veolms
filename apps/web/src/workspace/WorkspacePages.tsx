@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SignOut } from "@phosphor-icons/react";
+import { SignOut } from "@phosphor-icons/react/SignOut";
 import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
 import { DiscussionsWorkspace } from "./DiscussionsWorkspace";

@@ -1,0 +1,34 @@
+/* aurora palette — dark mode. */
+:root[data-palette="aurora"] {
+  --canvas: #081813;
+  --header: #091b16;
+  --surface: #102b25;
+  --hover: #1b433a;
+  --selected: #135346;
+  --track: #0e211d;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #effffc;
+  --text-secondary: #d2f3eb;
+  --muted: #9fc9be;
+  --accent: #28d8c6;
+  --accent-hover: #1ac4b3;
+  --accent-soft: rgba(40, 216, 198, 0.16);
+  --accent-border: rgba(40, 216, 198, 0.42);
+  --accent-shadow: rgba(15, 158, 143, 0.24);
+  --on-accent: #04221e;
+  --app-shell: #061512;
+  --main-surface: #0b231e;
+  --surface-strong: #15362e;
+  --on-accent-glyph: #04221e;
+  --card-surface: #102b25;
+  --card-surface-raised: #15362e;
+  --card-surface-soft: #0c211c;
+  --card-surface-hover: #15382f;
+}
+
+:root[data-high-contrast="true"][data-palette="aurora"] {
+  --text: #ffffff;
+  --text-secondary: #e4fff8;
+  --muted: #c0eee2;
+}

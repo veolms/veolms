@@ -1,5 +1,9 @@
 import { expect, test } from "./app.fixture.ts";
-import { installBaselineState, openApp } from "./support.ts";
+import {
+  installBaselineState,
+  openApp,
+  revealDeferredAppearanceSettings,
+} from "./support.ts";
 
 test("sidebar shortcut hints and positional navigation stay in sync", async ({
   page,
@@ -48,11 +52,21 @@ test("sidebar shortcut hints and positional navigation stay in sync", async ({
 
   await settings.hover();
   await expect(settingsShortcut).toBeVisible();
+  const multiKeyShortcutBox = await settingsShortcut.boundingBox();
+  expect(multiKeyShortcutBox).not.toBeNull();
+  expect(multiKeyShortcutBox!.width).toBeGreaterThan(
+    multiKeyShortcutBox!.height,
+  );
   const settingsTooltip = page.locator(".sidebar-nav-tooltip");
   await expect(settingsTooltip).toHaveCount(0);
 
   await courses.hover();
   await expect(coursesShortcut).toBeVisible();
+  const singleKeyShortcutBox = await coursesShortcut.boundingBox();
+  expect(singleKeyShortcutBox).not.toBeNull();
+  expect(singleKeyShortcutBox!.width).toBeGreaterThanOrEqual(
+    singleKeyShortcutBox!.height,
+  );
   await expect(settingsShortcut).toBeHidden();
 
   await collapse.hover();
@@ -66,11 +80,80 @@ test("sidebar shortcut hints and positional navigation stay in sync", async ({
   await collapse.click();
   await settings.hover();
   await expect(settingsTooltip).toBeVisible();
-  await expect(settingsTooltip.locator("kbd")).toHaveText(["Ctrl", ","]);
+  await expect(settingsTooltip).toHaveCSS("color", "rgb(17, 24, 39)");
+  const tooltipElevation = await settingsTooltip.evaluate((tooltip) => {
+    const filter = getComputedStyle(tooltip).filter;
+    return {
+      dropShadowCount: filter.match(/drop-shadow/g)?.length ?? 0,
+      filter,
+    };
+  });
+  expect(tooltipElevation.dropShadowCount).toBe(3);
+  expect(tooltipElevation.filter).not.toBe("none");
+  const tooltipSurface = settingsTooltip.locator(
+    ".sidebar-nav-tooltip__surface",
+  );
+  await expect(tooltipSurface).toHaveCSS("height", "38px");
+  await expect(tooltipSurface).toHaveAttribute(
+    "preserveAspectRatio",
+    "xMinYMid meet",
+  );
+  await expect(tooltipSurface.locator("path")).toHaveAttribute(
+    "d",
+    /^M 51 1 H .* C .* 1 .* 10 .* 21 V 156 C .* 167 .* 176 .* 176 H 51 C 40 176 34 167 34 156 V 132/,
+  );
+  await expect(tooltipSurface.locator("path")).not.toHaveCSS("stroke", "none");
+  await expect(tooltipSurface.locator("path")).toHaveCSS(
+    "fill",
+    /url\(["']?#sidebar-tooltip-material["']?\)/,
+  );
+  await expect(
+    tooltipSurface.locator(".sidebar-nav-tooltip__surface-start"),
+  ).not.toHaveCSS("stop-color", "rgba(0, 0, 0, 0)");
+  await expect(settingsTooltip.locator(".sidebar-nav-tooltip__body")).toHaveCSS(
+    "height",
+    "38px",
+  );
+  await expect(settingsTooltip.locator(".sidebar-nav-tooltip__body")).toHaveCSS(
+    "padding-left",
+    "17px",
+  );
+  await expect(settingsTooltip.locator(".sidebar-nav-tooltip__body")).toHaveCSS(
+    "padding-right",
+    "11px",
+  );
+  await expect(settingsTooltip.locator("kbd")).toHaveCount(0);
+  const labelTypography = await settingsTooltip
+    .locator(".sidebar-nav-tooltip__label")
+    .evaluate((label) => {
+      const styles = getComputedStyle(label);
+      return {
+        fontSize: Number.parseFloat(styles.fontSize),
+        lineHeight: Number.parseFloat(styles.lineHeight),
+      };
+    });
+  expect(labelTypography.lineHeight).toBeGreaterThan(labelTypography.fontSize);
+  const settingsTooltipWidth = await settingsTooltip.evaluate(
+    (tooltip) => tooltip.getBoundingClientRect().width,
+  );
 
   await courses.focus();
   await expect(settingsTooltip).toBeVisible();
   await expect(settingsTooltip).toContainText("Explore Courses");
+  const coursesTooltipWidth = await settingsTooltip.evaluate(
+    (tooltip) => tooltip.getBoundingClientRect().width,
+  );
+  expect(coursesTooltipWidth).toBeGreaterThan(settingsTooltipWidth);
+
+  await sidebar
+    .getByRole("button", {
+      name: "Dark mode active. Switch to light mode",
+    })
+    .click();
+  await settings.hover();
+  await expect(settingsTooltip).toBeVisible();
+  await expect(settingsTooltip).toHaveCSS("color", "rgb(255, 255, 255)");
+  await courses.focus();
   const resizeSidebar = sidebar.getByRole("separator", {
     name: "Resize sidebar",
   });
@@ -157,7 +240,8 @@ test("Apple platforms receive Command shortcut labels", async ({ page }) => {
   await settings.hover();
   const settingsTooltip = page.locator(".sidebar-nav-tooltip");
   await expect(settingsTooltip).toBeVisible();
-  await expect(settingsTooltip.locator("kbd")).toHaveText(["⌘", ","]);
+  await expect(settingsTooltip).toHaveText("Settings");
+  await expect(settingsTooltip.locator("kbd")).toHaveCount(0);
 
   await openApp(page, "/settings/profile");
   await page.evaluate(() => {
@@ -178,6 +262,7 @@ test("shortcut key style overrides system labels across the application", async 
 }) => {
   await installBaselineState(page);
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   const shortcutStyle = page.getByRole("radiogroup", {
     name: "Shortcut key style",
@@ -217,6 +302,7 @@ test("shortcut key style overrides system labels across the application", async 
   ).toHaveAttribute("title", "Resize course content | ⌘+⌥+C");
 
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
   await page
     .getByRole("radiogroup", { name: "Shortcut key style" })
     .getByRole("radio", { name: "Windows" })

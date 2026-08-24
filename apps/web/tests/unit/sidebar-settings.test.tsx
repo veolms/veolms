@@ -24,8 +24,8 @@ const renderSettings = (onChange: (next: SidebarPreferences) => void) =>
 function StatefulSidebarSettings() {
   const [state, setState] = useState<SidebarPreferences>({
     ...preferences,
-    headerLayout: "fixed",
-    dockItems: ["appearance", "theme", "reading-mode", "fullscreen"],
+    headerLayout: "inline",
+    dockItems: ["appearance", "reading-mode", "fullscreen"],
     dockOrder: [
       "appearance",
       "theme",
@@ -119,15 +119,15 @@ describe("sidebar settings draft inputs", () => {
     const fixedHeader = screen.getByRole("switch", {
       name: "Fixed collapse control",
     });
-    expect(fixedHeader).toHaveAttribute("aria-checked", "true");
+    expect(fixedHeader).toHaveAttribute("aria-checked", "false");
     fireEvent.click(
       fixedHeader
         .closest(".settings-row")!
         .querySelector(".settings-row__copy")!,
     );
-    expect(fixedHeader).toHaveAttribute("aria-checked", "false");
-    fireEvent.click(fixedHeader);
     expect(fixedHeader).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(fixedHeader);
+    expect(fixedHeader).toHaveAttribute("aria-checked", "false");
 
     const keyboardShortcuts = screen.getByRole("switch", {
       name: "Show keyboard shortcuts",
@@ -148,7 +148,23 @@ describe("sidebar settings draft inputs", () => {
     });
     expect(readingMode).toBeEnabled();
     expect(readingMode).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("4 visible")).toBeVisible();
+    expect(screen.getByText("3 visible")).toBeVisible();
+
+    expect(
+      screen.getByRole("switch", {
+        name: "Show Light / dark mode in sidebar dock",
+      }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("switch", {
+        name: "Show Color theme in sidebar dock",
+      }),
+    ).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByRole("switch", {
+        name: "Show Fullscreen in sidebar dock",
+      }),
+    ).toHaveAttribute("aria-checked", "true");
 
     const reorderHandles = screen.getAllByRole("button", {
       name: /^Reorder /,
@@ -189,7 +205,7 @@ describe("sidebar settings draft inputs", () => {
     expect(settings).toHaveAttribute("aria-checked", "false");
     fireEvent.click(settings);
     expect(settings).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("5 visible")).toBeVisible();
+    expect(screen.getByText("4 visible")).toBeVisible();
 
     fireEvent.click(
       readingMode
@@ -197,6 +213,6 @@ describe("sidebar settings draft inputs", () => {
         .querySelector(".settings-row__copy")!,
     );
     expect(readingMode).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText("4 visible")).toBeVisible();
+    expect(screen.getByText("3 visible")).toBeVisible();
   });
 });

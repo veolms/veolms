@@ -1,0 +1,69 @@
+/*
+ * Plain-CSS exception: ::view-transition pseudo-elements, the @property
+ * registered radius, and the mask keyframes cannot be expressed with Tailwind
+ * utilities. Scoped to the shell's appearance controls: the reveal circle
+ * starts at the pointer position staged as inline custom properties on the
+ * root (see themeViewTransition.ts); without them, light/dark flips reveal
+ * from the bottom-left corner (dock) and palette changes from top-right.
+ */
+@property --theme-reveal-radius {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+:root {
+  /* --expo-out: ease-in-out cubic-bezier(0.16, 1, 0.3, 1); */
+  --expo-out: ease-in-out;
+}
+
+::view-transition-group(root) {
+  animation-timing-function: var(--expo-out);
+}
+
+/* --theme-reveal-x/y stay unregistered so they inherit from the root's
+ * inline style into the view-transition pseudo-element tree. The duration is
+ * fixed so center-origin reveals keep the corner-click pacing. */
+::view-transition-new(root) {
+  mask: radial-gradient(
+    circle var(--theme-reveal-radius) at var(--theme-reveal-x, left)
+      var(--theme-reveal-y, bottom),
+    #fff 64%,
+    transparent 96%
+  );
+  animation: theme-view-transition-reveal 1s var(--expo-out);
+  animation-fill-mode: both;
+}
+
+:root[data-theme-transition="palette"]::view-transition-new(root) {
+  mask: radial-gradient(
+    circle var(--theme-reveal-radius) at var(--theme-reveal-x, right)
+      var(--theme-reveal-y, top),
+    #fff 64%,
+    transparent 96%
+  );
+}
+
+::view-transition-old(root) {
+  animation: none;
+  animation-fill-mode: both;
+  z-index: -1;
+}
+
+/* 220vmax keeps the fully opaque stop (64% of radius, i.e. 141vmax) past the
+ * farthest-corner diagonal (~141vmax at most) so the wipe never stalls
+ * mid-transition regardless of where the pointer landed. */
+@keyframes theme-view-transition-reveal {
+  to {
+    --theme-reveal-radius: 220vmax;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-new(root),
+  ::view-transition-old(root) {
+    animation: none !important;
+    mask: none;
+  }
+}

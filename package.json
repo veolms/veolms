@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web",
     "dev:web": "pnpm --filter @veolms/web dev",
+    "preview:web:device": "pnpm --filter @veolms/web preview:device",
     "dev:api": "pnpm --filter @veolms/api dev",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",

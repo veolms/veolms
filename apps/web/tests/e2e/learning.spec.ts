@@ -1,8 +1,90 @@
 import { test, expect } from "./app.fixture.ts";
 import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
 
+const LEARNING_DESKTOP_VIEWPORT = { width: 1424, height: 678 } as const;
+
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
+});
+
+test("desktop discussion preserves card elevation to the lesson frame edges", async ({
+  page,
+}) => {
+  await page.setViewportSize(LEARNING_DESKTOP_VIEWPORT);
+  await openApp(page, "/learn/typescript-course/the-design-mindset?from=home");
+  await expect(
+    page.getByRole("textbox", { name: "Add a comment" }),
+  ).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>(
+      ".learning-workspace__main",
+    );
+    const lesson = document.querySelector<HTMLElement>(
+      ".learning-workspace__lesson-column",
+    );
+    const panel = document.querySelector<HTMLElement>(
+      "#learning-discussion-tab-panel",
+    );
+    const curriculum = document.querySelector<HTMLElement>(
+      ".learning-workspace__curriculum-column",
+    );
+    const card = document.querySelector<HTMLElement>(
+      ".learning-comment-composer",
+    );
+    if (!main || !lesson || !panel || !curriculum || !card) {
+      throw new Error("Learning discussion layout targets missing");
+    }
+
+    const mainRect = main.getBoundingClientRect();
+    const lessonRect = lesson.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const curriculumRect = curriculum.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const mainStyle = getComputedStyle(main);
+    const curriculumStyle = getComputedStyle(curriculum);
+    return {
+      mainLeft: mainRect.left,
+      mainRight: mainRect.right,
+      lessonRight: lessonRect.right,
+      panelLeft: panelRect.left,
+      panelRight: panelRect.right,
+      curriculumLeft: curriculumRect.left,
+      curriculumRight: curriculumRect.right,
+      curriculumTop: Number.parseFloat(curriculumStyle.top),
+      curriculumHeight: curriculumRect.height,
+      cardLeft: cardRect.left,
+      cardRight: cardRect.right,
+      mainColumnGap: Number.parseFloat(mainStyle.columnGap),
+      mainPaddingTop: Number.parseFloat(mainStyle.paddingTop),
+      mainPaddingLeft: Number.parseFloat(mainStyle.paddingLeft),
+      mainPaddingRight: Number.parseFloat(mainStyle.paddingRight),
+      mainPaddingBottom: Number.parseFloat(mainStyle.paddingBottom),
+      panelOverflowX: getComputedStyle(panel).overflowX,
+    };
+  });
+
+  expect(geometry.panelOverflowX).toBe("clip");
+  expect(geometry.mainColumnGap).toBe(10);
+  expect(geometry.mainPaddingTop).toBe(12);
+  expect(geometry.mainPaddingRight).toBe(14);
+  expect(geometry.mainPaddingBottom).toBe(12);
+  expect(geometry.mainPaddingLeft).toBe(12);
+  expect(geometry.curriculumTop).toBe(12);
+  expect(geometry.curriculumHeight).toBeCloseTo(
+    LEARNING_DESKTOP_VIEWPORT.height - 24,
+    0,
+  );
+  expect(geometry.mainRight - geometry.curriculumRight).toBeCloseTo(14, 0);
+  expect(geometry.curriculumLeft - geometry.lessonRight).toBeCloseTo(10, 0);
+  expect(geometry.panelLeft).toBeCloseTo(geometry.mainLeft, 0);
+  expect(geometry.panelRight).toBeCloseTo(geometry.curriculumLeft, 0);
+  expect(geometry.cardLeft - geometry.panelLeft).toBeGreaterThanOrEqual(
+    geometry.mainPaddingLeft,
+  );
+  expect(geometry.panelRight - geometry.cardRight).toBeGreaterThanOrEqual(
+    geometry.mainPaddingRight,
+  );
 });
 
 test("lesson choice, curriculum width, and player preferences persist", async ({
@@ -167,7 +249,7 @@ test("curriculum keeps its minimum panel width while the collapse drag clips it 
   const firstClip = await geometry();
   expect(firstClip.overflowX).toBe("visible");
   expect(firstClip.viewportOverflowX).toBe("hidden");
-  expect(firstClip.columnRight).toBeCloseTo(firstClip.mainRight, 0);
+  expect(firstClip.mainRight - firstClip.columnRight).toBeCloseTo(14, 0);
   expect(firstClip.columnWidth).toBeCloseTo(initialColumnWidth - 20, 0);
   expect(firstClip.panelLeft).toBeCloseTo(firstClip.columnLeft, 0);
   expect(firstClip.panelWidth).toBeCloseTo(300, 0);
@@ -176,7 +258,7 @@ test("curriculum keeps its minimum panel width while the collapse drag clips it 
 
   await page.mouse.move(startX + 120, dragY);
   const deeperClip = await geometry();
-  expect(deeperClip.columnRight).toBeCloseTo(deeperClip.mainRight, 0);
+  expect(deeperClip.mainRight - deeperClip.columnRight).toBeCloseTo(14, 0);
   expect(deeperClip.columnWidth).toBeCloseTo(initialColumnWidth - 120, 0);
   expect(deeperClip.panelLeft).toBeCloseTo(deeperClip.columnLeft, 0);
   expect(deeperClip.panelWidth).toBeCloseTo(300, 0);
@@ -210,7 +292,7 @@ test("curriculum rail rests at the edge, reveals, snaps at halfway, then grows",
   const collapsedColumn = page.locator(
     ".learning-workspace__curriculum-column.is-collapsed",
   );
-  await expect(workspaceMain).toHaveCSS("padding-right", "0px");
+  await expect(workspaceMain).toHaveCSS("padding-right", "14px");
   const workspaceBox = await workspaceMain.boundingBox();
   const collapsedColumnBox = await collapsedColumn.boundingBox();
   expect(workspaceBox).not.toBeNull();
@@ -221,7 +303,7 @@ test("curriculum rail rests at the edge, reveals, snaps at halfway, then grows",
   expect(collapsedRailBox).not.toBeNull();
   const collapsedX = collapsedRailBox!.x + collapsedRailBox!.width - 1;
   expect(collapsedRailBox!.x + collapsedRailBox!.width).toBeCloseTo(
-    workspaceBox!.x + workspaceBox!.width,
+    workspaceBox!.x + workspaceBox!.width - 14,
     0,
   );
   const dragY = collapsedRailBox!.y + 180;
@@ -314,6 +396,9 @@ test("curriculum rail double-click expands and its shortcut toggles the content 
 test("player edge control collapses and expands course content with shortcut help", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("veolms-theme", "light");
+  });
   await openApp(page, "/learn/typescript-course/the-design-mindset");
 
   const playerWrap = page.locator(".learning-workspace__player-wrap");
@@ -335,7 +420,12 @@ test("player edge control collapses and expands course content with shortcut hel
     collapse.locator("[data-sidebar-toggle-direction]"),
   ).toHaveAttribute("data-sidebar-toggle-direction", "right");
   await expect(tooltip).toBeHidden();
+  await expect(collapse).toHaveCSS("opacity", "0");
+  await expect(collapse).toHaveCSS("pointer-events", "none");
   await playerWrap.hover();
+  await expect(collapse).toHaveCSS("opacity", "1");
+  await expect(collapse).toHaveCSS("pointer-events", "auto");
+  await expect(collapse).toHaveCSS("color", "rgb(255, 255, 255)");
 
   const [wrapBox, backBox, collapseBox] = await Promise.all([
     playerWrap.boundingBox(),
@@ -632,10 +722,10 @@ test("learning drafts and searches survive navigation away and resume", async ({
 test("lesson tools and discussion interactions retain their current contracts", async ({
   page,
 }) => {
-  await openApp(page, "/learn/typescript-course");
-  await page.locator("html").evaluate((root) => {
-    root.dataset.pageTabColors = "multicolor";
+  await page.addInitScript(() => {
+    localStorage.setItem("veolms-page-tab-colors", "multicolor");
   });
+  await openApp(page, "/learn/typescript-course");
 
   const discussion = page.locator("section.learning-discussion");
   const lessonTools = discussion.getByRole("tablist", { name: "Lesson tools" });
@@ -674,7 +764,7 @@ test("lesson tools and discussion interactions retain their current contracts", 
   await expect(
     discussion
       .getByRole("article")
-      .getByRole("heading", { name: "Ethan Park", level: 3 }),
+      .getByRole("heading", { name: "Ethan Park", level: 2 }),
   ).toBeVisible();
 
   await commentSearch.fill("no matching comment");
@@ -698,7 +788,7 @@ test("lesson tools and discussion interactions retain their current contracts", 
     hasText: "This discussion characterization should survive extraction.",
   });
   await expect(
-    postedComment.getByRole("heading", { name: "Sofia Chen", level: 3 }),
+    postedComment.getByRole("heading", { name: "Sofia Chen", level: 2 }),
   ).toBeVisible();
 
   const ethanComment = discussion

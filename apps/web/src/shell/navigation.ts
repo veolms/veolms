@@ -1,20 +1,20 @@
-import {
-  Bell,
-  BookOpen,
-  ChartBar,
-  GearSix,
-  GraduationCap,
-  Heart,
-  House,
-  Star,
-  Tote,
-  Users,
-  ChatCircleDots,
-  EnvelopeSimple,
-  SquaresFour,
-} from "@phosphor-icons/react";
+import { Bell } from "@phosphor-icons/react/Bell";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { ChartBar } from "@phosphor-icons/react/ChartBar";
+import { GearSix } from "@phosphor-icons/react/GearSix";
+import { GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { Heart } from "@phosphor-icons/react/Heart";
+import { House } from "@phosphor-icons/react/House";
+import { Star } from "@phosphor-icons/react/Star";
+import { Tote } from "@phosphor-icons/react/Tote";
+import { Users } from "@phosphor-icons/react/Users";
+import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
+
+import { ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
 
 export type NavigationItem = readonly [label: string, icon: Icon];
 
@@ -35,7 +35,7 @@ const allCreatorNavigation: readonly NavigationItem[] = [
   ["Dashboard", SquaresFour],
   ["Courses", BookOpen],
   ["Students", Users],
-  ["Reviews", Star],
+  ["Reviews", ChatTeardropDots],
   ["Wishlist", Heart],
   ["Discussions", ChatCircleDots],
   ["Analytics", ChartBar],
@@ -86,10 +86,14 @@ const migrateStudentNavigationLabel = (label: string) => {
   return label;
 };
 
+export function getDefaultNavigationOrder(role: string): string[] {
+  return (navigationByRole[role] || studentNavigation).map(([label]) => label);
+}
+
 export function getInitialNavigationOrder(role: string): string[] {
-  const defaultOrder = (navigationByRole[role] || studentNavigation).map(
-    ([label]) => label,
-  );
+  const defaultOrder = getDefaultNavigationOrder(role);
+  if (typeof window === "undefined") return defaultOrder;
+
   try {
     const parsedOrder: unknown = JSON.parse(
       localStorage.getItem(`veolms-navigation-order-${role}`) || "[]",

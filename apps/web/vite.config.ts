@@ -7,6 +7,50 @@ import { defineConfig, loadEnv } from "vite";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 
+const shellPhosphorIcons = new Set([
+  "Bell",
+  "BookOpen",
+  "CaretDown",
+  "ChartBar",
+  "ChatCircleDots",
+  "Check",
+  "CornersIn",
+  "CornersOut",
+  "DotsThreeCircle",
+  "EnvelopeSimple",
+  "Eye",
+  "GearSix",
+  "GraduationCap",
+  "Heart",
+  "House",
+  "Moon",
+  "Palette",
+  "Play",
+  "Question",
+  "SidebarSimple",
+  "SignOut",
+  "SquaresFour",
+  "Star",
+  "Student",
+  "Sun",
+  "Tote",
+  "Users",
+]);
+const homePhosphorIcons = new Set([
+  "ArrowRight",
+  "ChartLineUp",
+  "CheckCircle",
+  "Clock",
+  "Fire",
+  "Target",
+]);
+const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
+
+const getPhosphorIconName = (id: string) =>
+  id
+    .replaceAll("\\", "/")
+    .match(/@phosphor-icons\/react\/dist\/csr\/([^/]+)\.es\.js$/)?.[1];
+
 export default defineConfig(({ mode }) => {
   const environment = {
     ...process.env,
@@ -28,13 +72,39 @@ export default defineConfig(({ mode }) => {
       ),
     },
     plugins: [tailwindcss(), reactRouter()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const iconName = getPhosphorIconName(id);
+            if (iconName && shellPhosphorIcons.has(iconName)) return "shell-icons";
+            if (iconName && homePhosphorIcons.has(iconName)) return "home-icons";
+            if (iconName && settingsPhosphorIcons.has(iconName))
+              return "settings-icons";
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       port: config.WEB_PORT,
       strictPort: true,
+      warmup: {
+        clientFiles: [
+          "./src/entry.client.tsx",
+          "./src/root.tsx",
+          "./src/routes/academy-layout.tsx",
+          "./src/CoursesPage.tsx",
+          "./src/StudentPages.tsx",
+        ],
+      },
       proxy: {
         "/api": {
-          target: new URL(config.STATIC_BUILD_API_URL).origin,
+          target: config.STATIC_BUILD_API_URL
+            ? new URL(config.STATIC_BUILD_API_URL).origin.replace("localhost", "127.0.0.1")
+            : "http://127.0.0.1:4000",
           changeOrigin: true,
+          secure: false,
         },
       },
     },

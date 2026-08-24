@@ -1,30 +1,28 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  ArrowRight,
-  BookOpen,
-  Certificate,
-  ChartLineUp,
-  ChatCircleDots,
-  CheckCircle,
-  CircleNotch,
-  Clock,
-  Fire,
-  GraduationCap,
-  Heart,
-  MagnifyingGlass,
-  Medal,
-  Play,
-  Target,
-} from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { Certificate } from "@phosphor-icons/react/Certificate";
+import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { Clock } from "@phosphor-icons/react/Clock";
+import { Fire } from "@phosphor-icons/react/Fire";
+import { GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { Heart } from "@phosphor-icons/react/Heart";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { Medal } from "@phosphor-icons/react/Medal";
+import { Play } from "@phosphor-icons/react/Play";
+import { Target } from "@phosphor-icons/react/Target";
 import type { Icon } from "@phosphor-icons/react";
 import { ThemedSelect } from "./ThemedSelect";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
-import javascriptThumbnail from "./assets/course-thumbnails/javascript.jpg";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript.jpg";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs.jpg";
-import mongodbThumbnail from "./assets/course-thumbnails/mongodb.jpg";
-import awsThumbnail from "./assets/course-thumbnails/aws.jpg";
+import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
+import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
+import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
+import mongodbThumbnail from "./assets/course-thumbnails/mongodb-960.webp";
+import awsThumbnail from "./assets/course-thumbnails/aws-960.webp";
 import typescriptInstructorHero from "./assets/learning-thumbnails/typescript-instructor-hero.webp";
 import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
 import illustratorThumbnail from "./assets/learning-thumbnails/illustrator-course.webp";
@@ -73,6 +71,7 @@ interface LearningCourseCardProps {
   onWishlist: (courseId: string) => void;
   onOpen: (course: LearningCourse) => void;
   setNotice: (notice: string) => void;
+  imagePriority?: boolean;
 }
 
 interface MyCoursesPageProps {
@@ -419,7 +418,7 @@ export function StudentHome({
           />
           <div className="home-discussion-list">
             <article>
-              <img src="/assets/ethan-avatar.jpg" alt="" />
+              <img src="/assets/ethan-avatar-160.webp" alt="" />
               <div>
                 <strong>
                   Anurag Singh replied to your comment <b>NEW</b>
@@ -536,6 +535,7 @@ function LearningCourseCard({
   onWishlist,
   onOpen,
   setNotice,
+  imagePriority = false,
 }: LearningCourseCardProps) {
   const completed = course.status === "completed";
   const notStarted = course.status === "not-started";
@@ -548,7 +548,15 @@ function LearningCourseCard({
   return (
     <article className="learning-card">
       <div className="learning-card-media">
-        <img src={course.thumbnail} alt="" loading="lazy" decoding="async" />
+        <img
+          src={course.thumbnail}
+          alt=""
+          width={960}
+          height={540}
+          loading={imagePriority ? "eager" : "lazy"}
+          fetchPriority={imagePriority ? "high" : "low"}
+          decoding={imagePriority ? "sync" : "async"}
+        />
         <span className={`learning-status ${course.status}`}>
           {statusLabel}
         </span>
@@ -725,7 +733,7 @@ export function MyCoursesPage({
           <ThemedSelect
             value={sort}
             onValueChange={setSort}
-            ariaLabel="Sort learning courses"
+            ariaLabel="Sort by learning course order"
             options={[
               ["recent", "Sort by: Recently Accessed"],
               ["title", "Sort by: Title"],
@@ -750,7 +758,7 @@ export function MyCoursesPage({
 
       {visibleCourses.length ? (
         <section className="learning-course-grid" aria-label="Enrolled courses">
-          {visibleCourses.map((course) => (
+          {visibleCourses.map((course, index) => (
             <LearningCourseCard
               key={course.id}
               course={course}
@@ -758,6 +766,7 @@ export function MyCoursesPage({
               onWishlist={onWishlist}
               onOpen={onOpenCourse}
               setNotice={setNotice}
+              imagePriority={index === 0}
             />
           ))}
         </section>

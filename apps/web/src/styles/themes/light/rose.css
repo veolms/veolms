@@ -1,0 +1,23 @@
+/* rose palette — light mode. */
+:root[data-theme="light"][data-palette="rose"] {
+  --canvas: #f2eaed;
+  --header: #eee6e9;
+  --surface: #fffdfd;
+  --hover: #f0e3e8;
+  --selected: #f5dce5;
+  --track: #e7dce0;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #251218;
+  --text-secondary: #4d303a;
+  --muted: #735963;
+  --accent: #b81748;
+  --accent-hover: #99113b;
+  --accent-soft: rgba(184, 23, 72, 0.12);
+  --accent-border: rgba(184, 23, 72, 0.3);
+  --accent-shadow: rgba(184, 23, 72, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #ebe2e5;
+  --main-surface: #faf3f5;
+  --surface-strong: #f6eaee;
+}

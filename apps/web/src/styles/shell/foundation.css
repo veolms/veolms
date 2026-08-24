@@ -1,0 +1,324 @@
+:root {
+  --sidebar-expanded-width: 300px;
+}
+
+.courses-app {
+  --shell-frame-block-space: 22px;
+  grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
+  gap: 0;
+  padding: 12px 12px 10px 0;
+  background:
+    radial-gradient(
+      circle at 16% 2%,
+      color-mix(in srgb, var(--accent) 4%, transparent),
+      transparent 26%
+    ),
+    var(--app-shell);
+}
+
+.courses-app--collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+  padding-left: 0;
+}
+
+.courses-app--hidden {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding-left: 14px;
+}
+
+.courses-sidebar,
+.courses-main {
+  border: 0;
+}
+
+.courses-sidebar {
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+  height: calc(100vh - 22px);
+  border-radius: 0;
+  padding: 12px 14px 0;
+  background: transparent;
+}
+
+.courses-main {
+  min-height: calc(100vh - 22px);
+  border-radius: 18px;
+  background: var(--main-surface);
+  box-shadow: var(--card-shadow);
+}
+
+/* The learning workspace owns its inner breathing room; keep the shell flush only on this route. */
+.courses-main.courses-main--learning {
+  padding: 0;
+  overflow: clip;
+  border-radius: 18px;
+}
+
+@media (min-width: 821px) {
+  :root[data-content-layout="framed"],
+  :root[data-content-layout="framed"] body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  :root[data-content-layout="framed"] #root {
+    height: 100%;
+    min-height: 0;
+  }
+
+  :root[data-content-layout="framed"] .courses-app {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  :root[data-content-layout="framed"] .courses-sidebar,
+  :root[data-content-layout="framed"] .courses-main {
+    height: calc(100vh - var(--shell-frame-block-space));
+    height: calc(100dvh - var(--shell-frame-block-space));
+    min-height: 0;
+  }
+
+  :root[data-content-layout="framed"] .courses-main,
+  :root[data-content-layout="framed"] .courses-main.courses-main--learning {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: auto;
+  }
+
+  :root[data-content-layout="framed"] .courses-main.student-surface-main {
+    --page-tabs-sticky-top: calc(-1 * var(--student-surface-block-start, 0px));
+  }
+
+  :root[data-content-layout="framed"] .courses-main {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  :root[data-content-layout="framed"] .courses-main::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Keep the shell's inset edge above sticky page content. Box shadows on the
+     scrollport itself paint behind descendants, so the shell overlay restores
+     the continuous rounded highlight without taking up layout space. */
+  :root[data-content-layout="framed"] .courses-app {
+    --main-surface-inline-start: var(--sidebar-expanded-width);
+    position: relative;
+  }
+
+  :root[data-content-layout="framed"] .courses-app--collapsed,
+  :root[data-content-layout="framed"] .courses-app--resizing {
+    --main-surface-inline-start: var(--sidebar-resize-preview-width, 76px);
+  }
+
+  :root[data-content-layout="framed"] .courses-app--hidden {
+    --main-surface-inline-start: 14px;
+  }
+
+  :root[data-content-layout="framed"] .courses-app::after {
+    content: "";
+    position: absolute;
+    z-index: 46;
+    top: 12px;
+    right: 12px;
+    bottom: 10px;
+    left: var(--main-surface-inline-start);
+    border-radius: 18px;
+    pointer-events: none;
+    box-shadow: var(--surface-depth-edge-shadow, none);
+  }
+}
+
+.floating-scrollbar {
+  position: fixed;
+  z-index: 45;
+  top: var(--floating-scrollbar-top, 0);
+  right: var(--floating-scrollbar-right, 0);
+  width: 12px;
+  height: var(--floating-scrollbar-height, 0);
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.floating-scrollbar.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.floating-scrollbar__thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--scrollbar-thumb-size, 6px);
+  height: var(--floating-scrollbar-thumb-height, 40px);
+  border-radius: 999px;
+  background: var(--scrollbar-thumb-color, var(--accent));
+  transform: translate3d(0, var(--floating-scrollbar-thumb-offset, 0), 0);
+  transition: background-color 150ms ease-out;
+}
+
+.floating-scrollbar:hover .floating-scrollbar__thumb,
+.floating-scrollbar.is-dragging .floating-scrollbar__thumb {
+  background: var(
+    --scrollbar-thumb-hover-color,
+    var(--accent-hover, var(--accent))
+  );
+}
+
+.floating-scrollbar:focus-visible {
+  outline: none;
+}
+
+.floating-scrollbar:focus-visible .floating-scrollbar__thumb {
+  box-shadow:
+    0 0 0 2px var(--main-surface),
+    0 0 0 4px var(--accent);
+}
+
+:root[data-hide-scrollbars="true"] .floating-scrollbar,
+:root:not([data-content-layout="framed"]) .floating-scrollbar {
+  display: none;
+}
+
+.courses-sidebar__brand {
+  min-height: 36px;
+  align-items: flex-end;
+  padding: 0 3px 0 0;
+}
+
+.courses-logo-clip,
+.courses-logo-clip svg {
+  width: 156px;
+  height: 38px;
+}
+
+.courses-logo-clip {
+  color: var(--text);
+}
+
+.courses-logo-clip svg {
+  display: block;
+}
+
+:root {
+  --sidebar-toggle-surface: color-mix(
+    in srgb,
+    var(--accent) 28%,
+    var(--surface)
+  );
+  --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 22%, var(--text));
+}
+
+.sidebar-collapse {
+  display: inline-grid;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  align-self: auto;
+  border: 0;
+  padding: 0;
+  overflow: visible;
+  color: var(--muted);
+  background: transparent;
+}
+
+.sidebar-collapse__asset,
+.sidebar-collapse__asset > svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+.sidebar-collapse__asset {
+  line-height: 0;
+  color: var(--sidebar-toggle-ink);
+  transform: translateX(1px);
+}
+
+.sidebar-collapse:hover {
+  border-color: transparent;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+  box-shadow: 0 8px 22px
+    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 80;
+  width: 10px;
+  border: 0;
+  padding: 0;
+  cursor: e-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  right: 4px;
+  bottom: 14px;
+  left: 4px;
+  border-radius: 999px;
+  opacity: 0.34;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 34%, transparent) 13%,
+    color-mix(in srgb, var(--accent) 58%, transparent) 50%,
+    color-mix(in srgb, var(--accent) 34%, transparent) 87%,
+    transparent 100%
+  );
+  transition:
+    opacity 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.courses-app--resizing .sidebar-resize-handle::after {
+  opacity: 1;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-shadow) 65%, transparent);
+}
+
+.sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+
+@media (min-width: 821px) and (any-pointer: coarse) {
+  .courses-app {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .courses-main {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .sidebar-resize-handle {
+    right: -22px;
+    width: 44px;
+  }
+
+  .sidebar-resize-handle::after {
+    right: 21px;
+    left: 21px;
+  }
+}

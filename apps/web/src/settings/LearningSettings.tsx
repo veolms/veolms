@@ -1,22 +1,25 @@
 import { useEffect, useState } from "react";
-import {
-  BookOpen,
-  CheckCircle,
-  ClosedCaptioning,
-  PlayCircle,
-  Target,
-} from "@phosphor-icons/react";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { Target } from "@phosphor-icons/react/Target";
 import { ThemedSelect } from "../ThemedSelect";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import {
   LEARNING_PREFERENCES_KEY,
+  LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_REMINDER_DAYS,
   readLearningPreferences,
 } from "./settingsPreferences";
 import type { LearningPreferences } from "./settingsPreferences";
 
 export function LearningSettings() {
-  const [preferences, setPreferences] = useState(readLearningPreferences);
+  const [preferences, setPreferences] = useState({
+    ...LEARNING_PREFERENCE_DEFAULTS,
+    reminderDays: [...LEARNING_PREFERENCE_DEFAULTS.reminderDays],
+  });
+  const [storageReady, setStorageReady] = useState(false);
   const update = (next: Partial<LearningPreferences>) =>
     setPreferences((current) => ({ ...current, ...next }));
   const toggleReminderDay = (day: string) =>
@@ -27,11 +30,21 @@ export function LearningSettings() {
     });
 
   useEffect(() => {
-    window.localStorage.setItem(
-      LEARNING_PREFERENCES_KEY,
-      JSON.stringify(preferences),
-    );
-  }, [preferences]);
+    setPreferences(readLearningPreferences());
+    setStorageReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      window.localStorage.setItem(
+        LEARNING_PREFERENCES_KEY,
+        JSON.stringify(preferences),
+      );
+    } catch {
+      // Preferences remain available for this session when storage is blocked.
+    }
+  }, [preferences, storageReady]);
 
   return (
     <div

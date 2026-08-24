@@ -1,0 +1,30 @@
+/* Brainwave Slate samples the supplied reference directly: its core shell,
+   workspace, raised surface, selection, and blue accent use the source colors. */
+/* brainwave palette — light mode. */
+:root[data-theme="light"][data-palette="brainwave"] {
+  --canvas: #edf2f5;
+  --header: #e7edf1;
+  --surface: #ffffff;
+  --hover: #dce7ef;
+  --selected: #d7eaff;
+  --track: #d8e0e6;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #12171c;
+  --text-secondary: #37444d;
+  --muted: #5e6d77;
+  --accent: #0085ff;
+  --accent-hover: #0074df;
+  --accent-soft: rgba(0, 133, 255, 0.12);
+  --accent-border: rgba(0, 133, 255, 0.3);
+  --accent-shadow: rgba(0, 103, 197, 0.18);
+  --on-accent: #071829;
+  --app-shell: #d9e2e8;
+  --main-surface: #f7f9fb;
+  --surface-strong: #e5ebef;
+  --on-accent-glyph: #071829;
+  --card-surface: #ffffff;
+  --card-surface-raised: #e5ebef;
+  --card-surface-soft: #f1f5f7;
+  --card-surface-hover: #eaf2f7;
+}

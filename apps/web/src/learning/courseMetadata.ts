@@ -1,9 +1,9 @@
-import typescriptCourseThumbnail from "../assets/course-thumbnails/typescript.jpg";
-import javascriptCourseThumbnail from "../assets/course-thumbnails/javascript.jpg";
-import nodeCourseThumbnail from "../assets/course-thumbnails/nodejs.jpg";
-import figmaCourseThumbnail from "../assets/course-thumbnails/figma.jpg";
-import mongodbCourseThumbnail from "../assets/course-thumbnails/mongodb.jpg";
-import awsCourseThumbnail from "../assets/course-thumbnails/aws.jpg";
+import typescriptCourseThumbnail from "../assets/course-thumbnails/typescript-960.webp";
+import javascriptCourseThumbnail from "../assets/course-thumbnails/javascript-960.webp";
+import nodeCourseThumbnail from "../assets/course-thumbnails/nodejs-960.webp";
+import figmaCourseThumbnail from "../assets/course-thumbnails/figma-960.webp";
+import mongodbCourseThumbnail from "../assets/course-thumbnails/mongodb-960.webp";
+import awsCourseThumbnail from "../assets/course-thumbnails/aws-960.webp";
 import veolmsCourseThumbnail from "../assets/learning-thumbnails/veolms-course.webp";
 import illustratorCourseThumbnail from "../assets/learning-thumbnails/illustrator-course.webp";
 import reactCourseThumbnail from "../assets/learning-thumbnails/react-course.webp";
@@ -34,12 +34,10 @@ const courseTitlesBySlug: Record<string, string | undefined> = {
 
 export const getCourseTitle = (courseSlug: string | undefined) =>
   (courseSlug ? courseTitlesBySlug[courseSlug] : undefined) ||
-  (typeof window !== "undefined"
-    ? window.localStorage.getItem("veolms-current-course-title")
-    : null) ||
   "UI/UX Design Mastery";
 
 const courseThumbnailsBySlug: Record<string, string | undefined> = {
+  "ui-ux-design-mastery": "/assets/instructor-poster-960.webp",
   "typescript-course": typescriptCourseThumbnail,
   "javascript-course": javascriptCourseThumbnail,
   "backend-nodejs": nodeCourseThumbnail,

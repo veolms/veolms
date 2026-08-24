@@ -1,0 +1,32 @@
+@property --learning-curriculum-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 400px;
+}
+
+:root {
+  font-family:
+    "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+  --canvas: #060b14;
+  --header: #060a12;
+  --surface: #0c1421;
+  --hover: #111c2b;
+  --selected: #24184e;
+  --track: #151d2b;
+  --border: #1c2939;
+  --border-strong: #334055;
+  --text: #f7f5fa;
+  --text-secondary: #ded9e3;
+  --muted: #aaa6b2;
+  --accent: #7148ff;
+  --accent-hover: #6440e8;
+  --accent-soft: rgba(113, 72, 255, 0.16);
+  --accent-border: rgba(113, 72, 255, 0.42);
+  --learning-panel-border: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-shadow: rgba(113, 72, 255, 0.28);
+  --on-accent: #ffffff;
+  --on-accent-glyph: #ffffff;
+  --success: #4ade80;
+  --danger: #fb7185;
+}

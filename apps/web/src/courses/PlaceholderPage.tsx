@@ -1,17 +1,15 @@
-import {
-  Bell,
-  BookOpen,
-  ChartBar,
-  ChatCircleDots,
-  EnvelopeSimple,
-  GearSix,
-  PlusCircle,
-  SignOut,
-  Sparkle,
-  Star,
-  Tote,
-  Users,
-} from "@phosphor-icons/react";
+import { Bell } from "@phosphor-icons/react/Bell";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { ChartBar } from "@phosphor-icons/react/ChartBar";
+import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { GearSix } from "@phosphor-icons/react/GearSix";
+import { PlusCircle } from "@phosphor-icons/react/PlusCircle";
+import { SignOut } from "@phosphor-icons/react/SignOut";
+import { Sparkle } from "@phosphor-icons/react/Sparkle";
+import { Star } from "@phosphor-icons/react/Star";
+import { Tote } from "@phosphor-icons/react/Tote";
+import { Users } from "@phosphor-icons/react/Users";
 import type { ComponentType } from "react";
 import type { CourseRole } from "./catalogue";
 

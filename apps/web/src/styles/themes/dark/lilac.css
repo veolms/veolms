@@ -1,0 +1,34 @@
+/* lilac palette — dark mode. */
+:root[data-palette="lilac"] {
+  --canvas: #1d1823;
+  --header: #1c171f;
+  --surface: #32283c;
+  --hover: #443750;
+  --selected: #493760;
+  --track: #241d2a;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #fff8ff;
+  --text-secondary: #eadbef;
+  --muted: #bea9c5;
+  --accent: #c18cff;
+  --accent-hover: #d0a6ff;
+  --accent-soft: rgba(193, 140, 255, 0.16);
+  --accent-border: rgba(193, 140, 255, 0.42);
+  --accent-shadow: rgba(151, 84, 219, 0.28);
+  --on-accent: #21102f;
+  --app-shell: #17131c;
+  --main-surface: #261f2f;
+  --surface-strong: #3b3047;
+  --on-accent-glyph: #21102f;
+  --card-surface: #32283c;
+  --card-surface-raised: #3b3047;
+  --card-surface-soft: #211a28;
+  --card-surface-hover: #40334c;
+}
+
+:root[data-high-contrast="true"][data-palette="lilac"] {
+  --text: #fff8ff;
+  --text-secondary: #eadbef;
+  --muted: #bea9c5;
+}

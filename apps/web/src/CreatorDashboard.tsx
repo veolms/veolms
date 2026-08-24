@@ -1,29 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  ArrowsClockwise,
-  ChartBar,
-  ChartLineUp,
-  CheckCircle,
-  Clock,
-  CurrencyInr,
-  Info,
-  Plus,
-  PlusCircle,
-  Pulse,
-  Ticket,
-  UserList,
-  Users,
-  VideoCamera,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
+import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
+import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
+import { ChartBar } from "@phosphor-icons/react/ChartBar";
+import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { Clock } from "@phosphor-icons/react/Clock";
+import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
+import { Info } from "@phosphor-icons/react/Info";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { PlusCircle } from "@phosphor-icons/react/PlusCircle";
+import { Pulse } from "@phosphor-icons/react/Pulse";
+import { Ticket } from "@phosphor-icons/react/Ticket";
+import { UserList } from "@phosphor-icons/react/UserList";
+import { Users } from "@phosphor-icons/react/Users";
+import { VideoCamera } from "@phosphor-icons/react/VideoCamera";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript.jpg";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs.jpg";
+import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
+import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
 
 const creatorCourses = [
@@ -109,35 +107,35 @@ const recentEnrollments: readonly EnrollmentRow[] = [
     "The Ultimate TypeScript Course",
     "₹999",
     "15m ago",
-    "/assets/ethan-avatar.jpg",
+    "/assets/ethan-avatar-160.webp",
   ],
   [
     "Pooja Sharma",
     "Complete Backend with Node.js",
     "₹1,299",
     "1h ago",
-    "/assets/sofia-avatar.jpg",
+    "/assets/sofia-avatar-160.webp",
   ],
   [
     "Vivek Reddy",
     "The Ultimate TypeScript Course",
     "₹999",
     "2h ago",
-    "/assets/ethan-avatar.jpg",
+    "/assets/ethan-avatar-160.webp",
   ],
   [
     "Neha Patel",
     "Building VeoLMS: Idea to Production",
     "₹1,499",
     "3h ago",
-    "/assets/sofia-avatar.jpg",
+    "/assets/sofia-avatar-160.webp",
   ],
   [
     "Arjun Mehta",
     "Complete Backend with Node.js",
     "₹1,299",
     "4h ago",
-    "/assets/ethan-avatar.jpg",
+    "/assets/ethan-avatar-160.webp",
   ],
 ];
 
@@ -149,7 +147,7 @@ const discussions = [
     body: "I'm confused about the constraint in generic functions...",
     time: "10m ago",
     action: "Reply",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
   },
   {
     name: "Sneha Verma commented",
@@ -158,7 +156,7 @@ const discussions = [
     body: "Great explanation! Could you also cover refresh tokens?",
     time: "1h ago",
     action: "View",
-    avatar: "/assets/sofia-avatar.jpg",
+    avatar: "/assets/sofia-avatar-160.webp",
   },
   {
     name: "Discussion has 3 new replies",
@@ -167,7 +165,7 @@ const discussions = [
     body: "There's an issue when uploading large files on S3...",
     time: "2h ago",
     action: "View thread",
-    avatar: "/assets/ethan-avatar.jpg",
+    avatar: "/assets/ethan-avatar-160.webp",
   },
 ];
 

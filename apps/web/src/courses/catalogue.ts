@@ -1,9 +1,9 @@
-import nodeThumbnail from "../assets/course-thumbnails/nodejs.jpg";
-import javascriptThumbnail from "../assets/course-thumbnails/javascript.jpg";
-import typescriptThumbnail from "../assets/course-thumbnails/typescript.jpg";
-import figmaThumbnail from "../assets/course-thumbnails/figma.jpg";
-import mongodbThumbnail from "../assets/course-thumbnails/mongodb.jpg";
-import awsThumbnail from "../assets/course-thumbnails/aws.jpg";
+import nodeThumbnail from "../assets/course-thumbnails/nodejs-960.webp";
+import javascriptThumbnail from "../assets/course-thumbnails/javascript-960.webp";
+import typescriptThumbnail from "../assets/course-thumbnails/typescript-960.webp";
+import figmaThumbnail from "../assets/course-thumbnails/figma-960.webp";
+import mongodbThumbnail from "../assets/course-thumbnails/mongodb-960.webp";
+import awsThumbnail from "../assets/course-thumbnails/aws-960.webp";
 
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
@@ -50,7 +50,7 @@ export const courses: readonly Course[] = [
     enrolled: true,
     duration: "12h 40m",
     students: 842,
-    thumbnail: "/assets/instructor-poster.jpg",
+    thumbnail: "/assets/instructor-poster-960.webp",
   },
   {
     id: "backend-nodejs",

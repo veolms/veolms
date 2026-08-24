@@ -91,6 +91,34 @@ export const academyThemes: readonly AcademyTheme[] = [
     preview: "#28d8c6",
     darkInk: true,
   },
+  {
+    id: "brainwave",
+    name: "Brainwave Slate",
+    note: "Cool graphite & electric blue",
+    preview: "#0085ff",
+    darkInk: true,
+  },
+  {
+    id: "lilac",
+    name: "Velvet Lilac",
+    note: "Plum depth & soft lavender",
+    preview: "#c18cff",
+    darkInk: true,
+  },
+  {
+    id: "champagne",
+    name: "Champagne Noir",
+    note: "Soft black & champagne gold",
+    preview: "#e6c98a",
+    darkInk: true,
+  },
+  {
+    id: "lime",
+    name: "Electric Lime",
+    note: "Graphite & vivid chartreuse",
+    preview: "#a3e635",
+    darkInk: true,
+  },
 ];
 
 export interface ThemeRotationPreferences {

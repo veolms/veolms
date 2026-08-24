@@ -1,0 +1,23 @@
+/* sunlit palette — light mode. */
+:root[data-theme="light"][data-palette="sunlit"] {
+  --canvas: #f2efe3;
+  --header: #edeade;
+  --surface: #fffefa;
+  --hover: #eee8d3;
+  --selected: #f3e8b9;
+  --track: #e5dfca;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #201a0d;
+  --text-secondary: #49402b;
+  --muted: #685f46;
+  --accent: #805b00;
+  --accent-hover: #6b4c00;
+  --accent-soft: rgba(128, 91, 0, 0.12);
+  --accent-border: rgba(128, 91, 0, 0.3);
+  --accent-shadow: rgba(128, 91, 0, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #e9e6d9;
+  --main-surface: #faf8ef;
+  --surface-strong: #f5f0dc;
+}

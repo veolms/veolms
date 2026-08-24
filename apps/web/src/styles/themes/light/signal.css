@@ -1,0 +1,28 @@
+/* signal palette — light mode. */
+:root[data-theme="light"][data-palette="signal"] {
+  --canvas: #fff0f2;
+  --header: #fcedf0;
+  --surface: #fffdfd;
+  --hover: #f8e1e6;
+  --selected: #ffdce3;
+  --track: #f0d9de;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #260c12;
+  --text-secondary: #56313a;
+  --muted: #805c64;
+  --accent: #bb1d3d;
+  --accent-hover: #a81634;
+  --accent-soft: rgba(187, 29, 61, 0.12);
+  --accent-border: rgba(187, 29, 61, 0.3);
+  --accent-shadow: rgba(168, 22, 52, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #f2dfe3;
+  --main-surface: #fff6f8;
+  --surface-strong: #fbe8ec;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #fffdfd;
+  --card-surface-raised: #fbe8ec;
+  --card-surface-soft: #fff5f7;
+  --card-surface-hover: #fff0f3;
+}

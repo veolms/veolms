@@ -1,11 +1,9 @@
-import {
-  ArrowsDownUp,
-  Funnel,
-  Heart,
-  MagnifyingGlass,
-  Plus,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowsDownUp } from "@phosphor-icons/react/ArrowsDownUp";
+import { Funnel } from "@phosphor-icons/react/Funnel";
+import { Heart } from "@phosphor-icons/react/Heart";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { X } from "@phosphor-icons/react/X";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { CourseCard } from "./CourseCard";
@@ -32,6 +30,7 @@ export interface CourseCatalogueProps {
   visibleCourses: readonly Course[];
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course) => void;
+  onEditCourse?: (course: Course) => void;
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -54,6 +53,7 @@ export function CourseCatalogue({
   visibleCourses,
   onWishlist,
   onOpenCourse,
+  onEditCourse,
   courseMenu,
   setCourseMenu,
   setNotice,
@@ -171,7 +171,7 @@ export function CourseCatalogue({
 
       {visibleCourses.length ? (
         <section className="courses-grid" aria-label={activeSection}>
-          {visibleCourses.map((course) => (
+          {visibleCourses.map((course, index) => (
             <CourseCard
               key={course.id}
               course={course}
@@ -184,9 +184,19 @@ export function CourseCatalogue({
                   `/explore-courses/${encodeURIComponent(selected.id)}/overview`,
                 )
               }
+              onEdit={(selected) => {
+                if (onEditCourse) {
+                  onEditCourse(selected);
+                } else {
+                  onNavigatePage(
+                    `/courses/create?edit=${encodeURIComponent(selected.id)}`,
+                  );
+                }
+              }}
               menuOpen={courseMenu === course.id}
               setMenuOpen={setCourseMenu}
               setNotice={setNotice}
+              imagePriority={index === 0}
             />
           ))}
         </section>

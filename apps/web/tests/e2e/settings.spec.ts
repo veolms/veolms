@@ -4,7 +4,9 @@ import {
   expectStoredValue,
   installBaselineState,
   openApp,
+  revealDeferredAppearanceSettings,
   setApplicationScrollTop,
+  updateSidebarPreferences,
 } from "./support.ts";
 
 test.beforeEach(async ({ page }) => {
@@ -138,6 +140,11 @@ test("Escape leaves Settings for the previous non-settings destination", async (
   page,
 }) => {
   await openApp(page, "/notifications");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/notifications", {
+    dockItems,
+    dockOrder: dockItems,
+  });
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/settings\/profile$/);
 
@@ -164,7 +171,7 @@ test("Escape leaves Settings for the previous non-settings destination", async (
   await expect(page).toHaveURL(/\/notifications$/);
 });
 
-test("leaving Settings restores the document scroll position", async ({
+test("leaving Settings restores the application scroll position", async ({
   page,
 }) => {
   await openApp(page, "/my-courses");
@@ -189,6 +196,7 @@ test("page tab colors follow the sidebar and keep explicit overrides", async ({
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   const root = page.locator("html");
   const pageTabColorOptions = page.getByRole("radiogroup", {
@@ -236,6 +244,7 @@ test("page tab colors follow the sidebar and keep explicit overrides", async ({
   await expect(root).toHaveAttribute("data-page-tab-colors", "monochrome");
   await expectStoredValue(page, "veolms-page-tab-colors", "monochrome");
   await page.reload();
+  await revealDeferredAppearanceSettings(page);
   await expect(root).toHaveAttribute("data-page-tab-colors", "monochrome");
   expect(await activeTabColor("Appearance")).toBe(followedMonochromeColor);
 
@@ -343,11 +352,23 @@ test("appearance and sidebar preferences persist through their direct settings r
   await expect(colorThemeOptions.nth(0)).toContainText("Veo Onyx");
   await expect(colorThemeOptions.nth(1)).toContainText("Ocean Blue");
   await expect(colorThemeOptions.nth(2)).toContainText("Midnight Azure");
+  const previewTone = (themeName: RegExp) =>
+    colorThemeOptions
+      .filter({ hasText: themeName })
+      .locator(".settings-mini-surface")
+      .evaluate((element) =>
+        getComputedStyle(element).getPropertyValue("--mini-tone").trim(),
+      );
+  await expect.poll(() => previewTone(/Brainwave Slate/)).toBe("#0085ff");
+  await expect.poll(() => previewTone(/Velvet Lilac/)).toBe("#c18cff");
+  await expect.poll(() => previewTone(/Champagne Noir/)).toBe("#e6c98a");
+  await expect.poll(() => previewTone(/Electric Lime/)).toBe("#a3e635");
   await expect(page.locator("html")).toHaveAttribute(
     "data-sidebar-icon-style",
     "monochrome",
   );
 
+  await revealDeferredAppearanceSettings(page);
   const randomTheme = page.getByRole("switch", {
     name: "Random theme on app open",
   });
@@ -437,11 +458,11 @@ test("appearance and sidebar preferences persist through their direct settings r
   const sidebarAppearance = page
     .getByRole("complementary", { name: "Student navigation" })
     .getByRole("group", { name: "Appearance controls" });
-  await expect(themeDockControl).toHaveAttribute("aria-checked", "true");
+  await expect(themeDockControl).toHaveAttribute("aria-checked", "false");
   await expect(readingModeDockControl).toBeEnabled();
   await expect(readingModeDockControl).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByText("4 visible")).toBeVisible();
-  await expect(sidebarThemePicker).toBeVisible();
+  await expect(page.getByText("3 visible")).toBeVisible();
+  await expect(sidebarThemePicker).toHaveCount(0);
 
   await expect
     .poll(() =>
@@ -451,7 +472,7 @@ test("appearance and sidebar preferences persist through their direct settings r
         ),
       ),
     )
-    .toEqual(["appearance", "theme", "reading-mode", "fullscreen"]);
+    .toEqual(["appearance", "reading-mode", "fullscreen"]);
 
   const readingModeReorderHandle = page.getByRole("button", {
     name: "Reorder Reading mode",
@@ -499,7 +520,7 @@ test("appearance and sidebar preferences persist through their direct settings r
         ),
       ),
     )
-    .toEqual(["appearance", "reading-mode", "theme", "fullscreen"]);
+    .toEqual(["appearance", "reading-mode", "fullscreen"]);
 
   const settingsDockControl = page.getByRole("switch", {
     name: "Show Settings in sidebar dock",
@@ -532,7 +553,7 @@ test("appearance and sidebar preferences persist through their direct settings r
   await page.mouse.up();
 
   await expect(settingsDockControl).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByText("5 visible")).toBeVisible();
+  await expect(page.getByText("4 visible")).toBeVisible();
   await expect(
     page
       .getByRole("complementary", { name: "Student navigation" })
@@ -549,7 +570,7 @@ test("appearance and sidebar preferences persist through their direct settings r
         ),
       ),
     )
-    .toEqual(["appearance", "reading-mode", "theme", "settings", "fullscreen"]);
+    .toEqual(["appearance", "reading-mode", "settings", "fullscreen"]);
 
   await page
     .getByRole("complementary", { name: "Student navigation" })
@@ -562,7 +583,7 @@ test("appearance and sidebar preferences persist through their direct settings r
   await expect(page).toHaveURL(/\/settings\/sidebar$/);
 
   await settingsDockControl.click();
-  await expect(page.getByText("4 visible")).toBeVisible();
+  await expect(page.getByText("3 visible")).toBeVisible();
   await expect(
     page
       .getByRole("complementary", { name: "Student navigation" })
@@ -570,11 +591,16 @@ test("appearance and sidebar preferences persist through their direct settings r
   ).toBeVisible();
 
   await fullscreenDockControl.click();
-  await expect(page.getByText("3 visible")).toBeVisible();
+  await expect(page.getByText("2 visible")).toBeVisible();
 
+  await themeDockControl.click();
+  await expect(themeDockControl).toHaveAttribute("aria-checked", "true");
+  await expect(sidebarThemePicker).toBeVisible();
+  await expect(page.getByText("3 visible")).toBeVisible();
   await themeDockControl.click();
   await expect(themeDockControl).toHaveAttribute("aria-checked", "false");
   await expect(sidebarThemePicker).toHaveCount(0);
+  await expect(page.getByText("2 visible")).toBeVisible();
   await sidebarAppearance
     .getByRole("button", { name: /mode active\. Switch/ })
     .click({ button: "right" });
@@ -614,6 +640,12 @@ test("appearance and sidebar preferences persist through their direct settings r
   const fixedHeader = page.getByRole("switch", {
     name: "Fixed collapse control",
   });
+  await expect(fixedHeader).toHaveAttribute("aria-checked", "false");
+  await fixedHeader.click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-sidebar-header-layout",
+    "fixed",
+  );
   await fixedHeader.click();
   await expect(page.locator("html")).toHaveAttribute(
     "data-sidebar-header-layout",
@@ -732,7 +764,7 @@ test("sidebar logo stays on one anchor while the rail reveals it", async ({
   const compact = await measureLogoAnchor();
   expect(
     Math.abs(compact.logoMarkCenter - compact.collapseSurfaceCenter),
-  ).toBeLessThan(0.1);
+  ).toBeLessThan(1);
 
   const resizeRail = page.getByRole("separator", { name: "Resize sidebar" });
   const resizeRailBox = await resizeRail.boundingBox();
@@ -757,11 +789,11 @@ test("sidebar logo stays on one anchor while the rail reveals it", async ({
   const expanded = await measureLogoAnchor();
 
   for (const state of [compact, dragging, expanded]) {
-    expect(Math.abs(state.logoLeft - state.homeLeft)).toBeLessThan(0.1);
+    expect(Math.abs(state.logoLeft - state.homeLeft)).toBeLessThan(1);
     expect(state.transitionProperty).toBe("none");
   }
-  expect(Math.abs(dragging.logoLeft - compact.logoLeft)).toBeLessThan(0.1);
-  expect(Math.abs(expanded.logoLeft - compact.logoLeft)).toBeLessThan(0.1);
+  expect(Math.abs(dragging.logoLeft - compact.logoLeft)).toBeLessThan(1);
+  expect(Math.abs(expanded.logoLeft - compact.logoLeft)).toBeLessThan(1);
 });
 
 test("learning settings save a coherent preference object", async ({

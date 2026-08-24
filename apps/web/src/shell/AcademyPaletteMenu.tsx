@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Check } from "@phosphor-icons/react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { AcademyTheme } from "../themes";
+import {
+  themeRevealOriginFromClick,
+  themeRevealOriginFromElement,
+} from "./themeViewTransition";
+import type { ThemeRevealOrigin } from "./themeViewTransition";
 
 interface AcademyPaletteMenuProps {
   themes: readonly Pick<AcademyTheme, "id" | "name" | "note" | "preview">[];
@@ -9,11 +13,15 @@ interface AcademyPaletteMenuProps {
   className?: string;
   id?: string;
   mobile?: boolean;
-  onSelect: (themeId: string) => void;
-  onPreview: (themeId: string) => void;
+  onSelect: (themeId: string, origin?: ThemeRevealOrigin) => void;
+  // Keyboard previews and cancels carry the focused swatch's center so the
+  // reveal emanates from the item keyboard navigation is on.
+  onPreview: (themeId: string, origin?: ThemeRevealOrigin) => void;
   onConfirm: (themeId: string) => void;
-  onCancel: () => void;
+  onCancel: (origin?: ThemeRevealOrigin) => void;
 }
+
+const PALETTE_GRID_COLUMNS = 4;
 
 export function AcademyPaletteMenu({
   themes,
@@ -48,8 +56,38 @@ export function AcademyPaletteMenu({
     const nextTheme = themes[index];
     if (!nextTheme) return;
     setActiveTheme(nextTheme.id);
-    onPreview(nextTheme.id);
+    // Reveal arrow-key previews from the swatch being navigated to; an
+    // unmeasured element (jsdom) yields no origin and the corner applies.
+    onPreview(
+      nextTheme.id,
+      themeRevealOriginFromElement(itemRefs.current[index]) ?? undefined,
+    );
     itemRefs.current[index]?.focus({ preventScroll: true });
+  };
+
+  const getDirectionalThemeIndex = (
+    activeIndex: number,
+    key: "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp",
+  ) => {
+    if (themes.length === 0) return activeIndex;
+
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      const step = key === "ArrowRight" ? 1 : -1;
+      return (activeIndex + step + themes.length) % themes.length;
+    }
+
+    const column = activeIndex % PALETTE_GRID_COLUMNS;
+    const nextIndex =
+      activeIndex +
+      (key === "ArrowDown" ? PALETTE_GRID_COLUMNS : -PALETTE_GRID_COLUMNS);
+    if (nextIndex >= 0 && nextIndex < themes.length) return nextIndex;
+
+    if (key === "ArrowDown") return column;
+    return (
+      column +
+      Math.floor((themes.length - 1 - column) / PALETTE_GRID_COLUMNS) *
+        PALETTE_GRID_COLUMNS
+    );
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -58,10 +96,14 @@ export function AcademyPaletteMenu({
       themes.findIndex((theme) => theme.id === activeTheme),
     );
 
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "ArrowUp" ||
+      event.key === "ArrowRight" ||
+      event.key === "ArrowLeft"
+    ) {
       event.preventDefault();
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      previewThemeAt((activeIndex + direction + themes.length) % themes.length);
+      previewThemeAt(getDirectionalThemeIndex(activeIndex, event.key));
       return;
     }
 
@@ -81,7 +123,11 @@ export function AcademyPaletteMenu({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      onCancel();
+      // Reveal the preview revert from the swatch that had focus.
+      onCancel(
+        themeRevealOriginFromElement(itemRefs.current[activeIndex]) ??
+          undefined,
+      );
     }
   };
 
@@ -93,12 +139,9 @@ export function AcademyPaletteMenu({
       className={className}
       role="menu"
       aria-label="Choose a color theme"
-      aria-keyshortcuts="ArrowUp ArrowDown Home End Enter Escape"
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End Enter Escape"
       onKeyDown={handleKeyDown}
     >
-      <div>
-        <strong>Color theme</strong>
-      </div>
       {themes.map((item, index) => (
         <button
           ref={(element) => {
@@ -106,21 +149,23 @@ export function AcademyPaletteMenu({
           }}
           type="button"
           role="menuitemradio"
+          aria-label={`${item.name}. ${item.note}`}
           aria-checked={item.id === activeTheme}
           tabIndex={item.id === activeTheme ? 0 : -1}
           className={item.id === activeTheme ? "is-selected" : ""}
           key={item.id}
-          onClick={() => {
+          title={item.name}
+          data-theme-swatch={item.id}
+          style={{ "--theme-swatch": item.preview } as CSSProperties}
+          onClick={(event) => {
             setActiveTheme(item.id);
-            onSelect(item.id);
+            // Keyboard-activated clicks (Enter/Space) report the viewport
+            // origin and yield no reveal origin, so they keep the corner
+            // fallback; only real pointer clicks carry coordinates.
+            onSelect(item.id, themeRevealOriginFromClick(event) ?? undefined);
           }}
         >
-          <i style={{ background: item.preview }} />
-          <span>
-            <strong>{item.name}</strong>
-            <small>{item.note}</small>
-          </span>
-          {item.id === activeTheme && <Check size={16} weight="bold" />}
+          <i aria-hidden="true" />
         </button>
       ))}
     </div>

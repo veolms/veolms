@@ -13,12 +13,12 @@ describe("academy-local profile preferences", () => {
     expect(getProfileIdentity("student")).toMatchObject({
       displayName: "Ashi Singh",
       roleLabel: "Student",
-      avatarDataUrl: "/assets/sofia-avatar.jpg",
+      avatarDataUrl: "/assets/sofia-avatar-160.webp",
     });
     expect(getProfileIdentity("creator")).toMatchObject({
       displayName: "Anurag Singh",
       roleLabel: "Instructor",
-      avatarDataUrl: "/assets/ethan-avatar.jpg",
+      avatarDataUrl: "/assets/ethan-avatar-160.webp",
     });
   });
 
@@ -56,7 +56,7 @@ describe("academy-local profile preferences", () => {
     );
     expect(getProfileIdentity("student")).toMatchObject({
       displayName: "Ashi Singh",
-      avatarDataUrl: "/assets/sofia-avatar.jpg",
+      avatarDataUrl: "/assets/sofia-avatar-160.webp",
     });
     expect(getStoredProfilePreferences("student")).toBeNull();
   });

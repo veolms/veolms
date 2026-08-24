@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { At } from "@phosphor-icons/react/At";
+import { Camera } from "@phosphor-icons/react/Camera";
+import { Check } from "@phosphor-icons/react/Check";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { GithubLogo } from "@phosphor-icons/react/GithubLogo";
+import { Globe } from "@phosphor-icons/react/Globe";
+import { LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
+import { Phone } from "@phosphor-icons/react/Phone";
+import { SealCheck } from "@phosphor-icons/react/SealCheck";
+import { ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
+import { X } from "@phosphor-icons/react/X";
 import {
-  At,
-  Camera,
-  Check,
-  CheckCircle,
-  EnvelopeSimple,
-  GithubLogo,
-  Globe,
-  LinkedinLogo,
-  Phone,
-  SealCheck,
-  ShieldWarning,
-  X,
-} from "@phosphor-icons/react";
-import {
+  getDefaultProfileIdentity,
   getProfileIdentity,
   saveProfilePreferences,
 } from "./profilePreferences";
@@ -23,6 +22,8 @@ import type {
   ProfilePreferences,
   ProfileRole,
 } from "./profilePreferences";
+import { useCurrentUser } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -126,7 +127,15 @@ export function ProfileSettings({
   role = "student",
   onProfileSaved,
 }: ProfileSettingsProps) {
-  const initialIdentity = useMemo(() => getProfileIdentity(role), [role]);
+  const initializedRoleRef = useRef(role);
+  const { data: userProfile } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
+  const activeUser = userProfile || storeUser;
+
+  const initialIdentity = useMemo(
+    () => getDefaultProfileIdentity(role),
+    [role],
+  );
   const [savedProfile, setSavedProfile] = useState<EditableProfile>(() =>
     toEditableProfile(initialIdentity),
   );
@@ -154,12 +163,30 @@ export function ProfileSettings({
   const displayName = draftProfile.displayName.trim() || "Your name";
   const username = draftProfile.username?.trim() || "username";
   const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
+  const activeEmail = activeUser?.email || initialIdentity.email;
+  const isEmailVerified = Boolean(activeUser?.email);
+  const isMobileVerified = Boolean(activeUser?.phoneNo || draftProfile.mobileVerified);
 
   useEffect(() => {
-    const identity = getProfileIdentity(role);
-    const editableProfile = toEditableProfile(identity);
-    setSavedProfile(editableProfile);
-    setDraftProfile(editableProfile);
+    // Restore default dummy identity for guest or active user context
+    initializedRoleRef.current = role;
+    if (!activeUser) {
+      const defaultIdentity = getDefaultProfileIdentity(role);
+      const editableProfile = toEditableProfile(defaultIdentity);
+      setSavedProfile(editableProfile);
+      setDraftProfile(editableProfile);
+    } else {
+      const identity = getProfileIdentity(role);
+      const editableProfile = toEditableProfile(identity);
+      if (activeUser.displayName) editableProfile.displayName = activeUser.displayName;
+      if (activeUser.username) editableProfile.username = activeUser.username;
+      if (activeUser.phoneNo) {
+        editableProfile.mobileNumber = activeUser.phoneNo;
+        editableProfile.mobileVerified = true;
+      }
+      setSavedProfile(editableProfile);
+      setDraftProfile(editableProfile);
+    }
     setNameError("");
     setUsernameError("");
     setMobileError("");
@@ -168,7 +195,7 @@ export function ProfileSettings({
     setVerificationRequested(false);
     setMobileVisibilityPromptOpen(false);
     setMobileVisibilityAcknowledged(false);
-  }, [role]);
+  }, [role, activeUser]);
 
   useEffect(() => setAvatarFailed(false), [draftProfile.avatarDataUrl]);
 
@@ -190,7 +217,7 @@ export function ProfileSettings({
   }, []);
 
   useEffect(() => {
-    if (!isDirty || !isOnline) return;
+    if (!isDirty || !isOnline || !activeUser) return;
 
     const normalizedName = draftProfile.displayName.trim();
     const normalizedUsername = draftProfile.username?.trim() ?? "";
@@ -352,6 +379,8 @@ export function ProfileSettings({
         <img
           src={draftProfile.avatarDataUrl ?? undefined}
           alt=""
+          width={160}
+          height={160}
           onError={() => setAvatarFailed(true)}
         />
       ) : (
@@ -381,8 +410,8 @@ export function ProfileSettings({
         </a>
       )}
       {draftProfile.emailPublic && (
-        <a href={`mailto:${initialIdentity.email}`}>
-          <EnvelopeSimple size={16} /> {initialIdentity.email}
+        <a href={`mailto:${activeEmail}`}>
+          <EnvelopeSimple size={16} /> {activeEmail}
         </a>
       )}
       {draftProfile.mobilePublic && draftProfile.mobileNumber && (
@@ -543,7 +572,7 @@ export function ProfileSettings({
                 {draftProfile.bio.length} / 160
               </small>
             </div>
-            <div className="settings-profile__field-grid">
+            <div className="settings-profile__field-grid settings-profile__field-grid--contact">
               <div className="settings-profile__field">
                 <div className="settings-profile__field-heading">
                   <label htmlFor="profile-email">Email address</label>
@@ -558,14 +587,20 @@ export function ProfileSettings({
                   <EnvelopeSimple size={17} aria-hidden="true" />
                   <input
                     id="profile-email"
-                    value={initialIdentity.email}
+                    value={activeEmail}
                     autoComplete="email"
                     readOnly
                     aria-readonly="true"
                   />
-                  <span className="settings-profile__tag settings-profile__tag--warning">
-                    Not verified
-                  </span>
+                  {isEmailVerified ? (
+                    <span className="settings-profile__tag settings-profile__tag--success">
+                      <SealCheck size={14} weight="fill" /> Verified
+                    </span>
+                  ) : (
+                    <span className="settings-profile__tag settings-profile__tag--warning">
+                      Not verified
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="settings-profile__field">
@@ -591,7 +626,7 @@ export function ProfileSettings({
                         updateMobileNumber(event.target.value)
                       }
                     />
-                    {draftProfile.mobileVerified ? (
+                    {isMobileVerified ? (
                       <span className="settings-profile__tag settings-profile__tag--success">
                         <SealCheck size={14} weight="fill" /> Verified
                       </span>
@@ -601,7 +636,7 @@ export function ProfileSettings({
                       </span>
                     )}
                   </span>
-                  {!draftProfile.mobileVerified && (
+                  {!isMobileVerified && (
                     <button
                       type="button"
                       className="settings-profile__verify-action"
@@ -751,17 +786,18 @@ export function ProfileSettings({
         </div>
       </div>
 
-      <dialog
-        ref={mobileVisibilityDialogRef}
-        className="settings-profile__privacy-dialog"
-        aria-modal="true"
-        aria-labelledby="mobile-visibility-dialog-title"
-        aria-describedby="mobile-visibility-dialog-description"
-        onCancel={(event) => {
-          event.preventDefault();
-          closeMobileVisibilityPrompt();
-        }}
-      >
+      {mobileVisibilityPromptOpen && (
+        <dialog
+          ref={mobileVisibilityDialogRef}
+          className="settings-profile__privacy-dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-visibility-dialog-title"
+          aria-describedby="mobile-visibility-dialog-description"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeMobileVisibilityPrompt();
+          }}
+        >
         <button
           type="button"
           className="settings-profile__privacy-dialog-close"
@@ -818,7 +854,8 @@ export function ProfileSettings({
             I understand, keep private
           </button>
         </div>
-      </dialog>
+        </dialog>
+      )}
     </section>
   );
 }

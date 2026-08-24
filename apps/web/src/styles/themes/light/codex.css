@@ -1,0 +1,29 @@
+/* codex palette — light mode. */
+:root[data-theme="light"][data-palette="codex"] {
+  --canvas: #f1f1f3;
+  --header: #f3f3f5;
+  --surface: #ffffff;
+  --hover: #e8e8eb;
+  --selected: #e1e1e5;
+  --track: #dedee2;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #18181b;
+  --text-secondary: #3f3f46;
+  --muted: #71717a;
+  --accent: #252529;
+  --accent-hover: #18181b;
+  --accent-soft: rgba(37, 37, 41, 0.1);
+  --accent-border: rgba(37, 37, 41, 0.25);
+  --accent-shadow: rgba(24, 24, 27, 0.16);
+  --on-accent: #f9f9fa;
+  --app-shell: #e7e7ea;
+  --main-surface: #f7f7f8;
+  --surface-strong: #eeeef0;
+  --progress-track: #c2c2c8;
+  --on-accent-glyph: #f9f9fa;
+  --card-surface: #ffffff;
+  --card-surface-raised: #eeeef0;
+  --card-surface-soft: #f8f8f9;
+  --card-surface-hover: #efeff1;
+}

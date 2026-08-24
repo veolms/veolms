@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import {
-  Bell,
-  BellRinging,
-  BookOpen,
-  CheckCircle,
-  ChatCircleDots,
-  Trophy,
-} from "@phosphor-icons/react";
+import { Bell } from "@phosphor-icons/react/Bell";
+import { BellRinging } from "@phosphor-icons/react/BellRinging";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { Trophy } from "@phosphor-icons/react/Trophy";
 import { SettingRow, SettingsToggle } from "./SettingsControls";
 
 interface NotificationPreferences {
@@ -43,13 +41,24 @@ function readPreferences(): NotificationPreferences {
 }
 
 export function NotificationSettings() {
-  const [preferences, setPreferences] = useState(readPreferences);
+  const [preferences, setPreferences] = useState(defaults);
+  const [storageReady, setStorageReady] = useState(false);
   const update = (next: Partial<NotificationPreferences>) =>
     setPreferences((current) => ({ ...current, ...next }));
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-  }, [preferences]);
+    setPreferences(readPreferences());
+    setStorageReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    } catch {
+      // Preferences remain available for this session when storage is blocked.
+    }
+  }, [preferences, storageReady]);
 
   return (
     <div className="settings-detail" aria-label="Notification settings">

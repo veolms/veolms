@@ -13,6 +13,7 @@ import fastifyCors from "@fastify/cors";
 import { registerErrorHandler } from "./middlewares/error.middleware.ts";
 import type { RoutePluginOptions } from "./lib/route-plugin.ts";
 import { registerOpenApi } from "./openapi.ts";
+import { createServices, type AppServices } from "./services/index.ts";
 import { config } from "./config.ts";
 
 export const API_ROUTE_PREFIX = "/api/v1";
@@ -28,16 +29,22 @@ const MAX_PARAM_LENGTH = 512;
 interface CreateAppOptions {
   database: Kysely<Database>;
   logger?: FastifyServerOptions["logger"];
+  /** Overridable so tests can supply stubs instead of real gateways. */
+  services?: AppServices;
 }
 
 export async function createApp({
   database,
   logger = true,
+  services,
 }: CreateAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
   });
+
+  const appServices =
+    services ?? createServices({ config, logger: app.log });
 
   // Await this: it installs the Zod compilers and the route-discovery hook that
   // everything registered below depends on.
@@ -49,11 +56,9 @@ export async function createApp({
       return payload;
     }
 
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "success" in (payload as any)
-    ) {
+    // Already-enveloped payloads (notably error responses) pass through
+    // untouched, so they are not wrapped a second time.
+    if (payload && typeof payload === "object" && "success" in payload) {
       return payload;
     }
 
@@ -89,7 +94,13 @@ export async function createApp({
     options: {
       prefix: API_ROUTE_PREFIX,
       database,
+      services: appServices,
     } satisfies RoutePluginOptions,
+  });
+
+  // Release pooled SMTP connections when the server shuts down.
+  app.addHook("onClose", async () => {
+    await appServices.email.close();
   });
 
   return app;

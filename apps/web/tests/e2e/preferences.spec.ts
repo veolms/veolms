@@ -1,11 +1,76 @@
 import { test, expect } from "./app.fixture.ts";
-import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
+import type { Locator, Page } from "@playwright/test";
+import {
+  expectStoredValue,
+  installBaselineState,
+  openApp,
+  revealDeferredAppearanceSettings,
+  updateSidebarPreferences,
+} from "./support.ts";
 
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
 });
 
-test("framed and edge-to-edge layouts scroll with the document", async ({
+const getFloatingScrollbarThumb = (scrollbar: Locator) =>
+  scrollbar.locator(":scope > .floating-scrollbar__thumb");
+
+const getFloatingScrollbarThumbAppearance = async (thumb: Locator) =>
+  thumb.evaluate((element) => {
+    const background = getComputedStyle(element).backgroundColor;
+    const modernAlpha = background.match(/\/\s*([\d.]+)\)/)?.[1];
+    const legacyAlpha = background.match(
+      /rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/,
+    )?.[1];
+    return {
+      alpha: Number(modernAlpha ?? legacyAlpha ?? 1),
+      background,
+    };
+  });
+
+const exerciseFloatingScrollbar = async (
+  page: Page,
+  scrollport: Locator,
+  scrollbar: Locator,
+  upwardDragDistance: number,
+) => {
+  const thumb = getFloatingScrollbarThumb(scrollbar);
+  await scrollport.evaluate((element) => element.scrollTo(0, 0));
+  const trackBounds = await scrollbar.boundingBox();
+  expect(trackBounds).not.toBeNull();
+  const scrollTopBeforeTrackClick = await scrollport.evaluate(
+    (element) => element.scrollTop,
+  );
+  await page.mouse.click(
+    trackBounds!.x + trackBounds!.width / 2,
+    trackBounds!.y + trackBounds!.height * 0.82,
+  );
+  await expect
+    .poll(() => scrollport.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(scrollTopBeforeTrackClick);
+
+  const thumbBounds = await thumb.boundingBox();
+  expect(thumbBounds).not.toBeNull();
+  const scrollTopBeforeDrag = await scrollport.evaluate(
+    (element) => element.scrollTop,
+  );
+  await page.mouse.move(
+    thumbBounds!.x + thumbBounds!.width / 2,
+    thumbBounds!.y + thumbBounds!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    thumbBounds!.x + thumbBounds!.width / 2,
+    thumbBounds!.y + thumbBounds!.height / 2 - upwardDragDistance,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() => scrollport.evaluate((element) => element.scrollTop))
+    .toBeLessThan(scrollTopBeforeDrag);
+};
+
+test("framed layout scrolls inside its main surface while edge-to-edge uses the document", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1133, height: 753 });
@@ -16,13 +81,38 @@ test("framed and edge-to-edge layouts scroll with the document", async ({
   await expect(root).toHaveAttribute("data-content-layout", "framed");
   await expect(page.locator(".courses-main-scrollport")).toHaveCount(0);
   await expect(mainSurface).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
-    .toBeGreaterThan(753);
+  const framedMetrics = await mainSurface.evaluate((main) => {
+    const bounds = main.getBoundingClientRect();
+    const dockBounds = document
+      .querySelector(".sidebar-appearance")
+      ?.getBoundingClientRect();
+    return {
+      bottomGap: window.innerHeight - bounds.bottom,
+      clientHeight: main.clientHeight,
+      dockBottomDelta: dockBounds
+        ? Math.abs(dockBounds.bottom - bounds.bottom)
+        : Number.POSITIVE_INFINITY,
+      overflowY: getComputedStyle(main).overflowY,
+      rightGap: window.innerWidth - bounds.right,
+      scrollHeight: main.scrollHeight,
+      top: bounds.top,
+    };
+  });
+  expect(framedMetrics.top).toBe(12);
+  expect(framedMetrics.rightGap).toBe(12);
+  expect(framedMetrics.bottomGap).toBe(10);
+  expect(framedMetrics.dockBottomDelta).toBeLessThan(0.5);
+  expect(framedMetrics.overflowY).toBe("auto");
+  expect(framedMetrics.scrollHeight).toBeGreaterThan(
+    framedMetrics.clientHeight,
+  );
 
   await page.evaluate(() => window.scrollTo(0, 420));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  await mainSurface.evaluate((main) => main.scrollTo(0, 420));
   await expect
-    .poll(() => page.evaluate(() => window.scrollY))
+    .poll(() => mainSurface.evaluate((main) => main.scrollTop))
     .toBeGreaterThan(300);
 
   await page.evaluate(() => {
@@ -37,11 +127,308 @@ test("framed and edge-to-edge layouts scroll with the document", async ({
   await page.reload();
   await expect(root).toHaveAttribute("data-content-layout", "edge-to-edge");
   await expect(mainSurface).toBeVisible();
+  await expect(mainSurface).toHaveCSS("overflow-y", "visible");
 
   await page.evaluate(() => window.scrollTo(0, 420));
   await expect
     .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(300);
+});
+
+test("page tabs pin beneath the shell edge while the framed surface uses only a floating thumb", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1133, height: 753 });
+
+  for (const [path, tabSelector] of [
+    ["/discussions/q-and-a", ".discussion-hub__tabs"],
+    ["/settings/appearance", ".settings-tabs"],
+  ] as const) {
+    await openApp(page, path);
+    if (path === "/settings/appearance") {
+      await revealDeferredAppearanceSettings(page);
+    }
+
+    const mainSurface = page.locator("main.courses-main");
+    const tabs = page.locator(tabSelector);
+    const floatingScrollbar = page.locator(".floating-scrollbar");
+
+    await mainSurface.evaluate((main) => main.scrollTo(0, 360));
+    await expect
+      .poll(() =>
+        page.evaluate((selector) => {
+          const main = document.querySelector("main.courses-main");
+          const tabList = document.querySelector(selector);
+          if (!main || !tabList) return null;
+          return Math.abs(
+            tabList.getBoundingClientRect().top -
+              main.getBoundingClientRect().top,
+          );
+        }, tabSelector),
+      )
+      .toBeLessThan(0.5);
+
+    await expect(tabs).toBeVisible();
+    const shellLayering = await page
+      .locator(".courses-app")
+      .evaluate((app, selector) => {
+        const tabList = document.querySelector(selector);
+        if (!tabList) return null;
+        return {
+          edgeShadow: getComputedStyle(app, "::after").boxShadow,
+          edgeZIndex: Number(getComputedStyle(app, "::after").zIndex),
+          tabZIndex: Number(getComputedStyle(tabList).zIndex),
+        };
+      }, tabSelector);
+    expect(shellLayering).not.toBeNull();
+    expect(shellLayering!.edgeShadow).not.toBe("none");
+    expect(shellLayering!.edgeZIndex).toBeGreaterThan(shellLayering!.tabZIndex);
+    await expect(floatingScrollbar).toHaveClass(/is-visible/);
+    const thumb = getFloatingScrollbarThumb(floatingScrollbar);
+    await expect(thumb).toHaveCount(1);
+    await expect(thumb).toHaveCSS("width", "6px");
+    await expect(floatingScrollbar).toHaveCSS("cursor", "auto");
+    await expect(thumb).toHaveCSS("cursor", "auto");
+    await expect
+      .poll(() =>
+        mainSurface.evaluate(
+          (main) =>
+            (main as HTMLElement).offsetWidth -
+            (main as HTMLElement).clientWidth,
+        ),
+      )
+      .toBe(0);
+
+    await mainSurface.evaluate((main) => main.scrollTo(0, 0));
+    const trackBounds = await floatingScrollbar.boundingBox();
+    const mainBounds = await mainSurface.boundingBox();
+    expect(trackBounds).not.toBeNull();
+    expect(mainBounds).not.toBeNull();
+    expect(
+      Math.abs(
+        trackBounds!.x +
+          trackBounds!.width -
+          (mainBounds!.x + mainBounds!.width),
+      ),
+    ).toBeLessThan(0.5);
+    expect(trackBounds!.y - mainBounds!.y).toBeGreaterThanOrEqual(17.5);
+    expect(
+      mainBounds!.y +
+        mainBounds!.height -
+        (trackBounds!.y + trackBounds!.height),
+    ).toBeGreaterThanOrEqual(17.5);
+
+    const thumbAppearance = await getFloatingScrollbarThumbAppearance(thumb);
+    expect(thumbAppearance.alpha).toBeCloseTo(0.9, 2);
+    await page.locator("html").evaluate((root) => {
+      root.style.setProperty("--accent", "#ff0066");
+    });
+    await expect
+      .poll(() =>
+        thumb.evaluate((element) => getComputedStyle(element).backgroundColor),
+      )
+      .not.toBe(thumbAppearance.background);
+    await page.locator("html").evaluate((root) => {
+      root.style.removeProperty("--accent");
+    });
+
+    await exerciseFloatingScrollbar(page, mainSurface, floatingScrollbar, 70);
+  }
+});
+
+test("the framed learning scrollbar clears content at compact and wide desktop sizes", async ({
+  page,
+}) => {
+  for (const width of [981, 1133]) {
+    await page.setViewportSize({ width, height: 678 });
+    await openApp(
+      page,
+      "/learn/typescript-course/career-opportunities?from=home",
+    );
+
+    const mainSurface = page.locator("main.courses-main");
+    const floatingScrollbar = page.locator(
+      '.floating-scrollbar[aria-controls="courses-main-scrollport"]',
+    );
+    const rightmostContent = page.locator(
+      width <= 1080
+        ? ".learning-workspace__player-wrap"
+        : ".learning-workspace__curriculum-column",
+    );
+    await expect(floatingScrollbar).toHaveClass(/is-visible/);
+    await expect(rightmostContent).toBeVisible();
+
+    const [mainBounds, trackBounds, contentBounds] = await Promise.all([
+      mainSurface.boundingBox(),
+      floatingScrollbar.boundingBox(),
+      rightmostContent.boundingBox(),
+    ]);
+    expect(mainBounds).not.toBeNull();
+    expect(trackBounds).not.toBeNull();
+    expect(contentBounds).not.toBeNull();
+    expect(
+      Math.abs(
+        trackBounds!.x +
+          trackBounds!.width -
+          (mainBounds!.x + mainBounds!.width),
+      ),
+    ).toBeLessThan(0.5);
+    expect(
+      trackBounds!.x - (contentBounds!.x + contentBounds!.width),
+    ).toBeGreaterThanOrEqual(1.5);
+
+    if (width > 1080) {
+      const curriculum = page.locator("#learning-course-curriculum-scrollport");
+      const curriculumScrollbar = page.locator(
+        '.floating-scrollbar[aria-controls="learning-course-curriculum-scrollport"]',
+      );
+      const curriculumThumb = getFloatingScrollbarThumb(curriculumScrollbar);
+      await expect(curriculumScrollbar).toHaveClass(/is-visible/);
+      await expect(curriculumScrollbar).toHaveAttribute("aria-hidden", "false");
+
+      const [curriculumBounds, curriculumTrackBounds] = await Promise.all([
+        curriculum.boundingBox(),
+        curriculumScrollbar.boundingBox(),
+      ]);
+      expect(curriculumBounds).not.toBeNull();
+      expect(curriculumTrackBounds).not.toBeNull();
+      expect(
+        Math.abs(
+          curriculumTrackBounds!.x +
+            curriculumTrackBounds!.width -
+            (curriculumBounds!.x + curriculumBounds!.width),
+        ),
+      ).toBeLessThan(0.5);
+      expect(
+        curriculumTrackBounds!.y - curriculumBounds!.y,
+      ).toBeGreaterThanOrEqual(13.5);
+      expect(
+        curriculumBounds!.y +
+          curriculumBounds!.height -
+          (curriculumTrackBounds!.y + curriculumTrackBounds!.height),
+      ).toBeGreaterThanOrEqual(13.5);
+
+      const matchingScrollbarStyles = await page.evaluate(() => {
+        const curriculum = document.querySelector(
+          "#learning-course-curriculum-scrollport",
+        );
+        const curriculumScrollbar = document.querySelector(
+          '.floating-scrollbar[aria-controls="learning-course-curriculum-scrollport"]',
+        );
+        const curriculumThumb = curriculumScrollbar?.querySelector(
+          ".floating-scrollbar__thumb",
+        );
+        const mainScrollbar = document.querySelector(
+          '.floating-scrollbar[aria-controls="courses-main-scrollport"]',
+        );
+        const mainThumb = mainScrollbar?.querySelector(
+          ".floating-scrollbar__thumb",
+        );
+        if (
+          !curriculum ||
+          !curriculumScrollbar ||
+          !curriculumThumb ||
+          !mainThumb
+        )
+          return null;
+        const nativeScrollbar = getComputedStyle(
+          curriculum,
+          "::-webkit-scrollbar",
+        );
+        const curriculumStyle = getComputedStyle(curriculum);
+        const curriculumThumbStyle = getComputedStyle(curriculumThumb);
+        const mainThumbStyle = getComputedStyle(mainThumb);
+        const horizontalBorderWidth =
+          Number.parseFloat(curriculumStyle.borderLeftWidth) +
+          Number.parseFloat(curriculumStyle.borderRightWidth);
+        return {
+          curriculumCursor: curriculumThumbStyle.cursor,
+          curriculumLayoutGutter:
+            (curriculum as HTMLElement).offsetWidth -
+            (curriculum as HTMLElement).clientWidth -
+            horizontalBorderWidth,
+          curriculumNativeWidth: Number.parseFloat(nativeScrollbar.width),
+          curriculumPosition: getComputedStyle(curriculumScrollbar).position,
+          curriculumThumbBackground: curriculumThumbStyle.backgroundColor,
+          curriculumThumbWidth: curriculumThumb.getBoundingClientRect().width,
+          mainThumbBackground: mainThumbStyle.backgroundColor,
+          mainThumbCursor: mainThumbStyle.cursor,
+          mainThumbWidth: mainThumb.getBoundingClientRect().width,
+        };
+      });
+      expect(matchingScrollbarStyles).not.toBeNull();
+      expect(matchingScrollbarStyles!.curriculumNativeWidth).toBe(0);
+      expect(matchingScrollbarStyles!.curriculumLayoutGutter).toBe(0);
+      expect(matchingScrollbarStyles!.curriculumPosition).toBe("fixed");
+      expect(matchingScrollbarStyles!.curriculumThumbWidth).toBeCloseTo(6, 1);
+      expect(matchingScrollbarStyles!.mainThumbWidth).toBeCloseTo(6, 1);
+      expect(matchingScrollbarStyles!.curriculumThumbWidth).toBeCloseTo(
+        matchingScrollbarStyles!.mainThumbWidth,
+        1,
+      );
+      expect(matchingScrollbarStyles!.curriculumThumbBackground).toBe(
+        matchingScrollbarStyles!.mainThumbBackground,
+      );
+      expect(matchingScrollbarStyles!.curriculumCursor).toBe("auto");
+      expect(matchingScrollbarStyles!.mainThumbCursor).toBe("auto");
+
+      expect(
+        (await getFloatingScrollbarThumbAppearance(curriculumThumb)).alpha,
+      ).toBeCloseTo(0.9, 2);
+      await exerciseFloatingScrollbar(
+        page,
+        curriculum,
+        curriculumScrollbar,
+        60,
+      );
+    }
+  }
+});
+
+test("curriculum scrollbar follows navigation and sidebar layout shifts without scrolling", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1424, height: 678 });
+  await openApp(page, "/");
+
+  const navigation = page.getByRole("complementary", {
+    name: "Student navigation",
+  });
+  await navigation.getByRole("button", { name: "My Courses" }).click();
+  await page
+    .getByRole("article")
+    .filter({ hasText: "The Ultimate TypeScript Course" })
+    .getByRole("button", { name: "Continue Learning" })
+    .click();
+
+  const curriculum = page.locator("#learning-course-curriculum-scrollport");
+  const curriculumScrollbar = page.locator(
+    '.floating-scrollbar[aria-controls="learning-course-curriculum-scrollport"]',
+  );
+  await expect(curriculum).toBeVisible();
+  await expect(curriculumScrollbar).toHaveClass(/is-visible/);
+
+  const scrollbarEdgeDelta = () =>
+    page.evaluate(() => {
+      const scrollport = document.querySelector(
+        "#learning-course-curriculum-scrollport",
+      );
+      const scrollbar = document.querySelector(
+        '.floating-scrollbar[aria-controls="learning-course-curriculum-scrollport"]',
+      );
+      if (!scrollport || !scrollbar) return Number.POSITIVE_INFINITY;
+      return Math.abs(
+        scrollbar.getBoundingClientRect().right -
+          scrollport.getBoundingClientRect().right,
+      );
+    });
+
+  await expect.poll(scrollbarEdgeDelta).toBeLessThan(0.5);
+
+  await navigation
+    .getByRole("button", { name: /^(Expand|Collapse) navigation$/ })
+    .click();
+  await expect.poll(scrollbarEdgeDelta).toBeLessThan(0.5);
 });
 
 test("dock context menus stay attached and reading controls update immediately", async ({
@@ -117,7 +504,7 @@ test("dock context menus stay attached and reading controls update immediately",
   );
 
   await quickSettings
-    .getByRole("combobox", { name: "Quick reading mode colors" })
+    .getByRole("button", { name: /^Quick reading mode colors:/ })
     .click();
   await page.getByRole("option", { name: "Light colors" }).click();
   await expect(page.locator("html")).toHaveAttribute(
@@ -160,6 +547,11 @@ test("theme menus use the available height before introducing overflow", async (
 }) => {
   await page.setViewportSize({ width: 1101, height: 753 });
   await openApp(page, "/");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/", {
+    dockItems,
+    dockOrder: dockItems,
+  });
 
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
@@ -207,6 +599,25 @@ test("theme menus use the available height before introducing overflow", async (
   await sidebar.getByRole("button", { name: "Expand navigation" }).click();
   await appearance.getByRole("button", { name: "Choose color theme" }).click();
   await assertPaletteFits(true);
+  await page.keyboard.press("Escape");
+
+  const modeControl = appearance.getByRole("button").nth(0);
+  await modeControl.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await modeControl.click({ button: "right" });
+  const lightPaletteMaterial = await page
+    .getByRole("menu", { name: "Choose a color theme" })
+    .evaluate((menu) => {
+      const styles = getComputedStyle(menu);
+      return {
+        backgroundColor: styles.backgroundColor,
+        backgroundImage: styles.backgroundImage,
+        boxShadow: styles.boxShadow,
+      };
+    });
+  expect(lightPaletteMaterial.backgroundColor).not.toBe("rgb(36, 35, 33)");
+  expect(lightPaletteMaterial.backgroundImage).toBe("none");
+  expect(lightPaletteMaterial.boxShadow).not.toBe("none");
 });
 
 test("sidebar keyboard shortcut hints can be hidden without disabling shortcuts", async ({
@@ -260,6 +671,7 @@ test("sidebar menu depth is independent from application surface depth", async (
   page,
 }) => {
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   const root = page.locator("html");
   const mainSurface = page.locator("main.student-surface-main");
@@ -367,6 +779,7 @@ test("light mode uses a visible neutral shadow for elevated surfaces", async ({
   page,
 }) => {
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   await page.getByRole("radio", { name: /^Light / }).click();
   const elevatedSurfaces = page.getByRole("switch", {
@@ -392,6 +805,7 @@ test("dark mode uses distinct contact and ambient shadows for elevated surfaces"
   page,
 }) => {
   await openApp(page, "/settings/appearance");
+  await revealDeferredAppearanceSettings(page);
 
   await page.getByRole("radio", { name: /^Dark / }).click();
   const root = page.locator("html");
@@ -483,6 +897,11 @@ test("active dock controls reuse the sidebar menu active surface", async ({
   page,
 }) => {
   await openApp(page, "/");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/", {
+    dockItems,
+    dockOrder: dockItems,
+  });
 
   const activeNavigation = page.locator(".courses-nav button.is-active");
   const appearanceControls = page.getByRole("group", {
@@ -620,6 +1039,11 @@ test("role, appearance, and academy palette persist across routes and reloads", 
   page,
 }) => {
   await openApp(page, "/");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/", {
+    dockItems,
+    dockOrder: dockItems,
+  });
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
   });
@@ -716,7 +1140,7 @@ test("role, appearance, and academy palette persist across routes and reloads", 
 
   await sidebar
     .getByRole("button", { name: "Open role and appearance menu" })
-    .click();
+    .click({ position: { x: 24, y: 24 } });
   await expect(paletteMenu).toBeHidden();
   await page.getByRole("menuitemradio", { name: "Creator" }).click();
   await expect(
@@ -743,6 +1167,34 @@ test("role, appearance, and academy palette persist across routes and reloads", 
   await expect(page.locator("html")).toHaveAttribute("data-palette", "ocean");
 });
 
+test("toggling appearance dismisses the open desktop theme menu", async ({
+  page,
+}) => {
+  await openApp(page, "/");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/", {
+    dockItems,
+    dockOrder: dockItems,
+  });
+  const appearanceControls = page
+    .getByRole("complementary", { name: "Student navigation" })
+    .getByRole("group", { name: "Appearance controls" });
+  const modeToggle = appearanceControls.getByRole("button").nth(0);
+  const paletteMenu = page.getByRole("menu", {
+    name: "Choose a color theme",
+  });
+
+  await appearanceControls
+    .getByRole("button", { name: "Choose color theme" })
+    .click();
+  await expect(paletteMenu).toBeVisible();
+
+  await modeToggle.click();
+  await expect(paletteMenu).toBeHidden();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectStoredValue(page, "veolms-theme", "light");
+});
+
 test("theme picker keeps pointer choices open and makes keyboard previews reversible", async ({
   page,
 }) => {
@@ -750,9 +1202,13 @@ test("theme picker keeps pointer choices open and makes keyboard previews revers
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
   });
-  const trigger = sidebar.getByRole("button", { name: "Choose color theme" });
+  const trigger = sidebar
+    .getByRole("group", { name: "Appearance controls" })
+    .getByRole("button")
+    .nth(0);
+  const openThemeMenu = () => trigger.click({ button: "right" });
 
-  await trigger.click();
+  await openThemeMenu();
   const menu = page.getByRole("menu", { name: "Choose a color theme" });
   const graphite = menu.getByRole("menuitemradio", {
     name: /Graphite Studio/,
@@ -760,6 +1216,75 @@ test("theme picker keeps pointer choices open and makes keyboard previews revers
   const ocean = menu.getByRole("menuitemradio", { name: /Ocean Blue/ });
 
   await expect(graphite).toBeFocused();
+  await expect(graphite).toHaveAttribute("title", "Graphite Studio");
+  const paletteMaterial = await graphite.evaluate((button) => {
+    const swatch = button.querySelector("i");
+    if (!swatch) throw new Error("Theme swatch surface is missing");
+    const menu = button.parentElement;
+    if (!menu) throw new Error("Theme menu surface is missing");
+    const menuRect = menu.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const swatchRect = swatch.getBoundingClientRect();
+    const menuStyles = getComputedStyle(menu);
+    const buttonStyles = getComputedStyle(button);
+    const swatchStyles = getComputedStyle(swatch);
+    const countShadowLayers = (value: string) =>
+      value.match(/(?:rgba?|color)\(/g)?.length ?? 0;
+    return {
+      menuWidth: menuRect.width,
+      menuRadius: Number.parseFloat(menuStyles.borderRadius),
+      gridGap: Number.parseFloat(menuStyles.columnGap),
+      buttonSquareDelta: Math.abs(buttonRect.width - buttonRect.height),
+      swatchSquareDelta: Math.abs(swatchRect.width - swatchRect.height),
+      swatchSize: swatchRect.width,
+      menuShadowLayers: countShadowLayers(menuStyles.boxShadow),
+      selectedBorderLayers: countShadowLayers(buttonStyles.boxShadow),
+      selectedInsetLayers: buttonStyles.boxShadow.match(/inset/g)?.length ?? 0,
+      selectedBorderColor: buttonStyles.borderTopColor,
+      selectedBorderStyle: buttonStyles.borderTopStyle,
+      selectedBackgroundImage: buttonStyles.backgroundImage,
+      selectedBorderWidth: Number.parseFloat(buttonStyles.borderTopWidth),
+      selectedTransitionProperty: buttonStyles.transitionProperty,
+      swatchDepthLayers: countShadowLayers(swatchStyles.boxShadow),
+      swatchBackgroundImage: swatchStyles.backgroundImage,
+      swatchTransform: swatchStyles.transform,
+    };
+  });
+  expect(paletteMaterial.menuWidth).toBeCloseTo(216, 0);
+  expect(paletteMaterial.menuRadius).toBe(24);
+  expect(paletteMaterial.gridGap).toBe(4);
+  expect(paletteMaterial.buttonSquareDelta).toBeLessThan(0.5);
+  expect(paletteMaterial.swatchSquareDelta).toBeLessThan(0.5);
+  expect(paletteMaterial.swatchSize).toBeGreaterThanOrEqual(35);
+  expect(paletteMaterial.swatchSize).toBeLessThanOrEqual(38);
+  expect(paletteMaterial.menuShadowLayers).toBeGreaterThanOrEqual(4);
+  expect(paletteMaterial.selectedBorderLayers).toBeGreaterThanOrEqual(3);
+  expect(paletteMaterial.selectedInsetLayers).toBe(1);
+  expect(paletteMaterial.selectedBorderColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(paletteMaterial.selectedBorderStyle).toBe("solid");
+  expect(paletteMaterial.selectedBackgroundImage).toBe("none");
+  expect(paletteMaterial.selectedBorderWidth).toBe(3);
+  expect(paletteMaterial.selectedTransitionProperty).toContain("transform");
+  expect(paletteMaterial.swatchDepthLayers).toBe(2);
+  expect(paletteMaterial.swatchBackgroundImage).toBe("none");
+  expect(paletteMaterial.swatchTransform).toBe("none");
+
+  const graphiteBounds = await graphite.boundingBox();
+  expect(graphiteBounds).not.toBeNull();
+  await page.mouse.move(
+    graphiteBounds!.x + graphiteBounds!.width / 2,
+    graphiteBounds!.y + graphiteBounds!.height / 2,
+  );
+  await page.mouse.down();
+  await expect
+    .poll(() =>
+      graphite.evaluate((button) => {
+        const transform = getComputedStyle(button).transform;
+        return transform === "none" ? 1 : new DOMMatrix(transform).a;
+      }),
+    )
+    .toBeCloseTo(0.985, 2);
+  await page.mouse.up();
   await ocean.hover();
   await expect(page.locator("html")).toHaveAttribute(
     "data-palette",
@@ -767,34 +1292,92 @@ test("theme picker keeps pointer choices open and makes keyboard previews revers
   );
   await expectStoredValue(page, "veolms-academy-theme", "graphite");
 
-  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowRight");
   const copper = menu.getByRole("menuitemradio", { name: /Copper Slate/ });
   await expect(copper).toBeFocused();
   await expect(copper).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-palette", "violet");
   await expectStoredValue(page, "veolms-academy-theme", "graphite");
 
-  await page.getByRole("main").click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press("ArrowLeft");
+  await expect(graphite).toBeFocused();
+  await expect(graphite).toHaveAttribute("aria-checked", "true");
+
+  await page.keyboard.press("ArrowDown");
+  const grove = menu.getByRole("menuitemradio", { name: /Grove Green/ });
+  await expect(grove).toBeFocused();
+  await expect(grove).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "grove");
+  await expectStoredValue(page, "veolms-academy-theme", "graphite");
+
+  await page.keyboard.press("ArrowUp");
+  await expect(graphite).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(grove).toBeFocused();
+
+  await page.keyboard.press("End");
+  const lime = menu.getByRole("menuitemradio", { name: /Electric Lime/ });
+  const onyx = menu.getByRole("menuitemradio", { name: /Veo Onyx/ });
+  await expect(lime).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(onyx).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(lime).toBeFocused();
+
+  await page
+    .locator("#courses-main-scrollport")
+    .click({ position: { x: 20, y: 20 } });
   await expect(menu).toBeHidden();
   await expect(page.locator("html")).toHaveAttribute(
     "data-palette",
     "graphite",
   );
 
-  await trigger.click();
+  await openThemeMenu();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(menu).toBeHidden();
   await expect(trigger).toBeFocused();
-  await expect(page.locator("html")).toHaveAttribute("data-palette", "violet");
-  await expectStoredValue(page, "veolms-academy-theme", "violet");
+  await expect(page.locator("html")).toHaveAttribute("data-palette", "grove");
+  await expectStoredValue(page, "veolms-academy-theme", "grove");
 
-  await trigger.click();
+  await openThemeMenu();
   await ocean.click();
   await expect(menu).toBeVisible();
   await expect(ocean).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-palette", "ocean");
   await expectStoredValue(page, "veolms-academy-theme", "ocean");
+
+  const brainwave = menu.getByRole("menuitemradio", {
+    name: /Brainwave Slate/,
+  });
+  await brainwave.click();
+  await expect(brainwave).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-palette",
+    "brainwave",
+  );
+  await expectStoredValue(page, "veolms-academy-theme", "brainwave");
+  await expect
+    .poll(() =>
+      page.locator("html").evaluate((root) => {
+        const styles = getComputedStyle(root);
+        return {
+          shell: styles.getPropertyValue("--app-shell").trim(),
+          workspace: styles.getPropertyValue("--main-surface").trim(),
+          raised: styles.getPropertyValue("--surface").trim(),
+          selected: styles.getPropertyValue("--selected").trim(),
+          accent: styles.getPropertyValue("--accent").trim(),
+        };
+      }),
+    )
+    .toEqual({
+      shell: "#151718",
+      workspace: "#242627",
+      raised: "#343839",
+      selected: "#323337",
+      accent: "#0085ff",
+    });
 });
 
 test("sidebar collapse and hide shortcuts persist without losing navigation", async ({
@@ -969,11 +1552,13 @@ test("moving header control swaps with the compact logo without showing both", a
 test("sidebar wordmark aligns with navigation text and crops throughout a continuous collapse drag", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
+  const path = "/learn/ui-ux-design-mastery?from=explore-courses";
+  await openApp(page, path);
+  await page.evaluate(() => {
     window.localStorage.setItem("veolms-sidebar-mode", "expanded");
     window.localStorage.setItem("veolms-sidebar-width", "300");
   });
-  await openApp(page, "/learn/ui-ux-design-mastery?from=explore-courses");
+  await updateSidebarPreferences(page, path, { headerLayout: "fixed" });
 
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
@@ -1236,7 +1821,13 @@ test("appearance controls grow with the sidebar before animating into a horizont
       return originalAnimate.apply(this, args);
     };
   });
-  await openApp(page, "/learn/ui-ux-design-mastery");
+  const path = "/learn/ui-ux-design-mastery";
+  await openApp(page, path);
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, path, {
+    dockItems,
+    dockOrder: dockItems,
+  });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.evaluate(() => {
     window.localStorage.setItem("veolms-reduce-animations", "false");
@@ -1394,6 +1985,35 @@ test("mobile More dialog traps the workflow and restores focus on Escape", async
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(more).toBeFocused();
+});
+
+test("dismissing More clears a desktop reading menu hidden by a viewport change", async ({
+  page,
+}) => {
+  await openApp(page, "/explore-courses");
+  const desktopReadingModeControl = page
+    .getByRole("complementary", { name: "Student navigation" })
+    .getByRole("button", { name: "Turn reading mode on" });
+  const quickSettings = page.getByRole("dialog", {
+    name: "Reading mode quick settings",
+  });
+
+  await desktopReadingModeControl.click({ button: "right" });
+  await expect(quickSettings).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(quickSettings).toBeHidden();
+  const more = page
+    .getByRole("navigation", { name: "Student mobile navigation" })
+    .getByRole("button", { name: "More navigation options" });
+  await more.click();
+  const moreDialog = page.getByRole("dialog", { name: /More/ });
+  await expect(moreDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(moreDialog).toBeHidden();
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(quickSettings).toBeHidden();
 });
 
 test("mobile More drawer keeps five dock controls in one touch-friendly row", async ({
@@ -1719,9 +2339,7 @@ test("mobile bottom navigation hides on forward scroll and returns on reversal",
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page, "/explore-courses");
 
-  const navigation = page.getByRole("navigation", {
-    name: "Student mobile navigation",
-  });
+  const navigation = page.locator(".mobile-bottom-nav");
   const scrollTo = (top: number) =>
     page.evaluate((scrollTop) => window.scrollTo(0, scrollTop), top);
 
@@ -1807,7 +2425,6 @@ test.describe("wide touch tablet navigation", () => {
     const cdp = await page.context().newCDPSession(page);
     const iconCenters = async () => {
       const controls = [
-        page.locator("button.sidebar-collapse"),
         page
           .getByRole("complementary", { name: "Student navigation" })
           .getByRole("button", { name: "Explore Courses" })
@@ -1826,7 +2443,7 @@ test.describe("wide touch tablet navigation", () => {
 
     const initialIconCenters = await iconCenters();
     for (const center of initialIconCenters) {
-      expect(center).toBeCloseTo(initialIconCenters[1]!, 0);
+      expect(center).toBeCloseTo(initialIconCenters[0]!, 0);
     }
 
     await cdp.send("Input.dispatchTouchEvent", {
@@ -1853,7 +2470,7 @@ test.describe("wide touch tablet navigation", () => {
     ).toHaveCSS("opacity", "1");
     const resizingIconCenters = await iconCenters();
     for (const center of resizingIconCenters) {
-      expect(center).toBeCloseTo(resizingIconCenters[1]!, 0);
+      expect(center).toBeCloseTo(resizingIconCenters[0]!, 0);
     }
     await cdp.send("Input.dispatchTouchEvent", {
       type: "touchEnd",
@@ -1945,7 +2562,9 @@ test.describe("wide touch tablet navigation", () => {
   test("swipes from the full screen with distance and velocity settling while sliders remain isolated", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
+    test.setTimeout(45_000);
+    await openApp(page, "/notifications");
+    await page.evaluate(() => {
       window.localStorage.setItem("veolms-sidebar-mode", "expanded");
       window.localStorage.setItem("veolms-sidebar-width", "252");
     });
@@ -2014,7 +2633,8 @@ test.describe("wide touch tablet navigation", () => {
     await sendTouch("touchEnd", []);
     await expect(app).not.toHaveClass(/courses-app--collapsed/);
 
-    await page.goto("/settings/appearance");
+    await openApp(page, "/settings/appearance");
+    await revealDeferredAppearanceSettings(page);
     const slider = page.locator("#reading-mode-color-temperature");
     await slider.scrollIntoViewIfNeeded();
     const sliderBox = await slider.boundingBox();
