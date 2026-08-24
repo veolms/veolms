@@ -62,8 +62,12 @@ import {
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
   useCategories,
+  useCourseEditor,
   useCreateCategory,
+  useCreateCourse,
+  useCreateSection,
   useDeleteCategory,
+  useUpdateCourseBasics,
 } from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
@@ -474,8 +478,14 @@ export function CourseCreatePage({
     }
   };
 
-  const [category, setCategory] = useState("");
-  const [difficultyLevel, setDifficultyLevel] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [difficultyLevel, setDifficultyLevel] = useState<
+    "beginner" | "intermediate" | "advanced" | ""
+  >("");
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(
+    activeEditId,
+  );
+  const [courseVersion, setCourseVersion] = useState<number>(1);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addCategoryError, setAddCategoryError] = useState("");
@@ -486,6 +496,10 @@ export function CourseCreatePage({
 
   const { data: serverCategories = [], isLoading: isLoadingCategories } =
     useCategories();
+  const { data: editorData } = useCourseEditor(currentCourseId);
+  const createCourseMutation = useCreateCourse();
+  const updateBasicsMutation = useUpdateCourseBasics();
+  const createSectionMutation = useCreateSection();
   const createCategoryMutation = useCreateCategory();
   const deleteCategoryMutation = useDeleteCategory();
 
@@ -493,17 +507,17 @@ export function CourseCreatePage({
     const options: Array<readonly [string, string]> = [
       ["", "Select a category"] as const,
     ];
-    const seen = new Set<string>();
-
     for (const cat of serverCategories) {
-      if (cat.name && !seen.has(cat.name.toLowerCase())) {
-        seen.add(cat.name.toLowerCase());
-        options.push([cat.name, cat.name] as const);
+      if (cat.id && cat.name) {
+        options.push([cat.id, cat.name] as const);
       }
     }
-
     return options;
   }, [serverCategories]);
+
+  const selectedCategoryName = useMemo(() => {
+    return serverCategories.find((c) => c.id === categoryId)?.name || "";
+  }, [serverCategories, categoryId]);
 
   const handleOpenAddCategoryModal = () => {
     setNewCategoryName("");
@@ -539,7 +553,7 @@ export function CourseCreatePage({
       const created = await createCategoryMutation.mutateAsync({
         name: trimmed,
       });
-      setCategory(created.name);
+      setCategoryId(created.id);
       setNewCategoryName("");
       setAddCategoryError("");
       setToastMessage(`Category "${created.name}" created successfully.`);
@@ -554,8 +568,8 @@ export function CourseCreatePage({
     const targetId = categoryToDelete.id;
     try {
       await deleteCategoryMutation.mutateAsync(targetId);
-      if (category === targetName) {
-        setCategory("");
+      if (categoryId === targetId) {
+        setCategoryId("");
       }
       setToastMessage(`Category "${targetName}" deleted successfully.`);
     } catch {
@@ -567,9 +581,9 @@ export function CourseCreatePage({
 
   const difficultyOptions = [
     ["", "Select difficulty level"],
-    ["Beginner", "Beginner"],
-    ["Intermediate", "Intermediate"],
-    ["Advanced", "Advanced"],
+    ["beginner", "Beginner"],
+    ["intermediate", "Intermediate"],
+    ["advanced", "Advanced"],
   ] as const;
 
   const handleBack = () => {
@@ -772,75 +786,114 @@ export function CourseCreatePage({
 
   // Pre-populate fields when editing an existing course
   useEffect(() => {
-    if (!targetCourse) {
-      setIsPublished(false);
-      return;
-    }
-
-    setIsPublished(true);
-    setCourseTitle(targetCourse.title);
-    setCourseDescription(targetCourse.description);
-    setThumbnail(targetCourse.thumbnail);
-    setCategory(targetCourse.category);
-    setDifficultyLevel(targetCourse.level);
-    setPricing({
-      pricingType: "paid",
-      sellingPrice: "1999",
-      originalPrice: "2999",
-    });
-
-    if (targetCourse.id === "ui-ux-design-mastery") {
-      setSections(
-        initialCourseSections.map((s, sIdx) => ({
-          id: `section-${s.id}`,
-          title: s.title,
-          isExpanded: sIdx === 0,
-          lessons: s.lessons.map(([num, title]) => ({
-            id: `lesson-${s.id}-${num}`,
-            title,
-            description: "",
-            contentType: "video" as const,
-            isExpanded: false,
-            resources: [],
-          })),
-        })),
+    if (editorData?.course) {
+      const c = editorData.course;
+      setIsPublished(c.status === "published");
+      setCourseTitle(c.title || "");
+      setCourseDescription(c.description || "");
+      setCategoryId(c.categoryId || "");
+      setDifficultyLevel(
+        (c.difficulty as "beginner" | "intermediate" | "advanced") || "",
       );
-    } else {
-      const sectionCount = Math.max(1, targetCourse.sections || 1);
-      const generatedSections: CurriculumSectionItem[] = Array.from(
-        { length: sectionCount },
-        (_, i) => ({
-          id: `section-${i + 1}`,
-          title: getSectionTitle(targetCourse, i),
-          isExpanded: i === 0,
-          lessons: [
-            {
-              id: `lesson-${i + 1}-1`,
-              title: `${getSectionTitle(targetCourse, i)} - Overview`,
+      setCourseVersion(c.version || 1);
+      if (editorData.sections && editorData.sections.length > 0) {
+        setSections(
+          editorData.sections.map((sec, secIdx) => ({
+            id: sec.id,
+            title: sec.title,
+            isExpanded: secIdx === 0,
+            lessons: (sec.lessons || []).map((les) => ({
+              id: les.id,
+              title: les.title,
+              description: les.description || "",
+              contentType: les.contentType,
+              isExpanded: false,
+              resources: (les.resources || []).map((res) => ({
+                id: res.id,
+                name: res.title || "Resource",
+                type: "PDF" as const,
+                size: "1.0 MB",
+              })),
+            })),
+          })),
+        );
+      }
+    } else if (targetCourse) {
+      setIsPublished(true);
+      setCourseTitle(targetCourse.title);
+      setCourseDescription(targetCourse.description);
+      setThumbnail(targetCourse.thumbnail);
+      const matchedCat = serverCategories.find(
+        (sc) => sc.name.toLowerCase() === targetCourse.category.toLowerCase(),
+      );
+      if (matchedCat) {
+        setCategoryId(matchedCat.id);
+      }
+      const lvl = targetCourse.level.toLowerCase();
+      if (lvl === "beginner" || lvl === "intermediate" || lvl === "advanced") {
+        setDifficultyLevel(lvl);
+      }
+      setPricing({
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "2999",
+      });
+
+      if (targetCourse.id === "ui-ux-design-mastery") {
+        setSections(
+          initialCourseSections.map((s, sIdx) => ({
+            id: `section-${s.id}`,
+            title: s.title,
+            isExpanded: sIdx === 0,
+            lessons: s.lessons.map(([num, title]) => ({
+              id: `lesson-${s.id}-${num}`,
+              title,
               description: "",
               contentType: "video" as const,
               isExpanded: false,
               resources: [],
-            },
-          ],
-        }),
-      );
-      setSections(generatedSections);
-    }
+            })),
+          })),
+        );
+      } else {
+        const sectionCount = Math.max(1, targetCourse.sections || 1);
+        const generatedSections: CurriculumSectionItem[] = Array.from(
+          { length: sectionCount },
+          (_, i) => ({
+            id: `section-${i + 1}`,
+            title: getSectionTitle(targetCourse, i),
+            isExpanded: i === 0,
+            lessons: [
+              {
+                id: `lesson-${i + 1}-1`,
+                title: `${getSectionTitle(targetCourse, i)} - Overview`,
+                description: "",
+                contentType: "video" as const,
+                isExpanded: false,
+                resources: [],
+              },
+            ],
+          }),
+        );
+        setSections(generatedSections);
+      }
 
-    setExtras((prev) => ({
-      ...prev,
-      inclusions: [
-        { id: "inc-1", text: "Full lifetime access" },
-        { id: "inc-2", text: "Downloadable resources" },
-        {
-          id: "inc-3",
-          text: `${targetCourse.sections} Sections & ${targetCourse.lectures} Lectures`,
-        },
-        { id: "inc-4", text: "Certificate of completion" },
-      ],
-    }));
-  }, [targetCourse]);
+      setExtras((prev) => ({
+        ...prev,
+        inclusions: [
+          { id: "inc-1", text: "Full lifetime access" },
+          { id: "inc-2", text: "Downloadable resources" },
+          {
+            id: "inc-3",
+            text: `${targetCourse.sections} Sections & ${targetCourse.lectures} Lectures`,
+          },
+          { id: "inc-4", text: "Certificate of completion" },
+        ],
+      }));
+    } else {
+      setIsPublished(false);
+    }
+  }, [editorData, targetCourse, serverCategories]);
 
   // Extras Inclusions Handlers
   const [draggedInclusionIndex, setDraggedInclusionIndex] = useState<
@@ -1056,18 +1109,58 @@ export function CourseCreatePage({
   });
 
   // Section actions
-  const handleAddSection = () => {
-    const newId = `section-${Date.now()}`;
-    setSections((prev) => [
-      ...prev,
-      {
-        id: newId,
-        title: `Section ${prev.length + 1}`,
-        isExpanded: true,
-        isEditingTitle: true,
-        lessons: [],
-      },
-    ]);
+  const handleAddSection = async () => {
+    if (createSectionMutation.isPending) return;
+
+    let targetCourseId = currentCourseId;
+
+    // If no course draft exists yet, create it on the server first
+    if (!targetCourseId) {
+      const fallbackTitle = courseTitle.trim() || "Untitled Course";
+      try {
+        const createdCourse = await createCourseMutation.mutateAsync({
+          title: fallbackTitle,
+        });
+        targetCourseId = createdCourse.id;
+        setCurrentCourseId(createdCourse.id);
+        setCourseVersion(createdCourse.version);
+        if (!courseTitle.trim()) {
+          setCourseTitle(fallbackTitle);
+        }
+      } catch (err: unknown) {
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to create course draft.";
+        setToastMessage(errorMsg);
+        return;
+      }
+    }
+
+    const newSectionTitle = `Section ${sections.length + 1}`;
+    try {
+      const createdSection = await createSectionMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          title: newSectionTitle,
+        },
+      });
+
+      setSections((prev) => [
+        ...prev,
+        {
+          id: createdSection.id,
+          title: createdSection.title,
+          isExpanded: true,
+          isEditingTitle: true,
+          lessons: [],
+        },
+      ]);
+      setToastMessage(`Section "${createdSection.title}" created successfully.`);
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to create section.";
+      setToastMessage(errorMsg);
+    }
   };
 
   const handleToggleSectionExpand = (sectionId: string) => {
@@ -1355,12 +1448,14 @@ export function CourseCreatePage({
 
   // Student-facing Preview Object Adapter
   const previewCourse: Course = {
-    id: "preview-course",
+    id: currentCourseId || "preview-course",
     title: courseTitle.trim() || "Course Title",
     description:
       courseDescription.trim() || "This is a short description of your course.",
-    level: (difficultyLevel || "Beginner") as CourseLevel,
-    category: (category || "Development") as CourseCategory,
+    level: (difficultyLevel
+      ? difficultyLevel.charAt(0).toUpperCase() + difficultyLevel.slice(1)
+      : "Beginner") as CourseLevel,
+    category: (selectedCategoryName || "Development") as CourseCategory,
     sections: Math.max(1, totalSections),
     lectures: Math.max(1, totalLessons),
     progress: null,
@@ -1478,22 +1573,97 @@ export function CourseCreatePage({
     }, 450);
   };
 
-  const handleSaveDraftAction = () => {
+  const handleSaveDraftAction = async () => {
     if (actionLoading) return;
+    if (!courseTitle.trim()) {
+      setToastMessage("Please enter a course title to save draft.");
+      return;
+    }
+
     setActionLoading("draft");
-    setTimeout(() => {
+    try {
+      if (!currentCourseId) {
+        // Create initial course draft
+        const created = await createCourseMutation.mutateAsync({
+          title: courseTitle.trim(),
+        });
+        setCurrentCourseId(created.id);
+        setCourseVersion(created.version);
+
+        // If description, category, or difficulty are filled, update basics immediately
+        if (
+          courseDescription.trim() ||
+          categoryId ||
+          difficultyLevel
+        ) {
+          const updated = await updateBasicsMutation.mutateAsync({
+            id: created.id,
+            payload: {
+              description: courseDescription.trim() || null,
+              categoryId: categoryId || null,
+              difficulty: difficultyLevel || null,
+              version: created.version,
+            },
+          });
+          setCourseVersion(updated.version);
+        }
+        setToastMessage("Draft course created successfully!");
+      } else {
+        // Update existing draft
+        const updated = await updateBasicsMutation.mutateAsync({
+          id: currentCourseId,
+          payload: {
+            title: courseTitle.trim(),
+            description: courseDescription.trim() || null,
+            categoryId: categoryId || null,
+            difficulty: difficultyLevel || null,
+            version: courseVersion,
+          },
+        });
+        setCourseVersion(updated.version);
+        setToastMessage("Draft saved successfully!");
+      }
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to save draft.";
+      setToastMessage(errorMsg);
+    } finally {
       setActionLoading(null);
-      setToastMessage("Draft saved successfully!");
-    }, 700);
+    }
   };
 
-  const handleSaveChangesAction = () => {
+  const handleSaveChangesAction = async () => {
     if (actionLoading) return;
+    if (!courseTitle.trim()) {
+      setToastMessage("Please enter a course title.");
+      return;
+    }
+
     setActionLoading("save");
-    setTimeout(() => {
-      setActionLoading(null);
+    try {
+      if (!currentCourseId) {
+        await handleSaveDraftAction();
+        return;
+      }
+      const updated = await updateBasicsMutation.mutateAsync({
+        id: currentCourseId,
+        payload: {
+          title: courseTitle.trim(),
+          description: courseDescription.trim() || null,
+          categoryId: categoryId || null,
+          difficulty: difficultyLevel || null,
+          version: courseVersion,
+        },
+      });
+      setCourseVersion(updated.version);
       setToastMessage("All changes saved successfully!");
-    }, 650);
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to save changes.";
+      setToastMessage(errorMsg);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleFinalPublishCourse = () => {
@@ -1778,14 +1948,14 @@ export function CourseCreatePage({
                     <input
                       id="course-title"
                       type="text"
-                      maxLength={60}
+                      maxLength={120}
                       placeholder="e.g. Complete Backend with Node.js"
                       value={courseTitle}
-                      onChange={(e) => setCourseTitle(e.target.value.slice(0, 60))}
-                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
+                      onChange={(e) => setCourseTitle(e.target.value.slice(0, 120))}
+                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
                     />
                     <span className="absolute right-3.5 text-[var(--muted)] text-[0.76rem] pointer-events-none">
-                      {courseTitle.length} / 60
+                      {courseTitle.length} / 120
                     </span>
                   </div>
                 </div>
@@ -1816,8 +1986,8 @@ export function CourseCreatePage({
                       Category <span className="text-[#ff5252] ml-0.5">*</span>
                     </label>
                     <ThemedSelect
-                      value={category}
-                      onValueChange={setCategory}
+                      value={categoryId}
+                      onValueChange={setCategoryId}
                       options={categoryOptions}
                       ariaLabel="Select category"
                       triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
@@ -1838,7 +2008,7 @@ export function CourseCreatePage({
                     </label>
                     <ThemedSelect
                       value={difficultyLevel}
-                      onValueChange={setDifficultyLevel}
+                      onValueChange={(val) => setDifficultyLevel(val as any)}
                       options={difficultyOptions}
                       ariaLabel="Select difficulty level"
                       triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
@@ -2169,6 +2339,7 @@ export function CourseCreatePage({
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
+                  disabled={createSectionMutation.isPending}
                   style={{
                     fontSize: "0.80rem",
                     fontWeight: 700,
@@ -2178,10 +2349,11 @@ export function CourseCreatePage({
                     paddingLeft: "16px",
                     paddingRight: "16px",
                   }}
-                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 max-[768px]:whitespace-nowrap max-[768px]:self-start"
                   onClick={handleAddSection}
                 >
-                  <Plus size={15} weight="bold" /> Add Section
+                  <Plus size={15} weight="bold" />
+                  {createSectionMutation.isPending ? "Creating..." : "Add Section"}
                 </button>
               </div>
             </div>
