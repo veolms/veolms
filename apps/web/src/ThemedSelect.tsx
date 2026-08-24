@@ -1,6 +1,7 @@
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Check } from "@phosphor-icons/react/Check";
 import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { Plus } from "@phosphor-icons/react/Plus";
 import { X } from "@phosphor-icons/react/X";
 import {
   useCallback,
@@ -28,6 +29,12 @@ export type ThemedSelectOption<Value extends string = string> = readonly [
   extra?: ThemedSelectOptionExtra,
 ];
 
+export interface ThemedSelectAction {
+  label: string;
+  icon?: ReactNode;
+  onSelect: () => void;
+}
+
 export interface ThemedSelectProps<Value extends string = string> {
   id?: string;
   value: Value;
@@ -40,6 +47,7 @@ export interface ThemedSelectProps<Value extends string = string> {
   contentClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
+  action?: ThemedSelectAction;
 }
 
 const joinClasses = (
@@ -48,10 +56,11 @@ const joinClasses = (
 
 interface MenuPosition {
   left: number;
-  top: number;
+  top?: number;
+  bottom?: number;
   width: number;
   maxHeight: number;
-  origin: "top" | "bottom";
+  side: "top" | "bottom";
 }
 
 /**
@@ -71,6 +80,7 @@ export function ThemedSelect<Value extends string>({
   contentClassName = "",
   searchable = false,
   searchPlaceholder = "Search...",
+  action,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -106,22 +116,28 @@ export function ThemedSelect<Value extends string>({
     });
   }, [options, searchable, searchQuery]);
 
-  const updatePosition = useCallback(() => {
+  const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
-    if (!trigger) return;
+    if (!trigger) return null;
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 12;
     const gap = 6;
     const desiredHeight = Math.min(
       340,
-      Math.max(48, (searchable ? 44 : 0) + filteredOptions.length * 38 + 12),
+      Math.max(
+        48,
+        (searchable ? 44 : 0) +
+          filteredOptions.length * 38 +
+          (action ? 42 : 0) +
+          12,
+      ),
     );
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const spaceAbove = rect.top - viewportPadding;
     const useAbove =
-      spaceBelow < Math.min(desiredHeight, 180) && spaceAbove > spaceBelow;
+      spaceBelow < desiredHeight && spaceAbove > spaceBelow;
     const maxHeight = Math.max(
-      100,
+      80,
       Math.min(desiredHeight, useAbove ? spaceAbove - gap : spaceBelow - gap),
     );
     const width = Math.min(
@@ -132,28 +148,28 @@ export function ThemedSelect<Value extends string>({
       Math.max(viewportPadding, rect.left),
       window.innerWidth - viewportPadding - width,
     );
-    setPosition({
+    return {
       left,
-      top: useAbove ? rect.top - gap : rect.bottom + gap,
+      top: useAbove ? undefined : rect.bottom + gap,
+      bottom: useAbove ? window.innerHeight - rect.top + gap : undefined,
       width,
       maxHeight,
-      origin: useAbove ? "bottom" : "top",
-    });
-  }, [filteredOptions.length, searchable]);
+      side: useAbove ? "top" : "bottom",
+    };
+  }, [action, filteredOptions.length, searchable]);
 
   const openMenu = () => {
     if (disabled) return;
     setSearchQuery("");
+    const pos = calculatePosition();
+    setPosition(pos);
     setOpen(true);
     requestAnimationFrame(() => {
-      updatePosition();
-      requestAnimationFrame(() => {
-        if (searchable && searchInputRef.current) {
-          searchInputRef.current.focus();
-        } else {
-          itemRefs.current[selectedIndex]?.focus();
-        }
-      });
+      if (searchable && searchInputRef.current) {
+        searchInputRef.current.focus({ preventScroll: true });
+      } else {
+        itemRefs.current[selectedIndex]?.focus({ preventScroll: true });
+      }
     });
   };
 
@@ -165,8 +181,11 @@ export function ThemedSelect<Value extends string>({
   };
 
   useLayoutEffect(() => {
-    if (open) updatePosition();
-  }, [open, updatePosition]);
+    if (open) {
+      const pos = calculatePosition();
+      if (pos) setPosition(pos);
+    }
+  }, [open, calculatePosition]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -179,7 +198,10 @@ export function ThemedSelect<Value extends string>({
         return;
       closeMenu();
     };
-    const reposition = () => updatePosition();
+    const reposition = () => {
+      const pos = calculatePosition();
+      if (pos) setPosition(pos);
+    };
     document.addEventListener("pointerdown", closeFromOutside, true);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
@@ -188,7 +210,7 @@ export function ThemedSelect<Value extends string>({
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [open, updatePosition]);
+  }, [open, calculatePosition]);
 
   const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
@@ -279,6 +301,7 @@ export function ThemedSelect<Value extends string>({
             id={menuId}
             role="listbox"
             aria-label={ariaLabel}
+            data-side={position.side}
             className={joinClasses("themed-select__content", contentClassName)}
             onKeyDown={handleMenuKeyDown}
             style={
@@ -286,15 +309,11 @@ export function ThemedSelect<Value extends string>({
                 position: "fixed",
                 left: position.left,
                 top: position.top,
+                bottom: position.bottom,
                 width: position.width,
                 boxSizing: "border-box",
                 maxHeight: position.maxHeight,
                 overflowY: "auto",
-                transform:
-                  position.origin === "bottom"
-                    ? "translateY(-100%)"
-                    : undefined,
-                transformOrigin: position.origin,
               } as CSSProperties
             }
           >
@@ -378,6 +397,21 @@ export function ThemedSelect<Value extends string>({
                 })
               )}
             </div>
+            {action && (
+              <div className="themed-select__action-wrapper">
+                <button
+                  type="button"
+                  className="themed-select__action-btn"
+                  onClick={() => {
+                    closeMenu(true);
+                    action.onSelect();
+                  }}
+                >
+                  {action.icon ?? <Plus size={14} weight="bold" />}
+                  <span>{action.label}</span>
+                </button>
+              </div>
+            )}
           </div>,
           document.body,
         )}

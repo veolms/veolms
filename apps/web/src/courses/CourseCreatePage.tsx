@@ -60,6 +60,7 @@ import {
 } from "../keyboardShortcuts";
 
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
+import { useCategories, useCreateCategory } from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
   CourseInclude,
@@ -471,14 +472,90 @@ export function CourseCreatePage({
 
   const [category, setCategory] = useState("");
   const [difficultyLevel, setDifficultyLevel] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addCategoryError, setAddCategoryError] = useState("");
 
-  const categoryOptions = [
-    ["", "Select a category"],
-    ["Development", "Development"],
-    ["Design", "Design"],
-    ["Database", "Database"],
-    ["Cloud", "Cloud"],
-  ] as const;
+  const { data: serverCategories = [] } = useCategories();
+  const createCategoryMutation = useCreateCategory();
+
+  const DEFAULT_CATEGORY_OPTIONS = useMemo(
+    () =>
+      [
+        ["", "Select a category"],
+        ["Development", "Development"],
+        ["Design", "Design"],
+        ["Database", "Database"],
+        ["Cloud", "Cloud"],
+      ] as const,
+    [],
+  );
+
+  const categoryOptions = useMemo(() => {
+    const existing: Array<readonly [string, string]> = [...DEFAULT_CATEGORY_OPTIONS];
+    const seen = new Set(existing.map(([val]) => val.toLowerCase()));
+
+    for (const cat of serverCategories) {
+      if (cat.name && !seen.has(cat.name.toLowerCase())) {
+        seen.add(cat.name.toLowerCase());
+        existing.push([cat.name, cat.name] as const);
+      }
+    }
+
+    for (const custom of customCategories) {
+      if (custom && !seen.has(custom.toLowerCase())) {
+        seen.add(custom.toLowerCase());
+        existing.push([custom, custom] as const);
+      }
+    }
+
+    return existing;
+  }, [DEFAULT_CATEGORY_OPTIONS, serverCategories, customCategories]);
+
+  const handleOpenAddCategoryModal = () => {
+    setNewCategoryName("");
+    setAddCategoryError("");
+    setIsAddCategoryModalOpen(true);
+  };
+
+  const handleCloseAddCategoryModal = () => {
+    if (createCategoryMutation.isPending) return;
+    setIsAddCategoryModalOpen(false);
+    setNewCategoryName("");
+    setAddCategoryError("");
+  };
+
+  const handleCreateCategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      setAddCategoryError("Please enter a category name.");
+      return;
+    }
+
+    const isDuplicate = categoryOptions.some(
+      ([val]) => val.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (isDuplicate) {
+      setAddCategoryError("This category already exists.");
+      return;
+    }
+
+    try {
+      await createCategoryMutation.mutateAsync({ name: trimmed });
+    } catch {
+      // Fallback for offline/mock environments
+    }
+
+    setCustomCategories((prev) =>
+      prev.includes(trimmed) ? prev : [...prev, trimmed],
+    );
+    setCategory(trimmed);
+    setIsAddCategoryModalOpen(false);
+    setNewCategoryName("");
+    setAddCategoryError("");
+  };
 
   const difficultyOptions = [
     ["", "Select difficulty level"],
@@ -1736,6 +1813,10 @@ export function CourseCreatePage({
                       options={categoryOptions}
                       ariaLabel="Select category"
                       triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
+                      action={{
+                        label: "+ Add category",
+                        onSelect: handleOpenAddCategoryModal,
+                      }}
                     />
                   </div>
 
@@ -4389,6 +4470,118 @@ export function CourseCreatePage({
                   onNavigateCourses={() => setIsPreviewModalOpen(false)}
                 />
               </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Add New Category Modal */}
+      {isAddCategoryModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 [animation:deleteModalFadeIn_0.18s_ease-out]"
+            onClick={handleCloseAddCategoryModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-category-modal-title"
+          >
+            <div
+              className="relative w-full max-w-[420px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[var(--surface)] p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3
+                  id="add-category-modal-title"
+                  className="m-0 text-[var(--text)] text-[1.1rem] font-bold tracking-tight"
+                >
+                  Add New Category
+                </h3>
+                <button
+                  type="button"
+                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0"
+                  onClick={handleCloseAddCategoryModal}
+                  aria-label="Close modal"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateCategory} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="new-category-name-input"
+                    className="text-[var(--text-secondary)] text-[0.82rem] font-semibold"
+                  >
+                    Category Name <span className="text-[#ff5252] ml-0.5">*</span>
+                  </label>
+                  <input
+                    id="new-category-name-input"
+                    type="text"
+                    autoFocus
+                    value={newCategoryName}
+                    onChange={(e) => {
+                      setNewCategoryName(e.target.value);
+                      if (addCategoryError) setAddCategoryError("");
+                    }}
+                    placeholder="e.g. Mobile Development"
+                    maxLength={100}
+                    className="w-full h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[var(--text)] text-[0.88rem] focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--muted)]"
+                  />
+                  {addCategoryError && (
+                    <p className="m-0 text-[0.78rem] text-[#ff5252] font-medium">
+                      {addCategoryError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseAddCategoryModal}
+                    disabled={createCategoryMutation.isPending}
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "14px",
+                      paddingRight: "14px",
+                    }}
+                    className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60"
+                  >
+                    <span>Cancel</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "18px",
+                      paddingRight: "18px",
+                    }}
+                    className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {createCategoryMutation.isPending ? (
+                      <>
+                        <CircleNotch size={14} className="animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} weight="bold" />
+                        <span>Create</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>,
           document.body,

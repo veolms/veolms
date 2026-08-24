@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CourseSummary, PublicCourse } from "@veolms/contracts";
+import type { Category, CourseSummary, PublicCourse } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
@@ -17,6 +17,14 @@ export function useCourse(slug: string) {
     queryKey: courseKeys.detail(slug),
     queryFn: () => coursesService.getBySlug(slug),
     enabled: Boolean(slug),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCategories() {
+  return useQuery<Category[], ApiError>({
+    queryKey: courseKeys.categories(),
+    queryFn: () => coursesService.listCategories(),
     staleTime: 5 * 60 * 1000,
   });
 }

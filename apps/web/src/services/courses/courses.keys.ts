@@ -3,4 +3,5 @@ export const courseKeys = {
   lists: () => [...courseKeys.all, "list"] as const,
   details: () => [...courseKeys.all, "detail"] as const,
   detail: (slug: string) => [...courseKeys.details(), slug] as const,
+  categories: () => [...courseKeys.all, "categories"] as const,
 };
