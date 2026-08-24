@@ -171,6 +171,7 @@ export function createMediaService({
     if (existingJob) {
       if (
         existingJob.status === "QUEUED" ||
+        existingJob.status === "PROVISIONING" ||
         existingJob.status === "PROCESSING"
       ) {
         logger?.info(

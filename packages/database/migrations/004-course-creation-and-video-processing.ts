@@ -266,11 +266,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("error", "text")
     .addCheckConstraint(
       "video_jobs_status_valid",
-      sql`status in ('queued', 'processing', 'completed', 'failed')`,
-    )
-    .addCheckConstraint(
-      "video_jobs_stage_valid",
-      sql`current_stage in ('queued', 'downloading', 'transcoding', 'uploading', 'finalizing', 'completed', 'failed')`,
+      sql`status in ('QUEUED', 'PROVISIONING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'queued', 'provisioning', 'processing', 'completed', 'failed')`,
     )
     .execute();
 
