@@ -14,3 +14,14 @@ export function useCreateCategory() {
     },
   });
 }
+
+export function useDeleteCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ success: boolean }, ApiError, string>({
+    mutationFn: (categoryId: string) => coursesService.deleteCategory(categoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: courseKeys.categories() });
+    },
+  });
+}

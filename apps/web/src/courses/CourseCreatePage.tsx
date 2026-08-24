@@ -60,7 +60,11 @@ import {
 } from "../keyboardShortcuts";
 
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
-import { useCategories, useCreateCategory } from "../services/courses";
+import {
+  useCategories,
+  useCreateCategory,
+  useDeleteCategory,
+} from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
   CourseInclude,
@@ -472,46 +476,34 @@ export function CourseCreatePage({
 
   const [category, setCategory] = useState("");
   const [difficultyLevel, setDifficultyLevel] = useState("");
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addCategoryError, setAddCategoryError] = useState("");
+  const [categoryToDelete, setCategoryToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const { data: serverCategories = [] } = useCategories();
+  const { data: serverCategories = [], isLoading: isLoadingCategories } =
+    useCategories();
   const createCategoryMutation = useCreateCategory();
-
-  const DEFAULT_CATEGORY_OPTIONS = useMemo(
-    () =>
-      [
-        ["", "Select a category"],
-        ["Development", "Development"],
-        ["Design", "Design"],
-        ["Database", "Database"],
-        ["Cloud", "Cloud"],
-      ] as const,
-    [],
-  );
+  const deleteCategoryMutation = useDeleteCategory();
 
   const categoryOptions = useMemo(() => {
-    const existing: Array<readonly [string, string]> = [...DEFAULT_CATEGORY_OPTIONS];
-    const seen = new Set(existing.map(([val]) => val.toLowerCase()));
+    const options: Array<readonly [string, string]> = [
+      ["", "Select a category"] as const,
+    ];
+    const seen = new Set<string>();
 
     for (const cat of serverCategories) {
       if (cat.name && !seen.has(cat.name.toLowerCase())) {
         seen.add(cat.name.toLowerCase());
-        existing.push([cat.name, cat.name] as const);
+        options.push([cat.name, cat.name] as const);
       }
     }
 
-    for (const custom of customCategories) {
-      if (custom && !seen.has(custom.toLowerCase())) {
-        seen.add(custom.toLowerCase());
-        existing.push([custom, custom] as const);
-      }
-    }
-
-    return existing;
-  }, [DEFAULT_CATEGORY_OPTIONS, serverCategories, customCategories]);
+    return options;
+  }, [serverCategories]);
 
   const handleOpenAddCategoryModal = () => {
     setNewCategoryName("");
@@ -520,7 +512,8 @@ export function CourseCreatePage({
   };
 
   const handleCloseAddCategoryModal = () => {
-    if (createCategoryMutation.isPending) return;
+    if (createCategoryMutation.isPending || deleteCategoryMutation.isPending)
+      return;
     setIsAddCategoryModalOpen(false);
     setNewCategoryName("");
     setAddCategoryError("");
@@ -534,8 +527,8 @@ export function CourseCreatePage({
       return;
     }
 
-    const isDuplicate = categoryOptions.some(
-      ([val]) => val.toLowerCase() === trimmed.toLowerCase(),
+    const isDuplicate = serverCategories.some(
+      (cat) => cat.name.toLowerCase() === trimmed.toLowerCase(),
     );
     if (isDuplicate) {
       setAddCategoryError("This category already exists.");
@@ -543,18 +536,33 @@ export function CourseCreatePage({
     }
 
     try {
-      await createCategoryMutation.mutateAsync({ name: trimmed });
+      const created = await createCategoryMutation.mutateAsync({
+        name: trimmed,
+      });
+      setCategory(created.name);
+      setNewCategoryName("");
+      setAddCategoryError("");
+      setToastMessage(`Category "${created.name}" created successfully.`);
     } catch {
-      // Fallback for offline/mock environments
+      setAddCategoryError("Failed to create category. Please try again.");
     }
+  };
 
-    setCustomCategories((prev) =>
-      prev.includes(trimmed) ? prev : [...prev, trimmed],
-    );
-    setCategory(trimmed);
-    setIsAddCategoryModalOpen(false);
-    setNewCategoryName("");
-    setAddCategoryError("");
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    const targetName = categoryToDelete.name;
+    const targetId = categoryToDelete.id;
+    try {
+      await deleteCategoryMutation.mutateAsync(targetId);
+      if (category === targetName) {
+        setCategory("");
+      }
+      setToastMessage(`Category "${targetName}" deleted successfully.`);
+    } catch {
+      setToastMessage(`Failed to delete category "${targetName}".`);
+    } finally {
+      setCategoryToDelete(null);
+    }
   };
 
   const difficultyOptions = [
@@ -1814,7 +1822,7 @@ export function CourseCreatePage({
                       ariaLabel="Select category"
                       triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
                       action={{
-                        label: "+ Add category",
+                        label: "+ Add / Manage categories",
                         onSelect: handleOpenAddCategoryModal,
                       }}
                     />
@@ -4475,7 +4483,7 @@ export function CourseCreatePage({
           document.body,
         )}
 
-      {/* Add New Category Modal */}
+      {/* Manage Categories Modal */}
       {isAddCategoryModalOpen &&
         typeof document !== "undefined" &&
         createPortal(
@@ -4487,20 +4495,25 @@ export function CourseCreatePage({
             aria-labelledby="add-category-modal-title"
           >
             <div
-              className="relative w-full max-w-[420px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[var(--surface)] p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
+              className="relative w-full max-w-[460px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[var(--surface)] p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="flex items-center justify-between gap-3 mb-4">
-                <h3
-                  id="add-category-modal-title"
-                  className="m-0 text-[var(--text)] text-[1.1rem] font-bold tracking-tight"
-                >
-                  Add New Category
-                </h3>
+                <div>
+                  <h3
+                    id="add-category-modal-title"
+                    className="m-0 text-[var(--text)] text-[1.1rem] font-bold tracking-tight"
+                  >
+                    Manage Categories
+                  </h3>
+                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
+                    Create new categories or remove existing ones.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0"
+                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0 shrink-0"
                   onClick={handleCloseAddCategoryModal}
                   aria-label="Close modal"
                 >
@@ -4508,84 +4521,143 @@ export function CourseCreatePage({
                 </button>
               </div>
 
-              <form onSubmit={handleCreateCategory} className="flex flex-col gap-4">
+              {/* Add New Category Form */}
+              <form onSubmit={handleCreateCategory} className="flex flex-col gap-3 pb-4 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="new-category-name-input"
                     className="text-[var(--text-secondary)] text-[0.82rem] font-semibold"
                   >
-                    Category Name <span className="text-[#ff5252] ml-0.5">*</span>
+                    Add New Category <span className="text-[#ff5252] ml-0.5">*</span>
                   </label>
-                  <input
-                    id="new-category-name-input"
-                    type="text"
-                    autoFocus
-                    value={newCategoryName}
-                    onChange={(e) => {
-                      setNewCategoryName(e.target.value);
-                      if (addCategoryError) setAddCategoryError("");
-                    }}
-                    placeholder="e.g. Mobile Development"
-                    maxLength={100}
-                    className="w-full h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[var(--text)] text-[0.88rem] focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--muted)]"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      id="new-category-name-input"
+                      type="text"
+                      autoFocus
+                      value={newCategoryName}
+                      onChange={(e) => {
+                        setNewCategoryName(e.target.value);
+                        if (addCategoryError) setAddCategoryError("");
+                      }}
+                      placeholder="e.g. Mobile Development"
+                      maxLength={100}
+                      className="flex-1 h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[var(--text)] text-[0.88rem] focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--muted)]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                      style={{
+                        fontSize: "0.80rem",
+                        fontWeight: 700,
+                        height: "40px",
+                        borderRadius: "9px",
+                        gap: "6px",
+                        paddingLeft: "16px",
+                        paddingRight: "16px",
+                      }}
+                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {createCategoryMutation.isPending ? (
+                        <>
+                          <CircleNotch size={14} className="animate-spin" />
+                          <span>Adding...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={14} weight="bold" />
+                          <span>Add</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   {addCategoryError && (
                     <p className="m-0 text-[0.78rem] text-[#ff5252] font-medium">
                       {addCategoryError}
                     </p>
                   )}
                 </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleCloseAddCategoryModal}
-                    disabled={createCategoryMutation.isPending}
-                    style={{
-                      fontSize: "0.80rem",
-                      fontWeight: 700,
-                      height: "34px",
-                      borderRadius: "8px",
-                      gap: "6px",
-                      paddingLeft: "14px",
-                      paddingRight: "14px",
-                    }}
-                    className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60"
-                  >
-                    <span>Cancel</span>
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-                    style={{
-                      fontSize: "0.80rem",
-                      fontWeight: 700,
-                      height: "34px",
-                      borderRadius: "8px",
-                      gap: "6px",
-                      paddingLeft: "18px",
-                      paddingRight: "18px",
-                    }}
-                    className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {createCategoryMutation.isPending ? (
-                      <>
-                        <CircleNotch size={14} className="animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={14} weight="bold" />
-                        <span>Create</span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </form>
+
+              {/* Existing Categories List */}
+              <div className="pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[var(--text-secondary)] text-[0.80rem] font-semibold">
+                    Existing Categories ({serverCategories.length})
+                  </span>
+                  {isLoadingCategories && (
+                    <CircleNotch size={13} className="animate-spin text-[var(--muted)]" />
+                  )}
+                </div>
+
+                <div className="max-h-[220px] overflow-y-auto flex flex-col gap-1.5 pr-1">
+                  {serverCategories.length === 0 ? (
+                    <div className="py-6 text-center text-[var(--muted)] text-[0.82rem] italic">
+                      No categories found. Add your first category above.
+                    </div>
+                  ) : (
+                    serverCategories.map((cat) => (
+                      <div
+                        key={cat.id}
+                        className="flex items-center justify-between gap-3 px-3 py-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_16%,transparent)] transition-all duration-150"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Tag size={15} className="text-[var(--accent)] shrink-0" weight="duotone" />
+                          <span className="text-[var(--text)] text-[0.86rem] font-medium truncate">
+                            {cat.name}
+                          </span>
+                          <span className="text-[var(--muted)] text-[0.72rem] px-1.5 py-0.5 rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] shrink-0">
+                            {cat.slug}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryToDelete({ id: cat.id, name: cat.name })}
+                          disabled={deleteCategoryMutation.isPending}
+                          title={`Delete category ${cat.name}`}
+                          aria-label={`Delete category ${cat.name}`}
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[6px] text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 border-none bg-transparent cursor-pointer transition-colors duration-150 p-0 shrink-0"
+                        >
+                          <Trash size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end pt-4 mt-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                <button
+                  type="button"
+                  onClick={handleCloseAddCategoryModal}
+                  style={{
+                    fontSize: "0.80rem",
+                    fontWeight: 700,
+                    height: "34px",
+                    borderRadius: "8px",
+                    paddingLeft: "16px",
+                    paddingRight: "16px",
+                  }}
+                  className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)]"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>,
           document.body,
         )}
+
+      {/* Delete Category Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(categoryToDelete)}
+        title="Delete Category"
+        message={`Are you sure you want to delete the category "${categoryToDelete?.name}"? This action will remove it from available course categories.`}
+        confirmLabel="Delete"
+        onConfirm={handleConfirmDeleteCategory}
+        onClose={() => setCategoryToDelete(null)}
+      />
     </div>
   );
 }

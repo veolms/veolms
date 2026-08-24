@@ -22,4 +22,8 @@ export const coursesService = {
   createCategory: (payload: CreateCategoryRequest): Promise<Category> => {
     return api.post<Category>("/categories", payload);
   },
+
+  deleteCategory: (categoryId: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/categories/${categoryId}`);
+  },
 };

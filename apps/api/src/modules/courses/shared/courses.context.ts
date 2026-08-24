@@ -34,7 +34,7 @@ export function createCoursesContext({
   const requireCourseAuthor = [
     middleware.authenticate,
     middleware.requireAuthenticated,
-    middleware.requireRoles([CREATOR_ROLE, INSTRUCTOR_ROLE]),
+    middleware.requireRoles([CREATOR_ROLE, INSTRUCTOR_ROLE, ADMIN_ROLE]),
   ];
 
   const requireAdmin = [
