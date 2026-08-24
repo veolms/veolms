@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  S3ServiceException,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as fs from "node:fs";
@@ -62,13 +63,13 @@ export class S3StorageService {
       return {
         contentLength: response.ContentLength,
       };
-    } catch (error: any) {
-      if (
-        error.name === "NotFound" ||
-        error.$metadata?.httpStatusCode === 404
-      ) {
-        return null;
-      }
+    } catch (error: unknown) {
+     if (
+      error instanceof S3ServiceException &&
+      error.$metadata.httpStatusCode === 404
+    ) {
+      return null;
+    }
       throw error;
     }
   }
