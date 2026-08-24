@@ -106,6 +106,7 @@ export function useUpdateCourseSection() {
     },
   });
 }
+export const useUpdateSection = useUpdateCourseSection;
 
 export function useDeleteCourseSection() {
   const queryClient = useQueryClient();
@@ -124,6 +125,7 @@ export function useDeleteCourseSection() {
     },
   });
 }
+export const useDeleteSection = useDeleteCourseSection;
 
 export function useReorderCourseSections() {
   const queryClient = useQueryClient();
@@ -142,3 +144,4 @@ export function useReorderCourseSections() {
     },
   });
 }
+export const useReorderSections = useReorderCourseSections;

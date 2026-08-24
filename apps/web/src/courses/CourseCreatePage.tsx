@@ -67,7 +67,10 @@ import {
   useCreateCourse,
   useCreateSection,
   useDeleteCategory,
+  useDeleteSection,
+  useReorderSections,
   useUpdateCourseBasics,
+  useUpdateSection,
 } from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
@@ -500,6 +503,12 @@ export function CourseCreatePage({
   const createCourseMutation = useCreateCourse();
   const updateBasicsMutation = useUpdateCourseBasics();
   const createSectionMutation = useCreateSection();
+  const updateSectionMutation = useUpdateSection();
+  const deleteSectionMutation = useDeleteSection();
+  const reorderSectionsMutation = useReorderSections();
+  const [isCreatingSection, setIsCreatingSection] = useState(false);
+  const [updatingSectionId, setUpdatingSectionId] = useState<string | null>(null);
+  const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
   const createCategoryMutation = useCreateCategory();
   const deleteCategoryMutation = useDeleteCategory();
 
@@ -650,14 +659,10 @@ export function CourseCreatePage({
   ];
 
   // Curriculum Step state
-  const [sections, setSections] = useState<CurriculumSectionItem[]>([
-    {
-      id: "section-1",
-      title: "Introduction to the Course",
-      isExpanded: true,
-      lessons: [],
-    },
-  ]);
+  const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const dragInitialSectionIdsRef = useRef<string[]>([]);
 
   // Pricing interfaces
   type PricingType = "free" | "paid";
@@ -797,26 +802,36 @@ export function CourseCreatePage({
       );
       setCourseVersion(c.version || 1);
       if (editorData.sections && editorData.sections.length > 0) {
-        setSections(
-          editorData.sections.map((sec, secIdx) => ({
-            id: sec.id,
-            title: sec.title,
-            isExpanded: secIdx === 0,
-            lessons: (sec.lessons || []).map((les) => ({
-              id: les.id,
-              title: les.title,
-              description: les.description || "",
-              contentType: les.contentType,
-              isExpanded: false,
-              resources: (les.resources || []).map((res) => ({
-                id: res.id,
-                name: res.title || "Resource",
-                type: "PDF" as const,
-                size: "1.0 MB",
-              })),
-            })),
-          })),
-        );
+        setSections((prev) => {
+          const prevMap = new Map(prev.map((s) => [s.id, s]));
+          return editorData.sections.map((sec, secIdx) => {
+            const existing = prevMap.get(sec.id);
+            return {
+              id: sec.id,
+              title: sec.title,
+              isExpanded: existing ? existing.isExpanded : secIdx === 0,
+              isEditingTitle: existing ? existing.isEditingTitle : false,
+              lessons: (sec.lessons || []).map((les) => {
+                const existingLesson = existing?.lessons.find(
+                  (l) => l.id === les.id,
+                );
+                return {
+                  id: les.id,
+                  title: les.title,
+                  description: les.description || "",
+                  contentType: les.contentType,
+                  isExpanded: existingLesson ? existingLesson.isExpanded : false,
+                  resources: (les.resources || []).map((res) => ({
+                    id: res.id,
+                    name: res.title || "Resource",
+                    type: "PDF" as const,
+                    size: "1.0 MB",
+                  })),
+                };
+              }),
+            };
+          });
+        });
       }
     } else if (targetCourse) {
       setIsPublished(true);
@@ -1110,8 +1125,14 @@ export function CourseCreatePage({
 
   // Section actions
   const handleAddSection = async () => {
-    if (createSectionMutation.isPending) return;
+    if (
+      isCreatingSection ||
+      createSectionMutation.isPending ||
+      createCourseMutation.isPending
+    )
+      return;
 
+    setIsCreatingSection(true);
     let targetCourseId = currentCourseId;
 
     // If no course draft exists yet, create it on the server first
@@ -1132,11 +1153,12 @@ export function CourseCreatePage({
           (err as { message?: string })?.message ||
           "Failed to create course draft.";
         setToastMessage(errorMsg);
+        setIsCreatingSection(false);
         return;
       }
     }
 
-    const newSectionTitle = `Section ${sections.length + 1}`;
+    const newSectionTitle = "Title";
     try {
       const createdSection = await createSectionMutation.mutateAsync({
         courseId: targetCourseId,
@@ -1151,7 +1173,7 @@ export function CourseCreatePage({
           id: createdSection.id,
           title: createdSection.title,
           isExpanded: true,
-          isEditingTitle: true,
+          isEditingTitle: false,
           lessons: [],
         },
       ]);
@@ -1160,6 +1182,8 @@ export function CourseCreatePage({
       const errorMsg =
         (err as { message?: string })?.message || "Failed to create section.";
       setToastMessage(errorMsg);
+    } finally {
+      setIsCreatingSection(false);
     }
   };
 
@@ -1179,14 +1203,61 @@ export function CourseCreatePage({
     );
   };
 
-  const handleSaveSectionTitle = (sectionId: string, newTitle: string) => {
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === sectionId
-          ? { ...s, title: newTitle.trim() || s.title, isEditingTitle: false }
-          : s,
-      ),
-    );
+  const handleSaveSectionTitle = async (
+    sectionId: string,
+    newTitle: string,
+  ) => {
+    const trimmedTitle = newTitle.trim();
+    const sec = sections.find((s) => s.id === sectionId);
+    if (!sec) return;
+
+    if (!trimmedTitle || trimmedTitle === sec.title) {
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id === sectionId ? { ...s, isEditingTitle: false } : s,
+        ),
+      );
+      return;
+    }
+
+    if (currentCourseId) {
+      setUpdatingSectionId(sectionId);
+      try {
+        await updateSectionMutation.mutateAsync({
+          courseId: currentCourseId,
+          sectionId,
+          payload: { title: trimmedTitle },
+        });
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId
+              ? { ...s, title: trimmedTitle, isEditingTitle: false }
+              : s,
+          ),
+        );
+        setToastMessage(`Section updated to "${trimmedTitle}".`);
+      } catch (err: unknown) {
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update section title.";
+        setToastMessage(errorMsg);
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId ? { ...s, isEditingTitle: false } : s,
+          ),
+        );
+      } finally {
+        setUpdatingSectionId(null);
+      }
+    } else {
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id === sectionId
+            ? { ...s, title: trimmedTitle, isEditingTitle: false }
+            : s,
+        ),
+      );
+    }
   };
 
   const handleDeleteSection = (sectionId: string) => {
@@ -1194,10 +1265,29 @@ export function CourseCreatePage({
     if (!sec) return;
     setDeleteModalState({
       isOpen: true,
-      title: `Delete"${sec.title}"?`,
-      message: `Are you sure you want to delete"${sec.title}" and its ${sec.lessons.length} lessons? This action cannot be undone.`,
-      onConfirm: () => {
-        setSections((prev) => prev.filter((s) => s.id !== sectionId));
+      title: `Delete "${sec.title}"?`,
+      message: `Are you sure you want to delete "${sec.title}" and its ${sec.lessons.length} lessons? This action cannot be undone.`,
+      onConfirm: async () => {
+        if (currentCourseId) {
+          setDeletingSectionId(sectionId);
+          try {
+            await deleteSectionMutation.mutateAsync({
+              courseId: currentCourseId,
+              sectionId,
+            });
+            setSections((prev) => prev.filter((s) => s.id !== sectionId));
+            setToastMessage(`Section "${sec.title}" deleted.`);
+          } catch (err: unknown) {
+            const errorMsg =
+              (err as { message?: string })?.message ||
+              "Failed to delete section.";
+            setToastMessage(errorMsg);
+          } finally {
+            setDeletingSectionId(null);
+          }
+        } else {
+          setSections((prev) => prev.filter((s) => s.id !== sectionId));
+        }
       },
     });
   };
@@ -1208,6 +1298,15 @@ export function CourseCreatePage({
     index: number,
     section: CurriculumSectionItem,
   ) => {
+    if (
+      reorderSectionsMutation.isPending ||
+      updatingSectionId ||
+      deletingSectionId
+    ) {
+      e.preventDefault();
+      return;
+    }
+    dragInitialSectionIdsRef.current = sectionsRef.current.map((s) => s.id);
     setDraggedSectionIndex(index);
     setCustomDragImage(
       e,
@@ -1230,9 +1329,48 @@ export function CourseCreatePage({
     setDraggedSectionIndex(index);
   };
 
-  const handleSectionDragEnd = () => {
+  const handleSectionDragEnd = async () => {
     setDraggedSectionIndex(null);
     setDragEnabledSectionId(null);
+
+    const initialIds = dragInitialSectionIdsRef.current;
+    const currentSections = sectionsRef.current;
+    const currentIds = currentSections.map((s) => s.id);
+
+    // Check if order actually changed
+    const orderChanged =
+      initialIds.length === currentIds.length &&
+      initialIds.some((id, idx) => id !== currentIds[idx]);
+
+    if (!orderChanged) return;
+
+    if (currentCourseId) {
+      // Validate that all IDs are valid UUIDs (persisted sections)
+      const allValidUuids = currentIds.every((id) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id,
+        ),
+      );
+
+      if (allValidUuids) {
+        try {
+          await reorderSectionsMutation.mutateAsync({
+            courseId: currentCourseId,
+            payload: {
+              orderedSectionIds: currentIds,
+              version: courseVersion || 1,
+            },
+          });
+          setCourseVersion((prev) => prev + 1);
+          setToastMessage("Sections reordered successfully.");
+        } catch (err: unknown) {
+          const errorMsg =
+            (err as { message?: string })?.message ||
+            "Failed to save section order.";
+          setToastMessage(errorMsg);
+        }
+      }
+    }
   };
 
   // Lesson actions
@@ -1456,8 +1594,8 @@ export function CourseCreatePage({
       ? difficultyLevel.charAt(0).toUpperCase() + difficultyLevel.slice(1)
       : "Beginner") as CourseLevel,
     category: (selectedCategoryName || "Development") as CourseCategory,
-    sections: Math.max(1, totalSections),
-    lectures: Math.max(1, totalLessons),
+    sections: totalSections,
+    lectures: totalLessons,
     progress: null,
     enrolled: false,
     duration: computedDuration,
@@ -1469,7 +1607,7 @@ export function CourseCreatePage({
     sections.length > 0
       ? sections.map((sec, secIdx) => ({
           id: secIdx + 1,
-          title: sec.title.trim() || `Section ${secIdx + 1}`,
+          title: sec.title.trim() || "Title",
           progress: `0/${sec.lessons.length}`,
           lessons:
             sec.lessons.length > 0
@@ -1482,20 +1620,13 @@ export function CourseCreatePage({
               : [
                   [
                     1,
-                    `Introduction to ${sec.title.trim() || `Section ${secIdx + 1}`}`,
+                    `Introduction to ${sec.title.trim() || "Title"}`,
                     "05:00",
                     "todo",
                   ],
                 ],
         }))
-      : [
-          {
-            id: 1,
-            title: "Introduction",
-            progress: "0/1",
-            lessons: [[1, "Course Overview", "05:00", "todo"]],
-          },
-        ];
+      : [];
 
   const rawInclusions = extras.inclusions
     .map((inc) => inc.text.trim())
@@ -1702,7 +1833,7 @@ export function CourseCreatePage({
   };
 
   return (
-    <div className="relative flex w-full flex-col p-0 text-[var(--text)] box-border max-[768px]:pb-0">
+    <div className="relative flex w-full flex-1 flex-col p-0 text-[var(--text)] box-border max-[768px]:pb-0">
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-[18px] max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
@@ -1918,7 +2049,7 @@ export function CourseCreatePage({
 
       {/* Step Content Region */}
       <div
-        className={`w-full pb-12 will-change-[transform,opacity] max-[768px]:pb-[110px] slide-from-${slideDirection}`}
+        className={`w-full flex-1 flex flex-col min-h-0 pb-12 will-change-[transform,opacity] max-[768px]:pb-[110px] slide-from-${slideDirection}`}
         key={activeStep}
       >
         {activeStep === "basics" ? (
@@ -2324,13 +2455,21 @@ export function CourseCreatePage({
             </div>
           </div>
         ) : activeStep === "curriculum" ? (
-          <div className="flex flex-col gap-4 w-full">
+          <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
             {/* Header row */}
             <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
               <div className="">
-                <h2 className="m-0 text-[var(--text)] text-[1.25rem] font-bold tracking-[-0.015em]">
-                  Course Curriculum
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="m-0 text-[var(--text)] text-[1.25rem] font-bold tracking-[-0.015em]">
+                    Course Curriculum
+                  </h2>
+                  {reorderSectionsMutation.isPending && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] text-[0.76rem] font-semibold">
+                      <CircleNotch size={13} className="animate-spin" />
+                      <span>Saving order...</span>
+                    </span>
+                  )}
+                </div>
                 <p className="m-0 mt-1 text-[var(--muted)] text-[0.85rem]">
                   Organize your course into sections and lessons. You can
                   reorder them anytime.
@@ -2339,7 +2478,12 @@ export function CourseCreatePage({
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  disabled={createSectionMutation.isPending}
+                  disabled={
+                    isCreatingSection ||
+                    createSectionMutation.isPending ||
+                    createCourseMutation.isPending ||
+                    reorderSectionsMutation.isPending
+                  }
                   style={{
                     fontSize: "0.80rem",
                     fontWeight: 700,
@@ -2349,25 +2493,91 @@ export function CourseCreatePage({
                     paddingLeft: "16px",
                     paddingRight: "16px",
                   }}
-                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
                   onClick={handleAddSection}
                 >
-                  <Plus size={15} weight="bold" />
-                  {createSectionMutation.isPending ? "Creating..." : "Add Section"}
+                  {isCreatingSection ||
+                  createSectionMutation.isPending ||
+                  createCourseMutation.isPending ? (
+                    <>
+                      <CircleNotch size={15} className="animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={15} weight="bold" />
+                      <span>Add Section</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
 
-            {/* Sections list */}
-            {sections.map((sec, secIndex) => (
-              <div
+            {/* Sections list or Empty State */}
+            {sections.length === 0 ? (
+              <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] mb-3.5">
+                  <BookOpen size={24} weight="bold" />
+                </div>
+                <h3 className="m-0 text-[var(--text)] text-[1.05rem] font-bold">
+                  No sections added yet
+                </h3>
+                <p className="m-0 mt-1.5 max-w-[320px] text-[var(--muted)] text-[0.84rem]">
+                  Add your first section to start building your course curriculum.
+                </p>
+                <button
+                  type="button"
+                  disabled={
+                    isCreatingSection ||
+                    createSectionMutation.isPending ||
+                    createCourseMutation.isPending ||
+                    reorderSectionsMutation.isPending
+                  }
+                  style={{
+                    fontSize: "0.80rem",
+                    fontWeight: 700,
+                    height: "34px",
+                    borderRadius: "8px",
+                    gap: "6px",
+                    paddingLeft: "16px",
+                    paddingRight: "16px",
+                    marginTop: "18px",
+                  }}
+                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={handleAddSection}
+                >
+                  {isCreatingSection ||
+                  createSectionMutation.isPending ||
+                  createCourseMutation.isPending ? (
+                    <>
+                      <CircleNotch size={15} className="animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={15} weight="bold" />
+                      <span>Add Section</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              sections.map((sec, secIndex) => (
+                <div
                 key={sec.id}
                 className={`border rounded-[14px] bg-[var(--surface)] shadow-[var(--card-shadow)] overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                  draggedSectionIndex === secIndex
-                    ? "opacity-35 border-dashed border-[var(--accent)]"
-                    : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                  deletingSectionId === sec.id
+                    ? "opacity-45 pointer-events-none border-red-500/30"
+                    : draggedSectionIndex === secIndex
+                      ? "opacity-35 border-dashed border-[var(--accent)]"
+                      : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
                 }`}
-                draggable={dragEnabledSectionId === sec.id}
+                draggable={
+                  dragEnabledSectionId === sec.id &&
+                  !updatingSectionId &&
+                  !deletingSectionId &&
+                  !reorderSectionsMutation.isPending
+                }
                 onDragStart={(e) => handleSectionDragStart(e, secIndex, sec)}
                 onDragOver={(e) => handleSectionDragOver(e, secIndex)}
                 onDragEnd={handleSectionDragEnd}
@@ -2380,14 +2590,30 @@ export function CourseCreatePage({
                 >
                   <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
                     <span
-                      className="flex items-center justify-center text-[var(--muted)] cursor-grab opacity-60 transition-opacity duration-150 hover:opacity-100"
-                      title="Drag to reorder section"
-                      onMouseEnter={() => setDragEnabledSectionId(sec.id)}
+                      className={`flex items-center justify-center text-[var(--muted)] transition-opacity duration-150 ${
+                        reorderSectionsMutation.isPending
+                          ? "opacity-25 cursor-not-allowed pointer-events-none"
+                          : "cursor-grab opacity-60 hover:opacity-100"
+                      }`}
+                      title={
+                        reorderSectionsMutation.isPending
+                          ? "Reordering in progress..."
+                          : "Drag to reorder section"
+                      }
+                      onMouseEnter={() => {
+                        if (!reorderSectionsMutation.isPending) {
+                          setDragEnabledSectionId(sec.id);
+                        }
+                      }}
                       onMouseLeave={() => {
                         if (draggedSectionIndex === null)
                           setDragEnabledSectionId(null);
                       }}
-                      onMouseDown={() => setDragEnabledSectionId(sec.id)}
+                      onMouseDown={() => {
+                        if (!reorderSectionsMutation.isPending) {
+                          setDragEnabledSectionId(sec.id);
+                        }
+                      }}
                       onMouseUp={() => {
                         if (draggedSectionIndex === null)
                           setDragEnabledSectionId(null);
@@ -2401,29 +2627,48 @@ export function CourseCreatePage({
                         Section {secIndex + 1}
                       </span>
                       {sec.isEditingTitle ? (
-                        <input
-                          type="text"
-                          className="border border-[var(--accent)] rounded-md px-2 py-0.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none"
-                          defaultValue={sec.title}
-                          autoFocus
+                        <div
+                          className="flex items-center gap-2 max-[768px]:w-full"
                           onClick={(e) => e.stopPropagation()}
-                          onBlur={(e) =>
-                            handleSaveSectionTitle(sec.id, e.target.value)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleSaveSectionTitle(
-                                sec.id,
-                                (e.target as HTMLInputElement).value,
-                              );
+                        >
+                          <input
+                            type="text"
+                            className="border border-[var(--accent)] rounded-md px-2 py-0.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                            defaultValue={sec.title}
+                            autoFocus
+                            disabled={updatingSectionId === sec.id}
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={(e) =>
+                              handleSaveSectionTitle(sec.id, e.target.value)
                             }
-                          }}
-                        />
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                          />
+                          {updatingSectionId === sec.id && (
+                            <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.76rem] font-semibold">
+                              <CircleNotch size={14} className="animate-spin" />
+                              <span>Saving...</span>
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span
-                          className="text-[var(--text)] text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0"
+                          className={`text-[var(--text)] text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                            updatingSectionId === sec.id ||
+                            deletingSectionId === sec.id
+                              ? "opacity-60 pointer-events-none"
+                              : ""
+                          }`}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (
+                              updatingSectionId === sec.id ||
+                              deletingSectionId === sec.id
+                            )
+                              return;
                             handleStartEditSectionTitle(sec.id);
                           }}
                           title="Click to edit section title"
@@ -2431,16 +2676,27 @@ export function CourseCreatePage({
                           {sec.title}
                         </span>
                       )}
-                      <span className="ml-1 text-[var(--muted)] text-[0.76rem] font-normal">
-                        {sec.lessons.length}{" "}
-                        {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
-                      </span>
+                      {deletingSectionId === sec.id ? (
+                        <span className="inline-flex items-center gap-1 text-red-400 text-[0.76rem] font-semibold">
+                          <CircleNotch size={12} className="animate-spin" />
+                          <span>Deleting...</span>
+                        </span>
+                      ) : (
+                        <span className="ml-1 text-[var(--muted)] text-[0.76rem] font-normal">
+                          {sec.lessons.length}{" "}
+                          {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                     <button
                       type="button"
-                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0"
+                      disabled={
+                        updatingSectionId === sec.id ||
+                        deletingSectionId === sec.id
+                      }
+                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                       aria-label="Edit section title"
                       title="Edit section title"
                       onClick={(e) => {
@@ -2448,22 +2704,41 @@ export function CourseCreatePage({
                         handleStartEditSectionTitle(sec.id);
                       }}
                     >
-                      <PencilSimple size={15} />
+                      {updatingSectionId === sec.id ? (
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-[var(--accent)]"
+                        />
+                      ) : (
+                        <PencilSimple size={15} />
+                      )}
                     </button>
                     <button
                       type="button"
-                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0"
+                      disabled={
+                        deletingSectionId === sec.id ||
+                        updatingSectionId === sec.id
+                      }
+                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                       aria-label="Delete section"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteSection(sec.id);
                       }}
                     >
-                      <Trash size={15} />
+                      {deletingSectionId === sec.id ? (
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-red-400"
+                        />
+                      ) : (
+                        <Trash size={15} />
+                      )}
                     </button>
                     <button
                       type="button"
-                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                      disabled={deletingSectionId === sec.id}
+                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed [&>svg]:transition-transform [&>svg]:duration-200 ${
                         sec.isExpanded ? "is-expanded [&>svg]:rotate-180" : ""
                       }`}
                       aria-label={
@@ -3018,7 +3293,8 @@ export function CourseCreatePage({
                   </div>
                 </div>
               </div>
-            ))}
+            ))
+          )}
           </div>
         ) : activeStep === "access-rules" ? (
           <div className="flex w-full flex-col gap-5">
