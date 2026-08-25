@@ -1,4 +1,20 @@
 reviews:
+  # Temporary review batch: application TypeScript/React sources. This scope is
+  # reverted after the oversized pull request has been reviewed in batches.
+  path_filters:
+    - "!apps/web/src/**/*.css"
+    - "!apps/web/src/notifications/**"
+    - "!apps/web/tests/**"
+    - "!apps/web/public/**"
+    - "!apps/web/AGENTS.md"
+    - "!apps/web/components.json"
+    - "!apps/web/package.json"
+    - "!apps/web/playwright.config.ts"
+    - "!apps/web/tsconfig.json"
+    - "!apps/web/vite.config.ts"
+    - "!design-qa.md"
+    - "!eslint.config.js"
+    - "!packages/**"
   auto_review:
     enabled: true
     auto_incremental_review: true
