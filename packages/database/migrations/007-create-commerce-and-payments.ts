@@ -226,6 +226,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addCheckConstraint("coupon_redemptions_discount_non_negative", sql`discount_amount >= 0`)
+    .addUniqueConstraint("coupon_redemptions_coupon_order_unique", ["coupon_id", "order_id"])
     .execute();
 
   await sql`create index idx_coupon_redemptions_coupon_user on coupon_redemptions (coupon_id, user_id)`.execute(database);
@@ -253,6 +254,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
+    .addColumn("gateway_key_id", "text")
     .addCheckConstraint(
       "payments_status_valid",
       sql`status in ('initiated', 'processing', 'captured', 'failed', 'refunded')`,

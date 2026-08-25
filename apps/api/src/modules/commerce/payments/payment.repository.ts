@@ -47,6 +47,7 @@ export async function insertPayment(
     gateway_provider: string;
     gateway_order_id: string;
     gateway_payment_id?: string | null;
+    gateway_key_id?: string | null;
     amount: number;
     currency: string;
     status: PaymentStatus;
@@ -69,6 +70,7 @@ export async function updatePayment(
   paymentId: string,
   updates: {
     gateway_payment_id?: string | null;
+    gateway_key_id?: string | null;
     status?: PaymentStatus;
     payment_method?: unknown | null;
     error_code?: string | null;

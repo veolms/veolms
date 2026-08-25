@@ -49,24 +49,32 @@ export function createCartService({
       };
     }
 
-    // Convert raw cart items into pricing calculation inputs
     const pricingInputs: CartItemInput[] = rawItems.map((it) => ({
       itemType: it.item_type,
       courseId: it.course_id ?? undefined,
       bundleId: it.bundle_id ?? undefined,
     }));
 
-    // Authoritatively calculate prices & discounts using the pricing engine
-    const { pricing } = await pricingService.calculatePricing({
-      userId,
-      items: pricingInputs,
-    });
+    // Attempt pricing — degrade gracefully if an item became unavailable.
+    let pricingItems: Array<{ title: string; unitPrice: number }> = [];
+    let subtotalAmount = 0;
+    let currency = "INR";
+
+    try {
+      const { pricing } = await pricingService.calculatePricing({ userId, items: pricingInputs });
+      pricingItems = pricing.items;
+      subtotalAmount = pricing.subtotalAmount;
+      currency = pricing.currency;
+    } catch {
+      // Pricing failed (e.g., a course was unpublished); show items at zero price.
+      pricingItems = [];
+    }
 
     const enrichedItems: CartItem[] = [];
 
     for (let i = 0; i < rawItems.length; i++) {
       const raw = rawItems[i]!;
-      const calculated = pricing.items[i];
+      const calculated = pricingItems[i];
 
       let slug = "";
       let thumbnailMediaId: string | null | undefined = null;
@@ -91,7 +99,7 @@ export function createCartService({
         slug,
         thumbnailMediaId,
         unitPrice: calculated?.unitPrice ?? 0,
-        currency: pricing.currency,
+        currency,
         createdAt: raw.created_at,
       });
     }
@@ -101,8 +109,8 @@ export function createCartService({
       userId,
       items: enrichedItems,
       itemCount: enrichedItems.length,
-      subtotalAmount: pricing.subtotalAmount,
-      currency: pricing.currency,
+      subtotalAmount,
+      currency,
       updatedAt: new Date(),
     };
   }

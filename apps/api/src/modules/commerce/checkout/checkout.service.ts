@@ -119,6 +119,7 @@ export function createCheckoutService({
             gateway: {
               provider: payment.gateway_provider as any,
               gatewayOrderId: payment.gateway_order_id,
+              keyId: payment.gateway_key_id ?? undefined,
               amount: payment.amount,
               currency: payment.currency,
             },

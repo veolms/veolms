@@ -59,8 +59,9 @@ export async function insertCouponRedemption(
   return await database
     .insertInto("coupon_redemptions")
     .values(values)
+    .onConflict((oc) => oc.columns(["coupon_id", "order_id"]).doNothing())
     .returningAll()
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst(); // returns undefined if conflict — that is correct and expected
 }
 
 export async function insertCoupon(

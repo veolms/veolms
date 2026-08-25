@@ -35,7 +35,7 @@ export interface PaymentService {
       keyId?: string;
     };
   }>;
-  verifyPayment(input: VerifyPaymentRequest): Promise<VerifyPaymentResponse>;
+  verifyPayment(userId: string, input: VerifyPaymentRequest): Promise<VerifyPaymentResponse>;
   getPaymentById(paymentId: string): Promise<Payment | undefined>;
   getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
   refundPayment(input: CreateRefundRequest & { createdBy?: string }): Promise<Refund>;
@@ -104,6 +104,7 @@ export function createPaymentService({
         gateway_provider: paymentGateway.providerName,
         gateway_order_id: gatewayOrder.gatewayOrderId,
         gateway_payment_id: null,
+        gateway_key_id: gatewayOrder.keyId ?? null,
         amount: order.total_amount,
         currency: order.currency,
         status: "initiated",
@@ -148,11 +149,12 @@ export function createPaymentService({
   /**
    * Verifies client payment signature and transitions order to PAID and fulfills enrollments.
    */
-  async function verifyPayment(input: VerifyPaymentRequest): Promise<VerifyPaymentResponse> {
+  async function verifyPayment(userId: string, input: VerifyPaymentRequest): Promise<VerifyPaymentResponse> {
     const { orderId, gatewayOrderId, gatewayPaymentId, gatewaySignature } = input;
 
     const order = await orderRepo.findOrderById(database, orderId);
-    if (!order) {
+    if (!order || order.user_id !== userId) {
+      // Do not reveal whether the order exists for another user
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
 
@@ -179,24 +181,26 @@ export function createPaymentService({
       gatewaySignature,
     });
 
+    // Determine next attempt number from existing records
+    const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
+    const nextAttemptNumber = existingAttempts.length + 1;
+
     if (!isValid) {
       await paymentRepo.insertPaymentAttempt(database, {
         id: crypto.randomUUID(),
         payment_id: payment.id,
         gateway_payment_id: gatewayPaymentId,
-        attempt_number: 2,
+        attempt_number: nextAttemptNumber,
         status: "failed",
         error_code: "SIGNATURE_VERIFICATION_FAILED",
         error_description: "Invalid payment signature.",
       });
-
       throw CommerceErrors.PAYMENT_SIGNATURE_INVALID();
     }
 
-    // 2. Fetch authoritative payment status and details from Gateway
+    // 2. Fetch authoritative payment status from Gateway (OUTSIDE transaction)
     const paymentDetails = await paymentGateway.getPayment(gatewayPaymentId);
 
-    // Verify amount and currency match
     if (paymentDetails.amount !== order.total_amount) {
       throw CommerceErrors.PAYMENT_AMOUNT_MISMATCH();
     }
@@ -206,79 +210,83 @@ export function createPaymentService({
 
     const now = new Date();
 
-    // 3. Mark payment as captured & record successful attempt
-    await paymentRepo.updatePayment(database, payment.id, {
-      gateway_payment_id: gatewayPaymentId,
-      status: "captured",
-      payment_method: paymentDetails.method
-        ? {
-            method: paymentDetails.method,
-            bank: paymentDetails.bank,
-            wallet: paymentDetails.wallet,
-            vpa: paymentDetails.vpa,
-            cardLast4: paymentDetails.cardLast4,
-          }
-        : null,
-      updated_at: now,
-    });
-
-    await paymentRepo.insertPaymentAttempt(database, {
-      id: crypto.randomUUID(),
-      payment_id: payment.id,
-      gateway_payment_id: gatewayPaymentId,
-      attempt_number: 2,
-      status: "captured",
-    });
-
-    // 4. Mark order as PAID
-    await orderRepo.markOrderPaidIfPending(database, order.id, now);
-
-    // 5. Record coupon redemption if order had coupon
-    if (order.coupon_id) {
-      await couponRepo.insertCouponRedemption(database, {
-        id: crypto.randomUUID(),
-        coupon_id: order.coupon_id,
-        user_id: order.user_id,
-        order_id: order.id,
-        discount_amount: order.discount_amount,
-        created_at: now,
+    // 3. Transactional fulfillment: payment captured + order paid + coupon + enrollments
+    await database.transaction().execute(async (trx) => {
+      // 3a. Mark payment captured
+      await paymentRepo.updatePayment(trx, payment.id, {
+        gateway_payment_id: gatewayPaymentId,
+        status: "captured",
+        payment_method: paymentDetails.method
+          ? {
+              method: paymentDetails.method,
+              bank: paymentDetails.bank,
+              wallet: paymentDetails.wallet,
+              vpa: paymentDetails.vpa,
+              cardLast4: paymentDetails.cardLast4,
+            }
+          : null,
+        updated_at: now,
       });
-    }
 
-    // 6. Fulfill course & bundle enrollments
-    const orderItems = await orderRepo.listOrderItems(database, order.id);
-    for (const item of orderItems) {
-      if (item.item_type === "course" && item.course_id) {
-        await enrollmentRepo.insertEnrollment(database, {
+      // 3b. Record successful attempt
+      await paymentRepo.insertPaymentAttempt(trx, {
+        id: crypto.randomUUID(),
+        payment_id: payment.id,
+        gateway_payment_id: gatewayPaymentId,
+        attempt_number: nextAttemptNumber,
+        status: "captured",
+      });
+
+      // 3c. Mark order PAID (idempotent — only if pending/processing)
+      await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+
+      // 3d. Record coupon redemption (idempotent via ON CONFLICT DO NOTHING)
+      if (order.coupon_id) {
+        await couponRepo.insertCouponRedemption(trx, {
           id: crypto.randomUUID(),
+          coupon_id: order.coupon_id,
           user_id: order.user_id,
-          course_id: item.course_id,
           order_id: order.id,
-          status: "active",
-          source: "direct_purchase",
-          access_starts_at: now,
-          access_expires_at: null,
+          discount_amount: order.discount_amount,
           created_at: now,
-          updated_at: now,
         });
-      } else if (item.item_type === "bundle" && item.bundle_id) {
-        const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
-        for (const bc of bundleCourses) {
-          await enrollmentRepo.insertEnrollment(database, {
+      }
+
+      // 3e. Fulfill enrollments
+      const orderItems = await orderRepo.listOrderItems(trx, order.id);
+      for (const item of orderItems) {
+        if (item.item_type === "course" && item.course_id) {
+          await enrollmentRepo.insertEnrollment(trx, {
             id: crypto.randomUUID(),
             user_id: order.user_id,
-            course_id: bc.course_id,
+            course_id: item.course_id,
             order_id: order.id,
             status: "active",
-            source: "bundle_purchase",
+            source: "direct_purchase",
             access_starts_at: now,
             access_expires_at: null,
             created_at: now,
             updated_at: now,
           });
+        } else if (item.item_type === "bundle" && item.bundle_id) {
+          const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
+          for (const bc of bundleCourses) {
+            await enrollmentRepo.insertEnrollment(trx, {
+              id: crypto.randomUUID(),
+              user_id: order.user_id,
+              course_id: bc.course_id,
+              order_id: order.id,
+              status: "active",
+              source: "bundle_purchase",
+              access_starts_at: now,
+              access_expires_at: null,
+              created_at: now,
+              updated_at: now,
+            });
+          }
         }
       }
-    }
+    });
 
     return {
       verified: true,
@@ -288,6 +296,7 @@ export function createPaymentService({
       message: "Payment verified and enrollments granted successfully.",
     };
   }
+
 
   async function getPaymentById(paymentId: string) {
     const p = await paymentRepo.findPaymentById(database, paymentId);

@@ -414,6 +414,8 @@ export const verifyPaymentRequestSchema = z.strictObject({
   gatewaySignature: z.string().min(1),
 });
 export type VerifyPaymentRequest = z.infer<typeof verifyPaymentRequestSchema>;
+export const verifyPurchaseRequestSchema = verifyPaymentRequestSchema;
+export type VerifyPurchaseRequest = VerifyPaymentRequest;
 
 export const verifyPaymentResponseSchema = z.strictObject({
   verified: z.boolean(),

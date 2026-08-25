@@ -7,9 +7,12 @@ import type {
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { createAccessService } from "../../access/access.service.ts";
 import * as refundRepo from "./refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
+import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
+import * as bundleRepo from "../bundles/bundle.repository.ts";
 
 export interface RefundService {
   processRefund(
@@ -27,6 +30,8 @@ export function createRefundService({
   database: Kysely<Database>;
   paymentGateway: PaymentGateway;
 }): RefundService {
+  const accessService = createAccessService();
+
   /**
    * Processes a refund (full or partial) via PaymentGateway and tracks refund status idempotently.
    */
@@ -108,6 +113,28 @@ export function createRefundService({
 
       return record;
     });
+
+    const newTotalRefundedFinal = totalRefundedAlready + requestedAmount;
+    const isFullRefund = newTotalRefundedFinal >= payment.amount;
+
+    // 3. Post-transaction: revoke access and suspend enrollments on full refund
+    if (isFullRefund) {
+      await accessService.revokeAccessForOrder(database, order.id);
+
+      const orderItems = await orderRepo.listOrderItems(database, order.id);
+      for (const item of orderItems) {
+        const courseIds: string[] = [];
+        if (item.item_type === "course" && item.course_id) {
+          courseIds.push(item.course_id);
+        } else if (item.item_type === "bundle" && item.bundle_id) {
+          const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
+          courseIds.push(...bundleCourses.map((bc) => bc.course_id));
+        }
+        for (const courseId of courseIds) {
+          await enrollmentRepo.updateEnrollmentStatus(database, order.user_id, courseId, "revoked");
+        }
+      }
+    }
 
     return {
       id: createdRefund.id,
