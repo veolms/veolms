@@ -1,8 +1,7 @@
 import {
   authMessageResponseSchema,
-  passkeyAuthenticationOptionsResponseSchema,
   passkeyLoginVerifyRequestSchema,
-  passkeyRegistrationOptionsResponseSchema,
+  passkeyOptionsResponseSchema,
   passkeyRegisterVerifyRequestSchema,
   totpEnableRequestSchema,
   totpEnableResponseSchema,
@@ -100,7 +99,7 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Passkey options challenge.",
-            passkeyRegistrationOptionsResponseSchema,
+            passkeyOptionsResponseSchema,
           ),
           401: errorResponse("Unauthorized."),
           403: errorResponse(
@@ -151,7 +150,7 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Passkey options challenge.",
-            passkeyAuthenticationOptionsResponseSchema,
+            passkeyOptionsResponseSchema,
           ),
           401: errorResponse("Unauthorized."),
         },
