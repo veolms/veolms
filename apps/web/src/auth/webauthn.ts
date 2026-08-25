@@ -14,12 +14,15 @@ const toBrowserTransport = (
     case "nfc":
     case "usb":
       return transport;
+    case "smart-card":
+      // WebAuthn Level 3 supports this hint, but some lib.dom versions lag it.
+      return transport as AuthenticatorTransport;
     default:
       return null;
   }
 };
 
-const toBrowserTransports = (
+export const toBrowserTransports = (
   transports: PasskeyAuthenticatorTransport[] | undefined,
 ) => transports?.flatMap((transport) => toBrowserTransport(transport) ?? []);
 
