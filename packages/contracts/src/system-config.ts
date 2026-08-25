@@ -51,7 +51,19 @@ export const createThemePresetInputSchema = z.object({
   sortOrder: z.number().optional().default(0),
 });
 
-export const updateThemePresetInputSchema = createThemePresetInputSchema.partial();
+export const updateThemePresetInputSchema = z.object({
+  slug: z.string().min(2).optional(),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  previewColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  darkInk: z.boolean().optional(),
+  tokensDark: z.record(z.string(), z.string()).optional(),
+  tokensLight: z.record(z.string(), z.string()).optional(),
+  isDefault: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+});
 
 export const userPreferencesSchema = z.object({
   uiMode: z.enum(["light", "dark", "system"]).nullable().optional(),

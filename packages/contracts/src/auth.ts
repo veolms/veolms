@@ -58,7 +58,20 @@ export const registerRequestSchema = z
       .string()
       .length(6, "Code must be exactly 6 digits")
       .regex(/^\d+$/, "Code must contain only digits")
-      .meta({ example: "123456" }),
+      .meta({ example: "123456" })
+      .optional(),
+    emailCode: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" })
+      .optional(),
+    phoneCode: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" })
+      .optional(),
     username: z
       .string()
       .min(3, "Username must be at least 3 characters")
@@ -78,7 +91,18 @@ export const registerRequestSchema = z
   .refine((data) => data.email || data.phoneNo, {
     message: "Either email or phone number must be provided",
     path: ["email"],
-  });
+  })
+  .refine(
+    (data) =>
+      data.email && data.phoneNo
+        ? Boolean(data.emailCode && data.phoneCode)
+        : Boolean(data.code),
+    {
+      message:
+        "A code is required, or both emailCode and phoneCode are required when both channels are provided",
+      path: ["code"],
+    },
+  );
 
 export const loginRequestSchema = z
   .object({
@@ -216,14 +240,12 @@ export const loginResponseSchema = z.object({
     phoneNo: z.string().max(15).nullable(),
   }),
   mfaRequired: z.boolean(),
-  mfaMandatory: z
-    .boolean()
-    .meta({
-      description:
-        "True if the account is required to have MFA enrolled (e.g. creator accounts). " +
-        "When mfaRequired is true but neither totpEnabled nor passkeyEnabled is true, " +
-        "the client must prompt for MFA enrollment rather than step-up verification.",
-    }),
+  mfaMandatory: z.boolean().meta({
+    description:
+      "True if the account is required to have MFA enrolled (e.g. creator accounts). " +
+      "When mfaRequired is true but neither totpEnabled nor passkeyEnabled is true, " +
+      "the client must prompt for MFA enrollment rather than step-up verification.",
+  }),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
 });
@@ -332,6 +354,8 @@ export type OauthUrlRequest = z.input<typeof oauthUrlRequestSchema>;
 export type OauthUrlResponse = z.output<typeof oauthUrlResponseSchema>;
 export type OauthCallbackRequest = z.input<typeof oauthCallbackRequestSchema>;
 export type AuthConfigResponse = z.output<typeof authConfigResponseSchema>;
+export type LoginResponse = z.output<typeof loginResponseSchema>;
+export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SetupTokenRequest = z.input<typeof setupTokenRequestSchema>;
 export type CreatorRegisterRequest = z.input<

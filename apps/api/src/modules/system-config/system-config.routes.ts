@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
-import { createAuthContext } from "../auth/auth.context.ts";
+import { createAuthContext } from "../auth/shared/auth.context.ts";
 import * as repository from "./system-config.repository.ts";
 
 const namespaceKeyParamsSchema = z.object({
@@ -26,7 +26,7 @@ const themeSlugParamsSchema = z.object({
 });
 
 const systemConfigRoutes: RoutePlugin = async (app, options) => {
-  const { middleware } = createAuthContext(options);
+  const { authenticated, middleware } = createAuthContext(options);
   const { database } = options;
 
   // --- Public Endpoints ------------------------------------------------------
@@ -79,7 +79,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/me/preferences",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: authenticated,
       schema: {
         operationId: "getUserPreferences",
         tags: ["SystemConfig"],
@@ -103,7 +103,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.patch(
     "/me/preferences",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: authenticated,
       schema: {
         operationId: "updateUserPreferences",
         tags: ["SystemConfig"],
@@ -121,7 +121,8 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
     async (request: FastifyRequest) => {
       const user = request.user!;
       const updates = request.body as Record<string, unknown>;
-      return repository.upsertUserPreferences(database, user.id, updates);
+      const prefs = await repository.upsertUserPreferences(database, user.id, updates);
+      return prefs ?? {};
     },
   );
 
@@ -130,7 +131,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/admin/system/config",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/config:read")],
       schema: {
         operationId: "getAllSystemConfigsAdmin",
         tags: ["AdminSystemConfig"],
@@ -153,7 +154,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.put(
     "/admin/system/config/:namespace/:key",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/config:update")],
       schema: {
         operationId: "updateSystemConfigAdmin",
         tags: ["AdminSystemConfig"],
@@ -179,7 +180,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/admin/system/themes",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/themes:read")],
       schema: {
         operationId: "getAllThemesAdmin",
         tags: ["AdminSystemConfig"],
@@ -201,7 +202,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/admin/system/themes",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/themes:create")],
       schema: {
         operationId: "createThemePresetAdmin",
         tags: ["AdminSystemConfig"],
@@ -226,7 +227,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.put(
     "/admin/system/themes/:slug",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/themes:update")],
       schema: {
         operationId: "updateThemePresetAdmin",
         tags: ["AdminSystemConfig"],
@@ -253,7 +254,7 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/admin/system/themes/:slug",
     {
-      preHandler: [middleware.requireAuthenticated],
+      preHandler: [middleware.authenticate, middleware.requirePermission("admin/system/themes:delete")],
       schema: {
         operationId: "deleteThemePresetAdmin",
         tags: ["AdminSystemConfig"],

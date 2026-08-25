@@ -17,7 +17,9 @@ type SettingsIcon = ComponentType<{
 
 export interface ChoiceCardProps {
   checked: boolean;
-  onChange: () => void;
+  // Receives the click event so callers can derive a pointer reveal origin;
+  // keyboard and programmatic clicks report the viewport origin (0, 0).
+  onChange: (event: MouseEvent<HTMLButtonElement>) => void;
   label: string;
   note?: string;
   icon?: SettingsIcon;

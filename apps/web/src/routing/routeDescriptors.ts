@@ -6,7 +6,7 @@ import {
   resolveSessionTabPath,
 } from "./tabSessionState";
 
-const productName = "ProCodrr";
+export const productName = "ProCodrr";
 
 export type ShellPage =
   | "home"
@@ -443,6 +443,14 @@ export interface RouteMetadata {
   title: string;
   description: string;
 }
+
+export const getAuthRouteMeta = (
+  title: string,
+  description: string,
+): RouteMetadata => ({
+  title: `${title} · ${productName}`,
+  description,
+});
 
 export const getRouteMeta = (
   routeId: string | undefined,

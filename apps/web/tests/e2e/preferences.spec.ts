@@ -1167,6 +1167,34 @@ test("role, appearance, and academy palette persist across routes and reloads", 
   await expect(page.locator("html")).toHaveAttribute("data-palette", "ocean");
 });
 
+test("toggling appearance dismisses the open desktop theme menu", async ({
+  page,
+}) => {
+  await openApp(page, "/");
+  const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
+  await updateSidebarPreferences(page, "/", {
+    dockItems,
+    dockOrder: dockItems,
+  });
+  const appearanceControls = page
+    .getByRole("complementary", { name: "Student navigation" })
+    .getByRole("group", { name: "Appearance controls" });
+  const modeToggle = appearanceControls.getByRole("button").nth(0);
+  const paletteMenu = page.getByRole("menu", {
+    name: "Choose a color theme",
+  });
+
+  await appearanceControls
+    .getByRole("button", { name: "Choose color theme" })
+    .click();
+  await expect(paletteMenu).toBeVisible();
+
+  await modeToggle.click();
+  await expect(paletteMenu).toBeHidden();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectStoredValue(page, "veolms-theme", "light");
+});
+
 test("theme picker keeps pointer choices open and makes keyboard previews reversible", async ({
   page,
 }) => {

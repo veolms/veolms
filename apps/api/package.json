@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1115.0",
     "@fastify/autoload": "^6.5.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
@@ -18,6 +19,7 @@
     "@veolms/config": "workspace:*",
     "@veolms/contracts": "workspace:*",
     "@veolms/database": "workspace:*",
+    "@veolms/storage": "workspace:*",
     "fastify": "^5.11.0",
     "fastify-type-provider-zod": "^7.0.0",
     "kysely": "catalog:",

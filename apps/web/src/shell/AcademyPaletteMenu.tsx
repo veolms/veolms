@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { AcademyTheme } from "../themes";
+import {
+  themeRevealOriginFromClick,
+  themeRevealOriginFromElement,
+} from "./themeViewTransition";
+import type { ThemeRevealOrigin } from "./themeViewTransition";
 
 interface AcademyPaletteMenuProps {
   themes: readonly Pick<AcademyTheme, "id" | "name" | "note" | "preview">[];
@@ -8,10 +13,12 @@ interface AcademyPaletteMenuProps {
   className?: string;
   id?: string;
   mobile?: boolean;
-  onSelect: (themeId: string) => void;
-  onPreview: (themeId: string) => void;
+  onSelect: (themeId: string, origin?: ThemeRevealOrigin) => void;
+  // Keyboard previews and cancels carry the focused swatch's center so the
+  // reveal emanates from the item keyboard navigation is on.
+  onPreview: (themeId: string, origin?: ThemeRevealOrigin) => void;
   onConfirm: (themeId: string) => void;
-  onCancel: () => void;
+  onCancel: (origin?: ThemeRevealOrigin) => void;
 }
 
 const PALETTE_GRID_COLUMNS = 4;
@@ -49,7 +56,12 @@ export function AcademyPaletteMenu({
     const nextTheme = themes[index];
     if (!nextTheme) return;
     setActiveTheme(nextTheme.id);
-    onPreview(nextTheme.id);
+    // Reveal arrow-key previews from the swatch being navigated to; an
+    // unmeasured element (jsdom) yields no origin and the corner applies.
+    onPreview(
+      nextTheme.id,
+      themeRevealOriginFromElement(itemRefs.current[index]) ?? undefined,
+    );
     itemRefs.current[index]?.focus({ preventScroll: true });
   };
 
@@ -111,7 +123,11 @@ export function AcademyPaletteMenu({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      onCancel();
+      // Reveal the preview revert from the swatch that had focus.
+      onCancel(
+        themeRevealOriginFromElement(itemRefs.current[activeIndex]) ??
+          undefined,
+      );
     }
   };
 
@@ -141,9 +157,12 @@ export function AcademyPaletteMenu({
           title={item.name}
           data-theme-swatch={item.id}
           style={{ "--theme-swatch": item.preview } as CSSProperties}
-          onClick={() => {
+          onClick={(event) => {
             setActiveTheme(item.id);
-            onSelect(item.id);
+            // Keyboard-activated clicks (Enter/Space) report the viewport
+            // origin and yield no reveal origin, so they keep the corner
+            // fallback; only real pointer clicks carry coordinates.
+            onSelect(item.id, themeRevealOriginFromClick(event) ?? undefined);
           }}
         >
           <i aria-hidden="true" />

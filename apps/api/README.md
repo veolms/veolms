@@ -6,7 +6,8 @@ Fastify API for VEOLMS. Interactive docs are served at
 
 ## Adding an endpoint
 
-Create a file in [src/routes](src/routes) that default-exports a `RoutePlugin`.
+Create a route plugin under [src/modules](src/modules) that default-exports a
+`RoutePlugin`.
 That is the whole procedure — the file is registered automatically and its
 OpenAPI entry is generated from the same schemas that validate traffic, so there
 is no separate documentation step and nothing to regenerate.

@@ -41,6 +41,32 @@ const database = createDatabase(config.DATABASE_URL);
 
 try {
 
+  const roles = [
+    {
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "creator",
+      description: "Platform owner and creator",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "student",
+      description: "Enrolled student",
+    },
+  ];
+
+  for (const role of roles) {
+    await database
+      .insertInto("roles")
+      .values(role)
+      .onConflict((conflict) =>
+        conflict.column("name").doUpdateSet({
+          description: role.description,
+          updated_at: new Date(),
+        }),
+      )
+      .execute();
+  }
+
   for (const course of courses) {
     await database
       .insertInto("courses")
@@ -58,7 +84,7 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${courses.length} published courses.`);
+  console.info(`Seeded ${roles.length} roles and ${courses.length} published courses.`);
 } finally {
   await database.destroy();
 }

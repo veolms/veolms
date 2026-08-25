@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
@@ -56,6 +57,8 @@ import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { useCurrentUser, useLogout } from "./services/auth";
+import { useAuthStore } from "./store/auth.store";
 import {
   getDefaultNavigationOrder,
   getInitialNavigationOrder,
@@ -72,6 +75,12 @@ import {
   getInitialSidebarPreferences,
   getInitialSidebarWidth,
 } from "./shell/sidebarPreferences";
+import {
+  applyRootPalette,
+  applyWithThemeViewTransition,
+  themeRevealOriginFromClick,
+} from "./shell/themeViewTransition";
+import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
 import {
   academyThemes,
   DEFAULT_ACADEMY_THEME,
@@ -92,7 +101,10 @@ import {
   PAGE_TAB_COLORS_KEY,
   readPageTabColors,
 } from "./settings/settingsPreferences";
-import { getStoredProfilePreferences } from "./settings/profilePreferences";
+import {
+  clearStoredProfilePreferences,
+  getStoredProfilePreferences,
+} from "./settings/profilePreferences";
 import type { ProfilePreferences } from "./settings/profilePreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
@@ -468,6 +480,9 @@ export function CoursesPage({
   const [theme, setTheme] = useState<ThemePreference>("dark");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
   const [academyTheme, setAcademyTheme] = useState(DEFAULT_ACADEMY_THEME);
+  const [appliedAcademyTheme, setAppliedAcademyTheme] = useState(
+    DEFAULT_ACADEMY_THEME,
+  );
   const [palettePreviewTheme, setPalettePreviewTheme] = useState<string | null>(
     null,
   );
@@ -549,16 +564,37 @@ export function CoursesPage({
       : Boolean(getDocumentFullscreenElement(document)),
   );
   const shortcutPlatform = useShortcutPlatform();
-  const savedShellProfile = savedShellProfiles[role];
+  const { data: authUser } = useCurrentUser();
+  const storeUser = useAuthStore((s) => s.user);
+  const activeUser = authUser || storeUser;
+  const logoutMutation = useLogout();
+
+  const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
-    savedShellProfile?.displayName ??
+    activeUser?.displayName ??
     (role === "creator" ? "Anurag Singh" : "Ashi Singh");
-  const shellProfileAvatarUrl = savedShellProfile
-    ? savedShellProfile.avatarDataUrl
-    : role === "creator"
-      ? "/assets/ethan-avatar-160.webp"
-      : "/assets/sofia-avatar-160.webp";
+  const shellProfileAvatarUrl =
+    activeUser && savedShellProfile?.avatarDataUrl
+      ? savedShellProfile.avatarDataUrl
+      : role === "creator"
+        ? "/assets/ethan-avatar-160.webp"
+        : "/assets/sofia-avatar-160.webp";
   const profileRef = useRef<HTMLDivElement>(null);
+  const appliedThemeRef = useRef<"light" | "dark" | null>(null);
+  const appliedPaletteRef = useRef<string | null>(null);
+  // Pointer-triggered display-mode commits stage their pointer position
+  // here so the next reveal emanates from the interaction that caused it.
+  // Keyboard and OS-triggered commits leave it null, and the theme effect
+  // drains it on every application, so an unrelated earlier click can
+  // never become the reveal origin. Palette changes instead pass their
+  // origin straight from the interaction handler that commits them.
+  const themeRevealOriginRef = useRef<ThemeRevealOrigin | null>(null);
+  // Document-level dismiss listeners (outside click, global Escape) only
+  // re-subscribe when navigation changes, so they reach the latest revert
+  // handler through this ref instead of a stale render's closure.
+  const revertPalettePreviewRef = useRef<
+    ((origin?: ThemeRevealOrigin) => void) | null
+  >(null);
   const appearanceControlsRef = useRef<HTMLDivElement>(null);
   const appearanceControlRectsRef = useRef<DOMRect[]>([]);
   const appearanceLayoutRef = useRef<boolean | null>(null);
@@ -673,10 +709,29 @@ export function CoursesPage({
     if (!storedPreferencesReady) return undefined;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const applyTheme = () => {
+      // Drain the staged origin on every application: pointer commits stage
+      // it right before changing `theme`, while keyboard and OS-triggered
+      // applications find it null and reveal from the CSS corner fallback.
+      const pointerOrigin = themeRevealOriginRef.current;
+      themeRevealOriginRef.current = null;
       const nextTheme =
         theme === "device" ? (media.matches ? "dark" : "light") : theme;
-      document.documentElement.dataset.theme = nextTheme;
-      document.documentElement.dataset.appearance = theme;
+      const commit = () => {
+        document.documentElement.dataset.theme = nextTheme;
+        document.documentElement.dataset.appearance = theme;
+      };
+      // Reveal light/dark flips with the circular view transition, but skip it
+      // for the initial application so startup stays instant.
+      if (appliedThemeRef.current && appliedThemeRef.current !== nextTheme) {
+        applyWithThemeViewTransition(
+          commit,
+          "mode",
+          pointerOrigin ?? undefined,
+        );
+      } else {
+        commit();
+      }
+      appliedThemeRef.current = nextTheme;
       setResolvedTheme(nextTheme);
     };
     applyTheme();
@@ -699,7 +754,13 @@ export function CoursesPage({
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
-    document.documentElement.dataset.palette = displayedAcademyTheme;
+    // Synchronization only: palette interaction handlers own the animated
+    // reveals, so this covers the initial application once stored
+    // preferences load and any change that arrives outside a handler.
+    if (appliedPaletteRef.current === displayedAcademyTheme) return;
+    appliedPaletteRef.current = displayedAcademyTheme;
+    applyRootPalette(displayedAcademyTheme);
+    setAppliedAcademyTheme(displayedAcademyTheme);
   }, [displayedAcademyTheme, storedPreferencesReady]);
 
   useEffect(() => {
@@ -1069,7 +1130,7 @@ export function CoursesPage({
         !(event.target instanceof Element) ||
         !event.target.closest("[data-palette-menu], [data-palette-trigger]")
       ) {
-        setPalettePreviewTheme(null);
+        revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
       }
       if (
@@ -1103,7 +1164,7 @@ export function CoursesPage({
       if (event.key === "Escape") {
         setCourseMenu(null);
         setProfileMenu(false);
-        setPalettePreviewTheme(null);
+        revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
         setReadingModeMenu(null);
         setMobileMenuOpen(false);
@@ -1511,7 +1572,7 @@ export function CoursesPage({
 
   const toggleAppearance = (mobile = false) => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
-    setPalettePreviewTheme(null);
+    revertPalettePreviewRef.current?.();
     setReadingModeMenu(null);
     if (mobile) setMobilePaletteMenu(false);
     else setPaletteMenu(false);
@@ -1527,7 +1588,7 @@ export function CoursesPage({
     updateReadingMode({ enabled: !readingModePreferences.enabled });
   };
   const showReadingModeMenu = (mobile = false) => {
-    setPalettePreviewTheme(null);
+    revertPalettePreviewRef.current?.();
     setPaletteMenu(false);
     setMobilePaletteMenu(false);
     setReadingModeMenu(mobile ? "mobile" : "desktop");
@@ -1589,17 +1650,88 @@ export function CoursesPage({
     return true;
   };
 
-  const selectAcademyTheme = (themeId: string) => {
-    setAcademyTheme(themeId);
-    setPalettePreviewTheme(null);
+  // Applies a palette change as one synchronous commit: the root dataset
+  // for CSS-driven colors plus the appliedAcademyTheme React mirror for
+  // prop-driven surfaces (settings previews, dashboard charts). Handlers
+  // run this inside the view transition so those React re-renders land
+  // between the old and new snapshots and join the reveal instead of
+  // flipping ahead of it. Flushing synchronously is only legal here, in
+  // the interaction handler — never from an effect.
+  const commitPalette = (nextTheme: string) => {
+    appliedPaletteRef.current = nextTheme;
+    applyRootPalette(nextTheme);
+    setAppliedAcademyTheme(nextTheme);
   };
+
+  const changePalette = (nextTheme: string, origin?: ThemeRevealOrigin) => {
+    // Selecting what is already displayed runs no transition; plain state
+    // updates keep the committed selection and preview in sync.
+    if (nextTheme === displayedAcademyTheme) {
+      setAcademyTheme(nextTheme);
+      setPalettePreviewTheme(null);
+      return;
+    }
+    applyWithThemeViewTransition(
+      () =>
+        flushSync(() => {
+          setAcademyTheme(nextTheme);
+          setPalettePreviewTheme(null);
+          commitPalette(nextTheme);
+        }),
+      "palette",
+      origin,
+    );
+  };
+
+  const previewAcademyTheme = (themeId: string, origin?: ThemeRevealOrigin) => {
+    // No transition when the previewed theme already matches the displayed
+    // one; keyboard previews carry the focused swatch's center and pointer
+    // previews carry the pointer position as the reveal origin.
+    if (themeId === displayedAcademyTheme) {
+      setPalettePreviewTheme(themeId);
+      return;
+    }
+    applyWithThemeViewTransition(
+      () =>
+        flushSync(() => {
+          setPalettePreviewTheme(themeId);
+          commitPalette(themeId);
+        }),
+      "palette",
+      origin,
+    );
+  };
+
+  // Reverts an unconfirmed keyboard preview back to the committed theme.
+  // Only the revert (previewed theme differing from the committed one)
+  // runs a transition; otherwise clearing the preview changes nothing
+  // displayed and stays silent. Keyboard Escape carries the focused
+  // swatch's center; other dismissals pass nothing for the corner
+  // fallback.
+  const revertPalettePreview = (origin?: ThemeRevealOrigin) => {
+    if (!palettePreviewTheme || palettePreviewTheme === academyTheme) {
+      setPalettePreviewTheme(null);
+      return;
+    }
+    const committedTheme = academyTheme;
+    applyWithThemeViewTransition(
+      () =>
+        flushSync(() => {
+          setPalettePreviewTheme(null);
+          commitPalette(committedTheme);
+        }),
+      "palette",
+      origin,
+    );
+  };
+  revertPalettePreviewRef.current = revertPalettePreview;
 
   const focusPaletteTrigger = (trigger: HTMLButtonElement | null) => {
     window.setTimeout(() => trigger?.focus({ preventScroll: true }), 0);
   };
 
   const confirmDesktopPaletteTheme = (themeId: string) => {
-    selectAcademyTheme(themeId);
+    changePalette(themeId);
     setPaletteMenu(false);
     focusPaletteTrigger(
       paletteMenuSource === "appearance"
@@ -1608,8 +1740,8 @@ export function CoursesPage({
     );
   };
 
-  const cancelDesktopPalettePreview = () => {
-    setPalettePreviewTheme(null);
+  const cancelDesktopPalettePreview = (origin?: ThemeRevealOrigin) => {
+    revertPalettePreview(origin);
     setPaletteMenu(false);
     focusPaletteTrigger(
       paletteMenuSource === "appearance"
@@ -1619,7 +1751,7 @@ export function CoursesPage({
   };
 
   const confirmMobilePaletteTheme = (themeId: string) => {
-    selectAcademyTheme(themeId);
+    changePalette(themeId);
     setMobilePaletteMenu(false);
     focusPaletteTrigger(
       paletteMenuSource === "appearance"
@@ -1628,8 +1760,8 @@ export function CoursesPage({
     );
   };
 
-  const cancelMobilePalettePreview = () => {
-    setPalettePreviewTheme(null);
+  const cancelMobilePalettePreview = (origin?: ThemeRevealOrigin) => {
+    revertPalettePreview(origin);
     setMobilePaletteMenu(false);
     focusPaletteTrigger(
       paletteMenuSource === "appearance"
@@ -1651,7 +1783,7 @@ export function CoursesPage({
       return;
     }
     setTheme(option);
-    setPalettePreviewTheme(null);
+    revertPalettePreview();
     if (mobile) setMobilePaletteMenu(false);
     else setPaletteMenu(false);
   };
@@ -1833,6 +1965,11 @@ export function CoursesPage({
     const direction = delta > 0 ? 1 : -1;
     const nextOption =
       options[(sourceIndex + direction + options.length) % options.length];
+    // Only a swipe that lands on a different display mode stages the reveal
+    // origin; swiping onto "theme" (or the current mode) changes nothing.
+    if (nextOption !== "theme" && nextOption !== theme) {
+      themeRevealOriginRef.current = themeRevealOriginFromClick(event);
+    }
     activateAppearanceOption(nextOption!, mobile);
     window.setTimeout(() => {
       appearanceSwipeConsumedRef.current = false;
@@ -2662,9 +2799,16 @@ export function CoursesPage({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
+                    onClick={async () => {
                       setProfileMenu(false);
-                      onNavigatePage?.("Logout");
+                      try {
+                        await logoutMutation.mutateAsync();
+                      } catch {
+                        // ignore logout errors
+                      }
+                      clearStoredProfilePreferences();
+                      setSavedShellProfiles({ student: null, creator: null });
+                      window.location.href = "/";
                     }}
                   >
                     <SignOut size={18} />
@@ -2731,6 +2875,8 @@ export function CoursesPage({
                         title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode — switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
                         onClick={(event) => {
                           if (consumeAppearanceGestureClick(event)) return;
+                          themeRevealOriginRef.current =
+                            themeRevealOriginFromClick(event);
                           toggleAppearance();
                         }}
                         onContextMenu={openAppearanceThemeMenu}
@@ -2782,7 +2928,10 @@ export function CoursesPage({
                             if (consumeAppearanceGestureClick(event)) return;
                             setReadingModeMenu(null);
                             setPaletteMenuSource("theme");
-                            if (paletteMenu) cancelDesktopPalettePreview();
+                            if (paletteMenu)
+                              cancelDesktopPalettePreview(
+                                themeRevealOriginFromClick(event) ?? undefined,
+                              );
                             else setPaletteMenu(true);
                           }}
                           onPointerDown={(event) =>
@@ -2913,8 +3062,8 @@ export function CoursesPage({
                     selectedTheme={displayedAcademyTheme}
                     id="desktop-theme-menu"
                     className={`sidebar-palette-menu sidebar-palette-menu--dock-attached${sidebarCollapsed ? " sidebar-palette-menu--collapsed" : ""}`}
-                    onSelect={selectAcademyTheme}
-                    onPreview={setPalettePreviewTheme}
+                    onSelect={changePalette}
+                    onPreview={previewAcademyTheme}
                     onConfirm={confirmDesktopPaletteTheme}
                     onCancel={cancelDesktopPalettePreview}
                   />
@@ -2957,7 +3106,7 @@ export function CoursesPage({
             <CreatorDashboard
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
-              academyTheme={academyTheme}
+              academyTheme={appliedAcademyTheme}
             />
           ) : role === "student" && page === "home" ? (
             <StudentHome
@@ -2985,9 +3134,14 @@ export function CoursesPage({
                 }));
               }}
               theme={theme}
-              onThemeChange={setTheme}
-              academyTheme={academyTheme}
-              onAcademyThemeChange={setAcademyTheme}
+              onThemeChange={(next, origin) => {
+                if (next !== theme) {
+                  themeRevealOriginRef.current = origin ?? null;
+                }
+                setTheme(next);
+              }}
+              academyTheme={appliedAcademyTheme}
+              onAcademyThemeChange={changePalette}
               pageTabColors={pageTabColors}
               onPageTabColorsChange={setPageTabColors}
               sidebarPreferences={sidebarPreferences}
@@ -3317,6 +3471,8 @@ export function CoursesPage({
                       title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode — switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
                       onClick={(event) => {
                         if (consumeAppearanceGestureClick(event)) return;
+                        themeRevealOriginRef.current =
+                          themeRevealOriginFromClick(event);
                         toggleAppearance(true);
                       }}
                       onContextMenu={(event) =>
@@ -3361,7 +3517,10 @@ export function CoursesPage({
                         if (consumeAppearanceGestureClick(event)) return;
                         setReadingModeMenu(null);
                         setPaletteMenuSource("theme");
-                        if (mobilePaletteMenu) cancelMobilePalettePreview();
+                        if (mobilePaletteMenu)
+                          cancelMobilePalettePreview(
+                            themeRevealOriginFromClick(event) ?? undefined,
+                          );
                         else setMobilePaletteMenu(true);
                       }}
                       onPointerDown={(event) =>
@@ -3481,8 +3640,8 @@ export function CoursesPage({
                 id="mobile-theme-menu"
                 className="sidebar-palette-menu mobile-palette-menu"
                 mobile
-                onSelect={selectAcademyTheme}
-                onPreview={setPalettePreviewTheme}
+                onSelect={changePalette}
+                onPreview={previewAcademyTheme}
                 onConfirm={confirmMobilePaletteTheme}
                 onCancel={cancelMobilePalettePreview}
               />

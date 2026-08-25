@@ -38,6 +38,14 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) => column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
     .execute();
 
+  await database
+    .insertInto("roles" as any)
+    .values([
+      { id: "00000000-0000-4000-8000-000000000001", name: "creator", description: "Platform owner and creator" },
+      { id: "00000000-0000-4000-8000-000000000002", name: "student", description: "Enrolled student" },
+    ] as any)
+    .execute();
+
   // 4. Create user_roles table
   await database.schema
     .createTable("user_roles")

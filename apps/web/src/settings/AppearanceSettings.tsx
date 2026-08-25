@@ -4,6 +4,8 @@ import { Sun } from "@phosphor-icons/react/Sun";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { academyThemes } from "../themes";
 import type { AcademyTheme } from "../themes";
+import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
+import type { ThemeRevealOrigin } from "../shell/themeViewTransition";
 import type { PageTabColors } from "./settingsPreferences";
 import { ChoiceCard, RadioGroup } from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
@@ -37,9 +39,12 @@ const COLOR_THEMES = academyThemes;
 
 export interface AppearanceSettingsProps {
   theme: DisplayMode;
-  onThemeChange?: (theme: DisplayMode) => void;
+  onThemeChange?: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
-  onAcademyThemeChange?: (themeId: AcademyTheme["id"]) => void;
+  onAcademyThemeChange?: (
+    themeId: AcademyTheme["id"],
+    origin?: ThemeRevealOrigin,
+  ) => void;
   pageTabColors: PageTabColors;
   onPageTabColorsChange: (colors: PageTabColors) => void;
 }
@@ -91,7 +96,12 @@ export function AppearanceSettings({
             <ChoiceCard
               key={id}
               checked={theme === id}
-              onChange={() => onThemeChange?.(id)}
+              onChange={(event) =>
+                onThemeChange?.(
+                  id,
+                  themeRevealOriginFromClick(event) ?? undefined,
+                )
+              }
               label={label}
               note={note}
               icon={icon}
@@ -119,7 +129,12 @@ export function AppearanceSettings({
             <ChoiceCard
               key={item.id}
               checked={selectedColor === item.id}
-              onChange={() => onAcademyThemeChange?.(item.id)}
+              onChange={(event) =>
+                onAcademyThemeChange?.(
+                  item.id,
+                  themeRevealOriginFromClick(event) ?? undefined,
+                )
+              }
               label={item.name}
               note={item.note}
               className="settings-choice-card--stacked settings-choice-card--theme"

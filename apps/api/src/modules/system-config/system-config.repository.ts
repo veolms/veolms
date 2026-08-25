@@ -1,5 +1,5 @@
-import type { Database } from "@veolms/database";
-import { type Kysely } from "kysely";
+import type { Database, UserPreferenceTable } from "@veolms/database";
+import type { Insertable, Updateable, Kysely } from "kysely";
 
 type Executor = Kysely<Database>;
 
@@ -86,8 +86,8 @@ export async function getUserPreferences(database: Executor, userId: string) {
     mainContentLayout: row.main_content_layout as "framed" | "edge-to-edge",
     sidebarMaxWidthPx: row.sidebar_max_width_px,
     sidebarHeaderLayout: row.sidebar_header_layout as "fixed" | "inline",
-    sidebarDockItems: row.sidebar_dock_items,
-    sidebarDockOrder: row.sidebar_dock_order,
+    sidebarDockItems: typeof row.sidebar_dock_items === "string" ? JSON.parse(row.sidebar_dock_items) : row.sidebar_dock_items,
+    sidebarDockOrder: typeof row.sidebar_dock_order === "string" ? JSON.parse(row.sidebar_dock_order) : row.sidebar_dock_order,
     sidebarShowKeyboardShortcuts: row.sidebar_show_keyboard_shortcuts,
     sidebarShowLabelsCollapsed: row.sidebar_show_labels_collapsed,
     sidebarShowLogoCollapsed: row.sidebar_show_logo_collapsed,
@@ -119,12 +119,11 @@ export async function upsertUserPreferences(
   userId: string,
   updates: Record<string, unknown>
 ) {
-  const dbFields: Record<string, unknown> = {
-    user_id: userId,
+  const updatePayload: Updateable<UserPreferenceTable> = {
     updated_at: new Date(),
   };
 
-  const fieldMapping: Record<string, string> = {
+  const fieldMapping: Record<string, keyof UserPreferenceTable> = {
     uiMode: "ui_mode",
     colorTheme: "color_theme",
     randomThemeOnOpen: "random_theme_on_open",
@@ -178,18 +177,23 @@ export async function upsertUserPreferences(
     if (jsKey in updates && updates[jsKey] !== undefined) {
       const val = updates[jsKey];
       if (Array.isArray(val) && (dbCol === "sidebar_dock_items" || dbCol === "sidebar_dock_order")) {
-        dbFields[dbCol] = JSON.stringify(val);
+        (updatePayload as Record<string, unknown>)[dbCol] = JSON.stringify(val);
       } else {
-        dbFields[dbCol] = val;
+        (updatePayload as Record<string, unknown>)[dbCol] = val;
       }
     }
   }
 
+  const insertPayload: Insertable<UserPreferenceTable> = {
+    ...updatePayload,
+    user_id: userId,
+  };
+
   await database
     .insertInto("user_preferences")
-    .values(dbFields as any)
+    .values(insertPayload)
     .onConflict((oc) =>
-      oc.column("user_id").doUpdateSet(dbFields as any)
+      oc.column("user_id").doUpdateSet(updatePayload)
     )
     .execute();
 
@@ -225,61 +229,63 @@ export async function updateSystemConfigAdmin(
   key: string,
   input: { value: string; label?: string; description?: string; isPublic?: boolean }
 ) {
-  const existing = await database
-    .selectFrom("system_config")
-    .selectAll()
-    .where("namespace", "=", namespace)
-    .where("key", "=", key)
-    .executeTakeFirst();
+  return database.transaction().execute(async (trx) => {
+    const existing = await trx
+      .selectFrom("system_config")
+      .selectAll()
+      .where("namespace", "=", namespace)
+      .where("key", "=", key)
+      .executeTakeFirst();
 
-  const updatePayload: Record<string, unknown> = {
-    value: input.value,
-    updated_at: new Date(),
-  };
-  if (input.label !== undefined) updatePayload.label = input.label;
-  if (input.description !== undefined) updatePayload.description = input.description;
-  if (input.isPublic !== undefined) updatePayload.is_public = input.isPublic;
+    const updatePayload: Record<string, unknown> = {
+      value: input.value,
+      updated_at: new Date(),
+    };
+    if (input.label !== undefined) updatePayload.label = input.label;
+    if (input.description !== undefined) updatePayload.description = input.description;
+    if (input.isPublic !== undefined) updatePayload.is_public = input.isPublic;
 
-  if (existing) {
-    await database
-      .updateTable("system_config")
-      .set(updatePayload)
-      .where("id", "=", existing.id)
-      .execute();
+    if (existing) {
+      await trx
+        .updateTable("system_config")
+        .set(updatePayload)
+        .where("id", "=", existing.id)
+        .execute();
 
-    await database.insertInto("config_audit_log").values({
-      changed_by: adminUserId,
-      table_name: "system_config",
-      record_id: existing.id,
-      field_name: `${namespace}.${key}`,
-      old_value: existing.value,
-      new_value: input.value,
-    }).execute();
-  } else {
-    const inserted = await database
-      .insertInto("system_config")
-      .values({
-        namespace,
-        key,
-        value: input.value,
-        label: input.label ?? null,
-        description: input.description ?? null,
-        is_public: input.isPublic ?? true,
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+      await trx.insertInto("config_audit_log").values({
+        changed_by: adminUserId,
+        table_name: "system_config",
+        record_id: existing.id,
+        field_name: `${namespace}.${key}`,
+        old_value: existing.value,
+        new_value: input.value,
+      }).execute();
+    } else {
+      const inserted = await trx
+        .insertInto("system_config")
+        .values({
+          namespace,
+          key,
+          value: input.value,
+          label: input.label ?? null,
+          description: input.description ?? null,
+          is_public: input.isPublic ?? true,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
 
-    await database.insertInto("config_audit_log").values({
-      changed_by: adminUserId,
-      table_name: "system_config",
-      record_id: inserted.id,
-      field_name: `${namespace}.${key}`,
-      old_value: null,
-      new_value: input.value,
-    }).execute();
-  }
+      await trx.insertInto("config_audit_log").values({
+        changed_by: adminUserId,
+        table_name: "system_config",
+        record_id: inserted.id,
+        field_name: `${namespace}.${key}`,
+        old_value: null,
+        new_value: input.value,
+      }).execute();
+    }
 
-  return getSystemConfig(database);
+    return getSystemConfig(trx);
+  });
 }
 
 export async function getAllThemePresetsAdmin(database: Executor) {
@@ -322,34 +328,36 @@ export async function createThemePresetAdmin(
     sortOrder?: number;
   }
 ) {
-  const inserted = await database
-    .insertInto("theme_presets")
-    .values({
-      slug: input.slug,
-      name: input.name,
-      description: input.description ?? null,
-      accent_color: input.accentColor,
-      preview_color: input.previewColor,
-      dark_ink: input.darkInk ?? false,
-      tokens_dark: JSON.stringify(input.tokensDark ?? {}),
-      tokens_light: JSON.stringify(input.tokensLight ?? {}),
-      is_default: input.isDefault ?? false,
-      is_active: input.isActive ?? true,
-      sort_order: input.sortOrder ?? 0,
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow();
+  return database.transaction().execute(async (trx) => {
+    const inserted = await trx
+      .insertInto("theme_presets")
+      .values({
+        slug: input.slug,
+        name: input.name,
+        description: input.description ?? null,
+        accent_color: input.accentColor,
+        preview_color: input.previewColor,
+        dark_ink: input.darkInk ?? false,
+        tokens_dark: JSON.stringify(input.tokensDark ?? {}),
+        tokens_light: JSON.stringify(input.tokensLight ?? {}),
+        is_default: input.isDefault ?? false,
+        is_active: input.isActive ?? true,
+        sort_order: input.sortOrder ?? 0,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
 
-  await database.insertInto("config_audit_log").values({
-    changed_by: adminUserId,
-    table_name: "theme_presets",
-    record_id: inserted.id,
-    field_name: "create_theme",
-    old_value: null,
-    new_value: input.slug,
-  }).execute();
+    await trx.insertInto("config_audit_log").values({
+      changed_by: adminUserId,
+      table_name: "theme_presets",
+      record_id: inserted.id,
+      field_name: "create_theme",
+      old_value: null,
+      new_value: input.slug,
+    }).execute();
 
-  return getActiveThemePresets(database);
+    return getActiveThemePresets(trx);
+  });
 }
 
 export async function updateThemePresetAdmin(
@@ -358,42 +366,44 @@ export async function updateThemePresetAdmin(
   slug: string,
   input: Record<string, unknown>
 ) {
-  const existing = await database
-    .selectFrom("theme_presets")
-    .selectAll()
-    .where("slug", "=", slug)
-    .executeTakeFirst();
+  return database.transaction().execute(async (trx) => {
+    const existing = await trx
+      .selectFrom("theme_presets")
+      .selectAll()
+      .where("slug", "=", slug)
+      .executeTakeFirst();
 
-  if (!existing) return null;
+    if (!existing) return null;
 
-  const updatePayload: Record<string, unknown> = { updated_at: new Date() };
-  if ("name" in input && input.name !== undefined) updatePayload.name = input.name;
-  if ("description" in input && input.description !== undefined) updatePayload.description = input.description;
-  if ("accentColor" in input && input.accentColor !== undefined) updatePayload.accent_color = input.accentColor;
-  if ("previewColor" in input && input.previewColor !== undefined) updatePayload.preview_color = input.previewColor;
-  if ("darkInk" in input && input.darkInk !== undefined) updatePayload.dark_ink = input.darkInk;
-  if ("tokensDark" in input && input.tokensDark !== undefined) updatePayload.tokens_dark = JSON.stringify(input.tokensDark);
-  if ("tokensLight" in input && input.tokensLight !== undefined) updatePayload.tokens_light = JSON.stringify(input.tokensLight);
-  if ("isDefault" in input && input.isDefault !== undefined) updatePayload.is_default = input.isDefault;
-  if ("isActive" in input && input.isActive !== undefined) updatePayload.is_active = input.isActive;
-  if ("sortOrder" in input && input.sortOrder !== undefined) updatePayload.sort_order = input.sortOrder;
+    const updatePayload: Record<string, unknown> = { updated_at: new Date() };
+    if ("name" in input && input.name !== undefined) updatePayload.name = input.name;
+    if ("description" in input && input.description !== undefined) updatePayload.description = input.description;
+    if ("accentColor" in input && input.accentColor !== undefined) updatePayload.accent_color = input.accentColor;
+    if ("previewColor" in input && input.previewColor !== undefined) updatePayload.preview_color = input.previewColor;
+    if ("darkInk" in input && input.darkInk !== undefined) updatePayload.dark_ink = input.darkInk;
+    if ("tokensDark" in input && input.tokensDark !== undefined) updatePayload.tokens_dark = JSON.stringify(input.tokensDark);
+    if ("tokensLight" in input && input.tokensLight !== undefined) updatePayload.tokens_light = JSON.stringify(input.tokensLight);
+    if ("isDefault" in input && input.isDefault !== undefined) updatePayload.is_default = input.isDefault;
+    if ("isActive" in input && input.isActive !== undefined) updatePayload.is_active = input.isActive;
+    if ("sortOrder" in input && input.sortOrder !== undefined) updatePayload.sort_order = input.sortOrder;
 
-  await database
-    .updateTable("theme_presets")
-    .set(updatePayload)
-    .where("id", "=", existing.id)
-    .execute();
+    await trx
+      .updateTable("theme_presets")
+      .set(updatePayload)
+      .where("id", "=", existing.id)
+      .execute();
 
-  await database.insertInto("config_audit_log").values({
-    changed_by: adminUserId,
-    table_name: "theme_presets",
-    record_id: existing.id,
-    field_name: "update_theme",
-    old_value: existing.slug,
-    new_value: JSON.stringify(input),
-  }).execute();
+    await trx.insertInto("config_audit_log").values({
+      changed_by: adminUserId,
+      table_name: "theme_presets",
+      record_id: existing.id,
+      field_name: "update_theme",
+      old_value: existing.slug,
+      new_value: JSON.stringify(input),
+    }).execute();
 
-  return getActiveThemePresets(database);
+    return getActiveThemePresets(trx);
+  });
 }
 
 export async function deleteThemePresetAdmin(
@@ -401,29 +411,31 @@ export async function deleteThemePresetAdmin(
   adminUserId: string,
   slug: string
 ) {
-  const existing = await database
-    .selectFrom("theme_presets")
-    .selectAll()
-    .where("slug", "=", slug)
-    .executeTakeFirst();
+  return database.transaction().execute(async (trx) => {
+    const existing = await trx
+      .selectFrom("theme_presets")
+      .selectAll()
+      .where("slug", "=", slug)
+      .executeTakeFirst();
 
-  if (!existing) return false;
+    if (!existing) return false;
 
-  await database
-    .updateTable("theme_presets")
-    .set({ is_active: false, updated_at: new Date() })
-    .where("id", "=", existing.id)
-    .execute();
+    await trx
+      .updateTable("theme_presets")
+      .set({ is_active: false, updated_at: new Date() })
+      .where("id", "=", existing.id)
+      .execute();
 
-  await database.insertInto("config_audit_log").values({
-    changed_by: adminUserId,
-    table_name: "theme_presets",
-    record_id: existing.id,
-    field_name: "soft_delete_theme",
-    old_value: existing.slug,
-    new_value: "is_active=false",
-  }).execute();
+    await trx.insertInto("config_audit_log").values({
+      changed_by: adminUserId,
+      table_name: "theme_presets",
+      record_id: existing.id,
+      field_name: "soft_delete_theme",
+      old_value: existing.slug,
+      new_value: "is_active=false",
+    }).execute();
 
-  return true;
+    return true;
+  });
 }
 

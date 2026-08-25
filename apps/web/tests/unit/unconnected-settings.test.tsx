@@ -1,12 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { AccountSettings } from "../../src/settings/AccountSettings.tsx";
 import { SecuritySettings } from "../../src/settings/SecuritySettings.tsx";
+import { renderWithAppProviders } from "./test-utils.tsx";
 
 describe("unconnected account settings", () => {
   it("does not claim that an export request was sent", () => {
-    render(<AccountSettings role="student" />);
+    renderWithAppProviders(<AccountSettings role="student" />);
 
     expect(
       screen.getByRole("button", { name: "Export unavailable" }),
@@ -20,27 +21,21 @@ describe("unconnected account settings", () => {
   });
 });
 
-describe("unconnected security settings", () => {
-  it("keeps unenforced controls and sign-out disabled", () => {
-    render(<SecuritySettings />);
+describe("security settings", () => {
+  it("exposes the account protection and session surfaces", () => {
+    renderWithAppProviders(<SecuritySettings />);
 
     expect(
-      screen.getByText(/Security services are not connected yet/i),
+      screen.getByRole("heading", { name: "Privacy & security" }),
     ).toBeInTheDocument();
-
-    for (const name of [
-      "Two-factor authentication",
-      "New device alerts",
-      "Sign-in alerts",
-    ]) {
-      const control = screen.getByRole("switch", { name });
-      expect(control).toBeDisabled();
-      expect(control).toHaveAttribute("aria-checked", "false");
-    }
-
     expect(
-      screen.getByRole("button", { name: "Sign out unavailable" }),
-    ).toBeDisabled();
-    expect(screen.queryByText("Saved automatically")).not.toBeInTheDocument();
+      screen.getByRole("heading", { name: "Passkeys" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Authenticator app" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Active sessions" }),
+    ).toBeInTheDocument();
   });
 });

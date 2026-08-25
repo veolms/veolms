@@ -100,8 +100,11 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api": {
-          target: new URL(config.STATIC_BUILD_API_URL).origin,
+          target: config.STATIC_BUILD_API_URL
+            ? new URL(config.STATIC_BUILD_API_URL).origin.replace("localhost", "127.0.0.1")
+            : "http://127.0.0.1:4000",
           changeOrigin: true,
+          secure: false,
         },
       },
     },
