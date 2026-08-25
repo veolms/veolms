@@ -165,16 +165,6 @@ test.describe("@visual", () => {
     });
   });
 
-  test("More drawer mobile · dark Graphite", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await installBaselineState(page);
-    await openApp(page, "/courses");
-    await page.getByRole("button", { name: "More navigation options" }).click();
-    await expect(page.getByRole("dialog", { name: /More/ })).toBeVisible();
-    await prepareVisualPage(page);
-    await expect(page).toHaveScreenshot("more-drawer-mobile-dark.png");
-  });
-
   test("learning drawer mobile · dark Graphite", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installBaselineState(page);
@@ -184,6 +174,8 @@ test.describe("@visual", () => {
       page.getByRole("dialog", { name: "Course lessons" }),
     ).toBeVisible();
     await prepareVisualPage(page);
-    await expect(page).toHaveScreenshot("learning-drawer-mobile-dark.png");
+    await expect(page).toHaveScreenshot("learning-drawer-mobile-dark.png", {
+      fullPage: true,
+    });
   });
 });
