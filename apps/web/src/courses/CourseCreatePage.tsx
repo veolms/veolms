@@ -20,6 +20,7 @@ import {
   Clock,
   DotsSixVertical,
   DotsThreeVertical,
+  DownloadSimple,
   Export,
   Eye,
   EyeSlash,
@@ -41,6 +42,7 @@ import {
   Smiley,
   Sparkle,
   Stack,
+  Star,
   Tag,
   TextB,
   TextItalic,
@@ -48,9 +50,11 @@ import {
   UploadSimple,
   UserPlus,
   Video,
+  WarningCircle,
   X,
 } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
+import ISO6391 from "iso-639-1";
 import { ThemedSelect } from "../ThemedSelect";
 import { SettingsToggle } from "../settings/SettingsControls";
 import type { NavigateTo } from "../routing/navigation";
@@ -76,6 +80,9 @@ import {
   useUpdateCourseBasics,
   useUpdateLesson,
   useUpdateSection,
+  useUpsertAccessRules,
+  useUpsertPricing,
+  useUpsertSettings,
 } from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
@@ -110,6 +117,222 @@ const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "extras", label: "Extras", Icon: Sparkle, tone: "orange" },
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
+
+export function formatIsoToDatetimeLocal(isoString?: string | null): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch {
+    return "";
+  }
+}
+
+export function formatDatetimeLocalToIso(
+  localString?: string | null,
+): string | null {
+  if (!localString || !localString.trim()) return null;
+  try {
+    const d = new Date(localString);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+export type PricingType = "free" | "paid";
+
+export interface PricingState {
+  pricingType: PricingType;
+  sellingPrice: string;
+  originalPrice: string;
+  saleStartsAt: string;
+  saleEndsAt: string;
+  currency: string;
+}
+
+export function getCurrencyOptions(): Array<
+  readonly [string, string, { searchKeywords?: string }?]
+> {
+  try {
+    const displayNames = new Intl.DisplayNames(["en"], { type: "currency" });
+    const codes =
+      typeof Intl.supportedValuesOf === "function"
+        ? Intl.supportedValuesOf("currency")
+        : [
+            "USD",
+            "EUR",
+            "GBP",
+            "INR",
+            "AUD",
+            "CAD",
+            "JPY",
+            "CNY",
+            "SGD",
+            "NZD",
+            "CHF",
+            "AED",
+          ];
+
+    const list: Array<{ code: string; name: string; label: string }> = [];
+    for (const code of codes) {
+      try {
+        const name = displayNames.of(code) || code;
+        list.push({
+          code,
+          name,
+          label: `${name} (${code})`,
+        });
+      } catch {
+        list.push({
+          code,
+          name: code,
+          label: `${code} (${code})`,
+        });
+      }
+    }
+
+    list.sort((a, b) => a.name.localeCompare(b.name));
+
+    return list.map((item) => [
+      item.code,
+      item.label,
+      { searchKeywords: `${item.code} ${item.name}` },
+    ]);
+  } catch {
+    return [
+      ["USD", "US Dollar (USD)", { searchKeywords: "USD US Dollar" }],
+      ["EUR", "Euro (EUR)", { searchKeywords: "EUR Euro" }],
+      ["GBP", "British Pound (GBP)", { searchKeywords: "GBP British Pound" }],
+      ["INR", "Indian Rupee (INR)", { searchKeywords: "INR Indian Rupee" }],
+    ];
+  }
+}
+
+export function getCurrencySymbol(currencyCode: string): string {
+  if (!currencyCode) return "$";
+  try {
+    const parts = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: currencyCode,
+      currencyDisplay: "narrowSymbol",
+    }).formatToParts(0);
+    const symbolPart = parts.find((p) => p.type === "currency");
+    return symbolPart ? symbolPart.value : currencyCode;
+  } catch {
+    const map: Record<string, string> = {
+      INR: "₹",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      JPY: "¥",
+      AUD: "A$",
+      CAD: "CA$",
+    };
+    return map[currencyCode.toUpperCase()] || currencyCode;
+  }
+}
+
+export function validatePricing(pricing: PricingState): {
+  isValid: boolean;
+  error: string | null;
+} {
+  if (pricing.pricingType === "free") {
+    return { isValid: true, error: null };
+  }
+
+  const rawSell = pricing.sellingPrice.replace(/,/g, "").trim();
+  const sellNum = parseFloat(rawSell);
+
+  if (!rawSell || isNaN(sellNum) || sellNum <= 0) {
+    return {
+      isValid: false,
+      error: "Please enter a valid selling price greater than 0.",
+    };
+  }
+
+  const rawOrig = pricing.originalPrice.replace(/,/g, "").trim();
+  if (rawOrig) {
+    const origNum = parseFloat(rawOrig);
+    if (isNaN(origNum) || origNum <= 0) {
+      return {
+        isValid: false,
+        error: "Original price must be a valid number greater than 0.",
+      };
+    }
+    if (sellNum > origNum) {
+      return {
+        isValid: false,
+        error: "Sale price cannot be greater than original price.",
+      };
+    }
+  }
+
+  // Date validations
+  const hasStart = Boolean(pricing.saleStartsAt && pricing.saleStartsAt.trim());
+  const hasEnd = Boolean(pricing.saleEndsAt && pricing.saleEndsAt.trim());
+
+  if (hasStart && !hasEnd) {
+    return {
+      isValid: false,
+      error: "Please provide both sale start and end dates, or leave both empty.",
+    };
+  }
+  if (!hasStart && hasEnd) {
+    return {
+      isValid: false,
+      error: "Please provide both sale start and end dates, or leave both empty.",
+    };
+  }
+
+  if (hasStart && hasEnd) {
+    const startDate = new Date(pricing.saleStartsAt);
+    const endDate = new Date(pricing.saleEndsAt);
+    const now = new Date();
+    // 60-second leeway buffer for user input latency
+    const bufferTime = now.getTime() - 60000;
+
+    if (isNaN(startDate.getTime())) {
+      return {
+        isValid: false,
+        error: "Please enter a valid sale start date and time.",
+      };
+    }
+    if (isNaN(endDate.getTime())) {
+      return {
+        isValid: false,
+        error: "Please enter a valid sale end date and time.",
+      };
+    }
+    if (startDate.getTime() < bufferTime) {
+      return {
+        isValid: false,
+        error: "Sale start date cannot be in the past.",
+      };
+    }
+    if (endDate.getTime() < bufferTime) {
+      return {
+        isValid: false,
+        error: "Sale end date cannot be in the past.",
+      };
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return {
+        isValid: false,
+        error: "Sale end date must be later than sale start date.",
+      };
+    }
+  }
+
+  return { isValid: true, error: null };
+}
 
 const escapeHtml = (str: string) => {
   return str
@@ -490,6 +713,7 @@ export function CourseCreatePage({
   const [difficultyLevel, setDifficultyLevel] = useState<
     "beginner" | "intermediate" | "advanced" | ""
   >("");
+  const [language, setLanguage] = useState<string>("en");
   const [currentCourseId, setCurrentCourseId] = useState<string | null>(
     activeEditId,
   );
@@ -529,6 +753,9 @@ export function CourseCreatePage({
   const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
   const createCategoryMutation = useCreateCategory();
   const deleteCategoryMutation = useDeleteCategory();
+  const upsertAccessRulesMutation = useUpsertAccessRules();
+  const upsertSettingsMutation = useUpsertSettings();
+  const upsertPricingMutation = useUpsertPricing();
 
   const categoryOptions = useMemo(() => {
     const options: Array<readonly [string, string]> = [
@@ -613,6 +840,26 @@ export function CourseCreatePage({
     ["advanced", "Advanced"],
   ] as const;
 
+  const languageOptions = useMemo(() => {
+    const codes = ISO6391.getAllCodes();
+    const options: Array<readonly [string, string, { searchKeywords?: string }?]> = [
+      ["", "Select language"],
+    ];
+    for (const code of codes) {
+      const name = ISO6391.getName(code);
+      if (name) {
+        options.push([
+          code,
+          name,
+          { searchKeywords: `${code} ${name} ${ISO6391.getNativeName(code)}` },
+        ]);
+      }
+    }
+    return options;
+  }, []);
+
+  const currencyOptions = useMemo(() => getCurrencyOptions(), []);
+
   const handleBack = () => {
     if (onNavigatePage) {
       onNavigatePage("courses");
@@ -660,35 +907,55 @@ export function CourseCreatePage({
     lessons: CurriculumLessonItem[];
   }
 
+  const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
+    return (
+      les.initialState || {
+        title: les.title,
+        description: les.description || "",
+        contentType: les.contentType,
+        isPublished: les.isPublished !== undefined ? les.isPublished : true,
+        isPreview: les.isPreview !== undefined ? les.isPreview : false,
+      }
+    );
+  };
+
+  const isLessonDirty = (les: CurriculumLessonItem): boolean => {
+    const init = getLessonInitialState(les);
+    const isPub = les.isPublished !== undefined ? les.isPublished : true;
+    const isPrev = les.isPreview !== undefined ? les.isPreview : false;
+    const initPub =
+      init.isPublished !== undefined
+        ? init.isPublished
+        : true;
+    const initPrev =
+      init.isPreview !== undefined
+        ? init.isPreview
+        : false;
+
+    return (
+      les.title.trim() !== init.title.trim() ||
+      (les.description || "") !== (init.description || "") ||
+      les.contentType !== init.contentType ||
+      isPub !== initPub ||
+      isPrev !== initPrev
+    );
+  };
+
   // Access Rules interfaces
   type AccessType = "everyone" | "restricted";
-  type AccessDurationMode = "lifetime" | "fixed" | "custom";
+  type AccessDurationMode = "lifetime" | "fixed";
   type DurationUnit = "Days" | "Weeks" | "Months" | "Years";
-
-  interface AccessRequirement {
-    id: string;
-    courseId: string;
-  }
 
   interface AccessRulesState {
     accessType: AccessType;
-    requirements: AccessRequirement[];
     durationMode: AccessDurationMode;
     fixedDurationValue: number;
     fixedDurationUnit: DurationUnit;
-    customStartDate: string;
-    customEndDate: string;
     enableQA: boolean;
     enableComments: boolean;
+    enableReviews: boolean;
+    enableDownloads: boolean;
   }
-
-  // Available prerequisite courses for dropdown
-  const PREREQUISITE_COURSE_OPTIONS = [
-    { value: "node-fundamentals", label: "Node.js Fundamentals" },
-    { value: "js-basics", label: "JavaScript Basics & ES6+" },
-    { value: "react-core", label: "React Core Architecture" },
-    { value: "css-mastery", label: "Modern CSS & Responsive Web Design" },
-  ];
 
   // Curriculum Step state
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
@@ -704,26 +971,16 @@ export function CourseCreatePage({
     previousLessons: CurriculumLessonItem[];
   } | null>(null);
 
-  // Pricing interfaces
-  type PricingType = "free" | "paid";
-
-  interface PricingState {
-    pricingType: PricingType;
-    sellingPrice: string;
-    originalPrice: string;
-  }
-
   // Access Rules Step state
   const [accessRules, setAccessRules] = useState<AccessRulesState>({
-    accessType: "restricted",
-    requirements: [{ id: "req-1", courseId: "node-fundamentals" }],
+    accessType: "everyone",
     durationMode: "lifetime",
     fixedDurationValue: 30,
     fixedDurationUnit: "Days",
-    customStartDate: "2026-08-12",
-    customEndDate: "2026-09-12",
     enableQA: true,
     enableComments: true,
+    enableReviews: true,
+    enableDownloads: false,
   });
 
   // Extras interfaces
@@ -747,9 +1004,23 @@ export function CourseCreatePage({
   // Pricing Step state
   const [pricing, setPricing] = useState<PricingState>({
     pricingType: "paid",
-    sellingPrice: "1999",
-    originalPrice: "2999",
+    sellingPrice: "",
+    originalPrice: "",
+    saleStartsAt: "",
+    saleEndsAt: "",
+    currency: "USD",
   });
+  const [pricingValidationError, setPricingValidationError] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    if (!pricingValidationError) return;
+    const timer = setTimeout(() => {
+      setPricingValidationError(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [pricingValidationError]);
 
   // Publish interfaces
   type CourseVisibility = "public" | "private" | "unlisted";
@@ -821,7 +1092,7 @@ export function CourseCreatePage({
       { id: "inc-2", text: "Downloadable resources" },
       { id: "inc-3", text: "Access on all devices" },
     ],
-    enableCertificate: true,
+    enableCertificate: false,
     certificateTemplate: "purple-certificate",
     issuanceType: "percentage",
     minCompletionPercentage: 95,
@@ -841,6 +1112,74 @@ export function CourseCreatePage({
         (c.difficulty as "beginner" | "intermediate" | "advanced") || "",
       );
       setCourseVersion(c.version || 1);
+
+      if (editorData.accessRules) {
+        const ar = editorData.accessRules;
+        const isFixed = ar.durationType === "fixed_duration";
+        let fixedVal = 30;
+        let fixedUnit: DurationUnit = "Days";
+
+        if (isFixed && ar.durationDays && ar.durationDays > 0) {
+          const days = ar.durationDays;
+          if (days % 365 === 0 && days >= 365) {
+            fixedVal = days / 365;
+            fixedUnit = "Years";
+          } else if (days % 30 === 0 && days >= 30) {
+            fixedVal = days / 30;
+            fixedUnit = "Months";
+          } else if (days % 7 === 0 && days >= 7) {
+            fixedVal = days / 7;
+            fixedUnit = "Weeks";
+          } else {
+            fixedVal = days;
+            fixedUnit = "Days";
+          }
+        }
+
+        setAccessRules((prev) => ({
+          ...prev,
+          accessType: "everyone",
+          durationMode: isFixed ? "fixed" : "lifetime",
+          fixedDurationValue: fixedVal,
+          fixedDurationUnit: fixedUnit,
+        }));
+      }
+
+      if (editorData.settings) {
+        const s = editorData.settings;
+        setLanguage(s.language || "en");
+        setAccessRules((prev) => ({
+          ...prev,
+          enableQA: s.allowQa,
+          enableComments: s.allowComments,
+          enableReviews: s.allowReviews,
+          enableDownloads: s.allowDownloads,
+        }));
+        setExtras((prev) => ({
+          ...prev,
+          enableCertificate: s.certificateEnabled ?? false,
+        }));
+      }
+
+      if (editorData.pricing) {
+        const p = editorData.pricing;
+        const isFree = p.pricingType === "free";
+        const hasSale = p.salePrice != null && p.salePrice !== undefined;
+        setPricing({
+          pricingType: isFree ? "free" : "paid",
+          sellingPrice: isFree
+            ? ""
+            : hasSale
+              ? String(p.salePrice)
+              : p.price > 0
+                ? String(p.price)
+                : "",
+          originalPrice: !isFree && hasSale ? String(p.price) : "",
+          saleStartsAt: formatIsoToDatetimeLocal(p.saleStartsAt),
+          saleEndsAt: formatIsoToDatetimeLocal(p.saleEndsAt),
+          currency: p.currency || "USD",
+        });
+      }
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
           const prevMap = new Map(prev.map((s) => [s.id, s]));
@@ -851,14 +1190,34 @@ export function CourseCreatePage({
               const existingLesson = existing?.lessons.find(
                 (l) => l.id === les.id,
               );
-              const isPub = les.isPublished !== undefined ? les.isPublished : true;
-              const isPrev = les.isPreview !== undefined ? les.isPreview : false;
+              const isDirty = existingLesson ? isLessonDirty(existingLesson) : false;
+              const title = isDirty && existingLesson ? existingLesson.title : les.title;
+              const description =
+                isDirty && existingLesson
+                  ? (existingLesson.description || "")
+                  : (les.description || "");
+              const contentType =
+                isDirty && existingLesson
+                  ? existingLesson.contentType
+                  : les.contentType;
+              const isPub =
+                isDirty && existingLesson
+                  ? (existingLesson.isPublished !== undefined
+                      ? existingLesson.isPublished
+                      : true)
+                  : (les.isPublished !== undefined ? les.isPublished : true);
+              const isPrev =
+                isDirty && existingLesson
+                  ? (existingLesson.isPreview !== undefined
+                      ? existingLesson.isPreview
+                      : false)
+                  : (les.isPreview !== undefined ? les.isPreview : false);
               const desc = les.description || "";
               return {
                 id: les.id,
-                title: les.title,
-                description: desc,
-                contentType: les.contentType,
+                title,
+                description,
+                contentType,
                 isExpanded: existingLesson ? existingLesson.isExpanded : false,
                 isPublished: isPub,
                 isPreview: isPrev,
@@ -918,8 +1277,11 @@ export function CourseCreatePage({
       }
       setPricing({
         pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
+        sellingPrice: "",
+        originalPrice: "",
+        saleStartsAt: "",
+        saleEndsAt: "",
+        currency: "USD",
       });
 
       if (targetCourse.id === "ui-ux-design-mastery") {
@@ -1101,52 +1463,10 @@ export function CourseCreatePage({
     }));
   };
 
-  // Pricing Handlers
-  const handlePricingTypeChange = (type: PricingType) => {
-    setPricing((prev) => ({ ...prev, pricingType: type }));
-  };
-
-  const handleSellingPriceChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, sellingPrice: val }));
-  };
-
-  const handleOriginalPriceChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, originalPrice: val }));
-  };
-
   // Access Rules State Handlers
   const handleAccessTypeChange = (type: AccessType) => {
+    if (type === "restricted") return; // Restricted is disabled/coming soon
     setAccessRules((prev) => ({ ...prev, accessType: type }));
-  };
-
-  const handleAddRequirement = () => {
-    setAccessRules((prev) => ({
-      ...prev,
-      requirements: [
-        ...prev.requirements,
-        {
-          id: `req-${Date.now()}`,
-          courseId:
-            PREREQUISITE_COURSE_OPTIONS[0]?.value || "node-fundamentals",
-        },
-      ],
-    }));
-  };
-
-  const handleRemoveRequirement = (id: string) => {
-    setAccessRules((prev) => ({
-      ...prev,
-      requirements: prev.requirements.filter((r) => r.id !== id),
-    }));
-  };
-
-  const handleRequirementCourseChange = (id: string, courseId: string) => {
-    setAccessRules((prev) => ({
-      ...prev,
-      requirements: prev.requirements.map((r) =>
-        r.id === id ? { ...r, courseId } : r,
-      ),
-    }));
   };
 
   const handleDurationModeChange = (mode: AccessDurationMode) => {
@@ -1164,14 +1484,6 @@ export function CourseCreatePage({
     setAccessRules((prev) => ({ ...prev, fixedDurationUnit: unit }));
   };
 
-  const handleCustomStartDateChange = (date: string) => {
-    setAccessRules((prev) => ({ ...prev, customStartDate: date }));
-  };
-
-  const handleCustomEndDateChange = (date: string) => {
-    setAccessRules((prev) => ({ ...prev, customEndDate: date }));
-  };
-
   const handleToggleQA = () => {
     setAccessRules((prev) => ({ ...prev, enableQA: !prev.enableQA }));
   };
@@ -1180,6 +1492,20 @@ export function CourseCreatePage({
     setAccessRules((prev) => ({
       ...prev,
       enableComments: !prev.enableComments,
+    }));
+  };
+
+  const handleToggleReviews = () => {
+    setAccessRules((prev) => ({
+      ...prev,
+      enableReviews: !prev.enableReviews,
+    }));
+  };
+
+  const handleToggleDownloads = () => {
+    setAccessRules((prev) => ({
+      ...prev,
+      enableDownloads: !prev.enableDownloads,
     }));
   };
 
@@ -1787,40 +2113,6 @@ export function CourseCreatePage({
     );
   };
 
-  const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
-    return (
-      les.initialState || {
-        title: les.title,
-        description: les.description || "",
-        contentType: les.contentType,
-        isPublished: les.isPublished !== undefined ? les.isPublished : true,
-        isPreview: les.isPreview !== undefined ? les.isPreview : false,
-      }
-    );
-  };
-
-  const isLessonDirty = (les: CurriculumLessonItem): boolean => {
-    const init = getLessonInitialState(les);
-    const isPub = les.isPublished !== undefined ? les.isPublished : true;
-    const isPrev = les.isPreview !== undefined ? les.isPreview : false;
-    const initPub =
-      init.isPublished !== undefined
-        ? init.isPublished
-        : true;
-    const initPrev =
-      init.isPreview !== undefined
-        ? init.isPreview
-        : false;
-
-    return (
-      les.title.trim() !== init.title.trim() ||
-      (les.description || "") !== (init.description || "") ||
-      les.contentType !== init.contentType ||
-      isPub !== initPub ||
-      isPrev !== initPrev
-    );
-  };
-
   const handleSaveLesson = async (sectionId: string, lessonId: string) => {
     if (savingLessonId || updateLessonMutation.isPending) return;
 
@@ -2193,15 +2485,47 @@ export function CourseCreatePage({
     })),
   ];
 
+  const handlePricingTypeChange = (type: PricingType) => {
+    setPricing((prev) => ({ ...prev, pricingType: type }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const handleSellingPriceChange = (val: string) => {
+    setPricing((prev) => ({ ...prev, sellingPrice: val }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const handleOriginalPriceChange = (val: string) => {
+    setPricing((prev) => ({ ...prev, originalPrice: val }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const handleSaleStartsAtChange = (val: string) => {
+    setPricing((prev) => ({ ...prev, saleStartsAt: val }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const handleSaleEndsAtChange = (val: string) => {
+    setPricing((prev) => ({ ...prev, saleEndsAt: val }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const handleCurrencyChange = (val: string) => {
+    setPricing((prev) => ({ ...prev, currency: val }));
+    if (pricingValidationError) setPricingValidationError(null);
+  };
+
+  const currencySymbol = getCurrencySymbol(pricing.currency || "USD");
+
   const previewPricing: CourseOverviewPricingProps =
     pricing.pricingType === "free"
       ? { price: "Free" }
       : {
           price: pricing.sellingPrice.trim()
-            ? `₹${pricing.sellingPrice.trim()}`
-            : "₹1,999",
+            ? `${currencySymbol}${pricing.sellingPrice.trim()}`
+            : `${currencySymbol}1,999`,
           originalPrice: pricing.originalPrice.trim()
-            ? `₹${pricing.originalPrice.trim()}`
+            ? `${currencySymbol}${pricing.originalPrice.trim()}`
             : undefined,
           discount:
             pricing.originalPrice.trim() &&
@@ -2222,11 +2546,11 @@ export function CourseCreatePage({
     courseTitle.trim().length > 0 && courseDescription.trim().length > 0;
   const isCurriculumValid = totalSections > 0;
   const isAccessRulesValid =
-    accessRules.accessType === "everyone" ||
-    accessRules.requirements.length > 0;
-  const isPricingValid =
-    pricing.pricingType === "free" ||
-    parseFloat(pricing.sellingPrice.replace(/,/g, "")) > 0;
+    accessRules.accessType === "everyone" &&
+    (accessRules.durationMode === "lifetime" ||
+      (accessRules.durationMode === "fixed" &&
+        accessRules.fixedDurationValue > 0));
+  const isPricingValid = validatePricing(pricing).isValid;
   const isExtrasValid = true;
 
   const isCourseReadyToPublish =
@@ -2274,7 +2598,15 @@ export function CourseCreatePage({
             },
           });
           setCourseVersion(updated.version);
-          return updated;
+        }
+
+        if (language) {
+          await upsertSettingsMutation.mutateAsync({
+            courseId: created.id,
+            payload: {
+              language,
+            },
+          });
         }
         return created;
       } else {
@@ -2290,8 +2622,249 @@ export function CourseCreatePage({
           },
         });
         setCourseVersion(updated.version);
+
+        if (language) {
+          await upsertSettingsMutation.mutateAsync({
+            courseId: currentCourseId,
+            payload: {
+              language,
+            },
+          });
+        }
         return updated;
       }
+    } else if (activeStep === "curriculum") {
+      let targetCourseId = currentCourseId;
+      if (!targetCourseId) {
+        const created = await createCourseMutation.mutateAsync({
+          title: courseTitle.trim() || "Untitled Course",
+        });
+        targetCourseId = created.id;
+        setCurrentCourseId(created.id);
+        setCourseVersion(created.version);
+      }
+
+      // 1. Save any pending section title edits
+      const editingSections = sections.filter(
+        (s) =>
+          s.isEditingTitle &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            s.id,
+          ),
+      );
+      if (editingSections.length > 0) {
+        await Promise.all(
+          editingSections.map(async (sec) => {
+            const trimmed = sec.title.trim();
+            if (trimmed) {
+              await updateSectionMutation.mutateAsync({
+                courseId: targetCourseId,
+                sectionId: sec.id,
+                payload: { title: trimmed },
+              });
+              setSections((prev) =>
+                prev.map((s) =>
+                  s.id === sec.id ? { ...s, isEditingTitle: false } : s,
+                ),
+              );
+            }
+          }),
+        );
+      }
+
+      // 2. Save all dirty lessons across all sections
+      const dirtyLessons: Array<{
+        sectionId: string;
+        lesson: CurriculumLessonItem;
+      }> = [];
+      for (const sec of sections) {
+        for (const les of sec.lessons) {
+          if (isLessonDirty(les) && !les.isPendingCreation) {
+            dirtyLessons.push({ sectionId: sec.id, lesson: les });
+          }
+        }
+      }
+
+      if (dirtyLessons.length > 0) {
+        await Promise.all(
+          dirtyLessons.map(async ({ sectionId, lesson }) => {
+            const trimmedTitle = lesson.title.trim() || "Untitled Lesson";
+            const isPub = lesson.isPublished !== false;
+            const isPrev = lesson.isPreview === true;
+
+            if (
+              targetCourseId &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                lesson.id,
+              )
+            ) {
+              await updateLessonMutation.mutateAsync({
+                courseId: targetCourseId,
+                lessonId: lesson.id,
+                payload: {
+                  title: trimmedTitle,
+                  description: lesson.description || "",
+                  contentType: lesson.contentType,
+                  isPublished: isPub,
+                  isPreview: isPrev,
+                },
+              });
+
+              setSections((prev) =>
+                prev.map((s) => {
+                  if (s.id !== sectionId) return s;
+                  return {
+                    ...s,
+                    lessons: s.lessons.map((l) =>
+                      l.id === lesson.id
+                        ? {
+                            ...l,
+                            title: trimmedTitle,
+                            isPublished: isPub,
+                            isPreview: isPrev,
+                            initialState: {
+                              title: trimmedTitle,
+                              description: lesson.description || "",
+                              contentType: lesson.contentType,
+                              isPublished: isPub,
+                              isPreview: isPrev,
+                            },
+                          }
+                        : l,
+                    ),
+                  };
+                }),
+              );
+            }
+          }),
+        );
+      }
+
+      return { savedLessonsCount: dirtyLessons.length };
+    } else if (activeStep === "access-rules") {
+      let targetCourseId = currentCourseId;
+      if (!targetCourseId) {
+        const created = await createCourseMutation.mutateAsync({
+          title: courseTitle.trim() || "Untitled Course",
+        });
+        targetCourseId = created.id;
+        setCurrentCourseId(created.id);
+        setCourseVersion(created.version);
+      }
+
+      let durationDays: number | null = null;
+      if (accessRules.durationMode === "fixed") {
+        const val = Math.max(1, accessRules.fixedDurationValue || 1);
+        const unitMultiplier =
+          accessRules.fixedDurationUnit === "Years"
+            ? 365
+            : accessRules.fixedDurationUnit === "Months"
+              ? 30
+              : accessRules.fixedDurationUnit === "Weeks"
+                ? 7
+                : 1;
+        durationDays = val * unitMultiplier;
+      }
+
+      const [accessRuleRes, settingsRes] = await Promise.all([
+        upsertAccessRulesMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            accessType: "everyone",
+            durationType:
+              accessRules.durationMode === "fixed"
+                ? "fixed_duration"
+                : "lifetime",
+            durationDays:
+              accessRules.durationMode === "fixed" ? durationDays : null,
+          },
+        }),
+        upsertSettingsMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            language: language || undefined,
+            allowQa: accessRules.enableQA,
+            allowComments: accessRules.enableComments,
+            allowReviews: accessRules.enableReviews,
+            allowDownloads: accessRules.enableDownloads,
+          },
+        }),
+      ]);
+      return { accessRule: accessRuleRes, settings: settingsRes };
+    } else if (activeStep === "pricing") {
+      const validation = validatePricing(pricing);
+      if (!validation.isValid) {
+        setPricingValidationError(validation.error);
+        setToastMessage(validation.error || "Please fix pricing errors.");
+        throw new Error(validation.error || "Validation failed");
+      }
+      setPricingValidationError(null);
+
+      let targetCourseId = currentCourseId;
+      if (!targetCourseId) {
+        const created = await createCourseMutation.mutateAsync({
+          title: courseTitle.trim() || "Untitled Course",
+        });
+        targetCourseId = created.id;
+        setCurrentCourseId(created.id);
+        setCourseVersion(created.version);
+      }
+
+      if (pricing.pricingType === "free") {
+        const res = await upsertPricingMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            pricingType: "free",
+            price: 0,
+            salePrice: null,
+            saleStartsAt: null,
+            saleEndsAt: null,
+            currency: pricing.currency || "USD",
+          },
+        });
+        return res;
+      } else {
+        const rawSell = pricing.sellingPrice.replace(/,/g, "").trim();
+        const rawOrig = pricing.originalPrice.replace(/,/g, "").trim();
+        const sellNum = Math.round(parseFloat(rawSell));
+        const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
+
+        const price = origNum && origNum > 0 ? origNum : sellNum;
+        const salePrice = origNum && origNum > 0 ? sellNum : null;
+        const saleStartsAt = formatDatetimeLocalToIso(pricing.saleStartsAt);
+        const saleEndsAt = formatDatetimeLocalToIso(pricing.saleEndsAt);
+
+        const res = await upsertPricingMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            pricingType: "paid",
+            price,
+            salePrice,
+            saleStartsAt,
+            saleEndsAt,
+            currency: pricing.currency || "USD",
+          },
+        });
+        return res;
+      }
+    } else if (activeStep === "extras") {
+      let targetCourseId = currentCourseId;
+      if (!targetCourseId) {
+        const created = await createCourseMutation.mutateAsync({
+          title: courseTitle.trim() || "Untitled Course",
+        });
+        targetCourseId = created.id;
+        setCurrentCourseId(created.id);
+        setCourseVersion(created.version);
+      }
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          certificateEnabled: extras.enableCertificate,
+        },
+      });
+      return res;
     } else {
       // For other steps: if server course exists and basics are valid, keep basics synced
       if (currentCourseId && courseTitle.trim()) {
@@ -2698,7 +3271,7 @@ export function CourseCreatePage({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 max-[640px]:grid-cols-1">
+                <div className="grid grid-cols-3 gap-4 max-[900px]:grid-cols-2 max-[640px]:grid-cols-1">
                   <div className="flex flex-col gap-2 mb-0">
                     <label
                       id="category-label"
@@ -2732,6 +3305,24 @@ export function CourseCreatePage({
                       onValueChange={(val) => setDifficultyLevel(val as any)}
                       options={difficultyOptions}
                       ariaLabel="Select difficulty level"
+                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2 mb-0 max-[900px]:col-span-2 max-[640px]:col-span-1">
+                    <label
+                      id="language-label"
+                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    >
+                      Course Language
+                    </label>
+                    <ThemedSelect
+                      value={language}
+                      onValueChange={setLanguage}
+                      options={languageOptions}
+                      ariaLabel="Select course language"
+                      searchable
+                      searchPlaceholder="Search languages..."
                       triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem]"
                     />
                   </div>
@@ -4200,89 +4791,28 @@ export function CourseCreatePage({
                     </div>
                   </label>
 
-                  {/* Radio option: Restricted access */}
-                  <label
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      accessRules.accessType === "restricted"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    }`}
-                    onClick={() => handleAccessTypeChange("restricted")}
+                  {/* Radio option: Restricted access (Coming soon - Disabled) */}
+                  <div
+                    className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                    aria-disabled="true"
                   >
-                    <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        accessRules.accessType === "restricted"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
-                      }`}
-                    >
-                      {accessRules.accessType === "restricted" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
-                        Restricted access
-                      </strong>
+                    <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-[var(--muted)]" />
+                    <div className="flex flex-1 flex-col gap-0.75 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                          Restricted access
+                        </strong>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          Coming soon
+                        </span>
+                      </div>
                       <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
                         Only users who meet the selected requirements can access
                         this course.
                       </p>
                     </div>
-                  </label>
-                </div>
-
-                {/* Conditional Requirements Box */}
-                {accessRules.accessType === "restricted" && (
-                  <div className="flex flex-col gap-3 mt-3.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] p-3.5 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
-                    <div className="flex flex-col gap-0.5">
-                      <label className="block mb-0.5 text-[var(--text)] text-[0.84rem] font-bold">
-                        Access requirement
-                      </label>
-                      <p className="m-0 text-[var(--muted)] text-[0.78rem]">
-                        Users must have access to:
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      {accessRules.requirements.map((req) => (
-                        <div key={req.id} className="flex items-center gap-2">
-                          <ThemedSelect
-                            value={req.courseId}
-                            onValueChange={(val) =>
-                              handleRequirementCourseChange(req.id, val)
-                            }
-                            options={PREREQUISITE_COURSE_OPTIONS.map((c) => [
-                              c.value,
-                              c.label,
-                            ])}
-                            ariaLabel="Select prerequisite course requirement"
-                            triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex-1 min-w-0"
-                          />
-                          {accessRules.requirements.length > 1 && (
-                            <button
-                              type="button"
-                              className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0"
-                              aria-label="Remove requirement"
-                              title="Remove requirement"
-                              onClick={() => handleRemoveRequirement(req.id)}
-                            >
-                              <Trash size={15} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="inline-flex self-start items-center gap-1.5 text-[var(--muted)] hover:text-[var(--text)] text-[0.82rem] font-medium border-0 bg-transparent cursor-pointer p-0 mt-1 transition-colors"
-                      onClick={handleAddRequirement}
-                    >
-                      <Plus size={15} /> Add another requirement
-                    </button>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Card 2: Access duration */}
@@ -4390,75 +4920,6 @@ export function CourseCreatePage({
                       )}
                     </div>
                   </div>
-
-                  {/* Option 3: Custom expiration */}
-                  <div
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      accessRules.durationMode === "custom"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    }`}
-                    onClick={() => handleDurationModeChange("custom")}
-                  >
-                    <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        accessRules.durationMode === "custom"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
-                      }`}
-                    >
-                      {accessRules.durationMode === "custom" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
-                        Custom expiration
-                      </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
-                        Set a specific start and end date for access.
-                      </p>
-
-                      {accessRules.durationMode === "custom" && (
-                        <div
-                          className="flex items-center gap-3.5 mt-3 max-[768px]:flex-col max-[768px]:items-stretch"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[var(--muted)] text-[0.76rem] font-semibold">
-                              Start date
-                            </label>
-                            <input
-                              type="date"
-                              className="border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] font-inherit text-[0.84rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
-                              value={accessRules.customStartDate}
-                              onChange={(e) =>
-                                handleCustomStartDateChange(e.target.value)
-                              }
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-center mt-4.5 text-[var(--muted)] max-[768px]:mt-0 max-[768px]:rotate-90">
-                            <ArrowRight size={18} />
-                          </div>
-
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[var(--muted)] text-[0.76rem] font-semibold">
-                              End date
-                            </label>
-                            <input
-                              type="date"
-                              className="border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] font-inherit text-[0.84rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
-                              value={accessRules.customEndDate}
-                              onChange={(e) =>
-                                handleCustomEndDateChange(e.target.value)
-                              }
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -4516,6 +4977,50 @@ export function CourseCreatePage({
                     checked={accessRules.enableComments}
                     onChange={handleToggleComments}
                     label="Toggle Comments"
+                  />
+                </div>
+
+                {/* Toggle 3: Reviews */}
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex items-center gap-3.5">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+                      <Star size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                        Reviews
+                      </strong>
+                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                        Allow learners to leave star ratings and reviews.
+                      </p>
+                    </div>
+                  </div>
+                  <SettingsToggle
+                    checked={accessRules.enableReviews}
+                    onChange={handleToggleReviews}
+                    label="Toggle Reviews"
+                  />
+                </div>
+
+                {/* Toggle 4: Downloads */}
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex items-center gap-3.5">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+                      <DownloadSimple size={20} weight="bold" />
+                    </div>
+                    <div>
+                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                        Downloads
+                      </strong>
+                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                        Allow learners to download lesson resources for offline access.
+                      </p>
+                    </div>
+                  </div>
+                  <SettingsToggle
+                    checked={accessRules.enableDownloads}
+                    onChange={handleToggleDownloads}
+                    label="Toggle Downloads"
                   />
                 </div>
               </div>
@@ -4617,6 +5122,29 @@ export function CourseCreatePage({
                 </div>
 
                 <div className="flex flex-col gap-1.75">
+                  {/* Currency Combobox Field */}
+                  <div className="flex flex-col gap-2 mb-5">
+                    <label
+                      id="currency-label"
+                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    >
+                      Currency <span className="text-[#ff5252] ml-0.5">*</span>
+                    </label>
+                    <ThemedSelect
+                      value={pricing.currency || "USD"}
+                      onValueChange={handleCurrencyChange}
+                      options={currencyOptions}
+                      disabled={pricing.pricingType === "free"}
+                      ariaLabel="Select currency"
+                      searchable
+                      searchPlaceholder="Search currencies by name or code..."
+                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium"
+                    />
+                    <p className="m-0 mt-1 text-[var(--muted)] text-[0.78rem]">
+                      Choose the currency for course pricing.
+                    </p>
+                  </div>
+
                   {/* Selling Price Field */}
                   <div className="flex flex-col gap-2 mb-5">
                     <label
@@ -4628,7 +5156,7 @@ export function CourseCreatePage({
                     </label>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-[var(--muted)] text-[0.9rem] font-semibold pointer-events-none">
-                        ₹
+                        {getCurrencySymbol(pricing.currency || "USD")}
                       </span>
                       <input
                         id="selling-price"
@@ -4657,7 +5185,7 @@ export function CourseCreatePage({
                     </label>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-[var(--muted)] text-[0.9rem] font-semibold pointer-events-none">
-                        ₹
+                        {getCurrencySymbol(pricing.currency || "USD")}
                       </span>
                       <input
                         id="original-price"
@@ -4721,6 +5249,83 @@ export function CourseCreatePage({
                       </div>
                     );
                   })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Sale schedule (Optional) */}
+            <div
+              className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)] transition-opacity duration-200 ${
+                pricing.pricingType === "free"
+                  ? "is-disabled opacity-55 pointer-events-none"
+                  : ""
+              }`}
+            >
+              <div className="mb-4.5 flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                    3. Sale schedule (Optional)
+                  </h3>
+                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                    Set an optional start and end date/time for promotional pricing countdowns.
+                  </p>
+                </div>
+              </div>
+
+              {pricingValidationError && (
+                <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
+                  <WarningCircle size={18} weight="bold" className="shrink-0" />
+                  <span>{pricingValidationError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+                {/* Sale Start Date */}
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="sale-starts-at"
+                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold flex items-center gap-1.5"
+                  >
+                    <Calendar size={15} className="text-[var(--accent)]" />
+                    Sale Start Date & Time
+                  </label>
+                  <div className="relative flex items-center w-full">
+                    <input
+                      id="sale-starts-at"
+                      type="datetime-local"
+                      disabled={pricing.pricingType === "free"}
+                      value={pricing.saleStartsAt}
+                      onChange={(e) => handleSaleStartsAtChange(e.target.value)}
+                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 px-3.5 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 [color-scheme:dark_light]"
+                    />
+                  </div>
+                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
+                    When the promotion begins.
+                  </p>
+                </div>
+
+                {/* Sale End Date */}
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="sale-ends-at"
+                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold flex items-center gap-1.5"
+                  >
+                    <Clock size={15} className="text-[var(--accent)]" />
+                    Sale End Date & Time
+                  </label>
+                  <div className="relative flex items-center w-full">
+                    <input
+                      id="sale-ends-at"
+                      type="datetime-local"
+                      disabled={pricing.pricingType === "free"}
+                      value={pricing.saleEndsAt}
+                      onChange={(e) => handleSaleEndsAtChange(e.target.value)}
+                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 px-3.5 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 [color-scheme:dark_light]"
+                    />
+                  </div>
+                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
+                    When the promotional discount ends.
+                  </p>
                 </div>
               </div>
             </div>
@@ -4806,44 +5411,56 @@ export function CourseCreatePage({
                 >
                   {/* Template Selector */}
                   <div className="flex flex-col gap-2 mb-5">
-                    <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
-                      Certificate template
-                    </label>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                        Certificate template
+                      </label>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
                     <p className="m-0 mt-0.5 mb-2 text-[var(--muted)] text-[0.78rem]">
                       Choose from pre-designed certificate templates.
                     </p>
-                    <ThemedSelect
-                      value={extras.certificateTemplate}
-                      onValueChange={handleCertificateTemplateChange}
-                      options={[
-                        ["purple-certificate", "Modern Purple Certificate"],
-                        ["blue-certificate", "Classic Blue Certificate"],
-                        ["dark-certificate", "Minimal Dark Certificate"],
-                      ]}
-                      ariaLabel="Select certificate template"
-                      className="w-full"
-                      triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
-                    />
+                    <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                      <ThemedSelect
+                        value={extras.certificateTemplate}
+                        onValueChange={handleCertificateTemplateChange}
+                        options={[
+                          ["purple-certificate", "Modern Purple Certificate"],
+                          ["blue-certificate", "Classic Blue Certificate"],
+                          ["dark-certificate", "Minimal Dark Certificate"],
+                        ]}
+                        ariaLabel="Select certificate template"
+                        className="w-full"
+                        disabled
+                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
+                      />
+                    </div>
                   </div>
 
                   {/* Certificate Issuance Options */}
                   <div className="flex flex-col gap-2 mb-5">
-                    <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
-                      Certificate issuance
-                    </label>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                        Certificate issuance
+                      </label>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
                     <p className="m-0 mt-0.5 mb-2 text-[var(--muted)] text-[0.78rem]">
                       Choose when the certificate should be issued.
                     </p>
 
-                    <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
                       {/* Option 1: On course completion */}
                       <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                           extras.issuanceType === "completion"
                             ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                         }`}
-                        onClick={() => handleIssuanceTypeChange("completion")}
                       >
                         <div
                           className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
@@ -4869,12 +5486,11 @@ export function CourseCreatePage({
 
                       {/* Option 2: Minimum completion percentage */}
                       <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                           extras.issuanceType === "percentage"
                             ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                         }`}
-                        onClick={() => handleIssuanceTypeChange("percentage")}
                       >
                         <div
                           className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
@@ -4893,21 +5509,15 @@ export function CourseCreatePage({
                               Minimum completion percentage
                             </strong>
                             {extras.issuanceType === "percentage" && (
-                              <div
-                                className="flex items-center gap-1.5"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                              <div className="flex items-center gap-1.5">
                                 <input
                                   type="number"
-                                  className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
+                                  disabled
+                                  className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
                                   min={1}
                                   max={100}
                                   value={extras.minCompletionPercentage}
-                                  onChange={(e) =>
-                                    handleMinPercentageChange(
-                                      parseInt(e.target.value, 10),
-                                    )
-                                  }
+                                  readOnly
                                 />
                                 <span className="text-[var(--text)] text-[0.86rem] font-bold">
                                   %
@@ -4924,12 +5534,11 @@ export function CourseCreatePage({
 
                       {/* Option 3: Custom rule */}
                       <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                           extras.issuanceType === "custom"
                             ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                         }`}
-                        onClick={() => handleIssuanceTypeChange("custom")}
                       >
                         <div
                           className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
@@ -4952,17 +5561,13 @@ export function CourseCreatePage({
                           </p>
 
                           {extras.issuanceType === "custom" && (
-                            <div
-                              className="mt-2 w-full"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                            <div className="mt-2 w-full">
                               <input
                                 type="text"
-                                className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
+                                disabled
+                                readOnly
+                                className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
                                 value={extras.customRuleText}
-                                onChange={(e) =>
-                                  handleCustomRuleTextChange(e.target.value)
-                                }
                                 placeholder="e.g. Complete all quizzes with > 80% score"
                               />
                             </div>
@@ -4973,20 +5578,27 @@ export function CourseCreatePage({
                   </div>
 
                   {/* Delivery Toggle Row */}
-                  <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5">
+                  <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
                     <div>
-                      <strong className="block mb-0.5 text-[var(--text)] text-[0.88rem] font-[650]">
-                        Delivery
-                      </strong>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <strong className="text-[var(--text)] text-[0.88rem] font-[650]">
+                          Delivery
+                        </strong>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          Coming soon
+                        </span>
+                      </div>
                       <p className="m-0 text-[var(--muted)] text-[0.78rem]">
                         Automatically email the certificate to learners.
                       </p>
                     </div>
-                    <SettingsToggle
-                      checked={extras.autoEmailCertificate}
-                      onChange={handleToggleAutoEmailCertificate}
-                      label="Toggle certificate delivery"
-                    />
+                    <div className="pointer-events-none">
+                      <SettingsToggle
+                        checked={extras.autoEmailCertificate}
+                        onChange={handleToggleAutoEmailCertificate}
+                        label="Toggle certificate delivery"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5038,7 +5650,7 @@ export function CourseCreatePage({
                     </div>
                     <div className="flex flex-col">
                       <strong className="text-[var(--text)] text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                        9h 24m
+                        0m
                       </strong>
                       <span className="text-[var(--muted)] text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                         Content length
@@ -5049,65 +5661,45 @@ export function CourseCreatePage({
 
                 {/* Additional Inclusions Section */}
                 <div className="flex flex-col gap-3">
-                  <div className="mb-2">
-                    <h4 className="m-0 mb-0.5 text-[var(--text)] text-[0.9rem] font-bold">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h4 className="m-0 text-[var(--text)] text-[0.9rem] font-bold">
                       Additional inclusions
                     </h4>
-                    <p className="m-0 text-[var(--muted)] text-[0.78rem]">
-                      Add any additional benefits your learners will get with
-                      this course.
-                    </p>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      Coming soon
+                    </span>
                   </div>
+                  <p className="m-0 mb-1 text-[var(--muted)] text-[0.78rem]">
+                    Add any additional benefits your learners will get with
+                    this course.
+                  </p>
 
-                  <div className="flex flex-col gap-2">
-                    {extras.inclusions.map((item, incIndex) => (
+                  <div className="flex flex-col gap-2 opacity-75">
+                    {extras.inclusions.map((item) => (
                       <div
                         key={item.id}
-                        className={`flex items-center gap-2.5 border rounded-[10px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-[border-color,opacity] duration-150 ${
-                          draggedInclusionIndex === incIndex
-                            ? "opacity-35 border-dashed border-[var(--accent)]"
-                            : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-                        }`}
-                        draggable={dragEnabledInclusionId === item.id}
-                        onDragStart={(e) =>
-                          handleInclusionDragStart(e, incIndex, item.text)
-                        }
-                        onDragOver={(e) => handleInclusionDragOver(e, incIndex)}
-                        onDragEnd={handleInclusionDragEnd}
+                        className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] cursor-not-allowed select-none"
                       >
                         <span
-                          className="flex items-center justify-center text-[var(--muted)] cursor-grab opacity-60 transition-opacity duration-150 hover:opacity-100 select-none"
-                          title="Drag to reorder inclusion"
-                          onMouseEnter={() =>
-                            setDragEnabledInclusionId(item.id)
-                          }
-                          onMouseLeave={() => {
-                            if (draggedInclusionIndex === null)
-                              setDragEnabledInclusionId(null);
-                          }}
-                          onMouseDown={() => setDragEnabledInclusionId(item.id)}
-                          onMouseUp={() => {
-                            if (draggedInclusionIndex === null)
-                              setDragEnabledInclusionId(null);
-                          }}
+                          className="flex items-center justify-center text-[var(--muted)] opacity-40 select-none cursor-not-allowed"
+                          title="Reordering is coming soon"
                         >
                           <DotsSixVertical size={18} />
                         </span>
                         <input
                           type="text"
-                          className="flex-1 border-none text-[var(--text)] bg-transparent text-[0.86rem] font-medium outline-none"
+                          readOnly
+                          disabled
+                          className="flex-1 border-none text-[var(--text)] bg-transparent text-[0.86rem] font-medium outline-none cursor-not-allowed"
                           value={item.text}
-                          onChange={(e) =>
-                            handleUpdateInclusionText(item.id, e.target.value)
-                          }
                           placeholder="e.g. Downloadable resources"
                         />
                         <button
                           type="button"
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0"
-                          aria-label="Remove inclusion"
-                          title="Remove inclusion"
-                          onClick={() => handleDeleteInclusion(item.id)}
+                          disabled
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] opacity-40 bg-transparent cursor-not-allowed p-0 pointer-events-none"
+                          aria-label="Remove inclusion (Coming soon)"
+                          title="Remove inclusion (Coming soon)"
                         >
                           <Trash size={15} />
                         </button>
@@ -5117,8 +5709,9 @@ export function CourseCreatePage({
 
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center gap-1.5 h-[34px] w-full border border-dashed border-[color-mix(in_srgb,var(--text)_18%,transparent)] rounded-lg text-[var(--muted)] bg-transparent text-[0.82rem] font-medium cursor-pointer transition-colors duration-150 hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--accent-ink,var(--accent))] mt-1"
-                    onClick={handleAddInclusion}
+                    disabled
+                    className="inline-flex items-center justify-center gap-1.5 h-[34px] w-full border border-dashed border-[color-mix(in_srgb,var(--text)_18%,transparent)] rounded-lg text-[var(--muted)] bg-transparent text-[0.82rem] font-medium opacity-50 cursor-not-allowed pointer-events-none mt-1"
+                    title="Adding inclusions is coming soon"
                   >
                     <Plus size={15} /> Add inclusion
                   </button>

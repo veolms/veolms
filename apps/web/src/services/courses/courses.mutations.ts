@@ -2,16 +2,22 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Category,
   Course,
+  CourseAccessRule,
   CourseEditorDataResponse,
+  CoursePricing,
+  CourseSettings,
   CreateCategoryRequest,
   CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
+  UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseLessonRequest,
+  UpdateCoursePricingRequest,
   UpdateCourseSectionRequest,
+  UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
@@ -339,3 +345,61 @@ export function useReorderSectionLessons() {
   });
 }
 export const useReorderLessons = useReorderSectionLessons;
+
+export function useUpsertAccessRules() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    CourseAccessRule,
+    ApiError,
+    { courseId: string; payload: UpdateCourseAccessRuleRequest }
+  >({
+    mutationFn: ({ courseId, payload }) =>
+      coursesService.upsertAccessRules(courseId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useUpsertCourseAccessRules = useUpsertAccessRules;
+
+export function useUpsertSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    CourseSettings,
+    ApiError,
+    { courseId: string; payload: UpdateCourseSettingsRequest }
+  >({
+    mutationFn: ({ courseId, payload }) =>
+      coursesService.upsertSettings(courseId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useUpsertCourseSettings = useUpsertSettings;
+
+export function useUpsertPricing() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    CoursePricing,
+    ApiError,
+    { courseId: string; payload: UpdateCoursePricingRequest }
+  >({
+    mutationFn: ({ courseId, payload }) =>
+      coursesService.upsertPricing(courseId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useUpsertCoursePricing = useUpsertPricing;
+

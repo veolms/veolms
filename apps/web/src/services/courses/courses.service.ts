@@ -2,8 +2,11 @@ import { api } from "../../lib/api-client";
 import type {
   Category,
   Course,
+  CourseAccessRule,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CoursePricing,
+  CourseSettings,
   CourseSummary,
   CreateCategoryRequest,
   CreateCourseLessonRequest,
@@ -13,9 +16,12 @@ import type {
   PublicCourse,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
+  UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseLessonRequest,
+  UpdateCoursePricingRequest,
   UpdateCourseSectionRequest,
+  UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 
 export const coursesService = {
@@ -144,6 +150,36 @@ export const coursesService = {
   ): Promise<{ success: boolean }> => {
     return api.post<{ success: boolean }>(
       `/courses/${courseId}/sections/${sectionId}/lessons/reorder`,
+      payload,
+    );
+  },
+
+  upsertAccessRules: (
+    courseId: string,
+    payload: UpdateCourseAccessRuleRequest,
+  ): Promise<CourseAccessRule> => {
+    return api.put<CourseAccessRule>(
+      `/courses/${courseId}/access-rules`,
+      payload,
+    );
+  },
+
+  upsertSettings: (
+    courseId: string,
+    payload: UpdateCourseSettingsRequest,
+  ): Promise<CourseSettings> => {
+    return api.put<CourseSettings>(
+      `/courses/${courseId}/settings`,
+      payload,
+    );
+  },
+
+  upsertPricing: (
+    courseId: string,
+    payload: UpdateCoursePricingRequest,
+  ): Promise<CoursePricing> => {
+    return api.put<CoursePricing>(
+      `/courses/${courseId}/pricing`,
       payload,
     );
   },
