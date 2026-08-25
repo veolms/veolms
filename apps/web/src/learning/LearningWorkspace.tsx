@@ -149,6 +149,7 @@ export function LearningWorkspace({
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
   const [selectedLesson, setSelectedLesson] = useState(lessonId);
+  const pendingLessonSelectionRef = useRef<number | null>(null);
   const [lessonProgress, setLessonProgress] = useState<Record<number, number>>(
     {},
   );
@@ -317,6 +318,7 @@ export function LearningWorkspace({
 
   const selectLesson = (lessonNumber: number) => {
     if (lessonNumber === selectedLesson) return;
+    pendingLessonSelectionRef.current = lessonNumber;
     setAutoPlayOnLessonChange(true);
     setSelectedLesson(lessonNumber);
     onSelectLesson(lessonNumber);
@@ -338,6 +340,12 @@ export function LearningWorkspace({
   );
 
   useEffect(() => {
+    const pendingLessonSelection = pendingLessonSelectionRef.current;
+    if (pendingLessonSelection !== null) {
+      if (lessonId !== pendingLessonSelection) return;
+      pendingLessonSelectionRef.current = null;
+    }
+
     const nextLessonId = curriculumLessonsById.has(lessonId)
       ? lessonId
       : firstCurriculumLessonId;

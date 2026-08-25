@@ -219,10 +219,7 @@ export function getVisibleCourses(
       course.lifecycleStatus !== enrollmentFilter
     )
       return false;
-    if (statusFilter !== "all") {
-      if (role === "creator" && course.lifecycleStatus !== statusFilter)
-        return false;
-      if (role === "student") {
+    if (statusFilter !== "all" && role === "student") {
         const progress = course.progress ?? 0;
         if (
           statusFilter === "in-progress" &&
@@ -239,7 +236,6 @@ export function getVisibleCourses(
           (!course.enrolled || progress < 100)
         )
           return false;
-      }
     }
     return (
       !normalizedSearch ||

@@ -19,7 +19,7 @@ import {
   UploadSimpleIcon as UploadSimple,
   UsersThreeIcon as UsersThree,
 } from "@phosphor-icons/react";
-import type { Course, CoursePricing, CourseRole } from "./catalogue";
+import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 
 const courseOverviewPath = (course: Course) =>
@@ -37,12 +37,6 @@ const studentStatusStyles = {
   "in-progress": "border-sky-400/25 bg-sky-500/15 text-sky-300",
   completed: "border-emerald-400/25 bg-emerald-500/15 text-emerald-300",
 } as const;
-
-const DEFAULT_NOT_ENROLLED_PRICING: CoursePricing = {
-  price: "₹1,999",
-  originalPrice: "₹2,999",
-  discount: "33% off",
-};
 
 const getStudentStatus = (course: Course) => {
   if (!course.enrolled) return "not-enrolled" as const;
@@ -197,13 +191,6 @@ export function CourseCard({
           >
             {course.lifecycleStatus}
           </span>
-        ) : course.enrolled ? (
-          <span
-            className={`absolute left-3.5 top-3.5 z-20 inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold ${studentStatusStyles[studentStatus]}`}
-            data-course-card-tag
-          >
-            {getStudentStatusLabel(course)}
-          </span>
         ) : (
           <>
             <span
@@ -212,19 +199,21 @@ export function CourseCard({
             >
               {getStudentStatusLabel(course)}
             </span>
-            <button
-              type="button"
-              className={`absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${wishlisted ? "text-rose-400" : ""}`}
-              aria-label={
-                wishlisted
-                  ? `Remove ${course.title} from wishlist`
-                  : `Add ${course.title} to wishlist`
-              }
-              aria-pressed={wishlisted}
-              onClick={() => onWishlist(course.id)}
-            >
-              <Heart size={21} weight={wishlisted ? "fill" : "regular"} />
-            </button>
+            {!course.enrolled && (
+              <button
+                type="button"
+                className={`absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${wishlisted ? "text-rose-400" : ""}`}
+                aria-label={
+                  wishlisted
+                    ? `Remove ${course.title} from wishlist`
+                    : `Add ${course.title} to wishlist`
+                }
+                aria-pressed={wishlisted}
+                onClick={() => onWishlist(course.id)}
+              >
+                <Heart size={21} weight={wishlisted ? "fill" : "regular"} />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -471,20 +460,20 @@ export function CourseCard({
         </div>
 
         <div className="mt-auto flex flex-col">
-          {role === "student" && !course.enrolled && (
+          {role === "student" && !course.enrolled && course.pricing && (
             <div
               className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
               data-course-card-pricing
-              aria-label={`Course price ${course.pricing?.price ?? DEFAULT_NOT_ENROLLED_PRICING.price}`}
+              aria-label={`Course price ${course.pricing.price}`}
             >
               <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
-                {(course.pricing ?? DEFAULT_NOT_ENROLLED_PRICING).price}
+                {course.pricing.price}
               </strong>
               <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
-                {(course.pricing ?? DEFAULT_NOT_ENROLLED_PRICING).originalPrice}
+                {course.pricing.originalPrice}
               </span>
               <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                {(course.pricing ?? DEFAULT_NOT_ENROLLED_PRICING).discount}
+                {course.pricing.discount}
               </span>
             </div>
           )}
@@ -515,7 +504,7 @@ export function CourseCard({
             className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
               role === "creator"
                 ? "flex justify-center gap-2 hover:bg-(--accent-hover)"
-                : "flex justify-center gap-3 hover:bg-(--accent)"
+                : "flex justify-center gap-3 hover:bg-(--accent-hover)"
             }`}
             data-control-radius-action
             onClick={() => {

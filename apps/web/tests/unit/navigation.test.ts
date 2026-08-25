@@ -151,6 +151,18 @@ describe("navigation order persistence", () => {
     expect(getInitialNavigationOrder("creator")).toEqual(creatorDefault);
   });
 
+  it("migrates previous student course labels in saved visibility", () => {
+    localStorage.setItem(
+      "veolms-navigation-visibility-student",
+      JSON.stringify(["Home", "My Learning", "My Courses"]),
+    );
+
+    expect(getInitialNavigationVisibility("student")).toEqual([
+      "Home",
+      "Courses",
+    ]);
+  });
+
   it("falls back to role defaults when storage access throws", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("Storage denied", "SecurityError");

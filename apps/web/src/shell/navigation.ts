@@ -134,11 +134,15 @@ export function getInitialNavigationVisibility(role: string): string[] {
     );
     if (!Array.isArray(parsedVisibility)) return defaultVisibility;
 
-    const savedVisibility = parsedVisibility.filter(
-      (label, index): label is string =>
-        typeof label === "string" &&
+    const normalizedVisibility = parsedVisibility
+      .filter((label): label is string => typeof label === "string")
+      .map((label) =>
+        role === "student" ? migrateStudentNavigationLabel(label) : label,
+      );
+    const savedVisibility = normalizedVisibility.filter(
+      (label, index) =>
         defaultVisibility.includes(label) &&
-        parsedVisibility.indexOf(label) === index,
+        normalizedVisibility.indexOf(label) === index,
     );
     return defaultVisibility.filter((label) => savedVisibility.includes(label));
   } catch {

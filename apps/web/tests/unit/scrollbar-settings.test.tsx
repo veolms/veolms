@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ScrollbarSettings } from "../../src/settings/scrollbars/ScrollbarSettings.tsx";
 
 describe("scrollbar appearance settings", () => {
@@ -30,5 +30,17 @@ describe("scrollbar appearance settings", () => {
         screen.getByRole("radio", { name: new RegExp(style, "i") }),
       ).toBeDisabled();
     }
+  });
+
+  it("keeps current-session attributes when storage writes are blocked", () => {
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("Storage denied", "SecurityError");
+      });
+
+    expect(() => render(<ScrollbarSettings />)).not.toThrow();
+    expect(document.documentElement.dataset.scrollbarStyle).toBeTruthy();
+    setItem.mockRestore();
   });
 });

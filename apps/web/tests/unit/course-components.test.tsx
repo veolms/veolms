@@ -28,6 +28,11 @@ const nonEnrolledCourse = {
   title: "Figma UI Essentials",
   enrolled: false,
   progress: null,
+  pricing: {
+    price: "₹1,999",
+    originalPrice: "₹2,999",
+    discount: "33% off",
+  },
 };
 
 const renderCard = (props: Partial<CourseCardProps> = {}) => {
@@ -160,6 +165,19 @@ describe("CourseCard", () => {
       "/courses/figma-ui-essentials/overview#cov-curriculum-heading",
     );
     expect(onExplore).not.toHaveBeenCalled();
+  });
+
+  it("does not invent pricing when a non-enrolled course has no price", () => {
+    renderCard({
+      course: {
+        ...nonEnrolledCourse,
+        pricing: undefined,
+      },
+    });
+
+    expect(
+      document.querySelector("[data-course-card-pricing]"),
+    ).not.toBeInTheDocument();
   });
 
   it("plays a creator course from its thumbnail and opens its overview from the details", () => {

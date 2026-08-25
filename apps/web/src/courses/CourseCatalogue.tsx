@@ -88,21 +88,12 @@ export function CourseCatalogue({
         ]
   ) satisfies readonly (readonly [CourseSort, string])[];
 
-  const statusOptions = (
-    role === "creator"
-      ? [
-          ["all", "Status: All"],
-          ["published", "Published"],
-          ["draft", "Draft"],
-          ["archived", "Archived"],
-        ]
-      : [
-          ["all", "Status: All"],
-          ["in-progress", "In Progress"],
-          ["not-started", "Not Started"],
-          ["completed", "Completed"],
-        ]
-  ) satisfies readonly (readonly [CourseStatusFilter, string])[];
+  const statusOptions = [
+    ["all", "Status: All"],
+    ["in-progress", "In Progress"],
+    ["not-started", "Not Started"],
+    ["completed", "Completed"],
+  ] satisfies readonly (readonly [CourseStatusFilter, string])[];
 
   const gridClasses =
     role === "creator"
@@ -231,13 +222,15 @@ export function CourseCatalogue({
             options={sortOptions}
             triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-42.5!"
           />
-          <ThemedSelect
-            value={statusFilter}
-            onValueChange={onStatusFilterChange}
-            ariaLabel="Filter course status"
-            options={statusOptions}
-            triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-35!"
-          />
+          {role === "student" && (
+            <ThemedSelect
+              value={statusFilter}
+              onValueChange={onStatusFilterChange}
+              ariaLabel="Filter course status"
+              options={statusOptions}
+              triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-35!"
+            />
+          )}
         </div>
       </div>
 

@@ -112,7 +112,7 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
       {/* Tab Navigation Bar with delicate thin bottom line and prominent active underline */}
       <nav
         aria-label="Order status categories"
-        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)]"
+        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {

@@ -115,8 +115,12 @@ export function ScrollbarSettings() {
     const hideScrollbars = !scrollbarsEnabled;
     document.documentElement.dataset.hideScrollbars = String(hideScrollbars);
     document.documentElement.dataset.scrollbarStyle = scrollbarStyle;
-    localStorage.setItem(HIDE_SCROLLBARS_KEY, String(hideScrollbars));
-    localStorage.setItem(SCROLLBAR_STYLE_KEY, scrollbarStyle);
+    try {
+      localStorage.setItem(HIDE_SCROLLBARS_KEY, String(hideScrollbars));
+      localStorage.setItem(SCROLLBAR_STYLE_KEY, scrollbarStyle);
+    } catch {
+      // Keep the current-session preference when storage is unavailable.
+    }
   }, [scrollbarStyle, scrollbarsEnabled, storageReady]);
 
   const selectedStyleLabel =

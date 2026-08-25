@@ -9,7 +9,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 
@@ -51,6 +55,7 @@ export function MenuAction({
     <button
       type="button"
       role="menuitem"
+      tabIndex={-1}
       className={`flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[0.78rem] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${
         disabled
           ? "cursor-not-allowed text-(--muted) opacity-60"
@@ -174,7 +179,15 @@ export function CourseActionMenu({
 
     setMenuHorizontalPlacement(horizontalPlacement);
     setMenuVerticalPlacement(verticalPlacement);
-    setMenuPosition({ left, top, maxHeight });
+    setMenuPosition((current) => {
+      if (
+        current?.left === left &&
+        current.top === top &&
+        current.maxHeight === maxHeight
+      )
+        return current;
+      return { left, top, maxHeight };
+    });
   }, []);
 
   useLayoutEffect(() => {
@@ -187,6 +200,16 @@ export function CourseActionMenu({
   }, [open, updateMenuPlacement]);
 
   useEffect(() => {
+    if (!open || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      menuRef.current
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
     if (!open || typeof document === "undefined") return;
 
     const closeFromOutside = (event: PointerEvent) => {
@@ -197,20 +220,69 @@ export function CourseActionMenu({
         menuRef.current?.contains(target)
       )
         return;
-      onOpenChange(false);
+      dismissMenuThen(() => {});
     };
-    const reposition = () => updateMenuPlacement();
+    const closeFromKeyboard = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      dismissMenuThen(() => menuButtonRef.current?.focus());
+    };
+    let repositionFrame = 0;
+    const reposition = () => {
+      if (repositionFrame) return;
+      repositionFrame = window.requestAnimationFrame(() => {
+        repositionFrame = 0;
+        updateMenuPlacement();
+      });
+    };
 
     document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromKeyboard);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
 
     return () => {
       document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromKeyboard);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
+      if (repositionFrame) window.cancelAnimationFrame(repositionFrame);
     };
-  }, [onOpenChange, open, updateMenuPlacement]);
+  }, [dismissMenuThen, open, updateMenuPlacement]);
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowUp" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    )
+      return;
+
+    const items = [
+      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]:not(:disabled)',
+      ),
+    ];
+    if (!items.length) return;
+    const activeItem =
+      event.target instanceof Element
+        ? event.target.closest<HTMLButtonElement>('[role="menuitem"]')
+        : null;
+    const activeIndex = activeItem ? items.indexOf(activeItem) : -1;
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (Math.max(0, activeIndex) +
+              (event.key === "ArrowDown" ? 1 : -1) +
+              items.length) %
+            items.length;
+    event.preventDefault();
+    items[nextIndex]?.focus({ preventScroll: true });
+  };
 
   return (
     <>
@@ -250,7 +322,10 @@ export function CourseActionMenu({
               setMenuPressPulse((pulse) => pulse + 1);
             }
           }}
-          onClick={() => onOpenChange(!open)}
+          onClick={() => {
+            if (open) dismissMenuThen(() => {});
+            else onOpenChange(true);
+          }}
         >
           <span
             className={`relative z-10 flex size-9 items-center justify-center rounded-full text-(--text-secondary) transition-colors duration-150 group-hover/action:text-(--text) ${menuKeyboardFocus ? "text-(--text)" : ""}`}
@@ -282,6 +357,7 @@ export function CourseActionMenu({
               data-placement={`${menuVerticalPlacement}-${menuHorizontalPlacement}`}
               data-control-radius-menu
               onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={handleMenuKeyDown}
               style={
                 {
                   left: menuPosition?.left ?? courseMenuViewportPadding,

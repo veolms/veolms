@@ -30,7 +30,11 @@ export function ConfirmDeleteModal({
   const [holdProgress, setHoldProgress] = useState(0);
   const [isHolding, setIsHolding] = useState(false);
 
-  useBackDismiss({ open: isOpen, onDismiss: onClose });
+  const dismissThen = useBackDismiss({ open: isOpen, onDismiss: onClose });
+  const dismissModal = useCallback(
+    () => dismissThen(() => {}),
+    [dismissThen],
+  );
 
   const holdTimerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -47,9 +51,8 @@ export function ConfirmDeleteModal({
 
   const triggerConfirm = useCallback(() => {
     resetHold();
-    onConfirm();
-    onClose();
-  }, [resetHold, onConfirm, onClose]);
+    dismissThen(onConfirm);
+  }, [dismissThen, onConfirm, resetHold]);
 
   const startHold = useCallback(() => {
     if (holdTimerRef.current !== null) return;
@@ -83,7 +86,7 @@ export function ConfirmDeleteModal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         resetHold();
-        onClose();
+        dismissModal();
         return;
       }
 
@@ -121,14 +124,14 @@ export function ConfirmDeleteModal({
       resetHold();
       previousActiveElement?.focus();
     };
-  }, [isOpen, onClose, resetHold]);
+  }, [dismissModal, isOpen, resetHold]);
 
   if (!isOpen || typeof document === "undefined") return null;
 
   return createPortal(
     <div
       className="delete-modal-overlay"
-      onClick={onClose}
+      onClick={dismissModal}
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-modal-title"
@@ -143,7 +146,7 @@ export function ConfirmDeleteModal({
           ref={closeBtnRef}
           type="button"
           className="delete-modal-close"
-          onClick={onClose}
+          onClick={dismissModal}
           aria-label="Close dialog"
         >
           <X size={14} weight="bold" />
@@ -179,7 +182,7 @@ export function ConfirmDeleteModal({
             ref={cancelBtnRef}
             type="button"
             className="delete-modal-cancel"
-            onClick={onClose}
+            onClick={dismissModal}
           >
             {cancelLabel}
           </button>

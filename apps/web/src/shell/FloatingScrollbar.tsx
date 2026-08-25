@@ -66,11 +66,13 @@ export function FloatingScrollbar({
     if (disabled || scrollportRef.current) return;
 
     let animationFrame = 0;
+    let remainingAttempts = 60;
     const waitForScrollport = () => {
       if (scrollportRef.current) {
         setScrollportReadyVersion((version) => version + 1);
         return;
       }
+      if (remainingAttempts-- <= 0) return;
       animationFrame = window.requestAnimationFrame(waitForScrollport);
     };
     animationFrame = window.requestAnimationFrame(waitForScrollport);

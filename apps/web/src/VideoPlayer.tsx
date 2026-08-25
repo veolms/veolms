@@ -288,7 +288,12 @@ export function VideoPlayer({
     await shell.requestFullscreen();
 
     if (shouldLockLandscape) {
-      orientationLockRequestedRef.current = await lockScreenOrientation();
+      const locked = await lockScreenOrientation();
+      if (!getDocumentFullscreenElement()) {
+        if (locked) unlockScreenOrientation();
+        return;
+      }
+      orientationLockRequestedRef.current = locked;
     }
   };
 

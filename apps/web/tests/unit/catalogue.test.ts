@@ -95,6 +95,16 @@ describe("course catalogue selector", () => {
     ).toHaveLength(4);
   });
 
+  it("uses the creator lifecycle control as the only creator status filter", () => {
+    expect(
+      select({
+        role: "creator",
+        enrollmentFilter: "published",
+        statusFilter: "archived",
+      }).map(({ lifecycleStatus }) => lifecycleStatus),
+    ).toEqual(["published", "published", "published", "published"]);
+  });
+
   it("selects from the catalogue supplied by the caller", () => {
     const remoteCatalogue: Course[] = [
       {

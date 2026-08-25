@@ -1,3 +1,28 @@
+import type {
+  PasskeyAuthenticatorTransport,
+  PasskeyAuthenticationOptionsResponse,
+  PasskeyRegistrationOptionsResponse,
+} from "@veolms/contracts";
+
+const toBrowserTransport = (
+  transport: PasskeyAuthenticatorTransport,
+): AuthenticatorTransport | null => {
+  switch (transport) {
+    case "ble":
+    case "hybrid":
+    case "internal":
+    case "nfc":
+    case "usb":
+      return transport;
+    default:
+      return null;
+  }
+};
+
+const toBrowserTransports = (
+  transports: PasskeyAuthenticatorTransport[] | undefined,
+) => transports?.flatMap((transport) => toBrowserTransport(transport) ?? []);
+
 export function bufferToBase64URL(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = "";
@@ -27,40 +52,14 @@ export function isPasskeySupported(): boolean {
   );
 }
 
-type SerializedCredentialDescriptor = Omit<
-  PublicKeyCredentialDescriptor,
-  "id"
-> & {
-  id: string;
-};
-
-type SerializedRegistrationOptions = Omit<
-  PublicKeyCredentialCreationOptions,
-  "challenge" | "excludeCredentials" | "user"
-> & {
-  challenge: string;
-  excludeCredentials?: SerializedCredentialDescriptor[];
-  user: Omit<PublicKeyCredentialUserEntity, "id"> & { id: string };
-};
-
-type SerializedAuthenticationOptions = Omit<
-  PublicKeyCredentialRequestOptions,
-  "allowCredentials" | "challenge"
-> & {
-  allowCredentials?: SerializedCredentialDescriptor[];
-  challenge: string;
-};
-
 export async function startPasskeyRegistration(
-  serverOptions: unknown,
+  options: PasskeyRegistrationOptionsResponse,
 ): Promise<{ response: unknown }> {
   if (!isPasskeySupported()) {
     throw new Error(
       "Your browser does not support passkeys. Please use a modern browser such as Chrome, Safari, or Edge.",
     );
   }
-
-  const options = serverOptions as SerializedRegistrationOptions;
 
   const publicKeyOptions: PublicKeyCredentialCreationOptions = {
     ...options,
@@ -72,6 +71,7 @@ export async function startPasskeyRegistration(
     excludeCredentials: (options.excludeCredentials ?? []).map((cred) => ({
       ...cred,
       id: base64URLToBuffer(cred.id),
+      transports: toBrowserTransports(cred.transports),
     })),
   };
 
@@ -100,7 +100,7 @@ export async function startPasskeyRegistration(
 }
 
 export async function startPasskeyAuthentication(
-  serverOptions: unknown,
+  options: PasskeyAuthenticationOptionsResponse,
 ): Promise<{ response: unknown }> {
   if (!isPasskeySupported()) {
     throw new Error(
@@ -108,14 +108,13 @@ export async function startPasskeyAuthentication(
     );
   }
 
-  const options = serverOptions as SerializedAuthenticationOptions;
-
   const publicKeyOptions: PublicKeyCredentialRequestOptions = {
     ...options,
     challenge: base64URLToBuffer(options.challenge),
     allowCredentials: (options.allowCredentials ?? []).map((cred) => ({
       ...cred,
       id: base64URLToBuffer(cred.id),
+      transports: toBrowserTransports(cred.transports),
     })),
   };
 

@@ -57,7 +57,6 @@ const syncAdjacentSlideSpacing = (swiper: SwiperInstance) => {
   const changed = swiper.params.spaceBetween !== spaceBetween;
 
   swiper.params.spaceBetween = spaceBetween;
-  swiper.originalParams.spaceBetween = spaceBetween;
   return changed;
 };
 
@@ -71,7 +70,6 @@ const syncSwipeCompletionRatio = (swiper: SwiperInstance) => {
         )
       : TAB_SWIPE_MAX_COMPLETION_RATIO;
   swiper.params.longSwipesRatio = ratio;
-  swiper.originalParams.longSwipesRatio = ratio;
 };
 
 interface SwipeableTabPanelProps<T extends string> {

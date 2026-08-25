@@ -201,9 +201,10 @@ describe("video playback consent", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("requests landscape orientation when fullscreen starts in portrait", async () => {
+  it("releases a pending orientation lock if fullscreen already ended", async () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     const lock = vi.fn().mockResolvedValue(undefined);
+    const unlock = vi.fn();
     const originalInnerWidth = window.innerWidth;
     const originalInnerHeight = window.innerHeight;
     const originalOrientation = Object.getOwnPropertyDescriptor(
@@ -221,7 +222,7 @@ describe("video playback consent", () => {
     });
     Object.defineProperty(window.screen, "orientation", {
       configurable: true,
-      value: { type: "portrait-primary", lock },
+      value: { type: "portrait-primary", lock, unlock },
     });
 
     try {
@@ -247,6 +248,7 @@ describe("video playback consent", () => {
       await waitFor(() => {
         expect(requestFullscreen).toHaveBeenCalledOnce();
         expect(lock).toHaveBeenCalledWith("landscape");
+        expect(unlock).toHaveBeenCalledOnce();
       });
     } finally {
       Object.defineProperty(window, "innerWidth", {
