@@ -24,6 +24,9 @@ export {
   totpVerifyRequestSchema,
   totpEnableRequestSchema,
   authMessageResponseSchema,
+  authMenuPermissionSchema,
+  authMenuNodeSchema,
+  authUserSchema,
   loginResponseSchema,
   userProfileResponseSchema,
   sessionParamsSchema,
@@ -54,6 +57,9 @@ export type {
   PasskeyRegisterVerifyRequest,
   PasskeyLoginVerifyRequest,
   UserProfileResponse,
+  AuthUser,
+  AuthMenuNode,
+  AuthMenuPermission,
   SessionParams,
   SessionResponse,
   SetupTokenRequest,
@@ -63,3 +69,4 @@ export type {
   TotpVerifyRequest,
   TotpEnableRequest,
 } from "./auth.ts";
+

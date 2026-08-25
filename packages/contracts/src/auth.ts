@@ -231,14 +231,59 @@ export const authMessageResponseSchema = z.object({
   message: z.string().max(255),
 });
 
-export const loginResponseSchema = z.object({
-  user: z.object({
+export const authMenuPermissionSchema = z.object({
+  canCreate: z.boolean(),
+  canRead: z.boolean(),
+  canUpdate: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+export interface AuthMenuNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  routeLink: string;
+  icon: string | null;
+  expanded: boolean;
+  checkList?: string | null;
+  isBoth: boolean;
+  permissions: {
+    canCreate: boolean;
+    canRead: boolean;
+    canUpdate: boolean;
+    canDelete: boolean;
+  };
+  children?: AuthMenuNode[];
+}
+
+export const authMenuNodeSchema: z.ZodType<AuthMenuNode> = z.lazy(() =>
+  z.object({
     id: z.uuid(),
-    username: z.string().max(30),
-    displayName: z.string().max(100),
-    email: z.email().max(255).nullable(),
-    phoneNo: z.string().max(15).nullable(),
+    parentId: z.uuid().nullable(),
+    label: z.string(),
+    routeLink: z.string(),
+    icon: z.string().nullable(),
+    expanded: z.boolean(),
+    checkList: z.string().nullable().optional(),
+    isBoth: z.boolean(),
+    permissions: authMenuPermissionSchema,
+    children: z.array(authMenuNodeSchema).optional(),
   }),
+);
+
+export const authUserSchema = z.object({
+  id: z.uuid(),
+  username: z.string().max(30),
+  displayName: z.string().max(100),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(15).nullable(),
+  roles: z.array(z.string().max(50)).default([]),
+  permissions: z.array(z.string().max(50)).default([]),
+  menus: z.array(authMenuNodeSchema).default([]),
+});
+
+export const loginResponseSchema = z.object({
+  user: authUserSchema,
   mfaRequired: z.boolean(),
   mfaMandatory: z.boolean().meta({
     description:
@@ -256,8 +301,9 @@ export const userProfileResponseSchema = z.object({
   displayName: z.string().max(100),
   email: z.email().max(255).nullable(),
   phoneNo: z.string().max(15).nullable(),
-  roles: z.array(z.string().max(50)),
-  permissions: z.array(z.string().max(50)),
+  roles: z.array(z.string().max(50)).default([]),
+  permissions: z.array(z.string().max(50)).default([]),
+  menus: z.array(authMenuNodeSchema).default([]),
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
@@ -364,6 +410,9 @@ export type CreatorRegisterRequest = z.input<
 export type AcademyRequest = z.input<typeof academyRequestSchema>;
 export type AcademyResponse = z.output<typeof academyResponseSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
+export type AuthUser = z.output<typeof authUserSchema>;
+export type AuthMenuPermission = z.output<typeof authMenuPermissionSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;
+

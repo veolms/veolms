@@ -128,8 +128,9 @@ export function createSetupService({
     const userId = await authService.createUser(createInput);
     const user = await authService.requireUser(userId);
     const session = await sessionService.establishSession(user, request);
+    const rbac = await authService.getUserRbac(user.id);
 
-    return { user, session };
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function configureAcademy(input: AcademyRequest) {

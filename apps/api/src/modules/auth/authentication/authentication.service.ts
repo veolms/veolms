@@ -81,6 +81,15 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
+  async function getUserRbac(userId: string) {
+    const [roles, permissions, menus] = await Promise.all([
+      userRepository.listUserRoleNames(database, userId),
+      userRepository.listUserPermissions(database, userId),
+      userRepository.listUserMenus(database, userId),
+    ]);
+    return { roles, permissions, menus };
+  }
+
   async function login(input: {
     identifier: string;
     identifierType: IdentifierType;
@@ -116,7 +125,8 @@ export function createAuthService({
     );
 
     const session = await sessionService.establishSession(user, input.request);
-    return { user, session };
+    const rbac = await getUserRbac(user.id);
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function register(input: {
@@ -208,8 +218,9 @@ export function createAuthService({
     });
     const user = await requireUser(userId);
     const session = await sessionService.establishSession(user, input.request);
+    const rbac = await getUserRbac(user.id);
 
-    return { user, session };
+    return { user: { ...user, ...rbac }, session };
   }
 
   /** Appends a numeric suffix until the username is free. */
@@ -313,6 +324,7 @@ export function createAuthService({
     usernameExists,
     login,
     register,
+    getUserRbac,
     generateUniqueUsername,
     createUser,
     requireUser,

@@ -1,4 +1,11 @@
 export { createDatabase } from "./client.ts";
+export {
+  ROLES,
+  MENUS,
+  PERMISSION_ASSIGNMENTS,
+  seedRolesAndPermissions,
+} from "./seed-rbac.ts";
+export type { SeedMenuDefinition, RolePermissionRule } from "./seed-rbac.ts";
 export type {
   CourseStatus,
   Database,
@@ -13,6 +20,7 @@ export type {
   VideoJobTable,
   VideoOutputTable,
 } from "./schema.ts";
+
 
 
 
