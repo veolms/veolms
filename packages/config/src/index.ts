@@ -74,11 +74,25 @@ const serverConfigSchema = z.object({
   SMS_BACKUP_SID: z.string().optional(),
   SMS_BACKUP_TOKEN: z.string().optional(),
   SMS_BACKUP_FROM: z.string().default("+1234567890"),
+
+  // Storage Configs
+  STORAGE_ENDPOINT: z.string().optional(),
+  STORAGE_REGION: z.string().default("us-east-1"),
+  STORAGE_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_BUCKET: z.string().min(1).default("veolms"),
+  STORAGE_FORCE_PATH_STYLE: booleanEnvironmentValueSchema.default(false),
+
+  // Fleet Manager & Video Processing Dispatch
+  FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
+  FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
+  FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
+  FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
 });
 
 const webConfigSchema = z.object({
   WEB_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  VITE_API_BASE_URL: z.string().startsWith("/").default("/api/v1"),
+  VITE_API_BASE_URL: z.string().default("http://localhost:4000/api/v1"),
   VITE_COURSE_MEDIA_BASE_URL: z.url().optional(),
   STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/api/v1"),
 });

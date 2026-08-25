@@ -56,6 +56,8 @@ import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { useCurrentUser, useLogout } from "./services/auth";
+import { useAuthStore } from "./store/auth.store";
 import {
   getDefaultNavigationOrder,
   getInitialNavigationOrder,
@@ -114,7 +116,10 @@ import {
   PAGE_TAB_COLORS_KEY,
   readPageTabColors,
 } from "./settings/settingsPreferences";
-import { getStoredProfilePreferences } from "./settings/profilePreferences";
+import {
+  clearStoredProfilePreferences,
+  getStoredProfilePreferences,
+} from "./settings/profilePreferences";
 import type { ProfilePreferences } from "./settings/profilePreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
@@ -683,15 +688,21 @@ export function CoursesPage({
   );
   const shortcutPlatform = useShortcutPlatform();
   useGlobalSearchShortcut(shortcutPlatform);
-  const savedShellProfile = savedShellProfiles[role];
+  const { data: authUser } = useCurrentUser();
+  const storeUser = useAuthStore((s) => s.user);
+  const activeUser = authUser || storeUser;
+  const logoutMutation = useLogout();
+
+  const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
-    savedShellProfile?.displayName ??
+    activeUser?.displayName ??
     (role === "creator" ? "Anurag Singh" : "Ashi Singh");
-  const shellProfileAvatarUrl = savedShellProfile
-    ? savedShellProfile.avatarDataUrl
-    : role === "creator"
-      ? "/assets/ethan-avatar-160.webp"
-      : "/assets/sofia-avatar-160.webp";
+  const shellProfileAvatarUrl =
+    activeUser && savedShellProfile?.avatarDataUrl
+      ? savedShellProfile.avatarDataUrl
+      : role === "creator"
+        ? "/assets/ethan-avatar-160.webp"
+        : "/assets/sofia-avatar-160.webp";
   const profileRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
@@ -708,6 +719,16 @@ export function CoursesPage({
   const revertPalettePreviewRef = useRef<
     ((origin?: ThemeRevealOrigin) => void) | null
   >(null);
+  const handleLogout = useCallback(() => {
+    void logoutMutation
+      .mutateAsync()
+      .catch(() => undefined)
+      .finally(() => {
+        clearStoredProfilePreferences();
+        setSavedShellProfiles({ student: null, creator: null });
+        window.location.href = "/";
+      });
+  }, [logoutMutation]);
 
   useBackDismiss({
     open: profileMenu,
@@ -3028,7 +3049,7 @@ export function CoursesPage({
                     setSidebarMode(sidebarHidden ? "expanded" : "hidden");
                     setEdgeSidebarOpen(false);
                   }}
-                  onLogout={() => onNavigatePage?.("Logout")}
+                  onLogout={handleLogout}
                 />
               )}
               <button
@@ -3616,7 +3637,7 @@ export function CoursesPage({
                   onRoleChange={setRole}
                   onLogout={() => {
                     closeMobileMenu();
-                    onNavigatePage?.("Logout");
+                    handleLogout();
                   }}
                 />
               )}

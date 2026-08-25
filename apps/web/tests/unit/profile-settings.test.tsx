@@ -1,13 +1,8 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
+import { renderWithQueryClient } from "./test-utils.tsx";
 
 beforeAll(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
@@ -28,7 +23,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   beforeEach(() => window.localStorage.clear());
 
   it("requires acknowledgement but keeps the mobile number private while publishing is unconnected", async () => {
-    render(<ProfileSettings role="student" />);
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     const mobileVisibility = screen.getByRole("checkbox", {
       name: "Show mobile number on your public profile",
@@ -65,7 +60,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   });
 
   it("leaves the mobile number private when confirmation is cancelled", async () => {
-    render(<ProfileSettings role="student" />);
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     const mobileVisibility = screen.getByRole("checkbox", {
       name: "Show mobile number on your public profile",
@@ -82,7 +77,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   });
 
   it("keeps a changed mobile number private until it is verified again", async () => {
-    render(<ProfileSettings role="student" />);
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     const mobileNumber = screen.getByLabelText("Mobile number");
     const mobileVisibility = screen.getByRole("checkbox", {
@@ -109,7 +104,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   });
 
   it("does not accept a client-only verification code", async () => {
-    render(<ProfileSettings role="student" />);
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     const mobileNumber = screen.getByLabelText("Mobile number");
     fireEvent.change(mobileNumber, { target: { value: "+91 90000 00000" } });
@@ -130,7 +125,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   });
 
   it("rejects profile photos larger than 2 MB before reading them", () => {
-    render(<ProfileSettings role="student" />);
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     const photo = new File([new Uint8Array(2 * 1024 * 1024 + 1)], "large.jpg", {
       type: "image/jpeg",

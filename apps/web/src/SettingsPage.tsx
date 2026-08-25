@@ -39,6 +39,7 @@ import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProfileSettings } from "./settings/ProfileSettings";
 import { SecuritySettings } from "./settings/SecuritySettings";
 import { SidebarSettings } from "./settings/SidebarSettings";
+import "./auth/mfa-setup.css";
 export type { SettingsTab } from "./routing/tabSessionState";
 
 type SettingsTabIcon = ComponentType<{

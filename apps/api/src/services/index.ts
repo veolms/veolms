@@ -3,14 +3,22 @@ import type { FastifyBaseLogger } from "fastify";
 
 import { createEmailService, type EmailService } from "./email/index.ts";
 import { createSmsService, type SmsService } from "./sms/index.ts";
+import { S3StorageService } from "@veolms/storage";
+import {
+  createVideoDispatchService,
+  type VideoDispatchService,
+} from "./video-dispatch/index.ts";
 
 export * from "./email/index.ts";
 export * from "./sms/index.ts";
+export * from "./video-dispatch/index.ts";
 
 /** Every outbound-integration service, injected into routes as one unit. */
 export interface AppServices {
   email: EmailService;
   sms: SmsService;
+  storage: S3StorageService;
+  videoDispatch: VideoDispatchService;
 }
 
 export interface CreateServicesOptions {
@@ -24,7 +32,9 @@ export interface CreateServicesOptions {
  * at boot rather than blocked, since SMS is optional when email is configured.
  */
 function resolveSmsTransport(config: ServerConfig): "http" | "console" {
-  const hasPrimary = Boolean(config.SMS_PRIMARY_KEY && config.SMS_PRIMARY_SECRET);
+  const hasPrimary = Boolean(
+    config.SMS_PRIMARY_KEY && config.SMS_PRIMARY_SECRET,
+  );
   const hasBackup = Boolean(config.SMS_BACKUP_SID && config.SMS_BACKUP_TOKEN);
   return hasPrimary || hasBackup ? "http" : "console";
 }
@@ -38,6 +48,16 @@ export function createServices({
   logger,
 }: CreateServicesOptions): AppServices {
   const smsTransport = resolveSmsTransport(config);
+
+  if (
+    config.NODE_ENV === "production" &&
+    !config.FLEET_MANAGER_TRIGGER_URL &&
+    !config.FLEET_MANAGER_LAMBDA_NAME
+  ) {
+    logger.warn(
+      "Neither FLEET_MANAGER_TRIGGER_URL nor FLEET_MANAGER_LAMBDA_NAME is set; Fleet Manager will rely solely on database reconciliation",
+    );
+  }
 
   if (config.NODE_ENV === "production") {
     if (config.EMAIL_TRANSPORT === "console") {
@@ -77,6 +97,19 @@ export function createServices({
         backupToken: config.SMS_BACKUP_TOKEN,
         backupFrom: config.SMS_BACKUP_FROM,
       },
+    }),
+    storage: new S3StorageService({
+      endpoint: config.STORAGE_ENDPOINT,
+      region: config.STORAGE_REGION,
+      accessKeyId: config.STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,
+      bucket: config.STORAGE_BUCKET,
+      forcePathStyle: config.STORAGE_FORCE_PATH_STYLE,
+    }),
+    videoDispatch: createVideoDispatchService({
+      triggerUrl: config.FLEET_MANAGER_TRIGGER_URL,
+      lambdaName: config.FLEET_MANAGER_LAMBDA_NAME,
+      logger,
     }),
   };
 }

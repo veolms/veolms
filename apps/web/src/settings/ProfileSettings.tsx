@@ -23,6 +23,8 @@ import type {
   ProfilePreferences,
   ProfileRole,
 } from "./profilePreferences";
+import { useCurrentUser } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -127,6 +129,10 @@ export function ProfileSettings({
   onProfileSaved,
 }: ProfileSettingsProps) {
   const initializedRoleRef = useRef(role);
+  const { data: userProfile } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
+  const activeUser = userProfile || storeUser;
+
   const initialIdentity = useMemo(
     () => getDefaultProfileIdentity(role),
     [role],
@@ -163,16 +169,30 @@ export function ProfileSettings({
   const displayName = draftProfile.displayName.trim() || "Your name";
   const username = draftProfile.username?.trim() || "username";
   const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
+  const activeEmail = activeUser?.email || initialIdentity.email;
+  const isEmailVerified = Boolean(activeUser?.email);
+  const isMobileVerified = Boolean(activeUser?.phoneNo || draftProfile.mobileVerified);
 
   useEffect(() => {
-    // Restore browser-local identity only after hydration. The server cannot
-    // read this value, so using it in the initializer produced React #418 on
-    // every profile that had previously been edited.
+    // Restore default dummy identity for guest or active user context
     initializedRoleRef.current = role;
-    const identity = getProfileIdentity(role);
-    const editableProfile = toEditableProfile(identity);
-    setSavedProfile(editableProfile);
-    setDraftProfile(editableProfile);
+    if (!activeUser) {
+      const defaultIdentity = getDefaultProfileIdentity(role);
+      const editableProfile = toEditableProfile(defaultIdentity);
+      setSavedProfile(editableProfile);
+      setDraftProfile(editableProfile);
+    } else {
+      const identity = getProfileIdentity(role);
+      const editableProfile = toEditableProfile(identity);
+      if (activeUser.displayName) editableProfile.displayName = activeUser.displayName;
+      if (activeUser.username) editableProfile.username = activeUser.username;
+      if (activeUser.phoneNo) {
+        editableProfile.mobileNumber = activeUser.phoneNo;
+        editableProfile.mobileVerified = true;
+      }
+      setSavedProfile(editableProfile);
+      setDraftProfile(editableProfile);
+    }
     setNameError("");
     setUsernameError("");
     setMobileError("");
@@ -181,7 +201,7 @@ export function ProfileSettings({
     setVerificationRequested(false);
     setMobileVisibilityPromptOpen(false);
     setMobileVisibilityAcknowledged(false);
-  }, [role]);
+  }, [role, activeUser]);
 
   useEffect(() => setAvatarFailed(false), [draftProfile.avatarDataUrl]);
 
@@ -203,7 +223,7 @@ export function ProfileSettings({
   }, []);
 
   useEffect(() => {
-    if (!isDirty || !isOnline) return;
+    if (!isDirty || !isOnline || !activeUser) return;
 
     const normalizedName = draftProfile.displayName.trim();
     const normalizedUsername = draftProfile.username?.trim() ?? "";
@@ -396,8 +416,8 @@ export function ProfileSettings({
         </a>
       )}
       {draftProfile.emailPublic && (
-        <a href={`mailto:${initialIdentity.email}`}>
-          <EnvelopeSimple size={16} /> {initialIdentity.email}
+        <a href={`mailto:${activeEmail}`}>
+          <EnvelopeSimple size={16} /> {activeEmail}
         </a>
       )}
       {draftProfile.mobilePublic && draftProfile.mobileNumber && (
@@ -574,14 +594,20 @@ export function ProfileSettings({
                   <EnvelopeSimple size={17} aria-hidden="true" />
                   <input
                     id="profile-email"
-                    value={initialIdentity.email}
+                    value={activeEmail}
                     autoComplete="email"
                     readOnly
                     aria-readonly="true"
                   />
-                  <span className="settings-profile__tag settings-profile__tag--warning">
-                    Not verified
-                  </span>
+                  {isEmailVerified ? (
+                    <span className="settings-profile__tag settings-profile__tag--success">
+                      <SealCheck size={14} weight="fill" /> Verified
+                    </span>
+                  ) : (
+                    <span className="settings-profile__tag settings-profile__tag--warning">
+                      Not verified
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="settings-profile__field">
@@ -607,7 +633,7 @@ export function ProfileSettings({
                         updateMobileNumber(event.target.value)
                       }
                     />
-                    {draftProfile.mobileVerified ? (
+                    {isMobileVerified ? (
                       <span className="settings-profile__tag settings-profile__tag--success">
                         <SealCheck size={14} weight="fill" /> Verified
                       </span>
@@ -617,7 +643,7 @@ export function ProfileSettings({
                       </span>
                     )}
                   </span>
-                  {!draftProfile.mobileVerified && (
+                  {!isMobileVerified && (
                     <button
                       type="button"
                       className="settings-profile__verify-action"

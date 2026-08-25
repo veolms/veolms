@@ -4,6 +4,7 @@ import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -11,6 +12,7 @@ import {
   getScrollbarBootstrapScript,
   getSurfaceDepthBootstrapScript,
 } from "./settings/settingsPreferences";
+import { useCurrentUser } from "./services/auth";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -106,6 +108,17 @@ export function HydrateFallback() {
   return <AppLoadingScreen />;
 }
 
+function SessionInitializer({ children }: { children: ReactNode }) {
+  useCurrentUser();
+  return <>{children}</>;
+}
+
 export default function Root() {
-  return <Outlet />;
+  return (
+    <QueryProvider>
+      <SessionInitializer>
+        <Outlet />
+      </SessionInitializer>
+    </QueryProvider>
+  );
 }

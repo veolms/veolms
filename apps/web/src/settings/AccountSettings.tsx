@@ -2,7 +2,10 @@ import { useState } from "react";
 import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
 import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { useLogout } from "../services/auth";
+import { clearStoredProfilePreferences } from "./profilePreferences";
 import type { ProfileRole } from "./profilePreferences";
 
 export interface AccountSettingsProps {
@@ -15,6 +18,7 @@ export function AccountSettings({
   onNavigatePage,
 }: AccountSettingsProps) {
   const [confirmDeactivation, setConfirmDeactivation] = useState(false);
+  const logoutMutation = useLogout();
 
   return (
     <div className="settings-detail" aria-label="Account settings">
@@ -86,6 +90,39 @@ export function AccountSettings({
             disabled
           >
             <DownloadSimple size={16} /> Export unavailable
+          </button>
+        </div>
+      </section>
+
+      <section className="settings-section" aria-labelledby="signout-heading">
+        <header className="settings-section__heading">
+          <SignOut size={20} weight="duotone" />
+          <div>
+            <h3 id="signout-heading">Session</h3>
+            <p>Sign out of your active session on this device.</p>
+          </div>
+        </header>
+        <div className="settings-account-plan">
+          <div>
+            <strong>Log out</strong>
+            <small>
+              You will need to sign in again with your email or mobile OTP.
+            </small>
+          </div>
+          <button
+            type="button"
+            className="settings-action"
+            onClick={async () => {
+              try {
+                await logoutMutation.mutateAsync();
+              } catch {
+                // ignore
+              }
+              clearStoredProfilePreferences();
+              window.location.href = "/";
+            }}
+          >
+            <SignOut size={16} /> Sign out
           </button>
         </div>
       </section>
