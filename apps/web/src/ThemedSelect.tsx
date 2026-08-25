@@ -1,7 +1,7 @@
-import { CaretDown } from "@phosphor-icons/react/CaretDown";
-import { Check } from "@phosphor-icons/react/Check";
-import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { X } from "@phosphor-icons/react/X";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   useCallback,
   useEffect,
@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useBackDismiss } from "./navigation/useBackDismiss";
 
 export interface ThemedSelectOptionExtra {
   readonly flag?: ReactNode;
@@ -99,7 +100,9 @@ export function ThemedSelect<Value extends string>({
       const matchLabel = label.toLowerCase().includes(query);
       const matchVal = val.toLowerCase().includes(query);
       const matchExtraLabel = extra?.label?.toLowerCase().includes(query);
-      const matchKeywords = extra?.searchKeywords?.toLowerCase().includes(query);
+      const matchKeywords = extra?.searchKeywords
+        ?.toLowerCase()
+        .includes(query);
       return Boolean(
         matchLabel || matchVal || matchExtraLabel || matchKeywords,
       );
@@ -163,6 +166,11 @@ export function ThemedSelect<Value extends string>({
     setPosition(null);
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   };
+
+  useBackDismiss({
+    open,
+    onDismiss: () => closeMenu(true),
+  });
 
   useLayoutEffect(() => {
     if (open) updatePosition();
@@ -333,49 +341,51 @@ export function ThemedSelect<Value extends string>({
               {filteredOptions.length === 0 ? (
                 <div className="themed-select__empty">No results found</div>
               ) : (
-                filteredOptions.map(([optionValue, optionLabel, extra], index) => {
-                  const isChecked = optionValue === value;
-                  const itemLabel = extra?.label ?? optionLabel;
-                  return (
-                    <button
-                      ref={(node) => {
-                        itemRefs.current[index] = node;
-                      }}
-                      type="button"
-                      role="option"
-                      aria-selected={isChecked}
-                      data-state={isChecked ? "checked" : "unchecked"}
-                      className="themed-select__item"
-                      key={optionValue}
-                      onClick={() => {
-                        onValueChange(optionValue);
-                        closeMenu(true);
-                      }}
-                    >
-                      <span className="themed-select__item-content">
-                        {extra?.flag && (
+                filteredOptions.map(
+                  ([optionValue, optionLabel, extra], index) => {
+                    const isChecked = optionValue === value;
+                    const itemLabel = extra?.label ?? optionLabel;
+                    return (
+                      <button
+                        ref={(node) => {
+                          itemRefs.current[index] = node;
+                        }}
+                        type="button"
+                        role="option"
+                        aria-selected={isChecked}
+                        data-state={isChecked ? "checked" : "unchecked"}
+                        className="themed-select__item"
+                        key={optionValue}
+                        onClick={() => {
+                          onValueChange(optionValue);
+                          closeMenu(true);
+                        }}
+                      >
+                        <span className="themed-select__item-content">
+                          {extra?.flag && (
+                            <span
+                              className="themed-select__item-flag"
+                              aria-hidden="true"
+                            >
+                              {extra.flag}
+                            </span>
+                          )}
+                          <span className="themed-select__item-label">
+                            {itemLabel}
+                          </span>
+                        </span>
+                        {isChecked && (
                           <span
-                            className="themed-select__item-flag"
+                            className="themed-select__indicator"
                             aria-hidden="true"
                           >
-                            {extra.flag}
+                            <Check size={15} weight="bold" />
                           </span>
                         )}
-                        <span className="themed-select__item-label">
-                          {itemLabel}
-                        </span>
-                      </span>
-                      {isChecked && (
-                        <span
-                          className="themed-select__indicator"
-                          aria-hidden="true"
-                        >
-                          <Check size={15} weight="bold" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
+                      </button>
+                    );
+                  },
+                )
               )}
             </div>
           </div>,

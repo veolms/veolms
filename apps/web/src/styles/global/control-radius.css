@@ -1,0 +1,287 @@
+:root {
+  --control-radius: 8px;
+  --control-radius-action: 8px;
+  --control-radius-structured: 8px;
+  --control-radius-menu: 8px;
+}
+
+/* Structured controls stop at the Rounded preset. This keeps filters, search
+   fields, option cards, and navigation usable when CTA buttons use Pill. */
+:root[data-control-radius]
+  .courses-app
+  :where(
+    button,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+        [type="color"]
+      ),
+    select,
+    [data-control-radius-surface],
+    :where(label, div):has(> [data-search-shortcut-target]),
+    :where(label, div):has(> .themed-select__trigger)
+  ):not([data-fixed-radius]):not([data-control-radius-preview]):not(
+    [data-player-control]
+  ):not([data-control-radius-action]):not([data-learning-radius-compact]):not(
+    .creator-primary-action
+  ):not(.primary-learning-action):not(.workspace-button):not(
+    .settings-profile__primary-action
+  ):not(.course-wizard-link-btn-primary):not(.is-primary):not(
+    [role="switch"]
+  ):not([class~="rounded-full"]):not(.themed-select__item):not(
+    [data-theme-swatch]
+  ):not(.learning-workspace__back):not(
+    .learning-workspace__curriculum-toggle
+  ):not(.learning-workspace__lesson-heading):not(
+    .learning-curriculum__section-toggle
+  ):not(.learning-curriculum__lesson):not(
+    .learning-comment-composer__search
+  ):not(.learning-comment-card__like):not(.learning-comment-card__replies):not(
+    .lesson-tool-tab
+  ):not(.player-menu-row):not(.player-text-control) {
+  border-radius: var(--control-radius-structured) !important;
+}
+
+/* Full roundness belongs to action buttons, not navigation or option cards. */
+:root[data-control-radius]
+  .courses-app
+  :is(
+    [data-control-radius-action],
+    .creator-primary-action,
+    .primary-learning-action,
+    .workspace-button,
+    .settings-profile__primary-action,
+    .course-wizard-link-btn-primary,
+    button.is-primary
+  ) {
+  border-radius: var(--control-radius-action) !important;
+}
+
+/* Settings section navigation uses an underline, so rounded tab backgrounds
+   add visual noise and can deform into capsules. */
+:root[data-control-radius]
+  .courses-app
+  #courses-main-scrollport
+  .settings-tabs
+  button {
+  border-radius: 0 !important;
+}
+
+:root[data-control-radius]
+  :is(.themed-select__content, [data-control-radius-menu]) {
+  border-radius: var(--control-radius-menu) !important;
+}
+
+/* Appearance previews mirror the selected roundness at every nested level,
+   but their compact geometry uses progressively smaller caps so Pill never
+   turns the miniature interface into a stack of capsules. */
+:root[data-control-radius]
+  .courses-app
+  :is(.settings-choice-grid--display, .settings-choice-grid--colors)
+  .settings-mini-surface {
+  --control-radius-preview-frame: var(--control-radius-structured);
+  --control-radius-preview-app: min(var(--control-radius-structured), 10px);
+  --control-radius-preview-panel: min(var(--control-radius-structured), 6px);
+  --control-radius-preview-block: min(var(--control-radius-structured), 4px);
+  --control-radius-preview-detail: min(var(--control-radius-structured), 1px);
+  border-radius: var(--control-radius-preview-frame) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(.settings-choice-grid--display, .settings-choice-grid--colors)
+  :is(.settings-mini-surface__device-split, .settings-mini-app) {
+  border-radius: var(--control-radius-preview-app) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(.settings-choice-grid--display, .settings-choice-grid--colors)
+  :is(
+    .settings-mini-surface__device-pane,
+    .settings-mini-app__rail,
+    .settings-mini-app__body
+  ) {
+  border-radius: var(--control-radius-preview-panel) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(.settings-choice-grid--display, .settings-choice-grid--colors)
+  :is(.settings-mini-app__body > span, .settings-mini-app__body > span > i) {
+  border-radius: var(--control-radius-preview-block) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(.settings-choice-grid--display, .settings-choice-grid--colors)
+  :is(
+    .settings-mini-app__rail > i,
+    .settings-mini-app__body > b,
+    .settings-mini-app__body > em
+  ) {
+  border-radius: var(--control-radius-preview-detail) !important;
+}
+
+/* Course cards use the same capped family, with smaller limits for compact
+   tags and six-pixel progress bars. Circular media controls stay fixed. */
+:root[data-control-radius] .courses-app [data-course-card] {
+  --control-radius-course-card: var(--control-radius-structured);
+  --control-radius-course-tag: min(var(--control-radius-structured), 8px);
+  --control-radius-course-progress: min(var(--control-radius-structured), 2px);
+  border-radius: var(--control-radius-course-card) !important;
+}
+
+:root[data-control-radius] .courses-app [data-course-card-media] {
+  border-radius: var(--control-radius-course-card)
+    var(--control-radius-course-card) 0 0 !important;
+}
+
+:root[data-control-radius] .courses-app [data-course-card-tag] {
+  border-radius: var(--control-radius-course-tag) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is([data-course-card-progress], [data-course-card-progress-fill]) {
+  border-radius: var(--control-radius-course-progress) !important;
+}
+
+/* The learning workspace follows the same semantic radius family as the rest
+   of the application. Large panels use the structured cap, compact controls
+   use a smaller cap, and thin progress details receive a soft pill radius.
+   Deliberately circular controls such as avatars, play buttons, slider thumbs,
+   lesson status dots, and switches retain their fixed geometry. */
+:root[data-control-radius] {
+  --control-radius-learning-panel: var(--control-radius-structured);
+  --control-radius-learning-compact: min(var(--control-radius-structured), 8px);
+  --control-radius-learning-progress: min(
+    var(--control-radius-structured),
+    4px
+  );
+  --control-radius-learning-micro: min(var(--control-radius-structured), 4px);
+  --control-radius-learning-detail: min(var(--control-radius-structured), 1px);
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(
+    .learning-workspace .youtube-player,
+    .learning-curriculum,
+    .learning-curriculum__search,
+    .learning-session-dialog,
+    [data-learning-radius-surface]
+  ) {
+  border-radius: var(--control-radius-learning-panel) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(
+    .learning-workspace__player-wrap .youtube-player,
+    .learning-workspace__curriculum-column .learning-curriculum,
+    .learning-curriculum__section-toggle,
+    .learning-curriculum__lesson
+  ) {
+  border-radius: 0 !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(
+    .learning-workspace__back,
+    .learning-workspace__lesson-heading,
+    .learning-workspace__curriculum-toggle-tooltip,
+    .learning-comment-composer__search,
+    .learning-comment-card__like,
+    .learning-comment-card__replies,
+    [data-learning-radius-compact],
+    .lesson-tool-tab,
+    .player-hud,
+    .player-control,
+    .player-menu-row,
+    .player-text-control,
+    .learning-session-dialog__draft
+  ) {
+  border-radius: var(--control-radius-learning-compact) !important;
+}
+
+:root[data-control-radius] .courses-app .learning-workspace__lesson-heading {
+  border-radius: var(--control-radius-learning-panel)
+    var(--control-radius-learning-panel) 0 0 !important;
+}
+
+@media (min-width: 1081px) {
+  :root[data-control-radius] .courses-app .learning-workspace__lesson-heading {
+    border-radius: 0 !important;
+  }
+}
+
+:root[data-control-radius]
+  .courses-app
+  .learning-workspace__curriculum-toggle-tooltip
+  kbd {
+  border-radius: var(--control-radius-learning-micro) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(.learning-curriculum__progress-track, .learning-workspace .app-slider) {
+  --app-slider-pill-radius: var(--control-radius-learning-progress);
+  border-radius: var(--control-radius-learning-progress) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  .learning-curriculum__resize-rail::before {
+  border-radius: var(--control-radius-learning-detail) !important;
+}
+
+:root[data-control-radius] .courses-app .learning-workspace__curriculum-toggle {
+  border-radius: var(--control-radius-learning-compact) 0 0
+    var(--control-radius-learning-compact) !important;
+}
+
+:root[data-control-radius] .learning-course-content-drawer:not([data-expanded]),
+:root[data-control-radius]
+  .learning-course-content-drawer
+  .learning-curriculum {
+  border-radius: var(--control-radius-learning-panel)
+    var(--control-radius-learning-panel) 0 0 !important;
+}
+
+:root[data-control-radius] .courses-app .player-menu {
+  border-radius: var(--control-radius-menu) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  :is(
+    .learning-comment-composer__send,
+    .learning-comment-composer__search-toggle,
+    .learning-session-dialog__close
+  ) {
+  border-radius: 50% !important;
+}
+
+/* Fullscreen and compact playback remain edge to edge. */
+:root[data-control-radius]
+  .courses-app
+  .video-shell:fullscreen
+  .youtube-player {
+  border-radius: 0 !important;
+}
+
+:root[data-control-radius]
+  .courses-app--hidden
+  .learning-workspace__player-wrap
+  .youtube-player {
+  border-radius: 0 !important;
+}
+
+@media (max-width: 1080px) {
+  :root[data-control-radius]
+    .courses-app
+    .learning-workspace__player-wrap
+    .youtube-player {
+    border-radius: 0 !important;
+  }
+}

@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { Prohibit } from "@phosphor-icons/react/Prohibit";
-import { Receipt } from "@phosphor-icons/react/Receipt";
-import { ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
-import { XCircle } from "@phosphor-icons/react/XCircle";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
+import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { NavigateTo } from "../routing/navigation";
 import type { OrderHistoryTabId } from "./orderHistoryData";
 import { OrderHistoryFiltersBar } from "./OrderHistoryFiltersBar";
@@ -99,16 +99,16 @@ export function OrderHistoryPage({
         <div>
           <h1
             id="order-history-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-[var(--text)]"
+            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
           >
             Order History
           </h1>
-          <p className="mt-2 text-[0.92rem] text-[var(--muted)] leading-[1.5]">
+          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
             Review your academy purchases and payment activity.
           </p>
         </div>
         <span
-          className="inline-flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-[19px] text-[var(--accent)] transition-transform hover:scale-105"
+          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
           style={{
             background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
             boxShadow:
@@ -123,7 +123,7 @@ export function OrderHistoryPage({
       {/* Tab Navigation Bar with delicate thin bottom line and icons */}
       <nav
         aria-label="Order history categories"
-        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] scrollbar-none"
+        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {
@@ -140,17 +140,17 @@ export function OrderHistoryPage({
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-[46px] flex-shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
+              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
                 isActive
-                  ? "text-[var(--text)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "text-(--text)"
+                  : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <Icon
                 size={18}
                 weight={isActive ? "fill" : "regular"}
                 className={
-                  isActive ? "text-[var(--accent)]" : "text-[var(--muted)]"
+                  isActive ? "text-(--accent)" : "text-(--muted)"
                 }
               />
               <span>
@@ -158,7 +158,7 @@ export function OrderHistoryPage({
               </span>
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-[var(--accent)]"
+                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -202,16 +202,16 @@ export function OrderHistoryPage({
           </>
         ) : (
           <div
-            className="flex flex-col items-center justify-center rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-12 text-center"
+            className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--hover)] text-[var(--muted)] mb-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
               <Receipt size={24} />
             </div>
-            <h3 className="text-base font-semibold text-[var(--text)]">
+            <h3 className="text-base font-semibold text-(--text)">
               No order records found
             </h3>
-            <p className="mt-1 max-w-sm text-xs md:text-sm text-[var(--muted)]">
+            <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
               {searchQuery ||
               statusFilter !== "all" ||
               dateRangeFilter !== "all" ||
@@ -222,7 +222,7 @@ export function OrderHistoryPage({
             <button
               type="button"
               onClick={resetFilters}
-              className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--on-accent,#ffffff)] shadow-sm hover:opacity-90 cursor-pointer"
+              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
             >
               Reset filters
             </button>

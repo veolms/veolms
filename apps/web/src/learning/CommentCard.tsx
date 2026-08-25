@@ -1,6 +1,6 @@
-import { ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
-import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
-import { ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
+import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import React, { useState } from "react";
 import { IconButton } from "./IconButton";
 
@@ -34,14 +34,14 @@ export function CommentCard({ comment, onLike }: CommentCardProps) {
             <h2 className="learning-comment-card__name font-semibold">
               {comment.name}
             </h2>
-            <span className="learning-comment-card__time text-[var(--muted)]">
+            <span className="learning-comment-card__time text-(--muted)">
               {comment.time}
             </span>
           </div>
-          <p className="learning-comment-card__text mt-1 max-w-[72ch] text-[var(--text-secondary)]">
+          <p className="learning-comment-card__text mt-1 max-w-[72ch] text-(--text-secondary)">
             {comment.text}
           </p>
-          <div className="learning-comment-card__actions mt-2 flex items-center gap-5 text-[var(--muted)]">
+          <div className="learning-comment-card__actions mt-2 flex items-center gap-5 text-(--muted)">
             <button
               type="button"
               onClick={() => {
@@ -56,7 +56,7 @@ export function CommentCard({ comment, onLike }: CommentCardProps) {
             <button
               type="button"
               aria-label={`Show ${comment.replies ?? 0} replies`}
-              className="learning-comment-card__replies inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+              className="learning-comment-card__replies inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
             >
               <ChatCenteredDots size={17} />
               <span>{comment.replies ?? 0}</span>

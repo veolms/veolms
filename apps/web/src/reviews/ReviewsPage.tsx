@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
-import { ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
-import { ListBullets } from "@phosphor-icons/react/ListBullets";
-import { SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
-import { Star } from "@phosphor-icons/react/Star";
-import { UserCircle } from "@phosphor-icons/react/UserCircle";
+import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
+import { ChatTeardropTextIcon as ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import type { NavigateTo } from "../routing/navigation";
 import { CourseReviewHeader } from "./CourseReviewHeader";
 import { NeedHelpWidget } from "./NeedHelpWidget";
@@ -16,6 +16,7 @@ import type { ReviewTabId } from "./reviewsData";
 import { TopReviewersWidget } from "./TopReviewersWidget";
 import { useReviewsFilter } from "./useReviewsFilter";
 import { WriteReviewModal } from "./WriteReviewModal";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 
 export interface ReviewsPageProps {
   onNavigatePage?: NavigateTo;
@@ -67,6 +68,11 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
   const [mobileSummaryExpanded, setMobileSummaryExpanded] = useState(true);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
+  useBackDismiss({
+    open: isSupportModalOpen,
+    onDismiss: () => setIsSupportModalOpen(false),
+  });
+
   // Keyboard shortcut listener (/ or Cmd+K to search, W to write review)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -96,25 +102,29 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
   };
 
   return (
-    <div className="w-full min-w-0 flex flex-col font-sans" aria-labelledby="reviews-page-title">
+    <div
+      className="w-full min-w-0 flex flex-col font-sans"
+      aria-labelledby="reviews-page-title"
+    >
       {/* Top Header Row with Title, Description, and Header Icon Badge */}
       <header className="flex items-start justify-between gap-5 mb-6">
         <div>
           <h1
             id="reviews-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-[var(--text)]"
+            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
           >
             Reviews
           </h1>
-          <p className="mt-2 text-[0.92rem] text-[var(--muted)] leading-[1.5]">
+          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
             See what learners are saying about their learning experience.
           </p>
         </div>
         <span
-          className="inline-flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-[19px] text-[var(--accent)] transition-transform hover:scale-105"
+          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
           style={{
             background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
-            boxShadow: "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
+            boxShadow:
+              "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
           }}
           aria-hidden="true"
         >
@@ -125,7 +135,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Course Header Banner */}
       <section
         aria-label="Course details and actions"
-        className="mb-5 rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-5 md:p-6 transition-all"
+        className="mb-5 rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <CourseReviewHeader
@@ -140,7 +150,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Tab Navigation Bar with delicate thin bottom line and transparent background */}
       <nav
         aria-label="Review categories"
-        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] scrollbar-none"
+        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {
@@ -156,21 +166,23 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-[46px] flex-shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
+              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
                 isActive
-                  ? "text-[var(--text)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "text-(--text)"
+                  : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <Icon
                 size={18}
                 weight={isActive ? "fill" : "regular"}
-                className={isActive ? "text-[var(--accent)]" : "text-[var(--muted)]"}
+                className={
+                  isActive ? "text-(--accent)" : "text-(--muted)"
+                }
               />
               <span>{tab.label}</span>
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-[var(--accent)]"
+                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -221,16 +233,16 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
             ))
           ) : (
             <div
-              className="flex flex-col items-center justify-center rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-12 text-center"
+              className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--hover)] text-[var(--muted)] mb-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
                 <Star size={24} />
               </div>
-              <h3 className="text-base font-semibold text-[var(--text)]">
+              <h3 className="text-base font-semibold text-(--text)">
                 No reviews found
               </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-[var(--muted)]">
+              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
                 {searchQuery || ratingFilter !== "all" || verifiedOnly
                   ? "Try changing your search query or reset your active filters to view all reviews."
                   : "There are no reviews in this category yet."}
@@ -238,7 +250,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--on-accent,#ffffff)] shadow-sm hover:opacity-90 cursor-pointer"
+                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
               >
                 Reset filters
               </button>
@@ -251,7 +263,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <button
                 type="button"
                 onClick={() => setNotice?.("All reviews currently loaded.")}
-                className="rounded-xl border border-[var(--border)] bg-[var(--card-surface)] px-5 py-2.5 text-xs md:text-sm font-medium text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
                 style={{ boxShadow: "var(--card-shadow)" }}
               >
                 Showing {totalFilteredCount} reviews
@@ -302,24 +314,29 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-6 shadow-2xl animate-in zoom-in-95 duration-150"
-            style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
+            className="w-full max-w-md rounded-[18px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+            style={{
+              boxShadow: "var(--card-floating-shadow,var(--card-shadow))",
+            }}
           >
-            <h2 className="text-lg font-bold text-[var(--text)]">
+            <h2 className="text-lg font-bold text-(--text)">
               Contact Learner Support
             </h2>
-            <p className="mt-2 text-xs md:text-sm text-[var(--text-secondary)]">
-              Have questions or feedback regarding this course's reviews? Our support team is here to help 24/7.
+            <p className="mt-2 text-xs md:text-sm text-(--text-secondary)">
+              Have questions or feedback regarding this course&apos;s reviews? Our
+              support team is here to help 24/7.
             </p>
-            <div className="mt-4 rounded-xl bg-[var(--card-surface-raised,var(--hover))] p-3.5 text-xs text-[var(--muted)]">
+            <div className="mt-4 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3.5 text-xs text-(--muted)">
               <span>Support email: </span>
-              <strong className="text-[var(--text)]">support@procodrr.com</strong>
+              <strong className="text-(--text)">
+                support@procodrr.com
+              </strong>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsSupportModalOpen(false)}
-                className="rounded-xl bg-[var(--accent)] px-4 py-2 text-xs md:text-sm font-semibold text-[var(--on-accent,#ffffff)] hover:opacity-90 cursor-pointer"
+                className="rounded-xl bg-(--accent) px-4 py-2 text-xs md:text-sm font-semibold text-(--on-accent,#ffffff) hover:opacity-90 cursor-pointer"
               >
                 Close
               </button>

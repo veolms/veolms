@@ -1,6 +1,6 @@
 .courses-placeholder-page {
   min-height: calc(100vh - 28px);
-  padding: clamp(22px, 4vw, 52px) clamp(18px, 4vw, 56px) 56px;
+  padding: 0;
 }
 
 .courses-placeholder-heading {
@@ -108,7 +108,7 @@
 @media (max-width: 640px) {
   .courses-placeholder-page {
     min-height: calc(100vh - 28px);
-    padding: 24px 16px 32px;
+    padding: 0;
   }
 
   .courses-placeholder-heading {

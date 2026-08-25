@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyReadingModePreferences,
   getReadingModeBootstrapScript,
+  getReadingModeTextureGrainScale,
+  getReadingModeTextureTileSize,
   getReadingModeVisuals,
   normalizeReadingModePreferences,
   persistReadingModePreferences,
@@ -29,25 +31,37 @@ describe("reading mode preferences", () => {
         enabled: "yes",
         colorTemperature: 140,
         texture: -12,
+        textureGrainSize: 140,
       }),
     ).toEqual({
       enabled: false,
       colorTemperature: 100,
       texture: 0,
+      textureGrainSize: 100,
       colors: "full",
     });
     expect(
       normalizeReadingModePreferences({
         colorTemperature: "",
         texture: null,
+        textureGrainSize: null,
       }),
-    ).toMatchObject({ colorTemperature: 50, texture: 90 });
+    ).toMatchObject({
+      colorTemperature: 50,
+      texture: 90,
+      textureGrainSize: 50,
+    });
     expect(
       normalizeReadingModePreferences({
         colorTemperature: "25",
         texture: "75",
+        textureGrainSize: "25",
       }),
-    ).toMatchObject({ colorTemperature: 25, texture: 75 });
+    ).toMatchObject({
+      colorTemperature: 25,
+      texture: 75,
+      textureGrainSize: 25,
+    });
   });
 
   it("keeps bootstrap normalization in parity with runtime preferences", () => {
@@ -57,6 +71,7 @@ describe("reading mode preferences", () => {
         enabled: true,
         colorTemperature: "",
         texture: null,
+        textureGrainSize: null,
         colors: "light",
       }),
     );
@@ -85,6 +100,11 @@ describe("reading mode preferences", () => {
         5,
       ),
     );
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--reading-mode-texture-tile-size",
+      ),
+    ).toBe("256.00px");
   });
 
   it("accepts each color treatment and falls back to full colors", () => {
@@ -119,11 +139,21 @@ describe("reading mode preferences", () => {
     expect(maximum.temperatureOpacity).toBe(0.3);
   });
 
+  it("maps grain size around the existing default at each pixel density", () => {
+    expect(getReadingModeTextureGrainScale(0)).toBe(0.5);
+    expect(getReadingModeTextureGrainScale(50)).toBe(1);
+    expect(getReadingModeTextureGrainScale(100)).toBe(2);
+    expect(getReadingModeTextureTileSize(50, 1)).toBe(256);
+    expect(getReadingModeTextureTileSize(75, 2)).toBe(768);
+    expect(getReadingModeTextureTileSize(100, 3)).toBe(1536);
+  });
+
   it("applies and persists one coherent preference object", () => {
     const preferences = persistReadingModePreferences({
       enabled: true,
       colorTemperature: 80,
       texture: 75,
+      textureGrainSize: 75,
       colors: "black-and-white",
     });
 
@@ -143,6 +173,11 @@ describe("reading mode preferences", () => {
         "--reading-mode-texture-opacity-dark",
       ),
     ).toBe("0.15136");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--reading-mode-texture-tile-size",
+      ),
+    ).toBe("384.00px");
 
     applyReadingModePreferences({ ...preferences, enabled: false });
     expect(
@@ -164,6 +199,7 @@ describe("reading mode preferences", () => {
         enabled: true,
         colorTemperature: 65,
         texture: 80,
+        textureGrainSize: 50,
         colors: "full",
       }),
     ).not.toThrow();
@@ -185,6 +221,7 @@ describe("reading mode settings", () => {
         enabled: true,
         colorTemperature: 30,
         texture: 45,
+        textureGrainSize: 35,
         colors: "light",
       });
     });
@@ -193,6 +230,9 @@ describe("reading mode settings", () => {
       screen.getByRole("slider", { name: "Color temperature" }),
     ).toHaveValue("30");
     expect(screen.getByRole("slider", { name: "Texture" })).toHaveValue("45");
+    expect(
+      screen.getByRole("slider", { name: "Grain size" }),
+    ).toHaveValue("35");
     expect(
       screen.getByRole("button", { name: /Reading mode colors:/ }),
     ).toHaveTextContent("Light colors");
@@ -206,6 +246,9 @@ describe("reading mode settings", () => {
       name: "Color temperature",
     });
     const texture = screen.getByRole("slider", { name: "Texture" });
+    const grainSize = screen.getByRole("slider", {
+      name: "Grain size",
+    });
     const colors = screen.getByRole("button", {
       name: /Reading mode colors:/,
     });
@@ -220,6 +263,7 @@ describe("reading mode settings", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
     expect(temperature).toHaveValue("50");
     expect(texture).toHaveValue("90");
+    expect(grainSize).toHaveValue("50");
     expect(colors).toHaveTextContent("Full colors");
     expect(restore).toBeDisabled();
     expect(previewGuidance).toBeVisible();
@@ -235,6 +279,7 @@ describe("reading mode settings", () => {
 
     fireEvent.change(temperature, { target: { value: "85" } });
     fireEvent.change(texture, { target: { value: "75" } });
+    fireEvent.change(grainSize, { target: { value: "75" } });
     expect(texture.getAttribute("style")).toContain(
       "--app-slider-progress: 75%",
     );
@@ -243,6 +288,12 @@ describe("reading mode settings", () => {
       "false",
     );
     expect(texture).toHaveValue("75");
+    expect(grainSize).toHaveValue("75");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--reading-mode-texture-tile-size",
+      ),
+    ).toBe("384.00px");
 
     fireEvent.click(toggle);
     expect(document.documentElement).toHaveAttribute(
@@ -255,18 +306,22 @@ describe("reading mode settings", () => {
     fireEvent.click(toggle);
     expect(texture).toHaveValue("75");
     expect(temperature).toHaveValue("85");
+    expect(grainSize).toHaveValue("75");
 
     fireEvent.click(restore);
     expect(toggle).toHaveAttribute("aria-checked", "false");
     expect(temperature).toHaveValue("50");
     expect(texture).toHaveValue("90");
+    expect(grainSize).toHaveValue("50");
 
     fireEvent.click(toggle);
     fireEvent.change(temperature, { target: { value: "15" } });
     fireEvent.change(texture, { target: { value: "20" } });
+    fireEvent.change(grainSize, { target: { value: "90" } });
     fireEvent.click(restore);
     expect(toggle).toHaveAttribute("aria-checked", "true");
     expect(temperature).toHaveValue("50");
     expect(texture).toHaveValue("90");
+    expect(grainSize).toHaveValue("50");
   });
 });

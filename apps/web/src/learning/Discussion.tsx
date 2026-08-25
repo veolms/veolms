@@ -1,13 +1,22 @@
-import { ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
-import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { Notepad } from "@phosphor-icons/react/Notepad";
-import { PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { Question } from "@phosphor-icons/react/Question";
-import { Toolbox } from "@phosphor-icons/react/Toolbox";
-import { X } from "@phosphor-icons/react/X";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
+import { ToolboxIcon as Toolbox } from "@phosphor-icons/react/Toolbox";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 import { CommentCard } from "./CommentCard";
 import type { Comment } from "./CommentCard";
 import {
@@ -167,7 +176,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
   useEffect(() => {
     if (!searchOpen) return undefined;
     const frame = window.requestAnimationFrame(() =>
-      composerSearchInputRef.current?.focus(),
+      composerSearchInputRef.current?.focus({ preventScroll: true }),
     );
     return () => window.cancelAnimationFrame(frame);
   }, [searchOpen]);
@@ -216,17 +225,18 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
     setActiveTab(tab);
     setSearch("");
     setSearchOpen(false);
-    setSearchFocused(false);
   };
 
   return (
     <section className="learning-discussion">
-      <div className="flex flex-col gap-3 border-b border-[var(--border)] md:flex-row md:items-end md:justify-between">
+      <div className="learning-discussion__header min-w-0 border-b border-(--border)">
         <div
           ref={tabListRef}
-          className="page-tabs scrollbar-none flex min-w-0 gap-1 overflow-x-auto"
+          className="page-tabs flex min-w-0 gap-1 overflow-x-auto"
           role="tablist"
           aria-label="Lesson tools"
+          data-sidebar-swipe-ignore
+          data-learning-swipe-ignore
         >
           {tabs.map(([label, Icon, tone]) => (
             <button
@@ -241,7 +251,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
               key={label}
               onClick={() => navigateTab(label)}
               onKeyDown={handleRovingTabKeyDown}
-              className={`lesson-tool-tab relative inline-flex h-12 shrink-0 items-center gap-2 px-3 text-[15px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)] ${activeTab === label ? "is-active font-semibold" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
+              className={`lesson-tool-tab relative inline-flex h-12 shrink-0 items-center gap-2 px-3 text-[15px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${activeTab === label ? "is-active font-semibold" : "text-(--muted) hover:text-(--text)"}`}
             >
               <Icon
                 size={20}
@@ -252,30 +262,6 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
           ))}
           <span className="page-tabs__indicator" aria-hidden="true" />
         </div>
-        <label
-          className="learning-discussion__search relative mb-2 block shrink-0"
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-        >
-          <MagnifyingGlass
-            size={21}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"
-          />
-          <span className="sr-only">Search {activeTab.toLowerCase()}</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={
-              searchFocused
-                ? activeTab === "Q&A"
-                  ? "Search Q&A"
-                  : `Search ${activeTab.toLowerCase()}`
-                : "Search"
-            }
-            className="h-11 w-full rounded-[11px] border border-[var(--border)] bg-[var(--surface)] pl-11 pr-3 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]"
-          />
-        </label>
       </div>
 
       <SwipeableTabPanel
@@ -289,7 +275,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
       >
         {(panelTab) =>
           panelTab === "Comments" ? (
-            <>
+            <div className="learning-comments-surface">
               <div
                 className={`learning-comment-composer ${searchOpen ? "is-search-open" : ""}`}
               >
@@ -298,35 +284,40 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
                   alt=""
                   className="learning-comment-composer__avatar"
                 />
-                <label className="learning-comment-composer__comment min-w-0 flex-1">
-                  <span className="sr-only">Add a comment</span>
-                  <input
-                    value={draft}
-                    onChange={(event) => {
-                      setDraft(event.target.value);
-                      setNotice("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") addComment();
-                    }}
-                    placeholder="Add a comment..."
-                    className="learning-comment-composer__input h-11 w-full bg-transparent px-1 outline-none placeholder:text-[var(--muted)]"
-                  />
-                </label>
+                <div className="learning-comment-composer__field">
+                  <label className="learning-comment-composer__comment min-w-0 flex-1">
+                    <span className="sr-only">Add a comment</span>
+                    <input
+                      value={draft}
+                      onChange={(event) => {
+                        setDraft(event.target.value);
+                        setNotice("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") addComment();
+                      }}
+                      placeholder="Add a comment..."
+                      className="learning-comment-composer__input h-11 w-full bg-transparent px-1 outline-none placeholder:text-(--muted)"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    data-fixed-radius
+                    onClick={addComment}
+                    aria-label="Post comment"
+                    className="learning-comment-composer__send"
+                  >
+                    <PaperPlaneTilt size={22} weight="fill" />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={addComment}
-                  aria-label="Post comment"
-                  className="learning-comment-composer__send"
-                >
-                  <PaperPlaneTilt size={22} weight="fill" />
-                </button>
-                <button
-                  type="button"
+                  data-fixed-radius
                   aria-label={
                     searchOpen ? "Close comment search" : "Search comments"
                   }
                   aria-pressed={searchOpen}
+                  aria-controls="learning-comment-search-input"
                   onClick={() => {
                     setSearchOpen((open) => {
                       const nextOpen = !open;
@@ -348,6 +339,7 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
                     Search {activeTab.toLowerCase()}
                   </span>
                   <input
+                    id="learning-comment-search-input"
                     ref={composerSearchInputRef}
                     type="search"
                     tabIndex={searchOpen ? 0 : -1}
@@ -360,19 +352,24 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
                           : `Search ${activeTab.toLowerCase()}`
                         : "Search"
                     }
+                    className="rounded-none"
+                    data-fixed-radius
+                    data-search-shortcut-target
+                    aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
                   />
+                  <SearchShortcutHint />
                 </label>
               </div>
               {notice && (
                 <p
                   role="status"
-                  className={`mt-2 text-xs ${notice.includes("posted") ? "text-[var(--success)]" : "text-[var(--danger)]"}`}
+                  className={`learning-comment-notice text-xs ${notice.includes("posted") ? "text-(--success)" : "text-(--danger)"}`}
                 >
                   {notice}
                 </p>
               )}
 
-              <div className="mt-3 space-y-2.5">
+              <div className="learning-comment-feed">
                 {visibleComments.map((comment) => (
                   <CommentCard
                     key={comment.id}
@@ -381,31 +378,35 @@ export function Discussion({ persistenceKey }: DiscussionProps) {
                   />
                 ))}
                 {visibleComments.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface)] px-5 py-10 text-center">
+                  <div className="learning-comment-empty px-5 py-10 text-center">
                     <p className="font-semibold">
                       No comments match that search
                     </p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
+                    <p className="mt-1 text-sm text-(--muted)">
                       Try a name, topic, or phrase from the discussion.
                     </p>
                   </div>
                 )}
               </div>
-            </>
+            </div>
           ) : (
-            <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div
+              className="learning-supplemental-panel rounded-xl border border-(--border) bg-(--surface) px-6 text-center"
+              data-learning-radius-surface
+            >
               <h3 className="text-base font-semibold">
                 {supplementalContent[panelTab].title}
               </h3>
-              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[var(--muted)]">
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-(--muted)">
                 {supplementalContent[panelTab].body}
               </p>
               <button
                 type="button"
+                data-control-radius-action
                 onClick={() =>
                   setNotice(`${supplementalContent[panelTab].action} selected.`)
                 }
-                className="mt-5 rounded-[9px] bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                className="mt-5 rounded-[9px] bg-(--accent) px-4 py-2.5 text-sm font-semibold text-(--on-accent) transition hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
               >
                 {supplementalContent[panelTab].action}
               </button>

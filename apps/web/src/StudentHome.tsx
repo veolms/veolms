@@ -1,13 +1,13 @@
-import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { BookOpen } from "@phosphor-icons/react/BookOpen";
-import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
-import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { Fire } from "@phosphor-icons/react/Fire";
-import { GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { Play } from "@phosphor-icons/react/Play";
-import { Target } from "@phosphor-icons/react/Target";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
+import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import type { CSSProperties } from "react";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
@@ -59,7 +59,7 @@ const backendCourse: LearningCourse = {
   id: "backend-nodejs",
   title: "Complete Backend with Node.js",
   sections: 23,
-  lectures: 185,
+  lectures: 600,
   status: "in-progress",
   progress: 76,
   lastLesson: "Error Handling in Express",
@@ -226,7 +226,7 @@ export function StudentHome({
             <button
               type="button"
               className="resume-view-all"
-              onClick={() => onNavigatePage("my-courses")}
+              onClick={() => onNavigatePage("courses")}
             >
               View all in this section <ArrowRight size={17} />
             </button>
@@ -240,7 +240,7 @@ export function StudentHome({
             icon={BookOpen}
             title="Continue Learning"
             action="View All"
-            onAction={() => onNavigatePage("my-courses")}
+            onAction={() => onNavigatePage("courses")}
           />
           <div className="home-mini-course-grid">
             {[javascriptCourse, backendCourse].map((course) => (
@@ -365,7 +365,7 @@ export function StudentHome({
             icon={Target}
             title="New in Your Courses"
             action="View All"
-            onAction={() => onNavigatePage("my-courses")}
+            onAction={() => onNavigatePage("courses")}
           />
           <div className="home-update-list">
             {[currentCourse, backendCourse].map((course, index) => (

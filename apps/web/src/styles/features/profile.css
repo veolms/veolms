@@ -13,23 +13,6 @@
   gap: 14px;
 }
 
-@media (max-width: 720px) {
-  /* Keep the first visible profile fields eager, while letting the browser
-     skip layout and paint for the contact, social, and preview regions until
-     they approach the viewport. Their DOM and accessibility semantics remain
-     available; only below-the-fold rendering is deferred. */
-  .settings-profile__field-grid--contact,
-  .settings-profile__form-section:nth-child(n + 2) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 230px;
-  }
-
-  .settings-profile__identity {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 520px;
-  }
-}
-
 .settings-profile__preview-column {
   display: block;
   min-width: 0;
@@ -911,8 +894,6 @@ html:has(.settings-profile__privacy-dialog[open]) {
 }
 
 .settings-profile__privacy-dialog {
-  --scrollbar-track-block-inset: 16px;
-
   position: fixed;
   inset: 0;
   width: min(calc(100vw - 32px), 470px);

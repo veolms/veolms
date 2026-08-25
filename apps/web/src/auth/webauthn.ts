@@ -1,22 +1,46 @@
+import type {
+  PasskeyAuthenticatorTransport,
+  PasskeyAuthenticationOptionsResponse,
+  PasskeyRegistrationOptionsResponse,
+} from "@veolms/contracts";
+
+const toBrowserTransport = (
+  transport: PasskeyAuthenticatorTransport,
+): AuthenticatorTransport | null => {
+  switch (transport) {
+    case "ble":
+    case "hybrid":
+    case "internal":
+    case "nfc":
+    case "usb":
+      return transport;
+    case "smart-card":
+      // WebAuthn Level 3 supports this hint, but some lib.dom versions lag it.
+      return transport as AuthenticatorTransport;
+    default:
+      return null;
+  }
+};
+
+export const toBrowserTransports = (
+  transports: PasskeyAuthenticatorTransport[] | undefined,
+) => transports?.flatMap((transport) => toBrowserTransport(transport) ?? []);
+
 export function bufferToBase64URL(buffer: ArrayBuffer | Uint8Array): string {
-  const bytes =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = "";
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-export function base64URLToBuffer(base64url: string): Uint8Array {
+export function base64URLToBuffer(base64url: string): Uint8Array<ArrayBuffer> {
   const padded =
     base64url.replace(/-/g, "+").replace(/_/g, "/") +
     "==".slice(0, (4 - (base64url.length % 4)) % 4);
   const binary = atob(padded);
-  const buffer = new Uint8Array(binary.length);
+  const buffer = new Uint8Array(new ArrayBuffer(binary.length));
   for (let i = 0; i < binary.length; i++) {
     buffer[i] = binary.charCodeAt(i);
   }
@@ -32,8 +56,7 @@ export function isPasskeySupported(): boolean {
 }
 
 export async function startPasskeyRegistration(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverOptions: any,
+  options: PasskeyRegistrationOptionsResponse,
 ): Promise<{ response: unknown }> {
   if (!isPasskeySupported()) {
     throw new Error(
@@ -42,18 +65,17 @@ export async function startPasskeyRegistration(
   }
 
   const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-    ...serverOptions,
-    challenge: base64URLToBuffer(serverOptions.challenge),
+    ...options,
+    challenge: base64URLToBuffer(options.challenge),
     user: {
-      ...serverOptions.user,
-      id: base64URLToBuffer(serverOptions.user.id),
+      ...options.user,
+      id: base64URLToBuffer(options.user.id),
     },
-    excludeCredentials: (serverOptions.excludeCredentials ?? []).map(
-      (cred: { id: string; type: string }) => ({
-        ...cred,
-        id: base64URLToBuffer(cred.id),
-      }),
-    ),
+    excludeCredentials: (options.excludeCredentials ?? []).map((cred) => ({
+      ...cred,
+      id: base64URLToBuffer(cred.id),
+      transports: toBrowserTransports(cred.transports),
+    })),
   };
 
   const credential = (await navigator.credentials.create({
@@ -81,8 +103,7 @@ export async function startPasskeyRegistration(
 }
 
 export async function startPasskeyAuthentication(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serverOptions: any,
+  options: PasskeyAuthenticationOptionsResponse,
 ): Promise<{ response: unknown }> {
   if (!isPasskeySupported()) {
     throw new Error(
@@ -91,14 +112,13 @@ export async function startPasskeyAuthentication(
   }
 
   const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-    ...serverOptions,
-    challenge: base64URLToBuffer(serverOptions.challenge),
-    allowCredentials: (serverOptions.allowCredentials ?? []).map(
-      (cred: { id: string; type: string; transports?: string[] }) => ({
-        ...cred,
-        id: base64URLToBuffer(cred.id),
-      }),
-    ),
+    ...options,
+    challenge: base64URLToBuffer(options.challenge),
+    allowCredentials: (options.allowCredentials ?? []).map((cred) => ({
+      ...cred,
+      id: base64URLToBuffer(cred.id),
+      transports: toBrowserTransports(cred.transports),
+    })),
   };
 
   const credential = (await navigator.credentials.get({

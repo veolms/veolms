@@ -1,5 +1,5 @@
-/* grove palette — dark mode. */
-:root[data-palette="grove"] {
+/* grove palette - dark mode. */
+:root[data-theme="dark"][data-palette="grove"] {
   --canvas: #171d18;
   --header: #161c17;
   --surface: #28332b;

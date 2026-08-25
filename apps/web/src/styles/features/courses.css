@@ -100,11 +100,6 @@
   flex-direction: column;
   gap: 3px;
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.courses-nav::-webkit-scrollbar {
-  display: none;
 }
 
 .courses-nav button {
@@ -395,7 +390,6 @@
 .courses-main {
   min-height: calc(100vh - 20px);
   border-radius: 14px;
-  padding: 29px 31px 44px;
 }
 
 .courses-heading-row {
@@ -753,6 +747,46 @@
   background: var(--hover);
 }
 
+@keyframes course-menu-press-feedback {
+  0% {
+    background-color: color-mix(
+      in srgb,
+      var(--text) 24%,
+      var(--surface-strong)
+    );
+    transform: scale(1);
+  }
+
+  48% {
+    background-color: color-mix(
+      in srgb,
+      var(--text) 44%,
+      var(--surface-strong)
+    );
+    transform: scale(1.0278);
+  }
+
+  100% {
+    background-color: color-mix(
+      in srgb,
+      var(--text) 24%,
+      var(--surface-strong)
+    );
+    transform: scale(1);
+  }
+}
+
+.course-menu-press-feedback {
+  animation: course-menu-press-feedback 720ms cubic-bezier(0.45, 0, 0.2, 1);
+  will-change: background-color, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .course-menu-press-feedback {
+    animation: none;
+  }
+}
+
 .course-action-menu {
   position: absolute;
   right: 0;
@@ -974,57 +1008,57 @@
     height: auto;
   }
 
-  .courses-sidebar__brand {
+  .courses-app:not(.courses-app--hidden) .courses-sidebar__brand {
     align-items: center;
     flex-direction: column;
     gap: 6px;
     padding: 0;
   }
 
-  .courses-sidebar .sidebar-collapse {
+  .courses-app:not(.courses-app--hidden) .courses-sidebar .sidebar-collapse {
     display: none;
   }
 
-  .courses-logo-clip {
+  .courses-app:not(.courses-app--hidden) .courses-logo-clip {
     width: 30px;
     height: 48px;
   }
 
-  .courses-logo-clip img {
+  .courses-app:not(.courses-app--hidden) .courses-logo-clip img {
     width: 177px;
     height: auto;
     max-width: none;
   }
 
-  .courses-sidebar__label,
-  .courses-nav button > span,
-  .courses-nav button > b,
-  .courses-profile__button > span,
-  .courses-profile__button > svg {
+  .courses-app:not(.courses-app--hidden) .courses-sidebar__label,
+  .courses-app:not(.courses-app--hidden) .courses-nav button > span,
+  .courses-app:not(.courses-app--hidden) .courses-nav button > b,
+  .courses-app:not(.courses-app--hidden) .courses-profile__button > span,
+  .courses-app:not(.courses-app--hidden) .courses-profile__button > svg {
     display: none;
   }
 
-  .courses-nav {
+  .courses-app:not(.courses-app--hidden) .courses-nav {
     margin-top: 11px;
   }
 
-  .courses-nav button {
+  .courses-app:not(.courses-app--hidden) .courses-nav button {
     justify-content: center;
     padding: 0;
   }
 
-  .courses-profile__button {
+  .courses-app:not(.courses-app--hidden) .courses-profile__button {
     min-height: 58px;
     justify-content: center;
     padding: 5px;
   }
 
-  .courses-profile__button img {
+  .courses-app:not(.courses-app--hidden) .courses-profile__button img {
     width: 42px;
     height: 42px;
   }
 
-  .profile-menu {
+  .courses-app:not(.courses-app--hidden) .profile-menu {
     left: calc(100% + 8px);
     right: auto;
     bottom: 0;
@@ -1032,7 +1066,6 @@
 
   .courses-main {
     min-height: calc(100vh - 16px);
-    padding: 22px 18px 34px;
   }
 
   .courses-heading-row {
@@ -1046,10 +1079,6 @@
 }
 
 @media (max-width: 640px) {
-  .courses-main {
-    padding-inline: 14px;
-  }
-
   .courses-heading-row {
     align-items: stretch;
     flex-direction: column;

@@ -1,6 +1,10 @@
-import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { X } from "@phosphor-icons/react/X";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import { ThemedSelect } from "../ThemedSelect";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 export interface NotificationFiltersBarProps {
   searchQuery: string;
@@ -46,15 +50,15 @@ export function NotificationFiltersBar({
 }: NotificationFiltersBarProps) {
   return (
     <div
-      className="flex flex-col gap-3 rounded-[15px] border border-[var(--border)] bg-[var(--card-surface)] p-3 md:p-3.5 transition-all"
+      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 md:p-3.5 transition-all"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
-        <label className="flex min-h-[39px] min-w-[210px] flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label className="flex min-h-9.75 min-w-52.5 flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
           <MagnifyingGlass
             size={17}
-            className="text-[var(--muted)] flex-shrink-0"
+            className="text-(--muted) shrink-0"
             aria-hidden="true"
           />
           <input
@@ -64,14 +68,17 @@ export function NotificationFiltersBar({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search notifications..."
             aria-label="Search notifications"
-            className="w-full border-0 bg-transparent p-0 text-xs md:text-sm text-[var(--text-secondary)] placeholder-[var(--muted)] outline-none"
+            aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+            data-search-shortcut-target
+            className="w-full border-0 bg-transparent p-0 text-xs md:text-sm text-(--text-secondary) placeholder-(--muted) outline-none"
           />
+          <SearchShortcutHint />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange("")}
               aria-label="Clear search"
-              className="text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+              className="text-(--muted) hover:text-(--text) cursor-pointer"
             >
               <X size={14} />
             </button>
@@ -79,38 +86,38 @@ export function NotificationFiltersBar({
         </label>
 
         {/* Category Select */}
-        <div className="flex min-h-[39px] min-w-[145px] items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all flex-shrink-0">
+        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
           <ThemedSelect
             id="notifications-category-filter"
             value={categoryFilter}
             onValueChange={onCategoryFilterChange}
             options={categoryOptions}
             ariaLabel="Filter by category"
-            triggerClassName="!min-h-[39px] !p-0 !bg-transparent !shadow-none !border-0 text-xs md:text-sm font-medium text-[var(--text-secondary)] hover:!bg-transparent hover:!text-[var(--text)] focus:!outline-none flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
           />
         </div>
 
         {/* Status Select */}
-        <div className="flex min-h-[39px] min-w-[125px] items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all flex-shrink-0">
+        <div className="flex min-h-9.75 min-w-31.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
           <ThemedSelect
             id="notifications-status-filter"
             value={statusFilter}
             onValueChange={onStatusFilterChange}
             options={statusOptions}
             ariaLabel="Filter by read status"
-            triggerClassName="!min-h-[39px] !p-0 !bg-transparent !shadow-none !border-0 text-xs md:text-sm font-medium text-[var(--text-secondary)] hover:!bg-transparent hover:!text-[var(--text)] focus:!outline-none flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
           />
         </div>
 
         {/* Sort Select */}
-        <div className="flex min-h-[39px] min-w-[145px] items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all flex-shrink-0">
+        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
           <ThemedSelect
             id="notifications-sort-filter"
             value={sortBy}
             onValueChange={onSortByChange}
             options={sortOptions}
             ariaLabel="Sort notifications"
-            triggerClassName="!min-h-[39px] !p-0 !bg-transparent !shadow-none !border-0 text-xs md:text-sm font-medium text-[var(--text-secondary)] hover:!bg-transparent hover:!text-[var(--text)] focus:!outline-none flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
           />
         </div>
       </div>
