@@ -90,3 +90,48 @@ export async function insertCoupon(
     .returningAll()
     .executeTakeFirstOrThrow();
 }
+
+export async function listCoupons(database: Executor) {
+  return await database
+    .selectFrom("coupons")
+    .selectAll()
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+export async function updateCoupon(
+  database: Executor,
+  couponId: string,
+  updates: {
+    description?: string | null;
+    discount_type?: CouponDiscountType;
+    discount_value?: number;
+    max_discount_amount?: number | null;
+    min_order_amount?: number;
+    starts_at?: Date;
+    expires_at?: Date;
+    global_usage_limit?: number | null;
+    per_user_limit?: number;
+    is_active?: boolean;
+    restricted_course_ids?: string[] | null;
+    restricted_bundle_ids?: string[] | null;
+    updated_at?: Date;
+  },
+) {
+  return await database
+    .updateTable("coupons")
+    .set({
+      ...updates,
+      updated_at: new Date(),
+    })
+    .where("id", "=", couponId)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export async function deleteCoupon(database: Executor, couponId: string) {
+  return await database
+    .deleteFrom("coupons")
+    .where("id", "=", couponId)
+    .executeTakeFirst();
+}

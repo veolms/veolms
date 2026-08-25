@@ -4,6 +4,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
 import type { EmailService } from "../../../services/email/index.ts";
+import { createAccessService, type AccessService } from "../../access/access.service.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
@@ -16,6 +17,7 @@ import * as webhookRepo from "../webhooks/webhook.repository.ts";
 export interface PaymentWorkerOptions {
   database: Kysely<Database>;
   emailService?: EmailService;
+  accessService?: AccessService;
   logger?: FastifyBaseLogger;
 }
 
@@ -30,11 +32,13 @@ export interface PaymentWorker {
 
 /**
  * Robust, idempotent background worker for processing payment confirmations,
- * expanding course bundles, creating student enrollments, and queueing confirmation emails.
+ * creating AccessGrants, expanding course bundles, provisioning learning enrollments,
+ * and queueing outbox side-effects.
  */
 export function createPaymentWorker({
   database,
   emailService,
+  accessService = createAccessService(),
   logger,
 }: PaymentWorkerOptions): PaymentWorker {
   async function processPaymentJob(event: NormalizedPaymentEvent) {
@@ -91,8 +95,8 @@ export function createPaymentWorker({
 
     const now = new Date();
 
-    // 1. Transactional State Transition & Snapshot Enrollment
-    const enrollmentResults = await database.transaction().execute(async (trx) => {
+    // 1. Transactional State Transition: Payment Captured -> Order PAID -> AccessGrants -> Enrollments
+    const fulfillmentResults = await database.transaction().execute(async (trx) => {
       // Mark Payment Captured & Record Attempt
       await paymentRepo.updatePayment(trx, payment.id, {
         gateway_payment_id: event.gatewayPaymentId,
@@ -109,7 +113,7 @@ export function createPaymentWorker({
         status: "captured",
       });
 
-      // Optimistically Mark Order PAID
+      // Optimistically Mark Order / Purchase PAID
       await orderRepo.markOrderPaidIfPending(trx, order.id, now);
 
       // Record Coupon Redemption if applied
@@ -130,6 +134,16 @@ export function createPaymentWorker({
 
       for (const item of orderItems) {
         if (item.item_type === "course" && item.course_id) {
+          // 1A. Canonical Access Grant
+          await accessService.grantAccess(trx, {
+            userId: order.user_id,
+            courseId: item.course_id,
+            orderId: order.id,
+            source: "purchase",
+            validFrom: now,
+          });
+
+          // 1B. Learning Enrollment
           await enrollmentRepo.insertEnrollment(trx, {
             id: crypto.randomUUID(),
             user_id: order.user_id,
@@ -146,6 +160,16 @@ export function createPaymentWorker({
         } else if (item.item_type === "bundle" && item.bundle_id) {
           const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
           for (const bc of bundleCourses) {
+            // 1A. Canonical Access Grant
+            await accessService.grantAccess(trx, {
+              userId: order.user_id,
+              courseId: bc.course_id,
+              orderId: order.id,
+              source: "bundle_purchase",
+              validFrom: now,
+            });
+
+            // 1B. Learning Enrollment
             await enrollmentRepo.insertEnrollment(trx, {
               id: crypto.randomUUID(),
               user_id: order.user_id,
@@ -162,6 +186,27 @@ export function createPaymentWorker({
           }
         }
       }
+
+      // 1C. Record Outbox Event for durable post-purchase processing
+      await trx
+        .insertInto("outbox_events")
+        .values({
+          id: crypto.randomUUID(),
+          event_name: "purchase.completed",
+          aggregate_type: "purchase",
+          aggregate_id: order.id,
+          payload: {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            userId: order.user_id,
+            totalAmount: order.total_amount,
+            enrolledCourseIds: enrolledCourses,
+          },
+          processed_at: null,
+          error: null,
+          created_at: now,
+        })
+        .execute();
 
       return enrolledCourses;
     });
@@ -228,19 +273,18 @@ export function createPaymentWorker({
         });
       }
     } catch (sideEffectErr) {
-      // Side effect failure is logged but NEVER disrupts payment/fulfillment success
       log?.error({ err: sideEffectErr }, "Post-purchase side effect execution encountered an error");
     }
 
     log?.info(
-      { orderId: order.id, count: enrollmentResults.length },
+      { orderId: order.id, count: fulfillmentResults.length },
       "Successfully fulfilled order and completed post-purchase side effects",
     );
 
     return {
       status: "processed" as const,
       orderId: order.id,
-      enrollmentCount: enrollmentResults.length,
+      enrollmentCount: fulfillmentResults.length,
     };
   }
 
@@ -301,6 +345,11 @@ export function createPaymentWorker({
     await orderRepo.updateOrderStatus(database, payment.order_id, {
       status: isFullRefund ? "refunded" : "partially_refunded",
     });
+
+    // Revoke access grants if full refund
+    if (isFullRefund) {
+      await accessService.revokeAccessForOrder(database, payment.order_id);
+    }
 
     await webhookRepo.markWebhookEventProcessed(database, event.eventId);
     log?.info({ orderId: payment.order_id, refundAmount }, "Refund processed successfully");

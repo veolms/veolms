@@ -505,6 +505,41 @@ export interface WebhookEventTable {
   created_at: Generated<Date>;
 }
 
+export interface AccessGrantTable {
+  id: string;
+  user_id: string;
+  course_id: string;
+  order_id: string | null;
+  status: "active" | "suspended" | "revoked" | "expired";
+  source: "purchase" | "bundle_purchase" | "free_grant" | "admin_grant";
+  valid_from: Generated<Date>;
+  valid_until: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CallbackInboxTable {
+  id: string;
+  provider: string;
+  event_id: string;
+  event_type: string;
+  payload: unknown;
+  processed_at: Date | null;
+  error: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface OutboxEventTable {
+  id: string;
+  event_name: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  payload: unknown;
+  processed_at: Date | null;
+  error: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   courses: CourseTable;
   academy: AcademyTable;
@@ -541,8 +576,14 @@ export interface Database {
   payments: PaymentTable;
   payment_attempts: PaymentAttemptTable;
   refunds: RefundTable;
+  access_grants: AccessGrantTable;
   enrollments: EnrollmentTable;
   webhook_events: WebhookEventTable;
+  callback_inbox: CallbackInboxTable;
+  outbox_events: OutboxEventTable;
 }
+
+export type PurchaseTable = OrderTable;
+export type PurchaseItemTable = OrderItemTable;
 
 

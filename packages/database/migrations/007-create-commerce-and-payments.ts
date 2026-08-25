@@ -319,7 +319,38 @@ export async function up(database: Kysely<unknown>): Promise<void> {
   await sql`create index idx_refunds_order_id on refunds (order_id)`.execute(database);
   await sql`create index idx_refunds_payment_id on refunds (payment_id)`.execute(database);
 
-  // 8. Enrollments
+  // 8. Access Grants
+  await database.schema
+    .createTable("access_grants")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("user_id", "uuid", (col) =>
+      col.notNull().references("users.id").onDelete("cascade"),
+    )
+    .addColumn("course_id", "uuid", (col) =>
+      col.notNull().references("courses.id").onDelete("cascade"),
+    )
+    .addColumn("order_id", "uuid", (col) =>
+      col.references("orders.id").onDelete("set null"),
+    )
+    .addColumn("status", "varchar(50)", (col) => col.notNull().defaultTo("active"))
+    .addColumn("source", "varchar(50)", (col) => col.notNull().defaultTo("purchase"))
+    .addColumn("valid_from", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addColumn("valid_until", "timestamptz")
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addColumn("updated_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addUniqueConstraint("access_grants_user_course_unique", ["user_id", "course_id"])
+    .execute();
+
+  await sql`create index idx_access_grants_user_course on access_grants (user_id, course_id)`.execute(database);
+  await sql`create index idx_access_grants_order_id on access_grants (order_id)`.execute(database);
+
+  // 9. Enrollments
   await database.schema
     .createTable("enrollments")
     .addColumn("id", "uuid", (col) => col.primaryKey())
@@ -359,7 +390,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
   await sql`create index idx_enrollments_course_id on enrollments (course_id)`.execute(database);
   await sql`create index idx_enrollments_user_status on enrollments (user_id, status)`.execute(database);
 
-  // 9. Webhook Events
+  // 10. Webhook Events / Callback Inbox
   await database.schema
     .createTable("webhook_events")
     .addColumn("id", "uuid", (col) => col.primaryKey())
@@ -376,11 +407,48 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .execute();
 
   await sql`create index idx_webhook_events_provider_event on webhook_events (provider, event_id)`.execute(database);
+
+  await database.schema
+    .createTable("callback_inbox")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("provider", "varchar(50)", (col) => col.notNull())
+    .addColumn("event_id", "varchar(255)", (col) => col.notNull())
+    .addColumn("event_type", "varchar(100)", (col) => col.notNull())
+    .addColumn("payload", "jsonb", (col) => col.notNull())
+    .addColumn("processed_at", "timestamptz")
+    .addColumn("error", "text")
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addUniqueConstraint("callback_inbox_provider_event_unique", ["provider", "event_id"])
+    .execute();
+
+  await sql`create index idx_callback_inbox_provider_event on callback_inbox (provider, event_id)`.execute(database);
+
+  // 11. Outbox Events
+  await database.schema
+    .createTable("outbox_events")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("event_name", "varchar(100)", (col) => col.notNull())
+    .addColumn("aggregate_type", "varchar(50)", (col) => col.notNull())
+    .addColumn("aggregate_id", "varchar(255)", (col) => col.notNull())
+    .addColumn("payload", "jsonb", (col) => col.notNull())
+    .addColumn("processed_at", "timestamptz")
+    .addColumn("error", "text")
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .execute();
+
+  await sql`create index idx_outbox_events_unprocessed on outbox_events (created_at) where processed_at is null`.execute(database);
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
+  await database.schema.dropTable("outbox_events").ifExists().execute();
+  await database.schema.dropTable("callback_inbox").ifExists().execute();
   await database.schema.dropTable("webhook_events").ifExists().execute();
   await database.schema.dropTable("enrollments").ifExists().execute();
+  await database.schema.dropTable("access_grants").ifExists().execute();
   await database.schema.dropTable("refunds").ifExists().execute();
   await database.schema.dropTable("payment_attempts").ifExists().execute();
   await database.schema.dropTable("payments").ifExists().execute();

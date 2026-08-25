@@ -18,14 +18,14 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createRefundController({ service });
 
-  // 1. POST /admin/refunds - Initiate refund
+  // 1. POST /refunds - Initiate refund
   app.post(
-    "/admin/refunds",
+    "/refunds",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "createRefund",
-        tags: ["Commerce - Admin Refunds"],
+        tags: ["Commerce - Refunds"],
         summary: "Initiate full or partial refund",
         description: "Initiates a refund via the payment gateway and records refund state.",
         body: createRefundRequestSchema,
@@ -41,14 +41,14 @@ const refundRoutes: RoutePlugin = async (app, options) => {
     controller.createRefund,
   );
 
-  // 2. GET /admin/refunds/:refundId - Get refund details
+  // 2. GET /refunds/:refundId - Get refund details
   app.get(
-    "/admin/refunds/:refundId",
+    "/refunds/:refundId",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "getRefund",
-        tags: ["Commerce - Admin Refunds"],
+        tags: ["Commerce - Refunds"],
         summary: "Get refund by ID",
         params: z.object({ refundId: z.uuid() }),
         response: {
@@ -61,14 +61,14 @@ const refundRoutes: RoutePlugin = async (app, options) => {
     controller.getRefund,
   );
 
-  // 3. GET /admin/orders/:orderId/refunds - List all refunds for an order
+  // 3. GET /refunds/order/:orderId - List all refunds for an order
   app.get(
-    "/admin/orders/:orderId/refunds",
+    "/refunds/order/:orderId",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "listOrderRefunds",
-        tags: ["Commerce - Admin Refunds"],
+        tags: ["Commerce - Refunds"],
         summary: "List refunds for an order",
         params: z.object({ orderId: z.uuid() }),
         response: {

@@ -177,6 +177,39 @@ export const couponSchema = z.strictObject({
 });
 export type Coupon = z.infer<typeof couponSchema>;
 
+export const createCouponRequestSchema = z.strictObject({
+  code: z.string().min(1).max(50).toUpperCase(),
+  description: z.string().max(500).optional(),
+  discountType: couponDiscountTypeSchema,
+  discountValue: z.number().int().positive(),
+  maxDiscountAmount: z.number().int().positive().optional(),
+  minOrderAmount: z.number().int().nonnegative().default(0),
+  startsAt: z.string().or(z.date()),
+  expiresAt: z.string().or(z.date()),
+  globalUsageLimit: z.number().int().positive().optional(),
+  perUserLimit: z.number().int().positive().default(1),
+  isActive: z.boolean().default(true),
+  restrictedCourseIds: z.array(z.uuid()).optional(),
+  restrictedBundleIds: z.array(z.uuid()).optional(),
+});
+export type CreateCouponRequest = z.infer<typeof createCouponRequestSchema>;
+
+export const updateCouponRequestSchema = z.strictObject({
+  description: z.string().max(500).optional(),
+  discountType: couponDiscountTypeSchema.optional(),
+  discountValue: z.number().int().positive().optional(),
+  maxDiscountAmount: z.number().int().positive().nullable().optional(),
+  minOrderAmount: z.number().int().nonnegative().optional(),
+  startsAt: z.string().or(z.date()).optional(),
+  expiresAt: z.string().or(z.date()).optional(),
+  globalUsageLimit: z.number().int().positive().nullable().optional(),
+  perUserLimit: z.number().int().positive().optional(),
+  isActive: z.boolean().optional(),
+  restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
+  restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+});
+export type UpdateCouponRequest = z.infer<typeof updateCouponRequestSchema>;
+
 export const validateCouponRequestSchema = z.strictObject({
   code: z.string().min(1).max(50).toUpperCase(),
   items: z.array(cartItemInputSchema).min(1),
@@ -231,13 +264,15 @@ export const pricingCalculationSchema = z.strictObject({
 export type PricingCalculation = z.infer<typeof pricingCalculationSchema>;
 
 // ============================================================================
-// 6. ORDERS & ORDER ITEMS
+// 6. PURCHASES & PURCHASE ITEMS (Canonical Domain Model; Order aliases preserved)
 // ============================================================================
 
-export const orderItemSnapshotSchema = z.strictObject({
+export const purchaseItemSnapshotSchema = z.strictObject({
   id: z.uuid(),
-  orderId: z.uuid(),
+  purchaseId: z.uuid().optional(),
+  orderId: z.uuid().optional(),
   itemType: orderItemTypeSchema,
+  offeringId: z.uuid().nullable().optional(), // canonical reference to sellable offering
   courseId: z.uuid().nullable().optional(),
   bundleId: z.uuid().nullable().optional(),
   titleSnapshot: z.string(),
@@ -247,13 +282,19 @@ export const orderItemSnapshotSchema = z.strictObject({
   finalAmount: z.number().int().nonnegative(),
   createdAt: z.string().or(z.date()),
 });
-export type OrderItemSnapshot = z.infer<typeof orderItemSnapshotSchema>;
+export type PurchaseItemSnapshot = z.infer<typeof purchaseItemSnapshotSchema>;
+export const orderItemSnapshotSchema = purchaseItemSnapshotSchema;
+export type OrderItemSnapshot = PurchaseItemSnapshot;
 
-export const orderSchema = z.strictObject({
+export const purchaseStatusSchema = orderStatusSchema;
+export type PurchaseStatus = OrderStatus;
+
+export const purchaseSchema = z.strictObject({
   id: z.uuid(),
+  purchaseNumber: z.string().optional(), // e.g. PUR-20260825-XXXX
   orderNumber: z.string(),
   userId: z.uuid(),
-  status: orderStatusSchema,
+  status: purchaseStatusSchema,
   currency: z.string().length(3),
   subtotalAmount: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),
@@ -261,13 +302,15 @@ export const orderSchema = z.strictObject({
   totalAmount: z.number().int().nonnegative(),
   couponId: z.uuid().nullable().optional(),
   idempotencyKey: z.string().nullable().optional(),
-  items: z.array(orderItemSnapshotSchema).optional(),
+  items: z.array(purchaseItemSnapshotSchema).optional(),
   expiresAt: z.string().or(z.date()),
   paidAt: z.string().or(z.date()).nullable().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
-export type Order = z.infer<typeof orderSchema>;
+export type Purchase = z.infer<typeof purchaseSchema>;
+export const orderSchema = purchaseSchema;
+export type Order = Purchase;
 
 // ============================================================================
 // 7. CHECKOUT REQUESTS & RESPONSES
@@ -288,9 +331,11 @@ export type CheckoutPreviewResponse = z.infer<typeof checkoutPreviewResponseSche
 export const createCheckoutOrderRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
   couponCode: z.string().max(50).toUpperCase().optional(),
-  idempotencyKey: z.string().min(10).max(100).optional(),
+  idempotencyKey: z.string().max(255).optional(),
 });
 export type CreateCheckoutOrderRequest = z.infer<typeof createCheckoutOrderRequestSchema>;
+export const createPurchaseRequestSchema = createCheckoutOrderRequestSchema;
+export type CreatePurchaseRequest = CreateCheckoutOrderRequest;
 
 export const gatewayOrderDetailsSchema = z.strictObject({
   provider: paymentProviderSchema,
@@ -303,10 +348,18 @@ export const gatewayOrderDetailsSchema = z.strictObject({
 export type GatewayOrderDetails = z.infer<typeof gatewayOrderDetailsSchema>;
 
 export const createCheckoutOrderResponseSchema = z.strictObject({
-  order: orderSchema,
-  gateway: gatewayOrderDetailsSchema,
+  order: purchaseSchema,
+  gateway: z.strictObject({
+    provider: paymentProviderSchema,
+    gatewayOrderId: z.string(),
+    keyId: z.string().optional(),
+    amount: z.number().int().nonnegative(),
+    currency: z.string().length(3),
+  }),
 });
 export type CreateCheckoutOrderResponse = z.infer<typeof createCheckoutOrderResponseSchema>;
+export const createPurchaseResponseSchema = createCheckoutOrderResponseSchema;
+export type CreatePurchaseResponse = CreateCheckoutOrderResponse;
 
 // ============================================================================
 // 8. PAYMENTS & PAYMENT ATTEMPTS
@@ -320,7 +373,7 @@ export const paymentAttemptSchema = z.strictObject({
   status: paymentAttemptStatusSchema,
   errorCode: z.string().nullable().optional(),
   errorDescription: z.string().nullable().optional(),
-  rawPayload: z.unknown().optional(),
+  rawPayload: z.unknown().nullable().optional(),
   createdAt: z.string().or(z.date()),
 });
 export type PaymentAttempt = z.infer<typeof paymentAttemptSchema>;
@@ -338,6 +391,7 @@ export type PaymentMethodDetails = z.infer<typeof paymentMethodDetailsSchema>;
 export const paymentSchema = z.strictObject({
   id: z.uuid(),
   orderId: z.uuid(),
+  purchaseId: z.uuid().optional(),
   gatewayProvider: paymentProviderSchema,
   gatewayOrderId: z.string(),
   gatewayPaymentId: z.string().nullable().optional(),
@@ -397,13 +451,40 @@ export const createRefundRequestSchema = z.strictObject({
 export type CreateRefundRequest = z.infer<typeof createRefundRequestSchema>;
 
 // ============================================================================
-// 10. ENROLLMENTS & FULFILLMENT
+// 10. ACCESS GRANTS & LEARNING ENROLLMENTS
 // ============================================================================
+
+export const accessGrantStatusSchema = z.enum(["active", "suspended", "revoked", "expired"]);
+export type AccessGrantStatus = z.infer<typeof accessGrantStatusSchema>;
+
+export const accessGrantSourceSchema = z.enum([
+  "purchase",
+  "bundle_purchase",
+  "free_grant",
+  "admin_grant",
+]);
+export type AccessGrantSource = z.infer<typeof accessGrantSourceSchema>;
+
+export const accessGrantSchema = z.strictObject({
+  id: z.uuid(),
+  userId: z.uuid(),
+  offeringId: z.uuid().optional(), // courseId or offeringId
+  courseId: z.uuid(),
+  purchaseId: z.uuid().nullable().optional(),
+  status: accessGrantStatusSchema,
+  source: accessGrantSourceSchema,
+  validFrom: z.string().or(z.date()),
+  validUntil: z.string().or(z.date()).nullable().optional(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type AccessGrant = z.infer<typeof accessGrantSchema>;
 
 export const enrollmentSchema = z.strictObject({
   id: z.uuid(),
   userId: z.uuid(),
   courseId: z.uuid(),
+  accessGrantId: z.uuid().nullable().optional(),
   orderId: z.uuid().nullable().optional(),
   status: enrollmentStatusSchema,
   source: enrollmentSourceSchema,
