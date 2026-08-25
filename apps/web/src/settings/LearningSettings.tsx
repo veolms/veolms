@@ -5,6 +5,7 @@ import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/
 import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { ThemedSelect } from "../ThemedSelect";
+import { CurriculumTestControls } from "./CurriculumTestControls";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import {
   LEARNING_PREFERENCES_KEY,
@@ -312,6 +313,8 @@ export function LearningSettings() {
             />
           </div>
         </section>
+
+        <CurriculumTestControls />
       </div>
     </div>
   );

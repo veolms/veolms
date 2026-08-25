@@ -1,4 +1,3 @@
-import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/ArrowUp";
 import { ArrowsInLineVerticalIcon as ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
 import { ArrowsOutLineVerticalIcon as ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -8,7 +7,7 @@ import { CrosshairSimpleIcon as CrosshairSimple } from "@phosphor-icons/react/Cr
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { ListMagnifyingGlassIcon as ListMagnifyingGlass } from "@phosphor-icons/react/ListMagnifyingGlass";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ExpandableSearch } from "../ExpandableSearch";
 import {
@@ -20,54 +19,25 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../components/ui/context-menu";
-import { lessonsById, sections } from "./courseContent";
+import { ElasticScrollControl } from "../components/elastic-scroll-control";
+import type { ElasticScrollControlHandle } from "../components/elastic-scroll-control";
+import {
+  lessonsById as defaultLessonsById,
+  sections as defaultSections,
+} from "./courseContent";
+import type { CourseSection, Lesson } from "./courseContent";
 import {
   isStoredBoolean,
   isStoredString,
   useSessionStorageState,
 } from "./useSessionStorageState";
 
-type CurriculumScrollDirection = "up" | "down";
-type CurriculumScrollMode = "idle" | "edge" | "hold";
-
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
-
-const SCROLL_CONTROL_IDLE_DELAY_MS = 2400;
-const SCROLL_CONTROL_HOLD_DELAY_MS = 360;
-const SCROLL_CONTROL_HOLD_BASE_SPEED = 112;
-const SCROLL_CONTROL_HOLD_MAX_SPEED = 1440;
-const SCROLL_CONTROL_HOLD_MAX_POINTER_DISTANCE = 260;
-const SCROLL_EDGE_THRESHOLD = 0.5;
-
-export const getCurriculumHoldScrollSpeed = (pointerDistance: number) => {
-  const normalizedDistance = Math.min(
-    1,
-    Math.max(0, pointerDistance) / SCROLL_CONTROL_HOLD_MAX_POINTER_DISTANCE,
-  );
-  const easedDistance = Math.pow(normalizedDistance, 0.8);
-
-  return (
-    SCROLL_CONTROL_HOLD_BASE_SPEED +
-    (SCROLL_CONTROL_HOLD_MAX_SPEED - SCROLL_CONTROL_HOLD_BASE_SPEED) *
-      easedDistance
-  );
-};
-
-export const getCurriculumScrollDirectionAtEdge = (
-  scrollTop: number,
-  scrollHeight: number,
-  clientHeight: number,
-  fallbackDirection: CurriculumScrollDirection,
-) => {
-  const maximumScrollTop = Math.max(0, scrollHeight - clientHeight);
-  if (maximumScrollTop <= SCROLL_EDGE_THRESHOLD) return fallbackDirection;
-  if (scrollTop <= SCROLL_EDGE_THRESHOLD) return "down";
-  if (scrollTop >= maximumScrollTop - SCROLL_EDGE_THRESHOLD) return "up";
-  return fallbackDirection;
-};
 
 interface CurriculumProps {
   selectedLesson: number;
+  sections?: readonly CourseSection[];
+  lessonsById?: ReadonlyMap<number, Lesson>;
   lessonProgress?: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
   onOpenCourseOverview: () => void;
@@ -82,6 +52,8 @@ interface CurriculumProps {
 
 export function Curriculum({
   selectedLesson,
+  sections = defaultSections,
+  lessonsById = defaultLessonsById,
   lessonProgress = {},
   onSelectLesson,
   onOpenCourseOverview,
@@ -105,30 +77,14 @@ export function Curriculum({
     false,
     isStoredBoolean,
   );
-  const [showScrollControl, setShowScrollControl] = useState(false);
-  const [scrollControlDirection, setScrollControlDirection] =
-    useState<CurriculumScrollDirection>("up");
-  const [scrollControlMode, setScrollControlMode] =
-    useState<CurriculumScrollMode>("idle");
   const activeLessonSearch = searchOpen ? lessonSearch : "";
   const lessonSearchInputId = `learning-curriculum-search-${useId().replaceAll(":", "")}`;
   const activeLessonRef = useRef<HTMLButtonElement>(null);
   const currentSectionRef = useRef<HTMLElement>(null);
   const lessonListRef = useRef<HTMLDivElement>(null);
   const curriculumRef = useRef<HTMLElement>(null);
+  const scrollControlRef = useRef<ElasticScrollControlHandle>(null);
   const handledFocusRequestRef = useRef(0);
-  const lastCurriculumScrollTopRef = useRef(0);
-  const scrollControlDirectionRef = useRef<CurriculumScrollDirection>("up");
-  const scrollControlIdleTimerRef = useRef<number | null>(null);
-  const edgeScrollFrameRef = useRef<number | null>(null);
-  const holdScrollFrameRef = useRef<number | null>(null);
-  const holdDelayTimerRef = useRef<number | null>(null);
-  const holdPointerIdRef = useRef<number | null>(null);
-  const holdPointerCenterYRef = useRef<number | null>(null);
-  const holdPointerDistanceRef = useRef(0);
-  const suppressScrollControlClickRef = useRef(false);
-  const pointerDownStoppedEdgeRef = useRef(false);
-  const preserveScrollDirectionRef = useRef(false);
   const currentSection =
     sections.find((section) =>
       section.lessons.some(([number]) => number === selectedLesson),
@@ -143,15 +99,6 @@ export function Curriculum({
   const allSectionsExpanded = expandedSectionCount === sectionIds.length;
   const allSectionsCollapsed = expandedSectionCount === 0;
 
-  const getLessonProgress = (number: number, status: string) => {
-    const storedProgress = lessonProgress[number];
-    if (typeof storedProgress === "number")
-      return Math.max(0, Math.min(100, storedProgress));
-    if (status === "done") return 100;
-    if (status === "active") return 52;
-    return 0;
-  };
-
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
       curriculumRef.current = node;
@@ -160,391 +107,13 @@ export function Curriculum({
     [scrollportRef],
   );
 
-  const clearScrollControlIdleTimer = useCallback(() => {
-    if (scrollControlIdleTimerRef.current === null) return;
-    window.clearTimeout(scrollControlIdleTimerRef.current);
-    scrollControlIdleTimerRef.current = null;
-  }, []);
-
-  const scheduleScrollControlHide = useCallback(() => {
-    clearScrollControlIdleTimer();
-    scrollControlIdleTimerRef.current = window.setTimeout(() => {
-      scrollControlIdleTimerRef.current = null;
-      if (
-        edgeScrollFrameRef.current !== null ||
-        holdScrollFrameRef.current !== null
-      ) {
-        return;
-      }
-      setShowScrollControl(false);
-    }, SCROLL_CONTROL_IDLE_DELAY_MS);
-  }, [clearScrollControlIdleTimer]);
-
-  const clearHoldDelay = useCallback(() => {
-    if (holdDelayTimerRef.current === null) return;
-    window.clearTimeout(holdDelayTimerRef.current);
-    holdDelayTimerRef.current = null;
-  }, []);
-
-  const cancelEdgeScroll = useCallback(
-    (hideAfterIdle = true) => {
-      if (edgeScrollFrameRef.current === null) return false;
-      window.cancelAnimationFrame(edgeScrollFrameRef.current);
-      edgeScrollFrameRef.current = null;
-      setScrollControlMode("idle");
-      if (hideAfterIdle) scheduleScrollControlHide();
-      return true;
-    },
-    [scheduleScrollControlHide],
-  );
-
-  const cancelHoldScroll = useCallback(
-    (hideAfterIdle = true) => {
-      if (holdScrollFrameRef.current === null) return false;
-      window.cancelAnimationFrame(holdScrollFrameRef.current);
-      holdScrollFrameRef.current = null;
-      setScrollControlMode("idle");
-      if (hideAfterIdle) scheduleScrollControlHide();
-      return true;
-    },
-    [scheduleScrollControlHide],
-  );
-
-  const cancelAutomatedScroll = useCallback(() => {
-    clearHoldDelay();
-    const stoppedEdge = cancelEdgeScroll(false);
-    const stoppedHold = cancelHoldScroll(false);
-    if (stoppedEdge || stoppedHold) scheduleScrollControlHide();
-    return stoppedEdge || stoppedHold;
-  }, [
-    cancelEdgeScroll,
-    cancelHoldScroll,
-    clearHoldDelay,
-    scheduleScrollControlHide,
-  ]);
-
-  const revealScrollControl = useCallback(
-    (direction: CurriculumScrollDirection) => {
-      scrollControlDirectionRef.current = direction;
-      setScrollControlDirection(direction);
-      setShowScrollControl(true);
-      if (
-        edgeScrollFrameRef.current === null &&
-        holdScrollFrameRef.current === null
-      ) {
-        scheduleScrollControlHide();
-      }
-    },
-    [scheduleScrollControlHide],
-  );
-
-  const syncScrollControlDirectionAtEdge = useCallback(
-    (fallbackDirection: CurriculumScrollDirection) => {
-      const curriculum = curriculumRef.current;
-      if (!curriculum) return fallbackDirection;
-
-      const nextDirection = getCurriculumScrollDirectionAtEdge(
-        curriculum.scrollTop,
-        curriculum.scrollHeight,
-        curriculum.clientHeight,
-        fallbackDirection,
-      );
-      scrollControlDirectionRef.current = nextDirection;
-      setScrollControlDirection(nextDirection);
-      return nextDirection;
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const curriculum = curriculumRef.current;
-    if (!curriculum) return undefined;
-
-    lastCurriculumScrollTopRef.current = curriculum.scrollTop;
-    const updateScrollControl = () => {
-      const nextScrollTop = curriculum.scrollTop;
-      const delta = nextScrollTop - lastCurriculumScrollTopRef.current;
-      lastCurriculumScrollTopRef.current = nextScrollTop;
-      const fallbackDirection = delta > 0 ? "down" : "up";
-      const edgeDirection = getCurriculumScrollDirectionAtEdge(
-        nextScrollTop,
-        curriculum.scrollHeight,
-        curriculum.clientHeight,
-        fallbackDirection,
-      );
-      const isAtEdge = edgeDirection !== fallbackDirection;
-
-      if (isAtEdge) {
-        scrollControlDirectionRef.current = edgeDirection;
-        setScrollControlDirection(edgeDirection);
-      }
-      if (Math.abs(delta) < 0.5) return;
-      if (
-        edgeScrollFrameRef.current !== null ||
-        holdScrollFrameRef.current !== null ||
-        preserveScrollDirectionRef.current
-      ) {
-        return;
-      }
-      revealScrollControl(edgeDirection);
-    };
-    const interruptAutomatedScroll = () => {
-      preserveScrollDirectionRef.current = false;
-      cancelAutomatedScroll();
-    };
-    const beginScrollbarScroll = (event: PointerEvent) => {
-      if (event.target === curriculum) {
-        preserveScrollDirectionRef.current = false;
-      }
-    };
-    const interruptFromKeyboard = (event: KeyboardEvent) => {
-      if (
-        [
-          "ArrowUp",
-          "ArrowDown",
-          "PageUp",
-          "PageDown",
-          "Home",
-          "End",
-          " ",
-        ].includes(event.key)
-      ) {
-        preserveScrollDirectionRef.current = false;
-        cancelAutomatedScroll();
-      }
-    };
-
-    curriculum.addEventListener("scroll", updateScrollControl, {
-      passive: true,
-    });
-    curriculum.addEventListener("wheel", interruptAutomatedScroll, {
-      passive: true,
-    });
-    curriculum.addEventListener("touchmove", interruptAutomatedScroll, {
-      passive: true,
-    });
-    curriculum.addEventListener("pointerdown", beginScrollbarScroll);
-    curriculum.addEventListener("keydown", interruptFromKeyboard);
-    return () => {
-      curriculum.removeEventListener("scroll", updateScrollControl);
-      curriculum.removeEventListener("wheel", interruptAutomatedScroll);
-      curriculum.removeEventListener("touchmove", interruptAutomatedScroll);
-      curriculum.removeEventListener("pointerdown", beginScrollbarScroll);
-      curriculum.removeEventListener("keydown", interruptFromKeyboard);
-    };
-  }, [cancelAutomatedScroll, revealScrollControl, scrollportId]);
-
-  useEffect(
-    () => () => {
-      clearScrollControlIdleTimer();
-      clearHoldDelay();
-      if (edgeScrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(edgeScrollFrameRef.current);
-      }
-      if (holdScrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(holdScrollFrameRef.current);
-      }
-    },
-    [clearHoldDelay, clearScrollControlIdleTimer],
-  );
-
-  const scrollCurriculumToEdge = useCallback(
-    (direction: CurriculumScrollDirection) => {
-      const curriculum = curriculumRef.current;
-      if (!curriculum) return;
-
-      cancelEdgeScroll(false);
-      cancelHoldScroll(false);
-      clearScrollControlIdleTimer();
-      preserveScrollDirectionRef.current = true;
-      const target =
-        direction === "down"
-          ? Math.max(0, curriculum.scrollHeight - curriculum.clientHeight)
-          : 0;
-      const start = curriculum.scrollTop;
-      const distance = target - start;
-      if (Math.abs(distance) < 1) {
-        syncScrollControlDirectionAtEdge(direction);
-        scheduleScrollControlHide();
-        return;
-      }
-
-      setShowScrollControl(true);
-      setScrollControlMode("edge");
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        curriculum.scrollTop = target;
-        syncScrollControlDirectionAtEdge(direction);
-        setScrollControlMode("idle");
-        scheduleScrollControlHide();
-        return;
-      }
-
-      const duration = Math.min(
-        850,
-        Math.max(340, 300 + Math.abs(distance) * 0.28),
-      );
-      let startedAt: number | null = null;
-      const advance = (timestamp: number) => {
-        if (startedAt === null) startedAt = timestamp;
-        const progress = Math.min(1, (timestamp - startedAt) / duration);
-        const easedProgress = 1 - Math.pow(1 - progress, 4);
-        curriculum.scrollTop = start + distance * easedProgress;
-
-        if (progress < 1) {
-          edgeScrollFrameRef.current = window.requestAnimationFrame(advance);
-          return;
-        }
-
-        curriculum.scrollTop = target;
-        edgeScrollFrameRef.current = null;
-        syncScrollControlDirectionAtEdge(direction);
-        setScrollControlMode("idle");
-        scheduleScrollControlHide();
-      };
-
-      edgeScrollFrameRef.current = window.requestAnimationFrame(advance);
-    },
-    [
-      cancelEdgeScroll,
-      cancelHoldScroll,
-      clearScrollControlIdleTimer,
-      scheduleScrollControlHide,
-      syncScrollControlDirectionAtEdge,
-    ],
-  );
-
-  const startHeldCurriculumScroll = useCallback(() => {
-    const curriculum = curriculumRef.current;
-    if (!curriculum) return;
-
-    clearHoldDelay();
-    cancelEdgeScroll(false);
-    cancelHoldScroll(false);
-    clearScrollControlIdleTimer();
-    preserveScrollDirectionRef.current = true;
-    suppressScrollControlClickRef.current = true;
-    setShowScrollControl(true);
-    setScrollControlMode("hold");
-
-    const direction = syncScrollControlDirectionAtEdge(
-      scrollControlDirectionRef.current,
-    );
-    const directionMultiplier = direction === "down" ? 1 : -1;
-    let previousTimestamp = performance.now();
-    const advance = (timestamp: number) => {
-      const frameSeconds = Math.min(
-        0.05,
-        (timestamp - previousTimestamp) / 1000,
-      );
-      previousTimestamp = timestamp;
-      const maximumScrollTop = Math.max(
-        0,
-        curriculum.scrollHeight - curriculum.clientHeight,
-      );
-      const requestedScrollTop =
-        curriculum.scrollTop +
-        directionMultiplier *
-          getCurriculumHoldScrollSpeed(holdPointerDistanceRef.current) *
-          frameSeconds;
-      const nextScrollTop = Math.min(
-        maximumScrollTop,
-        Math.max(0, requestedScrollTop),
-      );
-      curriculum.scrollTop = nextScrollTop;
-
-      const reachedEdge =
-        direction === "down"
-          ? nextScrollTop >= maximumScrollTop - 0.5
-          : nextScrollTop <= 0.5;
-      if (reachedEdge) {
-        holdScrollFrameRef.current = null;
-        syncScrollControlDirectionAtEdge(direction);
-        setScrollControlMode("idle");
-        scheduleScrollControlHide();
-        return;
-      }
-
-      holdScrollFrameRef.current = window.requestAnimationFrame(advance);
-    };
-
-    holdScrollFrameRef.current = window.requestAnimationFrame(advance);
-  }, [
-    cancelEdgeScroll,
-    cancelHoldScroll,
-    clearHoldDelay,
-    clearScrollControlIdleTimer,
-    scheduleScrollControlHide,
-    syncScrollControlDirectionAtEdge,
-  ]);
-
-  const handleScrollControlClick = () => {
-    if (suppressScrollControlClickRef.current) {
-      suppressScrollControlClickRef.current = false;
-      pointerDownStoppedEdgeRef.current = false;
-      return;
-    }
-    if (pointerDownStoppedEdgeRef.current) {
-      pointerDownStoppedEdgeRef.current = false;
-      scheduleScrollControlHide();
-      return;
-    }
-    if (cancelAutomatedScroll()) return;
-    scrollCurriculumToEdge(scrollControlDirectionRef.current);
-  };
-
-  const handleScrollControlPointerDown = (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => {
-    if (event.button !== 0) return;
-    clearHoldDelay();
-    pointerDownStoppedEdgeRef.current = cancelEdgeScroll(false);
-    holdPointerIdRef.current = event.pointerId;
-    holdPointerCenterYRef.current =
-      event.currentTarget.getBoundingClientRect().top +
-      event.currentTarget.getBoundingClientRect().height / 2;
-    holdPointerDistanceRef.current = 0;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    holdDelayTimerRef.current = window.setTimeout(
-      startHeldCurriculumScroll,
-      SCROLL_CONTROL_HOLD_DELAY_MS,
-    );
-  };
-
-  const handleScrollControlPointerMove = (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => {
-    if (holdPointerIdRef.current !== event.pointerId) return;
-    const pointerCenterY = holdPointerCenterYRef.current;
-    if (pointerCenterY === null) return;
-
-    const directionMultiplier =
-      scrollControlDirectionRef.current === "down" ? 1 : -1;
-    holdPointerDistanceRef.current = Math.max(
-      0,
-      (event.clientY - pointerCenterY) * directionMultiplier,
-    );
-  };
-
-  const finishScrollControlPointer = (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => {
-    if (holdPointerIdRef.current !== event.pointerId) return;
-    holdPointerIdRef.current = null;
-    holdPointerCenterYRef.current = null;
-    holdPointerDistanceRef.current = 0;
-    clearHoldDelay();
-    if (cancelHoldScroll()) suppressScrollControlClickRef.current = true;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  const cancelScrollControlPointer = (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => {
-    finishScrollControlPointer(event);
-    pointerDownStoppedEdgeRef.current = false;
-    suppressScrollControlClickRef.current = false;
+  const getLessonProgress = (number: number, status: string) => {
+    const storedProgress = lessonProgress[number];
+    if (typeof storedProgress === "number")
+      return Math.max(0, Math.min(100, storedProgress));
+    if (status === "done") return 100;
+    if (status === "active") return 52;
+    return 0;
   };
 
   const scrollItemToTop = (element: HTMLElement | null) => {
@@ -620,14 +189,9 @@ export function Curriculum({
   };
 
   const openLessonSearch = useCallback(() => {
-    const curriculum = curriculumRef.current;
-    if (curriculum) {
-      cancelAutomatedScroll();
-      lastCurriculumScrollTopRef.current = 0;
-      curriculum.scrollTop = 0;
-    }
+    scrollControlRef.current?.scrollToStart();
     setSearchOpen(true);
-  }, [cancelAutomatedScroll, setSearchOpen]);
+  }, [setSearchOpen]);
 
   const handleLessonSearchOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -688,46 +252,14 @@ export function Curriculum({
         className="learning-curriculum"
         aria-label="Course curriculum"
       >
-        <div
-          className={`learning-curriculum__scroll-top-anchor${showScrollControl ? " is-visible" : ""}`}
-          data-direction={scrollControlDirection}
-          aria-hidden={!showScrollControl}
-        >
-          <button
-            type="button"
-            data-fixed-radius
-            className={`learning-curriculum__scroll-top${scrollControlMode !== "idle" ? " is-scrolling" : ""}`}
-            data-direction={scrollControlDirection}
-            data-scroll-mode={scrollControlMode}
-            aria-label={
-              scrollControlMode !== "idle"
-                ? "Stop curriculum scrolling"
-                : scrollControlDirection === "down"
-                  ? "Scroll curriculum to bottom"
-                  : "Scroll curriculum to top"
-            }
-            title={
-              scrollControlMode !== "idle"
-                ? "Stop scrolling"
-                : scrollControlDirection === "down"
-                  ? "Scroll to bottom — hold and move down to accelerate"
-                  : "Scroll to top — hold and move up to accelerate"
-            }
-            tabIndex={showScrollControl ? 0 : -1}
-            onClick={handleScrollControlClick}
-            onPointerDown={handleScrollControlPointerDown}
-            onPointerMove={handleScrollControlPointerMove}
-            onPointerUp={finishScrollControlPointer}
-            onPointerCancel={cancelScrollControlPointer}
-          >
-            <ArrowUp
-              className="learning-curriculum__scroll-top-icon"
-              size={20}
-              weight="bold"
-              aria-hidden="true"
-            />
-          </button>
-        </div>
+        <ElasticScrollControl
+          ref={scrollControlRef}
+          scrollportRef={curriculumRef}
+          ariaControls={scrollportId}
+          scrollAreaLabel="Curriculum"
+          borderColor="var(--learning-panel-border)"
+          contentRevision={`${selectedLesson}:${activeLessonSearch}:${expanded.join(",")}`}
+        />
         <ContextMenuTrigger
           render={<div className="learning-curriculum__hero" />}
         >

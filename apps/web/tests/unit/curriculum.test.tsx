@@ -6,12 +6,26 @@ import {
   within,
 } from "@testing-library/react";
 import React from "react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Curriculum } from "../../src/learning/Curriculum.tsx";
 import {
-  Curriculum,
-  getCurriculumScrollDirectionAtEdge,
-  getCurriculumHoldScrollSpeed,
-} from "../../src/learning/Curriculum.tsx";
+  createCurriculumSections,
+  createLessonsById,
+} from "../../src/learning/courseContent.ts";
+
+const testSections = createCurriculumSections(3, 16);
+const testLessonsById = createLessonsById(testSections);
+
+function TestCurriculum(props: ComponentProps<typeof Curriculum>) {
+  return (
+    <Curriculum
+      sections={testSections}
+      lessonsById={testLessonsById}
+      {...props}
+    />
+  );
+}
 
 describe("Curriculum", () => {
   beforeEach(() => {
@@ -28,28 +42,9 @@ describe("Curriculum", () => {
     vi.unstubAllGlobals();
   });
 
-  it("scales held curriculum scrolling with pointer distance to a capped speed", () => {
-    expect(getCurriculumHoldScrollSpeed(0)).toBe(112);
-    expect(getCurriculumHoldScrollSpeed(130)).toBeGreaterThan(
-      getCurriculumHoldScrollSpeed(0),
-    );
-    expect(getCurriculumHoldScrollSpeed(260)).toBe(1440);
-    expect(getCurriculumHoldScrollSpeed(1000)).toBe(1440);
-  });
-
-  it("points the scroll control toward the remaining content at both edges", () => {
-    expect(getCurriculumScrollDirectionAtEdge(0, 1000, 400, "up")).toBe("down");
-    expect(getCurriculumScrollDirectionAtEdge(600, 1000, 400, "down")).toBe(
-      "up",
-    );
-    expect(getCurriculumScrollDirectionAtEdge(280, 1000, 400, "down")).toBe(
-      "down",
-    );
-  });
-
   it("updates the visible scroll control direction when the curriculum reaches an edge", () => {
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-scroll-direction"
         selectedLesson={1}
         onSelectLesson={vi.fn()}
@@ -82,7 +77,7 @@ describe("Curriculum", () => {
 
   it("sizes the course title from the curriculum panel width within fixed bounds", () => {
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-title-sizing"
         selectedLesson={1}
         onSelectLesson={vi.fn()}
@@ -104,7 +99,7 @@ describe("Curriculum", () => {
 
   it("uses a theme progress ring for active lectures and completes it at 100 percent", () => {
     const { rerender } = render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-lesson-progress"
         selectedLesson={11}
         lessonProgress={{ 11: 52 }}
@@ -134,7 +129,7 @@ describe("Curriculum", () => {
     ).toHaveAttribute("aria-valuenow", "52");
 
     rerender(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-lesson-progress"
         selectedLesson={11}
         lessonProgress={{ 11: 100 }}
@@ -159,7 +154,7 @@ describe("Curriculum", () => {
     const onClose = vi.fn();
 
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-test-repeated"
         selectedLesson={1}
         onSelectLesson={onSelectLesson}
@@ -247,7 +242,7 @@ describe("Curriculum", () => {
     const onSelectLesson = vi.fn();
 
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-test"
         selectedLesson={1}
         onSelectLesson={onSelectLesson}
@@ -273,7 +268,7 @@ describe("Curriculum", () => {
 
   it("offers state-aware curriculum actions from the context menu", async () => {
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-context-menu"
         selectedLesson={1}
         onSelectLesson={vi.fn()}
@@ -343,7 +338,7 @@ describe("Curriculum", () => {
     vi.useFakeTimers();
     try {
       render(
-        <Curriculum
+        <TestCurriculum
           persistenceKey="curriculum-long-press"
           selectedLesson={1}
           onSelectLesson={vi.fn()}
@@ -376,7 +371,7 @@ describe("Curriculum", () => {
 
   it("returns the curriculum to the course card when opening lesson search", () => {
     render(
-      <Curriculum
+      <TestCurriculum
         persistenceKey="curriculum-search-scroll-top"
         selectedLesson={1}
         onSelectLesson={vi.fn()}

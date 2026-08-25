@@ -185,10 +185,6 @@
   z-index: 181;
 }
 
-.floating-scrollbar--sidebar {
-  z-index: 55;
-}
-
 .floating-scrollbar__thumb {
   position: absolute;
   top: 0;
@@ -243,9 +239,9 @@
 :root[data-scrollbar-style="default"] .floating-scrollbar,
 :root[data-hide-scrollbars="true"] .floating-scrollbar,
 :root:not([data-content-layout="framed"])
-  .floating-scrollbar:not(.floating-scrollbar--sidebar):not(
-    .floating-scrollbar--learning-page
-  ):not(.floating-scrollbar--curriculum),
+  .floating-scrollbar:not(.floating-scrollbar--learning-page):not(
+    .floating-scrollbar--curriculum
+  ),
 :root[data-lesson-page-scrollbar="hidden"] .floating-scrollbar--learning-page,
 :root[data-curriculum-scrollbar="hidden"] .floating-scrollbar--curriculum {
   display: none;

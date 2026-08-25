@@ -268,7 +268,7 @@ test("course catalogue uses the restored floating scrollbar", async ({
   await exerciseFloatingScrollbar(page, mainSurface, floatingScrollbar, 70);
 });
 
-test("sidebar navigation uses the floating scrollbar without reserving layout space", async ({
+test("sidebar navigation stays scrollable without exposing a scrollbar", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 962, height: 637 });
@@ -282,7 +282,6 @@ test("sidebar navigation uses the floating scrollbar without reserving layout sp
   const floatingScrollbar = page.locator(
     '.floating-scrollbar[aria-controls="courses-sidebar-nav-scrollport"]',
   );
-  const thumb = getFloatingScrollbarThumb(floatingScrollbar);
 
   await expect
     .poll(() =>
@@ -292,10 +291,7 @@ test("sidebar navigation uses the floating scrollbar without reserving layout sp
     )
     .toBeGreaterThan(0);
   await expect(navigation).toHaveCSS("scrollbar-width", "none");
-  await expect(floatingScrollbar).toHaveClass(/is-visible/);
-  await expect(floatingScrollbar).toHaveAttribute("aria-hidden", "false");
-  await expect(thumb).toHaveCSS("width", "6px");
-  await expect(thumb).toHaveCSS("border-radius", "999px");
+  await expect(floatingScrollbar).toHaveCount(0);
 
   const navigationGeometry = await navigation.evaluate((element) => ({
     clientWidth: element.clientWidth,
@@ -305,45 +301,22 @@ test("sidebar navigation uses the floating scrollbar without reserving layout sp
     navigationGeometry.offsetWidth - navigationGeometry.clientWidth,
   ).toBeLessThanOrEqual(1);
 
-  const [navigationBounds, scrollbarBounds] = await Promise.all([
-    navigation.boundingBox(),
-    floatingScrollbar.boundingBox(),
-  ]);
-  expect(navigationBounds).not.toBeNull();
-  expect(scrollbarBounds).not.toBeNull();
-  expect(
-    Math.abs(
-      scrollbarBounds!.x +
-        scrollbarBounds!.width -
-        (navigationBounds!.x + navigationBounds!.width),
-    ),
-  ).toBeLessThan(0.5);
-
   await navigation.evaluate((element) =>
     element.scrollTo(0, element.scrollHeight),
   );
   await expect
     .poll(() => navigation.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
-  const thumbBounds = await thumb.boundingBox();
-  expect(thumbBounds).not.toBeNull();
-  const scrollTopBeforeDrag = await navigation.evaluate(
-    (element) => element.scrollTop,
-  );
-  await page.mouse.move(
-    thumbBounds!.x + thumbBounds!.width / 2,
-    thumbBounds!.y + thumbBounds!.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(
-    thumbBounds!.x + thumbBounds!.width / 2,
-    thumbBounds!.y + thumbBounds!.height / 2 - 40,
-    { steps: 4 },
-  );
-  await page.mouse.up();
+
+  await navigation.hover();
+  await page.mouse.wheel(0, -480);
   await expect
     .poll(() => navigation.evaluate((element) => element.scrollTop))
-    .toBeLessThan(scrollTopBeforeDrag);
+    .toBeLessThan(
+      await navigation.evaluate(
+        (element) => element.scrollHeight - element.clientHeight,
+      ),
+    );
 });
 
 test("page tabs pin beneath the shell edge while the framed surface uses the floating scrollbar", async ({
@@ -521,6 +494,7 @@ test("learning scrollports use floating scrollbars at compact and wide desktop s
 test("Appearance controls scrollbar visibility and style across the app", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1247, height: 779 });
   await openApp(
     page,
@@ -529,7 +503,9 @@ test("Appearance controls scrollbar visibility and style across the app", async 
 
   const root = page.locator("html");
   const mainSurface = page.locator("#courses-main-scrollport");
+  const sidebarNavigation = page.locator("#courses-sidebar-nav-scrollport");
   const curriculum = page.locator("#learning-course-curriculum-scrollport");
+  const sidebarScrollbar = page.locator(".floating-scrollbar--sidebar");
   const mainScrollbar = page.locator(
     '.floating-scrollbar[aria-controls="courses-main-scrollport"]',
   );
@@ -539,6 +515,8 @@ test("Appearance controls scrollbar visibility and style across the app", async 
   await expect(root).toHaveAttribute("data-hide-scrollbars", "false");
   await expect(root).toHaveAttribute("data-scrollbar-style", "theme");
   await expect(mainSurface).toHaveCSS("scrollbar-width", "none");
+  await expect(sidebarNavigation).toHaveCSS("scrollbar-width", "none");
+  await expect(sidebarScrollbar).toHaveCount(0);
   await expect(curriculum).toHaveCSS("scrollbar-width", "none");
   await expect(mainScrollbar).toHaveClass(/is-visible/);
   await expect(curriculumScrollbar).toHaveClass(/is-visible/);
@@ -566,6 +544,8 @@ test("Appearance controls scrollbar visibility and style across the app", async 
     "/learn/typescript-course/career-opportunities?from=home",
   );
   await expect(mainSurface).toHaveCSS("scrollbar-width", "auto");
+  await expect(sidebarNavigation).toHaveCSS("scrollbar-width", "none");
+  await expect(sidebarScrollbar).toHaveCount(0);
   await expect(curriculum).toHaveCSS("scrollbar-width", "auto");
   await expect(mainScrollbar).toBeHidden();
   await expect(curriculumScrollbar).toBeHidden();

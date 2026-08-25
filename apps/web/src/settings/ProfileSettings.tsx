@@ -171,7 +171,9 @@ export function ProfileSettings({
   const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
   const activeEmail = activeUser?.email || initialIdentity.email;
   const isEmailVerified = Boolean(activeUser?.email);
-  const isMobileVerified = Boolean(activeUser?.phoneNo || draftProfile.mobileVerified);
+  const isMobileVerified = Boolean(
+    activeUser?.phoneNo || draftProfile.mobileVerified,
+  );
 
   useEffect(() => {
     // Restore default dummy identity for guest or active user context
@@ -184,7 +186,8 @@ export function ProfileSettings({
     } else {
       const identity = getProfileIdentity(role);
       const editableProfile = toEditableProfile(identity);
-      if (activeUser.displayName) editableProfile.displayName = activeUser.displayName;
+      if (activeUser.displayName)
+        editableProfile.displayName = activeUser.displayName;
       if (activeUser.username) editableProfile.username = activeUser.username;
       if (activeUser.phoneNo) {
         editableProfile.mobileNumber = activeUser.phoneNo;
@@ -261,7 +264,7 @@ export function ProfileSettings({
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [draftProfile, isDirty, isOnline, onProfileSaved, role]);
+  }, [activeUser, draftProfile, isDirty, isOnline, onProfileSaved, role]);
 
   const updateText = (field: keyof EditableProfile, value: string) => {
     setSaveError("");

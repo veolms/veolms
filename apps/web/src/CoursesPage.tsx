@@ -3308,13 +3308,6 @@ export function CoursesPage({
               </div>
             </div>
           </aside>
-          <FloatingScrollbar
-            scrollportRef={navigationRef}
-            ariaControls="courses-sidebar-nav-scrollport"
-            ariaLabel="Sidebar navigation scroll position"
-            className="floating-scrollbar--sidebar"
-            disabled={sidebarHidden && !edgeSidebarOpen}
-          />
         </>
       )}
 

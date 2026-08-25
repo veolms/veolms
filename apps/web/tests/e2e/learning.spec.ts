@@ -2299,9 +2299,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
   const curriculum = dialog.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollTopButton = curriculum.locator(
-    ".learning-curriculum__scroll-top",
-  );
+  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
 
   const initialMetrics = await curriculum.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -2332,7 +2330,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
     );
     const lastSection = sectionToggles?.[sectionToggles.length - 1];
     const scrollTopButton = curriculum?.querySelector<HTMLElement>(
-      ".learning-curriculum__scroll-top",
+      ".elastic-scroll-control__button",
     );
     if (!curriculum || !lastSection || !scrollTopButton) return null;
     const curriculumBounds = curriculum.getBoundingClientRect();
@@ -2365,7 +2363,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
   );
 });
 
-test("curriculum scroll control follows direction, stops, and accelerates while held", async ({
+test("curriculum scroll control follows direction, stops, and accelerates with drag distance", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1197, height: 779 });
@@ -2382,9 +2380,15 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
   const curriculum = page.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollControl = curriculum.locator(".learning-curriculum__scroll-top");
+  const scrollControl = curriculum.locator(".elastic-scroll-control__button");
   const scrollControlIcon = scrollControl.locator(
-    ".learning-curriculum__scroll-top-icon",
+    ".elastic-scroll-control__icon",
+  );
+  const scrollProgressPuck = curriculum.locator(
+    ".elastic-scroll-control__progress-puck",
+  );
+  const scrollProgressRing = curriculum.locator(
+    ".elastic-scroll-control__progress-ring",
   );
   const readScrollMetrics = () =>
     curriculum.evaluate((element) => ({
@@ -2403,6 +2407,19 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
   await expect
     .poll(async () => (await readScrollMetrics()).maximum)
     .toBeGreaterThan(700);
+  const progressCircumference = 2 * Math.PI * 17.5;
+  await curriculum.evaluate((element) => {
+    const maximumScrollTop = element.scrollHeight - element.clientHeight;
+    element.scrollTop = maximumScrollTop / 2;
+  });
+  await expect
+    .poll(async () =>
+      Number(await scrollProgressRing.getAttribute("stroke-dashoffset")),
+    )
+    .toBeCloseTo(progressCircumference / 2, 1);
+  await curriculum.evaluate((element) => {
+    element.scrollTop = 0;
+  });
   await page.waitForTimeout(300);
   await curriculum.evaluate((element) => {
     element.scrollTop = 110;
@@ -2413,10 +2430,7 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
     "aria-label",
     "Scroll curriculum to bottom",
   );
-  await expect(scrollControlIcon).toHaveCSS(
-    "transform",
-    "matrix(-1, 0, 0, -1, 0, 0)",
-  );
+  await expect(scrollControlIcon).toHaveCSS("rotate", "180deg");
 
   await scrollControl.click();
   await expect(scrollControl).toHaveAttribute("data-scroll-mode", "edge");
@@ -2430,7 +2444,6 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
 
   await expect(scrollControl).toHaveAttribute("data-direction", "down");
   await scrollControl.click();
-  await expect(scrollControl).toHaveAttribute("data-scroll-mode", "edge");
   await expect
     .poll(async () => {
       const metrics = await readScrollMetrics();
@@ -2450,10 +2463,7 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
     "aria-label",
     "Scroll curriculum to top",
   );
-  await expect(scrollControlIcon).toHaveCSS(
-    "transform",
-    "matrix(1, 0, 0, 1, 0, 0)",
-  );
+  await expect(scrollControlIcon).toHaveCSS("rotate", "none");
   await scrollControl.click();
   await expect
     .poll(() => curriculum.evaluate((element) => element.scrollTop))
@@ -2469,18 +2479,62 @@ test("curriculum scroll control follows direction, stops, and accelerates while 
     controlBounds!.y + controlBounds!.height / 2,
   );
   await page.mouse.down();
-  await expect(scrollControl).toHaveAttribute("data-scroll-mode", "hold", {
+  await expect(scrollControl).toHaveAttribute("data-scroll-mode", "drag", {
     timeout: 1000,
   });
-  const holdStart = (await readScrollMetrics()).top;
-  await page.waitForTimeout(220);
-  const holdMiddle = (await readScrollMetrics()).top;
-  await page.waitForTimeout(220);
-  const holdEnd = (await readScrollMetrics()).top;
-  expect(holdMiddle - holdStart).toBeGreaterThan(0);
-  expect(holdEnd - holdMiddle).toBeGreaterThan(holdMiddle - holdStart);
+  await expect(scrollControl).toHaveCSS("cursor", "pointer");
+  await page.mouse.move(
+    controlBounds!.x + controlBounds!.width / 2,
+    controlBounds!.y + controlBounds!.height / 2 + 18,
+  );
+  await expect(scrollControl).toHaveAttribute("data-drag-distance", "18");
+  const slowStart = (await readScrollMetrics()).top;
+  await page.waitForTimeout(240);
+  const slowEnd = (await readScrollMetrics()).top;
+  const movedControlBounds = await scrollControl.boundingBox();
+  const movedControlTransformY = await scrollControl.evaluate(
+    (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+  );
+  expect(movedControlBounds).not.toBeNull();
+  expect(movedControlTransformY).toBeCloseTo(18, 0);
+  expect(movedControlBounds!.y - controlBounds!.y).toBeGreaterThan(14);
+  const movedPuckTransformY = await scrollProgressPuck.evaluate(
+    (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+  );
+  expect(movedPuckTransformY).toBeCloseTo(-18, 0);
+
+  await page.mouse.move(
+    controlBounds!.x + controlBounds!.width / 2,
+    controlBounds!.y + controlBounds!.height / 2 + 88,
+  );
+  await expect(scrollControl).toHaveAttribute("data-drag-distance", "88");
+  const fastStart = (await readScrollMetrics()).top;
+  await page.waitForTimeout(240);
+  const fastEnd = (await readScrollMetrics()).top;
+  expect(slowEnd - slowStart).toBeGreaterThan(0);
+  expect(fastEnd - fastStart).toBeGreaterThan(slowEnd - slowStart);
+  await page.mouse.move(
+    controlBounds!.x + controlBounds!.width / 2,
+    controlBounds!.y + controlBounds!.height / 2 + 176,
+  );
+  await expect(scrollControl).toHaveAttribute("data-drag-distance", "176");
   await page.mouse.up();
   await expect(scrollControl).toHaveAttribute("data-scroll-mode", "idle");
+  await expect(scrollControl).toHaveAttribute("data-drag-distance", "0");
+  await expect
+    .poll(() =>
+      scrollControl.evaluate(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+      ),
+    )
+    .toBeCloseTo(0, 0);
+  await expect
+    .poll(() =>
+      scrollProgressPuck.evaluate(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+      ),
+    )
+    .toBeCloseTo(0, 0);
   const releasedPosition = (await readScrollMetrics()).top;
   await page.waitForTimeout(180);
   expect((await readScrollMetrics()).top).toBeCloseTo(releasedPosition, 0);
@@ -2750,9 +2804,7 @@ test("curriculum overview, section, and chapter zones keep their actions separat
   const lessonSearchButton = curriculum.getByRole("button", {
     name: "Search lessons",
   });
-  const scrollTopButton = curriculum.locator(
-    ".learning-curriculum__scroll-top",
-  );
+  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
 
   await expect(scrollTopButton).toBeHidden();
   await curriculum.evaluate((container) => container.scrollTo({ top: 160 }));
@@ -2778,8 +2830,8 @@ test("curriculum overview, section, and chapter zones keep their actions separat
     };
   });
   expect(Math.abs(scrollTopAlignment.centerDelta)).toBeLessThanOrEqual(1);
-  expect(scrollTopAlignment.bottomInset).toBeGreaterThanOrEqual(75);
-  expect(scrollTopAlignment.bottomInset).toBeLessThanOrEqual(78);
+  expect(scrollTopAlignment.bottomInset).toBeGreaterThanOrEqual(227);
+  expect(scrollTopAlignment.bottomInset).toBeLessThanOrEqual(229);
   await curriculum.evaluate((container) => {
     container.scrollTop = Math.max(0, container.scrollTop - 80);
   });

@@ -8,6 +8,8 @@
   margin: 5px -14px -5px;
   padding: 5px 14px;
   overflow-x: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-size: 100% 100%;
@@ -16,12 +18,7 @@
   mask-image: none;
 }
 
-:root:not([data-scrollbar-style="default"]) .courses-nav {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-:root:not([data-scrollbar-style="default"]) .courses-nav::-webkit-scrollbar {
+.courses-nav::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;

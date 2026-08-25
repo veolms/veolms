@@ -127,7 +127,9 @@ export function ScrollbarSettings() {
       <div className="settings-section__heading-row">
         <div>
           <h2>Scrollbars</h2>
-          <p>Choose when scrollbars appear and how they look across the app.</p>
+          <p>
+            Choose when scrollbars appear and how they look in content areas.
+          </p>
         </div>
         <span className="settings-section__count" aria-live="polite">
           {scrollbarsEnabled ? selectedStyleLabel : "Hidden"}
@@ -138,7 +140,7 @@ export function ScrollbarSettings() {
         <SettingRow
           icon={Eye}
           label="Show scrollbars"
-          note="Hide scrollbar controls everywhere while keeping wheel, touch, and keyboard scrolling"
+          note="Hide content scrollbar controls while keeping wheel, touch, and keyboard scrolling"
         >
           <SettingsToggle
             checked={scrollbarsEnabled}

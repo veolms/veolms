@@ -23,10 +23,15 @@ import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { VideoPlayer as YouTubeVideoPlayer } from "../VideoPlayer";
-import { courseVideos, lessonsById, lessonVideoMap } from "./courseContent";
+import {
+  createCurriculumSections,
+  createLessonsById,
+  getCourseVideoForLesson,
+} from "./courseContent";
 import { Curriculum } from "./Curriculum";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import { Discussion } from "./Discussion";
+import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import {
   Drawer,
   DrawerContent,
@@ -171,6 +176,8 @@ export function LearningWorkspace({
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
     useState<number | null>(null);
+  const { preferences: curriculumTestPreferences } =
+    useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
@@ -198,7 +205,29 @@ export function LearningWorkspace({
     () => window.matchMedia("(max-width: 1080px)").matches,
     [],
   );
-  const currentLesson = lessonsById.get(selectedLesson) || lessonsById.get(9)!;
+  const curriculumSections = useMemo(
+    () =>
+      createCurriculumSections(
+        curriculumTestPreferences.sectionCount,
+        curriculumTestPreferences.lectureCount,
+      ),
+    [
+      curriculumTestPreferences.lectureCount,
+      curriculumTestPreferences.sectionCount,
+    ],
+  );
+  const curriculumLessonsById = useMemo(
+    () => createLessonsById(curriculumSections),
+    [curriculumSections],
+  );
+  const firstCurriculumLessonId = curriculumSections
+    .find(({ lessons }) => lessons.length > 0)
+    ?.lessons.at(0)?.[0];
+  const firstCurriculumLesson = firstCurriculumLessonId
+    ? curriculumLessonsById.get(firstCurriculumLessonId)
+    : undefined;
+  const currentLesson =
+    curriculumLessonsById.get(selectedLesson) || firstCurriculumLesson!;
   const courseThumbnail = getCourseThumbnail(courseSlug);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
@@ -309,10 +338,20 @@ export function LearningWorkspace({
   );
 
   useEffect(() => {
-    if (lessonId === selectedLesson) return;
+    const nextLessonId = curriculumLessonsById.has(lessonId)
+      ? lessonId
+      : firstCurriculumLessonId;
+    if (nextLessonId === undefined || nextLessonId === selectedLesson) return;
     setAutoPlayOnLessonChange(true);
-    setSelectedLesson(lessonId);
-  }, [lessonId, selectedLesson]);
+    setSelectedLesson(nextLessonId);
+    if (nextLessonId !== lessonId) onSelectLesson(nextLessonId);
+  }, [
+    curriculumLessonsById,
+    firstCurriculumLessonId,
+    lessonId,
+    onSelectLesson,
+    selectedLesson,
+  ]);
 
   const toggleTheaterMode = () => {
     setLessonDrawer(false);
@@ -932,7 +971,7 @@ export function LearningWorkspace({
               </span>
             </button>
             <YouTubeVideoPlayer
-              media={lessonVideoMap[selectedLesson] || courseVideos[0]!}
+              media={getCourseVideoForLesson(currentLesson[0])}
               lessonTitle={currentLesson[1]}
               theaterMode={theaterMode}
               onTheaterToggle={toggleTheaterMode}
@@ -1008,6 +1047,8 @@ export function LearningWorkspace({
             className="learning-curriculum__viewport"
           >
             <Curriculum
+              sections={curriculumSections}
+              lessonsById={curriculumLessonsById}
               scrollportRef={curriculumScrollportRef}
               scrollportId="learning-course-curriculum-scrollport"
               selectedLesson={selectedLesson}
@@ -1082,6 +1123,8 @@ export function LearningWorkspace({
           </DrawerDescription>
           <div className="min-h-0 flex-1 overflow-hidden">
             <Curriculum
+              sections={curriculumSections}
+              lessonsById={curriculumLessonsById}
               scrollportRef={lessonDrawerScrollportRef}
               scrollportId="lesson-drawer-curriculum-scrollport"
               selectedLesson={selectedLesson}

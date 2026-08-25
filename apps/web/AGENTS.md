@@ -127,6 +127,9 @@ Always import DTO request/response types and schemas from `@veolms/contracts`. D
 - Do not add new rules to global CSS files.
 - Existing CSS is legacy code and may remain unchanged unless the task explicitly requires refactoring it. Do not perform unrelated CSS migrations while implementing a feature.
 - When repeated Tailwind classes represent a reusable UI element, create a small reusable component or a typed class/variant helper. Do not solve repetition by moving ordinary component styling into plain CSS.
+- Use canonical Tailwind CSS v4 syntax. Prefer custom-property shorthand such as `bg-(--surface)`, `text-(--text)`, and `h-(--panel-height)` over arbitrary values such as `bg-[var(--surface)]`, `text-[var(--text)]`, and `h-[var(--panel-height)]`.
+- Prefer Tailwind v4's generated numeric utilities such as `h-18`, `w-59.5`, or `max-w-345` when the value is derived from the spacing scale. Use an arbitrary dimension such as `h-[73px]` only when no canonical utility represents the intentional value.
+- Keep arbitrary values for expressions Tailwind cannot represent canonically, including `calc(...)`, `color-mix(...)`, unusual units, and complex grid or shadow declarations.
 
 ---
 
