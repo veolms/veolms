@@ -2520,6 +2520,25 @@ test("mobile More dialog traps the workflow and restores focus on Escape", async
   await expect(more).toBeFocused();
 });
 
+test("mobile More navigation clears its drawer history before routing", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page, "/courses");
+
+  await page.getByRole("button", { name: "More navigation options" }).click();
+  const dialog = page.getByRole("dialog", { name: /More/ });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Home", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/courses$/);
+  await expect(dialog).toBeHidden();
+});
+
 test("dismissing More clears a desktop reading menu hidden by a viewport change", async ({
   page,
 }) => {
@@ -2603,6 +2622,65 @@ test("mobile More drawer keeps five dock controls in one touch-friendly row", as
   expect(geometry.at(-1)!.right).toBeLessThanOrEqual(
     controlsBox!.x + controlsBox!.width,
   );
+});
+
+test("mobile More navigation reaches both drawer edges without clipping item shadows", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page, "/courses");
+
+  await page.getByRole("button", { name: "More navigation options" }).click();
+  const dialog = page.getByRole("dialog", { name: /More/ });
+  const body = dialog.locator(".mobile-menu-sheet__body");
+  const list = dialog.locator(".mobile-menu-sheet__list");
+  const activeItem = list.locator(":scope > button.is-active");
+  await expect(activeItem).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      "#mobile-navigation-sheet",
+    );
+    const body = dialog?.querySelector<HTMLElement>(".mobile-menu-sheet__body");
+    const list = dialog?.querySelector<HTMLElement>(".mobile-menu-sheet__list");
+    const activeItem = list?.querySelector<HTMLElement>(
+      ":scope > button.is-active",
+    );
+    if (!dialog || !body || !list || !activeItem) return null;
+
+    const dialogBounds = dialog.getBoundingClientRect();
+    const listBounds = list.getBoundingClientRect();
+    const itemBounds = activeItem.getBoundingClientRect();
+    const listStyle = getComputedStyle(list);
+    return {
+      bodyOverflow: getComputedStyle(body).overflow,
+      dialogLeft: dialogBounds.left,
+      dialogRight: dialogBounds.right,
+      listLeft: listBounds.left,
+      listRight: listBounds.right,
+      itemLeft: itemBounds.left,
+      itemRight: itemBounds.right,
+      paddingTop: Number.parseFloat(listStyle.paddingTop),
+      paddingRight: Number.parseFloat(listStyle.paddingRight),
+      paddingBottom: Number.parseFloat(listStyle.paddingBottom),
+      paddingLeft: Number.parseFloat(listStyle.paddingLeft),
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.bodyOverflow).toBe("visible");
+  expect(geometry!.listLeft).toBeCloseTo(geometry!.dialogLeft, 0);
+  expect(geometry!.listRight).toBeCloseTo(geometry!.dialogRight, 0);
+  expect(geometry!.itemLeft - geometry!.listLeft).toBeCloseTo(
+    geometry!.paddingLeft,
+    0,
+  );
+  expect(geometry!.listRight - geometry!.itemRight).toBeCloseTo(
+    geometry!.paddingRight,
+    0,
+  );
+  expect(geometry!.paddingTop).toBeGreaterThanOrEqual(6);
+  expect(geometry!.paddingBottom).toBeGreaterThanOrEqual(18);
 });
 
 test("mobile navigation items reorder after a long press drag", async ({

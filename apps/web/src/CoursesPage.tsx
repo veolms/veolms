@@ -157,6 +157,7 @@ import {
   DrawerContent,
   DrawerDescription,
   DrawerTitle,
+  type DrawerDismissThen,
 } from "@/components/ui/drawer";
 
 const CreatorDashboard = lazy(() =>
@@ -765,6 +766,7 @@ export function CoursesPage({
   const mobileBottomNavRef = useRef<HTMLElement>(null);
   const mobileMoreRef = useRef<HTMLButtonElement>(null);
   const mobileSheetRef = useRef<HTMLDivElement>(null);
+  const mobileMenuDismissThenRef = useRef<DrawerDismissThen>(null);
   const mobileMenuSnapPoints = useMemo(
     () => [mobileMenuCollapsedSnapPoint, 1],
     [mobileMenuCollapsedSnapPoint],
@@ -1512,9 +1514,19 @@ export function CoursesPage({
     setReadingModeMenu((current) => (current === "mobile" ? null : current));
   };
 
-  const selectNavigation = (label: string) => {
+  const dismissMobileMenuThen = (action: () => void) => {
+    if (mobileMenuOpen && mobileMenuDismissThenRef.current) {
+      mobileMenuDismissThenRef.current(action);
+      return;
+    }
     closeMobileMenu();
-    onNavigatePage?.(getNavigationDestination(label));
+    action();
+  };
+
+  const selectNavigation = (label: string) => {
+    dismissMobileMenuThen(() =>
+      onNavigatePage?.(getNavigationDestination(label)),
+    );
   };
 
   const reorderNavigation = (
@@ -3555,6 +3567,7 @@ export function CoursesPage({
 
       <Drawer
         open={mobileMenuOpen}
+        dismissThenRef={mobileMenuDismissThenRef}
         onOpenChange={(open) => {
           if (open) setMobileMenuOpen(true);
           else closeMobileMenu();
@@ -3578,6 +3591,7 @@ export function CoursesPage({
           finalFocus={mobileMoreRef}
           tabIndex={-1}
           className="mobile-menu-sheet data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,env(safe-area-inset-bottom))] shadow-[0_-24px_70px_rgba(0,0,0,0.42)]"
+          data-sidebar-swipe-ignore
           onPointerDownCapture={(event) => {
             if (
               mobilePaletteMenu &&
@@ -3695,12 +3709,12 @@ export function CoursesPage({
                   mobile
                   onExpandedChange={setLearningSpaceExpanded}
                   onActivate={(session) => {
-                    closeMobileMenu();
-                    activateLearningSession(session);
+                    dismissMobileMenuThen(() =>
+                      activateLearningSession(session),
+                    );
                   }}
                   onClose={(session) => {
-                    closeMobileMenu();
-                    closeLearningSession(session);
+                    dismissMobileMenuThen(() => closeLearningSession(session));
                   }}
                 />
               )}

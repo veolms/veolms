@@ -94,6 +94,10 @@ export const ElasticScrollControl = forwardRef<
       data-direction={control.direction}
       data-dragging={control.mode === "drag" ? "" : undefined}
       data-visible={control.visible ? "" : undefined}
+      data-base-ui-swipe-ignore
+      data-learning-swipe-ignore
+      data-sidebar-swipe-ignore
+      data-tab-swipe-ignore
       style={
         {
           "--elastic-scroll-control-spring": spring,

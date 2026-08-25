@@ -12,6 +12,8 @@ type DrawerContextProps = {
   swipeDirection: NonNullable<DrawerPrimitive.Root.Props["swipeDirection"]>;
 };
 
+export type DrawerDismissThen = (afterDismiss: () => void) => void;
+
 const DrawerContext = React.createContext<DrawerContextProps | null>(null);
 
 function useDrawer() {
@@ -34,10 +36,12 @@ function Drawer({
   defaultOpen = false,
   onOpenChange,
   actionsRef: externalActionsRef,
+  dismissThenRef,
   ...props
 }: DrawerPrimitive.Root.Props & {
   showSwipeHandle?: boolean;
   swipeHandleClassName?: string;
+  dismissThenRef?: React.Ref<DrawerDismissThen>;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
   const open = openProp ?? uncontrolledOpen;
@@ -45,10 +49,11 @@ function Drawer({
     null,
   );
 
-  useBackDismiss({
+  const dismissThen = useBackDismiss({
     open,
     onDismiss: () => drawerActionsRef.current?.close(),
   });
+  React.useImperativeHandle(dismissThenRef, () => dismissThen, [dismissThen]);
 
   const actionsRef = React.useMemo<
     React.RefObject<DrawerPrimitive.Root.Actions | null>

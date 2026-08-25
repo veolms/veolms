@@ -75,9 +75,15 @@ describe("ElasticScrollControl", () => {
     scrollport.scrollTop = 120;
     fireEvent.scroll(scrollport);
 
-    expect(
-      screen.getByRole("button", { name: "Scroll sample list to bottom" }),
-    ).toHaveAttribute("aria-controls", "sample-scrollport");
+    const control = screen.getByRole("button", {
+      name: "Scroll sample list to bottom",
+    });
+    expect(control).toHaveAttribute("aria-controls", "sample-scrollport");
+    const gestureBoundary = control.closest(".elastic-scroll-control");
+    expect(gestureBoundary).toHaveAttribute("data-base-ui-swipe-ignore");
+    expect(gestureBoundary).toHaveAttribute("data-learning-swipe-ignore");
+    expect(gestureBoundary).toHaveAttribute("data-sidebar-swipe-ignore");
+    expect(gestureBoundary).toHaveAttribute("data-tab-swipe-ignore");
     expect(
       screen.getByRole("progressbar", { name: "Sample list scroll position" }),
     ).toHaveAttribute("aria-valuenow", "20");

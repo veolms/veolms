@@ -262,7 +262,11 @@
     );
     flex: 0 0 auto;
     flex-direction: column;
-    overflow: hidden;
+    /* The drawer content owns the rounded outer clip. Keeping this inner
+       layout visible lets the navigation scroll lane use its negative margin
+       to reach both drawer edges without cutting selected-item shadows at the
+       content gutter. */
+    overflow: visible;
   }
 
   .mobile-menu-sheet__heading {
@@ -382,8 +386,9 @@
     display: grid;
     align-content: start;
     gap: 3px;
-    margin-top: 10px;
+    margin-top: 4px;
     margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-block: 6px 18px;
     padding-inline: var(--mobile-menu-sheet-inline-inset);
     overflow-y: auto;
     overscroll-behavior: contain;

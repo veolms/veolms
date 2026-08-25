@@ -2363,6 +2363,83 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
   );
 });
 
+test("mobile curriculum scroll control owns diagonal gestures inside its drawer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  await page.locator("#learning-course-content-trigger").click();
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const curriculum = dialog.getByRole("complementary", {
+    name: "Course curriculum",
+  });
+  const gestureBoundary = curriculum.locator(".elastic-scroll-control");
+  const scrollControl = gestureBoundary.locator(
+    ".elastic-scroll-control__button",
+  );
+
+  await curriculum.evaluate((element) => {
+    element.scrollTop = Math.min(
+      140,
+      element.scrollHeight - element.clientHeight,
+    );
+  });
+  await expect(scrollControl).toBeVisible();
+  await expect(gestureBoundary).toHaveAttribute(
+    "data-base-ui-swipe-ignore",
+    "true",
+  );
+  await expect(gestureBoundary).toHaveAttribute(
+    "data-learning-swipe-ignore",
+    "true",
+  );
+  await expect(gestureBoundary).toHaveAttribute(
+    "data-sidebar-swipe-ignore",
+    "true",
+  );
+
+  const initialBounds = await scrollControl.boundingBox();
+  expect(initialBounds).not.toBeNull();
+  const startX = initialBounds!.x + initialBounds!.width / 2;
+  const startY = initialBounds!.y + initialBounds!.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const timestamp = Date.now() / 1000;
+
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: startX, y: startY }],
+    timestamp,
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: startX + 92, y: startY + 112 }],
+    timestamp: timestamp + 0.08,
+  });
+
+  await expect(scrollControl).toHaveAttribute("data-scroll-mode", "drag");
+  await expect(dialog).not.toHaveAttribute("data-swiping", "");
+  const draggedBounds = await scrollControl.boundingBox();
+  expect(draggedBounds).not.toBeNull();
+  expect(draggedBounds!.x).toBeCloseTo(initialBounds!.x, 0);
+  expect(draggedBounds!.y).toBeGreaterThan(initialBounds!.y + 40);
+
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+    timestamp: timestamp + 0.1,
+  });
+
+  await expect(dialog).toBeVisible();
+  await expect(scrollControl).toHaveAttribute("data-scroll-mode", "idle");
+  await expect
+    .poll(async () => (await scrollControl.boundingBox())?.x)
+    .toBeCloseTo(initialBounds!.x, 0);
+});
+
 test("curriculum scroll control follows direction, stops, and accelerates with drag distance", async ({
   page,
 }) => {

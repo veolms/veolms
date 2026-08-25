@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from "react";
 import {
   ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE,
   ELASTIC_SCROLL_CONTROL_DRAG_MAX_DISTANCE,
@@ -372,24 +376,30 @@ export function useElasticScrollControl({
     dragScrollFrameRef.current = window.requestAnimationFrame(advance);
   }, [cancelDragScroll, cancelEdgeScroll, clearIdleTimer, scrollportRef]);
 
-  const handleClick = useCallback(() => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
-      pointerDownStoppedEdgeRef.current = false;
-      return;
-    }
-    if (pointerDownStoppedEdgeRef.current) {
-      pointerDownStoppedEdgeRef.current = false;
-      scheduleHide();
-      return;
-    }
-    if (cancelAutomatedScroll()) return;
-    scrollToEdge(directionRef.current);
-  }, [cancelAutomatedScroll, scheduleHide, scrollToEdge]);
+  const handleClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (suppressClickRef.current) {
+        suppressClickRef.current = false;
+        pointerDownStoppedEdgeRef.current = false;
+        return;
+      }
+      if (pointerDownStoppedEdgeRef.current) {
+        pointerDownStoppedEdgeRef.current = false;
+        scheduleHide();
+        return;
+      }
+      if (cancelAutomatedScroll()) return;
+      scrollToEdge(directionRef.current);
+    },
+    [cancelAutomatedScroll, scheduleHide, scrollToEdge],
+  );
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
       clearLongPressTimer();
       pointerDownStoppedEdgeRef.current = cancelEdgeScroll(false);
       dragPointerIdRef.current = event.pointerId;
@@ -409,6 +419,8 @@ export function useElasticScrollControl({
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (dragPointerIdRef.current !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
       const pointerStartY = dragPointerStartYRef.current;
       if (pointerStartY === null) return;
 
@@ -436,6 +448,8 @@ export function useElasticScrollControl({
   const handlePointerFinish = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (dragPointerIdRef.current !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
       dragPointerIdRef.current = null;
       dragPointerStartYRef.current = null;
       dragPointerOffsetRef.current = 0;
