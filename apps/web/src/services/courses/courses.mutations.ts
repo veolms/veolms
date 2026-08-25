@@ -2,11 +2,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Category,
   Course,
+  CourseEditorDataResponse,
   CreateCategoryRequest,
+  CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
+  ReorderLessonsRequest,
   ReorderSectionsRequest,
   UpdateCourseBasicsRequest,
+  UpdateCourseLessonRequest,
   UpdateCourseSectionRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
@@ -133,11 +137,60 @@ export function useReorderCourseSections() {
   return useMutation<
     { success: boolean },
     ApiError,
-    { courseId: string; payload: ReorderSectionsRequest }
+    { courseId: string; payload: ReorderSectionsRequest },
+    { previousEditorData?: CourseEditorDataResponse }
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.reorderSections(courseId, payload),
-    onSuccess: (_, variables) => {
+    onMutate: async ({ courseId, payload }) => {
+      await queryClient.cancelQueries({
+        queryKey: courseKeys.editor(courseId),
+      });
+
+      const previousEditorData =
+        queryClient.getQueryData<CourseEditorDataResponse>(
+          courseKeys.editor(courseId),
+        );
+
+      if (previousEditorData && previousEditorData.sections) {
+        const sectionOrderMap = new Map(
+          payload.orderedSectionIds.map((id, index) => [id, index]),
+        );
+        const sortedSections = [...previousEditorData.sections]
+          .sort((a, b) => {
+            const posA = sectionOrderMap.get(a.id) ?? a.position;
+            const posB = sectionOrderMap.get(b.id) ?? b.position;
+            return posA - posB;
+          })
+          .map((sec, idx) => ({
+            ...sec,
+            position: idx,
+          }));
+
+        queryClient.setQueryData<CourseEditorDataResponse>(
+          courseKeys.editor(courseId),
+          {
+            ...previousEditorData,
+            course: {
+              ...previousEditorData.course,
+              version: (previousEditorData.course.version || 1) + 1,
+            },
+            sections: sortedSections,
+          },
+        );
+      }
+
+      return { previousEditorData };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previousEditorData) {
+        queryClient.setQueryData(
+          courseKeys.editor(variables.courseId),
+          context.previousEditorData,
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -145,3 +198,144 @@ export function useReorderCourseSections() {
   });
 }
 export const useReorderSections = useReorderCourseSections;
+
+export function useCreateLesson() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { id: string; position: number },
+    ApiError,
+    {
+      courseId: string;
+      sectionId: string;
+      payload: CreateCourseLessonRequest;
+    }
+  >({
+    mutationFn: ({ courseId, sectionId, payload }) =>
+      coursesService.createLesson(courseId, sectionId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useUpdateCourseLesson() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean; videoJobId?: string; processingStatus?: string },
+    ApiError,
+    {
+      courseId: string;
+      lessonId: string;
+      payload: UpdateCourseLessonRequest;
+    }
+  >({
+    mutationFn: ({ courseId, lessonId, payload }) =>
+      coursesService.updateLesson(courseId, lessonId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useUpdateLesson = useUpdateCourseLesson;
+
+export function useDeleteCourseLesson() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    { courseId: string; lessonId: string }
+  >({
+    mutationFn: ({ courseId, lessonId }) =>
+      coursesService.deleteLesson(courseId, lessonId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useDeleteLesson = useDeleteCourseLesson;
+
+export function useReorderSectionLessons() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    {
+      courseId: string;
+      sectionId: string;
+      payload: ReorderLessonsRequest;
+    },
+    { previousEditorData?: CourseEditorDataResponse }
+  >({
+    mutationFn: ({ courseId, sectionId, payload }) =>
+      coursesService.reorderLessons(courseId, sectionId, payload),
+    onMutate: async ({ courseId, sectionId, payload }) => {
+      await queryClient.cancelQueries({
+        queryKey: courseKeys.editor(courseId),
+      });
+
+      const previousEditorData =
+        queryClient.getQueryData<CourseEditorDataResponse>(
+          courseKeys.editor(courseId),
+        );
+
+      if (previousEditorData && previousEditorData.sections) {
+        const lessonOrderMap = new Map(
+          payload.orderedLessonIds.map((id, index) => [id, index]),
+        );
+        const updatedSections = previousEditorData.sections.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          const sortedLessons = [...(sec.lessons || [])].sort((a, b) => {
+            const posA = lessonOrderMap.get(a.id) ?? a.position;
+            const posB = lessonOrderMap.get(b.id) ?? b.position;
+            return posA - posB;
+          });
+          return {
+            ...sec,
+            lessons: sortedLessons.map((les, idx) => ({
+              ...les,
+              position: idx,
+            })),
+          };
+        });
+
+        queryClient.setQueryData<CourseEditorDataResponse>(
+          courseKeys.editor(courseId),
+          {
+            ...previousEditorData,
+            course: {
+              ...previousEditorData.course,
+              version: (previousEditorData.course.version || 1) + 1,
+            },
+            sections: updatedSections,
+          },
+        );
+      }
+
+      return { previousEditorData };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previousEditorData) {
+        queryClient.setQueryData(
+          courseKeys.editor(variables.courseId),
+          context.previousEditorData,
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+    },
+  });
+}
+export const useReorderLessons = useReorderSectionLessons;

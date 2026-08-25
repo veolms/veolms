@@ -22,6 +22,7 @@ import {
   DotsThreeVertical,
   Export,
   Eye,
+  EyeSlash,
   FileText,
   FloppyDisk,
   Globe,
@@ -65,11 +66,15 @@ import {
   useCourseEditor,
   useCreateCategory,
   useCreateCourse,
+  useCreateLesson,
   useCreateSection,
   useDeleteCategory,
+  useDeleteLesson,
   useDeleteSection,
+  useReorderLessons,
   useReorderSections,
   useUpdateCourseBasics,
+  useUpdateLesson,
   useUpdateSection,
 } from "../services/courses";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
@@ -506,7 +511,20 @@ export function CourseCreatePage({
   const updateSectionMutation = useUpdateSection();
   const deleteSectionMutation = useDeleteSection();
   const reorderSectionsMutation = useReorderSections();
+  const createLessonMutation = useCreateLesson();
+  const updateLessonMutation = useUpdateLesson();
+  const deleteLessonMutation = useDeleteLesson();
+  const reorderLessonsMutation = useReorderLessons();
   const [isCreatingSection, setIsCreatingSection] = useState(false);
+  const [creatingLessonSectionId, setCreatingLessonSectionId] = useState<
+    string | null
+  >(null);
+  const [savingLessonId, setSavingLessonId] = useState<string | null>(null);
+  const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
+  const [reorderingLessonsSectionId, setReorderingLessonsSectionId] = useState<
+    string | null
+  >(null);
+  const [isReorderingSections, setIsReorderingSections] = useState<boolean>(false);
   const [updatingSectionId, setUpdatingSectionId] = useState<string | null>(null);
   const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
   const createCategoryMutation = useCreateCategory();
@@ -607,8 +625,17 @@ export function CourseCreatePage({
   interface LessonResourceItem {
     id: string;
     name: string;
-    type: "PDF" | "TXT" | "DOC";
+    type: "PDF" | "TXT" | "DOC" | "DOCX" | "ZIP" | "PNG" | "MP4";
     size: string;
+    mediaAssetId?: string;
+  }
+
+  interface LessonSnapshot {
+    title: string;
+    description: string;
+    contentType: "video" | "document";
+    isPublished?: boolean;
+    isPreview?: boolean;
   }
 
   interface CurriculumLessonItem {
@@ -617,6 +644,10 @@ export function CourseCreatePage({
     description: string;
     contentType: "video" | "document";
     isExpanded: boolean;
+    isPublished?: boolean;
+    isPreview?: boolean;
+    isPendingCreation?: boolean;
+    initialState?: LessonSnapshot;
     resources: LessonResourceItem[];
   }
 
@@ -625,6 +656,7 @@ export function CourseCreatePage({
     title: string;
     isExpanded: boolean;
     isEditingTitle?: boolean;
+    isPendingCreation?: boolean;
     lessons: CurriculumLessonItem[];
   }
 
@@ -662,7 +694,15 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
-  const dragInitialSectionIdsRef = useRef<string[]>([]);
+  const dragInitialSectionsStateRef = useRef<{
+    sectionIds: string[];
+    previousSections: CurriculumSectionItem[];
+  } | null>(null);
+  const dragInitialLessonStateRef = useRef<{
+    sectionId: string;
+    lessonIds: string[];
+    previousLessons: CurriculumLessonItem[];
+  } | null>(null);
 
   // Pricing interfaces
   type PricingType = "free" | "paid";
@@ -738,7 +778,7 @@ export function CourseCreatePage({
 
   // Footer Action Loading States
   const [actionLoading, setActionLoading] = useState<
-    "preview" | "draft" | "save" | "publish" | null
+    "preview" | "draft" | "save" | "next" | "publish" | null
   >(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -804,33 +844,61 @@ export function CourseCreatePage({
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
           const prevMap = new Map(prev.map((s) => [s.id, s]));
-          return editorData.sections.map((sec, secIdx) => {
+          const mappedServerSections = editorData.sections.map((sec, secIdx) => {
             const existing = prevMap.get(sec.id);
+            const serverLessonIds = new Set((sec.lessons || []).map((l) => l.id));
+            const serverLessons = (sec.lessons || []).map((les) => {
+              const existingLesson = existing?.lessons.find(
+                (l) => l.id === les.id,
+              );
+              const isPub = les.isPublished !== undefined ? les.isPublished : true;
+              const isPrev = les.isPreview !== undefined ? les.isPreview : false;
+              const desc = les.description || "";
+              return {
+                id: les.id,
+                title: les.title,
+                description: desc,
+                contentType: les.contentType,
+                isExpanded: existingLesson ? existingLesson.isExpanded : false,
+                isPublished: isPub,
+                isPreview: isPrev,
+                initialState: existingLesson?.initialState || {
+                  title: les.title,
+                  description: desc,
+                  contentType: les.contentType,
+                  isPublished: isPub,
+                  isPreview: isPrev,
+                },
+                resources: (les.resources || []).map((res) => ({
+                  id: res.id,
+                  name: res.title || "Resource",
+                  type: "PDF" as const,
+                  size: "1.0 MB",
+                })),
+              };
+            });
+
+            // Preserve any pending optimistic lessons that are still being created
+            const pendingLessons = (existing?.lessons || []).filter(
+              (l) => l.isPendingCreation || !serverLessonIds.has(l.id),
+            );
+
             return {
               id: sec.id,
               title: sec.title,
               isExpanded: existing ? existing.isExpanded : secIdx === 0,
               isEditingTitle: existing ? existing.isEditingTitle : false,
-              lessons: (sec.lessons || []).map((les) => {
-                const existingLesson = existing?.lessons.find(
-                  (l) => l.id === les.id,
-                );
-                return {
-                  id: les.id,
-                  title: les.title,
-                  description: les.description || "",
-                  contentType: les.contentType,
-                  isExpanded: existingLesson ? existingLesson.isExpanded : false,
-                  resources: (les.resources || []).map((res) => ({
-                    id: res.id,
-                    name: res.title || "Resource",
-                    type: "PDF" as const,
-                    size: "1.0 MB",
-                  })),
-                };
-              }),
+              lessons: [...serverLessons, ...pendingLessons],
             };
           });
+
+          // Preserve any pending optimistic sections that are still being created
+          const serverSectionIds = new Set(editorData.sections.map((s) => s.id));
+          const pendingSections = prev.filter(
+            (s) => s.isPendingCreation || !serverSectionIds.has(s.id),
+          );
+
+          return [...mappedServerSections, ...pendingSections];
         });
       }
     } else if (targetCourse) {
@@ -866,6 +934,15 @@ export function CourseCreatePage({
               description: "",
               contentType: "video" as const,
               isExpanded: false,
+              isPublished: true,
+              isPreview: false,
+              initialState: {
+                title,
+                description: "",
+                contentType: "video",
+                isPublished: true,
+                isPreview: false,
+              },
               resources: [],
             })),
           })),
@@ -874,21 +951,33 @@ export function CourseCreatePage({
         const sectionCount = Math.max(1, targetCourse.sections || 1);
         const generatedSections: CurriculumSectionItem[] = Array.from(
           { length: sectionCount },
-          (_, i) => ({
-            id: `section-${i + 1}`,
-            title: getSectionTitle(targetCourse, i),
-            isExpanded: i === 0,
-            lessons: [
-              {
-                id: `lesson-${i + 1}-1`,
-                title: `${getSectionTitle(targetCourse, i)} - Overview`,
-                description: "",
-                contentType: "video" as const,
-                isExpanded: false,
-                resources: [],
-              },
-            ],
-          }),
+          (_, i) => {
+            const overviewTitle = `${getSectionTitle(targetCourse, i)} - Overview`;
+            return {
+              id: `section-${i + 1}`,
+              title: getSectionTitle(targetCourse, i),
+              isExpanded: i === 0,
+              lessons: [
+                {
+                  id: `lesson-${i + 1}-1`,
+                  title: overviewTitle,
+                  description: "",
+                  contentType: "video" as const,
+                  isExpanded: false,
+                  isPublished: true,
+                  isPreview: false,
+                  initialState: {
+                    title: overviewTitle,
+                    description: "",
+                    contentType: "video",
+                    isPublished: true,
+                    isPreview: false,
+                  },
+                  resources: [],
+                },
+              ],
+            };
+          },
         );
         setSections(generatedSections);
       }
@@ -1132,7 +1221,21 @@ export function CourseCreatePage({
     )
       return;
 
+    const tempSectionId = `temp-sec-${Date.now()}`;
+    const newSectionTitle = "Title";
+    const optimisticSection: CurriculumSectionItem = {
+      id: tempSectionId,
+      title: newSectionTitle,
+      isExpanded: true,
+      isEditingTitle: false,
+      isPendingCreation: true,
+      lessons: [],
+    };
+
+    // Show temporary section immediately
+    setSections((prev) => [...prev, optimisticSection]);
     setIsCreatingSection(true);
+
     let targetCourseId = currentCourseId;
 
     // If no course draft exists yet, create it on the server first
@@ -1149,6 +1252,8 @@ export function CourseCreatePage({
           setCourseTitle(fallbackTitle);
         }
       } catch (err: unknown) {
+        // Rollback temporary section
+        setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
         const errorMsg =
           (err as { message?: string })?.message ||
           "Failed to create course draft.";
@@ -1158,7 +1263,6 @@ export function CourseCreatePage({
       }
     }
 
-    const newSectionTitle = "Title";
     try {
       const createdSection = await createSectionMutation.mutateAsync({
         courseId: targetCourseId,
@@ -1167,18 +1271,33 @@ export function CourseCreatePage({
         },
       });
 
-      setSections((prev) => [
-        ...prev,
-        {
-          id: createdSection.id,
-          title: createdSection.title,
-          isExpanded: true,
-          isEditingTitle: false,
-          lessons: [],
-        },
-      ]);
+      // Replace temporary ID with real backend UUID
+      setSections((prev) => {
+        const hasServerSection = prev.some((s) => s.id === createdSection.id);
+        if (hasServerSection) {
+          return prev
+            .filter((s) => s.id !== tempSectionId)
+            .map((s) =>
+              s.id === createdSection.id
+                ? { ...s, isPendingCreation: false }
+                : s,
+            );
+        }
+        return prev.map((s) =>
+          s.id === tempSectionId
+            ? {
+                ...s,
+                id: createdSection.id,
+                title: createdSection.title,
+                isPendingCreation: false,
+              }
+            : s,
+        );
+      });
       setToastMessage(`Section "${createdSection.title}" created successfully.`);
     } catch (err: unknown) {
+      // Rollback temporary section on failure
+      setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
       const errorMsg =
         (err as { message?: string })?.message || "Failed to create section.";
       setToastMessage(errorMsg);
@@ -1299,6 +1418,7 @@ export function CourseCreatePage({
     section: CurriculumSectionItem,
   ) => {
     if (
+      isReorderingSections ||
       reorderSectionsMutation.isPending ||
       updatingSectionId ||
       deletingSectionId
@@ -1306,7 +1426,10 @@ export function CourseCreatePage({
       e.preventDefault();
       return;
     }
-    dragInitialSectionIdsRef.current = sectionsRef.current.map((s) => s.id);
+    dragInitialSectionsStateRef.current = {
+      sectionIds: sectionsRef.current.map((s) => s.id),
+      previousSections: structuredClone(sectionsRef.current),
+    };
     setDraggedSectionIndex(index);
     setCustomDragImage(
       e,
@@ -1330,10 +1453,14 @@ export function CourseCreatePage({
   };
 
   const handleSectionDragEnd = async () => {
+    const initial = dragInitialSectionsStateRef.current;
     setDraggedSectionIndex(null);
     setDragEnabledSectionId(null);
+    dragInitialSectionsStateRef.current = null;
 
-    const initialIds = dragInitialSectionIdsRef.current;
+    if (!initial) return;
+
+    const initialIds = initial.sectionIds;
     const currentSections = sectionsRef.current;
     const currentIds = currentSections.map((s) => s.id);
 
@@ -1353,6 +1480,7 @@ export function CourseCreatePage({
       );
 
       if (allValidUuids) {
+        setIsReorderingSections(true);
         try {
           await reorderSectionsMutation.mutateAsync({
             courseId: currentCourseId,
@@ -1364,37 +1492,212 @@ export function CourseCreatePage({
           setCourseVersion((prev) => prev + 1);
           setToastMessage("Sections reordered successfully.");
         } catch (err: unknown) {
+          // Rollback to previous sections order on failure
+          setSections(initial.previousSections);
           const errorMsg =
             (err as { message?: string })?.message ||
-            "Failed to save section order.";
+            "Failed to save section order. Restored previous order.";
           setToastMessage(errorMsg);
+        } finally {
+          setIsReorderingSections(false);
         }
       }
     }
   };
 
   // Lesson actions
-  const handleAddLesson = (sectionId: string) => {
-    const newLessonId = `lesson-${Date.now()}`;
+  const handleAddLesson = async (sectionId: string) => {
+    if (
+      creatingLessonSectionId ||
+      createLessonMutation.isPending ||
+      createCourseMutation.isPending ||
+      createSectionMutation.isPending
+    ) {
+      return;
+    }
+
+    const sec = sections.find((s) => s.id === sectionId);
+    if (!sec || sec.isPendingCreation) return;
+
+    const tempLessonId = `temp-les-${Date.now()}`;
+    const newLessonTitle = `New Lesson ${sec.lessons.length + 1}`;
+    const optimisticLesson: CurriculumLessonItem = {
+      id: tempLessonId,
+      title: newLessonTitle,
+      description: "",
+      contentType: "video" as const,
+      isExpanded: true,
+      isPublished: true,
+      isPreview: false,
+      isPendingCreation: true,
+      initialState: {
+        title: newLessonTitle,
+        description: "",
+        contentType: "video",
+        isPublished: true,
+        isPreview: false,
+      },
+      resources: [],
+    };
+
+    // Show temporary lesson immediately
     setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
+      prev.map((s) => {
+        if (s.id !== sectionId) return s;
         return {
-          ...sec,
+          ...s,
           lessons: [
-            ...sec.lessons.map((l) => ({ ...l, isExpanded: false })),
-            {
-              id: newLessonId,
-              title: `New Lesson ${sec.lessons.length + 1}`,
-              description: "",
-              contentType: "video" as const,
-              isExpanded: true,
-              resources: [],
-            },
+            ...s.lessons.map((l) => ({ ...l, isExpanded: false })),
+            optimisticLesson,
           ],
         };
       }),
     );
+
+    setCreatingLessonSectionId(sectionId);
+    let targetCourseId = currentCourseId;
+
+    // If no course draft exists yet, create it on the server first
+    if (!targetCourseId) {
+      const fallbackTitle = courseTitle.trim() || "Untitled Course";
+      try {
+        const createdCourse = await createCourseMutation.mutateAsync({
+          title: fallbackTitle,
+        });
+        targetCourseId = createdCourse.id;
+        setCurrentCourseId(createdCourse.id);
+        setCourseVersion(createdCourse.version);
+        if (!courseTitle.trim()) {
+          setCourseTitle(fallbackTitle);
+        }
+      } catch (err: unknown) {
+        // Rollback temporary lesson
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId
+              ? {
+                  ...s,
+                  lessons: s.lessons.filter((l) => l.id !== tempLessonId),
+                }
+              : s,
+          ),
+        );
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to create course draft.";
+        setToastMessage(errorMsg);
+        setCreatingLessonSectionId(null);
+        return;
+      }
+    }
+
+    let targetSectionId = sectionId;
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        targetSectionId,
+      )
+    ) {
+      try {
+        const createdSection = await createSectionMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: { title: sec.title },
+        });
+        targetSectionId = createdSection.id;
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId ? { ...s, id: targetSectionId } : s,
+          ),
+        );
+      } catch (err: unknown) {
+        // Rollback temporary lesson
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId
+              ? {
+                  ...s,
+                  lessons: s.lessons.filter((l) => l.id !== tempLessonId),
+                }
+              : s,
+          ),
+        );
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to create section on server.";
+        setToastMessage(errorMsg);
+        setCreatingLessonSectionId(null);
+        return;
+      }
+    }
+
+    try {
+      const createdLesson = await createLessonMutation.mutateAsync({
+        courseId: targetCourseId,
+        sectionId: targetSectionId,
+        payload: {
+          title: newLessonTitle,
+          contentType: "video",
+          description: "",
+        },
+      });
+
+      // Replace temporary ID with real backend UUID
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== targetSectionId && s.id !== sectionId) return s;
+          const hasServerLesson = s.lessons.some((l) => l.id === createdLesson.id);
+          if (hasServerLesson) {
+            return {
+              ...s,
+              id: targetSectionId,
+              lessons: s.lessons
+                .filter((l) => l.id !== tempLessonId)
+                .map((l) =>
+                  l.id === createdLesson.id
+                    ? { ...l, isPendingCreation: false }
+                    : l,
+                ),
+            };
+          }
+          return {
+            ...s,
+            id: targetSectionId,
+            lessons: s.lessons.map((l) =>
+              l.id === tempLessonId
+                ? {
+                    ...l,
+                    id: createdLesson.id,
+                    isPendingCreation: false,
+                    initialState: l.initialState || {
+                      title: l.title,
+                      description: l.description || "",
+                      contentType: l.contentType,
+                      isPublished: l.isPublished !== undefined ? l.isPublished : true,
+                      isPreview: l.isPreview !== undefined ? l.isPreview : false,
+                    },
+                  }
+                : l,
+            ),
+          };
+        }),
+      );
+      setToastMessage(`Lesson "${newLessonTitle}" created successfully.`);
+    } catch (err: unknown) {
+      // Rollback temporary lesson on failure
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== targetSectionId && s.id !== sectionId) return s;
+          return {
+            ...s,
+            lessons: s.lessons.filter((l) => l.id !== tempLessonId),
+          };
+        }),
+      );
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to create lesson.";
+      setToastMessage(errorMsg);
+    } finally {
+      setCreatingLessonSectionId(null);
+    }
   };
 
   const handleToggleLessonExpand = (sectionId: string, lessonId: string) => {
@@ -1418,18 +1721,50 @@ export function CourseCreatePage({
 
     setDeleteModalState({
       isOpen: true,
-      title: `Delete"${les.title}"?`,
-      message: `Are you sure you want to delete lesson"${les.title}"? This action cannot be undone.`,
-      onConfirm: () => {
-        setSections((prev) =>
-          prev.map((s) => {
-            if (s.id !== sectionId) return s;
-            return {
-              ...s,
-              lessons: s.lessons.filter((l) => l.id !== lessonId),
-            };
-          }),
-        );
+      title: `Delete "${les.title}"?`,
+      message: `Are you sure you want to delete lesson "${les.title}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        if (
+          currentCourseId &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            lessonId,
+          )
+        ) {
+          setDeletingLessonId(lessonId);
+          try {
+            await deleteLessonMutation.mutateAsync({
+              courseId: currentCourseId,
+              lessonId,
+            });
+            setSections((prev) =>
+              prev.map((s) => {
+                if (s.id !== sectionId) return s;
+                return {
+                  ...s,
+                  lessons: s.lessons.filter((l) => l.id !== lessonId),
+                };
+              }),
+            );
+            setToastMessage(`Lesson "${les.title}" deleted.`);
+          } catch (err: unknown) {
+            const errorMsg =
+              (err as { message?: string })?.message ||
+              "Failed to delete lesson.";
+            setToastMessage(errorMsg);
+          } finally {
+            setDeletingLessonId(null);
+          }
+        } else {
+          setSections((prev) =>
+            prev.map((s) => {
+              if (s.id !== sectionId) return s;
+              return {
+                ...s,
+                lessons: s.lessons.filter((l) => l.id !== lessonId),
+              };
+            }),
+          );
+        }
       },
     });
   };
@@ -1452,18 +1787,146 @@ export function CourseCreatePage({
     );
   };
 
-  const handleSaveLesson = (sectionId: string, lessonId: string) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          lessons: sec.lessons.map((l) =>
-            l.id === lessonId ? { ...l, isExpanded: false } : l,
-          ),
-        };
-      }),
+  const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
+    return (
+      les.initialState || {
+        title: les.title,
+        description: les.description || "",
+        contentType: les.contentType,
+        isPublished: les.isPublished !== undefined ? les.isPublished : true,
+        isPreview: les.isPreview !== undefined ? les.isPreview : false,
+      }
     );
+  };
+
+  const isLessonDirty = (les: CurriculumLessonItem): boolean => {
+    const init = getLessonInitialState(les);
+    const isPub = les.isPublished !== undefined ? les.isPublished : true;
+    const isPrev = les.isPreview !== undefined ? les.isPreview : false;
+    const initPub =
+      init.isPublished !== undefined
+        ? init.isPublished
+        : true;
+    const initPrev =
+      init.isPreview !== undefined
+        ? init.isPreview
+        : false;
+
+    return (
+      les.title.trim() !== init.title.trim() ||
+      (les.description || "") !== (init.description || "") ||
+      les.contentType !== init.contentType ||
+      isPub !== initPub ||
+      isPrev !== initPrev
+    );
+  };
+
+  const handleSaveLesson = async (sectionId: string, lessonId: string) => {
+    if (savingLessonId || updateLessonMutation.isPending) return;
+
+    const sec = sections.find((s) => s.id === sectionId);
+    const les = sec?.lessons.find((l) => l.id === lessonId);
+    if (!les || les.isPendingCreation) return;
+
+    if (!isLessonDirty(les)) {
+      setToastMessage("No changes to save.");
+      return;
+    }
+
+    const trimmedTitle = les.title.trim();
+    if (!trimmedTitle) {
+      setToastMessage("Lesson title cannot be empty.");
+      return;
+    }
+
+    const isPublishedVal =
+      les.isPublished !== undefined ? les.isPublished : true;
+    const isPreviewVal =
+      les.isPreview !== undefined ? les.isPreview : false;
+
+    if (
+      currentCourseId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        lessonId,
+      )
+    ) {
+      setSavingLessonId(lessonId);
+      try {
+        await updateLessonMutation.mutateAsync({
+          courseId: currentCourseId,
+          lessonId,
+          payload: {
+            title: trimmedTitle,
+            description: les.description || "",
+            contentType: les.contentType,
+            isPublished: isPublishedVal,
+            isPreview: isPreviewVal,
+          },
+        });
+
+        setSections((prev) =>
+          prev.map((s) => {
+            if (s.id !== sectionId) return s;
+            return {
+              ...s,
+              lessons: s.lessons.map((l) =>
+                l.id === lessonId
+                  ? {
+                      ...l,
+                      title: trimmedTitle,
+                      isPublished: isPublishedVal,
+                      isPreview: isPreviewVal,
+                      isExpanded: false,
+                      initialState: {
+                        title: trimmedTitle,
+                        description: les.description || "",
+                        contentType: les.contentType,
+                        isPublished: isPublishedVal,
+                        isPreview: isPreviewVal,
+                      },
+                    }
+                  : l,
+              ),
+            };
+          }),
+        );
+        setToastMessage(`Lesson "${trimmedTitle}" updated successfully.`);
+      } catch (err: unknown) {
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update lesson.";
+        setToastMessage(errorMsg);
+      } finally {
+        setSavingLessonId(null);
+      }
+    } else {
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== sectionId) return s;
+          return {
+            ...s,
+            lessons: s.lessons.map((l) =>
+              l.id === lessonId
+                ? {
+                    ...l,
+                    title: trimmedTitle,
+                    isPublished: isPublishedVal,
+                    isPreview: isPreviewVal,
+                    isExpanded: false,
+                    initialState: {
+                      title: trimmedTitle,
+                      description: les.description || "",
+                      contentType: les.contentType,
+                      isPublished: isPublishedVal,
+                      isPreview: isPreviewVal,
+                    },
+                  }
+                : l,
+            ),
+          };
+        }),
+      );
+    }
   };
 
   const handleAddLessonResource = (sectionId: string, lessonId: string) => {
@@ -1520,6 +1983,21 @@ export function CourseCreatePage({
     lessonIndex: number,
     lesson: CurriculumLessonItem,
   ) => {
+    if (
+      reorderingLessonsSectionId ||
+      reorderLessonsMutation.isPending ||
+      savingLessonId ||
+      deletingLessonId
+    ) {
+      e.preventDefault();
+      return;
+    }
+    const currentSec = sectionsRef.current.find((s) => s.id === sectionId);
+    dragInitialLessonStateRef.current = {
+      sectionId,
+      lessonIds: currentSec ? currentSec.lessons.map((l) => l.id) : [],
+      previousLessons: currentSec ? structuredClone(currentSec.lessons) : [],
+    };
     setDraggedLessonState({ sectionId, lessonIndex });
     setCustomDragImage(
       e,
@@ -1564,9 +2042,72 @@ export function CourseCreatePage({
     });
   };
 
-  const handleLessonDragEnd = () => {
+  const handleLessonDragEnd = async () => {
+    const initial = dragInitialLessonStateRef.current;
     setDraggedLessonState(null);
     setDragEnabledLessonId(null);
+    dragInitialLessonStateRef.current = null;
+
+    if (!initial) return;
+
+    const currentSec = sectionsRef.current.find(
+      (s) => s.id === initial.sectionId,
+    );
+    if (!currentSec) return;
+
+    const currentLessonIds = currentSec.lessons.map((l) => l.id);
+    const initialLessonIds = initial.lessonIds;
+
+    const orderChanged =
+      initialLessonIds.length === currentLessonIds.length &&
+      initialLessonIds.some((id, idx) => id !== currentLessonIds[idx]);
+
+    if (!orderChanged) return;
+
+    if (
+      currentCourseId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        initial.sectionId,
+      )
+    ) {
+      const allValidUuids = currentLessonIds.every((id) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id,
+        ),
+      );
+
+      if (allValidUuids) {
+        setReorderingLessonsSectionId(initial.sectionId);
+        try {
+          await reorderLessonsMutation.mutateAsync({
+            courseId: currentCourseId,
+            sectionId: initial.sectionId,
+            payload: {
+              orderedLessonIds: currentLessonIds,
+              version: courseVersion || 1,
+            },
+          });
+          setCourseVersion((prev) => prev + 1);
+        } catch (err: unknown) {
+          // Rollback to previous order on failure
+          setSections((prev) =>
+            prev.map((s) => {
+              if (s.id !== initial.sectionId) return s;
+              return {
+                ...s,
+                lessons: initial.previousLessons,
+              };
+            }),
+          );
+          const errorMsg =
+            (err as { message?: string })?.message ||
+            "Failed to save lesson order. Restored previous order.";
+          setToastMessage(errorMsg);
+        } finally {
+          setReorderingLessonsSectionId(null);
+        }
+      }
+    }
   };
 
   // Computed total stats
@@ -1704,17 +2245,13 @@ export function CourseCreatePage({
     }, 450);
   };
 
-  const handleSaveDraftAction = async () => {
-    if (actionLoading) return;
-    if (!courseTitle.trim()) {
-      setToastMessage("Please enter a course title to save draft.");
-      return;
-    }
-
-    setActionLoading("draft");
-    try {
+  const saveCurrentStep = async () => {
+    if (activeStep === "basics") {
+      if (!courseTitle.trim()) {
+        throw new Error("Please enter a course title.");
+      }
       if (!currentCourseId) {
-        // Create initial course draft
+        // Create initial course on server
         const created = await createCourseMutation.mutateAsync({
           title: courseTitle.trim(),
         });
@@ -1737,10 +2274,11 @@ export function CourseCreatePage({
             },
           });
           setCourseVersion(updated.version);
+          return updated;
         }
-        setToastMessage("Draft course created successfully!");
+        return created;
       } else {
-        // Update existing draft
+        // Update basics on server
         const updated = await updateBasicsMutation.mutateAsync({
           id: currentCourseId,
           payload: {
@@ -1752,45 +2290,77 @@ export function CourseCreatePage({
           },
         });
         setCourseVersion(updated.version);
-        setToastMessage("Draft saved successfully!");
+        return updated;
       }
-    } catch (err: unknown) {
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to save draft.";
-      setToastMessage(errorMsg);
-    } finally {
-      setActionLoading(null);
+    } else {
+      // For other steps: if server course exists and basics are valid, keep basics synced
+      if (currentCourseId && courseTitle.trim()) {
+        const updated = await updateBasicsMutation.mutateAsync({
+          id: currentCourseId,
+          payload: {
+            title: courseTitle.trim(),
+            description: courseDescription.trim() || null,
+            categoryId: categoryId || null,
+            difficulty: difficultyLevel || null,
+            version: courseVersion,
+          },
+        });
+        setCourseVersion(updated.version);
+        return updated;
+      }
     }
   };
 
   const handleSaveChangesAction = async () => {
     if (actionLoading) return;
-    if (!courseTitle.trim()) {
+    if (activeStep === "basics" && !courseTitle.trim()) {
       setToastMessage("Please enter a course title.");
       return;
     }
 
     setActionLoading("save");
     try {
-      if (!currentCourseId) {
-        await handleSaveDraftAction();
-        return;
-      }
-      const updated = await updateBasicsMutation.mutateAsync({
-        id: currentCourseId,
-        payload: {
-          title: courseTitle.trim(),
-          description: courseDescription.trim() || null,
-          categoryId: categoryId || null,
-          difficulty: difficultyLevel || null,
-          version: courseVersion,
-        },
-      });
-      setCourseVersion(updated.version);
-      setToastMessage("All changes saved successfully!");
+      await saveCurrentStep();
+      setToastMessage("Changes saved successfully!");
     } catch (err: unknown) {
       const errorMsg =
         (err as { message?: string })?.message || "Failed to save changes.";
+      setToastMessage(errorMsg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const goToNextStep = () => {
+    const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
+    if (currentIndex >= 0 && currentIndex < WIZARD_STEPS.length - 1) {
+      const nextStep = WIZARD_STEPS[currentIndex + 1]!;
+      setSlideDirection("right");
+      setActiveStep(nextStep.id);
+    }
+  };
+
+  const handleNextAction = async () => {
+    if (actionLoading) return;
+
+    // 1. Step validation
+    if (activeStep === "basics") {
+      if (!courseTitle.trim()) {
+        setToastMessage("Please enter a course title before proceeding.");
+        return;
+      }
+    }
+
+    // 2. Save current step if server-backed
+    setActionLoading("next");
+    try {
+      await saveCurrentStep();
+      // 3. Move to next step only on successful save
+      goToNextStep();
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { message?: string })?.message ||
+        "Failed to save step changes.";
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
@@ -1879,7 +2449,7 @@ export function CourseCreatePage({
 
           {/* Top Actions in Header (Desktop / Tablet) */}
           <div className="flex items-center gap-2.5 shrink-0 pt-0.5 max-[768px]:hidden">
-            {/* Preview Button (Ghost) */}
+            {/* Preview Button (Ghost / Secondary) */}
             <button
               type="button"
               style={{
@@ -1891,7 +2461,7 @@ export function CourseCreatePage({
                 paddingLeft: "14px",
                 paddingRight: "14px",
               }}
-              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60"
+              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={handlePreviewAction}
               disabled={actionLoading !== null}
             >
@@ -1911,7 +2481,7 @@ export function CourseCreatePage({
               )}
             </button>
 
-            {/* Save Draft Button (Draft / Subtle Solid) */}
+            {/* Save Changes Button (Secondary / Outline) */}
             <button
               type="button"
               style={{
@@ -1920,73 +2490,93 @@ export function CourseCreatePage({
                 height: "34px",
                 borderRadius: "8px",
                 gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
+                paddingLeft: "16px",
+                paddingRight: "16px",
               }}
-              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60"
-              onClick={handleSaveDraftAction}
+              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={handleSaveChangesAction}
               disabled={actionLoading !== null}
             >
-              {actionLoading === "draft" ? (
+              {actionLoading === "save" ? (
                 <>
                   <CircleNotch
                     size={14}
                     className="animate-spin text-[var(--accent)]"
                   />
-                  <span>Saving Draft...</span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
                   <FloppyDisk size={15} />
-                  <span>Save Draft</span>
+                  <span>Save Changes</span>
                 </>
               )}
             </button>
 
-            {/* Save Changes / Publish Course Button (Primary Accent CTA) */}
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "18px",
-                paddingRight: "18px",
-              }}
-              className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60"
-              disabled={actionLoading !== null}
-              onClick={
-                activeStep === "publish"
-                  ? handleFinalPublishCourse
-                  : handleSaveChangesAction
-              }
-            >
-              {actionLoading === "publish" ? (
-                <>
-                  <CircleNotch size={15} className="animate-spin text-white" />
-                  <span>{isPublished ? "Updating..." : "Publishing..."}</span>
-                </>
-              ) : actionLoading === "save" ? (
-                <>
-                  <CircleNotch size={15} className="animate-spin text-white" />
-                  <span>Saving Changes...</span>
-                </>
-              ) : (
-                <>
-                  {activeStep === "publish" ? (
-                    isPublished ? (
-                      <span>Update Course</span>
-                    ) : (
-                      <span>Publish Course</span>
-                    )
-                  ) : (
-                    <span>Save Changes</span>
-                  )}
-                </>
-              )}
-            </button>
+            {/* Next / Publish Button (Primary Accent CTA) */}
+            {activeStep === "publish" ? (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "18px",
+                  paddingRight: "18px",
+                }}
+                className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={actionLoading !== null}
+                onClick={handleFinalPublishCourse}
+              >
+                {actionLoading === "publish" ? (
+                  <>
+                    <CircleNotch
+                      size={15}
+                      className="animate-spin text-white"
+                    />
+                    <span>{isPublished ? "Updating..." : "Publishing..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lightning size={15} weight="bold" />
+                    <span>{isPublished ? "Update Course" : "Publish"}</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "18px",
+                  paddingRight: "18px",
+                }}
+                className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={actionLoading !== null}
+                onClick={handleNextAction}
+              >
+                {actionLoading === "next" ? (
+                  <>
+                    <CircleNotch
+                      size={15}
+                      className="animate-spin text-white"
+                    />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Next</span>
+                    <CaretRight size={15} weight="bold" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -2459,29 +3049,28 @@ export function CourseCreatePage({
             {/* Header row */}
             <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
               <div className="">
-                <div className="flex items-center gap-3">
-                  <h2 className="m-0 text-[var(--text)] text-[1.25rem] font-bold tracking-[-0.015em]">
-                    Course Curriculum
-                  </h2>
-                  {reorderSectionsMutation.isPending && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] text-[0.76rem] font-semibold">
-                      <CircleNotch size={13} className="animate-spin" />
-                      <span>Saving order...</span>
-                    </span>
-                  )}
-                </div>
+                <h2 className="m-0 text-[var(--text)] text-[1.25rem] font-bold tracking-[-0.015em]">
+                  Course Curriculum
+                </h2>
                 <p className="m-0 mt-1 text-[var(--muted)] text-[0.85rem]">
                   Organize your course into sections and lessons. You can
                   reorder them anytime.
                 </p>
               </div>
               <div className="flex items-center gap-2.5">
+                {(isReorderingSections || reorderSectionsMutation.isPending) && (
+                  <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                    <CircleNotch size={13} className="animate-spin text-[var(--accent)]" />
+                    <span>Saving section order...</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   disabled={
                     isCreatingSection ||
                     createSectionMutation.isPending ||
                     createCourseMutation.isPending ||
+                    isReorderingSections ||
                     reorderSectionsMutation.isPending
                   }
                   style={{
@@ -2531,6 +3120,7 @@ export function CourseCreatePage({
                     isCreatingSection ||
                     createSectionMutation.isPending ||
                     createCourseMutation.isPending ||
+                    isReorderingSections ||
                     reorderSectionsMutation.isPending
                   }
                   style={{
@@ -2574,8 +3164,10 @@ export function CourseCreatePage({
                 }`}
                 draggable={
                   dragEnabledSectionId === sec.id &&
+                  !sec.isPendingCreation &&
                   !updatingSectionId &&
                   !deletingSectionId &&
+                  !isReorderingSections &&
                   !reorderSectionsMutation.isPending
                 }
                 onDragStart={(e) => handleSectionDragStart(e, secIndex, sec)}
@@ -2591,17 +3183,26 @@ export function CourseCreatePage({
                   <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
                     <span
                       className={`flex items-center justify-center text-[var(--muted)] transition-opacity duration-150 ${
+                        sec.isPendingCreation ||
+                        isReorderingSections ||
                         reorderSectionsMutation.isPending
                           ? "opacity-25 cursor-not-allowed pointer-events-none"
                           : "cursor-grab opacity-60 hover:opacity-100"
                       }`}
                       title={
-                        reorderSectionsMutation.isPending
-                          ? "Reordering in progress..."
-                          : "Drag to reorder section"
+                        sec.isPendingCreation
+                          ? "Creating section..."
+                          : isReorderingSections ||
+                            reorderSectionsMutation.isPending
+                            ? "Reordering in progress..."
+                            : "Drag to reorder section"
                       }
                       onMouseEnter={() => {
-                        if (!reorderSectionsMutation.isPending) {
+                        if (
+                          !sec.isPendingCreation &&
+                          !isReorderingSections &&
+                          !reorderSectionsMutation.isPending
+                        ) {
                           setDragEnabledSectionId(sec.id);
                         }
                       }}
@@ -2610,7 +3211,11 @@ export function CourseCreatePage({
                           setDragEnabledSectionId(null);
                       }}
                       onMouseDown={() => {
-                        if (!reorderSectionsMutation.isPending) {
+                        if (
+                          !sec.isPendingCreation &&
+                          !isReorderingSections &&
+                          !reorderSectionsMutation.isPending
+                        ) {
                           setDragEnabledSectionId(sec.id);
                         }
                       }}
@@ -2636,7 +3241,7 @@ export function CourseCreatePage({
                             className="border border-[var(--accent)] rounded-md px-2 py-0.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                             defaultValue={sec.title}
                             autoFocus
-                            disabled={updatingSectionId === sec.id}
+                            disabled={sec.isPendingCreation || updatingSectionId === sec.id}
                             onClick={(e) => e.stopPropagation()}
                             onBlur={(e) =>
                               handleSaveSectionTitle(sec.id, e.target.value)
@@ -2647,16 +3252,11 @@ export function CourseCreatePage({
                               }
                             }}
                           />
-                          {updatingSectionId === sec.id && (
-                            <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.76rem] font-semibold">
-                              <CircleNotch size={14} className="animate-spin" />
-                              <span>Saving...</span>
-                            </span>
-                          )}
                         </div>
                       ) : (
                         <span
                           className={`text-[var(--text)] text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                            sec.isPendingCreation ||
                             updatingSectionId === sec.id ||
                             deletingSectionId === sec.id
                               ? "opacity-60 pointer-events-none"
@@ -2665,38 +3265,54 @@ export function CourseCreatePage({
                           onClick={(e) => {
                             e.stopPropagation();
                             if (
+                              sec.isPendingCreation ||
                               updatingSectionId === sec.id ||
                               deletingSectionId === sec.id
                             )
                               return;
                             handleStartEditSectionTitle(sec.id);
                           }}
-                          title="Click to edit section title"
+                          title={sec.isPendingCreation ? "Creating section..." : "Click to edit section title"}
                         >
                           {sec.title}
                         </span>
                       )}
-                      {deletingSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-red-400 text-[0.76rem] font-semibold">
-                          <CircleNotch size={12} className="animate-spin" />
-                          <span>Deleting...</span>
-                        </span>
-                      ) : (
-                        <span className="ml-1 text-[var(--muted)] text-[0.76rem] font-normal">
-                          {sec.lessons.length}{" "}
-                          {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
-                        </span>
-                      )}
+                      <span className="ml-1 text-[var(--muted)] text-[0.76rem] font-normal">
+                        {sec.lessons.length}{" "}
+                        {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                    {sec.isPendingCreation ? (
+                      <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <CircleNotch size={12} className="animate-spin text-[var(--accent)]" />
+                        <span>Creating...</span>
+                      </span>
+                    ) : deletingSectionId === sec.id ? (
+                      <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                        <CircleNotch size={12} className="animate-spin text-red-400" />
+                        <span>Deleting...</span>
+                      </span>
+                    ) : reorderingLessonsSectionId === sec.id ? (
+                      <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <CircleNotch size={12} className="animate-spin text-[var(--accent)]" />
+                        <span>Saving order...</span>
+                      </span>
+                    ) : updatingSectionId === sec.id ? (
+                      <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <CircleNotch size={12} className="animate-spin text-[var(--accent)]" />
+                        <span>Saving...</span>
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       disabled={
+                        sec.isPendingCreation ||
                         updatingSectionId === sec.id ||
                         deletingSectionId === sec.id
                       }
-                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                       aria-label="Edit section title"
                       title="Edit section title"
                       onClick={(e) => {
@@ -2716,10 +3332,11 @@ export function CourseCreatePage({
                     <button
                       type="button"
                       disabled={
+                        sec.isPendingCreation ||
                         deletingSectionId === sec.id ||
                         updatingSectionId === sec.id
                       }
-                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                       aria-label="Delete section"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -2738,7 +3355,7 @@ export function CourseCreatePage({
                     <button
                       type="button"
                       disabled={deletingSectionId === sec.id}
-                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed [&>svg]:transition-transform [&>svg]:duration-200 ${
+                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
                         sec.isExpanded ? "is-expanded [&>svg]:rotate-180" : ""
                       }`}
                       aria-label={
@@ -2779,7 +3396,12 @@ export function CourseCreatePage({
                               ? "opacity-35 border-dashed border-[var(--accent)]"
                               : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                           }`}
-                          draggable={dragEnabledLessonId === les.id}
+                          draggable={
+                            dragEnabledLessonId === les.id &&
+                            !les.isPendingCreation &&
+                            !reorderingLessonsSectionId &&
+                            !reorderLessonsMutation.isPending
+                          }
                           onDragStart={(e) =>
                             handleLessonDragStart(e, sec.id, lesIndex, les)
                           }
@@ -2798,18 +3420,43 @@ export function CourseCreatePage({
                           >
                             <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
                               <span
-                                className="flex items-center justify-center text-[var(--muted)] cursor-grab opacity-60 transition-opacity duration-150 hover:opacity-100"
-                                title="Drag to reorder lesson"
-                                onMouseEnter={() =>
-                                  setDragEnabledLessonId(les.id)
+                                className={`flex items-center justify-center text-[var(--muted)] transition-opacity duration-150 ${
+                                  les.isPendingCreation ||
+                                  reorderingLessonsSectionId ||
+                                  reorderLessonsMutation.isPending
+                                    ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                    : "cursor-grab opacity-60 hover:opacity-100"
+                                }`}
+                                title={
+                                  les.isPendingCreation
+                                    ? "Creating lesson..."
+                                    : reorderingLessonsSectionId ||
+                                      reorderLessonsMutation.isPending
+                                      ? "Reordering in progress..."
+                                      : "Drag to reorder lesson"
                                 }
+                                onMouseEnter={() => {
+                                  if (
+                                    !les.isPendingCreation &&
+                                    !reorderingLessonsSectionId &&
+                                    !reorderLessonsMutation.isPending
+                                  ) {
+                                    setDragEnabledLessonId(les.id);
+                                  }
+                                }}
                                 onMouseLeave={() => {
                                   if (!draggedLessonState)
                                     setDragEnabledLessonId(null);
                                 }}
-                                onMouseDown={() =>
-                                  setDragEnabledLessonId(les.id)
-                                }
+                                onMouseDown={() => {
+                                  if (
+                                    !les.isPendingCreation &&
+                                    !reorderingLessonsSectionId &&
+                                    !reorderLessonsMutation.isPending
+                                  ) {
+                                    setDragEnabledLessonId(les.id);
+                                  }
+                                }}
                                 onMouseUp={() => {
                                   if (!draggedLessonState)
                                     setDragEnabledLessonId(null);
@@ -2826,6 +3473,38 @@ export function CourseCreatePage({
                               </span>
                             </div>
                             <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                              {les.isPendingCreation ? (
+                                <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <CircleNotch size={12} className="animate-spin text-[var(--accent)]" />
+                                  <span>Creating...</span>
+                                </span>
+                              ) : deletingLessonId === les.id ? (
+                                <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                  <CircleNotch size={12} className="animate-spin text-red-400" />
+                                  <span>Deleting...</span>
+                                </span>
+                              ) : savingLessonId === les.id ? (
+                                <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <CircleNotch size={12} className="animate-spin text-[var(--accent)]" />
+                                  <span>Saving...</span>
+                                </span>
+                              ) : null}
+                              {les.isPublished === false && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
+                                  title="Draft mode: This lesson is not published and is hidden from students."
+                                >
+                                  <EyeSlash size={13} weight="bold" /> Unpublished
+                                </span>
+                              )}
+                              {les.isPreview === true && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
+                                  title="Free Preview: Anyone can view this lesson without enrolling."
+                                >
+                                  Preview
+                                </span>
+                              )}
                               {les.contentType === "video" ? (
                                 <span className="inline-flex items-center gap-1.25 text-[var(--accent-ink,var(--accent))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                                   <PlayCircle size={13} weight="fill" /> Video
@@ -2837,14 +3516,22 @@ export function CourseCreatePage({
                               )}
                               <button
                                 type="button"
-                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0"
+                                disabled={les.isPendingCreation || deletingLessonId === les.id}
+                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                 aria-label="Delete lesson"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteLesson(sec.id, les.id);
                                 }}
                               >
-                                <Trash size={15} />
+                                {deletingLessonId === les.id ? (
+                                  <CircleNotch
+                                    size={14}
+                                    className="animate-spin text-red-400"
+                                  />
+                                ) : (
+                                  <Trash size={15} />
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -2905,13 +3592,14 @@ export function CourseCreatePage({
                                         type="text"
                                         maxLength={120}
                                         value={les.title}
+                                        disabled={les.isPendingCreation || savingLessonId === les.id}
                                         onChange={(e) =>
                                           handleUpdateLesson(sec.id, les.id, {
                                             title: e.target.value,
                                           })
                                         }
                                         placeholder="e.g. Introduction to React Hooks"
-                                        className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)]"
+                                        className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
                                       />
                                       <span className="absolute right-3.5 text-[var(--muted)] text-[0.76rem] pointer-events-none">
                                         {les.title.length} / 120
@@ -2927,16 +3615,18 @@ export function CourseCreatePage({
                                     >
                                       Lesson Description
                                     </label>
-                                    <RichTextEditor
-                                      value={les.description}
-                                      onChange={(val) =>
-                                        handleUpdateLesson(sec.id, les.id, {
-                                          description: val,
-                                        })
-                                      }
-                                      placeholder="Add a detailed description of what students will learn in this lesson..."
-                                      maxLength={1500}
-                                    />
+                                    <div className={les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}>
+                                      <RichTextEditor
+                                        value={les.description}
+                                        onChange={(val) =>
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            description: val,
+                                          })
+                                        }
+                                        placeholder="Add a detailed description of what students will learn in this lesson..."
+                                        maxLength={1500}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
 
@@ -2952,16 +3642,19 @@ export function CourseCreatePage({
                                     </label>
                                     <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
                                       <div
-                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] ${
+                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                          les.isPendingCreation ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                        } ${
                                           les.contentType === "video"
                                             ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                             : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                         }`}
-                                        onClick={() =>
+                                        onClick={() => {
+                                          if (les.isPendingCreation) return;
                                           handleUpdateLesson(sec.id, les.id, {
                                             contentType: "video",
-                                          })
-                                        }
+                                          });
+                                        }}
                                       >
                                         <div
                                           className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-[var(--accent)]" : "border-[var(--muted)]"}`}
@@ -2984,16 +3677,19 @@ export function CourseCreatePage({
                                       </div>
 
                                       <div
-                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] ${
+                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                          les.isPendingCreation ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                        } ${
                                           les.contentType === "document"
                                             ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                             : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                         }`}
-                                        onClick={() =>
+                                        onClick={() => {
+                                          if (les.isPendingCreation) return;
                                           handleUpdateLesson(sec.id, les.id, {
                                             contentType: "document",
-                                          })
-                                        }
+                                          });
+                                        }}
                                       >
                                         <div
                                           className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-[var(--accent)]" : "border-[var(--muted)]"}`}
@@ -3031,6 +3727,7 @@ export function CourseCreatePage({
                                     <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
                                       <button
                                         type="button"
+                                        disabled={les.isPendingCreation}
                                         style={{
                                           fontSize: "0.80rem",
                                           fontWeight: 700,
@@ -3040,13 +3737,14 @@ export function CourseCreatePage({
                                           paddingLeft: "16px",
                                           paddingRight: "16px",
                                         }}
-                                        className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                        className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                       >
                                         <UploadSimple size={15} />
                                         Upload New
                                       </button>
                                       <button
                                         type="button"
+                                        disabled={les.isPendingCreation}
                                         style={{
                                           fontSize: "0.80rem",
                                           fontWeight: 500,
@@ -3056,7 +3754,7 @@ export function CourseCreatePage({
                                           paddingLeft: "14px",
                                           paddingRight: "14px",
                                         }}
-                                        className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                        className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                       >
                                         {les.contentType === "video" ? (
                                           <PlayCircle
@@ -3074,6 +3772,108 @@ export function CourseCreatePage({
                                     </div>
                                   </div>
 
+                                  {/* Lesson Publishing Status */}
+                                  <div className="flex flex-col gap-2 mb-5">
+                                    <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                                      Publishing Status
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
+                                      <div
+                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                          les.isPendingCreation ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                        } ${
+                                          les.isPublished !== false
+                                            ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                        }`}
+                                        onClick={() => {
+                                          if (les.isPendingCreation) return;
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            isPublished: true,
+                                          });
+                                        }}
+                                      >
+                                        <div
+                                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                            les.isPublished !== false
+                                              ? "border-[var(--accent)]"
+                                              : "border-[var(--muted)]"
+                                          }`}
+                                        >
+                                          {les.isPublished !== false && (
+                                            <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                                          )}
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            Published
+                                          </span>
+                                          <span className="text-[var(--muted)] text-[0.75rem]">
+                                            Visible to enrolled students
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div
+                                        className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                          les.isPendingCreation ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                        } ${
+                                          les.isPublished === false
+                                            ? "is-selected border-[#f59e0b] bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))]"
+                                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                        }`}
+                                        onClick={() => {
+                                          if (les.isPendingCreation) return;
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            isPublished: false,
+                                          });
+                                        }}
+                                      >
+                                        <div
+                                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                            les.isPublished === false
+                                              ? "border-[#f59e0b]"
+                                              : "border-[var(--muted)]"
+                                          }`}
+                                        >
+                                          {les.isPublished === false && (
+                                            <div className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+                                          )}
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            Draft (Hidden)
+                                          </span>
+                                          <span className="text-[var(--muted)] text-[0.75rem]">
+                                            Hidden from students
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Free Preview Toggle */}
+                                  <div className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-5 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}>
+                                    <div className="pr-3">
+                                      <strong className="block mb-0.5 text-[var(--text)] text-[0.88rem] font-[650]">
+                                        Free Preview
+                                      </strong>
+                                      <p className="m-0 text-[var(--muted)] text-[0.78rem]">
+                                        Allow prospective students to view this lesson before enrolling or purchasing.
+                                      </p>
+                                    </div>
+                                    <SettingsToggle
+                                      checked={les.isPreview === true}
+                                      onChange={(checked) => {
+                                        if (les.isPendingCreation) return;
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          isPreview: checked,
+                                        });
+                                      }}
+                                      label="Toggle Free Preview"
+                                    />
+                                  </div>
+
                                   {/* Lesson Resources Table */}
                                   <div className="flex flex-col gap-2 mb-5">
                                     <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-2.5">
@@ -3083,6 +3883,7 @@ export function CourseCreatePage({
                                       <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
                                         <button
                                           type="button"
+                                          disabled={les.isPendingCreation}
                                           style={{
                                             fontSize: "0.80rem",
                                             fontWeight: 700,
@@ -3092,7 +3893,7 @@ export function CourseCreatePage({
                                             paddingLeft: "16px",
                                             paddingRight: "16px",
                                           }}
-                                          className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                          className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                           onClick={() =>
                                             handleAddLessonResource(
                                               sec.id,
@@ -3105,6 +3906,7 @@ export function CourseCreatePage({
                                         </button>
                                         <button
                                           type="button"
+                                          disabled={les.isPendingCreation}
                                           style={{
                                             fontSize: "0.80rem",
                                             fontWeight: 500,
@@ -3114,7 +3916,7 @@ export function CourseCreatePage({
                                             paddingLeft: "14px",
                                             paddingRight: "14px",
                                           }}
-                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                           onClick={() =>
                                             handleAddLessonResource(
                                               sec.id,
@@ -3161,7 +3963,8 @@ export function CourseCreatePage({
                                               </div>
                                               <button
                                                 type="button"
-                                                className="inline-flex w-7 h-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0"
+                                                disabled={les.isPendingCreation}
+                                                className="inline-flex w-7 h-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                                 onClick={() =>
                                                   handleRemoveLessonResource(
                                                     sec.id,
@@ -3222,7 +4025,10 @@ export function CourseCreatePage({
                                                   <td className="px-4 py-3 text-right pr-4">
                                                     <button
                                                       type="button"
-                                                      className="inline-flex w-7 h-7 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0"
+                                                      disabled={
+                                                        les.isPendingCreation
+                                                      }
+                                                      className="inline-flex w-7 h-7 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                                       onClick={() =>
                                                         handleRemoveLessonResource(
                                                           sec.id,
@@ -3255,6 +4061,12 @@ export function CourseCreatePage({
                                   <div className="flex justify-end mt-4 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                                     <button
                                       type="button"
+                                      disabled={
+                                        les.isPendingCreation ||
+                                        !isLessonDirty(les) ||
+                                        savingLessonId === les.id ||
+                                        updateLessonMutation.isPending
+                                      }
                                       style={{
                                         fontSize: "0.80rem",
                                         fontWeight: 700,
@@ -3264,12 +4076,43 @@ export function CourseCreatePage({
                                         paddingLeft: "16px",
                                         paddingRight: "16px",
                                       }}
-                                      className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60"
+                                      className={`inline-flex items-center justify-center border transition-all duration-150 ${
+                                        !isLessonDirty(les) || les.isPendingCreation || savingLessonId === les.id
+                                          ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] bg-transparent opacity-40 cursor-not-allowed pointer-events-none"
+                                          : "border-[var(--accent)] text-[var(--on-accent,#ffffff)] bg-[var(--accent)] hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_12px_var(--accent-shadow)] cursor-pointer"
+                                      }`}
                                       onClick={() =>
                                         handleSaveLesson(sec.id, les.id)
                                       }
+                                      title={
+                                        les.isPendingCreation
+                                          ? "Creating lesson..."
+                                          : !isLessonDirty(les)
+                                            ? "No changes to save"
+                                            : "Save changes"
+                                      }
                                     >
-                                      <FloppyDisk size={15} /> Save Lesson
+                                      {les.isPendingCreation ? (
+                                        <>
+                                          <CircleNotch
+                                            size={14}
+                                            className="animate-spin text-[var(--accent)]"
+                                          />
+                                          <span>Creating lesson...</span>
+                                        </>
+                                      ) : savingLessonId === les.id ? (
+                                        <>
+                                          <CircleNotch
+                                            size={14}
+                                            className="animate-spin text-[var(--accent)]"
+                                          />
+                                          <span>Saving...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FloppyDisk size={15} /> Save Lesson
+                                        </>
+                                      )}
                                     </button>
                                   </div>
                                 </div>
@@ -3284,10 +4127,24 @@ export function CourseCreatePage({
                     <div className="mt-3.5">
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--text)] text-[0.82rem] font-medium border-0 bg-transparent cursor-pointer p-0 transition-colors"
+                        disabled={
+                          sec.isPendingCreation ||
+                          creatingLessonSectionId === sec.id ||
+                          createLessonMutation.isPending
+                        }
+                        className="inline-flex items-center gap-1.5 text-[var(--muted)] enabled:hover:text-[var(--text)] text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
                         onClick={() => handleAddLesson(sec.id)}
                       >
-                        <Plus size={16} /> Add Lesson
+                        {creatingLessonSectionId === sec.id ? (
+                          <>
+                            <CircleNotch size={14} className="animate-spin text-[var(--accent)]" />
+                            <span>Adding Lesson...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={16} /> Add Lesson
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -4752,7 +5609,7 @@ export function CourseCreatePage({
             borderRadius: "12px",
             gap: "6px",
           }}
-          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] active:scale-[0.98] disabled:opacity-60"
+          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={handlePreviewAction}
           disabled={actionLoading !== null}
         >
@@ -4772,7 +5629,7 @@ export function CourseCreatePage({
           )}
         </button>
 
-        {/* Save Draft Button */}
+        {/* Save Changes Button */}
         <button
           type="button"
           style={{
@@ -4782,11 +5639,11 @@ export function CourseCreatePage({
             borderRadius: "12px",
             gap: "6px",
           }}
-          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] active:scale-[0.98] disabled:opacity-60"
-          onClick={handleSaveDraftAction}
+          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          onClick={handleSaveChangesAction}
           disabled={actionLoading !== null}
         >
-          {actionLoading === "draft" ? (
+          {actionLoading === "save" ? (
             <>
               <CircleNotch
                 size={14}
@@ -4797,59 +5654,71 @@ export function CourseCreatePage({
           ) : (
             <>
               <FloppyDisk size={14} />
-              <span>Save Draft</span>
+              <span>Save Changes</span>
             </>
           )}
         </button>
 
-        {/* Save Changes / Publish Course Button */}
-        <button
-          type="button"
-          style={{
-            fontSize: "0.84rem",
-            fontWeight: 600,
-            height: "44px",
-            borderRadius: "14px",
-            gap: "6px",
-          }}
-          className="flex-1 inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all hover:bg-[var(--accent-hover,var(--accent))] active:scale-[0.98] disabled:opacity-60"
-          disabled={actionLoading !== null}
-          onClick={
-            activeStep === "publish"
-              ? handleFinalPublishCourse
-              : handleSaveChangesAction
-          }
-        >
-          {actionLoading === "publish" ? (
-            <>
-              <CircleNotch
-                size={14}
-                className="animate-spin text-[var(--on-accent,#fff)]"
-              />
-              <span>{isPublished ? "Updating..." : "Publishing..."}</span>
-            </>
-          ) : actionLoading === "save" ? (
-            <>
-              <CircleNotch
-                size={14}
-                className="animate-spin text-[var(--on-accent,#fff)]"
-              />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              {activeStep === "publish" ? (
-                isPublished ? (
-                  <span>Update Course</span>
-                ) : (
-                  <span>Publish Course</span>
-                )
-              ) : (
-                <span>Save Changes</span>
-              )}
-            </>
-          )}
-        </button>
+        {/* Next / Publish Button */}
+        {activeStep === "publish" ? (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 600,
+              height: "44px",
+              borderRadius: "14px",
+              gap: "6px",
+            }}
+            className="flex-1 inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all hover:bg-[var(--accent-hover,var(--accent))] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={actionLoading !== null}
+            onClick={handleFinalPublishCourse}
+          >
+            {actionLoading === "publish" ? (
+              <>
+                <CircleNotch
+                  size={14}
+                  className="animate-spin text-[var(--on-accent,#fff)]"
+                />
+                <span>{isPublished ? "Updating..." : "Publishing..."}</span>
+              </>
+            ) : (
+              <>
+                <Lightning size={14} weight="bold" />
+                <span>{isPublished ? "Update Course" : "Publish"}</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 600,
+              height: "44px",
+              borderRadius: "14px",
+              gap: "6px",
+            }}
+            className="flex-1 inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all hover:bg-[var(--accent-hover,var(--accent))] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={actionLoading !== null}
+            onClick={handleNextAction}
+          >
+            {actionLoading === "next" ? (
+              <>
+                <CircleNotch
+                  size={14}
+                  className="animate-spin text-[var(--on-accent,#fff)]"
+                />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <span>Next</span>
+                <CaretRight size={14} weight="bold" />
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Floating Action Feedback Toast */}

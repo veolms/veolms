@@ -6,12 +6,15 @@ import type {
   CourseOverviewResponse,
   CourseSummary,
   CreateCategoryRequest,
+  CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   MyCoursesListResponse,
   PublicCourse,
+  ReorderLessonsRequest,
   ReorderSectionsRequest,
   UpdateCourseBasicsRequest,
+  UpdateCourseLessonRequest,
   UpdateCourseSectionRequest,
 } from "@veolms/contracts";
 
@@ -99,6 +102,48 @@ export const coursesService = {
   ): Promise<{ success: boolean }> => {
     return api.post<{ success: boolean }>(
       `/courses/${courseId}/sections/reorder`,
+      payload,
+    );
+  },
+
+  createLesson: (
+    courseId: string,
+    sectionId: string,
+    payload: CreateCourseLessonRequest,
+  ): Promise<{ id: string; position: number }> => {
+    return api.post<{ id: string; position: number }>(
+      `/courses/${courseId}/sections/${sectionId}/lessons`,
+      payload,
+    );
+  },
+
+  updateLesson: (
+    courseId: string,
+    lessonId: string,
+    payload: UpdateCourseLessonRequest,
+  ): Promise<{ success: boolean; videoJobId?: string; processingStatus?: string }> => {
+    return api.patch<{ success: boolean; videoJobId?: string; processingStatus?: string }>(
+      `/courses/${courseId}/lessons/${lessonId}`,
+      payload,
+    );
+  },
+
+  deleteLesson: (
+    courseId: string,
+    lessonId: string,
+  ): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(
+      `/courses/${courseId}/lessons/${lessonId}`,
+    );
+  },
+
+  reorderLessons: (
+    courseId: string,
+    sectionId: string,
+    payload: ReorderLessonsRequest,
+  ): Promise<{ success: boolean }> => {
+    return api.post<{ success: boolean }>(
+      `/courses/${courseId}/sections/${sectionId}/lessons/reorder`,
       payload,
     );
   },
