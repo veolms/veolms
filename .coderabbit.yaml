@@ -4,9 +4,6 @@ reviews:
   path_filters:
     - "!apps/web/src/**/*.ts"
     - "!apps/web/src/**/*.tsx"
-    - "apps/web/src/notifications/**/*.ts"
-    - "apps/web/src/notifications/**/*.tsx"
-    - "apps/web/src/services/auth/**/*.ts"
     - "!apps/web/tests/**"
   pre_merge_checks:
     # This TypeScript/React codebase relies on types, explicit names, and focused
