@@ -10,7 +10,7 @@ import { authStore } from "../store/auth.store";
 export { getApiError, type ApiError };
 
 const BACKEND_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
+  import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const MFA_SETUP_PATH = "/mfa-setup";
 
 function redirectToMfaSetup(apiError: ApiError): void {
