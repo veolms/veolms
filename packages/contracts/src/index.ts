@@ -1,5 +1,6 @@
 export * from "./course.ts";
 export * from "./media.ts";
+export * from "./commerce.ts";
 
 export { healthResponseSchema } from "./health.ts";
 export type { HealthResponse } from "./health.ts";

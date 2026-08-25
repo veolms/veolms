@@ -310,6 +310,201 @@ export interface VideoOutputTable {
   created_at: Generated<Date>;
 }
 
+export type BundleStatus = "draft" | "published" | "archived";
+export type CartItemType = "course" | "bundle";
+export type OrderItemType = "course" | "bundle";
+export type CouponDiscountType = "percentage" | "fixed";
+export type OrderStatus =
+  | "pending"
+  | "payment_processing"
+  | "paid"
+  | "payment_failed"
+  | "cancelled"
+  | "expired"
+  | "partially_refunded"
+  | "refunded";
+export type PaymentStatus =
+  | "initiated"
+  | "processing"
+  | "captured"
+  | "failed"
+  | "refunded";
+export type PaymentAttemptStatus =
+  | "initiated"
+  | "processing"
+  | "captured"
+  | "failed";
+export type RefundStatus = "pending" | "processed" | "failed";
+export type EnrollmentStatus = "active" | "suspended" | "revoked" | "expired";
+export type EnrollmentSource =
+  | "direct_purchase"
+  | "bundle_purchase"
+  | "free_grant"
+  | "admin_grant";
+
+export interface CourseBundleTable {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  thumbnail_media_id: string | null;
+  status: BundleStatus;
+  price: number;
+  currency: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+export interface CourseBundleItemTable {
+  id: string;
+  bundle_id: string;
+  course_id: string;
+  created_at: Generated<Date>;
+}
+
+export interface CartTable {
+  id: string;
+  user_id: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CartItemTable {
+  id: string;
+  cart_id: string;
+  item_type: CartItemType;
+  course_id: string | null;
+  bundle_id: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface CouponTable {
+  id: string;
+  code: string;
+  description: string | null;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  max_discount_amount: number | null;
+  min_order_amount: Generated<number>;
+  starts_at: Date;
+  expires_at: Date;
+  global_usage_limit: number | null;
+  per_user_limit: Generated<number>;
+  is_active: Generated<boolean>;
+  restricted_course_ids: string[] | null;
+  restricted_bundle_ids: string[] | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CouponRedemptionTable {
+  id: string;
+  coupon_id: string;
+  user_id: string;
+  order_id: string;
+  discount_amount: number;
+  created_at: Generated<Date>;
+}
+
+export interface OrderTable {
+  id: string;
+  order_number: string;
+  user_id: string;
+  status: OrderStatus;
+  currency: string;
+  subtotal_amount: number;
+  discount_amount: Generated<number>;
+  tax_amount: Generated<number>;
+  total_amount: number;
+  coupon_id: string | null;
+  idempotency_key: string | null;
+  expires_at: Date;
+  paid_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface OrderItemTable {
+  id: string;
+  order_id: string;
+  item_type: OrderItemType;
+  course_id: string | null;
+  bundle_id: string | null;
+  title_snapshot: string;
+  unit_price: number;
+  discount_amount: Generated<number>;
+  tax_amount: Generated<number>;
+  final_amount: number;
+  created_at: Generated<Date>;
+}
+
+export interface PaymentTable {
+  id: string;
+  order_id: string;
+  gateway_provider: string;
+  gateway_order_id: string;
+  gateway_payment_id: string | null;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  payment_method: unknown | null;
+  error_code: string | null;
+  error_description: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface PaymentAttemptTable {
+  id: string;
+  payment_id: string;
+  gateway_payment_id: string | null;
+  attempt_number: number;
+  status: PaymentAttemptStatus;
+  error_code: string | null;
+  error_description: string | null;
+  raw_payload: unknown | null;
+  created_at: Generated<Date>;
+}
+
+export interface RefundTable {
+  id: string;
+  order_id: string;
+  payment_id: string;
+  gateway_refund_id: string | null;
+  amount: number;
+  currency: string;
+  reason: string | null;
+  status: RefundStatus;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface EnrollmentTable {
+  id: string;
+  user_id: string;
+  course_id: string;
+  order_id: string | null;
+  status: EnrollmentStatus;
+  source: EnrollmentSource;
+  access_starts_at: Generated<Date>;
+  access_expires_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface WebhookEventTable {
+  id: string;
+  provider: string;
+  event_id: string;
+  event_type: string;
+  payload: unknown;
+  processed_at: Date | null;
+  error: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   courses: CourseTable;
   academy: AcademyTable;
@@ -335,5 +530,19 @@ export interface Database {
   course_settings: CourseSettingsTable;
   video_jobs: VideoJobTable;
   video_outputs: VideoOutputTable;
+  course_bundles: CourseBundleTable;
+  course_bundle_items: CourseBundleItemTable;
+  carts: CartTable;
+  cart_items: CartItemTable;
+  coupons: CouponTable;
+  coupon_redemptions: CouponRedemptionTable;
+  orders: OrderTable;
+  order_items: OrderItemTable;
+  payments: PaymentTable;
+  payment_attempts: PaymentAttemptTable;
+  refunds: RefundTable;
+  enrollments: EnrollmentTable;
+  webhook_events: WebhookEventTable;
 }
+
 
