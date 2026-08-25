@@ -1,10 +1,4 @@
 reviews:
-  # Temporary review batch: styles, configuration, and integration contracts.
-  # This scope is reverted after the oversized pull request is fully reviewed.
-  path_filters:
-    - "!apps/web/src/**/*.ts"
-    - "!apps/web/src/**/*.tsx"
-    - "!apps/web/tests/**"
   pre_merge_checks:
     # This TypeScript/React codebase relies on types, explicit names, and focused
     # comments instead of requiring docstrings on every touched function.
