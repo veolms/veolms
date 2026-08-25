@@ -1,5 +1,5 @@
 export { createDatabase } from "./client.ts";
-export {  claimNextQueuedVideoJob } from "./fleet/video-jobs.ts";
+export { claimNextQueuedVideoJob } from "./fleet/video-jobs.ts";
 export type {
   AcademyTable,
   Architecture,
@@ -21,5 +21,3 @@ export type {
   WorkerStatus,
   WorkerTable,
 } from "./schema.ts";
-
-

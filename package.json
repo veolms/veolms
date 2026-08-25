@@ -15,7 +15,7 @@
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",
-    "build:lambda": "pnpm --filter @veolms/fleet-provider-aws build:lambda",
+    "build:serverless": "pnpm --filter @veolms/fleet-manager build:serverless",
     "build:worker": "pnpm --filter @veolms/media-worker build:bundle",
     "lint": "eslint .",
     "format": "prettier --write .",
