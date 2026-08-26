@@ -1007,7 +1007,7 @@ export function LearningWorkspace({
                 <div className="min-w-0">
                   <h1 id="learning-lesson-title" className="truncate">{currentLesson[1]}</h1>
                 </div>
-                <div className="flex items-center gap-1.5 pt-1 text-sm font-semibold text-(--muted) transition-colors group-hover:text-(--text) xl:hidden">
+                <div className="flex items-center gap-1.5 pt-1 text-sm font-semibold text-(--muted) transition-colors group-hover:text-(--text) min-[1081px]:hidden">
                   <span>Lessons</span>
                   <CaretDown size={18} className={`transition-transform duration-200 ${lessonDrawer ? "rotate-180" : ""}`} />
                 </div>
