@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
-import { Archive } from "@phosphor-icons/react/Archive";
-import { CreditCard } from "@phosphor-icons/react/CreditCard";
-import { DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
-import { SignOut } from "@phosphor-icons/react/SignOut";
-import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
+import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { useLogout } from "../services/auth";
 import { clearStoredProfilePreferences } from "./profilePreferences";
 import type { ProfileRole } from "./profilePreferences";
@@ -19,7 +18,6 @@ export function AccountSettings({
   onNavigatePage,
 }: AccountSettingsProps) {
   const [confirmDeactivation, setConfirmDeactivation] = useState(false);
-  const navigate = useNavigate();
   const logoutMutation = useLogout();
 
   return (
@@ -96,10 +94,7 @@ export function AccountSettings({
         </div>
       </section>
 
-      <section
-        className="settings-section"
-        aria-labelledby="signout-heading"
-      >
+      <section className="settings-section" aria-labelledby="signout-heading">
         <header className="settings-section__heading">
           <SignOut size={20} weight="duotone" />
           <div>

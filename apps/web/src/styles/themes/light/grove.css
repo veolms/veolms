@@ -1,4 +1,4 @@
-/* grove palette — light mode. */
+/* grove palette - light mode. */
 :root[data-theme="light"][data-palette="grove"] {
   --canvas: #e9f1eb;
   --header: #e4ece6;
@@ -20,4 +20,8 @@
   --app-shell: #dfe8e2;
   --main-surface: #f2f8f4;
   --surface-strong: #e9f3ec;
+  --card-surface: var(--surface);
+  --card-surface-raised: var(--surface-strong);
+  --card-surface-soft: var(--main-surface);
+  --card-surface-hover: var(--hover);
 }

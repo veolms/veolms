@@ -1,38 +1,23 @@
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { Outlet, useLocation, useMatches, useNavigate } from "react-router";
+  Outlet,
+  useLocation,
+  useMatches,
+  useNavigate,
+  useParams,
+} from "react-router";
 import { CoursesPage } from "../CoursesPage";
+import type { Course, CourseOpenOptions } from "../courses/catalogue";
 import { useLogout } from "../services/auth";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
-import type { Course } from "../courses/catalogue";
 import type { LearningCourse } from "../StudentPages";
-import {
-  discardPendingCourseCommentDraft,
-  getActiveCoursePlayerSession,
-  getCoursePlayerOrigin,
-  getCoursePlayerOriginFromPathname,
-  getPendingCourseCommentDraft,
-  getResumableCoursePlayerNavigationPath,
-  getCoursePlayerSection,
-  postPendingCourseCommentDraft,
-  rememberCoursePlayerDestination,
-} from "../learning/coursePlayerNavigation";
-import type {
-  CoursePlayerOrigin,
-  PendingCourseCommentDraft,
-} from "../learning/coursePlayerNavigation";
-import { LearningSessionConflictDialog } from "../learning/LearningSessionConflictDialog";
-import { getCourseTitle } from "../learning/courseMetadata";
+import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import {
   getInitialNavigationOrder,
+  getInitialNavigationVisibility,
   getNavigationDestination,
-  getOrderedNavigation,
+  getVisibleOrderedNavigation,
 } from "../shell/navigation";
 import {
   readApplicationScrollPosition,
@@ -54,38 +39,67 @@ export interface AcademyOutletContext {
   navigateTo: NavigateTo;
 }
 
-interface PendingCourseOpen {
-  course: Course | LearningCourse;
-  origin: CoursePlayerOrigin;
-  draft: PendingCourseCommentDraft;
-  currentCourseTitle: string;
-}
-
 const isSettingsPath = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
   return pathname === "/settings" || pathname.startsWith("/settings/");
+};
+
+const decorateCoursePlayerLaunch = (
+  destinationPath: string,
+  sourcePath: string,
+) => {
+  const sourcePathname = normalizeNavigationPath(
+    sourcePath.split(/[?#]/, 1)[0] || "/",
+  );
+  if (sourcePathname.startsWith("/learn/")) return destinationPath;
+
+  try {
+    const localOrigin = "https://procodrr.local";
+    const destinationUrl = new URL(destinationPath, localOrigin);
+    const pathParts = destinationUrl.pathname.split("/").filter(Boolean);
+    if (
+      destinationUrl.origin !== localOrigin ||
+      pathParts[0] !== "learn" ||
+      pathParts.length < 2 ||
+      pathParts.length > 3
+    )
+      return destinationPath;
+    if (
+      destinationUrl.searchParams.has("from") ||
+      destinationUrl.searchParams.has("returnTo")
+    )
+      return destinationPath;
+
+    const courseId = decodeURIComponent(pathParts[1]!);
+    const lessonIdentifier = pathParts[2]
+      ? decodeURIComponent(pathParts[2])
+      : undefined;
+    return getCoursePlayerLaunchPath(courseId, sourcePath, lessonIdentifier);
+  } catch {
+    return destinationPath;
+  }
 };
 
 export default function AcademyLayout() {
   const matches = useMatches();
   const location = useLocation();
   const navigate = useNavigate();
+  const { courseSlug } = useParams();
   const preservedScrollPositionRef = useRef<{
     left: number;
     top: number;
   } | null>(null);
-  const locationPathRef = useRef(`${location.pathname}${location.search}`);
+  const locationPathRef = useRef(
+    `${location.pathname}${location.search}${location.hash}`,
+  );
   const settingsReturnLocationRef = useRef({
     path: "/",
     left: 0,
     top: 0,
   });
   const numberNavigationTimerRef = useRef<number | null>(null);
-  const [pendingCourseOpen, setPendingCourseOpen] =
-    useState<PendingCourseOpen | null>(null);
-  const currentLocationPath = `${location.pathname}${location.search}`;
+  const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
-  const coursePlayerOrigin = getCoursePlayerOrigin(location.search);
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -106,11 +120,11 @@ export default function AcademyLayout() {
       return;
     }
     const destination =
-      pathname === "/my-learning"
-        ? "/my-courses"
-        : pathname === "/courses"
-          ? "/explore-courses"
-          : null;
+      pathname === "/my-learning" ||
+      pathname === "/my-courses" ||
+      pathname === "/explore-courses"
+        ? "/courses"
+        : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
   }, [location.pathname, location.search, navigate, logoutMutation]);
@@ -129,8 +143,14 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
-      const destinationPath = getDestinationPath(destination);
-      const path = getResumableCoursePlayerNavigationPath(destinationPath);
+      const destinationPath = options?.exact
+        ? destination
+        : getDestinationPath(destination);
+      const activeLocationPath = locationPathRef.current;
+      const path = decorateCoursePlayerLaunch(
+        destinationPath,
+        activeLocationPath,
+      );
       if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
         const currentScrollPosition = readApplicationScrollPosition();
         settingsReturnLocationRef.current = {
@@ -184,9 +204,10 @@ export default function AcademyLayout() {
       if (index === null) return;
 
       const role = localStorage.getItem("veolms-role") || "student";
-      const orderedNavigation = getOrderedNavigation(
+      const orderedNavigation = getVisibleOrderedNavigation(
         role,
         getInitialNavigationOrder(role),
+        getInitialNavigationVisibility(role),
       ).filter(
         ([label]) =>
           label !== "Settings" ||
@@ -216,48 +237,23 @@ export default function AcademyLayout() {
     };
   }, []);
 
-  const commitCourseOpen = useCallback(
-    (course: Course | LearningCourse, origin: CoursePlayerOrigin) => {
-      localStorage.setItem("veolms-current-course-title", course.title);
-      localStorage.setItem("veolms-current-course-id", course.id);
-      const path = rememberCoursePlayerDestination(course.id, origin);
-      navigateTo(path);
+  const openCourse = useCallback(
+    (course: Course | LearningCourse, options?: CourseOpenOptions) => {
+      navigateTo(
+        `/learn/${encodeURIComponent(course.id)}${options?.preview ? "/1" : ""}`,
+      );
     },
     [navigateTo],
-  );
-
-  const openCourse = useCallback(
-    (course: Course | LearningCourse) => {
-      const origin = getCoursePlayerOriginFromPathname(location.pathname);
-      const activeSession = getActiveCoursePlayerSession();
-      if (activeSession && activeSession.courseId !== course.id) {
-        const draft = getPendingCourseCommentDraft(activeSession);
-        if (draft) {
-          setPendingCourseOpen({
-            course,
-            origin,
-            draft,
-            currentCourseTitle: getCourseTitle(activeSession.courseId),
-          });
-          return;
-        }
-      }
-      commitCourseOpen(course, origin);
-    },
-    [commitCourseOpen, location.pathname],
   );
 
   return (
     <>
       <CoursesPage
         page={route.page}
-        section={
-          route.kind === "learning"
-            ? getCoursePlayerSection(coursePlayerOrigin)
-            : route.section
-        }
+        section={route.section}
         settingsTab={route.settingsTab}
         discussionTab={route.discussionTab}
+        courseSlug={courseSlug}
         onNavigatePage={navigateTo}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
@@ -271,30 +267,6 @@ export default function AcademyLayout() {
             : null
         }
       />
-      {pendingCourseOpen && (
-        <LearningSessionConflictDialog
-          currentCourseTitle={pendingCourseOpen.currentCourseTitle}
-          nextCourseTitle={pendingCourseOpen.course.title}
-          draftText={pendingCourseOpen.draft.text}
-          onCancel={() => setPendingCourseOpen(null)}
-          onDiscard={() => {
-            discardPendingCourseCommentDraft(pendingCourseOpen.draft);
-            commitCourseOpen(
-              pendingCourseOpen.course,
-              pendingCourseOpen.origin,
-            );
-            setPendingCourseOpen(null);
-          }}
-          onPost={() => {
-            postPendingCourseCommentDraft(pendingCourseOpen.draft);
-            commitCourseOpen(
-              pendingCourseOpen.course,
-              pendingCourseOpen.origin,
-            );
-            setPendingCourseOpen(null);
-          }}
-        />
-      )}
     </>
   );
 }

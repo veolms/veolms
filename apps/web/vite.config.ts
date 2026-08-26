@@ -6,6 +6,7 @@ import { loadWebConfig } from "@veolms/config";
 import { defineConfig, loadEnv } from "vite";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
+const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
 
 const shellPhosphorIcons = new Set([
   "Bell",
@@ -72,13 +73,20 @@ export default defineConfig(({ mode }) => {
       ),
     },
     plugins: [tailwindcss(), reactRouter()],
+    resolve: {
+      alias: {
+        "@": webSourceRoot,
+      },
+    },
     build: {
       rollupOptions: {
         output: {
           manualChunks(id) {
             const iconName = getPhosphorIconName(id);
-            if (iconName && shellPhosphorIcons.has(iconName)) return "shell-icons";
-            if (iconName && homePhosphorIcons.has(iconName)) return "home-icons";
+            if (iconName && shellPhosphorIcons.has(iconName))
+              return "shell-icons";
+            if (iconName && homePhosphorIcons.has(iconName))
+              return "home-icons";
             if (iconName && settingsPhosphorIcons.has(iconName))
               return "settings-icons";
             return undefined;

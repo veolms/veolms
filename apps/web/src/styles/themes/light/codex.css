@@ -1,4 +1,4 @@
-/* codex palette — light mode. */
+/* codex palette - light mode. */
 :root[data-theme="light"][data-palette="codex"] {
   --canvas: #f1f1f3;
   --header: #f3f3f5;

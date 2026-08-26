@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 .turbo/
 .tmp/
+.codex-qa/
 build/
 .react-router/
 .env

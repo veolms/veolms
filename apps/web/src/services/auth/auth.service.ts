@@ -7,11 +7,17 @@ import type {
   OauthUrlRequest,
   OauthUrlResponse,
   OtpSendRequest,
+  PasskeyAuthenticationOptionsResponse,
+  PasskeyRegistrationOptionsResponse,
   RegisterRequest,
   SessionResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
   UserProfileResponse,
+} from "@veolms/contracts";
+import {
+  passkeyAuthenticationOptionsResponseSchema,
+  passkeyRegistrationOptionsResponseSchema,
 } from "@veolms/contracts";
 
 export interface TotpSetupResponse {
@@ -54,9 +60,13 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
   },
 
-  getPasskeyRegisterOptions: (): Promise<unknown> => {
-    return api.post<unknown>("/auth/passkey/register/options");
-  },
+  getPasskeyRegisterOptions:
+    async (): Promise<PasskeyRegistrationOptionsResponse> => {
+      const response = await api.post<unknown>(
+        "/auth/passkey/register/options",
+      );
+      return passkeyRegistrationOptionsResponseSchema.parse(response);
+    },
 
   verifyPasskeyRegister: (payload: {
     response: unknown;
@@ -67,9 +77,11 @@ export const authService = {
     );
   },
 
-  getPasskeyLoginOptions: (): Promise<unknown> => {
-    return api.post<unknown>("/auth/passkey/login/options");
-  },
+  getPasskeyLoginOptions:
+    async (): Promise<PasskeyAuthenticationOptionsResponse> => {
+      const response = await api.post<unknown>("/auth/passkey/login/options");
+      return passkeyAuthenticationOptionsResponseSchema.parse(response);
+    },
 
   verifyPasskeyLogin: (payload: {
     response: unknown;

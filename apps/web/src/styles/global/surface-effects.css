@@ -8,18 +8,34 @@
     color-mix(in srgb, var(--surface) 82%, var(--accent) 18%) 100%
   );
   --surface-depth-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
-    inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
-    0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
-    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 6%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--canvas) 28%, transparent),
+    0 2px 6px color-mix(in srgb, var(--canvas) 48%, transparent),
+    0 14px 32px color-mix(in srgb, var(--canvas) 50%, transparent),
+    0 28px 56px color-mix(in srgb, var(--canvas) 28%, transparent);
+  --surface-frame-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 15%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 7%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--canvas) 30%, transparent),
+    0 3px 10px color-mix(in srgb, var(--canvas) 54%, transparent),
+    0 20px 46px color-mix(in srgb, var(--canvas) 56%, transparent),
+    0 34px 72px color-mix(in srgb, var(--canvas) 32%, transparent);
   --surface-depth-edge-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
-    inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 6%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--canvas) 28%, transparent);
+  --surface-frame-edge-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 15%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 7%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--canvas) 30%, transparent);
   --surface-depth-hover-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
-    inset 1px 0 0 color-mix(in srgb, var(--text) 5%, transparent),
-    0 13px 30px color-mix(in srgb, var(--canvas) 38%, transparent),
-    0 3px 12px color-mix(in srgb, var(--accent-shadow) 25%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 17%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 8%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--canvas) 32%, transparent),
+    0 3px 8px color-mix(in srgb, var(--canvas) 54%, transparent),
+    0 18px 42px color-mix(in srgb, var(--canvas) 58%, transparent),
+    0 34px 68px color-mix(in srgb, var(--canvas) 34%, transparent);
   --surface-depth-selected-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
@@ -41,31 +57,37 @@
    let neutral black create the lift so the result reads as depth, not glow. */
 :root[data-theme="dark"] {
   --surface-depth-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 11%), inset 1px 0 0 rgb(255 255 255 / 5%),
-    0 3px 8px rgb(0 0 0 / 30%), 0 16px 36px rgb(0 0 0 / 42%),
-    0 5px 16px color-mix(in srgb, var(--accent-shadow) 26%, transparent);
-  --surface-depth-edge-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 11%), inset 1px 0 0 rgb(255 255 255 / 5%);
-  --surface-depth-hover-shadow:
     inset 0 1px 0 rgb(255 255 255 / 15%), inset 1px 0 0 rgb(255 255 255 / 7%),
-    0 4px 10px rgb(0 0 0 / 36%), 0 20px 44px rgb(0 0 0 / 48%),
-    0 7px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+    inset 0 -1px 0 rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 50%),
+    0 14px 32px rgb(0 0 0 / 54%), 0 28px 56px rgb(0 0 0 / 30%);
+  --surface-frame-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 17%), inset 1px 0 0 rgb(255 255 255 / 8%),
+    inset 0 -1px 0 rgb(0 0 0 / 32%), 0 3px 10px rgb(0 0 0 / 56%),
+    0 20px 46px rgb(0 0 0 / 60%), 0 34px 72px rgb(0 0 0 / 36%);
+  --surface-depth-edge-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 15%), inset 1px 0 0 rgb(255 255 255 / 7%),
+    inset 0 -1px 0 rgb(0 0 0 / 28%);
+  --surface-frame-edge-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 17%), inset 1px 0 0 rgb(255 255 255 / 8%),
+    inset 0 -1px 0 rgb(0 0 0 / 32%);
+  --surface-depth-hover-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 19%), inset 1px 0 0 rgb(255 255 255 / 9%),
+    inset 0 -1px 0 rgb(0 0 0 / 32%), 0 3px 8px rgb(0 0 0 / 56%),
+    0 18px 42px rgb(0 0 0 / 60%), 0 34px 68px rgb(0 0 0 / 35%);
   --surface-depth-selected-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 15%),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 21%, transparent),
-    0 4px 10px rgb(0 0 0 / 34%), 0 18px 40px rgb(0 0 0 / 45%),
-    0 6px 18px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+    inset 0 1px 0 rgb(255 255 255 / 19%), inset 1px 0 0 rgb(255 255 255 / 9%),
+    inset 0 -1px 0 rgb(0 0 0 / 32%),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent),
+    0 3px 8px rgb(0 0 0 / 54%), 0 18px 40px rgb(0 0 0 / 58%),
+    0 8px 24px color-mix(in srgb, var(--accent) 16%, transparent);
   --surface-depth-compact-shadow:
-    0 2px 5px rgb(0 0 0 / 34%), 0 11px 25px rgb(0 0 0 / 42%);
+    0 2px 5px rgb(0 0 0 / 48%), 0 10px 22px rgb(0 0 0 / 52%);
   --surface-depth-floating-shadow:
-    0 8px 22px rgb(0 0 0 / 44%), 0 30px 76px rgb(0 0 0 / 58%);
+    0 8px 22px rgb(0 0 0 / 58%), 0 30px 76px rgb(0 0 0 / 70%);
 }
 
-/* Light surfaces need a foreground-derived neutral cast for separation.
-   Using --text rather than a palette's canvas or accent keeps the perceived
-   depth stable on every light palette, including low-contrast warm palettes
-   such as Copper Slate. The short contact shadow defines the edge while the
-   broader, softer layers provide lift without turning into an accent glow. */
+/* Match the deployed light-mode material hierarchy: a crisp white top/left
+   edge, close contact shadow, and two soft foreground-derived lift layers. */
 :root[data-theme="light"] {
   --sidebar-menu-active-background: linear-gradient(
     108deg,
@@ -77,8 +99,10 @@
     0 1px 3px color-mix(in srgb, var(--text) 20%, transparent),
     0 7px 17px color-mix(in srgb, var(--text) 14%, transparent),
     0 19px 38px color-mix(in srgb, var(--text) 10%, transparent);
+  --surface-frame-shadow: var(--surface-depth-shadow);
   --surface-depth-edge-shadow:
     inset 0 1px 0 rgb(255 255 255 / 96%), inset 1px 0 0 rgb(255 255 255 / 68%);
+  --surface-frame-edge-shadow: var(--surface-depth-edge-shadow);
   --surface-depth-hover-shadow:
     inset 0 1px 0 rgb(255 255 255 / 100%), inset 1px 0 0 rgb(255 255 255 / 76%),
     0 2px 5px color-mix(in srgb, var(--text) 22%, transparent),
@@ -108,16 +132,21 @@
   --card-selected-shadow: var(--surface-depth-selected-shadow);
   --card-compact-shadow: var(--surface-depth-compact-shadow);
   --card-floating-shadow: var(--surface-depth-floating-shadow);
+  --application-frame-shadow: var(--surface-frame-shadow);
+  --application-frame-edge-shadow: var(--surface-frame-edge-shadow);
 }
 
 :root[data-elevated-surfaces="false"] {
   --card-shadow: none;
   --surface-depth-edge-shadow: none;
+  --surface-frame-edge-shadow: none;
   --card-hover-shadow: none;
   --card-selected-shadow: inset 0 0 0 1px
     color-mix(in srgb, var(--accent) 18%, transparent);
   --card-compact-shadow: none;
   --card-floating-shadow: none;
+  --application-frame-shadow: none;
+  --application-frame-edge-shadow: none;
 }
 
 :root[data-sidebar-menu-elevation="true"] {
@@ -142,11 +171,10 @@
   --sidebar-menu-depth-hover-shadow:
     inset 0 1px 0 rgb(255 255 255 / 12%), 0 4px 9px rgb(0 0 0 / 34%),
     0 15px 32px rgb(0 0 0 / 42%);
-  --sidebar-menu-active-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 14%),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 21%, transparent),
-    0 4px 10px rgb(0 0 0 / 34%), 0 16px 34px rgb(0 0 0 / 43%),
-    0 6px 18px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+  /* The selected destination is a raised surface, not an accent glow. Reuse
+     the same dark contact and ambient depth as dashboard cards so it remains
+     visibly lifted against every dark sidebar palette. */
+  --sidebar-menu-active-shadow: var(--surface-depth-shadow);
 }
 
 :root[data-theme="light"][data-sidebar-menu-elevation="true"] {

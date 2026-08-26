@@ -1,4 +1,4 @@
-/* midnight palette — light mode. */
+/* midnight palette - light mode. */
 :root[data-theme="light"][data-palette="midnight"] {
   --canvas: #e8eff8;
   --header: #e4ecf7;

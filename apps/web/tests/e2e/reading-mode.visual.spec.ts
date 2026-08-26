@@ -40,7 +40,7 @@ test.describe("@visual reading mode", () => {
             }),
           },
         });
-        await openApp(page, "/explore-courses");
+        await openApp(page, "/courses");
         await prepareVisualPage(page);
         await expect(page).toHaveScreenshot(
           `reading-mode-${state.id}-${viewport}.png`,
@@ -82,7 +82,7 @@ test.describe("@visual reading mode", () => {
         }),
       },
     });
-    await openApp(page, "/explore-courses");
+    await openApp(page, "/courses");
     await prepareVisualPage(page);
     await expect(page.locator(".reading-mode-effects__texture")).toHaveCSS(
       "mix-blend-mode",
@@ -108,7 +108,7 @@ test.describe("@visual reading mode high density", () => {
           }),
         },
       });
-      await openApp(page, "/explore-courses");
+      await openApp(page, "/courses");
       await prepareVisualPage(page);
       const textureLayer = page.locator(".reading-mode-effects__texture");
       await expect(textureLayer).toHaveCSS("background-size", "512px 512px");
@@ -119,7 +119,7 @@ test.describe("@visual reading mode high density", () => {
               performance
                 .getEntriesByType("resource")
                 .some((entry) =>
-                  entry.name.endsWith("reading-mode-grain@2x.png"),
+                  entry.name.endsWith("reading-mode-grain@2x.webp"),
                 ),
             ),
           )
@@ -148,7 +148,7 @@ test.describe("reading mode extra-high density", () => {
         }),
       },
     });
-    await openApp(page, "/explore-courses");
+    await openApp(page, "/courses");
     await prepareVisualPage(page);
     await expect(page.locator(".reading-mode-effects__texture")).toHaveCSS(
       "background-size",
@@ -159,7 +159,7 @@ test.describe("reading mode extra-high density", () => {
         page.evaluate(() =>
           performance
             .getEntriesByType("resource")
-            .some((entry) => entry.name.endsWith("reading-mode-grain@3x.png")),
+            .some((entry) => entry.name.endsWith("reading-mode-grain@3x.webp")),
         ),
       )
       .toBe(true);

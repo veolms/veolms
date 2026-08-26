@@ -85,10 +85,10 @@ export async function updateSidebarPreferences(
   await openApp(page, path);
 }
 
-export async function revealDeferredAppearanceSettings(page: Page) {
-  const sentinel = page.locator(".settings-deferred-sentinel");
-  await expect(sentinel).toBeAttached();
-  await sentinel.scrollIntoViewIfNeeded();
+export async function expectAppearanceSettingsReady(page: Page) {
+  await expect(page.getByRole("heading", { name: "Interface" })).toBeAttached({
+    timeout: 15_000,
+  });
   await expect(page.locator(".settings-reading-mode")).toBeAttached({
     timeout: 15_000,
   });

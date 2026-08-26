@@ -1,4 +1,4 @@
-/* rose palette — light mode. */
+/* rose palette - light mode. */
 :root[data-theme="light"][data-palette="rose"] {
   --canvas: #f2eaed;
   --header: #eee6e9;
@@ -20,4 +20,8 @@
   --app-shell: #ebe2e5;
   --main-surface: #faf3f5;
   --surface-strong: #f6eaee;
+  --card-surface: var(--surface);
+  --card-surface-raised: var(--surface-strong);
+  --card-surface-soft: var(--main-surface);
+  --card-surface-hover: var(--hover);
 }

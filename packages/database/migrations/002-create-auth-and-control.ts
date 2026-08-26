@@ -56,13 +56,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .execute();
 
-  await (database as Kysely<any>)
-    .insertInto("roles")
-    .values([
-      { id: "00000000-0000-4000-8000-000000000001", name: "creator", description: "Platform owner and creator" },
-      { id: "00000000-0000-4000-8000-000000000002", name: "student", description: "Enrolled student" },
-    ])
-    .execute();
+  await sql`
+    INSERT INTO roles (id, name, description)
+    VALUES
+      ('00000000-0000-4000-8000-000000000001', 'creator', 'Platform owner and creator'),
+      ('00000000-0000-4000-8000-000000000002', 'student', 'Enrolled student')
+  `.execute(database);
 
   // 4. Create user_roles table
   await database.schema

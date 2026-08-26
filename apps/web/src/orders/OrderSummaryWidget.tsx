@@ -1,9 +1,9 @@
-import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { ChartBar } from "@phosphor-icons/react/ChartBar";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { PlusCircle } from "@phosphor-icons/react/PlusCircle";
-import { XCircle } from "@phosphor-icons/react/XCircle";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
+import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { OrderSummaryMetrics, OrderTabId } from "./ordersData";
 
 export interface OrderSummaryWidgetProps {
@@ -21,7 +21,7 @@ export function OrderSummaryWidget({
       label: "Total orders",
       value: summary.totalOrders,
       Icon: PlusCircle,
-      iconColor: "text-[var(--text-secondary)]",
+      iconColor: "text-(--text-secondary)",
     },
     {
       id: "completed" as OrderTabId,
@@ -56,18 +56,18 @@ export function OrderSummaryWidget({
   return (
     <section
       aria-labelledby="order-summary-heading"
-      className="rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3
           id="order-summary-heading"
-          className="font-bold text-base text-[var(--text)] tracking-tight"
+          className="font-bold text-base text-(--text) tracking-tight"
         >
           Order Summary
         </h3>
-        <span className="text-[var(--accent)]" aria-hidden="true">
+        <span className="text-(--accent)" aria-hidden="true">
           <ChartBar size={20} weight="duotone" />
         </span>
       </div>
@@ -81,13 +81,13 @@ export function OrderSummaryWidget({
               key={item.id}
               type="button"
               onClick={() => onSelectStatusFilter?.(item.id)}
-              className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs md:text-sm text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer text-left"
+              className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs md:text-sm text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer text-left"
             >
               <div className="flex items-center gap-2.5">
                 <Icon size={16} weight="fill" className={item.iconColor} />
                 <span>{item.label}</span>
               </div>
-              <span className="font-bold text-[var(--text)]">{item.value}</span>
+              <span className="font-bold text-(--text)">{item.value}</span>
             </button>
           );
         })}
@@ -99,17 +99,17 @@ export function OrderSummaryWidget({
       {/* Total Spent Section with Sparkline */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs text-[var(--muted)]">Total spent</div>
-          <div className="text-2xl font-extrabold tracking-tight text-[var(--text)] mt-0.5">
+          <div className="text-xs text-(--muted)">Total spent</div>
+          <div className="text-2xl font-extrabold tracking-tight text-(--text) mt-0.5">
             {summary.totalSpent}
           </div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">
+          <div className="text-[11px] text-(--muted) mt-0.5">
             Across all orders
           </div>
         </div>
 
         {/* Sparkline Visual SVG */}
-        <div className="h-10 w-24 flex-shrink-0" aria-hidden="true">
+        <div className="h-10 w-24 shrink-0" aria-hidden="true">
           <svg viewBox="0 0 100 40" className="h-full w-full overflow-visible">
             <defs>
               <linearGradient id="orderSpentGradient" x1="0" y1="0" x2="1" y2="0">

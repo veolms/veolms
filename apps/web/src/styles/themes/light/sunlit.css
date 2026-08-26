@@ -1,4 +1,4 @@
-/* sunlit palette — light mode. */
+/* sunlit palette - light mode. */
 :root[data-theme="light"][data-palette="sunlit"] {
   --canvas: #f2efe3;
   --header: #edeade;
@@ -20,4 +20,8 @@
   --app-shell: #e9e6d9;
   --main-surface: #faf8ef;
   --surface-strong: #f5f0dc;
+  --card-surface: var(--surface);
+  --card-surface-raised: var(--surface-strong);
+  --card-surface-soft: var(--main-surface);
+  --card-surface-hover: var(--hover);
 }

@@ -1,4 +1,4 @@
-/* violet palette — light mode. */
+/* violet palette - light mode. */
 :root[data-theme="light"][data-palette="violet"] {
   --app-shell: #e8e5e1;
   --main-surface: #faf8f5;

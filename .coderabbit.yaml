@@ -1,4 +1,9 @@
 reviews:
+  pre_merge_checks:
+    # This TypeScript/React codebase relies on types, explicit names, and focused
+    # comments instead of requiring docstrings on every touched function.
+    docstrings:
+      mode: off
   auto_review:
     enabled: true
     auto_incremental_review: true

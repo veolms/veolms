@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CourseCatalogue } from "../../src/courses/CourseCatalogue.tsx";
@@ -19,7 +19,7 @@ vi.mock("../../src/ThemedSelect.tsx", () => ({
       aria-label={ariaLabel}
       onClick={() =>
         onValueChange(
-          ariaLabel === "Filter by category" ? "Development" : "title",
+          ariaLabel === "Filter course status" ? "completed" : "title",
         )
       }
     >
@@ -31,9 +31,9 @@ vi.mock("../../src/ThemedSelect.tsx", () => ({
 const renderCatalogue = (props: Partial<CourseCatalogueProps> = {}) => {
   const callbacks = {
     onEnrollmentFilterChange: vi.fn(),
+    onStatusFilterChange: vi.fn(),
     onSearchChange: vi.fn(),
     onSortChange: vi.fn(),
-    onCategoryChange: vi.fn(),
     onWishlist: vi.fn(),
     onOpenCourse: vi.fn(),
     setCourseMenu: vi.fn(),
@@ -47,9 +47,9 @@ const renderCatalogue = (props: Partial<CourseCatalogueProps> = {}) => {
       role="student"
       wishlisted={new Set<string>()}
       enrollmentFilter="all"
+      statusFilter="all"
       search=""
       sort="latest"
-      category="all"
       visibleCourses={[]}
       courseMenu={null}
       {...callbacks}
@@ -61,21 +61,21 @@ const renderCatalogue = (props: Partial<CourseCatalogueProps> = {}) => {
 };
 
 describe("CourseCatalogue", () => {
-  it("forwards enrollment, search, and category controls to the parent", () => {
+  it("forwards enrollment, search, status, and sort controls to the parent", () => {
     const {
       onEnrollmentFilterChange,
       onSearchChange,
       onSortChange,
-      onCategoryChange,
+      onStatusFilterChange,
     } = renderCatalogue();
 
     fireEvent.click(screen.getByRole("tab", { name: "Enrolled" }));
-    fireEvent.change(screen.getByPlaceholderText("Search your courses..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search courses..."), {
       target: { value: "mongo" },
     });
     fireEvent.click(
       screen.getByRole("combobox", {
-        name: "Filter by category",
+        name: "Filter course status",
       }),
     );
     fireEvent.click(
@@ -86,14 +86,28 @@ describe("CourseCatalogue", () => {
 
     expect(onEnrollmentFilterChange).toHaveBeenCalledWith("enrolled");
     expect(onSearchChange).toHaveBeenCalledWith("mongo");
-    expect(onCategoryChange).toHaveBeenCalledWith("Development");
+    expect(onStatusFilterChange).toHaveBeenCalledWith("completed");
     expect(onSortChange).toHaveBeenCalledWith("title");
+  });
+
+  it("reveals the mobile search field from its compact search control", () => {
+    renderCatalogue();
+
+    const searchToggle = screen.getByRole("button", { name: "Search courses" });
+    expect(searchToggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(searchToggle);
+
+    expect(searchToggle).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByPlaceholderText("Search courses..."),
+    ).toBeInTheDocument();
   });
 
   it("opens the dedicated create-course route for creators", () => {
     const { onNavigatePage, setNotice } = renderCatalogue({ role: "creator" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Create Course" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith("Create Course");
     expect(setNotice).not.toHaveBeenCalled();
@@ -107,15 +121,15 @@ describe("CourseCatalogue", () => {
       visibleCourses: [unenrolledCourse!],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Explore Course" }));
+    fireEvent.click(screen.getByRole("button", { name: "View Curriculum" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith(
-      `/explore-courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
+      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview#cov-curriculum-heading`,
     );
     expect(setNotice).not.toHaveBeenCalled();
   });
 
-  it("navigates to course edit page when edit course action is selected", () => {
+  it("navigates to course edit page when edit course action is selected", async () => {
     const target = courses[0]!;
     const { onNavigatePage } = renderCatalogue({
       role: "creator",
@@ -125,8 +139,10 @@ describe("CourseCatalogue", () => {
 
     fireEvent.click(screen.getByRole("menuitem", { name: /Edit course/i }));
 
-    expect(onNavigatePage).toHaveBeenCalledWith(
-      `/courses/create?edit=${encodeURIComponent(target.id)}`,
+    await waitFor(() =>
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/courses/create?edit=${encodeURIComponent(target.id)}`,
+      ),
     );
   });
 
@@ -136,13 +152,13 @@ describe("CourseCatalogue", () => {
       wishlisted: new Set(["course-a", "course-b"]),
     });
 
-    expect(screen.getByText("2 saved courses")).toBeVisible();
+    expect(screen.getByText("2 saved courses.")).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Your wishlist is empty" }),
     ).toBeVisible();
     expect(
       screen.getByText(
-        "Save a course with its heart button and it will appear here.",
+        "Save a not-enrolled course with its heart button and it will appear here.",
       ),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "View all courses" }));

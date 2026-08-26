@@ -1,13 +1,13 @@
-import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
-import { ArrowsInLineHorizontal } from "@phosphor-icons/react/ArrowsInLineHorizontal";
-import { Check } from "@phosphor-icons/react/Check";
-import { CircleHalf } from "@phosphor-icons/react/CircleHalf";
-import { Keyboard } from "@phosphor-icons/react/Keyboard";
-import { SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
-import { Sparkle } from "@phosphor-icons/react/Sparkle";
-import { Stack } from "@phosphor-icons/react/Stack";
-import { Tabs } from "@phosphor-icons/react/Tabs";
-import { TextAa } from "@phosphor-icons/react/TextAa";
+import { ArrowsClockwiseIcon as ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
+import { ArrowsInLineHorizontalIcon as ArrowsInLineHorizontal } from "@phosphor-icons/react/ArrowsInLineHorizontal";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CircleHalfIcon as CircleHalf } from "@phosphor-icons/react/CircleHalf";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
+import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
+import { TabsIcon as Tabs } from "@phosphor-icons/react/Tabs";
+import { TextAaIcon as TextAa } from "@phosphor-icons/react/TextAa";
 import { useEffect, useState } from "react";
 import {
   academyThemes,
@@ -18,7 +18,14 @@ import { persistShortcutPlatformPreference } from "../keyboardShortcuts";
 import type { ShortcutPlatformPreference } from "../keyboardShortcuts";
 import { useShortcutPlatformPreference } from "../useShortcutPlatform";
 import {
+  CONTROL_RADIUS_CUSTOM_MAX,
+  CONTROL_RADIUS_CUSTOM_MIN,
+  CONTROL_RADIUS_DEFAULT,
+  CONTROL_RADIUS_PRESETS,
   ELEVATED_SURFACES_KEY,
+  normalizeControlRadiusCustom,
+  persistControlRadiusPreference,
+  readControlRadiusPreference,
   readElevatedSurfaces,
   readStored,
   readStoredBoolean,
@@ -26,21 +33,24 @@ import {
 import type { PageTabColors } from "./settingsPreferences";
 import { RadioGroup, SettingRow, SettingsToggle } from "./SettingsControls";
 import { ReadingModeSettings } from "./ReadingModeSettings";
+import { ScrollbarSettings } from "./scrollbars/ScrollbarSettings";
 
-interface AppearanceDeferredSettingsProps {
+interface AppearanceAdditionalSettingsProps {
   pageTabColors: PageTabColors;
   onPageTabColorsChange: (colors: PageTabColors) => void;
 }
 
-export default function AppearanceDeferredSettings({
+export default function AppearanceAdditionalSettings({
   pageTabColors,
   onPageTabColorsChange,
-}: AppearanceDeferredSettingsProps) {
+}: AppearanceAdditionalSettingsProps) {
   const [reduceAnimations, setReduceAnimations] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [compactLayout, setCompactLayout] = useState(false);
-  const [hideScrollbars, setHideScrollbars] = useState(false);
   const [elevatedSurfaces, setElevatedSurfaces] = useState(true);
+  const [controlRadius, setControlRadius] = useState({
+    ...CONTROL_RADIUS_DEFAULT,
+  });
   const [textSize, setTextSize] = useState("default");
   const [storageReady, setStorageReady] = useState(false);
   const shortcutPlatformPreference = useShortcutPlatformPreference();
@@ -65,13 +75,11 @@ export default function AppearanceDeferredSettings({
   };
 
   useEffect(() => {
-    setReduceAnimations(
-      readStoredBoolean("veolms-reduce-animations", false),
-    );
+    setReduceAnimations(readStoredBoolean("veolms-reduce-animations", false));
     setHighContrast(readStoredBoolean("veolms-high-contrast", false));
     setCompactLayout(readStoredBoolean("veolms-compact-layout", false));
-    setHideScrollbars(readStoredBoolean("veolms-hide-scrollbars", false));
     setElevatedSurfaces(readElevatedSurfaces());
+    setControlRadius(readControlRadiusPreference());
     setTextSize(readStored("veolms-text-size", "default"));
     setThemeRotation(getThemeRotationPreferences());
     setStorageReady(true);
@@ -79,7 +87,8 @@ export default function AppearanceDeferredSettings({
 
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.reduceAnimations = String(reduceAnimations);
+    document.documentElement.dataset.reduceAnimations =
+      String(reduceAnimations);
     localStorage.setItem("veolms-reduce-animations", String(reduceAnimations));
   }, [reduceAnimations, storageReady]);
   useEffect(() => {
@@ -94,14 +103,14 @@ export default function AppearanceDeferredSettings({
   }, [compactLayout, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.hideScrollbars = String(hideScrollbars);
-    localStorage.setItem("veolms-hide-scrollbars", String(hideScrollbars));
-  }, [hideScrollbars, storageReady]);
-  useEffect(() => {
-    if (!storageReady) return;
-    document.documentElement.dataset.elevatedSurfaces = String(elevatedSurfaces);
+    document.documentElement.dataset.elevatedSurfaces =
+      String(elevatedSurfaces);
     localStorage.setItem(ELEVATED_SURFACES_KEY, String(elevatedSurfaces));
   }, [elevatedSurfaces, storageReady]);
+  useEffect(() => {
+    if (!storageReady) return;
+    persistControlRadiusPreference(controlRadius);
+  }, [controlRadius, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
     document.documentElement.dataset.textSize = textSize;
@@ -111,6 +120,8 @@ export default function AppearanceDeferredSettings({
   return (
     <>
       <ReadingModeSettings />
+
+      <ScrollbarSettings />
 
       <section className="settings-section settings-theme-rotation">
         <h2>Theme rotation</h2>
@@ -188,51 +199,222 @@ export default function AppearanceDeferredSettings({
       <section className="settings-section">
         <h2>Interface</h2>
         <div className="settings-row-list">
-          <SettingRow icon={Sparkle} label="Reduce animations" note="Minimize motion for a calmer experience">
-            <SettingsToggle checked={reduceAnimations} onChange={setReduceAnimations} label="Reduce animations" />
+          <SettingRow
+            className="settings-row--control-radius"
+            icon={CornersOut}
+            label="Control roundness"
+            note="Pill applies to action buttons. Tabs stay square, while fields and option cards stop at Rounded"
+          >
+            <div className="settings-control-radius">
+              <RadioGroup
+                label="Control roundness"
+                className="settings-control-radius__presets"
+              >
+                {CONTROL_RADIUS_PRESETS.map(({ id, label, radius }) => (
+                  <button
+                    type="button"
+                    key={id}
+                    role="radio"
+                    aria-checked={controlRadius.preset === id}
+                    tabIndex={controlRadius.preset === id ? 0 : -1}
+                    className={controlRadius.preset === id ? "is-selected" : ""}
+                    style={{ borderRadius: radius }}
+                    data-control-radius-preview
+                    onClick={() =>
+                      setControlRadius((current) => ({
+                        ...current,
+                        preset: id,
+                      }))
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={controlRadius.preset === "custom"}
+                  tabIndex={controlRadius.preset === "custom" ? 0 : -1}
+                  className={
+                    controlRadius.preset === "custom" ? "is-selected" : ""
+                  }
+                  style={{ borderRadius: controlRadius.customPx }}
+                  data-control-radius-preview
+                  onClick={() =>
+                    setControlRadius((current) => ({
+                      ...current,
+                      preset: "custom",
+                    }))
+                  }
+                >
+                  Custom
+                </button>
+              </RadioGroup>
+              {controlRadius.preset === "custom" && (
+                <label className="settings-control-radius__custom">
+                  <span>Radius</span>
+                  <span className="settings-control-radius__input">
+                    <input
+                      type="number"
+                      min={CONTROL_RADIUS_CUSTOM_MIN}
+                      max={CONTROL_RADIUS_CUSTOM_MAX}
+                      step="1"
+                      inputMode="numeric"
+                      value={controlRadius.customPx}
+                      aria-label="Custom control radius in pixels"
+                      onChange={(event) =>
+                        setControlRadius((current) => ({
+                          ...current,
+                          customPx: normalizeControlRadiusCustom(
+                            event.target.value,
+                          ),
+                        }))
+                      }
+                    />
+                    <span aria-hidden="true">px</span>
+                  </span>
+                </label>
+              )}
+            </div>
           </SettingRow>
-          <SettingRow icon={CircleHalf} label="High contrast mode" note="Increase contrast for better visibility">
-            <SettingsToggle checked={highContrast} onChange={setHighContrast} label="High contrast mode" />
+          <SettingRow
+            icon={Sparkle}
+            label="Reduce animations"
+            note="Minimize motion for a calmer experience"
+          >
+            <SettingsToggle
+              checked={reduceAnimations}
+              onChange={setReduceAnimations}
+              label="Reduce animations"
+            />
           </SettingRow>
-          <SettingRow icon={ArrowsInLineHorizontal} label="Compact layout" note="Show more content in less space">
-            <SettingsToggle checked={compactLayout} onChange={setCompactLayout} label="Compact layout" />
+          <SettingRow
+            icon={CircleHalf}
+            label="High contrast mode"
+            note="Increase contrast for better visibility"
+          >
+            <SettingsToggle
+              checked={highContrast}
+              onChange={setHighContrast}
+              label="High contrast mode"
+            />
           </SettingRow>
-          <SettingRow icon={SidebarSimple} label="Hide scrollbars" note="Keep scrolling enabled while hiding the visual scrollbars">
-            <SettingsToggle checked={hideScrollbars} onChange={setHideScrollbars} label="Hide scrollbars" />
+          <SettingRow
+            icon={ArrowsInLineHorizontal}
+            label="Compact layout"
+            note="Show more content in less space"
+          >
+            <SettingsToggle
+              checked={compactLayout}
+              onChange={setCompactLayout}
+              label="Compact layout"
+            />
           </SettingRow>
-          <SettingRow icon={Stack} label="Elevated surfaces" note="Add subtle edge light and depth to cards and navigation">
-            <SettingsToggle checked={elevatedSurfaces} onChange={setElevatedSurfaces} label="Elevated surfaces" />
+          <SettingRow
+            icon={Stack}
+            label="Elevated surfaces"
+            note="Add subtle edge light and depth to cards and navigation"
+          >
+            <SettingsToggle
+              checked={elevatedSurfaces}
+              onChange={setElevatedSurfaces}
+              label="Elevated surfaces"
+            />
           </SettingRow>
-          <SettingRow className="settings-row--shortcut-platform" icon={Keyboard} label="Shortcut key style" note="Follow your system or choose which modifier keys shortcut hints use">
-            <RadioGroup label="Shortcut key style" className="settings-segmented settings-segmented--shortcut-platform">
-              {([
-                ["system", "Follow system"],
-                ["windows", "Windows"],
-                ["mac", "Mac"],
-              ] as const satisfies readonly (readonly [ShortcutPlatformPreference, string])[]).map(([value, label]) => (
-                <button type="button" key={value} role="radio" aria-checked={shortcutPlatformPreference === value} tabIndex={shortcutPlatformPreference === value ? 0 : -1} className={shortcutPlatformPreference === value ? "is-selected" : ""} onClick={() => persistShortcutPlatformPreference(value)}>
+          <SettingRow
+            className="settings-row--shortcut-platform"
+            icon={Keyboard}
+            label="Shortcut key style"
+            note="Follow your system or choose which modifier keys shortcut hints use"
+          >
+            <RadioGroup
+              label="Shortcut key style"
+              className="settings-segmented settings-segmented--shortcut-platform"
+            >
+              {(
+                [
+                  ["system", "Follow system"],
+                  ["windows", "Windows"],
+                  ["mac", "Mac"],
+                ] as const satisfies readonly (readonly [
+                  ShortcutPlatformPreference,
+                  string,
+                ])[]
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={shortcutPlatformPreference === value}
+                  tabIndex={shortcutPlatformPreference === value ? 0 : -1}
+                  className={
+                    shortcutPlatformPreference === value ? "is-selected" : ""
+                  }
+                  onClick={() => persistShortcutPlatformPreference(value)}
+                >
                   {label}
                 </button>
               ))}
             </RadioGroup>
           </SettingRow>
-          <SettingRow className="settings-row--text-size" icon={TextAa} label="Text size" note="Adjust the size of text across the application">
-            <RadioGroup label="Text size" className="settings-segmented settings-segmented--text-size">
-              {([[
-                "small", "Small"], ["default", "Default"], ["large", "Large"], ["extra-large", "Extra large"],
-              ] as const).map(([value, label]) => (
-                <button type="button" key={value} role="radio" aria-checked={textSize === value} tabIndex={textSize === value ? 0 : -1} className={textSize === value ? "is-selected" : ""} onClick={() => setTextSize(value)}>
+          <SettingRow
+            className="settings-row--text-size"
+            icon={TextAa}
+            label="Text size"
+            note="Adjust the size of text across the application"
+          >
+            <RadioGroup
+              label="Text size"
+              className="settings-segmented settings-segmented--text-size"
+            >
+              {(
+                [
+                  ["small", "Small"],
+                  ["default", "Default"],
+                  ["large", "Large"],
+                  ["extra-large", "Extra large"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={textSize === value}
+                  tabIndex={textSize === value ? 0 : -1}
+                  className={textSize === value ? "is-selected" : ""}
+                  onClick={() => setTextSize(value)}
+                >
                   {label}
                 </button>
               ))}
             </RadioGroup>
           </SettingRow>
-          <SettingRow className="settings-row--page-tab-colors" icon={Tabs} label="Page tab colors" note="Follow the sidebar or choose an independent tab style">
-            <RadioGroup label="Page tab colors" className="settings-segmented settings-segmented--page-tabs">
-              {([[
-                "follow-sidebar", "Follow sidebar"], ["multicolor", "Multicolor"], ["monochrome", "Monochrome"],
-              ] as const).map(([value, label]) => (
-                <button type="button" key={value} role="radio" aria-checked={pageTabColors === value} tabIndex={pageTabColors === value ? 0 : -1} className={pageTabColors === value ? "is-selected" : ""} onClick={() => onPageTabColorsChange(value)}>
+          <SettingRow
+            className="settings-row--page-tab-colors"
+            icon={Tabs}
+            label="Page tab colors"
+            note="Follow the sidebar or choose an independent tab style"
+          >
+            <RadioGroup
+              label="Page tab colors"
+              className="settings-segmented settings-segmented--page-tabs"
+            >
+              {(
+                [
+                  ["follow-sidebar", "Follow sidebar"],
+                  ["multicolor", "Multicolor"],
+                  ["monochrome", "Monochrome"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={pageTabColors === value}
+                  tabIndex={pageTabColors === value ? 0 : -1}
+                  className={pageTabColors === value ? "is-selected" : ""}
+                  onClick={() => onPageTabColorsChange(value)}
+                >
                   {label}
                 </button>
               ))}
