@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CommentCard } from "../../src/learning/CommentCard.tsx";
@@ -58,10 +58,11 @@ describe("Discussion", () => {
   it("filters comments and resets search when changing tabs", () => {
     render(<Discussion persistenceKey="discussion-filter-test" />);
 
-    const [search] = screen.getAllByRole("searchbox", {
+    const searchboxes = screen.getAllByRole("searchbox", {
       name: "Search comments",
     });
-    expect(search).toBeDefined();
+    expect(searchboxes).toHaveLength(1);
+    const [search] = searchboxes;
     if (!search) throw new Error("Expected the comments searchbox");
     fireEvent.change(search, { target: { value: "Maya Rodriguez" } });
 
@@ -79,8 +80,24 @@ describe("Discussion", () => {
     expect(
       screen.getByRole("heading", { name: "Your lesson notes" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("searchbox", { name: "Search notes" })).toHaveValue(
-      "",
-    );
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  });
+
+  it("restores comment search focus without moving the lesson", async () => {
+    const persistenceKey = "discussion-focus-test";
+    const storageKey = `veolms-learning-${persistenceKey}-discussion-search-open`;
+    sessionStorage.setItem(storageKey, JSON.stringify(true));
+    const focus = vi.spyOn(HTMLInputElement.prototype, "focus");
+
+    try {
+      render(<Discussion persistenceKey={persistenceKey} />);
+
+      await waitFor(() =>
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true }),
+      );
+    } finally {
+      focus.mockRestore();
+      sessionStorage.removeItem(storageKey);
+    }
   });
 });

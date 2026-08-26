@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import EmojiPicker, { Theme as EmojiTheme } from "emoji-picker-react";
 import {
-  CaretDown,
-  TextB,
-  TextItalic,
-  ListBullets,
-  ListNumbers,
-  Quotes,
-  Paperclip,
-  Smiley,
+  CaretDownIcon as CaretDown,
+  TextBIcon as TextB,
+  TextItalicIcon as TextItalic,
+  ListBulletsIcon as ListBullets,
+  ListNumbersIcon as ListNumbers,
+  QuotesIcon as Quotes,
+  PaperclipIcon as Paperclip,
+  SmileyIcon as Smiley,
 } from "@phosphor-icons/react";
 
 import { Editor } from "@tiptap/core";
@@ -18,7 +19,7 @@ import { Markdown } from "@tiptap/markdown";
 import { Link } from "@tiptap/extension-link";
 
 // ---------------------------------------------------------------------------
-// Singleton editor — used ONLY to convert Markdown → HTML for the preview card.
+// Singleton editor - used ONLY to convert Markdown → HTML for the preview card.
 // The editing surface is a plain <textarea>; no Tiptap in the editor itself.
 // ---------------------------------------------------------------------------
 let parserEditorInstance: Editor | null = null;
@@ -303,7 +304,7 @@ export function RichTextEditor({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const appTheme = useAppTheme();
 
-  // Reactive selection state — used only for toolbar "is-active" indicators.
+  // Reactive selection state - used only for toolbar "is-active" indicators.
   const [sel, setSel] = useState({ start: 0, end: 0 });
 
   // One-time cleanup: normalize old Tiptap-serialized content (HTML entities,
@@ -325,6 +326,15 @@ export function RichTextEditor({
     left: number;
   } | null>(null);
   const [showLinkPopover, setShowLinkPopover] = useState(false);
+
+  useBackDismiss({
+    open: showLinkPopover,
+    onDismiss: () => setShowLinkPopover(false),
+  });
+  useBackDismiss({
+    open: showEmojiPicker,
+    onDismiss: () => setShowEmojiPicker(false),
+  });
   const [linkUrlInput, setLinkUrlInput] = useState("");
   const [linkPopoverPos, setLinkPopoverPos] = useState<{
     top: number;
@@ -388,7 +398,7 @@ export function RichTextEditor({
   const isOrderedList = /^\d+\.\s/.test(currentLine);
 
   // -------------------------------------------------------------------------
-  // Apply transform — always reads live selection from the DOM ref
+  // Apply transform - always reads live selection from the DOM ref
   // -------------------------------------------------------------------------
   const applyTransform = (fn: (v: string, s: number, e: number) => EditResult) => {
     const ta = textareaRef.current;
@@ -569,7 +579,7 @@ export function RichTextEditor({
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-[var(--accent)]">
+    <div className="relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-(--accent)">
       <div className="flex items-center flex-wrap gap-1 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-1.5 bg-[color-mix(in_srgb,var(--text)_3%,transparent)] rounded-t-[9px]">
         {/* Heading / Format Selector */}
         <div className="relative inline-flex items-center shrink-0">
@@ -577,13 +587,13 @@ export function RichTextEditor({
             aria-label="Text format"
             value={currentFormat}
             onChange={(e) => handleHeadingChange(e.target.value)}
-            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-[var(--surface)] text-[var(--text)] text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-[var(--hover)] focus:border-[var(--accent)] appearance-none"
+            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-(--surface) text-(--text) text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-(--hover) focus:border-(--accent) appearance-none"
           >
-            <option value="normal" className="bg-[var(--surface)] text-[var(--text)]">Normal</option>
-            <option value="h1" className="bg-[var(--surface)] text-[var(--text)]">Heading 1</option>
-            <option value="h2" className="bg-[var(--surface)] text-[var(--text)]">Heading 2</option>
+            <option value="normal" className="bg-(--surface) text-(--text)">Normal</option>
+            <option value="h1" className="bg-(--surface) text-(--text)">Heading 1</option>
+            <option value="h2" className="bg-(--surface) text-(--text)">Heading 2</option>
           </select>
-          <CaretDown size={11} weight="bold" className="absolute right-2 text-[var(--muted)] pointer-events-none" />
+          <CaretDown size={11} weight="bold" className="absolute right-2 text-(--muted) pointer-events-none" />
         </div>
 
         {/* Divider */}
@@ -771,7 +781,7 @@ export function RichTextEditor({
         </div>
       </div>
 
-      {/* Plain Markdown textarea — the single source of truth */}
+      {/* Plain Markdown textarea - the single source of truth */}
       <textarea
         ref={textareaRef}
         className="course-wizard-editor__raw-markdown"
@@ -785,7 +795,7 @@ export function RichTextEditor({
       />
 
       <div className="flex justify-end px-3.5 pt-1.5 pb-2.5">
-        <span className="static text-[var(--muted)] text-[0.76rem]">
+        <span className="static text-(--muted) text-[0.76rem]">
           {value.length} / {maxLength}
         </span>
       </div>

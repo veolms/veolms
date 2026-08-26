@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
-import { Flag } from "@phosphor-icons/react/Flag";
-import { LinkSimple } from "@phosphor-icons/react/LinkSimple";
-import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { Star } from "@phosphor-icons/react/Star";
-import { ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
+import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import type { ReviewItem } from "./reviewsData";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 
 export interface ReviewCardProps {
   review: ReviewItem;
@@ -21,6 +22,8 @@ export function ReviewCard({
   setNotice,
 }: ReviewCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useBackDismiss({ open: menuOpen, onDismiss: () => setMenuOpen(false) });
 
   const handleCopyLink = () => {
     setMenuOpen(false);
@@ -40,7 +43,7 @@ export function ReviewCard({
   return (
     <article
       id={review.id}
-      className="group relative rounded-[18px] border border-[var(--border)] bg-[var(--card-surface-raised,var(--surface))] p-5 md:p-6 transition-all duration-200 hover:bg-[var(--card-surface-hover,var(--hover))]"
+      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-5 md:p-6 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header Row */}
@@ -49,7 +52,7 @@ export function ReviewCard({
           <img
             src={review.avatarUrl}
             alt={review.authorName}
-            className="h-11 w-11 flex-shrink-0 rounded-full object-cover border border-[var(--border)] bg-[var(--surface-strong)]"
+            className="h-11 w-11 shrink-0 rounded-full object-cover border border-(--border) bg-(--surface-strong)"
             loading="lazy"
             onError={(e) => {
               // Graceful avatar fallback
@@ -58,7 +61,7 @@ export function ReviewCard({
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate font-bold text-sm md:text-base text-[var(--text)]">
+              <h3 className="truncate font-bold text-sm md:text-base text-(--text)">
                 {review.authorName}
               </h3>
               {review.isVerifiedLearner && (
@@ -68,20 +71,20 @@ export function ReviewCard({
                 </span>
               )}
             </div>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
+            <p className="text-xs text-(--muted) mt-0.5">
               {review.timestamp}
             </p>
           </div>
         </div>
 
         {/* Card Options Menu */}
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-label={`Options for ${review.authorName}'s review`}
             aria-expanded={menuOpen}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
           >
             <DotsThreeVertical size={18} weight="bold" />
           </button>
@@ -94,13 +97,13 @@ export function ReviewCard({
               />
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-1 z-30 min-w-[160px] rounded-xl border border-[var(--border)] bg-[var(--card-surface)] p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 top-full mt-1 z-30 min-w-40 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
               >
                 <button
                   type="button"
                   role="menuitem"
                   onClick={handleCopyLink}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
                 >
                   <LinkSimple size={14} />
                   <span>Copy link</span>
@@ -109,7 +112,7 @@ export function ReviewCard({
                   type="button"
                   role="menuitem"
                   onClick={handleReport}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-[var(--hover)] cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover) cursor-pointer"
                 >
                   <Flag size={14} />
                   <span>Report review</span>
@@ -123,7 +126,7 @@ export function ReviewCard({
       {/* Star Rating & Headline Row */}
       <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
         <div
-          className="flex items-center gap-0.5 text-[var(--accent)]"
+          className="flex items-center gap-0.5 text-(--accent)"
           aria-label={`Rating: ${review.rating} out of 5 stars`}
         >
           {Array.from({ length: 5 }).map((_, idx) => (
@@ -133,61 +136,61 @@ export function ReviewCard({
               weight={idx < review.rating ? "fill" : "regular"}
               className={
                 idx < review.rating
-                  ? "text-[var(--accent)]"
-                  : "text-[var(--muted)] opacity-30"
+                  ? "text-(--accent)"
+                  : "text-(--muted) opacity-30"
               }
             />
           ))}
         </div>
-        <h4 className="font-bold text-sm md:text-base text-[var(--text)] tracking-tight">
+        <h4 className="font-bold text-sm md:text-base text-(--text) tracking-tight">
           {review.title}
         </h4>
       </div>
 
       {/* Review Content */}
-      <p className="mt-2 text-xs md:text-sm leading-relaxed text-[var(--text-secondary)]">
+      <p className="mt-2 text-xs md:text-sm leading-relaxed text-(--text-secondary)">
         {review.content}
       </p>
 
       {/* Instructor Reply if present */}
       {review.reply && (
-        <div className="mt-4 rounded-[14px] p-3.5 md:p-4 bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] border border-[var(--border)] ml-2 md:ml-4">
+        <div className="mt-4 rounded-[14px] p-3.5 md:p-4 bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] border border-(--border) ml-2 md:ml-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <img
                 src={review.reply.avatarUrl}
                 alt={review.reply.authorName}
-                className="h-7 w-7 rounded-full object-cover border border-[var(--border)]"
+                className="h-7 w-7 rounded-full object-cover border border-(--border)"
                 loading="lazy"
               />
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="font-semibold text-[var(--text)]">
+                <span className="font-semibold text-(--text)">
                   {review.reply.authorName}
                 </span>
-                <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent)] border border-[var(--accent-border)]">
+                <span className="rounded-full bg-(--accent-soft) px-2 py-0.5 text-[10px] font-medium text-(--accent) border border-(--accent-border)">
                   {review.reply.authorRole}
                 </span>
-                <span className="text-[var(--muted)] opacity-80">
+                <span className="text-(--muted) opacity-80">
                   {review.reply.timestamp}
                 </span>
               </div>
             </div>
           </div>
-          <p className="mt-2 text-xs md:text-sm leading-relaxed text-[var(--text-secondary)]">
+          <p className="mt-2 text-xs md:text-sm leading-relaxed text-(--text-secondary)">
             {review.reply.content}
           </p>
         </div>
       )}
 
       {/* Card Footer Actions */}
-      <div className="mt-4 flex items-center gap-4 text-xs text-[var(--muted)]">
+      <div className="mt-4 flex items-center gap-4 text-xs text-(--muted)">
         <button
           type="button"
           onClick={() => onToggleHelpful(review.id)}
           aria-label={`${review.helpfulCount} people found this helpful`}
           aria-pressed={review.isHelpfulByUser}
-          className={`inline-flex items-center gap-1.5 transition-colors hover:text-[var(--text)] cursor-pointer ${
-            review.isHelpfulByUser ? "font-semibold text-[var(--accent)]" : ""
+          className={`inline-flex items-center gap-1.5 transition-colors hover:text-(--text) cursor-pointer ${
+            review.isHelpfulByUser ? "font-semibold text-(--accent)" : ""
           }`}
         >
           <span className="opacity-60">•</span>
@@ -202,7 +205,7 @@ export function ReviewCard({
         <button
           type="button"
           onClick={() => onReportReview(review.id)}
-          className="inline-flex items-center gap-1 hover:text-[var(--text)] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 hover:text-(--text) transition-colors cursor-pointer"
         >
           <Flag size={13} />
           <span>Report</span>

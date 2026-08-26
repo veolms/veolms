@@ -1,5 +1,5 @@
-import { CaretLeft } from "@phosphor-icons/react/CaretLeft";
-import { CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 
 export interface OrderHistoryPaginationProps {
   currentPage: number;
@@ -24,12 +24,12 @@ export function OrderHistoryPagination({
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-1 text-xs md:text-sm text-[var(--muted)]">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-1 text-xs md:text-sm text-(--muted)">
       {/* Range indicator */}
       <div>
-        Showing <span className="font-semibold text-[var(--text)]">{startItem}</span> to{" "}
-        <span className="font-semibold text-[var(--text)]">{endItem}</span> of{" "}
-        <span className="font-semibold text-[var(--text)]">{totalFilteredCount}</span> orders
+        Showing <span className="font-semibold text-(--text)">{startItem}</span> to{" "}
+        <span className="font-semibold text-(--text)">{endItem}</span> of{" "}
+        <span className="font-semibold text-(--text)">{totalFilteredCount}</span> orders
       </div>
 
       {/* Pagination button controls */}
@@ -40,7 +40,7 @@ export function OrderHistoryPagination({
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
           aria-label="Previous page"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card-surface)] text-[var(--muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <CaretLeft size={15} weight="bold" />
         </button>
@@ -57,8 +57,8 @@ export function OrderHistoryPagination({
               aria-label={`Page ${page}`}
               className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 isActive
-                  ? "bg-[var(--accent)] text-[var(--on-accent,#ffffff)] shadow-sm"
-                  : "border border-[var(--border)] bg-[var(--card-surface)] text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                  ? "bg-(--accent) text-(--on-accent,#ffffff) shadow-sm"
+                  : "border border-(--border) bg-(--card-surface) text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
               }`}
             >
               {page}
@@ -72,7 +72,7 @@ export function OrderHistoryPagination({
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage >= totalPages}
           aria-label="Next page"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card-surface)] text-[var(--muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <CaretRight size={15} weight="bold" />
         </button>

@@ -10,7 +10,7 @@ const defaultFilters: CourseCatalogueFilters = {
   wishlisted: new Set<string>(),
   role: "student",
   enrollmentFilter: "all",
-  category: "all",
+  statusFilter: "all",
   search: "",
   sort: "latest",
 };
@@ -19,11 +19,21 @@ const select = (overrides: Partial<CourseCatalogueFilters> = {}) =>
   getVisibleCourses(courses, { ...defaultFilters, ...overrides });
 
 describe("course catalogue selector", () => {
-  it("returns all seven courses in the existing catalogue order by default", () => {
+  it("returns all seven courses with mixed enrollment in the first two cards", () => {
     const result = select();
 
     expect(result).toHaveLength(7);
-    expect(result.map(({ id }) => id)).toEqual(courses.map(({ id }) => id));
+    expect(result.map(({ id }) => id)).toEqual([
+      "backend-nodejs",
+      "figma-ui-essentials",
+      "typescript-course",
+      "javascript-course",
+      "ui-ux-design-mastery",
+      "mongodb-database-design",
+      "aws-cloud-practitioner",
+    ]);
+    expect(result[0]?.enrolled).toBe(true);
+    expect(result[1]?.enrolled).toBe(false);
   });
 
   it("filters enrolled and not-enrolled student courses", () => {
@@ -35,9 +45,9 @@ describe("course catalogue selector", () => {
     expect(
       select({
         activeSection: "Wishlist",
-        wishlisted: new Set(["typescript-course"]),
+        wishlisted: new Set(["figma-ui-essentials"]),
       }).map(({ id }) => id),
-    ).toEqual(["typescript-course"]);
+    ).toEqual(["figma-ui-essentials"]);
   });
 
   it("normalizes text search before matching course titles and descriptions", () => {
@@ -46,12 +56,13 @@ describe("course catalogue selector", () => {
     ]);
   });
 
-  it("filters courses by category", () => {
-    expect(select({ category: "Development" }).map(({ id }) => id)).toEqual([
-      "backend-nodejs",
-      "typescript-course",
-      "javascript-course",
+  it("filters student progress statuses", () => {
+    expect(select({ statusFilter: "completed" }).map(({ id }) => id)).toEqual([
+      "ui-ux-design-mastery",
     ]);
+    expect(select({ statusFilter: "not-started" }).map(({ id }) => id)).toEqual(
+      ["mongodb-database-design"],
+    );
   });
 
   it("sorts by title and progress with the existing null-progress behavior", () => {
@@ -65,23 +76,33 @@ describe("course catalogue selector", () => {
       "UI/UX Design Mastery",
     ]);
     expect(select({ sort: "progress" }).map(({ id }) => id)).toEqual([
-      "backend-nodejs",
       "ui-ux-design-mastery",
+      "backend-nodejs",
       "typescript-course",
       "javascript-course",
-      "mongodb-database-design",
       "figma-ui-essentials",
+      "mongodb-database-design",
       "aws-cloud-practitioner",
     ]);
   });
 
-  it("does not apply student enrollment filters to creator catalogues", () => {
+  it("filters creator catalogues by lifecycle", () => {
     expect(
       select({
         role: "creator",
-        enrollmentFilter: "not-enrolled",
+        enrollmentFilter: "published",
       }),
-    ).toHaveLength(7);
+    ).toHaveLength(4);
+  });
+
+  it("uses the creator lifecycle control as the only creator status filter", () => {
+    expect(
+      select({
+        role: "creator",
+        enrollmentFilter: "published",
+        statusFilter: "archived",
+      }).map(({ lifecycleStatus }) => lifecycleStatus),
+    ).toEqual(["published", "published", "published", "published"]);
   });
 
   it("selects from the catalogue supplied by the caller", () => {
@@ -99,6 +120,7 @@ describe("course catalogue selector", () => {
         duration: "1h",
         students: 0,
         thumbnail: "/academy-course.jpg",
+        lifecycleStatus: "published",
       },
     ];
 

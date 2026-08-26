@@ -1,6 +1,6 @@
 /* Brainwave Slate samples the supplied reference directly: its core shell,
    workspace, raised surface, selection, and blue accent use the source colors. */
-/* brainwave palette — light mode. */
+/* brainwave palette - light mode. */
 :root[data-theme="light"][data-palette="brainwave"] {
   --canvas: #edf2f5;
   --header: #e7edf1;

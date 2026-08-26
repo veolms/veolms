@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   AuthMessageResponse,
+  PasskeyAuthenticationOptionsResponse,
+  PasskeyRegistrationOptionsResponse,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -102,7 +104,7 @@ export function useVerifyMfaTotp() {
 }
 
 export function usePasskeyRegisterOptions() {
-  return useMutation<unknown, ApiError, void>({
+  return useMutation<PasskeyRegistrationOptionsResponse, ApiError, void>({
     mutationFn: () => authService.getPasskeyRegisterOptions(),
   });
 }
@@ -120,7 +122,7 @@ export function usePasskeyRegisterVerify() {
 }
 
 export function usePasskeyLoginOptions() {
-  return useMutation<unknown, ApiError, void>({
+  return useMutation<PasskeyAuthenticationOptionsResponse, ApiError, void>({
     mutationFn: () => authService.getPasskeyLoginOptions(),
   });
 }
