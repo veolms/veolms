@@ -78,9 +78,21 @@ export async function down(database: Kysely<unknown>): Promise<void> {
     database,
   );
 
-  await database.schema.dropIndex("webauthn_challenges_lookup").ifExists().execute();
-  await database.schema.dropIndex("mfa_backup_codes_lookup").ifExists().execute();
+  await database.schema
+    .dropIndex("webauthn_challenges_lookup")
+    .ifExists()
+    .execute();
+  await database.schema
+    .dropIndex("mfa_backup_codes_lookup")
+    .ifExists()
+    .execute();
   await database.schema.dropIndex("otp_codes_lookup").ifExists().execute();
-  await database.schema.dropIndex("passkeys_credential_id_unique").ifExists().execute();
-  await database.schema.dropIndex("sessions_token_hash_unique").ifExists().execute();
+  await database.schema
+    .dropIndex("passkeys_credential_id_unique")
+    .ifExists()
+    .execute();
+  await database.schema
+    .dropIndex("sessions_token_hash_unique")
+    .ifExists()
+    .execute();
 }

@@ -333,13 +333,7 @@ export const academyResponseSchema = z.object({
 });
 
 export type PasskeyAuthenticatorTransport =
-  | "ble"
-  | "cable"
-  | "hybrid"
-  | "internal"
-  | "nfc"
-  | "smart-card"
-  | "usb";
+  "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
 
 export interface PasskeyCredentialDescriptorResponse {
   id: string;
