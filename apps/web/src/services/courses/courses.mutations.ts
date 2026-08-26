@@ -403,3 +403,38 @@ export function useUpsertPricing() {
 }
 export const useUpsertCoursePricing = useUpsertPricing;
 
+export function usePublishCourse() {
+  const queryClient = useQueryClient();
+
+  return useMutation<Course, ApiError, string>({
+    mutationFn: (courseId) => coursesService.publishCourse(courseId),
+    onSuccess: (updatedCourse) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(updatedCourse.id),
+      });
+      queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.validation(updatedCourse.id),
+      });
+    },
+  });
+}
+
+export function useUnpublishCourse() {
+  const queryClient = useQueryClient();
+
+  return useMutation<Course, ApiError, string>({
+    mutationFn: (courseId) => coursesService.unpublishCourse(courseId),
+    onSuccess: (updatedCourse) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(updatedCourse.id),
+      });
+      queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.validation(updatedCourse.id),
+      });
+    },
+  });
+}

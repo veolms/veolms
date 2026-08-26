@@ -139,6 +139,7 @@ export async function updateCourse(
   version: number,
   updates: {
     title?: string;
+    short_description?: string | null;
     description?: string | null;
     category_id?: string | null;
     difficulty?: "beginner" | "intermediate" | "advanced" | null;

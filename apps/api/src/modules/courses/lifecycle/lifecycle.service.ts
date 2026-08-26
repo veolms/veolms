@@ -1,6 +1,9 @@
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-import type { CourseValidationIssue } from "@veolms/contracts";
+import type {
+  CourseValidationIssue,
+  CourseValidationResponse,
+} from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as courseRepo from "../course/course.repository.ts";
@@ -46,67 +49,66 @@ export function createLifecycleService({
   async function validateCourseObject(
     course: NonNullable<Awaited<ReturnType<typeof verifyCourseOwner>>>,
     creatorId: string,
-  ): Promise<CourseValidationIssue[]> {
-    const issues: CourseValidationIssue[] = [];
+  ): Promise<CourseValidationResponse> {
+    const errors: CourseValidationIssue[] = [];
+    const warnings: CourseValidationIssue[] = [];
     const courseId = course.id;
 
-    // 1. Course Basics validation
+    // 1. Basics Validation
+    const basicsErrors: string[] = [];
     if (!course.title || course.title.trim().length === 0) {
-      issues.push({
-        code: "MISSING_TITLE",
-        message: "Course title is required.",
-      });
+      const msg = "Course title is required.";
+      basicsErrors.push(msg);
+      errors.push({ code: "MISSING_TITLE", message: msg, area: "basics" });
     }
 
     if (!course.description || course.description.trim().length === 0) {
-      issues.push({
+      const msg = "Course description is required.";
+      basicsErrors.push(msg);
+      errors.push({
         code: "MISSING_DESCRIPTION",
-        message: "Course description is required.",
+        message: msg,
+        area: "basics",
       });
     }
 
-    if (!course.category_id) {
-      issues.push({
-        code: "MISSING_CATEGORY",
-        message: "Course must have a category selected.",
-      });
-    }
+    // 2. Concurrently load curriculum, access rules, pricing, and settings
+    const [sections, lessons, accessRules, pricing, settings] =
+      await Promise.all([
+        curriculumService.findSectionsByCourseId(courseId),
+        curriculumService.findLessonsByCourseId(courseId),
+        configurationService.findAccessRuleByCourseId(courseId),
+        configurationService.findPricingByCourseId(courseId),
+        configurationService.findSettingsByCourseId(courseId),
+      ]);
 
-    if (!course.thumbnail_media_id) {
-      issues.push({
-        code: "MISSING_THUMBNAIL",
-        message: "Course thumbnail is required.",
-      });
-    }
-
-    // 2. Curriculum & Configuration concurrently
-    const [sections, lessons, accessRules, pricing] = await Promise.all([
-      curriculumService.findSectionsByCourseId(courseId),
-      curriculumService.findLessonsByCourseId(courseId),
-      configurationService.findAccessRuleByCourseId(courseId),
-      configurationService.findPricingByCourseId(courseId),
-    ]);
-
+    // 3. Curriculum Validation
+    const curriculumErrors: string[] = [];
     if (sections.length === 0) {
-      issues.push({
+      const msg = "Course must contain at least one section.";
+      curriculumErrors.push(msg);
+      errors.push({
         code: "EMPTY_CURRICULUM",
-        message: "Course must contain at least one section.",
+        message: msg,
+        area: "curriculum",
       });
     }
 
     if (lessons.length === 0) {
-      issues.push({
-        code: "NO_LESSONS",
-        message: "Course must contain at least one lesson.",
-      });
+      const msg = "Course must contain at least one lesson.";
+      curriculumErrors.push(msg);
+      errors.push({ code: "NO_LESSONS", message: msg, area: "curriculum" });
     }
 
     for (const section of sections) {
       const sectionLessons = lessons.filter((l) => l.section_id === section.id);
       if (sectionLessons.length === 0) {
-        issues.push({
+        const msg = `Section "${section.title}" has no lessons.`;
+        curriculumErrors.push(msg);
+        errors.push({
           code: "EMPTY_SECTION",
-          message: `Section "${section.title}" has no lessons.`,
+          message: msg,
+          area: "curriculum",
         });
       }
     }
@@ -122,7 +124,10 @@ export function createLifecycleService({
       }
     }
 
-    const mediaAssets = await mediaService.getMediaAssets(Array.from(mediaIds));
+    const mediaAssets =
+      mediaIds.size > 0
+        ? await mediaService.getMediaAssets(Array.from(mediaIds))
+        : [];
     const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
 
     if (course.thumbnail_media_id) {
@@ -130,11 +135,14 @@ export function createLifecycleService({
       if (
         !thumb ||
         thumb.owner_id !== creatorId ||
-        thumb.status !== "uploaded"
+        (thumb.status !== "uploaded" && thumb.status !== "ready")
       ) {
-        issues.push({
+        const msg = "Thumbnail media must be fully uploaded.";
+        basicsErrors.push(msg);
+        errors.push({
           code: "INVALID_THUMBNAIL",
-          message: "Thumbnail media must be fully uploaded.",
+          message: msg,
+          area: "basics",
         });
       }
     }
@@ -142,56 +150,222 @@ export function createLifecycleService({
     // Validate media status for all lessons
     for (const lesson of lessons) {
       if (!lesson.content_media_id) {
-        issues.push({
+        const msg = `Lesson "${lesson.title}" does not have media content attached.`;
+        curriculumErrors.push(msg);
+        errors.push({
           code: "LESSON_MISSING_CONTENT",
-          message: `Lesson "${lesson.title}" does not have media content attached.`,
+          message: msg,
+          area: "curriculum",
         });
       } else {
         const media = mediaMap.get(lesson.content_media_id);
         if (!media || media.owner_id !== creatorId) {
-          issues.push({
+          const msg = `Media for lesson "${lesson.title}" was not found.`;
+          curriculumErrors.push(msg);
+          errors.push({
             code: "LESSON_MEDIA_NOT_FOUND",
-            message: `Media for lesson "${lesson.title}" was not found.`,
+            message: msg,
+            area: "curriculum",
           });
         } else if (lesson.content_type === "video") {
           if (media.status !== "ready") {
-            issues.push({
+            const msg = `Video for lesson "${lesson.title}" is still processing or failed.`;
+            curriculumErrors.push(msg);
+            errors.push({
               code: "VIDEO_PROCESSING_INCOMPLETE",
-              message: `Video for lesson "${lesson.title}" is still processing or failed.`,
+              message: msg,
+              area: "curriculum",
             });
           }
         } else if (lesson.content_type === "document") {
-          if (media.status !== "uploaded") {
-            issues.push({
+          if (media.status !== "uploaded" && media.status !== "ready") {
+            const msg = `Document for lesson "${lesson.title}" is not completely uploaded.`;
+            curriculumErrors.push(msg);
+            errors.push({
               code: "DOCUMENT_NOT_UPLOADED",
-              message: `Document for lesson "${lesson.title}" is not completely uploaded.`,
+              message: msg,
+              area: "curriculum",
             });
           }
         }
       }
     }
 
-    // 3. Configuration validation
+    // 4. Access Rules Validation
+    const accessRulesErrors: string[] = [];
     if (!accessRules) {
-      issues.push({
+      const msg = "Course access rules have not been configured.";
+      accessRulesErrors.push(msg);
+      errors.push({
         code: "MISSING_ACCESS_RULES",
-        message: "Course access rules have not been configured.",
+        message: msg,
+        area: "accessRules",
       });
+    } else {
+      if (accessRules.access_type !== "everyone") {
+        const msg = "Restricted access is not yet supported.";
+        accessRulesErrors.push(msg);
+        errors.push({
+          code: "INVALID_ACCESS_TYPE",
+          message: msg,
+          area: "accessRules",
+        });
+      }
+      if (
+        accessRules.duration_type === "fixed_duration" &&
+        (!accessRules.duration_days || accessRules.duration_days <= 0)
+      ) {
+        const msg =
+          "Fixed duration must specify a duration in days greater than 0.";
+        accessRulesErrors.push(msg);
+        errors.push({
+          code: "INVALID_ACCESS_DURATION",
+          message: msg,
+          area: "accessRules",
+        });
+      }
+      if (accessRules.duration_type === "custom_expiration") {
+        if (
+          !accessRules.expires_at ||
+          accessRules.expires_at.getTime() <= Date.now()
+        ) {
+          const msg = "Expiration date must be in the future.";
+          accessRulesErrors.push(msg);
+          errors.push({
+            code: "INVALID_EXPIRATION_DATE",
+            message: msg,
+            area: "accessRules",
+          });
+        }
+      }
     }
 
+    // 5. Pricing Validation
+    const pricingErrors: string[] = [];
     if (!pricing) {
-      issues.push({
+      const msg = "Course pricing has not been configured.";
+      pricingErrors.push(msg);
+      errors.push({
         code: "MISSING_PRICING",
-        message: "Course pricing has not been configured.",
+        message: msg,
+        area: "pricing",
       });
-    } else if (pricing.pricing_type === "paid" && pricing.price <= 0) {
-      issues.push({
-        code: "INVALID_PRICE",
-        message: "Paid courses must have a price greater than 0.",
-      });
+    } else {
+      if (pricing.pricing_type === "paid") {
+        if (pricing.price <= 0) {
+          const msg = "Paid courses must have a price greater than 0.";
+          pricingErrors.push(msg);
+          errors.push({
+            code: "INVALID_PRICE",
+            message: msg,
+            area: "pricing",
+          });
+        }
+        if (pricing.sale_price !== null && pricing.sale_price !== undefined) {
+          if (pricing.sale_price > pricing.price) {
+            const msg = "Sale price cannot exceed the original price.";
+            pricingErrors.push(msg);
+            errors.push({
+              code: "INVALID_SALE_PRICE",
+              message: msg,
+              area: "pricing",
+            });
+          }
+        }
+        if (pricing.sale_starts_at && pricing.sale_ends_at) {
+          if (
+            pricing.sale_ends_at.getTime() < pricing.sale_starts_at.getTime()
+          ) {
+            const msg = "Sale end date must be later than sale start date.";
+            pricingErrors.push(msg);
+            errors.push({
+              code: "INVALID_SALE_DATES",
+              message: msg,
+              area: "pricing",
+            });
+          }
+        }
+      }
     }
 
-    return issues;
+    // 6. Extras Validation (Optional, defaults apply)
+    const extrasErrors: string[] = [];
+
+    // Assemble section statuses
+    const isBasicsValid = basicsErrors.length === 0;
+    const isCurriculumValid = curriculumErrors.length === 0;
+    const isAccessRulesValid = accessRulesErrors.length === 0;
+    const isPricingValid = pricingErrors.length === 0;
+    const isExtrasValid = extrasErrors.length === 0;
+
+    let pricingStatus = "Not configured";
+    if (pricing) {
+      if (pricing.pricing_type === "free") {
+        pricingStatus = "Free";
+      } else {
+        pricingStatus = `${pricing.currency || "USD"} ${pricing.price}`;
+      }
+    }
+
+    let accessRulesStatus = "Not configured";
+    if (accessRules) {
+      if (accessRules.access_type === "everyone") {
+        accessRulesStatus =
+          accessRules.duration_type === "fixed_duration"
+            ? `Everyone (${accessRules.duration_days ?? 0} days)`
+            : "Everyone";
+      } else {
+        accessRulesStatus = "Restricted access";
+      }
+    }
+
+    const extrasStatus = settings?.certificate_enabled
+      ? "Certificate Enabled"
+      : "Disabled";
+
+    const sectionsValidation = {
+      basics: {
+        valid: isBasicsValid,
+        status: isBasicsValid ? "Completed" : "Incomplete",
+        errors: basicsErrors,
+      },
+      curriculum: {
+        valid: isCurriculumValid,
+        status: `${sections.length} Sections, ${lessons.length} Lessons`,
+        errors: curriculumErrors,
+      },
+      accessRules: {
+        valid: isAccessRulesValid,
+        status: accessRulesStatus,
+        errors: accessRulesErrors,
+      },
+      pricing: {
+        valid: isPricingValid,
+        status: pricingStatus,
+        errors: pricingErrors,
+      },
+      extras: {
+        valid: isExtrasValid,
+        status: extrasStatus,
+        errors: extrasErrors,
+      },
+    };
+
+    const canPublish =
+      isBasicsValid &&
+      isCurriculumValid &&
+      isAccessRulesValid &&
+      isPricingValid &&
+      isExtrasValid &&
+      errors.length === 0;
+
+    return {
+      canPublish,
+      valid: canPublish,
+      sections: sectionsValidation,
+      errors,
+      warnings,
+    };
   }
 
   /**
@@ -200,7 +374,7 @@ export function createLifecycleService({
   async function validateCourse(
     courseId: string,
     creatorId: string,
-  ): Promise<CourseValidationIssue[]> {
+  ): Promise<CourseValidationResponse> {
     const course = await getCourseAndVerifyOwner(courseId, creatorId);
     return await validateCourseObject(course, creatorId);
   }
@@ -208,12 +382,12 @@ export function createLifecycleService({
   async function publishCourse(courseId: string, creatorId: string) {
     const course = await getCourseAndVerifyOwner(courseId, creatorId);
 
-    const issues = await validateCourseObject(course, creatorId);
-    if (issues.length > 0) {
+    const validation = await validateCourseObject(course, creatorId);
+    if (!validation.canPublish || validation.errors.length > 0) {
       throw new AppError(
         400,
         "VALIDATION_FAILED",
-        `Cannot publish course due to unresolved issues: ${issues.map((i) => i.message).join("; ")}`,
+        `Cannot publish course due to unresolved issues: ${validation.errors.map((i) => i.message).join("; ")}`,
       );
     }
 

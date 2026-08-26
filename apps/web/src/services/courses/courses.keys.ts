@@ -5,5 +5,6 @@ export const courseKeys = {
   details: () => [...courseKeys.all, "detail"] as const,
   detail: (slug: string) => [...courseKeys.details(), slug] as const,
   editor: (id: string) => [...courseKeys.all, "editor", id] as const,
+  validation: (id: string) => [...courseKeys.all, "validation", id] as const,
   categories: () => [...courseKeys.all, "categories"] as const,
 };

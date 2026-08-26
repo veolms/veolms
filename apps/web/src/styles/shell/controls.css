@@ -274,26 +274,36 @@
 .themed-select__action-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  min-height: 34px;
+  box-sizing: border-box;
+  min-height: 32px;
   padding: 6px 10px;
-  border: 1px dashed color-mix(in srgb, var(--accent) 30%, transparent);
-  border-radius: 7px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 8px;
   color: var(--accent-ink, var(--accent));
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   text-align: left;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  line-height: 1.35;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 100ms ease;
+}
+
+.themed-select__action-btn svg {
+  flex-shrink: 0;
 }
 
 .themed-select__action-btn:is(:hover, :focus-visible) {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-color: var(--accent);
   outline: none;
+}
+
+.themed-select__action-btn:active {
+  transform: scale(0.99);
 }
 
 @keyframes themed-select-in-bottom {

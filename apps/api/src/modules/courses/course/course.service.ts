@@ -264,6 +264,7 @@ export function createCourseService({
       version,
       {
         title: updates.title,
+        short_description: updates.shortDescription,
         description: updates.description,
         category_id: updates.categoryId,
         difficulty: updates.difficulty,
@@ -302,7 +303,10 @@ export function createCourseService({
         id: course.id,
         slug: course.slug,
         title: updates.title ?? course.title,
-        shortDescription: course.short_description,
+        shortDescription:
+          updates.shortDescription !== undefined
+            ? updates.shortDescription
+            : course.short_description,
         description:
           updates.description !== undefined
             ? updates.description

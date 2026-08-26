@@ -362,6 +362,7 @@ export const createCourseRequestSchema = z.object({
 
 export const updateCourseBasicsRequestSchema = z.object({
   title: z.string().min(1).max(120).optional(),
+  shortDescription: z.string().max(150).nullable().optional(),
   description: z.string().max(1500).nullable().optional(),
   categoryId: z.uuid().nullable().optional(),
   difficulty: z
@@ -396,18 +397,48 @@ export type CourseEditorDataResponse = z.infer<
 export type MyCoursesListResponse = z.infer<typeof myCoursesListResponseSchema>;
 
 // --- Validation & Publishing ---
+export const courseValidationAreaSchema = z.enum([
+  "basics",
+  "curriculum",
+  "accessRules",
+  "pricing",
+  "extras",
+]);
+
 export const courseValidationIssueSchema = z.object({
   code: z.string(),
   message: z.string(),
+  area: courseValidationAreaSchema.optional(),
+});
+
+export const validationItemSchema = z.object({
+  valid: z.boolean(),
+  status: z.string(),
+  errors: z.array(z.string()),
+});
+
+export const courseValidationSectionsSchema = z.object({
+  basics: validationItemSchema,
+  curriculum: validationItemSchema,
+  accessRules: validationItemSchema,
+  pricing: validationItemSchema,
+  extras: validationItemSchema,
 });
 
 export const courseValidationResponseSchema = z.object({
   canPublish: z.boolean(),
+  valid: z.boolean(),
+  sections: courseValidationSectionsSchema,
   errors: z.array(courseValidationIssueSchema),
   warnings: z.array(courseValidationIssueSchema),
 });
 
+export type CourseValidationArea = z.infer<typeof courseValidationAreaSchema>;
 export type CourseValidationIssue = z.infer<typeof courseValidationIssueSchema>;
+export type ValidationItem = z.infer<typeof validationItemSchema>;
+export type CourseValidationSections = z.infer<
+  typeof courseValidationSectionsSchema
+>;
 export type CourseValidationResponse = z.infer<
   typeof courseValidationResponseSchema
 >;
@@ -456,6 +487,12 @@ z.globalRegistry.add(myCoursesListResponseSchema, {
 });
 z.globalRegistry.add(courseOverviewSchema, {
   id: "CourseOverviewResponse",
+});
+z.globalRegistry.add(validationItemSchema, {
+  id: "ValidationItem",
+});
+z.globalRegistry.add(courseValidationSectionsSchema, {
+  id: "CourseValidationSections",
 });
 z.globalRegistry.add(courseValidationResponseSchema, {
   id: "CourseValidationResponse",

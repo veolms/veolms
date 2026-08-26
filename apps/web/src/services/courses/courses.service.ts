@@ -8,6 +8,7 @@ import type {
   CoursePricing,
   CourseSettings,
   CourseSummary,
+  CourseValidationResponse,
   CreateCategoryRequest,
   CreateCourseLessonRequest,
   CreateCourseRequest,
@@ -47,6 +48,18 @@ export const coursesService = {
     return api.get<CourseEditorDataResponse>(`/courses/${courseId}/editor`);
   },
 
+  getValidation: (courseId: string): Promise<CourseValidationResponse> => {
+    return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
+  },
+
+  publishCourse: (courseId: string): Promise<Course> => {
+    return api.post<Course>(`/courses/${courseId}/publish`);
+  },
+
+  unpublishCourse: (courseId: string): Promise<Course> => {
+    return api.post<Course>(`/courses/${courseId}/unpublish`);
+  },
+
   createCourse: (payload: CreateCourseRequest): Promise<Course> => {
     return api.post<Course>("/courses", payload);
   },
@@ -73,7 +86,12 @@ export const coursesService = {
   createSection: (
     courseId: string,
     payload: CreateCourseSectionRequest,
-  ): Promise<{ id: string; courseId: string; title: string; position: number }> => {
+  ): Promise<{
+    id: string;
+    courseId: string;
+    title: string;
+    position: number;
+  }> => {
     return api.post<{
       id: string;
       courseId: string;
@@ -127,11 +145,16 @@ export const coursesService = {
     courseId: string,
     lessonId: string,
     payload: UpdateCourseLessonRequest,
-  ): Promise<{ success: boolean; videoJobId?: string; processingStatus?: string }> => {
-    return api.patch<{ success: boolean; videoJobId?: string; processingStatus?: string }>(
-      `/courses/${courseId}/lessons/${lessonId}`,
-      payload,
-    );
+  ): Promise<{
+    success: boolean;
+    videoJobId?: string;
+    processingStatus?: string;
+  }> => {
+    return api.patch<{
+      success: boolean;
+      videoJobId?: string;
+      processingStatus?: string;
+    }>(`/courses/${courseId}/lessons/${lessonId}`, payload);
   },
 
   deleteLesson: (
@@ -168,19 +191,13 @@ export const coursesService = {
     courseId: string,
     payload: UpdateCourseSettingsRequest,
   ): Promise<CourseSettings> => {
-    return api.put<CourseSettings>(
-      `/courses/${courseId}/settings`,
-      payload,
-    );
+    return api.put<CourseSettings>(`/courses/${courseId}/settings`, payload);
   },
 
   upsertPricing: (
     courseId: string,
     payload: UpdateCoursePricingRequest,
   ): Promise<CoursePricing> => {
-    return api.put<CoursePricing>(
-      `/courses/${courseId}/pricing`,
-      payload,
-    );
+    return api.put<CoursePricing>(`/courses/${courseId}/pricing`, payload);
   },
 };
