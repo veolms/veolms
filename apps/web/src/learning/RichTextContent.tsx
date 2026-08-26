@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useEffect } from "react";
-import { createCommentEditorExtensions } from "./commentEditor";
+import { createReadOnlyRichTextExtensions } from "./commentEditor";
 
 interface RichTextContentProps {
   content: JSONContent;
@@ -17,7 +17,7 @@ export function RichTextContent({
   className = "",
 }: RichTextContentProps) {
   const editor = useEditor({
-    extensions: createCommentEditorExtensions(),
+    extensions: createReadOnlyRichTextExtensions(),
     content,
     editable: false,
     immediatelyRender: false,

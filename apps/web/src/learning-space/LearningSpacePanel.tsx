@@ -17,7 +17,11 @@ import { claimPointerGesture } from "../gestures/pointerGestureOwnership";
 import { lessonsById, sections } from "../learning/courseContent";
 import { getCourseThumbnail, getCourseTitle } from "../learning/courseMetadata";
 import type { CoursePlayerSession } from "../learning/coursePlayerNavigation";
-import type { LearningSpaceResizeEdge } from "./useFloatingLearningSpacePanel";
+import {
+  PANEL_MAX_WIDTH,
+  PANEL_MIN_WIDTH,
+  type LearningSpaceResizeEdge,
+} from "./useFloatingLearningSpacePanel";
 
 interface LearningSpacePanelProps {
   panelId: string;
@@ -308,6 +312,7 @@ const LearningSessionItem = memo(function LearningSessionItem({
     )
       return;
     clearLongPressTimer();
+    suppressClickRef.current = false;
     gestureRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -595,8 +600,8 @@ const ResizeHandle = ({
       role="separator"
       aria-label={`Resize Learning Space panel from ${edge}`}
       aria-orientation="vertical"
-      aria-valuemin={120}
-      aria-valuemax={460}
+      aria-valuemin={PANEL_MIN_WIDTH}
+      aria-valuemax={PANEL_MAX_WIDTH}
       aria-valuenow={currentValue}
       aria-valuetext={`${currentValue} pixels wide`}
       data-resize-edge={edge}

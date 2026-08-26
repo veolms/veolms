@@ -192,6 +192,8 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
         isRichTextDocument((entry as Comment).content)) &&
       (typeof (entry as Comment).visibility === "undefined" ||
         isDiscussionVisibility((entry as Comment).visibility)) &&
+      (typeof (entry as Comment).liked === "undefined" ||
+        typeof (entry as Comment).liked === "boolean") &&
       (typeof (entry as Comment).isOwn === "undefined" ||
         typeof (entry as Comment).isOwn === "boolean"),
   );
@@ -369,7 +371,11 @@ export function Discussion({
     const update = (current: Comment[]) =>
       current.map((entry) =>
         entry.id === id
-          ? { ...entry, likes: Math.max(0, entry.likes + (liked ? 1 : -1)) }
+          ? {
+              ...entry,
+              likes: Math.max(0, entry.likes + (liked ? 1 : -1)),
+              liked,
+            }
           : entry,
       );
     setEntries(update);
@@ -477,8 +483,10 @@ function ThreadSurface({
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
-  const [mobileComposerCollapsedSnapPoint, setMobileComposerCollapsedSnapPoint] =
-    useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const [
+    mobileComposerCollapsedSnapPoint,
+    setMobileComposerCollapsedSnapPoint,
+  ] = useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
   const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
     number | null
   >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
@@ -582,14 +590,16 @@ function ThreadSurface({
         </div>
       )}
 
-      {notice && (
-        <p
-          role="status"
-          className={`mt-2 text-xs ${notice.includes("posted") || notice.includes("saved") || notice.includes("updated") || notice.includes("deleted") ? "text-(--success)" : notice.includes("Report") ? "text-(--muted)" : "text-(--danger)"}`}
-        >
-          {notice}
-        </p>
-      )}
+      <p
+        role="status"
+        className={
+          notice
+            ? `mt-2 text-xs ${notice.includes("posted") || notice.includes("saved") || notice.includes("updated") || notice.includes("deleted") ? "text-(--success)" : notice.includes("Report") ? "text-(--muted)" : "text-(--danger)"}`
+            : "sr-only"
+        }
+      >
+        {notice}
+      </p>
 
       <div
         className={`learning-discussion__filter-bar ${isPhone ? "mt-2" : "mt-5"}`}
@@ -744,7 +754,9 @@ function CompactComposer({
       </button>
       <button
         type="button"
-        aria-label="Send discussion entry"
+        aria-label={
+          preview ? "Send discussion entry" : "Open discussion composer"
+        }
         onClick={preview ? onSubmit : onOpen}
         className="grid size-9 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
       >

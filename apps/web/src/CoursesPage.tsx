@@ -842,6 +842,9 @@ export function CoursesPage({
       subscribeToPointerGestureClaims(({ pointerId }) => {
         if (sidebarResizeRef.current?.pointerId === pointerId) {
           sidebarResizeRef.current = null;
+          setSidebarResizing(false);
+          setSidebarResizePreviewWidth(null);
+          setSidebarOverlaySwipeOffset(0);
         }
       }),
     [],

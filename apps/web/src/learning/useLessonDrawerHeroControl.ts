@@ -1,10 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   TouchEvent as ReactTouchEvent,
-  WheelEvent as ReactWheelEvent,
 } from "react";
 
 const GESTURE_ACTIVATION_DISTANCE = 10;
@@ -53,6 +52,7 @@ export interface LessonDrawerHeroControlProps {
   "data-learning-swipe-ignore": "";
   "data-lesson-drawer-gesture-control": "";
   "data-sidebar-swipe-ignore": "";
+  ref: (node: HTMLDivElement | null) => void;
   style: CSSProperties;
   onClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onMouseDownCapture: (event: ReactMouseEvent<HTMLDivElement>) => void;
@@ -66,7 +66,6 @@ export interface LessonDrawerHeroControlProps {
   onTouchMoveCapture: (event: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchEndCapture: (event: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchCancelCapture: (event: ReactTouchEvent<HTMLDivElement>) => void;
-  onWheelCapture: (event: ReactWheelEvent<HTMLDivElement>) => void;
 }
 
 export interface LessonDrawerViewportBounds {
@@ -125,6 +124,7 @@ export function useLessonDrawerHeroControl({
   onClose,
 }: UseLessonDrawerHeroControlOptions): LessonDrawerHeroControlProps {
   const gestureRef = useRef<LessonDrawerGesture | null>(null);
+  const heroElementRef = useRef<HTMLDivElement | null>(null);
   const suppressClickUntilRef = useRef(0);
   const wheelResetTimerRef = useRef<number | null>(null);
   const wheelGestureRef = useRef<WheelGesture>({
@@ -136,13 +136,78 @@ export function useLessonDrawerHeroControl({
   const optionsRef = useRef({ open, expanded, onExpand, onCollapse, onClose });
   optionsRef.current = { open, expanded, onExpand, onCollapse, onClose };
 
+  const handleWheel = useCallback((event: WheelEvent) => {
+    if (
+      !optionsRef.current.open ||
+      isWheelControlExcludedTarget(event.target) ||
+      Math.abs(event.deltaY) <= Math.abs(event.deltaX)
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const now = Date.now();
+    const wheelGesture = wheelGestureRef.current;
+    if (now < wheelGesture.lockedUntil) return;
+
+    const direction = Math.sign(event.deltaY);
+    const multiplier =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? window.innerHeight
+          : 1;
+    const distance = Math.abs(event.deltaY * multiplier);
+    if (
+      direction !== wheelGesture.direction ||
+      now - wheelGesture.lastEventAt > WHEEL_GESTURE_GAP
+    ) {
+      wheelGesture.direction = direction;
+      wheelGesture.distance = 0;
+    }
+    wheelGesture.distance += distance;
+    wheelGesture.lastEventAt = now;
+
+    if (wheelResetTimerRef.current !== null) {
+      window.clearTimeout(wheelResetTimerRef.current);
+    }
+    wheelResetTimerRef.current = window.setTimeout(() => {
+      wheelGesture.distance = 0;
+      wheelGesture.direction = 0;
+      wheelResetTimerRef.current = null;
+    }, WHEEL_GESTURE_GAP);
+
+    if (wheelGesture.distance < WHEEL_COMMIT_DISTANCE) return;
+    wheelGesture.distance = 0;
+    wheelGesture.lockedUntil = now + WHEEL_ACTION_COOLDOWN;
+    if (direction > 0) {
+      optionsRef.current.onExpand();
+    } else if (optionsRef.current.expanded) {
+      optionsRef.current.onCollapse();
+    } else {
+      optionsRef.current.onClose();
+    }
+  }, []);
+
+  const setHeroElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (heroElementRef.current === node) return;
+      heroElementRef.current?.removeEventListener("wheel", handleWheel);
+      heroElementRef.current = node;
+      node?.addEventListener("wheel", handleWheel, { passive: false });
+    },
+    [handleWheel],
+  );
+
   useEffect(
     () => () => {
+      heroElementRef.current?.removeEventListener("wheel", handleWheel);
       if (wheelResetTimerRef.current !== null) {
         window.clearTimeout(wheelResetTimerRef.current);
       }
     },
-    [],
+    [handleWheel],
   );
 
   const beginGesture = (
@@ -244,6 +309,7 @@ export function useLessonDrawerHeroControl({
     "data-learning-swipe-ignore": "",
     "data-lesson-drawer-gesture-control": "",
     "data-sidebar-swipe-ignore": "",
+    ref: setHeroElement,
     style: { touchAction: "none" },
     onClickCapture: (event) => {
       if (Date.now() >= suppressClickUntilRef.current) return;
@@ -326,59 +392,6 @@ export function useLessonDrawerHeroControl({
       if (!gesture || gesture.source !== "touch") return;
       if (!cancelGesture("touch", gesture.id)) return;
       event.stopPropagation();
-    },
-    onWheelCapture: (event) => {
-      if (
-        !optionsRef.current.open ||
-        isWheelControlExcludedTarget(event.target) ||
-        Math.abs(event.deltaY) <= Math.abs(event.deltaX)
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      const now = Date.now();
-      const wheelGesture = wheelGestureRef.current;
-      if (now < wheelGesture.lockedUntil) return;
-
-      const direction = Math.sign(event.deltaY);
-      const multiplier =
-        event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? 16
-          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? window.innerHeight
-            : 1;
-      const distance = Math.abs(event.deltaY * multiplier);
-      if (
-        direction !== wheelGesture.direction ||
-        now - wheelGesture.lastEventAt > WHEEL_GESTURE_GAP
-      ) {
-        wheelGesture.direction = direction;
-        wheelGesture.distance = 0;
-      }
-      wheelGesture.distance += distance;
-      wheelGesture.lastEventAt = now;
-
-      if (wheelResetTimerRef.current !== null) {
-        window.clearTimeout(wheelResetTimerRef.current);
-      }
-      wheelResetTimerRef.current = window.setTimeout(() => {
-        wheelGesture.distance = 0;
-        wheelGesture.direction = 0;
-        wheelResetTimerRef.current = null;
-      }, WHEEL_GESTURE_GAP);
-
-      if (wheelGesture.distance < WHEEL_COMMIT_DISTANCE) return;
-      wheelGesture.distance = 0;
-      wheelGesture.lockedUntil = now + WHEEL_ACTION_COOLDOWN;
-      if (direction > 0) {
-        optionsRef.current.onExpand();
-      } else if (optionsRef.current.expanded) {
-        optionsRef.current.onCollapse();
-      } else {
-        optionsRef.current.onClose();
-      }
     },
   };
 }

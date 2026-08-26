@@ -53,15 +53,23 @@ interface OpenBlockMenu {
 
 export function CommentBlockControls({ editor }: { editor: Editor }) {
   const selectedBlockRef = useRef<SelectedBlock | null>(null);
+  const menuOpenRef = useRef(false);
+  const addButtonReleaseCleanupRef = useRef<() => void>(() => undefined);
+  const addButtonReleaseTimerRef = useRef<number | null>(null);
   const [menu, setMenu] = useState<OpenBlockMenu | null>(null);
 
   const closeMenu = useCallback(() => {
+    menuOpenRef.current = false;
     setMenu(null);
     setDragHandleLocked(editor, false);
   }, [editor]);
 
   useEffect(
     () => () => {
+      addButtonReleaseCleanupRef.current();
+      if (addButtonReleaseTimerRef.current !== null) {
+        window.clearTimeout(addButtonReleaseTimerRef.current);
+      }
       setDragHandleLocked(editor, false);
     },
     [editor],
@@ -128,6 +136,7 @@ export function CommentBlockControls({ editor }: { editor: Editor }) {
       .setTextSelection(selectionPosition)
       .run();
     setDragHandleLocked(editor, true);
+    menuOpenRef.current = true;
     setMenu({
       anchor: event.currentTarget,
       title: "Add a block",
@@ -139,10 +148,15 @@ export function CommentBlockControls({ editor }: { editor: Editor }) {
     const selectedBlock = selectedBlockRef.current;
     if (!selectedBlock) return;
 
-    editor.commands.setTextSelection(
-      getBlockTextSelectionPosition(selectedBlock.node, selectedBlock.pos),
-    );
+    if (!selectedBlock.node.isTextblock && selectedBlock.node.isLeaf) {
+      editor.commands.setNodeSelection(selectedBlock.pos);
+    } else {
+      editor.commands.setTextSelection(
+        getBlockTextSelectionPosition(selectedBlock.node, selectedBlock.pos),
+      );
+    }
     setDragHandleLocked(editor, true);
+    menuOpenRef.current = true;
     setMenu({
       anchor: event.currentTarget,
       title: "Turn into",
@@ -165,7 +179,10 @@ export function CommentBlockControls({ editor }: { editor: Editor }) {
         onNodeChange={({ node, pos }) => {
           selectedBlockRef.current = node ? { node, pos } : null;
         }}
-        onElementDragStart={() => setMenu(null)}
+        onElementDragStart={() => {
+          menuOpenRef.current = false;
+          setMenu(null);
+        }}
       >
         <button
           type="button"
@@ -178,6 +195,21 @@ export function CommentBlockControls({ editor }: { editor: Editor }) {
             event.preventDefault();
             event.stopPropagation();
             setDragHandleLocked(editor, true);
+
+            addButtonReleaseCleanupRef.current();
+            const release = () => {
+              window.removeEventListener("mouseup", release);
+              addButtonReleaseCleanupRef.current = () => undefined;
+              addButtonReleaseTimerRef.current = window.setTimeout(() => {
+                addButtonReleaseTimerRef.current = null;
+                if (!menuOpenRef.current) {
+                  setDragHandleLocked(editor, false);
+                }
+              }, 0);
+            };
+            addButtonReleaseCleanupRef.current = () =>
+              window.removeEventListener("mouseup", release);
+            window.addEventListener("mouseup", release, { once: true });
           }}
           onClick={openAddMenu}
         >

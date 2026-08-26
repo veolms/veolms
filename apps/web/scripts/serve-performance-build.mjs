@@ -107,6 +107,9 @@ const proxyApiRequest = (request, response, requestUrl) => {
   });
 
   request.on("aborted", () => proxyRequest.destroy());
+  response.on("close", () => {
+    if (!response.writableEnded) proxyRequest.destroy();
+  });
   request.pipe(proxyRequest);
 };
 

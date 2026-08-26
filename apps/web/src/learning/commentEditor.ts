@@ -24,7 +24,7 @@ export const createEmptyRichTextDraft = (): RichTextDraft => ({
   text: "",
 });
 
-export const createCommentEditorExtensions = (placeholder?: string) => [
+export const createReadOnlyRichTextExtensions = () => [
   StarterKit.configure({
     codeBlock: false,
     heading: { levels: [1, 2, 3] },
@@ -40,6 +40,10 @@ export const createCommentEditorExtensions = (placeholder?: string) => [
     enableTabIndentation: true,
     tabSize: 2,
   }),
+];
+
+export const createCommentEditorExtensions = (placeholder?: string) => [
+  ...createReadOnlyRichTextExtensions(),
   CommentSlashCommand,
   ...(placeholder
     ? [

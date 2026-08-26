@@ -34,6 +34,7 @@ export interface Comment {
   content?: JSONContent;
   visibility?: DiscussionVisibility;
   likes: number;
+  liked?: boolean;
   replies?: number;
   thread?: CommentReply[];
   repliesExpanded?: boolean;
@@ -61,7 +62,7 @@ export function CommentCard({
   onDelete = () => undefined,
   onReport = () => undefined,
 }: CommentCardProps) {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(Boolean(comment.liked));
   const [repliesOpen, setRepliesOpen] = useState(
     comment.repliesExpanded ?? false,
   );
@@ -72,7 +73,11 @@ export function CommentCard({
   const [localReplies, setLocalReplies] = useState<CommentReply[]>(
     comment.thread ?? [],
   );
-  const replyCount = Math.max(comment.replies ?? 0, localReplies.length);
+  const unloadedReplyCount = Math.max(
+    0,
+    (comment.replies ?? 0) - (comment.thread?.length ?? 0),
+  );
+  const replyCount = unloadedReplyCount + localReplies.length;
 
   const addReply = () => {
     const text = replyDraft.trim();
@@ -155,6 +160,7 @@ export function CommentCard({
                 setEditing(false);
               }}
               onSave={saveEdit}
+              formattingWarning={Boolean(comment.content)}
             />
           ) : comment.content ? (
             <RichTextContent
@@ -404,6 +410,7 @@ interface InlineEditFormProps {
   onChange: (value: string) => void;
   onCancel: () => void;
   onSave: () => void;
+  formattingWarning?: boolean;
 }
 
 function InlineEditForm({
@@ -412,6 +419,7 @@ function InlineEditForm({
   onChange,
   onCancel,
   onSave,
+  formattingWarning = false,
 }: InlineEditFormProps) {
   return (
     <div className="mt-2 max-w-2xl">
@@ -434,6 +442,12 @@ function InlineEditForm({
           className="block min-h-18 w-full resize-y rounded-lg border bg-(--surface) px-3 py-2 text-sm leading-6 text-(--text) outline-none [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]"
         />
       </label>
+      {formattingWarning && (
+        <p className="mt-1.5 text-xs leading-5 text-(--warning,var(--muted))">
+          This basic editor does not preserve rich-text formatting. Saving will
+          keep only the text.
+        </p>
+      )}
       <div className="mt-2 flex justify-end gap-2">
         <button
           type="button"

@@ -11,6 +11,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { COMPACT_NAVIGATION_QUERY } from "../shell/sidebarVisibility";
 
@@ -18,10 +19,10 @@ const PANEL_STATE_STORAGE_KEY = "veolms-learning-space-panel-state";
 const PANEL_STATE_VERSION = 5;
 const VIEWPORT_GUTTER = 12;
 const VIEWPORT_LEFT_EDGE = 0;
-const PANEL_MIN_WIDTH = 120;
+export const PANEL_MIN_WIDTH = 120;
 const PANEL_COMPACT_WIDTH = 300;
 const PANEL_SINGLE_COLUMN_WIDTH = 208;
-const PANEL_MAX_WIDTH = 460;
+export const PANEL_MAX_WIDTH = 460;
 const PANEL_DEFAULT_WIDTH = 440;
 const MOVE_ACTIVATION_DISTANCE = 4;
 const HOVER_CLOSE_DELAY_MS = 160;
@@ -69,6 +70,17 @@ interface UseFloatingLearningSpacePanelOptions {
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+
+const subscribeToCompactNavigationViewport = (onStoreChange: () => void) => {
+  const media = window.matchMedia(COMPACT_NAVIGATION_QUERY);
+  media.addEventListener("change", onStoreChange);
+  return () => media.removeEventListener("change", onStoreChange);
+};
+
+const getCompactNavigationViewportSnapshot = () =>
+  window.matchMedia(COMPACT_NAVIGATION_QUERY).matches;
+
+const getServerCompactNavigationViewportSnapshot = () => false;
 
 const clampPosition = (
   position: PanelPosition,
@@ -142,10 +154,13 @@ export function useFloatingLearningSpacePanel({
   panelRef,
   triggerRef,
 }: UseFloatingLearningSpacePanelOptions) {
+  const compactNavigationViewportSnapshot = useSyncExternalStore(
+    subscribeToCompactNavigationViewport,
+    getCompactNavigationViewportSnapshot,
+    getServerCompactNavigationViewportSnapshot,
+  );
   const compactNavigationViewport =
-    !mobile &&
-    typeof window !== "undefined" &&
-    window.matchMedia(COMPACT_NAVIGATION_QUERY).matches;
+    !mobile && compactNavigationViewportSnapshot;
   const [width, setWidth] = useState(PANEL_DEFAULT_WIDTH);
   const [position, setPosition] = useState<PanelPosition>({
     left: VIEWPORT_LEFT_EDGE,
@@ -274,8 +289,26 @@ export function useFloatingLearningSpacePanel({
       if (!visible) cancelClose();
     };
 
+    syncTriggerVisibility();
     window.addEventListener("resize", syncTriggerVisibility);
-    return () => window.removeEventListener("resize", syncTriggerVisibility);
+
+    const observer =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(syncTriggerVisibility);
+    let current: HTMLElement | null = triggerRef.current;
+    while (current) {
+      observer?.observe(current, {
+        attributes: true,
+        attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+      });
+      current = current.parentElement;
+    }
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncTriggerVisibility);
+    };
   }, [cancelClose, mobile, triggerRef]);
 
   useEffect(() => {
