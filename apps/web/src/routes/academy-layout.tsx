@@ -36,6 +36,7 @@ import {
 } from "../routing/routeDescriptors";
 
 export interface AcademyOutletContext {
+  mobileBottomNavigation: boolean;
   navigateTo: NavigateTo;
 }
 
@@ -259,9 +260,14 @@ export default function AcademyLayout() {
         onOpenCourse={openCourse}
         renderMain={
           route.kind === "learning"
-            ? () => (
+            ? ({ mobileBottomNavigation }) => (
                 <Outlet
-                  context={{ navigateTo } satisfies AcademyOutletContext}
+                  context={
+                    {
+                      mobileBottomNavigation,
+                      navigateTo,
+                    } satisfies AcademyOutletContext
+                  }
                 />
               )
             : null

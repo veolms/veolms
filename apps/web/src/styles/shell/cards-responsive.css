@@ -578,6 +578,7 @@
     gap: 0;
     padding: 0;
     background: var(--main-surface);
+    touch-action: pan-y pinch-zoom;
   }
 
   .courses-sidebar,
@@ -587,11 +588,13 @@
 
   .courses-app--hidden > .courses-sidebar {
     display: flex !important;
+    z-index: 160;
     width: min(var(--sidebar-expanded-width), calc(100vw - 28px));
   }
 
   .courses-app--hidden > .sidebar-edge-trigger {
     display: block !important;
+    z-index: 159;
   }
 
   .courses-app--hidden.courses-app--edge-open .sidebar-resize-handle {

@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type {
   CSSProperties,
@@ -14,6 +15,10 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { SidebarToggleIcon } from "../shell/SidebarToggleIcon";
+import {
+  claimPointerGesture,
+  subscribeToPointerGestureClaims,
+} from "../gestures/pointerGestureOwnership";
 import {
   FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
   FloatingScrollbar,
@@ -33,6 +38,11 @@ import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import { Discussion } from "./Discussion";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import {
+  getSideLessonDrawerBounds,
+  useLessonDrawerHeroControl,
+} from "./useLessonDrawerHeroControl";
+import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
+import {
   Drawer,
   DrawerContent,
   DrawerDescription,
@@ -51,6 +61,19 @@ const CURRICULUM_SWIPE_COMMIT_DISTANCE = 72;
 const CURRICULUM_SWIPE_FLING_DISTANCE = 24;
 const CURRICULUM_SWIPE_FLING_VELOCITY = 0.3;
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
+const COURSE_CONTENT_DRAWER_QUERY = "(max-width: 1080px)";
+const PHONE_LESSON_DRAWER_QUERY = "(max-width: 640px)";
+
+const subscribeToPhoneLessonDrawerViewport = (onStoreChange: () => void) => {
+  const media = window.matchMedia(PHONE_LESSON_DRAWER_QUERY);
+  media.addEventListener("change", onStoreChange);
+  return () => media.removeEventListener("change", onStoreChange);
+};
+
+const getPhoneLessonDrawerViewportSnapshot = () =>
+  window.matchMedia(PHONE_LESSON_DRAWER_QUERY).matches;
+
+const getPhoneLessonDrawerViewportServerSnapshot = () => false;
 
 const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
@@ -63,9 +86,21 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
   "[data-learning-swipe-ignore]",
 ].join(",");
 
-const isCurriculumSwipeExcludedTarget = (target: EventTarget | null) =>
-  target instanceof Element &&
-  Boolean(target.closest(CURRICULUM_SWIPE_EXCLUSION_SELECTOR));
+const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
+  ".learning-curriculum__resize-rail",
+  ".elastic-scroll-control",
+  "[data-learning-space-panel]",
+  "input",
+  "textarea",
+  "select",
+  '[contenteditable="true"]',
+  '[role="slider"]',
+].join(",");
+
+const isCurriculumSwipeExcludedTarget = (
+  target: EventTarget | null,
+  selector = CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
+) => target instanceof Element && Boolean(target.closest(selector));
 
 const clampCurriculumWidth = (value: number) =>
   Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, value));
@@ -89,6 +124,7 @@ const getInitialCurriculumWidth = () => {
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   lessonId: number;
+  mobileBottomNavigation: boolean;
   backLabel: string;
   onSelectLesson: (lessonId: number) => void;
   onOpenCourseOverview: () => void;
@@ -125,12 +161,8 @@ interface CurriculumScreenSwipe {
   velocityX: number;
   closedAtStart: boolean;
   expandedWidthAtStart: number;
+  target: "curriculum" | "lesson-drawer";
   handle: HTMLDivElement;
-}
-
-interface LessonDrawerViewportBounds {
-  left: number;
-  width: number;
 }
 
 type LearningWorkspaceStyle = CSSProperties & {
@@ -141,6 +173,7 @@ type LearningWorkspaceStyle = CSSProperties & {
 export function LearningWorkspace({
   courseSlug,
   lessonId,
+  mobileBottomNavigation,
   backLabel,
   onSelectLesson,
   onOpenCourseOverview,
@@ -165,6 +198,12 @@ export function LearningWorkspace({
     useState(LESSON_DRAWER_FALLBACK_SNAP_POINT);
   const [lessonDrawerViewportBounds, setLessonDrawerViewportBounds] =
     useState<LessonDrawerViewportBounds | null>(null);
+  const phoneLessonDrawerViewport = useSyncExternalStore(
+    subscribeToPhoneLessonDrawerViewport,
+    getPhoneLessonDrawerViewportSnapshot,
+    getPhoneLessonDrawerViewportServerSnapshot,
+  );
+  const phoneLessonDrawer = mobileBottomNavigation && phoneLessonDrawerViewport;
   const lessonDrawerSnapPoints = useMemo(
     () => [lessonDrawerCollapsedSnapPoint, 1],
     [lessonDrawerCollapsedSnapPoint],
@@ -195,6 +234,17 @@ export function LearningWorkspace({
     ((event: PointerEvent, cancelled?: boolean) => void) | null
   >(null);
   const curriculumScreenSwipeRef = useRef<CurriculumScreenSwipe | null>(null);
+
+  useEffect(
+    () =>
+      subscribeToPointerGestureClaims(({ owner, pointerId }) => {
+        if (owner !== "learning-space") return;
+        if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
+          curriculumScreenSwipeRef.current = null;
+        }
+      }),
+    [],
+  );
   const curriculumScreenSwipeMoveRef = useRef<
     ((event: PointerEvent) => void) | null
   >(null);
@@ -203,9 +253,10 @@ export function LearningWorkspace({
   >(null);
   const curriculumScreenSwipeConsumedUntilRef = useRef(0);
   const isCourseContentDrawerLayout = useCallback(
-    () => window.matchMedia("(max-width: 1080px)").matches,
+    () => window.matchMedia(COURSE_CONTENT_DRAWER_QUERY).matches,
     [],
   );
+
   const curriculumSections = useMemo(
     () =>
       createCurriculumSections(
@@ -296,7 +347,7 @@ export function LearningWorkspace({
   }, []);
 
   const getLessonDrawerViewportBounds = useCallback(() => {
-    if (!isCourseContentDrawerLayout()) return null;
+    if (!isCourseContentDrawerLayout() || phoneLessonDrawer) return null;
 
     const playerBounds = playerWrapRef.current?.getBoundingClientRect();
     if (
@@ -308,13 +359,8 @@ export function LearningWorkspace({
       return null;
     }
 
-    const left = Math.max(0, playerBounds.left);
-    const width = Math.min(
-      playerBounds.width,
-      Math.max(0, window.innerWidth - left),
-    );
-    return width > 0 ? { left, width } : null;
-  }, [isCourseContentDrawerLayout]);
+    return getSideLessonDrawerBounds(playerBounds, window.innerWidth);
+  }, [isCourseContentDrawerLayout, phoneLessonDrawer]);
 
   const selectLesson = (lessonNumber: number) => {
     if (lessonNumber === selectedLesson) return;
@@ -387,15 +433,18 @@ export function LearningWorkspace({
     setCurriculumFocusRequest((request) => request + 1);
     if (!isCourseContentDrawerLayout()) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
-    setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
-    setLessonDrawerSnapPoint(collapsedSnapPoint);
+    if (phoneLessonDrawer) {
+      const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
+      setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
+      setLessonDrawerSnapPoint(collapsedSnapPoint);
+    }
     setLessonDrawerViewportBounds(getLessonDrawerViewportBounds());
     setLessonDrawer(true);
   }, [
     getLessonDrawerCollapsedSnapPoint,
     getLessonDrawerViewportBounds,
     isCourseContentDrawerLayout,
+    phoneLessonDrawer,
   ]);
 
   const closeLessonDrawer = useCallback(() => {
@@ -403,9 +452,17 @@ export function LearningWorkspace({
     setLessonDrawerViewportBounds(null);
   }, []);
 
+  const lessonDrawerHeroControlProps = useLessonDrawerHeroControl({
+    open: lessonDrawer,
+    expanded: lessonDrawerSnapPoint === 1,
+    onExpand: () => setLessonDrawerSnapPoint(1),
+    onCollapse: () => setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint),
+    onClose: closeLessonDrawer,
+  });
+
   useEffect(() => {
     if (!lessonDrawer) return undefined;
-    const compactWorkspace = window.matchMedia("(max-width: 1080px)");
+    const compactWorkspace = window.matchMedia(COURSE_CONTENT_DRAWER_QUERY);
     const appShell =
       playerWrapRef.current?.closest(".courses-app") ??
       document.querySelector(".courses-app");
@@ -418,6 +475,7 @@ export function LearningWorkspace({
       }
 
       setLessonDrawerViewportBounds(getLessonDrawerViewportBounds());
+      if (!phoneLessonDrawer) return;
       const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
       setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
       setLessonDrawerSnapPoint((currentSnapPoint) =>
@@ -483,19 +541,28 @@ export function LearningWorkspace({
     getLessonDrawerViewportBounds,
     isCourseContentDrawerLayout,
     lessonDrawer,
+    phoneLessonDrawer,
   ]);
 
   const startCurriculumScreenSwipe = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const drawerLayout = isCourseContentDrawerLayout();
+    const revealsTabletDrawer = drawerLayout && !phoneLessonDrawer;
     if (
-      isCourseContentDrawerLayout() ||
+      (drawerLayout && !revealsTabletDrawer) ||
+      (revealsTabletDrawer && lessonDrawer) ||
       event.pointerType !== "touch" ||
       !event.isPrimary ||
       event.clientX < window.innerWidth / 2 ||
       curriculumResizeRef.current ||
       curriculumScreenSwipeRef.current ||
-      isCurriculumSwipeExcludedTarget(event.target)
+      isCurriculumSwipeExcludedTarget(
+        event.target,
+        revealsTabletDrawer
+          ? LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR
+          : CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
+      )
     )
       return;
 
@@ -510,6 +577,7 @@ export function LearningWorkspace({
       velocityX: 0,
       closedAtStart: curriculumCollapsed,
       expandedWidthAtStart: curriculumWidth,
+      target: revealsTabletDrawer ? "lesson-drawer" : "curriculum",
       handle: event.currentTarget,
     };
   };
@@ -537,18 +605,28 @@ export function LearningWorkspace({
       )
         return;
 
-      const opensClosedCurriculum = swipe.closedAtStart && deltaX < 0;
-      const closesOpenCurriculum = !swipe.closedAtStart && deltaX > 0;
+      const opensClosedCurriculum =
+        swipe.target === "lesson-drawer"
+          ? deltaX < 0
+          : swipe.closedAtStart && deltaX < 0;
+      const closesOpenCurriculum =
+        swipe.target === "curriculum" && !swipe.closedAtStart && deltaX > 0;
       if (!opensClosedCurriculum && !closesOpenCurriculum) {
         curriculumScreenSwipeRef.current = null;
         return;
       }
 
       swipe.active = true;
-      setCurriculumResizePreviewWidth(
-        swipe.closedAtStart ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
-      );
-      setCurriculumResizing(true);
+      claimPointerGesture({
+        owner: "curriculum",
+        pointerId: swipe.pointerId,
+      });
+      if (swipe.target === "curriculum") {
+        setCurriculumResizePreviewWidth(
+          swipe.closedAtStart ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
+        );
+        setCurriculumResizing(true);
+      }
       try {
         swipe.handle.setPointerCapture?.(swipe.pointerId);
       } catch {
@@ -557,6 +635,7 @@ export function LearningWorkspace({
     }
 
     event.preventDefault();
+    if (swipe.target === "lesson-drawer") event.stopPropagation();
     const eventTimestamp = event.timeStamp || performance.now();
     const timestamp = Math.max(eventTimestamp, swipe.lastTimestamp + 1);
     const elapsed = timestamp - swipe.lastTimestamp;
@@ -567,6 +646,8 @@ export function LearningWorkspace({
         : swipe.velocityX * 0.35 + instantaneousVelocity * 0.65;
     swipe.lastX = event.clientX;
     swipe.lastTimestamp = timestamp;
+
+    if (swipe.target === "lesson-drawer") return;
 
     const startWidth = swipe.closedAtStart
       ? CURRICULUM_COLLAPSED_WIDTH
@@ -592,9 +673,11 @@ export function LearningWorkspace({
 
     event.preventDefault();
     curriculumScreenSwipeConsumedUntilRef.current = performance.now() + 450;
-    setCurriculumResizing(false);
-    setCurriculumResizePreviewWidth(null);
-    if (cancelled) return;
+    if (swipe.target === "curriculum") {
+      setCurriculumResizing(false);
+      setCurriculumResizePreviewWidth(null);
+    }
+    if (cancelled && swipe.target !== "lesson-drawer") return;
 
     const totalDistance = swipe.lastX - swipe.startX;
     const finishedAt = event.timeStamp || performance.now();
@@ -607,6 +690,11 @@ export function LearningWorkspace({
     const shouldCommit =
       fastFling || Math.abs(totalDistance) >= CURRICULUM_SWIPE_COMMIT_DISTANCE;
     if (!shouldCommit) return;
+
+    if (swipe.target === "lesson-drawer") {
+      openLessonDrawer();
+      return;
+    }
 
     setCurriculumCollapsed(!swipe.closedAtStart);
   };
@@ -1011,6 +1099,7 @@ export function LearningWorkspace({
             <Discussion
               key={discussionPersistenceKey}
               persistenceKey={discussionPersistenceKey}
+              mobileBottomNavigation={mobileBottomNavigation}
             />
           </article>
         </section>
@@ -1081,19 +1170,24 @@ export function LearningWorkspace({
       />
 
       <Drawer
+        key={phoneLessonDrawer ? "phone-course-lessons" : "side-course-lessons"}
         open={lessonDrawer}
         onOpenChange={(open) => {
           if (open) openLessonDrawer();
           else closeLessonDrawer();
         }}
         onOpenChangeComplete={(open) => {
-          if (!open) setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
+          if (!open && phoneLessonDrawer)
+            setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
         }}
-        snapPoints={lessonDrawerSnapPoints}
-        snapPoint={lessonDrawerSnapPoint}
-        onSnapPointChange={setLessonDrawerSnapPoint}
-        snapToSequentialPoints
-        showSwipeHandle
+        snapPoints={phoneLessonDrawer ? lessonDrawerSnapPoints : undefined}
+        snapPoint={phoneLessonDrawer ? lessonDrawerSnapPoint : undefined}
+        onSnapPointChange={
+          phoneLessonDrawer ? setLessonDrawerSnapPoint : undefined
+        }
+        snapToSequentialPoints={phoneLessonDrawer}
+        showSwipeHandle={phoneLessonDrawer}
+        swipeDirection={phoneLessonDrawer ? "down" : "right"}
         swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2 group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 after:shadow-[0_1px_3px_rgba(0,0,0,0.48)]"
         triggerId="learning-course-content-trigger"
       >
@@ -1109,21 +1203,36 @@ export function LearningWorkspace({
           }}
           style={
             {
-              ...(lessonDrawerCollapsedSnapPoint > 1
+              ...(phoneLessonDrawer && lessonDrawerCollapsedSnapPoint > 1
                 ? {
                     "--learning-drawer-collapsed-height": `${lessonDrawerCollapsedSnapPoint}px`,
                   }
                 : {}),
               ...(lessonDrawerViewportBounds
                 ? {
+                    bottom: "max(12px, env(safe-area-inset-bottom))",
                     left: `${lessonDrawerViewportBounds.left}px`,
                     right: "auto",
+                    top: "max(12px, env(safe-area-inset-top))",
                     width: `${lessonDrawerViewportBounds.width}px`,
                   }
-                : {}),
+                : !phoneLessonDrawer
+                  ? {
+                      bottom: "max(12px, env(safe-area-inset-bottom))",
+                      left: "auto",
+                      right: "max(12px, env(safe-area-inset-right))",
+                      top: "max(12px, env(safe-area-inset-top))",
+                      width: "min(500px, calc(100dvw - 24px))",
+                    }
+                  : {}),
             } as CSSProperties
           }
-          className="learning-course-content-drawer overflow-hidden data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] [--drawer-bleed-background:var(--canvas)] bg-(--canvas) shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
+          className={[
+            "learning-course-content-drawer overflow-hidden [--drawer-bleed-background:var(--canvas)] bg-(--canvas)",
+            phoneLessonDrawer
+              ? "data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
+              : "rounded-[22px]! shadow-[-18px_0_48px_rgba(0,0,0,0.32)]",
+          ].join(" ")}
         >
           <DrawerTitle className="sr-only">Course lessons</DrawerTitle>
           <DrawerDescription className="sr-only">
@@ -1144,6 +1253,9 @@ export function LearningWorkspace({
               focusRequest={curriculumFocusRequest}
               persistenceKey={coursePersistenceKey}
               onClose={closeLessonDrawer}
+              drawerHeroControlProps={
+                phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
+              }
             />
           </div>
         </DrawerContent>

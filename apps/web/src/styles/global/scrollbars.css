@@ -22,6 +22,23 @@
   scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
 }
 
+/* Keep the native browser/OS treatment for Default, but constrain its rail to
+   the same slim width as Theme. */
+:where(
+  html[data-scrollbar-style="default"],
+  html[data-scrollbar-style="default"] *
+) {
+  scrollbar-width: thin;
+}
+
+:where(
+  html[data-scrollbar-style="default"],
+  html[data-scrollbar-style="default"] *
+)::-webkit-scrollbar {
+  width: var(--scrollbar-thumb-size);
+  height: var(--scrollbar-thumb-size);
+}
+
 :where(
   html:not([data-scrollbar-style="default"]),
   html:not([data-scrollbar-style="default"]) *

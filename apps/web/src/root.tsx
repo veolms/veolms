@@ -44,7 +44,7 @@ export function Layout({ children }: LayoutProps) {
       data-sidebar-glow="theme"
       data-sidebar-glow-shape="circle"
       data-elevated-surfaces="true"
-      data-hide-scrollbars="false"
+      data-hide-scrollbars="true"
       data-scrollbar-style="theme"
       data-sidebar-menu-elevation="true"
       data-control-radius="balanced"

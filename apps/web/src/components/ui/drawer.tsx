@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
-import { cn } from "@/lib/utils";
-import { useBackDismiss } from "@/navigation/useBackDismiss";
+import { cn } from "../../lib/utils";
+import { useBackDismiss } from "../../navigation/useBackDismiss";
 
 type DrawerContextProps = {
   hasSnapPoints: boolean;

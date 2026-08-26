@@ -1,419 +1,776 @@
-import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
-import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
+import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { ToolboxIcon as Toolbox } from "@phosphor-icons/react/Toolbox";
-import { XIcon as X } from "@phosphor-icons/react/X";
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "../searchShortcut";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "../components/ui/drawer";
+import { ThemedSelect } from "../ThemedSelect";
+import type { ThemedSelectOption } from "../ThemedSelect";
 import { CommentCard } from "./CommentCard";
 import type { Comment } from "./CommentCard";
+import { CommentComposer } from "./CommentComposer";
 import {
-  isStoredBoolean,
-  isStoredString,
-  useSessionStorageState,
-} from "./useSessionStorageState";
+  createEmptyRichTextDraft,
+  isRichTextDocument,
+  isStoredRichTextDraft,
+  type DiscussionEntryKind,
+  type DiscussionVisibility,
+  type RichTextDraft,
+} from "./commentEditor";
+import { useSessionStorageState } from "./useSessionStorageState";
 
-const initialComments: Comment[] = [
+const CURRENT_USER = {
+  name: "Ashi Singh",
+  avatar: "/assets/sofia-avatar-160.webp",
+};
+
+const initialEntries: Comment[] = [
   {
-    id: 1,
-    name: "Ethan Park",
+    id: 4,
+    name: "Rohit Sharma",
     time: "2 hours ago",
     avatar: "/assets/ethan-avatar-160.webp",
-    text: "That dashboard animation breakdown was super helpful! Could you share the easing curve used for the chart transitions?",
-    likes: 12,
-    replies: 3,
-  },
-  {
-    id: 2,
-    name: "Sofia Chen",
-    time: "1 hour ago",
-    avatar: "/assets/sofia-avatar-160.webp",
-    text: "Love how you explained the spacing system. The 8pt grid approach really makes things consistent.",
-    likes: 8,
-    replies: 1,
+    text: "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
+    entryKind: "comment",
+    likes: 24,
+    replies: 2,
+    repliesExpanded: true,
+    thread: [
+      {
+        id: 401,
+        name: "Ashi Singh",
+        time: "1 hour ago",
+        avatar: "/assets/sofia-avatar-160.webp",
+        text: "Thank you so much, Rohit! Really glad it helped.",
+        likes: 12,
+      },
+      {
+        id: 402,
+        name: "Karan Mehta",
+        time: "45 minutes ago",
+        avatar: "/assets/ethan-avatar-160.webp",
+        text: "Totally agree! The empathy part clicked for me too.",
+        likes: 5,
+      },
+    ],
   },
   {
     id: 3,
-    name: "Maya Rodriguez",
-    time: "45 minutes ago",
+    name: "Neha Patel",
+    time: "3 hours ago",
     avatar: "/assets/sofia-avatar-160.webp",
-    text: "The pacing in this section made the research workflow much easier to follow. The examples were especially clear.",
-    likes: 5,
-    replies: 2,
-  },
-  {
-    id: 4,
-    name: "Noah Williams",
-    time: "28 minutes ago",
-    avatar: "/assets/ethan-avatar-160.webp",
-    text: "Could you revisit the part about choosing between qualitative and quantitative feedback in a future lesson?",
-    likes: 4,
+    text: "Can you share some real-world examples of this process?",
+    entryKind: "question",
+    likes: 18,
     replies: 1,
+    isQuestion: true,
+    thread: [
+      {
+        id: 301,
+        name: "Ashi Singh",
+        time: "2 hours ago",
+        avatar: "/assets/sofia-avatar-160.webp",
+        text: "Absolutely — I’ll add a few examples from product discovery and usability testing.",
+        likes: 7,
+      },
+    ],
   },
   {
-    id: 5,
-    name: "Ava Patel",
-    time: "12 minutes ago",
+    id: 2,
+    name: "Ashi Singh",
+    time: "1 day ago",
     avatar: "/assets/sofia-avatar-160.webp",
-    text: "I tried the exercise alongside the video and it helped me spot a few gaps in my own process.",
-    likes: 2,
-    replies: 0,
+    text: "Here’s a quick note on user empathy with examples and a worksheet that helped me connect the steps.",
+    entryKind: "note",
+    likes: 8,
+    attachment: {
+      name: "User empathy notes",
+      meta: "PDF · 412 KB",
+    },
+  },
+  {
+    id: 1,
+    name: "Vivek Nair",
+    time: "1 day ago",
+    avatar: "/assets/ethan-avatar-160.webp",
+    text: "How do you know when you have enough user interviews to start mapping patterns?",
+    entryKind: "question",
+    likes: 11,
+    replies: 1,
+    isQuestion: true,
+    thread: [
+      {
+        id: 101,
+        name: "Karan Mehta",
+        time: "21 hours ago",
+        avatar: "/assets/ethan-avatar-160.webp",
+        text: "When the same themes repeat and new interviews stop changing the shape of the problem.",
+        likes: 7,
+      },
+    ],
   },
 ];
 
-const tabs = [
-  ["Comments", ChatCenteredDots, "blue"],
-  ["Notes", Notepad, "cyan"],
-  ["Resources", Toolbox, "orange"],
-  ["Q&A", Question, "violet"],
-] as const;
+type FeedFilter = "top" | "newest";
+type EntryFilter = "all" | DiscussionEntryKind;
+type ComposerMode = "collapsed" | "desktop" | "mobile";
 
-type Tab = (typeof tabs)[number][0];
-type SupplementalTab = Exclude<Tab, "Comments">;
-const tabIds = tabs.map(([label]) => label);
-const getTabId = (tab: Tab) =>
-  `lesson-tool-tab-${tab.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
 
-const supplementalContent: Record<
-  SupplementalTab,
-  { title: string; body: string; action: string }
-> = {
-  Notes: {
-    title: "Your lesson notes",
-    body: "Capture the questions, principles, and examples you want to revisit.",
-    action: "Add a note",
-  },
-  Resources: {
-    title: "Lesson resources",
-    body: "Research-plan template, interview prompts, and the usability checklist are ready to download.",
-    action: "View 3 resources",
-  },
-  "Q&A": {
-    title: "Questions & answers",
-    body: "Ask the instructor or browse answers from other students in this lesson.",
-    action: "Ask a question",
-  },
+export const getDiscussionComposerCollapsedSnapPoint = (
+  viewportHeight: number,
+  playerBottom: number | undefined,
+) => {
+  if (
+    !Number.isFinite(viewportHeight) ||
+    viewportHeight <= 0 ||
+    playerBottom === undefined ||
+    !Number.isFinite(playerBottom)
+  ) {
+    return DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT;
+  }
+
+  return Math.max(2, Math.round(viewportHeight - playerBottom));
 };
+
+interface LegacyLessonNote {
+  id: number;
+  time: string;
+  text: string;
+  content: RichTextDraft["content"];
+  visibility: DiscussionVisibility;
+}
 
 interface DiscussionProps {
   persistenceKey: string;
+  mobileBottomNavigation?: boolean;
 }
 
-const isStoredComments = (value: unknown): value is Comment[] =>
+export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
+const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
+const initialDraft = createEmptyRichTextDraft();
+const countCharacters = (value: string) => Array.from(value).length;
+
+const feedFilterOptions = [
+  ["top", "Top", { flag: <Fire size={17} weight="fill" aria-hidden="true" /> }],
+  ["newest", "Newest"],
+] as const satisfies readonly ThemedSelectOption<FeedFilter>[];
+
+const entryFilters = [
+  ["all", "All"],
+  ["note", "Notes"],
+  ["comment", "Comments"],
+  ["question", "Q&As"],
+] as const satisfies readonly (readonly [EntryFilter, string])[];
+
+const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
+  value === "comment" || value === "question" || value === "note";
+
+const isDiscussionVisibility = (
+  value: unknown,
+): value is DiscussionVisibility =>
+  value === "public" || value === "private" || value === "unlisted";
+
+const isStoredEntries = (value: unknown): value is Comment[] =>
   Array.isArray(value) &&
   value.every(
-    (comment) =>
-      Boolean(comment) &&
-      typeof comment === "object" &&
-      typeof (comment as Comment).id === "number" &&
-      typeof (comment as Comment).name === "string" &&
-      typeof (comment as Comment).time === "string" &&
-      typeof (comment as Comment).avatar === "string" &&
-      typeof (comment as Comment).text === "string" &&
-      typeof (comment as Comment).likes === "number",
+    (entry) =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      typeof (entry as Comment).id === "number" &&
+      typeof (entry as Comment).name === "string" &&
+      typeof (entry as Comment).time === "string" &&
+      typeof (entry as Comment).avatar === "string" &&
+      typeof (entry as Comment).text === "string" &&
+      typeof (entry as Comment).likes === "number" &&
+      (typeof (entry as Comment).entryKind === "undefined" ||
+        isDiscussionEntryKind((entry as Comment).entryKind)) &&
+      (typeof (entry as Comment).content === "undefined" ||
+        isRichTextDocument((entry as Comment).content)) &&
+      (typeof (entry as Comment).visibility === "undefined" ||
+        isDiscussionVisibility((entry as Comment).visibility)) &&
+      (typeof (entry as Comment).isOwn === "undefined" ||
+        typeof (entry as Comment).isOwn === "boolean"),
   );
 
-export function Discussion({ persistenceKey }: DiscussionProps) {
+const isStoredLegacyNotes = (value: unknown): value is LegacyLessonNote[] =>
+  Array.isArray(value) &&
+  value.every(
+    (note) =>
+      Boolean(note) &&
+      typeof note === "object" &&
+      typeof (note as LegacyLessonNote).id === "number" &&
+      typeof (note as LegacyLessonNote).time === "string" &&
+      typeof (note as LegacyLessonNote).text === "string" &&
+      isRichTextDocument((note as LegacyLessonNote).content) &&
+      isDiscussionVisibility((note as LegacyLessonNote).visibility),
+  );
+
+const asLegacyNoteEntry = (note: LegacyLessonNote): Comment => ({
+  id: note.id,
+  name: CURRENT_USER.name,
+  time: note.time,
+  avatar: CURRENT_USER.avatar,
+  text: note.text,
+  content: note.content,
+  visibility: note.visibility,
+  entryKind: "note",
+  likes: 0,
+  replies: 0,
+  isOwn: true,
+});
+
+export function Discussion({
+  persistenceKey,
+  mobileBottomNavigation = false,
+}: DiscussionProps) {
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
-  const [activeTab, setActiveTab] = useState<Tab>("Comments");
-  const [search, setSearch] = useSessionStorageState(
-    `${storageBase}-search`,
-    "",
-    isStoredString,
-  );
-  const [searchOpen, setSearchOpen] = useSessionStorageState(
-    `${storageBase}-search-open`,
-    false,
-    isStoredBoolean,
-  );
-  const [searchFocused, setSearchFocused] = useState(false);
-  const tabListRef = useRef<HTMLDivElement>(null);
-  const composerSearchInputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useSessionStorageState(
+  const [draft, setDraft] = useSessionStorageState<RichTextDraft>(
     `${storageBase}-comment-draft`,
-    "",
-    isStoredString,
+    initialDraft,
+    isStoredRichTextDraft,
   );
-  const [postedComments, setPostedComments] = useSessionStorageState<Comment[]>(
+  const [postedEntries, setPostedEntries] = useSessionStorageState<Comment[]>(
     `${storageBase}-posted-comments`,
     [],
-    isStoredComments,
+    isStoredEntries,
   );
-  const [comments, setComments] = useState(() => [
-    ...postedComments,
-    ...initialComments,
-  ]);
+  const [legacyNotes] = useSessionStorageState<LegacyLessonNote[]>(
+    `${storageBase}-posted-notes`,
+    [],
+    isStoredLegacyNotes,
+  );
+  const [entries, setEntries] = useState(initialEntries);
+  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
+  const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>("top");
+  const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
   const [notice, setNotice] = useState("");
+  const draftIsTooLong =
+    countCharacters(draft.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
 
   useEffect(() => {
-    setComments((current) => {
-      const currentById = new Map(
-        current.map((comment) => [comment.id, comment]),
-      );
-      return [
-        ...postedComments.map(
-          (comment) => currentById.get(comment.id) ?? comment,
-        ),
-        ...initialComments.map(
-          (comment) => currentById.get(comment.id) ?? comment,
-        ),
-      ];
+    const migratedNotes = legacyNotes.map(asLegacyNoteEntry);
+    const persistedById = new Map<number, Comment>();
+    [...postedEntries, ...migratedNotes].forEach((entry) => {
+      if (!persistedById.has(entry.id)) {
+        persistedById.set(entry.id, { ...entry, isOwn: true });
+      }
     });
-  }, [postedComments]);
+    const persistedEntries = [...persistedById.values()];
 
-  useEffect(() => {
-    if (!searchOpen) return undefined;
-    const frame = window.requestAnimationFrame(() =>
-      composerSearchInputRef.current?.focus({ preventScroll: true }),
+    if (persistedEntries.length > 0) {
+      setEntries((current) => [
+        ...persistedEntries,
+        ...current.filter(
+          (entry) =>
+            !persistedEntries.some((persisted) => persisted.id === entry.id),
+        ),
+      ]);
+    }
+
+    const notesMissingFromCurrentStorage = migratedNotes.filter(
+      (note) => !postedEntries.some((entry) => entry.id === note.id),
     );
-    return () => window.cancelAnimationFrame(frame);
-  }, [searchOpen]);
+    if (notesMissingFromCurrentStorage.length > 0) {
+      setPostedEntries((current) => [
+        ...notesMissingFromCurrentStorage,
+        ...current,
+      ]);
+    }
+  }, [legacyNotes, postedEntries, setPostedEntries]);
 
-  const visibleComments = useMemo(
-    () =>
-      comments.filter((comment) =>
-        `${comment.name} ${comment.text}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [comments, search],
-  );
+  const filteredEntries = useMemo(() => {
+    const visibleEntries =
+      entryFilter === "all"
+        ? entries
+        : entries.filter(
+            (entry) =>
+              (entry.entryKind ??
+                (entry.isQuestion ? "question" : "comment")) === entryFilter,
+          );
+    const uniqueEntries = Array.from(
+      new Map(visibleEntries.map((entry) => [entry.id, entry])).values(),
+    );
 
-  const addComment = () => {
-    const text = draft.trim();
-    if (!text) {
-      setNotice("Write a comment before sending.");
+    return uniqueEntries.sort((left, right) => {
+      if (feedFilter === "newest") return right.id - left.id;
+      const leftScore = left.likes + (left.replies ?? 0) * 2;
+      const rightScore = right.likes + (right.replies ?? 0) * 2;
+      return rightScore - leftScore || right.id - left.id;
+    });
+  }, [entries, entryFilter, feedFilter]);
+
+  const addEntry = () => {
+    if (draftIsTooLong) {
+      setNotice(COMMENT_LENGTH_NOTICE);
       return;
     }
-    const comment: Comment = {
+
+    const text = draft.text.trim();
+    if (!text) {
+      setNotice(
+        entryKind === "note"
+          ? "Write a note before posting."
+          : entryKind === "question"
+            ? "Write a Q&A before posting."
+            : "Write a comment before posting.",
+      );
+      return;
+    }
+
+    const entry: Comment = {
       id: Date.now(),
-      name: "Sofia Chen",
+      name: CURRENT_USER.name,
       time: "Just now",
-      avatar: "/assets/sofia-avatar-160.webp",
+      avatar: CURRENT_USER.avatar,
       text,
+      content: draft.content,
+      visibility,
+      entryKind,
       likes: 0,
+      replies: 0,
+      isQuestion: entryKind === "question",
+      isOwn: true,
     };
-    setPostedComments((current) => [comment, ...current]);
-    setComments((current) => [comment, ...current]);
-    setDraft("");
-    setNotice("Comment posted.");
+
+    setPostedEntries((current) => [entry, ...current]);
+    setEntries((current) => [entry, ...current]);
+    setDraft(createEmptyRichTextDraft());
+    setFeedFilter("newest");
+    setEntryFilter("all");
+
+    const entryName =
+      entryKind === "note"
+        ? "Note"
+        : entryKind === "question"
+          ? "Q&A"
+          : "Comment";
+    const visibilityPrefix =
+      visibility === "private"
+        ? "Private "
+        : visibility === "unlisted"
+          ? "Unlisted "
+          : "";
+    const noticeEntryName = visibilityPrefix
+      ? `${visibilityPrefix}${entryName.toLowerCase()}`
+      : entryName;
+    setNotice(
+      entryKind === "note"
+        ? `${noticeEntryName} saved.`
+        : `${noticeEntryName} posted.`,
+    );
   };
 
   const onLike = (id: number, liked: boolean) => {
-    setComments((current) =>
-      current.map((comment) =>
-        comment.id === id
-          ? { ...comment, likes: Math.max(0, comment.likes + (liked ? 1 : -1)) }
-          : comment,
-      ),
-    );
+    const update = (current: Comment[]) =>
+      current.map((entry) =>
+        entry.id === id
+          ? { ...entry, likes: Math.max(0, entry.likes + (liked ? 1 : -1)) }
+          : entry,
+      );
+    setEntries(update);
+    setPostedEntries(update);
   };
 
-  const navigateTab = (tab: Tab) => {
-    setActiveTab(tab);
-    setSearch("");
-    setSearchOpen(false);
+  const editEntry = (id: number, text: string) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) =>
+        entry.id === id
+          ? { ...entry, text, content: undefined, time: "Just now (edited)" }
+          : entry,
+      );
+    setEntries(update);
+    setPostedEntries(update);
+    setNotice("Entry updated.");
+  };
+
+  const deleteEntry = (id: number) => {
+    const remove = (current: Comment[]) =>
+      current.filter((entry) => entry.id !== id);
+    setEntries(remove);
+    setPostedEntries(remove);
+    setNotice("Entry deleted.");
   };
 
   return (
-    <section className="learning-discussion">
-      <div className="learning-discussion__header min-w-0 border-b border-(--border)">
-        <div
-          ref={tabListRef}
-          className="page-tabs flex min-w-0 gap-1 overflow-x-auto"
-          role="tablist"
-          aria-label="Lesson tools"
-          data-sidebar-swipe-ignore
-          data-learning-swipe-ignore
-        >
-          {tabs.map(([label, Icon, tone]) => (
-            <button
-              type="button"
-              id={getTabId(label)}
-              role="tab"
-              aria-selected={activeTab === label}
-              aria-controls="learning-discussion-tab-panel"
-              data-page-tab-tone={tone}
-              data-swipe-tab-id={label}
-              tabIndex={activeTab === label ? 0 : -1}
-              key={label}
-              onClick={() => navigateTab(label)}
-              onKeyDown={handleRovingTabKeyDown}
-              className={`lesson-tool-tab relative inline-flex h-12 shrink-0 items-center gap-2 px-3 text-[15px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${activeTab === label ? "is-active font-semibold" : "text-(--muted) hover:text-(--text)"}`}
-            >
-              <Icon
-                size={20}
-                weight={activeTab === label ? "fill" : "regular"}
-              />{" "}
-              {label}
-            </button>
-          ))}
-          <span className="page-tabs__indicator" aria-hidden="true" />
-        </div>
-      </div>
-
-      <SwipeableTabPanel
-        tabs={tabIds}
-        activeTab={activeTab}
-        onTabChange={navigateTab}
-        tabListRef={tabListRef}
-        id="learning-discussion-tab-panel"
-        labelledBy={getTabId(activeTab)}
-        className="learning-discussion__tab-panel"
-      >
-        {(panelTab) =>
-          panelTab === "Comments" ? (
-            <div className="learning-comments-surface">
-              <div
-                className={`learning-comment-composer ${searchOpen ? "is-search-open" : ""}`}
-              >
-                <img
-                  src="/assets/sofia-avatar-160.webp"
-                  alt=""
-                  className="learning-comment-composer__avatar"
-                />
-                <div className="learning-comment-composer__field">
-                  <label className="learning-comment-composer__comment min-w-0 flex-1">
-                    <span className="sr-only">Add a comment</span>
-                    <input
-                      value={draft}
-                      onChange={(event) => {
-                        setDraft(event.target.value);
-                        setNotice("");
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") addComment();
-                      }}
-                      placeholder="Add a comment..."
-                      className="learning-comment-composer__input h-11 w-full bg-transparent px-1 outline-none placeholder:text-(--muted)"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    data-fixed-radius
-                    onClick={addComment}
-                    aria-label="Post comment"
-                    className="learning-comment-composer__send"
-                  >
-                    <PaperPlaneTilt size={22} weight="fill" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  data-fixed-radius
-                  aria-label={
-                    searchOpen ? "Close comment search" : "Search comments"
-                  }
-                  aria-pressed={searchOpen}
-                  aria-controls="learning-comment-search-input"
-                  onClick={() => {
-                    setSearchOpen((open) => {
-                      const nextOpen = !open;
-                      setSearchFocused(nextOpen);
-                      return nextOpen;
-                    });
-                  }}
-                  className="learning-comment-composer__search-toggle"
-                >
-                  {searchOpen ? <X size={18} /> : <MagnifyingGlass size={20} />}
-                </button>
-                <label
-                  className="learning-comment-composer__search"
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                >
-                  <MagnifyingGlass size={18} aria-hidden="true" />
-                  <span className="sr-only">
-                    Search {activeTab.toLowerCase()}
-                  </span>
-                  <input
-                    id="learning-comment-search-input"
-                    ref={composerSearchInputRef}
-                    type="search"
-                    tabIndex={searchOpen ? 0 : -1}
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={
-                      searchFocused
-                        ? (activeTab as Tab) === "Q&A"
-                          ? "Search Q&A"
-                          : `Search ${activeTab.toLowerCase()}`
-                        : "Search"
-                    }
-                    className="rounded-none"
-                    data-fixed-radius
-                    data-search-shortcut-target
-                    aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
-                  />
-                  <SearchShortcutHint />
-                </label>
-              </div>
-              {notice && (
-                <p
-                  role="status"
-                  className={`learning-comment-notice text-xs ${notice.includes("posted") ? "text-(--success)" : "text-(--danger)"}`}
-                >
-                  {notice}
-                </p>
-              )}
-
-              <div className="learning-comment-feed">
-                {visibleComments.map((comment) => (
-                  <CommentCard
-                    key={comment.id}
-                    comment={comment}
-                    onLike={onLike}
-                  />
-                ))}
-                {visibleComments.length === 0 && (
-                  <div className="learning-comment-empty px-5 py-10 text-center">
-                    <p className="font-semibold">
-                      No comments match that search
-                    </p>
-                    <p className="mt-1 text-sm text-(--muted)">
-                      Try a name, topic, or phrase from the discussion.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div
-              className="learning-supplemental-panel rounded-xl border border-(--border) bg-(--surface) px-6 text-center"
-              data-learning-radius-surface
-            >
-              <h3 className="text-base font-semibold">
-                {supplementalContent[panelTab].title}
-              </h3>
-              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-(--muted)">
-                {supplementalContent[panelTab].body}
-              </p>
-              <button
-                type="button"
-                data-control-radius-action
-                onClick={() =>
-                  setNotice(`${supplementalContent[panelTab].action} selected.`)
-                }
-                className="mt-5 rounded-[9px] bg-(--accent) px-4 py-2.5 text-sm font-semibold text-(--on-accent) transition hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-              >
-                {supplementalContent[panelTab].action}
-              </button>
-            </div>
-          )
+    <section className="learning-discussion" aria-label="Lesson discussion">
+      <ThreadSurface
+        draft={draft}
+        entryKind={entryKind}
+        visibility={visibility}
+        notice={notice}
+        feedFilter={feedFilter}
+        entryFilter={entryFilter}
+        entries={filteredEntries}
+        draftIsTooLong={draftIsTooLong}
+        mobileBottomNavigation={mobileBottomNavigation}
+        onDraftChange={(value) => {
+          setDraft(value);
+          setNotice(
+            countCharacters(value.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT
+              ? COMMENT_LENGTH_NOTICE
+              : "",
+          );
+        }}
+        onEntryKindChange={setEntryKind}
+        onVisibilityChange={setVisibility}
+        onSubmit={addEntry}
+        onFeedFilterChange={setFeedFilter}
+        onEntryFilterChange={setEntryFilter}
+        onLike={onLike}
+        onEdit={editEntry}
+        onDelete={deleteEntry}
+        onReport={() =>
+          setNotice("Report received. Our moderation team will review it.")
         }
-      </SwipeableTabPanel>
+      />
     </section>
   );
 }
+
+interface ThreadSurfaceProps {
+  draft: RichTextDraft;
+  entryKind: DiscussionEntryKind;
+  visibility: DiscussionVisibility;
+  notice: string;
+  feedFilter: FeedFilter;
+  entryFilter: EntryFilter;
+  entries: Comment[];
+  draftIsTooLong: boolean;
+  mobileBottomNavigation: boolean;
+  onDraftChange: (value: RichTextDraft) => void;
+  onEntryKindChange: (value: DiscussionEntryKind) => void;
+  onVisibilityChange: (value: DiscussionVisibility) => void;
+  onSubmit: () => void;
+  onFeedFilterChange: (filter: FeedFilter) => void;
+  onEntryFilterChange: (filter: EntryFilter) => void;
+  onLike: (id: number, liked: boolean) => void;
+  onEdit: (id: number, text: string) => void;
+  onDelete: (id: number) => void;
+  onReport: (id: number) => void;
+}
+
+function ThreadSurface({
+  draft,
+  entryKind,
+  visibility,
+  notice,
+  feedFilter,
+  entryFilter,
+  entries,
+  draftIsTooLong,
+  mobileBottomNavigation,
+  onDraftChange,
+  onEntryKindChange,
+  onVisibilityChange,
+  onSubmit,
+  onFeedFilterChange,
+  onEntryFilterChange,
+  onLike,
+  onEdit,
+  onDelete,
+  onReport,
+}: ThreadSurfaceProps) {
+  const isPhone = usePhoneComposerLayout();
+  const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
+  const [mobileComposerCollapsedSnapPoint, setMobileComposerCollapsedSnapPoint] =
+    useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
+    number | null
+  >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const mobileComposerSnapPoints = useMemo(
+    () => [mobileComposerCollapsedSnapPoint, 1],
+    [mobileComposerCollapsedSnapPoint],
+  );
+
+  const getMobileComposerCollapsedSnapPoint = useCallback(() => {
+    const playerBottom = document
+      .querySelector<HTMLElement>(".learning-workspace__player-wrap")
+      ?.getBoundingClientRect().bottom;
+    return getDiscussionComposerCollapsedSnapPoint(
+      window.innerHeight,
+      playerBottom,
+    );
+  }, []);
+
+  const openMobileComposer = useCallback(() => {
+    const collapsedSnapPoint = getMobileComposerCollapsedSnapPoint();
+    setMobileComposerCollapsedSnapPoint(collapsedSnapPoint);
+    setMobileComposerSnapPoint(collapsedSnapPoint);
+    setComposerMode("mobile");
+  }, [getMobileComposerCollapsedSnapPoint]);
+
+  useEffect(() => {
+    setComposerMode((current) => {
+      if (isPhone && current === "desktop") return "collapsed";
+      if (!isPhone && current === "mobile") return "collapsed";
+      return current;
+    });
+  }, [isPhone]);
+
+  useEffect(() => {
+    if (!isPhone || composerMode !== "mobile") return undefined;
+
+    const player = document.querySelector<HTMLElement>(
+      ".learning-workspace__player-wrap",
+    );
+    let frame: number | null = null;
+    const syncSnapPoint = () => {
+      frame = null;
+      const collapsedSnapPoint = getMobileComposerCollapsedSnapPoint();
+      setMobileComposerCollapsedSnapPoint(collapsedSnapPoint);
+      setMobileComposerSnapPoint((current) =>
+        current === 1 ? 1 : collapsedSnapPoint,
+      );
+    };
+    const scheduleSnapPointSync = () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(syncSnapPoint);
+    };
+    const playerResizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleSnapPointSync);
+
+    if (player) playerResizeObserver?.observe(player);
+    window.addEventListener("resize", scheduleSnapPointSync);
+    window.visualViewport?.addEventListener("resize", scheduleSnapPointSync);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      playerResizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleSnapPointSync);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        scheduleSnapPointSync,
+      );
+    };
+  }, [composerMode, getMobileComposerCollapsedSnapPoint, isPhone]);
+
+  const submitAndCollapse = () => {
+    onSubmit();
+    if (!draft.text.trim() || draftIsTooLong) return;
+    setComposerMode("collapsed");
+  };
+
+  return (
+    <div>
+      {!isPhone && (
+        <div className="mt-4">
+          {composerMode === "desktop" ? (
+            <CommentComposer
+              draft={draft}
+              entryKind={entryKind}
+              visibility={visibility}
+              invalid={draftIsTooLong}
+              autoFocus
+              onDraftChange={onDraftChange}
+              onEntryKindChange={onEntryKindChange}
+              onVisibilityChange={onVisibilityChange}
+              onSubmit={submitAndCollapse}
+            />
+          ) : (
+            <CompactComposer
+              draft={draft}
+              onOpen={() => setComposerMode("desktop")}
+              onSubmit={submitAndCollapse}
+            />
+          )}
+        </div>
+      )}
+
+      {notice && (
+        <p
+          role="status"
+          className={`mt-2 text-xs ${notice.includes("posted") || notice.includes("saved") || notice.includes("updated") || notice.includes("deleted") ? "text-(--success)" : notice.includes("Report") ? "text-(--muted)" : "text-(--danger)"}`}
+        >
+          {notice}
+        </p>
+      )}
+
+      <div
+        className={`learning-discussion__filter-bar ${isPhone ? "mt-2" : "mt-5"}`}
+      >
+        <div
+          role="group"
+          aria-label="Filter discussion entries"
+          className="learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {entryFilters.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={entryFilter === value}
+              onClick={() => onEntryFilterChange(value)}
+              className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="learning-discussion__sort w-[5.4rem] shrink-0 sm:w-[5.8rem]">
+          <ThemedSelect
+            value={feedFilter}
+            onValueChange={onFeedFilterChange}
+            options={feedFilterOptions}
+            ariaLabel="Sort discussion"
+            triggerClassName="learning-discussion__sort-trigger h-8 px-2 sm:px-2.5"
+          />
+        </div>
+      </div>
+
+      <div className={`mt-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+        {entries.map((entry) => (
+          <CommentCard
+            key={entry.id}
+            comment={entry}
+            onLike={onLike}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onReport={onReport}
+          />
+        ))}
+        {entries.length === 0 && (
+          <div className="py-12 text-center">
+            <p className="font-semibold text-(--text)">
+              No{" "}
+              {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
+              yet
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
+              Choose All to return to the full lesson discussion.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {isPhone && composerMode !== "mobile" && (
+        <div
+          className={`fixed inset-x-0 z-130 bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl ${mobileBottomNavigation ? "bottom-[calc(58px+env(safe-area-inset-bottom))]" : "bottom-0"}`}
+        >
+          <CompactComposer
+            draft={draft}
+            mobile
+            onOpen={openMobileComposer}
+            onSubmit={submitAndCollapse}
+          />
+        </div>
+      )}
+
+      {isPhone && (
+        <Drawer
+          open={composerMode === "mobile"}
+          onOpenChange={(open) => {
+            if (open) openMobileComposer();
+            else setComposerMode("collapsed");
+          }}
+          modal={false}
+          snapPoints={mobileComposerSnapPoints}
+          snapPoint={mobileComposerSnapPoint}
+          onSnapPointChange={(snapPoint) => {
+            if (typeof snapPoint === "number" || snapPoint === null) {
+              setMobileComposerSnapPoint(snapPoint);
+            }
+          }}
+          snapToSequentialPoints
+          showSwipeHandle
+          swipeDirection="down"
+          swipeHandleClassName="pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_34%,transparent)]"
+        >
+          <DrawerContent
+            aria-label="Create a discussion entry"
+            className="learning-comment-composer-drawer overflow-hidden rounded-t-[26px]! bg-[color-mix(in_srgb,var(--canvas)_92%,var(--surface))] px-0 pt-0 pb-[max(12px,env(safe-area-inset-bottom))] shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] data-expanded:rounded-none!"
+          >
+            <DrawerTitle className="sr-only">
+              Create a discussion entry
+            </DrawerTitle>
+            <DrawerDescription className="sr-only">
+              Write a comment, Q&A, or note for this lesson.
+            </DrawerDescription>
+            <CommentComposer
+              draft={draft}
+              entryKind={entryKind}
+              visibility={visibility}
+              invalid={draftIsTooLong}
+              autoFocus
+              presentation="drawer"
+              onDraftChange={onDraftChange}
+              onEntryKindChange={onEntryKindChange}
+              onVisibilityChange={onVisibilityChange}
+              onSubmit={submitAndCollapse}
+            />
+          </DrawerContent>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+interface CompactComposerProps {
+  draft: RichTextDraft;
+  mobile?: boolean;
+  onOpen: () => void;
+  onSubmit: () => void;
+}
+
+function CompactComposer({
+  draft,
+  mobile = false,
+  onOpen,
+  onSubmit,
+}: CompactComposerProps) {
+  const preview = draft.text.trim();
+
+  return (
+    <div
+      data-compact-comment-composer
+      className={`flex items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
+    >
+      <img
+        src={CURRENT_USER.avatar}
+        alt=""
+        className="size-9 shrink-0 rounded-full object-cover"
+      />
+      <button
+        type="button"
+        aria-label="Open discussion composer"
+        onClick={onOpen}
+        className="learning-discussion__composer-prompt min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text-secondary) focus-visible:outline-2 focus-visible:outline-(--accent)"
+      >
+        {preview || "Write something…"}
+      </button>
+      <button
+        type="button"
+        aria-label="Send discussion entry"
+        onClick={preview ? onSubmit : onOpen}
+        className="grid size-9 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+      >
+        <PaperPlaneTilt size={20} weight="fill" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function usePhoneComposerLayout() {
+  const [isPhone, setIsPhone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsPhone(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return isPhone;
+}
+
+const getFilterName = (filter: Exclude<EntryFilter, "all">) => {
+  if (filter === "question") return "Q&As";
+  if (filter === "note") return "notes";
+  return "comments";
+};
