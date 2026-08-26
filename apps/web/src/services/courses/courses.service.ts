@@ -48,6 +48,10 @@ export const coursesService = {
     return api.get<CourseEditorDataResponse>(`/courses/${courseId}/editor`);
   },
 
+  getPreview: (courseId: string): Promise<CourseEditorDataResponse> => {
+    return api.get<CourseEditorDataResponse>(`/courses/${courseId}/preview`);
+  },
+
   getValidation: (courseId: string): Promise<CourseValidationResponse> => {
     return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
   },

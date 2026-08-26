@@ -9,21 +9,123 @@ import {
   Circle,
   Clock,
   FileText,
+  Globe,
   Heart,
   Play,
   PlayCircle,
   ShoppingBag,
   Stack,
+  Tag,
   Ticket,
   User,
 } from "@phosphor-icons/react";
 import { courses } from "./catalogue";
-import type { Course } from "./catalogue";
+import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import { sections } from "../learning/courseContent";
 import type { CourseSection } from "../learning/courseContent";
 import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
 import type { NavigateTo } from "../routing/navigation";
 import { RenderMarkdown } from "./RichTextEditor";
+import type { CourseEditorDataResponse, Category } from "@veolms/contracts";
+
+// ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
+
+export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
+
+export function getPriceSizeVariant(priceStr: string): PriceSizeVariant {
+  if (!priceStr || priceStr.toLowerCase() === "free") return "normal";
+  const digitsOnly = priceStr.replace(/\D/g, "");
+  const digitCount = digitsOnly.length;
+  if (digitCount >= 8) return "xlarge";
+  if (digitCount >= 6) return "large";
+  if (digitCount === 5) return "medium";
+  return "normal";
+}
+
+export const priceTextClasses: Record<PriceSizeVariant, string> = {
+  normal: "text-[2.15rem] max-[640px]:text-[1.95rem] tracking-[-0.03em]",
+  medium: "text-[1.95rem] max-[640px]:text-[1.75rem] tracking-[-0.025em]",
+  large: "text-[1.75rem] max-[640px]:text-[1.55rem] tracking-[-0.02em]",
+  xlarge: "text-[1.55rem] max-[640px]:text-[1.4rem] tracking-[-0.015em]",
+};
+
+export function getCurrencySymbol(currency: string = "USD"): string {
+  switch (currency.toUpperCase()) {
+    case "INR":
+      return "₹";
+    case "USD":
+      return "$";
+    case "EUR":
+      return "€";
+    case "GBP":
+      return "£";
+    case "CAD":
+      return "CA$";
+    case "AUD":
+      return "A$";
+    case "JPY":
+      return "¥";
+    default:
+      return `${currency.toUpperCase()} `;
+  }
+}
+
+export function formatPriceWithCurrency(
+  amount: number,
+  currency: string = "USD",
+): string {
+  const sym = getCurrencySymbol(currency);
+  return `${sym}${amount.toLocaleString()}`;
+}
+
+export function isCourseSaleActive(
+  salePrice: number | null | undefined,
+  regularPrice: number,
+  saleStartsAt?: string | null,
+  saleEndsAt?: string | null,
+): boolean {
+  if (salePrice == null || salePrice <= 0 || salePrice >= regularPrice) {
+    return false;
+  }
+  const now = new Date().getTime();
+  if (saleStartsAt) {
+    const starts = new Date(saleStartsAt).getTime();
+    if (!isNaN(starts) && starts > now) {
+      return false;
+    }
+  }
+  if (saleEndsAt) {
+    const ends = new Date(saleEndsAt).getTime();
+    if (!isNaN(ends) && ends < now) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getLanguageLabel(code?: string | null): string | undefined {
+  if (!code || !code.trim()) return undefined;
+  const trimmed = code.trim();
+  const map: Record<string, string> = {
+    en: "English",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    hi: "Hindi",
+    zh: "Chinese",
+    ja: "Japanese",
+    ar: "Arabic",
+    pt: "Portuguese",
+    ru: "Russian",
+    it: "Italian",
+  };
+  return (
+    map[trimmed.toLowerCase()] ||
+    (trimmed.length <= 3
+      ? trimmed.toUpperCase()
+      : trimmed.charAt(0).toUpperCase() + trimmed.slice(1))
+  );
+}
 
 // ─── per-course curriculum adapter ──────────────────────────────────────────
 
@@ -158,11 +260,16 @@ function CurriculumSectionItem({
 }: CurriculumSectionProps) {
   const panelId = `cov-section-panel-${section.id}`;
   const buttonId = `cov-section-toggle-${section.id}`;
-  const lectureCount = section.lessons.length || Math.max(3, 5 - (index % 3));
-  const minutes = 20 + index * 7 + (index % 4) * 5;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  const durationLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  const lessonCount = section.lessons.length;
+  const hasDurations = section.lessons.some((l) => Boolean(l[2]));
+  const durationLabel = hasDurations
+    ? (() => {
+        const minutes = 20 + index * 7 + (index % 4) * 5;
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      })()
+    : "";
 
   return (
     <div
@@ -191,7 +298,8 @@ function CurriculumSectionItem({
           {section.title}
         </span>
         <span className="shrink-0 text-[var(--muted)] text-[0.82rem] font-normal mr-1">
-          {lectureCount} Lectures &bull; {durationLabel}
+          {lessonCount} Lesson{lessonCount === 1 ? "" : "s"}
+          {durationLabel ? ` • ${durationLabel}` : ""}
         </span>
         <span
           className={`shrink-0 text-[var(--muted)] inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
@@ -216,13 +324,16 @@ function CurriculumSectionItem({
       >
         <div className="overflow-hidden min-h-0">
           <div className="px-3.5 pt-1 pb-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
-          {section.lessons.length > 0
-            ? section.lessons.map(([number, title, duration, status]) => {
+            {section.lessons.length > 0 ? (
+              section.lessons.map(([number, title, duration, status]) => {
                 const isDoc =
                   title.toLowerCase().includes("discord") ||
                   title.toLowerCase().includes("app") ||
                   title.toLowerCase().includes("community") ||
-                  title.toLowerCase().includes("download");
+                  title.toLowerCase().includes("download") ||
+                  title.toLowerCase().endsWith(".pdf") ||
+                  title.toLowerCase().endsWith(".doc") ||
+                  title.toLowerCase().endsWith(".docx");
                 return (
                   <div
                     className="group/lesson flex items-center gap-3 min-h-[38px] px-3 py-1.5 rounded-md text-[var(--text-secondary)] text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-[var(--text)]"
@@ -241,81 +352,38 @@ function CurriculumSectionItem({
                     <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-[var(--text-secondary)]">
                       {title}
                     </span>
-                    <span className="text-[var(--muted)] text-[0.78rem] shrink-0 w-[45px] text-right">
-                      {duration}
-                    </span>
-                    <span
-                      className="inline-flex items-center justify-center shrink-0"
-                      aria-hidden="true"
-                    >
-                      {status === "done" ? (
+                    {duration ? (
+                      <span className="text-[var(--muted)] text-[0.78rem] shrink-0 w-[45px] text-right">
+                        {duration}
+                      </span>
+                    ) : null}
+                    {status === "done" ? (
+                      <span
+                        className="inline-flex items-center justify-center shrink-0"
+                        aria-hidden="true"
+                      >
                         <CheckCircle
                           size={16}
                           weight="fill"
                           className="text-[#10b981]"
                         />
-                      ) : (
+                      </span>
+                    ) : status === "todo" ? (
+                      <span
+                        className="inline-flex items-center justify-center shrink-0"
+                        aria-hidden="true"
+                      >
                         <Circle size={16} className="text-[var(--muted)]" />
-                      )}
-                    </span>
+                      </span>
+                    ) : null}
                   </div>
                 );
               })
-            : Array.from({ length: lectureCount }, (_, i) => {
-                const isDoc = i === 1 || i === 2;
-                const isDone = i === 0 || i === 3;
-                return (
-                  <div
-                    className="group/lesson flex items-center gap-3 min-h-[38px] px-3 py-1.5 rounded-md text-[var(--text-secondary)] text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-[var(--text)]"
-                    key={i}
-                  >
-                    <span
-                      className="inline-flex w-5 shrink-0 items-center justify-center text-[var(--muted)] transition-colors duration-140 group-hover/lesson:text-[var(--accent)]"
-                      aria-hidden="true"
-                    >
-                      {isDoc ? (
-                        <FileText size={16} weight="regular" />
-                      ) : (
-                        <PlayCircle size={16} weight="regular" />
-                      )}
-                    </span>
-                    <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-[var(--text-secondary)]">
-                      {i === 0
-                        ? "Welcome to the course and setup your environment"
-                        : i === 1
-                          ? "Join Premium Discord Community"
-                          : i === 2
-                            ? "Download ProCodrr's Mobile App"
-                            : i === 3
-                              ? "Prerequisites"
-                              : `Lesson ${i + 1}`}
-                    </span>
-                    <span className="text-[var(--muted)] text-[0.78rem] shrink-0 w-[45px] text-right">
-                      {isDoc
-                        ? "--:--"
-                        : i === 0
-                          ? "05:24"
-                          : i === 3
-                            ? "05:02"
-                            : "04:35"}
-                    </span>
-                    <span
-                      className="inline-flex items-center justify-center shrink-0"
-                      aria-hidden="true"
-                    >
-                      {isDone ? (
-                        <CheckCircle
-                          size={16}
-                          weight="fill"
-                          className="text-[#10b981]"
-                        />
-                      ) : (
-                        <Circle size={16} className="text-[var(--muted)]" />
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
+            ) : (
+              <div className="px-3.5 py-3 text-[var(--muted)] text-[0.82rem] italic">
+                No lessons added yet
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -330,6 +398,9 @@ interface CourseHeroSectionProps {
   title: string;
   thumbnail: string;
   wishlisted: boolean;
+  shortDescription?: string;
+  categoryName?: string;
+  language?: string;
   pricing?: CourseOverviewPricingProps;
   inclusions?: string[];
   onNavigateCourses?: () => void;
@@ -343,6 +414,9 @@ function CourseHeroSection({
   title,
   thumbnail,
   wishlisted,
+  shortDescription,
+  categoryName,
+  language,
   pricing,
   inclusions,
   onNavigateCourses,
@@ -356,18 +430,18 @@ function CourseHeroSection({
     }
   };
 
-  const price = pricing?.price ?? DEFAULT_PRICE;
-  const originalPrice =
-    pricing?.originalPrice ??
-    (pricing?.price ? undefined : DEFAULT_ORIGINAL_PRICE);
-  const discount =
-    pricing?.discount ?? (pricing?.price ? undefined : DEFAULT_DISCOUNT);
+  const price = pricing?.price ?? (isReadOnlyPreview ? "Free" : DEFAULT_PRICE);
+  const originalPrice = pricing?.originalPrice;
+  const discount = pricing?.discount;
+  const priceSizeVariant = getPriceSizeVariant(price);
 
-  const defaultPerks = [
-    "Full lifetime access",
-    "Certificate of completion",
-    "Access on all devices",
-  ];
+  const defaultPerks = isReadOnlyPreview
+    ? []
+    : [
+        "Full lifetime access",
+        "Certificate of completion",
+        "Access on all devices",
+      ];
   const perksList = inclusions !== undefined ? inclusions : defaultPerks;
 
   return (
@@ -376,8 +450,8 @@ function CourseHeroSection({
       <div className="flex flex-col min-[1200px]:grid min-[1200px]:grid-cols-[minmax(0,42%)_minmax(0,58%)] gap-5 min-[1200px]:gap-7 min-[1200px]:items-stretch w-full box-border">
         {/* Left Column: Top row at top, Lower group (Title + Meta + Pricing) pushed to bottom on desktop */}
         <div className="flex flex-col min-w-0 w-full min-[1200px]:h-full min-[1200px]:justify-between gap-3.5 max-[1200px]:contents">
-          {/* Top Row: Back Button + Level Badge */}
-          <div className="flex items-center gap-3 shrink-0 max-[1200px]:order-1">
+          {/* Top Row: Back Button + Level Badge Only */}
+          <div className="flex items-center gap-2.5 shrink-0 max-[1200px]:order-1">
             {onNavigateCourses && (
               <button
                 type="button"
@@ -400,28 +474,32 @@ function CourseHeroSection({
 
           {/* Lower Content Group: Title, Meta row, Pricing Card */}
           <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
-            {/* Title & Metadata */}
-            <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[900px]:gap-1.5 max-[1200px]:w-full">
-              {/* Title */}
-              <h1 className="m-0 mb-1.5 text-[var(--text)] text-[2.15rem] font-extrabold leading-[1.16] tracking-[-0.025em] max-[900px]:text-[1.85rem] max-[640px]:text-[1.65rem]">
+            {/* Title & Metadata Group */}
+            <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
+              {/* 1. Title */}
+              <h1 className="m-0 text-[var(--text)] text-[2.15rem] font-extrabold leading-[1.16] tracking-[-0.025em] max-[900px]:text-[1.85rem] max-[640px]:text-[1.65rem]">
                 {title}
               </h1>
 
-              {/* Meta row */}
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[var(--text-secondary)] text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
-                <span className="inline-flex items-center gap-1.5 text-[var(--text)] font-[650]">
-                  <User size={17} weight="bold" aria-hidden="true" />
-                  <span>Instructor</span>
-                </span>
-                <span
-                  className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                  aria-hidden="true"
-                >
-                  •
-                </span>
+              {/* 2. Metadata row immediately below title */}
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[var(--text-secondary)] text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
+                {!isReadOnlyPreview && (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 text-[var(--text)] font-[650]">
+                      <User size={17} weight="bold" aria-hidden="true" />
+                      <span>Instructor</span>
+                    </span>
+                    <span
+                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                      aria-hidden="true"
+                    >
+                      •
+                    </span>
+                  </>
+                )}
                 <span className="inline-flex items-center gap-1.5">
                   <Stack size={17} aria-hidden="true" />
-                  <span>{course.sections} Sections</span>
+                  <span>{course.sections} Section{course.sections === 1 ? "" : "s"}</span>
                 </span>
                 <span
                   className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
@@ -431,18 +509,50 @@ function CourseHeroSection({
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <BookOpen size={17} aria-hidden="true" />
-                  <span>{course.lectures} Lectures</span>
+                  <span>{course.lectures} Lesson{course.lectures === 1 ? "" : "s"}</span>
                 </span>
-                <span
-                  className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                  aria-hidden="true"
-                >
-                  •
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock size={17} aria-hidden="true" />
-                  <span>{course.duration}</span>
-                </span>
+                {language ? (
+                  <>
+                    <span
+                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                      aria-hidden="true"
+                    >
+                      •
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Globe size={17} aria-hidden="true" />
+                      <span>{language}</span>
+                    </span>
+                  </>
+                ) : null}
+                {categoryName ? (
+                  <>
+                    <span
+                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                      aria-hidden="true"
+                    >
+                      •
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Tag size={17} aria-hidden="true" />
+                      <span>{categoryName}</span>
+                    </span>
+                  </>
+                ) : null}
+                {course.duration ? (
+                  <>
+                    <span
+                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                      aria-hidden="true"
+                    >
+                      •
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock size={17} aria-hidden="true" />
+                      <span>{course.duration}</span>
+                    </span>
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -452,18 +562,20 @@ function CourseHeroSection({
               aria-label="Course pricing and enrollment"
             >
               {/* Top Row: Prominent Price + Original Price + Discount (Left) and Favourite Button (Top Right) */}
-              <div className="flex items-center justify-between gap-3 w-full">
-                <div className="flex items-baseline gap-2.5">
-                  <span className="text-[var(--text)] text-[2.15rem] font-[850] tracking-[-0.03em] leading-none max-[640px]:text-[1.95rem]">
+              <div className="flex items-start justify-between gap-3 w-full">
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
+                  <span
+                    className={`text-[var(--text)] font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
+                  >
                     {price}
                   </span>
                   {originalPrice && (
-                    <span className="text-[var(--muted)] text-[1.05rem] font-medium line-through">
+                    <span className="text-[var(--muted)] text-[1.05rem] font-medium line-through whitespace-nowrap">
                       {originalPrice}
                     </span>
                   )}
                   {discount && (
-                    <span className="inline-flex items-center rounded-md px-2 py-[3px] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent))] text-[var(--accent-ink,var(--accent))] text-[0.75rem] font-[750] leading-none">
+                    <span className="inline-flex items-center rounded-md px-2 py-[3px] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent))] text-[var(--accent-ink,var(--accent))] text-[0.75rem] font-[750] leading-none whitespace-nowrap">
                       {discount}
                     </span>
                   )}
@@ -498,7 +610,7 @@ function CourseHeroSection({
               <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center gap-1.5 min-h-[40px] border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-[var(--text)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-bold font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent))] hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-[120px] max-[640px]:px-3 max-[640px]:text-[0.84rem]"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-[40px] border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-[var(--text)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-bold font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent))] hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-[120px] max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isReadOnlyPreview}
                 >
                   <Ticket
@@ -514,7 +626,7 @@ function CourseHeroSection({
 
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center gap-2 flex-1 min-h-[42px] min-w-[140px] px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-extrabold font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-[var(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text)))] hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem]"
+                  className="inline-flex items-center justify-center gap-2 flex-1 min-h-[42px] min-w-[140px] px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-extrabold font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-[var(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text)))] hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
                   disabled={isReadOnlyPreview}
                   onClick={() => {
                     if (!isReadOnlyPreview && onNavigatePage) {
@@ -632,6 +744,7 @@ interface CourseAboutCardProps {
   aboutExtra?: string;
   showMore: boolean;
   onToggleShowMore: () => void;
+  isReadOnlyPreview?: boolean;
 }
 
 function CourseAboutCard({
@@ -641,6 +754,7 @@ function CourseAboutCard({
   aboutExtra,
   showMore,
   onToggleShowMore,
+  isReadOnlyPreview = false,
 }: CourseAboutCardProps) {
   return (
     <section
@@ -658,6 +772,10 @@ function CourseAboutCard({
           <div className="course-preview-markdown-content">
             <RenderMarkdown content={description} />
           </div>
+        ) : isReadOnlyPreview ? (
+          <p className="m-0 text-[var(--muted)] text-[0.87rem] italic">
+            No description provided yet.
+          </p>
         ) : (
           <>
             {aboutLead && (
@@ -678,7 +796,7 @@ function CourseAboutCard({
           </>
         )}
       </div>
-      {!description && (
+      {!description && !isReadOnlyPreview && (
         <button
           type="button"
           className="inline-flex items-center gap-1 mt-2.5 border-0 bg-transparent text-[var(--accent)] text-[0.82rem] font-semibold p-0 cursor-pointer transition-opacity duration-140 hover:opacity-85"
@@ -729,22 +847,29 @@ function CourseCurriculumCard({
             Course curriculum
           </h2>
           <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.82rem]">
-            {course.sections} Sections &bull; {course.lectures} Lectures
+            {course.sections} Section{course.sections === 1 ? "" : "s"} &bull;{" "}
+            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"}
           </p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5" role="list">
-        {courseSections.map((section, index) => (
-          <CurriculumSectionItem
-            key={section.id}
-            section={section}
-            index={index}
-            isOpen={openSections.has(index)}
-            onToggle={() => onToggleSection(index)}
-          />
-        ))}
-      </div>
+      {courseSections.length === 0 ? (
+        <div className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] text-[var(--muted)] text-center text-[0.88rem] italic">
+          No sections added yet
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5" role="list">
+          {courseSections.map((section, index) => (
+            <CurriculumSectionItem
+              key={section.id}
+              section={section}
+              index={index}
+              isOpen={openSections.has(index)}
+              onToggle={() => onToggleSection(index)}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -755,9 +880,15 @@ export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
-  // Custom overview data override for Course Wizard Preview
+  // API Preview Data
+  previewData?: CourseEditorDataResponse;
+  categories?: Category[];
+  // Custom overview data override for backwards compatibility or tests
   customCourse?: Course;
   customDescription?: string;
+  customShortDescription?: string;
+  customCategoryName?: string;
+  customLanguage?: string;
   customSections?: CourseSection[];
   customIncludes?: CourseInclude[];
   customInclusions?: string[];
@@ -769,8 +900,13 @@ export function CourseOverviewPage({
   courseSlug: propCourseSlug,
   onNavigateCourses,
   onNavigatePage,
+  previewData,
+  categories = [],
   customCourse,
   customDescription,
+  customShortDescription,
+  customCategoryName,
+  customLanguage,
   customSections,
   customIncludes,
   customInclusions,
@@ -779,8 +915,125 @@ export function CourseOverviewPage({
 }: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = propCourseSlug ?? routeCourseSlug;
+  const serverCategories = categories;
+
+  // If previewData is provided, adapt it cleanly from persisted server state
+  const adaptedFromPreview = previewData
+    ? (() => {
+        const c = previewData.course;
+        const totalSections = previewData.sections.length;
+        const totalLessons = previewData.sections.reduce(
+          (acc, sec) => acc + (sec.lessons?.length ?? 0),
+          0,
+        );
+
+        const difficultyStr = c.difficulty
+          ? c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1)
+          : "Beginner";
+
+        const resolvedCategoryName = c.categoryId
+          ? serverCategories.find((cat) => cat.id === c.categoryId)?.name
+          : undefined;
+
+        const resolvedLanguage = getLanguageLabel(
+          previewData.settings?.language,
+        );
+
+        const adaptedCourse: Course = {
+          id: c.id,
+          title: c.title || "Untitled Course",
+          description: c.description || "",
+          level: difficultyStr as CourseLevel,
+          category: (resolvedCategoryName || "Development") as CourseCategory,
+          sections: totalSections,
+          lectures: totalLessons,
+          progress: null,
+          enrolled: false,
+          duration: previewData.settings?.estimatedDuration
+            ? `${previewData.settings.estimatedDuration}h`
+            : "",
+          students: 0,
+          thumbnail: c.thumbnailMediaId
+            ? `/api/v1/media/${c.thumbnailMediaId}`
+            : "/assets/instructor-poster.jpg",
+        };
+
+        const adaptedSections: CourseSection[] = (previewData.sections || [])
+          .slice()
+          .sort((a, b) => a.position - b.position)
+          .map((sec, secIdx) => ({
+            id: secIdx + 1,
+            title: sec.title || `Section ${secIdx + 1}`,
+            progress: `0/${sec.lessons?.length ?? 0}`,
+            lessons: (sec.lessons || [])
+              .slice()
+              .sort((a, b) => a.position - b.position)
+              .map((les, lesIdx) => [
+                lesIdx + 1,
+                les.title || `Lesson ${lesIdx + 1}`,
+                "", // No fake duration
+                "todo" as const,
+              ]),
+          }));
+
+        // Inclusions / Perks from Access Rules & Settings
+        const perks: string[] = [];
+        if (previewData.accessRules?.durationType === "lifetime") {
+          perks.push("Full lifetime access");
+        } else if (
+          previewData.accessRules?.durationType === "fixed_duration" &&
+          previewData.accessRules.durationDays
+        ) {
+          perks.push(`${previewData.accessRules.durationDays} days access`);
+        }
+        if (previewData.settings?.certificateEnabled) {
+          perks.push("Certificate of completion");
+        }
+
+        // Pricing with dynamic currency and sale window validation
+        let pricingProps: CourseOverviewPricingProps;
+        const pr = previewData.pricing;
+        if (!pr || pr.pricingType === "free") {
+          pricingProps = { price: "Free" };
+        } else {
+          const activeSale = isCourseSaleActive(
+            pr.salePrice,
+            pr.price,
+            pr.saleStartsAt,
+            pr.saleEndsAt,
+          );
+
+          if (activeSale) {
+            const discountPct = Math.round(
+              ((pr.price - pr.salePrice!) / pr.price) * 100,
+            );
+            pricingProps = {
+              price: formatPriceWithCurrency(pr.salePrice!, pr.currency),
+              originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
+              discount: `${discountPct}% OFF`,
+            };
+          } else {
+            pricingProps = {
+              price: formatPriceWithCurrency(pr.price, pr.currency),
+            };
+          }
+        }
+
+        return {
+          course: adaptedCourse,
+          description: c.description || "",
+          shortDescription: c.shortDescription?.trim() || undefined,
+          categoryName: resolvedCategoryName,
+          language: resolvedLanguage,
+          sections: adaptedSections,
+          inclusions: perks,
+          pricing: pricingProps,
+        };
+      })()
+    : null;
 
   const course =
+    adaptedFromPreview?.course ??
     customCourse ??
     (courseSlug ? courses.find((c) => c.id === courseSlug) : undefined);
 
@@ -810,11 +1063,28 @@ export function CourseOverviewPage({
     );
   }
 
-  const title = customCourse?.title ?? course.title;
-  const thumbnail = customCourse?.thumbnail ?? course.thumbnail;
-  const courseSections = customSections ?? getCourseSections(course.id);
-  const inclusions: string[] | undefined =
-    customInclusions !== undefined
+  const title = adaptedFromPreview?.course.title ?? customCourse?.title ?? course.title;
+  const thumbnail = adaptedFromPreview?.course.thumbnail ?? customCourse?.thumbnail ?? course.thumbnail;
+  const shortDescription =
+    adaptedFromPreview?.shortDescription ??
+    customShortDescription ??
+    undefined;
+  const categoryName =
+    adaptedFromPreview?.categoryName ??
+    customCategoryName ??
+    (!isReadOnlyPreview && course.category ? course.category : undefined);
+  const language =
+    adaptedFromPreview?.language ??
+    customLanguage ??
+    undefined;
+  const courseSections =
+    adaptedFromPreview?.sections ?? customSections ?? getCourseSections(course.id);
+  const activeDescription = adaptedFromPreview?.description ?? customDescription;
+  const activePricing = adaptedFromPreview?.pricing ?? customPricing;
+
+  const inclusions: string[] | undefined = adaptedFromPreview
+    ? adaptedFromPreview.inclusions
+    : customInclusions !== undefined
       ? Array.from(
           new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
         )
@@ -895,7 +1165,10 @@ export function CourseOverviewPage({
         title={title}
         thumbnail={thumbnail}
         wishlisted={wishlisted}
-        pricing={customPricing}
+        shortDescription={shortDescription}
+        categoryName={categoryName}
+        language={language}
+        pricing={activePricing}
         inclusions={inclusions}
         onNavigateCourses={onNavigateCourses}
         onToggleWishlist={toggleWishlist}
@@ -905,12 +1178,13 @@ export function CourseOverviewPage({
 
       {/* 2. About This Course */}
       <CourseAboutCard
-        description={customDescription}
+        description={activeDescription}
         aboutLead={aboutLead}
         aboutBody={aboutBody}
         aboutExtra={aboutExtra}
         showMore={showMore}
         onToggleShowMore={() => setShowMore((v) => !v)}
+        isReadOnlyPreview={isReadOnlyPreview}
       />
 
       {/* 3. Course Curriculum */}

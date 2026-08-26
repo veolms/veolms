@@ -49,6 +49,9 @@ export function useUpdateCourseBasics() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.id),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.id),
+      });
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
     },
@@ -91,6 +94,9 @@ export function useCreateSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -113,6 +119,9 @@ export function useUpdateCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -131,6 +140,9 @@ export function useDeleteCourseSection() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
       });
     },
   });
@@ -200,6 +212,9 @@ export function useReorderCourseSections() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -223,6 +238,9 @@ export function useCreateLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -245,6 +263,9 @@ export function useUpdateCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -263,6 +284,9 @@ export function useDeleteCourseLesson() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
       });
     },
   });
@@ -341,6 +365,9 @@ export function useReorderSectionLessons() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -359,6 +386,9 @@ export function useUpsertAccessRules() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
       });
     },
   });
@@ -379,6 +409,9 @@ export function useUpsertSettings() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -398,6 +431,9 @@ export function useUpsertPricing() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
     },
   });
 }
@@ -411,6 +447,9 @@ export function usePublishCourse() {
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(updatedCourse.id),
       });
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
@@ -429,6 +468,9 @@ export function useUnpublishCourse() {
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(updatedCourse.id),
       });
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });

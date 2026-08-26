@@ -140,14 +140,15 @@ export function ThemedSelect<Value extends string>({
       80,
       Math.min(desiredHeight, useAbove ? spaceAbove - gap : spaceBelow - gap),
     );
+    const minWidth = searchable ? 180 : 120;
     const width = Math.min(
-      Math.max(rect.width, searchable ? 260 : 120),
+      Math.max(rect.width, minWidth),
       window.innerWidth - viewportPadding * 2,
     );
-    const left = Math.min(
-      Math.max(viewportPadding, rect.left),
-      window.innerWidth - viewportPadding - width,
-    );
+    let left = rect.left;
+    if (left + width > window.innerWidth - viewportPadding) {
+      left = Math.max(viewportPadding, rect.right - width);
+    }
     return {
       left,
       top: useAbove ? undefined : rect.bottom + gap,

@@ -47,6 +47,20 @@ export function useCourseEditor(courseId: string | null) {
   });
 }
 
+export function useCoursePreview(
+  courseId: string | null,
+  options?: { enabled?: boolean },
+) {
+  return useQuery<CourseEditorDataResponse, ApiError>({
+    queryKey: courseId
+      ? courseKeys.preview(courseId)
+      : ["courses", "preview", null],
+    queryFn: () => coursesService.getPreview(courseId!),
+    enabled: Boolean(courseId && (options?.enabled ?? true)),
+    staleTime: 0,
+  });
+}
+
 export function useCourseValidation(
   courseId: string | null,
   options?: { enabled?: boolean },

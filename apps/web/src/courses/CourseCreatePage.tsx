@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
+import { useIsMutating } from "@tanstack/react-query";
 import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
 import {
   ArrowLeft,
@@ -69,6 +70,7 @@ import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
   useCategories,
   useCourseEditor,
+  useCoursePreview,
   useCourseValidation,
   useCreateCategory,
   useCreateCourse,
@@ -982,6 +984,7 @@ export function CourseCreatePage({
   );
   const [courseVersion, setCourseVersion] = useState<number>(1);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addCategoryError, setAddCategoryError] = useState("");
   const [categoryToDelete, setCategoryToDelete] = useState<{
@@ -992,6 +995,14 @@ export function CourseCreatePage({
   const { data: serverCategories = [], isLoading: isLoadingCategories } =
     useCategories();
   const { data: editorData } = useCourseEditor(currentCourseId);
+  const {
+    data: previewData,
+    isLoading: isPreviewLoading,
+    isError: isPreviewError,
+    refetch: refetchPreview,
+  } = useCoursePreview(currentCourseId, {
+    enabled: isPreviewModalOpen && Boolean(currentCourseId),
+  });
   const {
     data: serverValidation,
     refetch: refetchValidation,
@@ -1031,6 +1042,13 @@ export function CourseCreatePage({
   const upsertAccessRulesMutation = useUpsertAccessRules();
   const upsertSettingsMutation = useUpsertSettings();
   const upsertPricingMutation = useUpsertPricing();
+  const publishCourseMutation = usePublishCourse();
+  const unpublishCourseMutation = useUnpublishCourse();
+
+  // Footer Action Loading States
+  const [actionLoading, setActionLoading] = useState<
+    "preview" | "draft" | "save" | "publish" | "unpublish" | "validate" | null
+  >(null);
 
   // Page-specific in-flight save states
   const [isSavingBasics, setIsSavingBasics] = useState(false);
@@ -1046,6 +1064,29 @@ export function CourseCreatePage({
     isSavingAccessRules || upsertAccessRulesMutation.isPending;
   const isPricingSaving = isSavingPricing || upsertPricingMutation.isPending;
   const isExtrasSaving = isSavingExtras || upsertSettingsMutation.isPending;
+
+  const isMutatingCount = useIsMutating();
+
+  const isAnyApiInProgress =
+    isMutatingCount > 0 ||
+    actionLoading !== null ||
+    isBasicsSaving ||
+    isAccessRulesSaving ||
+    isPricingSaving ||
+    isExtrasSaving ||
+    isCreatingSection ||
+    creatingLessonSectionId !== null ||
+    savingLessonId !== null ||
+    deletingLessonId !== null ||
+    isReorderingSections ||
+    reorderingLessonsSectionId !== null ||
+    updatingSectionId !== null ||
+    deletingSectionId !== null ||
+    createCategoryMutation.isPending ||
+    deleteCategoryMutation.isPending ||
+    publishCourseMutation.isPending ||
+    unpublishCourseMutation.isPending ||
+    isValidating;
 
   const categoryOptions = useMemo(() => {
     const options: Array<readonly [string, string]> = [
@@ -1324,14 +1365,8 @@ export function CourseCreatePage({
   });
 
   // Course Overview Live Full Preview Modal State
-  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [isUnpublishModalOpen, setIsUnpublishModalOpen] =
     useState<boolean>(false);
-
-  // Footer Action Loading States
-  const [actionLoading, setActionLoading] = useState<
-    "preview" | "draft" | "save" | "publish" | "unpublish" | "validate" | null
-  >(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -2899,12 +2934,8 @@ export function CourseCreatePage({
   const isCourseReadyToPublish = serverValidation?.canPublish ?? false;
 
   const handlePreviewAction = () => {
-    if (actionLoading) return;
-    setActionLoading("preview");
-    setTimeout(() => {
-      setActionLoading(null);
-      setIsPreviewModalOpen(true);
-    }, 450);
+    if (isAnyApiInProgress) return;
+    setIsPreviewModalOpen(true);
   };
 
   const saveBasicsStep = async (explicitCourseId?: string | null) => {
@@ -3370,9 +3401,6 @@ export function CourseCreatePage({
     }
   };
 
-  const publishCourseMutation = usePublishCourse();
-  const unpublishCourseMutation = useUnpublishCourse();
-
   const reconcileDirtyState = async (explicitCourseId?: string | null) => {
     let targetCourseId = explicitCourseId || currentCourseId;
 
@@ -3474,13 +3502,13 @@ export function CourseCreatePage({
       if (!validationData || !validationData.canPublish) {
         const errorMsg =
           validationData?.errors?.[0]?.message ||
-          "Please resolve incomplete sections before publishing.";
+          "Course failed validation checks. Please review highlighted steps.";
         setPublishValidationError(errorMsg);
         setToastMessage(errorMsg);
         return;
       }
 
-      // 3. Call backend POST /api/v1/courses/:id/publish
+      // 3. Trigger publish API mutation
       const publishedCourse =
         await publishCourseMutation.mutateAsync(targetCourseId);
 
@@ -3584,7 +3612,7 @@ export function CourseCreatePage({
               }}
               className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={handlePreviewAction}
-              disabled={actionLoading !== null}
+              disabled={isAnyApiInProgress}
             >
               {actionLoading === "preview" ? (
                 <>
@@ -6958,7 +6986,7 @@ export function CourseCreatePage({
           }}
           className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={handlePreviewAction}
-          disabled={actionLoading !== null}
+          disabled={isAnyApiInProgress}
         >
           {actionLoading === "preview" ? (
             <>
@@ -7185,16 +7213,77 @@ export function CourseCreatePage({
               </div>
 
               {/* Modal Body: Render authentic CourseOverviewPage */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-0">
-                <CourseOverviewPage
-                  customCourse={previewCourse}
-                  customDescription={courseDescription}
-                  customSections={previewSections}
-                  customInclusions={previewInclusions}
-                  customPricing={previewPricing}
-                  isReadOnlyPreview={true}
-                  onNavigateCourses={() => setIsPreviewModalOpen(false)}
-                />
+              <div className="flex-1 min-h-0 overflow-y-auto p-0 flex flex-col">
+                {!currentCourseId ? (
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center text-[var(--muted)] my-auto">
+                    <BookOpen size={44} className="mb-3.5 opacity-60 text-[var(--accent)]" />
+                    <h3 className="text-[1.15rem] font-bold text-[var(--text)] mb-1.5">
+                      No Saved Course Data
+                    </h3>
+                    <p className="text-[0.88rem] max-w-[420px] mb-5 text-[var(--muted)] leading-[1.45]">
+                      Please save the course before opening Preview.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewModalOpen(false)}
+                      style={{
+                        fontSize: "0.80rem",
+                        fontWeight: 700,
+                        height: "34px",
+                        borderRadius: "8px",
+                        gap: "6px",
+                        paddingLeft: "16px",
+                        paddingRight: "16px",
+                      }}
+                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                    >
+                      <ArrowLeft size={15} weight="bold" />
+                      <span>Back to Editor</span>
+                    </button>
+                  </div>
+                ) : isPreviewLoading ? (
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-[var(--muted)] my-auto">
+                    <div className="w-8 h-8 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin mb-4" />
+                    <p className="text-[0.9rem] font-medium text-[var(--text)]">
+                      Loading course preview...
+                    </p>
+                  </div>
+                ) : isPreviewError ? (
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-[var(--muted)] my-auto">
+                    <div className="w-10 h-10 rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444] flex items-center justify-center mb-3">
+                      <X size={20} />
+                    </div>
+                    <h3 className="text-[1.05rem] font-bold text-[var(--text)] mb-1">
+                      Failed to Load Preview
+                    </h3>
+                    <p className="text-[0.86rem] max-w-[400px] mb-4 text-[var(--muted)]">
+                      An error occurred while fetching the course preview from the server.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => refetchPreview()}
+                      style={{
+                        fontSize: "0.80rem",
+                        fontWeight: 700,
+                        height: "34px",
+                        borderRadius: "8px",
+                        gap: "6px",
+                        paddingLeft: "16px",
+                        paddingRight: "16px",
+                      }}
+                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                    >
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                ) : previewData ? (
+                  <CourseOverviewPage
+                    previewData={previewData}
+                    categories={serverCategories}
+                    isReadOnlyPreview={true}
+                    onNavigateCourses={() => setIsPreviewModalOpen(false)}
+                  />
+                ) : null}
               </div>
             </div>
           </div>,

@@ -296,5 +296,92 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
       expect(canEditInputs).toBe(false);
       expect(canTriggerSave).toBe(false);
     });
+
+    it("disables preview button whenever any API operation or mutation is ongoing", () => {
+      const computeIsAnyApiInProgress = (params: {
+        isMutatingCount: number;
+        actionLoading: string | null;
+        isBasicsSaving: boolean;
+        isAccessRulesSaving: boolean;
+        isPricingSaving: boolean;
+        isExtrasSaving: boolean;
+        isValidating: boolean;
+      }) => {
+        return (
+          params.isMutatingCount > 0 ||
+          params.actionLoading !== null ||
+          params.isBasicsSaving ||
+          params.isAccessRulesSaving ||
+          params.isPricingSaving ||
+          params.isExtrasSaving ||
+          params.isValidating
+        );
+      };
+
+      // Idle: Preview is enabled
+      expect(
+        computeIsAnyApiInProgress({
+          isMutatingCount: 0,
+          actionLoading: null,
+          isBasicsSaving: false,
+          isAccessRulesSaving: false,
+          isPricingSaving: false,
+          isExtrasSaving: false,
+          isValidating: false,
+        }),
+      ).toBe(false);
+
+      // During active mutation
+      expect(
+        computeIsAnyApiInProgress({
+          isMutatingCount: 1,
+          actionLoading: null,
+          isBasicsSaving: false,
+          isAccessRulesSaving: false,
+          isPricingSaving: false,
+          isExtrasSaving: false,
+          isValidating: false,
+        }),
+      ).toBe(true);
+
+      // During save action
+      expect(
+        computeIsAnyApiInProgress({
+          isMutatingCount: 0,
+          actionLoading: "save",
+          isBasicsSaving: false,
+          isAccessRulesSaving: false,
+          isPricingSaving: false,
+          isExtrasSaving: false,
+          isValidating: false,
+        }),
+      ).toBe(true);
+
+      // During validation
+      expect(
+        computeIsAnyApiInProgress({
+          isMutatingCount: 0,
+          actionLoading: null,
+          isBasicsSaving: false,
+          isAccessRulesSaving: false,
+          isPricingSaving: false,
+          isExtrasSaving: false,
+          isValidating: true,
+        }),
+      ).toBe(true);
+
+      // During basics saving
+      expect(
+        computeIsAnyApiInProgress({
+          isMutatingCount: 0,
+          actionLoading: null,
+          isBasicsSaving: true,
+          isAccessRulesSaving: false,
+          isPricingSaving: false,
+          isExtrasSaving: false,
+          isValidating: false,
+        }),
+      ).toBe(true);
+    });
   });
 });
