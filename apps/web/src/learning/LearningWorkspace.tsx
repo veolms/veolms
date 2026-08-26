@@ -28,6 +28,7 @@ import {
   createLessonsById,
   getCourseVideoForLesson,
 } from "./courseContent";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Curriculum } from "./Curriculum";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import { Discussion } from "./Discussion";
@@ -998,13 +999,17 @@ export function LearningWorkspace({
                 id="learning-course-content-trigger"
                 ref={lessonTriggerRef}
                 type="button"
-                className="learning-workspace__lesson-heading"
+                className="learning-workspace__lesson-heading group"
                 aria-label={`Open course lessons for ${currentLesson[1]}`}
                 aria-expanded={lessonDrawer}
                 onClick={openLessonDrawer}
               >
                 <div className="min-w-0">
-                  <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+                  <h1 id="learning-lesson-title" className="truncate">{currentLesson[1]}</h1>
+                </div>
+                <div className="flex items-center gap-1.5 pt-1 text-sm font-semibold text-(--muted) transition-colors group-hover:text-(--text) xl:hidden">
+                  <span>Lessons</span>
+                  <CaretDown size={18} className={`transition-transform duration-200 ${lessonDrawer ? "rotate-180" : ""}`} />
                 </div>
               </button>
             </header>
