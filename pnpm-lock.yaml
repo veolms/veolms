@@ -126,6 +126,12 @@ importers:
       '@veolms/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@veolms/fleet-provider-aws':
+        specifier: workspace:*
+        version: link:../../packages/fleet-provider-aws
+      '@veolms/fleet-provider-local':
+        specifier: workspace:*
+        version: link:../../packages/fleet-provider-local
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../../packages/fleet-types
@@ -142,9 +148,6 @@ importers:
       '@types/pg':
         specifier: 8.15.5
         version: 8.15.5
-      '@veolms/fleet-provider-aws':
-        specifier: workspace:*
-        version: link:../../packages/fleet-provider-aws
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
@@ -338,6 +341,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1112.0
         version: 3.1116.0
+      '@aws-sdk/client-scheduler':
+        specifier: ^3.1112.0
+        version: 3.1116.0
       '@aws-sdk/client-ssm':
         specifier: ^3.750.0
         version: 3.1116.0
@@ -431,6 +437,10 @@ packages:
 
   '@aws-sdk/client-s3@3.1116.0':
     resolution: {integrity: sha512-UKRl9qSVW0rZpvSOauQNpYAy8+ONBAVYnpfKVtCyOF+FZVT1tl6MunYuHvuarCrroD2/YJs+tHTALYNgAlec3Q==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-scheduler@3.1116.0':
+    resolution: {integrity: sha512-2YLAd2oUsccz16NGRBl03JeHrPQ8Ft1xpQ8X0tfPqSc/6LVBBzSo/nAtihzWIlxmKfQr+jxEoRTQxnhsbm/laQ==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-ssm@3.1116.0':
@@ -3884,6 +3894,17 @@ snapshots:
       '@smithy/types': 4.17.2
       tslib: 2.8.1
 
+  '@aws-sdk/client-scheduler@3.1116.0':
+    dependencies:
+      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/credential-provider-node': 3.972.81
+      '@aws-sdk/types': 3.974.5
+      '@smithy/core': 3.33.3
+      '@smithy/fetch-http-handler': 5.7.2
+      '@smithy/node-http-handler': 4.11.3
+      '@smithy/types': 4.17.2
+      tslib: 2.8.1
+
   '@aws-sdk/client-ssm@3.1116.0':
     dependencies:
       '@aws-sdk/core': 3.977.9
@@ -4795,7 +4816,7 @@ snapshots:
 
   '@smithy/credential-provider-imds@4.5.2':
     dependencies:
-      '@smithy/core': 3.33.2
+      '@smithy/core': 3.33.3
       '@smithy/types': 4.17.2
       tslib: 2.8.1
 
@@ -4813,7 +4834,7 @@ snapshots:
 
   '@smithy/signature-v4@5.7.2':
     dependencies:
-      '@smithy/core': 3.33.2
+      '@smithy/core': 3.33.3
       '@smithy/types': 4.17.2
       tslib: 2.8.1
 
