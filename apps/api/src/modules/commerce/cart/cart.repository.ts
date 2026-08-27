@@ -98,3 +98,38 @@ export async function clearCartItems(database: Executor, cartId: string) {
     .where("cart_id", "=", cartId)
     .execute();
 }
+
+export async function removeItemsFromUserCart(
+  database: Executor,
+  userId: string,
+  items: Array<{ course_id?: string | null; bundle_id?: string | null }>,
+) {
+  const cart = await findCartByUserId(database, userId);
+  if (!cart || items.length === 0) return;
+
+  const courseIds = items
+    .map((it) => it.course_id)
+    .filter((id): id is string => Boolean(id));
+
+  const bundleIds = items
+    .map((it) => it.bundle_id)
+    .filter((id): id is string => Boolean(id));
+
+  if (courseIds.length > 0) {
+    await database
+      .deleteFrom("cart_items")
+      .where("cart_id", "=", cart.id)
+      .where("item_type", "=", "course")
+      .where("course_id", "in", courseIds)
+      .execute();
+  }
+
+  if (bundleIds.length > 0) {
+    await database
+      .deleteFrom("cart_items")
+      .where("cart_id", "=", cart.id)
+      .where("item_type", "=", "bundle")
+      .where("bundle_id", "in", bundleIds)
+      .execute();
+  }
+}

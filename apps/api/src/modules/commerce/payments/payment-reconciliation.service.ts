@@ -8,6 +8,7 @@ import * as orderRepo from "../orders/order.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
+import * as cartRepo from "../cart/cart.repository.ts";
 
 export interface FinalizePaymentParams {
   /** Internal payment record id */
@@ -183,7 +184,17 @@ export function createPaymentReconciliationService({
         }
       }
 
-      // 5. Record outbox event for durable post-purchase processing
+      // 5. Clean up purchased items from student's active cart
+      await cartRepo.removeItemsFromUserCart(
+        trx,
+        order.user_id,
+        orderItems.map((item) => ({
+          course_id: item.course_id,
+          bundle_id: item.bundle_id,
+        })),
+      );
+
+      // 6. Record outbox event for durable post-purchase processing
       await trx
         .insertInto("outbox_events")
         .values({
