@@ -167,3 +167,17 @@ export async function updateCourse(
     .executeTakeFirst();
 }
 
+export async function softDeleteCourse(
+  database: Kysely<Database>,
+  courseId: string,
+  now: Date,
+) {
+  return await database
+    .updateTable("courses")
+    .set({ deleted_at: now, updated_at: now })
+    .where("id", "=", courseId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
+

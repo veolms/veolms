@@ -716,6 +716,18 @@ export function createCourseService({
     };
   }
 
+  /**
+   * Soft deletes a course after verifying ownership.
+   */
+  async function deleteCourse(courseId: string, creatorId: string) {
+    await getCourseAndVerifyOwner(courseId, creatorId);
+
+    const now = new Date();
+    await courseRepo.softDeleteCourse(database, courseId, now);
+
+    return { success: true };
+  }
+
   return {
     getCourseAndVerifyOwner,
     createCourse,
@@ -726,6 +738,7 @@ export function createCourseService({
     updateCourseBasics,
     getCourseEditorData,
     getCourseOverviewData,
+    deleteCourse,
   };
 }
 

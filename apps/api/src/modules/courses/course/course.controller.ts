@@ -115,6 +115,14 @@ export function createCourseController({
     return await service.getCourseOverviewData(idOrSlug, user);
   }
 
+  async function deleteCourse(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    const { id } = request.params;
+    const creatorId = request.user!.id;
+    return await service.deleteCourse(id, creatorId);
+  }
+
   return {
     listCourses,
     getCourseBySlug,
@@ -124,6 +132,7 @@ export function createCourseController({
     getCourseEditor,
     updateCourseBasics,
     getCourseOverview,
+    deleteCourse,
   };
 }
 
