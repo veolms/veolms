@@ -1,5 +1,5 @@
 export type ShellRouteModuleKey =
-  "my-courses" | "settings" | "catalogue" | "placeholder" | "workspace";
+  "settings" | "catalogue" | "placeholder" | "workspace";
 
 const routeModuleCache = new Map<ShellRouteModuleKey, unknown>();
 const routeModulePromises = new Map<ShellRouteModuleKey, Promise<unknown>>();
@@ -45,12 +45,7 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     return;
   }
 
-  if (pathname === "/my-courses") {
-    await loadShellRouteModule("my-courses", () => import("../StudentPages"));
-    return;
-  }
-
-  if (pathname === "/explore-courses" || pathname === "/wishlist") {
+  if (pathname === "/courses" || pathname === "/wishlist") {
     await loadShellRouteModule(
       "catalogue",
       () => import("../courses/CourseCatalogue"),

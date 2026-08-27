@@ -1,4 +1,4 @@
-/* champagne palette — light mode. */
+/* champagne palette - light mode. */
 :root[data-theme="light"][data-palette="champagne"] {
   --canvas: #f3eee4;
   --header: #eee8dc;

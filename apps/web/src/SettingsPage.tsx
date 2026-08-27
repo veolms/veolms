@@ -1,12 +1,15 @@
-import { Bell } from "@phosphor-icons/react/Bell";
-import { GearSix } from "@phosphor-icons/react/GearSix";
-import { GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { Palette } from "@phosphor-icons/react/Palette";
-import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
-import { UserCircle } from "@phosphor-icons/react/UserCircle";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
+import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { useEffect, useRef, type ComponentType } from "react";
-import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
+import {
+  handleRovingTabKeyDown,
+  scrollKeyboardFocusedTabIntoView,
+} from "./accessibility/rovingTabFocus";
 import type { DisplayMode } from "./settings/AppearanceSettings";
 import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
 import type {
@@ -99,6 +102,8 @@ export interface SettingsPageProps {
   onSidebarPreferencesChange: (preferences: SidebarPreferences) => void;
   sidebarMode: SidebarMode;
   onSidebarModeChange: (mode: SidebarMode) => void;
+  navigationVisibleItems?: readonly string[];
+  onNavigationVisibilityChange?: (visibleItems: string[]) => void;
 }
 
 function SettingsTabContent({
@@ -136,6 +141,9 @@ function SettingsTabContent({
           academyTheme={pageProps.academyTheme}
           sidebarMode={pageProps.sidebarMode}
           onSidebarModeChange={pageProps.onSidebarModeChange}
+          role={pageProps.role}
+          navigationVisibleItems={pageProps.navigationVisibleItems}
+          onNavigationVisibilityChange={pageProps.onNavigationVisibilityChange}
         />
       );
     case "learning":
@@ -170,6 +178,8 @@ export function SettingsPage({
   onSidebarPreferencesChange,
   sidebarMode,
   onSidebarModeChange,
+  navigationVisibleItems,
+  onNavigationVisibilityChange,
 }: SettingsPageProps) {
   const activeTab = normalizeSettingsTab(tab);
   const tabListRef = useRef<HTMLElement>(null);
@@ -189,6 +199,8 @@ export function SettingsPage({
     onSidebarPreferencesChange,
     sidebarMode,
     onSidebarModeChange,
+    navigationVisibleItems,
+    onNavigationVisibilityChange,
   };
   const navigateTab = (id: SettingsTab) => {
     rememberSettingsTab(id);
@@ -293,12 +305,7 @@ export function SettingsPage({
             className={activeTab === id ? "is-active" : ""}
             onClick={() => navigateTab(id)}
             onKeyDown={handleRovingTabKeyDown}
-            onFocus={(event) =>
-              event.currentTarget.scrollIntoView({
-                block: "nearest",
-                inline: "center",
-              })
-            }
+            onFocus={scrollKeyboardFocusedTabIntoView}
           >
             <Icon size={17} weight={activeTab === id ? "fill" : "regular"} />
             <span>{label}</span>

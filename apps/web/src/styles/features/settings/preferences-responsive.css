@@ -151,9 +151,9 @@
 }
 
 @media (max-width: 640px) {
-.settings-page {
-    --settings-page-inline-gutter: 15px;
-    padding: 22px 0 28px;
+  .settings-page {
+    --settings-page-inline-gutter: 0px;
+    padding: 0;
   }
   .settings-page__marker {
     width: 42px;
@@ -339,7 +339,7 @@
     min-width: 0;
   }
 
-.settings-sidebar-category-heading {
+  .settings-sidebar-category-heading {
     grid-template-columns: 34px minmax(0, 1fr);
     margin-inline: 1px;
   }
@@ -362,6 +362,17 @@
   .settings-section__heading-row {
     flex-direction: column;
     gap: 10px;
+  }
+
+  .settings-sidebar-glow-section > .settings-section__heading-row {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .settings-sidebar-glow-section
+    > .settings-section__heading-row
+    > div:first-child {
+    min-width: 0;
   }
 
   .settings-section__hint {

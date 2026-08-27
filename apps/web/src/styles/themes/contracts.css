@@ -1,5 +1,20 @@
 /* Theme behavior shared across palettes. */
 :root[data-theme="light"] {
+  /* Some palettes only customize their core light surfaces. Keep those
+     palettes from inheriting the card materials declared by their dark
+     counterpart while allowing explicit light card tokens to win. */
+  --card-surface: var(--surface);
+  --card-surface-raised: var(--surface-strong);
+  --card-surface-soft: color-mix(
+    in srgb,
+    var(--surface) 82%,
+    var(--main-surface)
+  );
+  --card-surface-hover: color-mix(
+    in srgb,
+    var(--surface) 94%,
+    var(--accent) 6%
+  );
   --sidebar-nav-text: color-mix(
     in srgb,
     var(--text) 84%,

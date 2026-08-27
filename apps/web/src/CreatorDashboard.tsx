@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
-import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
-import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
-import { ChartBar } from "@phosphor-icons/react/ChartBar";
-import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
-import { Info } from "@phosphor-icons/react/Info";
-import { Plus } from "@phosphor-icons/react/Plus";
-import { PlusCircle } from "@phosphor-icons/react/PlusCircle";
-import { Pulse } from "@phosphor-icons/react/Pulse";
-import { Ticket } from "@phosphor-icons/react/Ticket";
-import { UserList } from "@phosphor-icons/react/UserList";
-import { Users } from "@phosphor-icons/react/Users";
-import { VideoCamera } from "@phosphor-icons/react/VideoCamera";
-import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
+import { ArrowsClockwiseIcon as ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
+import { PulseIcon as Pulse } from "@phosphor-icons/react/Pulse";
+import { TicketIcon as Ticket } from "@phosphor-icons/react/Ticket";
+import { UserListIcon as UserList } from "@phosphor-icons/react/UserList";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
@@ -592,7 +592,7 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
       className="creator-courses-panel"
       title="Your Courses"
       action="View all"
-      onAction={() => onNavigatePage?.("explore-courses")}
+      onAction={() => onNavigatePage?.("courses")}
     >
       <div className="creator-table creator-courses-table">
         <div className="creator-table-head">

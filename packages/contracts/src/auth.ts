@@ -332,10 +332,108 @@ export const academyResponseSchema = z.object({
   setupCompleted: z.boolean(),
 });
 
-export const passkeyOptionsResponseSchema = z.any().meta({
-  description:
-    "Dynamic WebAuthn credential generation options (registration/assertion challenge)",
-});
+export type PasskeyAuthenticatorTransport =
+  | "ble"
+  | "cable"
+  | "hybrid"
+  | "internal"
+  | "nfc"
+  | "smart-card"
+  | "usb";
+
+export interface PasskeyCredentialDescriptorResponse {
+  id: string;
+  type: "public-key";
+  transports?: PasskeyAuthenticatorTransport[];
+}
+
+export interface PasskeyRegistrationOptionsResponse {
+  challenge: string;
+  rp: { id?: string; name: string };
+  user: { displayName: string; id: string; name: string };
+  pubKeyCredParams: { alg: number; type: "public-key" }[];
+  timeout?: number;
+  excludeCredentials?: PasskeyCredentialDescriptorResponse[];
+}
+
+export interface PasskeyAuthenticationOptionsResponse {
+  challenge: string;
+  allowCredentials?: PasskeyCredentialDescriptorResponse[];
+  rpId?: string;
+  timeout?: number;
+  userVerification?: "discouraged" | "preferred" | "required";
+}
+
+const passkeyCredentialDescriptorSchema = z
+  .object({
+    id: z.string().min(1),
+    type: z.literal("public-key"),
+    transports: z
+      .array(
+        z.enum([
+          "ble",
+          "cable",
+          "hybrid",
+          "internal",
+          "nfc",
+          "smart-card",
+          "usb",
+        ]),
+      )
+      .optional(),
+  })
+  .passthrough()
+  .transform((value): PasskeyCredentialDescriptorResponse => value);
+
+export const passkeyRegistrationOptionsResponseSchema = z
+  .object({
+    challenge: z.string().min(1),
+    rp: z
+      .object({
+        id: z.string().min(1).optional(),
+        name: z.string().min(1),
+      })
+      .passthrough(),
+    user: z
+      .object({
+        displayName: z.string(),
+        id: z.string().min(1),
+        name: z.string().min(1),
+      })
+      .passthrough(),
+    pubKeyCredParams: z.array(
+      z
+        .object({
+          alg: z.number().int(),
+          type: z.literal("public-key"),
+        })
+        .passthrough(),
+    ),
+    timeout: z.number().nonnegative().optional(),
+    excludeCredentials: z.array(passkeyCredentialDescriptorSchema).optional(),
+  })
+  .passthrough()
+  .transform((value): PasskeyRegistrationOptionsResponse => value)
+  .meta({ description: "Serialized WebAuthn registration options" });
+
+export const passkeyAuthenticationOptionsResponseSchema = z
+  .object({
+    challenge: z.string().min(1),
+    allowCredentials: z.array(passkeyCredentialDescriptorSchema).optional(),
+    rpId: z.string().min(1).optional(),
+    timeout: z.number().nonnegative().optional(),
+    userVerification: z
+      .enum(["discouraged", "preferred", "required"])
+      .optional(),
+  })
+  .passthrough()
+  .transform((value): PasskeyAuthenticationOptionsResponse => value)
+  .meta({ description: "Serialized WebAuthn authentication options" });
+
+export const passkeyOptionsResponseSchema = z.union([
+  passkeyRegistrationOptionsResponseSchema,
+  passkeyAuthenticationOptionsResponseSchema,
+]);
 
 export type OtpSendRequest = z.input<typeof otpSendRequestSchema>;
 export type OtpVerifyRequest = z.input<typeof otpVerifyRequestSchema>;

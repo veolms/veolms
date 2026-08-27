@@ -2,7 +2,7 @@ import { test, expect } from "./app.fixture.ts";
 import {
   installBaselineState,
   openApp,
-  revealDeferredAppearanceSettings,
+  expectAppearanceSettingsReady,
 } from "./support.ts";
 
 const READING_MODE_STORAGE_KEY = "veolms-reading-mode-v1";
@@ -13,7 +13,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   test.setTimeout(60_000);
   await installBaselineState(page);
   await openApp(page, "/settings/appearance");
-  await revealDeferredAppearanceSettings(page);
+  await expectAppearanceSettingsReady(page);
 
   const toggle = page.getByRole("switch", {
     name: "Reading mode",
@@ -23,10 +23,12 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
     name: "Color temperature",
   });
   const texture = page.getByRole("slider", { name: "Texture" });
+  const grainSize = page.getByRole("slider", { name: "Grain size" });
 
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await expect(temperature).toHaveValue("50");
   await expect(texture).toHaveValue("90");
+  await expect(grainSize).toHaveValue("50");
   await expect(texture).toHaveCSS("--app-slider-track-height", "10px");
 
   await page.getByRole("switch", { name: "Turn reading mode on" }).click();
@@ -119,6 +121,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
       enabled: true,
       colorTemperature: 85,
       texture: 75,
+      textureGrainSize: 50,
       colors: "full",
     });
 
@@ -128,7 +131,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   await expect(effects).toHaveCSS("user-select", "none");
   await expect(page.locator(".reading-mode-effects__texture")).toHaveCSS(
     "background-image",
-    /reading-mode-grain\.webp/,
+    /reading-mode-grain(?:@(?:2x|3x))?\.webp/,
   );
   const [effectBounds, viewport] = await Promise.all([
     effects.evaluate((element) => {
@@ -150,6 +153,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
       toggle,
       temperature,
       texture,
+      grainSize,
       page.getByRole("switch", { name: "Turn reading mode off" }),
       page.getByRole("button", { name: "Restore defaults" }),
     ].map(async (control) => {
@@ -171,12 +175,13 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   await page.keyboard.press("Escape");
 
   await page.reload();
-  await revealDeferredAppearanceSettings(page);
+  await expectAppearanceSettingsReady(page);
   await expect(page.locator("html")).toHaveAttribute(
     "data-reading-mode",
     "true",
   );
   await expect(texture).toHaveValue("75");
+  await expect(grainSize).toHaveValue("50");
 
   await openApp(page, "/settings/learning");
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
@@ -202,7 +207,7 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   );
   await page.keyboard.press("Escape");
   await openApp(page, "/settings/appearance");
-  await revealDeferredAppearanceSettings(page);
+  await expectAppearanceSettingsReady(page);
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "data-settings-tab",
     "appearance",
@@ -212,13 +217,59 @@ test("reading mode persists, stays interactive, and covers viewport UI", async (
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await expect(temperature).toHaveValue("50");
   await expect(texture).toHaveValue("90");
+  await expect(grainSize).toHaveValue("50");
+});
+
+test("grain size control persists and scales the paper texture", async ({
+  page,
+}) => {
+  await installBaselineState(page);
+  await openApp(page, "/settings/appearance");
+  await expectAppearanceSettingsReady(page);
+
+  const grainSize = page.getByRole("slider", { name: "Grain size" });
+  const textureLayer = page.locator(".reading-mode-effects__texture");
+  const previewTexture = page.locator(
+    ".settings-reading-mode__preview-texture",
+  );
+
+  await expect(grainSize).toHaveValue("50");
+  await expect(grainSize).toHaveAttribute("aria-valuetext", "50% grain size");
+  await grainSize.fill("75");
+
+  await expect(grainSize).toHaveValue("75");
+  await expect(page.locator("html")).toHaveCSS(
+    "--reading-mode-texture-tile-size",
+    "384.00px",
+  );
+  await expect(textureLayer).toHaveCSS("background-size", "384px 384px");
+  await expect(previewTexture).toHaveCSS("background-size", "384px 384px");
+  await expect
+    .poll(() =>
+      page.evaluate((key) => {
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value).textureGrainSize : null;
+      }, READING_MODE_STORAGE_KEY),
+    )
+    .toBe(75);
+
+  await page.reload();
+  await expectAppearanceSettingsReady(page);
+  await expect(grainSize).toHaveValue("75");
+
+  await page.getByRole("button", { name: "Restore defaults" }).click();
+  await expect(grainSize).toHaveValue("50");
+  await expect(page.locator("html")).toHaveCSS(
+    "--reading-mode-texture-tile-size",
+    "256.00px",
+  );
 });
 
 test("neutral temperature and zero texture leave every effect layer inactive", async ({
   page,
 }) => {
   await installBaselineState(page);
-  await openApp(page, "/explore-courses");
+  await openApp(page, "/courses");
   const textureLayer = page.locator(".reading-mode-effects__texture");
   const temperatureLayer = page.locator(".reading-mode-effects__temperature");
   await expect(textureLayer).toHaveCSS("display", "none");
@@ -262,7 +313,7 @@ test("reading mode effects and preview are disabled for print", async ({
     },
   });
   await openApp(page, "/settings/appearance");
-  await revealDeferredAppearanceSettings(page);
+  await expectAppearanceSettingsReady(page);
   await expect(page.locator("[data-reading-mode-effects]")).toHaveCSS(
     "display",
     "block",

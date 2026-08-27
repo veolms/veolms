@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @import "./styles/base/theme-contract.css";
 @import "./styles/base/foundation.css";
 @import "./styles/features/player.css";

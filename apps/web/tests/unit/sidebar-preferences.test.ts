@@ -5,6 +5,12 @@ import {
   getInitialSidebarPreferences,
   getInitialSidebarWidth,
 } from "../../src/shell/sidebarPreferences.js";
+import {
+  normalizeSidebarGlowBlur,
+  normalizeSidebarGlowIntensity,
+  normalizeSidebarGlowShape,
+  normalizeSidebarGlowShapeSize,
+} from "../../src/settings/settingsPreferences.js";
 
 const defaultPreferences = {
   iconStyle: "monochrome",
@@ -18,8 +24,13 @@ const defaultPreferences = {
   showKeyboardShortcuts: true,
   showCollapsedLabels: true,
   showCollapsedLogo: true,
+  glowPalette: "theme",
+  glowShape: "circle",
+  glowShapeSize: 100,
+  glowBlur: 8,
+  glowIntensity: 50,
   highlightActive: true,
-  elevateMenus: false,
+  elevateMenus: true,
 };
 
 describe("sidebar width helpers", () => {
@@ -51,6 +62,52 @@ describe("sidebar width helpers", () => {
 
     localStorage.setItem("veolms-sidebar-width", "invalid");
     expect(getInitialSidebarWidth()).toBe(300);
+  });
+});
+
+describe("sidebar glow intensity", () => {
+  it("normalizes the full 0 to 100 range", () => {
+    expect(normalizeSidebarGlowIntensity(0)).toBe(0);
+    expect(normalizeSidebarGlowIntensity(42.4)).toBe(42);
+    expect(normalizeSidebarGlowIntensity(100)).toBe(100);
+    expect(normalizeSidebarGlowIntensity(-20)).toBe(0);
+    expect(normalizeSidebarGlowIntensity(140)).toBe(100);
+    expect(normalizeSidebarGlowIntensity("invalid")).toBe(50);
+  });
+});
+
+describe("sidebar bokeh blur", () => {
+  it("supports a fully clear backdrop and clamps the upper range", () => {
+    expect(normalizeSidebarGlowBlur(0)).toBe(0);
+    expect(normalizeSidebarGlowBlur(8)).toBe(8);
+    expect(normalizeSidebarGlowBlur(20.4)).toBe(20);
+    expect(normalizeSidebarGlowBlur(32)).toBe(32);
+    expect(normalizeSidebarGlowBlur(-20)).toBe(0);
+    expect(normalizeSidebarGlowBlur(80)).toBe(32);
+    expect(normalizeSidebarGlowBlur("invalid")).toBe(8);
+  });
+});
+
+describe("sidebar glow shape", () => {
+  it("accepts supported shapes and falls back to a circle", () => {
+    expect(normalizeSidebarGlowShape("circle")).toBe("circle");
+    expect(normalizeSidebarGlowShape("triangle")).toBe("triangle");
+    expect(normalizeSidebarGlowShape("star")).toBe("star");
+    expect(normalizeSidebarGlowShape("diamond")).toBe("diamond");
+    expect(normalizeSidebarGlowShape("hexagon")).toBe("hexagon");
+    expect(normalizeSidebarGlowShape("square")).toBe("circle");
+    expect(normalizeSidebarGlowShape(undefined)).toBe("circle");
+  });
+});
+
+describe("sidebar glow shape size", () => {
+  it("uses a 100 percent default and clamps the adjustable scale", () => {
+    expect(normalizeSidebarGlowShapeSize(50)).toBe(50);
+    expect(normalizeSidebarGlowShapeSize(100)).toBe(100);
+    expect(normalizeSidebarGlowShapeSize(180)).toBe(180);
+    expect(normalizeSidebarGlowShapeSize(20)).toBe(50);
+    expect(normalizeSidebarGlowShapeSize(220)).toBe(180);
+    expect(normalizeSidebarGlowShapeSize("invalid")).toBe(100);
   });
 });
 
@@ -260,30 +317,44 @@ describe("sidebar preference storage", () => {
     });
   });
 
-  it("migrates the legacy always-elevate preference without changing its value", () => {
-    localStorage.setItem(
-      "veolms-sidebar-max-width-default-version",
-      "300px-v1",
-    );
-    localStorage.setItem(
-      "veolms-sidebar-icon-default-version",
-      "monochrome-theme-v1",
-    );
-    localStorage.setItem(
-      "veolms-sidebar-dock-default-version",
-      "four-controls-v1",
-    );
+  it.each([true, false])(
+    "migrates the legacy always-elevate preference without changing %s",
+    (legacyValue) => {
+      localStorage.setItem(
+        "veolms-sidebar-max-width-default-version",
+        "300px-v1",
+      );
+      localStorage.setItem(
+        "veolms-sidebar-icon-default-version",
+        "monochrome-theme-v1",
+      );
+      localStorage.setItem(
+        "veolms-sidebar-dock-default-version",
+        "four-controls-v1",
+      );
+      localStorage.setItem(
+        "veolms-sidebar-preferences",
+        JSON.stringify({ alwaysElevateMenus: legacyValue }),
+      );
+
+      const migratedPreferences = getInitialSidebarPreferences();
+      expect(migratedPreferences.elevateMenus).toBe(legacyValue);
+      expect(migratedPreferences).not.toHaveProperty("alwaysElevateMenus");
+      expect(
+        JSON.parse(
+          localStorage.getItem("veolms-sidebar-preferences") ?? "null",
+        ),
+      ).toEqual(migratedPreferences);
+    },
+  );
+
+  it("preserves an explicit opt-out from the new default", () => {
     localStorage.setItem(
       "veolms-sidebar-preferences",
-      JSON.stringify({ alwaysElevateMenus: true }),
+      JSON.stringify({ elevateMenus: false }),
     );
 
-    const migratedPreferences = getInitialSidebarPreferences();
-    expect(migratedPreferences.elevateMenus).toBe(true);
-    expect(migratedPreferences).not.toHaveProperty("alwaysElevateMenus");
-    expect(
-      JSON.parse(localStorage.getItem("veolms-sidebar-preferences") ?? "null"),
-    ).toEqual(migratedPreferences);
+    expect(getInitialSidebarPreferences().elevateMenus).toBe(false);
   });
 
   it("returns defaults for invalid JSON without stamping the migration version", () => {

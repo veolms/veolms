@@ -224,7 +224,7 @@
   min-width: 0;
   max-width: 1440px;
   margin: 0 auto;
-  padding: clamp(20px, 2.6vw, 36px) clamp(16px, 2.8vw, 38px) 42px;
+  padding: 0;
   color: var(--text);
 }
 
@@ -319,10 +319,6 @@
 }
 
 @media (max-width: 390px) {
-  .workspace-page {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
   .workspace-page__header h1 {
     font-size: 1.7rem;
   }
@@ -340,40 +336,21 @@
 }
 
 .discussion-hub {
+  --swipeable-tab-panel-inline-start: var(
+    --application-page-inline-gutter,
+    0px
+  );
+  --swipeable-tab-panel-inline-end: var(--application-page-inline-gutter, 0px);
   min-width: 0;
   max-width: 1480px;
   margin: 0 auto;
-  padding: clamp(18px, 1.5vw, 22px) clamp(16px, 2.8vw, 38px) 46px;
+  padding: 0;
   color: var(--text);
-}
-
-@media (min-width: 821px) {
-  .courses-main.student-surface-main:has(> .discussion-hub) {
-    padding-inline: 0;
-  }
-
-  .discussion-hub {
-    --discussion-page-inline-gutter: calc(25px + clamp(16px, 2.8vw, 38px));
-    padding-inline: 0;
-  }
-
-  .discussion-hub__header {
-    padding-inline: var(--discussion-page-inline-gutter);
-  }
-
-  .discussion-hub__tabs {
-    margin-right: var(--discussion-page-inline-gutter);
-    margin-left: var(--discussion-page-inline-gutter);
-  }
-
-  .discussion-hub > .swipeable-tab-panel > .swipeable-tab-panel__layer {
-    padding-inline: var(--discussion-page-inline-gutter);
-  }
 }
 
 /* Graphite Studio keeps discussion copy readable on the same raised neutral
    surfaces used by the student home cards. Accent color is reserved for
-   selection, actions, and status—not the message-card fill. */
+   selection, actions, and status-not the message-card fill. */
 :root[data-theme="dark"][data-palette="graphite"]
   .courses-app:has(.discussion-hub) {
   --muted: #b5bbb7;
@@ -424,18 +401,13 @@
   display: flex;
   min-width: 0;
   gap: 8px;
-  margin-top: 23px;
-  padding: 6px 0 0;
+  margin: 23px calc(-1 * var(--application-page-inline-gutter, 0px)) 0;
+  padding: 6px var(--application-page-inline-gutter, 0px) 0;
   overflow-x: auto;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   background: color-mix(in srgb, var(--main-surface) 95%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  scrollbar-width: none;
-}
-
-.discussion-hub__tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .discussion-hub__tabs button {
@@ -1059,19 +1031,6 @@
   }
 }
 
-@media (max-width: 820px) {
-  .student-surface-main > .discussion-hub > .swipeable-tab-panel {
-    margin-inline: -15px;
-  }
-
-  .student-surface-main
-    > .discussion-hub
-    > .swipeable-tab-panel
-    > .swipeable-tab-panel__layer {
-    padding-inline: 15px;
-  }
-}
-
 @media (max-width: 780px) {
   /* Keep the first discussion results immediately available while allowing
      the browser to skip layout and paint for cards that start below the
@@ -1199,12 +1158,5 @@
 @media (max-width: 820px) {
   .student-surface-main > :is(.discussion-hub, .workspace-page) {
     padding: 0;
-  }
-
-  .student-surface-main > .discussion-hub .discussion-hub__tabs {
-    margin-right: 0;
-    margin-left: 0;
-    padding-right: 0;
-    padding-left: 0;
   }
 }

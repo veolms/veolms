@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { Receipt } from "@phosphor-icons/react/Receipt";
-import { ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
-import { XCircle } from "@phosphor-icons/react/XCircle";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { NavigateTo } from "../routing/navigation";
 import { OrderCard } from "./OrderCard";
 import { OrderFiltersBar } from "./OrderFiltersBar";
@@ -88,16 +88,16 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
         <div>
           <h1
             id="orders-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-[var(--text)]"
+            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
           >
             Orders
           </h1>
-          <p className="mt-2 text-[0.92rem] text-[var(--muted)] leading-[1.5]">
+          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
             Track your purchases, payment status, and active course orders.
           </p>
         </div>
         <span
-          className="inline-flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-[19px] text-[var(--accent)] transition-transform hover:scale-105"
+          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
           style={{
             background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
             boxShadow:
@@ -112,7 +112,7 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
       {/* Tab Navigation Bar with delicate thin bottom line and prominent active underline */}
       <nav
         aria-label="Order status categories"
-        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] scrollbar-none"
+        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {
@@ -128,23 +128,23 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-[46px] flex-shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
+              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
                 isActive
-                  ? "text-[var(--text)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "text-(--text)"
+                  : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <Icon
                 size={18}
                 weight={isActive ? "fill" : "regular"}
                 className={
-                  isActive ? "text-[var(--accent)]" : "text-[var(--muted)]"
+                  isActive ? "text-(--accent)" : "text-(--muted)"
                 }
               />
               <span>{tab.label}</span>
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-[var(--accent)]"
+                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -180,16 +180,16 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
             ))
           ) : (
             <div
-              className="flex flex-col items-center justify-center rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-12 text-center"
+              className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--hover)] text-[var(--muted)] mb-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
                 <Receipt size={24} />
               </div>
-              <h3 className="text-base font-semibold text-[var(--text)]">
+              <h3 className="text-base font-semibold text-(--text)">
                 No orders found
               </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-[var(--muted)]">
+              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
                 {searchQuery || courseFilter !== "all" || statusFilter !== "all"
                   ? "Try changing your search query or reset your active filters to view all orders."
                   : "There are no orders in this category."}
@@ -197,7 +197,7 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--on-accent,#ffffff)] shadow-sm hover:opacity-90 cursor-pointer"
+                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
               >
                 Reset filters
               </button>
@@ -210,10 +210,11 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
               <button
                 type="button"
                 onClick={() => setNotice?.("All orders currently loaded.")}
-                className="rounded-xl border border-[var(--border)] bg-[var(--card-surface)] px-5 py-2.5 text-xs md:text-sm font-medium text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
                 style={{ boxShadow: "var(--card-shadow)" }}
               >
-                Showing {totalFilteredCount} of {orderSummary.totalOrders} orders
+                Showing {totalFilteredCount} of {orderSummary.totalOrders}{" "}
+                orders
               </button>
             </div>
           )}

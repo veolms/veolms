@@ -1,4 +1,4 @@
-/* barbie palette — light mode. */
+/* barbie palette - light mode. */
 :root[data-theme="light"][data-palette="barbie"] {
   --canvas: #fff0f8;
   --header: #fff0f7;
