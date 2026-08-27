@@ -15,6 +15,10 @@ import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createPricingService, type PricingService } from "../pricing/pricing.service.ts";
 import { createPaymentService, type PaymentService } from "../payments/payment.service.ts";
+import {
+  createPaymentReconciliationService,
+  type PaymentReconciliationService,
+} from "../payments/payment-reconciliation.service.ts";
 
 export interface CheckoutService {
   previewCheckout(
@@ -32,6 +36,7 @@ export interface CheckoutServiceOptions {
   paymentGateway: PaymentGateway;
   pricingService?: PricingService;
   paymentService?: PaymentService;
+  reconciliationService?: PaymentReconciliationService;
 }
 
 export function createCheckoutService({
@@ -39,6 +44,7 @@ export function createCheckoutService({
   paymentGateway,
   pricingService = createPricingService({ database }),
   paymentService = createPaymentService({ database, paymentGateway }),
+  reconciliationService = createPaymentReconciliationService({ database }),
 }: CheckoutServiceOptions): CheckoutService {
   /**
    * Generates a preview of checkout calculation with live item pricing and optional coupon.
@@ -85,6 +91,7 @@ export function createCheckoutService({
         const orderItems = await orderRepo.listOrderItems(database, existingOrder.id);
 
         if (payment) {
+          const isFreeOrder = payment.gateway_provider === "free" || payment.amount === 0;
           return {
             order: {
               id: existingOrder.id,
@@ -116,13 +123,15 @@ export function createCheckoutService({
               createdAt: existingOrder.created_at,
               updatedAt: existingOrder.updated_at,
             },
-            gateway: {
-              provider: payment.gateway_provider as any,
-              gatewayOrderId: payment.gateway_order_id,
-              keyId: payment.gateway_key_id ?? undefined,
-              amount: payment.amount,
-              currency: payment.currency,
-            },
+            gateway: isFreeOrder
+              ? null
+              : {
+                  provider: payment.gateway_provider as any,
+                  gatewayOrderId: payment.gateway_order_id,
+                  keyId: (payment as any).gateway_key_id ?? undefined,
+                  amount: payment.amount,
+                  currency: payment.currency,
+                },
           };
         }
       }
@@ -139,6 +148,7 @@ export function createCheckoutService({
     const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour order expiry
     const orderId = crypto.randomUUID();
     const orderNumber = generateOrderNumber();
+    const isFreeCheckout = pricing.totalAmount === 0;
 
     // 3. Database Transaction Boundary for Order + Order Items Snapshots
     const createdOrder = await database.transaction().execute(async (trx) => {
@@ -175,13 +185,77 @@ export function createCheckoutService({
 
       await orderRepo.insertOrderItems(trx, orderItemRows);
 
+      let initialPaymentId: string | undefined;
+
+      if (isFreeCheckout) {
+        initialPaymentId = crypto.randomUUID();
+        await paymentRepo.insertPayment(trx, {
+          id: initialPaymentId,
+          order_id: orderId,
+          gateway_provider: "free",
+          gateway_order_id: `free_ord_${orderId}`,
+          gateway_payment_id: null,
+          gateway_key_id: null,
+          amount: 0,
+          currency: pricing.currency,
+          status: "initiated",
+          created_at: now,
+          updated_at: now,
+        });
+      }
+
       return {
         ...orderRow,
         items: orderItemRows,
+        initialPaymentId,
       };
     });
 
-    // 4. External Gateway Call (executed OUTSIDE the database transaction)
+    // 4. Handle Free Orders vs Paid Gateway Orders
+    if (isFreeCheckout && createdOrder.initialPaymentId) {
+      // Free order: instantly finalize and fulfill without external gateway call
+      await reconciliationService.finalizeSuccessfulPayment({
+        paymentId: createdOrder.initialPaymentId,
+        gatewayPaymentId: `free_pay_${orderId}`,
+        paymentMethod: { method: "free" },
+      });
+
+      return {
+        order: {
+          id: createdOrder.id,
+          orderNumber: createdOrder.order_number,
+          userId: createdOrder.user_id,
+          status: "paid",
+          currency: createdOrder.currency,
+          subtotalAmount: createdOrder.subtotal_amount,
+          discountAmount: createdOrder.discount_amount,
+          taxAmount: createdOrder.tax_amount,
+          totalAmount: createdOrder.total_amount,
+          couponId: createdOrder.coupon_id,
+          idempotencyKey: createdOrder.idempotency_key,
+          items: createdOrder.items.map((oi) => ({
+            id: oi.id,
+            orderId: oi.order_id,
+            itemType: oi.item_type as any,
+            courseId: oi.course_id,
+            bundleId: oi.bundle_id,
+            titleSnapshot: oi.title_snapshot,
+            unitPrice: oi.unit_price,
+            discountAmount: oi.discount_amount,
+            taxAmount: oi.tax_amount,
+            finalAmount: oi.final_amount,
+            createdAt: oi.created_at,
+          })),
+          expiresAt: createdOrder.expires_at,
+          paidAt: now,
+          createdAt: createdOrder.created_at,
+          updatedAt: now,
+        },
+        gateway: null,
+      };
+    }
+
+    // 5. External Gateway Call for Paid Orders (executed OUTSIDE the database transaction)
     const { gatewayOrder } = await paymentService.initializePayment({
       orderId: createdOrder.id,
       customer: user,

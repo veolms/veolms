@@ -445,6 +445,7 @@ export interface PaymentTable {
   gateway_provider: string;
   gateway_order_id: string;
   gateway_payment_id: string | null;
+  gateway_key_id: string | null;
   amount: number;
   currency: string;
   status: PaymentStatus;

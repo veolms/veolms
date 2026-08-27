@@ -70,7 +70,7 @@ export function createPaymentService({
     if (!order) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
-    if (order.status === "paid") {
+    if (order.status === "paid" || order.total_amount === 0) {
       throw CommerceErrors.ORDER_ALREADY_PAID();
     }
     if (new Date(order.expires_at) < new Date()) {

@@ -50,6 +50,7 @@ export const paymentProviderSchema = z.enum([
   "razorpay",
   "stripe",
   "mock",
+  "free",
 ]);
 export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
 
@@ -349,13 +350,16 @@ export type GatewayOrderDetails = z.infer<typeof gatewayOrderDetailsSchema>;
 
 export const createCheckoutOrderResponseSchema = z.strictObject({
   order: purchaseSchema,
-  gateway: z.strictObject({
-    provider: paymentProviderSchema,
-    gatewayOrderId: z.string(),
-    keyId: z.string().optional(),
-    amount: z.number().int().nonnegative(),
-    currency: z.string().length(3),
-  }),
+  gateway: z
+    .strictObject({
+      provider: paymentProviderSchema,
+      gatewayOrderId: z.string(),
+      keyId: z.string().optional(),
+      amount: z.number().int().nonnegative(),
+      currency: z.string().length(3),
+    })
+    .nullable()
+    .optional(),
 });
 export type CreateCheckoutOrderResponse = z.infer<typeof createCheckoutOrderResponseSchema>;
 export const createPurchaseResponseSchema = createCheckoutOrderResponseSchema;
