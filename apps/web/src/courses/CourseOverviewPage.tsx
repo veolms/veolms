@@ -608,7 +608,7 @@ function CourseHeroSection({
             <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-bold font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isReadOnlyPreview}
               >
                 <Ticket
@@ -617,14 +617,14 @@ function CourseHeroSection({
                   className="shrink-0"
                   aria-hidden="true"
                 />
-                <span className="font-bold font-[750] truncate">
+                <span className="font-[750] truncate">
                   Apply coupon
                 </span>
               </button>
 
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-extrabold font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
+                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
                 disabled={isReadOnlyPreview}
                 onClick={() => {
                   if (!isReadOnlyPreview && onNavigatePage) {
@@ -654,7 +654,7 @@ function CourseHeroSection({
                     aria-hidden="true"
                   />
                 )}
-                <span className="font-extrabold font-[800] truncate">
+                <span className="font-[800] truncate">
                   {price.toLowerCase() === "free"
                     ? "Enroll for Free"
                     : course.enrolled
@@ -675,7 +675,7 @@ function CourseHeroSection({
                     <CheckCircle
                       size={15}
                       weight="fill"
-                      className="text-[var(--accent)] shrink-0"
+                      className="text-(--accent) shrink-0"
                       aria-hidden="true"
                     />
                     <span>{perk}</span>
@@ -827,7 +827,7 @@ function CourseCurriculumCard({
 }: CourseCurriculumCardProps) {
   return (
     <section
-      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] shadow-[var(--card-shadow)] max-[640px]:p-[18px_16px]"
+      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
       aria-labelledby="cov-curriculum-heading"
     >
       <div className="flex items-start justify-between gap-4 mb-4">
@@ -846,7 +846,7 @@ function CourseCurriculumCard({
       </div>
 
       {courseSections.length === 0 ? (
-        <div className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] text-[var(--muted)] text-center text-[0.88rem] italic">
+        <div className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) text-(--muted) text-center text-[0.88rem] italic">
           No sections added yet
         </div>
       ) : (

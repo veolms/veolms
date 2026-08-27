@@ -631,7 +631,7 @@ export function RichTextEditor({
   // -------------------------------------------------------------------------
   return (
     <div
-      className={`relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-[var(--accent)] ${disabled ? "opacity-60 cursor-not-allowed pointer-events-none" : ""}`}
+      className={`relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-(--accent) ${disabled ? "opacity-60 cursor-not-allowed pointer-events-none" : ""}`}
     >
       <div className="flex items-center flex-wrap gap-1 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-1.5 bg-[color-mix(in_srgb,var(--text)_3%,transparent)] rounded-t-[9px]">
         {/* Heading / Format Selector */}
@@ -641,23 +641,23 @@ export function RichTextEditor({
             value={currentFormat}
             disabled={disabled}
             onChange={(e) => handleHeadingChange(e.target.value)}
-            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-[var(--surface)] text-[var(--text)] text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-[var(--hover)] focus:border-[var(--accent)] appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-(--surface) text-(--text) text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-(--hover) focus:border-(--accent) appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option
               value="normal"
-              className="bg-[var(--surface)] text-[var(--text)]"
+              className="bg-(--surface) text-(--text)"
             >
               Normal
             </option>
             <option
               value="h1"
-              className="bg-[var(--surface)] text-[var(--text)]"
+              className="bg-(--surface) text-(--text)"
             >
               Heading 1
             </option>
             <option
               value="h2"
-              className="bg-[var(--surface)] text-[var(--text)]"
+              className="bg-(--surface) text-(--text)"
             >
               Heading 2
             </option>
@@ -665,7 +665,7 @@ export function RichTextEditor({
           <CaretDown
             size={11}
             weight="bold"
-            className="absolute right-2 text-[var(--muted)] pointer-events-none"
+            className="absolute right-2 text-(--muted) pointer-events-none"
           />
         </div>
 

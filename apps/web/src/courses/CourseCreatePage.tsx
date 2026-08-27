@@ -3521,7 +3521,7 @@ export function CourseCreatePage({
                 paddingLeft: "14px",
                 paddingRight: "14px",
               }}
-              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={handlePreviewAction}
               disabled={isAnyApiInProgress}
             >
@@ -3554,7 +3554,7 @@ export function CourseCreatePage({
                   paddingLeft: "16px",
                   paddingRight: "16px",
                 }}
-                className="inline-flex items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:opacity-60 disabled:cursor-not-allowed"
                 onClick={handleValidateCourseAction}
                 disabled={actionLoading !== null || isValidating}
               >
@@ -3562,7 +3562,7 @@ export function CourseCreatePage({
                   <>
                     <CircleNotch
                       size={14}
-                      className="animate-spin text-[var(--accent)]"
+                      className="animate-spin text-(--accent)"
                     />
                     <span>Validating...</span>
                   </>
@@ -3585,7 +3585,7 @@ export function CourseCreatePage({
                   paddingLeft: "16px",
                   paddingRight: "16px",
                 }}
-                className={`inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
                   actionLoading !== null ||
                   (activeStep === "basics" && !isBasicsDirty) ||
                   (activeStep === "curriculum" && !isCurriculumDirty) ||
@@ -3593,7 +3593,7 @@ export function CourseCreatePage({
                   (activeStep === "pricing" && !isPricingDirty) ||
                   (activeStep === "extras" && !isExtrasDirty)
                     ? "!opacity-40 !cursor-not-allowed !shadow-none"
-                    : "cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                    : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                 }`}
                 onClick={handleSaveChangesAction}
                 disabled={
@@ -3670,10 +3670,10 @@ export function CourseCreatePage({
                     paddingLeft: "18px",
                     paddingRight: "18px",
                   }}
-                  className={`inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                  className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
                     !isCourseReadyToPublish
                       ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                      : "cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                      : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                   }`}
                   disabled={actionLoading !== null || !isCourseReadyToPublish}
                   onClick={handleFinalPublishCourse}
@@ -3776,7 +3776,7 @@ export function CourseCreatePage({
                   <span>{step.label}</span>
                   {isDirty && (
                     <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent)] shrink-0"
+                      className="inline-block w-1.5 h-1.5 rounded-full bg-(--accent) shrink-0"
                       title="Unsaved changes"
                       aria-label="Unsaved changes"
                     />
@@ -3827,9 +3827,9 @@ export function CourseCreatePage({
                       onChange={(e) =>
                         setCourseTitle(e.target.value.slice(0, 120))
                       }
-                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                     />
-                    <span className="absolute right-3.5 text-[var(--muted)] text-[0.76rem] pointer-events-none">
+                    <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
                       {courseTitle.length} / 120
                     </span>
                   </div>
@@ -3838,7 +3838,7 @@ export function CourseCreatePage({
                 <div className="flex flex-col gap-2 mb-5">
                   <label
                     htmlFor="course-short-description"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
                   >
                     Short Description
                   </label>
@@ -3853,9 +3853,9 @@ export function CourseCreatePage({
                       onChange={(e) =>
                         setShortDescription(e.target.value.slice(0, 150))
                       }
-                      className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+                      className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-sans"
                     />
-                    <span className="absolute right-3.5 bottom-2.5 text-[var(--muted)] text-[0.76rem] pointer-events-none">
+                    <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
                       {shortDescription.length} / 150
                     </span>
                   </div>
@@ -3883,7 +3883,7 @@ export function CourseCreatePage({
                 <div className="flex flex-col gap-2 mb-4.5">
                   <label
                     htmlFor="instructor-alias"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
                   >
                     Instructor Alias
                   </label>
@@ -3895,9 +3895,9 @@ export function CourseCreatePage({
                     disabled={isBasicsSaving}
                     value={instructorAliasVisual}
                     onChange={(e) => setInstructorAliasVisual(e.target.value)}
-                    className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                   />
-                  <p className="m-0 text-[var(--muted)] text-[0.78rem]">
+                  <p className="m-0 text-(--muted) text-[0.78rem]">
                     Optional custom name shown to students instead of your account name.
                   </p>
                 </div>
@@ -3905,10 +3905,10 @@ export function CourseCreatePage({
                 {/* Show Instructor Name Settings Row */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex flex-col min-w-0 pr-3">
-                    <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
                       Show Instructor Name
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                    <p className="m-0 text-(--muted) text-[0.8rem]">
                       Control whether the instructor name is shown to students.
                     </p>
                   </div>
@@ -3983,7 +3983,7 @@ export function CourseCreatePage({
                               paddingLeft: "16px",
                               paddingRight: "16px",
                             }}
-                            className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={triggerThumbnailUpload}
                           >
                             <ImageIcon size={15} /> Change Image
@@ -4026,7 +4026,7 @@ export function CourseCreatePage({
                               paddingLeft: "16px",
                               paddingRight: "16px",
                             }}
-                            className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={triggerThumbnailUpload}
                           >
                             <UploadSimple size={15} /> Upload
@@ -4044,7 +4044,7 @@ export function CourseCreatePage({
                     <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
                       Video Trailer (Optional)
                     </h3>
-                    <p className="m-0 mb-3 text-[var(--muted)] text-[0.78rem] min-h-[1.15rem]">
+                    <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
                       Add a trailer video to your course.
                     </p>
                     {videoTrailer ? (
@@ -4067,7 +4067,7 @@ export function CourseCreatePage({
                               paddingLeft: "16px",
                               paddingRight: "16px",
                             }}
-                            className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={triggerVideoTrailerUpload}
                           >
                             <PlayCircle size={15} /> Change Video
@@ -4110,7 +4110,7 @@ export function CourseCreatePage({
                               paddingLeft: "16px",
                               paddingRight: "16px",
                             }}
-                            className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={triggerVideoTrailerUpload}
                           >
                             <UploadSimple size={15} /> Upload
@@ -4127,7 +4127,7 @@ export function CourseCreatePage({
                               paddingLeft: "14px",
                               paddingRight: "14px",
                             }}
-                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => {
                               // Select from media action
                             }}
@@ -4254,10 +4254,10 @@ export function CourseCreatePage({
               <div className="flex items-center gap-2.5">
                 {(isReorderingSections ||
                   reorderSectionsMutation.isPending) && (
-                  <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                     <CircleNotch
                       size={13}
-                      className="animate-spin text-[var(--accent)]"
+                      className="animate-spin text-(--accent)"
                     />
                     <span>Saving section order...</span>
                   </span>
@@ -4280,7 +4280,7 @@ export function CourseCreatePage({
                     paddingLeft: "16px",
                     paddingRight: "16px",
                   }}
-                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
                   onClick={handleAddSection}
                 >
                   {isCreatingSection ||
@@ -4303,13 +4303,13 @@ export function CourseCreatePage({
             {/* Sections list or Empty State */}
             {sections.length === 0 ? (
               <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] mb-3.5">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
                   <BookOpen size={24} weight="bold" />
                 </div>
-                <h3 className="m-0 text-[var(--text)] text-[1.05rem] font-bold">
+                <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
                   No sections added yet
                 </h3>
-                <p className="m-0 mt-1.5 max-w-[320px] text-[var(--muted)] text-[0.84rem]">
+                <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
                   Add your first section to start building your course
                   curriculum.
                 </p>
@@ -4332,7 +4332,7 @@ export function CourseCreatePage({
                     paddingRight: "16px",
                     marginTop: "18px",
                   }}
-                  className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
                   onClick={handleAddSection}
                 >
                   {isCreatingSection ||
@@ -4354,11 +4354,11 @@ export function CourseCreatePage({
               sections.map((sec, secIndex) => (
                 <div
                   key={sec.id}
-                  className={`border rounded-[14px] bg-[var(--surface)] shadow-[var(--card-shadow)] overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                  className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
                     deletingSectionId === sec.id
                       ? "opacity-45 pointer-events-none border-red-500/30"
                       : draggedSectionIndex === secIndex
-                        ? "opacity-35 border-dashed border-[var(--accent)]"
+                        ? "opacity-35 border-dashed border-(--accent)"
                         : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
                   }`}
                   draggable={
@@ -4381,7 +4381,7 @@ export function CourseCreatePage({
                   >
                     <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
                       <span
-                        className={`flex items-center justify-center text-[var(--muted)] transition-opacity duration-150 ${
+                        className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
                           sec.isPendingCreation ||
                           isReorderingSections ||
                           reorderSectionsMutation.isPending
@@ -4427,7 +4427,7 @@ export function CourseCreatePage({
                         <DotsSixVertical size={18} />
                       </span>
                       <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
-                        <span className="text-[var(--text)] text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
+                        <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
                           Section {secIndex + 1}
                         </span>
                         {sec.isEditingTitle ? (
@@ -4437,7 +4437,7 @@ export function CourseCreatePage({
                           >
                             <input
                               type="text"
-                              className="border border-[var(--accent)] rounded-md px-2 py-0.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                               defaultValue={sec.title}
                               autoFocus
                               disabled={
@@ -4457,7 +4457,7 @@ export function CourseCreatePage({
                           </div>
                         ) : (
                           <span
-                            className={`text-[var(--text)] text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                            className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
                               sec.isPendingCreation ||
                               updatingSectionId === sec.id ||
                               deletingSectionId === sec.id
@@ -4483,7 +4483,7 @@ export function CourseCreatePage({
                             {sec.title}
                           </span>
                         )}
-                        <span className="ml-1 text-[var(--muted)] text-[0.76rem] font-normal">
+                        <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
                           {sec.lessons.length}{" "}
                           {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
                         </span>
@@ -4491,10 +4491,10 @@ export function CourseCreatePage({
                     </div>
                     <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                       {sec.isPendingCreation ? (
-                        <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                           <CircleNotch
                             size={12}
-                            className="animate-spin text-[var(--accent)]"
+                            className="animate-spin text-(--accent)"
                           />
                           <span>Creating...</span>
                         </span>
@@ -4507,18 +4507,18 @@ export function CourseCreatePage({
                           <span>Deleting...</span>
                         </span>
                       ) : reorderingLessonsSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                           <CircleNotch
                             size={12}
-                            className="animate-spin text-[var(--accent)]"
+                            className="animate-spin text-(--accent)"
                           />
                           <span>Saving order...</span>
                         </span>
                       ) : updatingSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                           <CircleNotch
                             size={12}
-                            className="animate-spin text-[var(--accent)]"
+                            className="animate-spin text-(--accent)"
                           />
                           <span>Saving...</span>
                         </span>
@@ -4530,7 +4530,7 @@ export function CourseCreatePage({
                           updatingSectionId === sec.id ||
                           deletingSectionId === sec.id
                         }
-                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                         aria-label="Edit section title"
                         title="Edit section title"
                         onClick={(e) => {
@@ -4541,7 +4541,7 @@ export function CourseCreatePage({
                         {updatingSectionId === sec.id ? (
                           <CircleNotch
                             size={14}
-                            className="animate-spin text-[var(--accent)]"
+                            className="animate-spin text-(--accent)"
                           />
                         ) : (
                           <PencilSimple size={15} />
@@ -4554,7 +4554,7 @@ export function CourseCreatePage({
                           deletingSectionId === sec.id ||
                           updatingSectionId === sec.id
                         }
-                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
                         aria-label="Delete section"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -4573,7 +4573,7 @@ export function CourseCreatePage({
                       <button
                         type="button"
                         disabled={deletingSectionId === sec.id}
-                        className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
+                        className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
                           sec.isExpanded ? "is-expanded [&>svg]:rotate-180" : ""
                         }`}
                         aria-label={
@@ -4608,10 +4608,10 @@ export function CourseCreatePage({
                         {sec.lessons.map((les, lesIndex) => (
                           <div
                             key={les.id}
-                            className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-[var(--card-shadow)] overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                            className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
                               draggedLessonState?.sectionId === sec.id &&
                               draggedLessonState?.lessonIndex === lesIndex
-                                ? "opacity-35 border-dashed border-[var(--accent)]"
+                                ? "opacity-35 border-dashed border-(--accent)"
                                 : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                             }`}
                             draggable={
@@ -4638,7 +4638,7 @@ export function CourseCreatePage({
                             >
                               <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
                                 <span
-                                  className={`flex items-center justify-center text-[var(--muted)] transition-opacity duration-150 ${
+                                  className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
                                     les.isPendingCreation ||
                                     reorderingLessonsSectionId ||
                                     reorderLessonsMutation.isPending
@@ -4683,19 +4683,19 @@ export function CourseCreatePage({
                                 >
                                   <DotsSixVertical size={18} />
                                 </span>
-                                <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-[var(--muted)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
+                                <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
                                   {lesIndex + 1}
                                 </span>
-                                <span className="text-[var(--text)] text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words">
+                                <span className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words">
                                   {les.title}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                                 {les.isPendingCreation ? (
-                                  <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                                     <CircleNotch
                                       size={12}
-                                      className="animate-spin text-[var(--accent)]"
+                                      className="animate-spin text-(--accent)"
                                     />
                                     <span>Creating...</span>
                                   </span>
@@ -4708,10 +4708,10 @@ export function CourseCreatePage({
                                     <span>Deleting...</span>
                                   </span>
                                 ) : savingLessonId === les.id ? (
-                                  <span className="inline-flex items-center gap-1 text-[var(--accent)] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                                     <CircleNotch
                                       size={12}
-                                      className="animate-spin text-[var(--accent)]"
+                                      className="animate-spin text-(--accent)"
                                     />
                                     <span>Saving...</span>
                                   </span>
@@ -4734,11 +4734,11 @@ export function CourseCreatePage({
                                   </span>
                                 )}
                                 {les.contentType === "video" ? (
-                                  <span className="inline-flex items-center gap-1.25 text-[var(--accent-ink,var(--accent))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                                     <PlayCircle size={13} weight="fill" /> Video
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.25 text-[var(--accent-ink,var(--accent))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
+                                  <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
                                     <FileText size={13} weight="fill" />{" "}
                                     Document
                                   </span>
@@ -4749,7 +4749,7 @@ export function CourseCreatePage({
                                     les.isPendingCreation ||
                                     deletingLessonId === les.id
                                   }
-                                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                   aria-label="Delete lesson"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -4767,7 +4767,7 @@ export function CourseCreatePage({
                                 </button>
                                 <button
                                   type="button"
-                                  className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                  className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
                                     les.isExpanded
                                       ? "is-expanded [&>svg]:rotate-180"
                                       : ""
@@ -4811,7 +4811,7 @@ export function CourseCreatePage({
                                     <div className="flex flex-col gap-2 mb-5">
                                       <label
                                         htmlFor={`les-title-${les.id}`}
-                                        className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
                                       >
                                         Lesson Title{""}
                                         <span className="text-[#ff5252] ml-0.5">
@@ -4834,9 +4834,9 @@ export function CourseCreatePage({
                                             })
                                           }
                                           placeholder="e.g. Introduction to React Hooks"
-                                          className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                                          className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                                         />
-                                        <span className="absolute right-3.5 text-[var(--muted)] text-[0.76rem] pointer-events-none">
+                                        <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
                                           {les.title.length} / 120
                                         </span>
                                       </div>
@@ -4846,7 +4846,7 @@ export function CourseCreatePage({
                                     <div className="flex flex-col gap-2 mb-5">
                                       <label
                                         id={`les-desc-label-${les.id}`}
-                                        className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
                                       >
                                         Lesson Description
                                       </label>
@@ -4875,7 +4875,7 @@ export function CourseCreatePage({
                                   <div className="flex flex-col gap-4.5">
                                     {/* Content Type Selector */}
                                     <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                         Content Type{""}
                                         <span className="text-[#ff5252] ml-0.5">
                                           *
@@ -4889,7 +4889,7 @@ export function CourseCreatePage({
                                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                                           } ${
                                             les.contentType === "video"
-                                              ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                           }`}
                                           onClick={() => {
@@ -4900,20 +4900,20 @@ export function CourseCreatePage({
                                           }}
                                         >
                                           <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-[var(--accent)]" : "border-[var(--muted)]"}`}
+                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
                                           >
                                             {les.contentType === "video" && (
-                                              <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
                                             )}
                                           </div>
-                                          <div className="flex items-center justify-center text-[var(--accent)] mt-px">
+                                          <div className="flex items-center justify-center text-(--accent) mt-px">
                                             <Video size={18} weight="fill" />
                                           </div>
                                           <div className="flex flex-col gap-0.5">
-                                            <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
                                               Video
                                             </span>
-                                            <span className="text-[var(--muted)] text-[0.75rem]">
+                                            <span className="text-(--muted) text-[0.75rem]">
                                               Upload or select a video
                                             </span>
                                           </div>
@@ -4926,7 +4926,7 @@ export function CourseCreatePage({
                                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                                           } ${
                                             les.contentType === "document"
-                                              ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                           }`}
                                           onClick={() => {
@@ -4937,20 +4937,20 @@ export function CourseCreatePage({
                                           }}
                                         >
                                           <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-[var(--accent)]" : "border-[var(--muted)]"}`}
+                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
                                           >
                                             {les.contentType === "document" && (
-                                              <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
                                             )}
                                           </div>
-                                          <div className="flex items-center justify-center text-[var(--accent)] mt-px">
+                                          <div className="flex items-center justify-center text-(--accent) mt-px">
                                             <FileText size={18} weight="fill" />
                                           </div>
                                           <div className="flex flex-col gap-0.5">
-                                            <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
                                               Document / PDF
                                             </span>
-                                            <span className="text-[var(--muted)] text-[0.75rem]">
+                                            <span className="text-(--muted) text-[0.75rem]">
                                               Upload PDF or document
                                             </span>
                                           </div>
@@ -4960,7 +4960,7 @@ export function CourseCreatePage({
 
                                     {/* Content Source Controls (Video or Document) */}
                                     <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                         {les.contentType === "video"
                                           ? "Video Source"
                                           : "Document / PDF Source"}
@@ -4982,7 +4982,7 @@ export function CourseCreatePage({
                                             paddingLeft: "16px",
                                             paddingRight: "16px",
                                           }}
-                                          className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                         >
                                           <UploadSimple size={15} />
                                           Upload New
@@ -4999,17 +4999,17 @@ export function CourseCreatePage({
                                             paddingLeft: "14px",
                                             paddingRight: "14px",
                                           }}
-                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                         >
                                           {les.contentType === "video" ? (
                                             <PlayCircle
                                               size={15}
-                                              className="text-[var(--text-secondary)]"
+                                              className="text-(--text-secondary)"
                                             />
                                           ) : (
                                             <FileText
                                               size={15}
-                                              className="text-[var(--text-secondary)]"
+                                              className="text-(--text-secondary)"
                                             />
                                           )}
                                           Select from Media
@@ -5019,7 +5019,7 @@ export function CourseCreatePage({
 
                                     {/* Lesson Publishing Status */}
                                     <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                         Publishing Status
                                       </label>
                                       <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
@@ -5030,7 +5030,7 @@ export function CourseCreatePage({
                                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                                           } ${
                                             les.isPublished !== false
-                                              ? "is-selected border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                           }`}
                                           onClick={() => {
@@ -5043,19 +5043,19 @@ export function CourseCreatePage({
                                           <div
                                             className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                                               les.isPublished !== false
-                                                ? "border-[var(--accent)]"
-                                                : "border-[var(--muted)]"
+                                                ? "border-(--accent)"
+                                                : "border-(--muted)"
                                             }`}
                                           >
                                             {les.isPublished !== false && (
-                                              <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
                                             )}
                                           </div>
                                           <div className="flex flex-col gap-0.5">
-                                            <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
                                               Published
                                             </span>
-                                            <span className="text-[var(--muted)] text-[0.75rem]">
+                                            <span className="text-(--muted) text-[0.75rem]">
                                               Visible to enrolled students
                                             </span>
                                           </div>
@@ -5082,7 +5082,7 @@ export function CourseCreatePage({
                                             className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                                               les.isPublished === false
                                                 ? "border-[#f59e0b]"
-                                                : "border-[var(--muted)]"
+                                                : "border-(--muted)"
                                             }`}
                                           >
                                             {les.isPublished === false && (
@@ -5090,10 +5090,10 @@ export function CourseCreatePage({
                                             )}
                                           </div>
                                           <div className="flex flex-col gap-0.5">
-                                            <span className="text-[var(--text)] text-[0.86rem] font-bold leading-[18px]">
+                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
                                               Draft (Hidden)
                                             </span>
-                                            <span className="text-[var(--muted)] text-[0.75rem]">
+                                            <span className="text-(--muted) text-[0.75rem]">
                                               Hidden from students
                                             </span>
                                           </div>
@@ -5106,10 +5106,10 @@ export function CourseCreatePage({
                                       className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-5 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
                                     >
                                       <div className="pr-3">
-                                        <strong className="block mb-0.5 text-[var(--text)] text-[0.88rem] font-[650]">
+                                        <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
                                           Free Preview
                                         </strong>
-                                        <p className="m-0 text-[var(--muted)] text-[0.78rem]">
+                                        <p className="m-0 text-(--muted) text-[0.78rem]">
                                           Allow prospective students to view
                                           this lesson before enrolling or
                                           purchasing.
@@ -5130,7 +5130,7 @@ export function CourseCreatePage({
                                     {/* Lesson Resources Table */}
                                     <div className="flex flex-col gap-2 mb-5">
                                       <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-2.5">
-                                        <label className="flex items-center gap-1.5 text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                                        <label className="flex items-center gap-1.5 text-(--text-secondary) text-[0.84rem] font-semibold">
                                           Lesson Resources
                                         </label>
                                         <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
@@ -5146,7 +5146,7 @@ export function CourseCreatePage({
                                               paddingLeft: "16px",
                                               paddingRight: "16px",
                                             }}
-                                            className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                             onClick={() =>
                                               handleAddLessonResource(
                                                 sec.id,
@@ -5169,7 +5169,7 @@ export function CourseCreatePage({
                                               paddingLeft: "14px",
                                               paddingRight: "14px",
                                             }}
-                                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                             onClick={() =>
                                               handleAddLessonResource(
                                                 sec.id,
@@ -5179,7 +5179,7 @@ export function CourseCreatePage({
                                           >
                                             <PlayCircle
                                               size={15}
-                                              className="text-[var(--text-secondary)]"
+                                              className="text-(--text-secondary)"
                                             />
                                             Select from Media
                                           </button>
@@ -5202,11 +5202,11 @@ export function CourseCreatePage({
                                                     className="text-red-400 shrink-0"
                                                   />
                                                   <div className="flex flex-col min-w-0 flex-1">
-                                                    <span className="text-[var(--text)] text-[0.82rem] font-semibold truncate">
+                                                    <span className="text-(--text) text-[0.82rem] font-semibold truncate">
                                                       {res.name}
                                                     </span>
-                                                    <span className="text-[var(--muted)] text-[0.72rem] flex items-center gap-1.5 mt-0.5">
-                                                      <span className="uppercase text-[var(--text-secondary)] font-bold">
+                                                    <span className="text-(--muted) text-[0.72rem] flex items-center gap-1.5 mt-0.5">
+                                                      <span className="uppercase text-(--text-secondary) font-bold">
                                                         {res.type}
                                                       </span>
                                                       <span>•</span>
@@ -5219,7 +5219,7 @@ export function CourseCreatePage({
                                                   disabled={
                                                     les.isPendingCreation
                                                   }
-                                                  className="inline-flex w-7 h-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                  className="inline-flex w-7 h-7 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                                   onClick={() =>
                                                     handleRemoveLessonResource(
                                                       sec.id,
@@ -5241,16 +5241,16 @@ export function CourseCreatePage({
                                             <table className="w-full border-collapse text-left">
                                               <thead>
                                                 <tr className="bg-[color-mix(in_srgb,var(--text)_4%,transparent)] border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
-                                                  <th className="px-4 py-2.5 text-[var(--muted)] text-[0.74rem] font-bold tracking-wider uppercase">
+                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
                                                     File Name
                                                   </th>
-                                                  <th className="px-4 py-2.5 text-[var(--muted)] text-[0.74rem] font-bold tracking-wider uppercase">
+                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
                                                     Type
                                                   </th>
-                                                  <th className="px-4 py-2.5 text-[var(--muted)] text-[0.74rem] font-bold tracking-wider uppercase">
+                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
                                                     Size
                                                   </th>
-                                                  <th className="px-4 py-2.5 text-[var(--muted)] text-[0.74rem] font-bold tracking-wider uppercase text-right pr-4">
+                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase text-right pr-4">
                                                     Actions
                                                   </th>
                                                 </tr>
@@ -5261,7 +5261,7 @@ export function CourseCreatePage({
                                                     key={res.id}
                                                     className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] last:border-b-0 hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] transition-colors"
                                                   >
-                                                    <td className="px-4 py-3 text-[var(--text)] text-[0.82rem] font-semibold">
+                                                    <td className="px-4 py-3 text-(--text) text-[0.82rem] font-semibold">
                                                       <div className="flex items-center gap-2.5">
                                                         <FileText
                                                           size={16}
@@ -5271,10 +5271,10 @@ export function CourseCreatePage({
                                                         <span>{res.name}</span>
                                                       </div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-[var(--text-secondary)] text-[0.80rem] font-medium">
+                                                    <td className="px-4 py-3 text-(--text-secondary) text-[0.80rem] font-medium">
                                                       {res.type}
                                                     </td>
-                                                    <td className="px-4 py-3 text-[var(--muted)] text-[0.80rem]">
+                                                    <td className="px-4 py-3 text-(--muted) text-[0.80rem]">
                                                       {res.size}
                                                     </td>
                                                     <td className="px-4 py-3 text-right pr-4">
@@ -5283,7 +5283,7 @@ export function CourseCreatePage({
                                                         disabled={
                                                           les.isPendingCreation
                                                         }
-                                                        className="inline-flex w-7 h-7 items-center justify-center rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        className="inline-flex w-7 h-7 items-center justify-center rounded-lg text-(--muted) hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                                         onClick={() =>
                                                           handleRemoveLessonResource(
                                                             sec.id,
@@ -5307,7 +5307,7 @@ export function CourseCreatePage({
                                           </div>
                                         </div>
                                       ) : (
-                                        <p className="m-0 mb-3 text-[var(--muted)] text-[0.78rem] min-h-[1.15rem]">
+                                        <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
                                           No resources added to this lesson yet.
                                         </p>
                                       )}
@@ -5335,8 +5335,8 @@ export function CourseCreatePage({
                                           !isLessonDirty(les) ||
                                           les.isPendingCreation ||
                                           savingLessonId === les.id
-                                            ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] bg-transparent opacity-40 cursor-not-allowed pointer-events-none"
-                                            : "border-[var(--accent)] text-[var(--on-accent,#ffffff)] bg-[var(--accent)] hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_12px_var(--accent-shadow)] cursor-pointer"
+                                            ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) bg-transparent opacity-40 cursor-not-allowed pointer-events-none"
+                                            : "border-(--accent) text-(--on-accent,#ffffff) bg-(--accent) hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_12px_var(--accent-shadow)] cursor-pointer"
                                         }`}
                                         onClick={() =>
                                           handleSaveLesson(sec.id, les.id)
@@ -5353,7 +5353,7 @@ export function CourseCreatePage({
                                           <>
                                             <CircleNotch
                                               size={14}
-                                              className="animate-spin text-[var(--accent)]"
+                                              className="animate-spin text-(--accent)"
                                             />
                                             <span>Creating lesson...</span>
                                           </>
@@ -5361,7 +5361,7 @@ export function CourseCreatePage({
                                           <>
                                             <CircleNotch
                                               size={14}
-                                              className="animate-spin text-[var(--accent)]"
+                                              className="animate-spin text-(--accent)"
                                             />
                                             <span>Saving...</span>
                                           </>
@@ -5389,14 +5389,14 @@ export function CourseCreatePage({
                             creatingLessonSectionId === sec.id ||
                             createLessonMutation.isPending
                           }
-                          className="inline-flex items-center gap-1.5 text-[var(--muted)] enabled:hover:text-[var(--text)] text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
+                          className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
                           onClick={() => handleAddLesson(sec.id)}
                         >
                           {creatingLessonSectionId === sec.id ? (
                             <>
                               <CircleNotch
                                 size={14}
-                                className="animate-spin text-[var(--accent)]"
+                                className="animate-spin text-(--accent)"
                               />
                               <span>Adding Lesson...</span>
                             </>
@@ -5465,17 +5465,17 @@ export function CourseCreatePage({
                     className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     aria-disabled="true"
                   >
-                    <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-[var(--muted)]" />
+                    <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
                     <div className="flex flex-1 flex-col gap-0.75 min-w-0">
                       <div className="flex items-center gap-2">
-                        <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
                           Restricted access
                         </strong>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                           Coming soon
                         </span>
                       </div>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Only users who meet the selected requirements can access
                         this course.
                       </p>
@@ -5576,7 +5576,7 @@ export function CourseCreatePage({
                           <input
                             type="number"
                             disabled={isAccessRulesSaving}
-                            className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-[var(--accent)] box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
                             min={1}
                             value={accessRules.fixedDurationValue}
                             onChange={(e) =>
@@ -5598,7 +5598,7 @@ export function CourseCreatePage({
                               ["Years", "Years"],
                             ]}
                             ariaLabel="Select duration unit"
-                            triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
+                            triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
                           />
                         </div>
                       )}
@@ -5623,11 +5623,11 @@ export function CourseCreatePage({
                 {/* Toggle 1: Q&A */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <Question size={20} weight="bold" />
                     </div>
                     <div className="min-w-0">
-                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
                         Q&A
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem]">
@@ -5646,11 +5646,11 @@ export function CourseCreatePage({
                 {/* Toggle 2: Comments */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <ChatCircleText size={20} weight="fill" />
                     </div>
                     <div className="min-w-0">
-                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
                         Comments
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem]">
@@ -5669,14 +5669,14 @@ export function CourseCreatePage({
                 {/* Toggle 3: Downloads */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <DownloadSimple size={20} weight="bold" />
                     </div>
                     <div className="min-w-0">
-                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
                         Downloads
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
                         Allow learners to download lesson resources for offline
                         access.
                       </p>
@@ -5811,7 +5811,7 @@ export function CourseCreatePage({
                   <div className="flex flex-col gap-2 mb-5">
                     <label
                       id="currency-label"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
                     >
                       Currency <span className="text-[#ff5252] ml-0.5">*</span>
                     </label>
@@ -5825,9 +5825,9 @@ export function CourseCreatePage({
                       ariaLabel="Select currency"
                       searchable
                       searchPlaceholder="Search currencies by name or code..."
-                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
+                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
                     />
-                    <p className="m-0 mt-1 text-[var(--muted)] text-[0.78rem]">
+                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
                       Choose the currency for course pricing.
                     </p>
                   </div>
@@ -5842,7 +5842,7 @@ export function CourseCreatePage({
                       <span className="text-[#ff5252] ml-0.5">*</span>
                     </label>
                     <div className="relative flex items-center w-full">
-                      <span className="absolute left-3.5 text-[var(--muted)] text-[0.9rem] font-semibold pointer-events-none">
+                      <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
                         {getCurrencySymbol(pricing.currency || "USD")}
                       </span>
                       <input
@@ -5856,7 +5856,7 @@ export function CourseCreatePage({
                           handleSellingPriceChange(e.target.value)
                         }
                         placeholder="1,999"
-                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                     <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
@@ -5873,7 +5873,7 @@ export function CourseCreatePage({
                       Original price
                     </label>
                     <div className="relative flex items-center w-full">
-                      <span className="absolute left-3.5 text-[var(--muted)] text-[0.9rem] font-semibold pointer-events-none">
+                      <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
                         {getCurrencySymbol(pricing.currency || "USD")}
                       </span>
                       <input
@@ -5887,7 +5887,7 @@ export function CourseCreatePage({
                           handleOriginalPriceChange(e.target.value)
                         }
                         placeholder="2,999"
-                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                     <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
@@ -6001,7 +6001,7 @@ export function CourseCreatePage({
                 {/* Enable Certificate Toggle Row */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
                   <div className="flex flex-col min-w-0 pr-3">
-                    <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
                       Enable certificate
                     </strong>
                     <p className="m-0 text-(--muted) text-[0.8rem]">
@@ -6027,14 +6027,14 @@ export function CourseCreatePage({
                   {/* Template Selector */}
                   <div className="flex flex-col gap-2 mb-5">
                     <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                         Certificate template
                       </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                         Coming soon
                       </span>
                     </div>
-                    <p className="m-0 mt-0.5 mb-2 text-[var(--muted)] text-[0.78rem]">
+                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
                       Choose from pre-designed certificate templates.
                     </p>
                     <div className="opacity-60 cursor-not-allowed pointer-events-none">
@@ -6049,7 +6049,7 @@ export function CourseCreatePage({
                         ariaLabel="Select certificate template"
                         className="w-full"
                         disabled
-                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
+                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
                       />
                     </div>
                   </div>
@@ -6057,14 +6057,14 @@ export function CourseCreatePage({
                   {/* Certificate Issuance Options */}
                   <div className="flex flex-col gap-2 mb-5">
                     <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[var(--text-secondary)] text-[0.84rem] font-semibold">
+                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                         Certificate issuance
                       </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                         Coming soon
                       </span>
                     </div>
-                    <p className="m-0 mt-0.5 mb-2 text-[var(--muted)] text-[0.78rem]">
+                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
                       Choose when the certificate should be issued.
                     </p>
 
@@ -6128,7 +6128,7 @@ export function CourseCreatePage({
                                 <input
                                   type="number"
                                   disabled
-                                  className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
+                                  className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
                                   min={1}
                                   max={100}
                                   value={extras.minCompletionPercentage}
@@ -6181,7 +6181,7 @@ export function CourseCreatePage({
                                 type="text"
                                 disabled
                                 readOnly
-                                className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
+                                className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
                                 value={extras.customRuleText}
                                 placeholder="e.g. Complete all quizzes with > 80% score"
                               />
@@ -6196,14 +6196,14 @@ export function CourseCreatePage({
                   <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
-                        <strong className="text-[var(--text)] text-[0.88rem] font-[650]">
+                        <strong className="text-(--text) text-[0.88rem] font-[650]">
                           Delivery
                         </strong>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                           Coming soon
                         </span>
                       </div>
-                      <p className="m-0 text-[var(--muted)] text-[0.78rem]">
+                      <p className="m-0 text-(--muted) text-[0.78rem]">
                         Automatically email the certificate to learners.
                       </p>
                     </div>
@@ -6264,7 +6264,7 @@ export function CourseCreatePage({
                       <Clock size={20} weight="bold" />
                     </div>
                     <div className="flex flex-col">
-                      <strong className="text-[var(--text)] text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
                         0m
                       </strong>
                       <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
@@ -6277,14 +6277,14 @@ export function CourseCreatePage({
                 {/* Additional Inclusions Section */}
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between mb-0.5">
-                    <h4 className="m-0 text-[var(--text)] text-[0.9rem] font-bold">
+                    <h4 className="m-0 text-(--text) text-[0.9rem] font-bold">
                       Additional inclusions
                     </h4>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                       Coming soon
                     </span>
                   </div>
-                  <p className="m-0 mb-1 text-[var(--muted)] text-[0.78rem]">
+                  <p className="m-0 mb-1 text-(--muted) text-[0.78rem]">
                     Add any additional benefits your learners will get with this
                     course.
                   </p>
@@ -6296,7 +6296,7 @@ export function CourseCreatePage({
                         className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] cursor-not-allowed select-none"
                       >
                         <span
-                          className="flex items-center justify-center text-[var(--muted)] opacity-40 select-none cursor-not-allowed"
+                          className="flex items-center justify-center text-(--muted) opacity-40 select-none cursor-not-allowed"
                           title="Reordering is coming soon"
                         >
                           <DotsSixVertical size={18} />
@@ -6305,14 +6305,14 @@ export function CourseCreatePage({
                           type="text"
                           readOnly
                           disabled
-                          className="flex-1 border-none text-[var(--text)] bg-transparent text-[0.86rem] font-medium outline-none cursor-not-allowed"
+                          className="flex-1 border-none text-(--text) bg-transparent text-[0.86rem] font-medium outline-none cursor-not-allowed"
                           value={item.text}
                           placeholder="e.g. Downloadable resources"
                         />
                         <button
                           type="button"
                           disabled
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-[var(--muted)] opacity-40 bg-transparent cursor-not-allowed p-0 pointer-events-none"
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) opacity-40 bg-transparent cursor-not-allowed p-0 pointer-events-none"
                           aria-label="Remove inclusion (Coming soon)"
                           title="Remove inclusion (Coming soon)"
                         >
@@ -6325,7 +6325,7 @@ export function CourseCreatePage({
                   <button
                     type="button"
                     disabled
-                    className="inline-flex items-center justify-center gap-1.5 h-[34px] w-full border border-dashed border-[color-mix(in_srgb,var(--text)_18%,transparent)] rounded-lg text-[var(--muted)] bg-transparent text-[0.82rem] font-medium opacity-50 cursor-not-allowed pointer-events-none mt-1"
+                    className="inline-flex items-center justify-center gap-1.5 h-[34px] w-full border border-dashed border-[color-mix(in_srgb,var(--text)_18%,transparent)] rounded-lg text-(--muted) bg-transparent text-[0.82rem] font-medium opacity-50 cursor-not-allowed pointer-events-none mt-1"
                     title="Adding inclusions is coming soon"
                   >
                     <Plus size={15} /> Add inclusion
@@ -6374,10 +6374,10 @@ export function CourseCreatePage({
                 {/* Course visibility select */}
                 <div className="flex flex-col gap-1.5 mb-4.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[var(--text)] text-[0.86rem] font-[650]">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
                       Course visibility
                     </label>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                       Coming soon
                     </span>
                   </div>
@@ -6406,7 +6406,7 @@ export function CourseCreatePage({
                         ],
                       ]}
                       ariaLabel="Select course visibility (Coming soon)"
-                      triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-[var(--muted)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
+                      triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--muted) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -6414,10 +6414,10 @@ export function CourseCreatePage({
                 {/* Publish on radio options */}
                 <div className="flex flex-col gap-1.5 mb-4.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[var(--text)] text-[0.86rem] font-[650]">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
                       Publish on
                     </label>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                       Coming soon
                     </span>
                   </div>
@@ -6776,7 +6776,7 @@ export function CourseCreatePage({
             borderRadius: "12px",
             gap: "6px",
           }}
-          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={handlePreviewAction}
           disabled={isAnyApiInProgress}
         >
@@ -6807,7 +6807,7 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={handleValidateCourseAction}
             disabled={actionLoading !== null || isValidating}
           >
@@ -6815,7 +6815,7 @@ export function CourseCreatePage({
               <>
                 <CircleNotch
                   size={14}
-                  className="animate-spin text-[var(--accent)]"
+                  className="animate-spin text-(--accent)"
                 />
                 <span>Validating...</span>
               </>
@@ -6836,7 +6836,7 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className={`flex-1 inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+            className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
               actionLoading !== null ||
               (activeStep === "basics" && !isBasicsDirty) ||
               (activeStep === "curriculum" && !isCurriculumDirty) ||
@@ -6844,7 +6844,7 @@ export function CourseCreatePage({
               (activeStep === "pricing" && !isPricingDirty) ||
               (activeStep === "extras" && !isExtrasDirty)
                 ? "!opacity-40 !cursor-not-allowed !shadow-none"
-                : "cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] active:scale-[0.98]"
+                : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
             }`}
             onClick={handleSaveChangesAction}
             disabled={
@@ -6913,10 +6913,10 @@ export function CourseCreatePage({
                 borderRadius: "14px",
                 gap: "6px",
               }}
-              className={`flex-1 inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+              className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
                 !isCourseReadyToPublish
                   ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                  : "cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] active:scale-[0.98]"
+                  : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
               }`}
               disabled={actionLoading !== null || !isCourseReadyToPublish}
               onClick={handleFinalPublishCourse}
@@ -7007,12 +7007,12 @@ export function CourseCreatePage({
               {/* Modal Body: Render authentic CourseOverviewPage */}
               <div className="flex-1 min-h-0 overflow-y-auto p-0 flex flex-col">
                 {!currentCourseId ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center text-[var(--muted)] my-auto">
-                    <BookOpen size={44} className="mb-3.5 opacity-60 text-[var(--accent)]" />
-                    <h3 className="text-[1.15rem] font-bold text-[var(--text)] mb-1.5">
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center text-(--muted) my-auto">
+                    <BookOpen size={44} className="mb-3.5 opacity-60 text-(--accent)" />
+                    <h3 className="text-[1.15rem] font-bold text-(--text) mb-1.5">
                       No Saved Course Data
                     </h3>
-                    <p className="text-[0.88rem] max-w-[420px] mb-5 text-[var(--muted)] leading-[1.45]">
+                    <p className="text-[0.88rem] max-w-[420px] mb-5 text-(--muted) leading-[1.45]">
                       Please save the course before opening Preview.
                     </p>
                     <button
@@ -7027,28 +7027,28 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                     >
                       <ArrowLeft size={15} weight="bold" />
                       <span>Back to Editor</span>
                     </button>
                   </div>
                 ) : isPreviewLoading ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-[var(--muted)] my-auto">
-                    <div className="w-8 h-8 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin mb-4" />
-                    <p className="text-[0.9rem] font-medium text-[var(--text)]">
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">
+                    <div className="w-8 h-8 rounded-full border-2 border-(--accent) border-t-transparent animate-spin mb-4" />
+                    <p className="text-[0.9rem] font-medium text-(--text)">
                       Loading course preview...
                     </p>
                   </div>
                 ) : isPreviewError ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-[var(--muted)] my-auto">
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">
                     <div className="w-10 h-10 rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444] flex items-center justify-center mb-3">
                       <X size={20} />
                     </div>
-                    <h3 className="text-[1.05rem] font-bold text-[var(--text)] mb-1">
+                    <h3 className="text-[1.05rem] font-bold text-(--text) mb-1">
                       Failed to Load Preview
                     </h3>
-                    <p className="text-[0.86rem] max-w-[400px] mb-4 text-[var(--muted)]">
+                    <p className="text-[0.86rem] max-w-[400px] mb-4 text-(--muted)">
                       An error occurred while fetching the course preview from the server.
                     </p>
                     <button
@@ -7063,7 +7063,7 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                     >
                       <span>Retry</span>
                     </button>
@@ -7094,7 +7094,7 @@ export function CourseCreatePage({
             aria-labelledby="add-category-modal-title"
           >
             <div
-              className="relative w-full max-w-[460px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[var(--surface)] p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
+              className="relative w-full max-w-[460px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -7102,17 +7102,17 @@ export function CourseCreatePage({
                 <div>
                   <h3
                     id="add-category-modal-title"
-                    className="m-0 text-[var(--text)] text-[1.1rem] font-bold tracking-tight"
+                    className="m-0 text-(--text) text-[1.1rem] font-bold tracking-tight"
                   >
                     Manage Categories
                   </h3>
-                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
+                  <p className="m-0 mt-0.5 text-(--muted) text-[0.78rem]">
                     Create new categories or remove existing ones.
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0 shrink-0"
+                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0 shrink-0"
                   onClick={handleCloseAddCategoryModal}
                   aria-label="Close modal"
                 >
@@ -7128,7 +7128,7 @@ export function CourseCreatePage({
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="new-category-name-input"
-                    className="text-[var(--text-secondary)] text-[0.82rem] font-semibold"
+                    className="text-(--text-secondary) text-[0.82rem] font-semibold"
                   >
                     Add New Category{" "}
                     <span className="text-[#ff5252] ml-0.5">*</span>
@@ -7145,7 +7145,7 @@ export function CourseCreatePage({
                       }}
                       placeholder="e.g. Mobile Development"
                       maxLength={100}
-                      className="flex-1 h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[var(--text)] text-[0.88rem] focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--muted)]"
+                      className="flex-1 h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-(--text) text-[0.88rem] focus:outline-none focus:border-(--accent) transition-colors placeholder:text-(--muted)"
                     />
                     <button
                       type="submit"
@@ -7162,7 +7162,7 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
                     >
                       {createCategoryMutation.isPending ? (
                         <>
@@ -7188,20 +7188,20 @@ export function CourseCreatePage({
               {/* Existing Categories List */}
               <div className="pt-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[var(--text-secondary)] text-[0.80rem] font-semibold">
+                  <span className="text-(--text-secondary) text-[0.80rem] font-semibold">
                     Existing Categories ({serverCategories.length})
                   </span>
                   {isLoadingCategories && (
                     <CircleNotch
                       size={13}
-                      className="animate-spin text-[var(--muted)]"
+                      className="animate-spin text-(--muted)"
                     />
                   )}
                 </div>
 
                 <div className="max-h-[220px] overflow-y-auto flex flex-col gap-1.5 pr-1">
                   {serverCategories.length === 0 ? (
-                    <div className="py-6 text-center text-[var(--muted)] text-[0.82rem] italic">
+                    <div className="py-6 text-center text-(--muted) text-[0.82rem] italic">
                       No categories found. Add your first category above.
                     </div>
                   ) : (
@@ -7213,13 +7213,13 @@ export function CourseCreatePage({
                         <div className="flex items-center gap-2 min-w-0">
                           <Tag
                             size={15}
-                            className="text-[var(--accent)] shrink-0"
+                            className="text-(--accent) shrink-0"
                             weight="duotone"
                           />
-                          <span className="text-[var(--text)] text-[0.86rem] font-medium truncate">
+                          <span className="text-(--text) text-[0.86rem] font-medium truncate">
                             {cat.name}
                           </span>
-                          <span className="text-[var(--muted)] text-[0.72rem] px-1.5 py-0.5 rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] shrink-0">
+                          <span className="text-(--muted) text-[0.72rem] px-1.5 py-0.5 rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] shrink-0">
                             {cat.slug}
                           </span>
                         </div>
@@ -7231,7 +7231,7 @@ export function CourseCreatePage({
                           disabled={deleteCategoryMutation.isPending}
                           title={`Delete category ${cat.name}`}
                           aria-label={`Delete category ${cat.name}`}
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[6px] text-[var(--muted)] hover:text-red-500 hover:bg-red-500/10 border-none bg-transparent cursor-pointer transition-colors duration-150 p-0 shrink-0"
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[6px] text-(--muted) hover:text-red-500 hover:bg-red-500/10 border-none bg-transparent cursor-pointer transition-colors duration-150 p-0 shrink-0"
                         >
                           <Trash size={14} />
                         </button>
@@ -7254,7 +7254,7 @@ export function CourseCreatePage({
                     paddingLeft: "16px",
                     paddingRight: "16px",
                   }}
-                  className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--text-secondary)] bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-[var(--text)]"
+                  className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
                 >
                   Done
                 </button>
