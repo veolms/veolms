@@ -29,6 +29,8 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         categoryId: "cat-dev-123",
         difficulty: "advanced",
         language: "en",
+        instructorAlias: "TS Guild",
+        showInstructorName: true,
       };
 
       let isSavingBasics = false;
@@ -79,6 +81,8 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       };
 
       let isSavingBasics = false;

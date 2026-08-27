@@ -10,7 +10,7 @@ import type { CourseAccessRule, CourseSettings } from "@veolms/contracts";
 
 describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", () => {
   describe("1. Missing Access Rules on Initial Course Load", () => {
-    it("recognizes missing Access Rules resource, renders defaults, sets needsAccessRulesSave=true with active button and indicator", () => {
+    it("recognizes missing Access Rules resource, renders unselected durationMode, starts clean without active button or indicator until an option is selected", () => {
       // API returns null for accessRules (e.g. GET /courses/{id}/editor)
       const editorData = {
         course: { id: "c1", title: "New Course", version: 1 },
@@ -26,28 +26,51 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
       const accessRulesExists = hasAccessRules;
 
       const serverAccessRules = initialAccessRulesState;
-      const accessRulesDraft = initialAccessRulesState;
+      let accessRulesDraft = initialAccessRulesState;
 
-      const isAccessRulesDirty = !isAccessRulesEqual(
+      // 1. Initial unconfigured state: both radio options unselected (durationMode === "")
+      expect(accessRulesExists).toBe(false);
+      expect(accessRulesDraft.durationMode).toBe("");
+      expect(serverAccessRules.durationMode).toBe("");
+
+      let isAccessRulesDirty = !isAccessRulesEqual(
         accessRulesDraft,
         serverAccessRules,
       );
-      const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+      let needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
 
-      expect(accessRulesExists).toBe(false);
       expect(isAccessRulesDirty).toBe(false);
-      expect(needsAccessRulesSave).toBe(true);
+      expect(needsAccessRulesSave).toBe(false);
 
-      // Verify Tab unsaved indicator
+      // Verify Tab unsaved indicator is NOT shown initially
       const isStepDirty = (stepId: CourseWizardStepId) => {
         if (stepId === "access-rules") return needsAccessRulesSave;
         return false;
       };
-      expect(isStepDirty("access-rules")).toBe(true);
+      expect(isStepDirty("access-rules")).toBe(false);
 
-      // Verify Save button active state
+      // Verify Save button is disabled initially
       const isSaveButtonDisabled = (step: CourseWizardStepId) =>
         step === "access-rules" && !needsAccessRulesSave;
+      expect(isSaveButtonDisabled("access-rules")).toBe(true);
+
+      // 2. User selects "lifetime" duration mode
+      accessRulesDraft = {
+        ...accessRulesDraft,
+        durationMode: "lifetime",
+      };
+
+      isAccessRulesDirty = !isAccessRulesEqual(
+        accessRulesDraft,
+        serverAccessRules,
+      );
+      needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
+
+      expect(isAccessRulesDirty).toBe(true);
+      expect(needsAccessRulesSave).toBe(true);
+      expect(isStepDirty("access-rules")).toBe(true);
       expect(isSaveButtonDisabled("access-rules")).toBe(false);
     });
   });
@@ -103,7 +126,8 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         accessRulesDraft,
         serverAccessRules,
       );
-      const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+      const needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
 
       expect(accessRulesExists).toBe(true);
       expect(isAccessRulesDirty).toBe(false);
@@ -146,7 +170,8 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         accessRulesDraft,
         serverAccessRules,
       );
-      const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+      const needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
 
       expect(accessRulesExists).toBe(true);
       expect(isAccessRulesDirty).toBe(true);
@@ -158,12 +183,15 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
     it("transitions from unpersisted to persisted on successful save, clearing needsAccessRulesSave", async () => {
       let accessRulesExists = false;
       let serverAccessRules = initialAccessRulesState;
-      let accessRulesDraft = initialAccessRulesState;
+      // User has selected lifetime mode
+      let accessRulesDraft: AccessRulesFormState = {
+        ...initialAccessRulesState,
+        durationMode: "lifetime",
+      };
 
-      expect(
-        !accessRulesExists ||
-          !isAccessRulesEqual(accessRulesDraft, serverAccessRules),
-      ).toBe(true);
+      expect(!isAccessRulesEqual(accessRulesDraft, serverAccessRules)).toBe(
+        true,
+      );
 
       // Simulate saveAccessRulesStep
       const mockSaveAccessRulesApi = vi.fn().mockResolvedValue({
@@ -209,18 +237,20 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         accessRulesDraft,
         serverAccessRules,
       );
-      const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+      const needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
 
       expect(accessRulesExists).toBe(true);
       expect(isAccessRulesDirty).toBe(false);
       expect(needsAccessRulesSave).toBe(false);
     });
 
-    it("preserves accessRulesExists=false and draft on failed save for immediate retry", async () => {
+    it("preserves unpersisted state and draft on failed save for immediate retry", async () => {
       let accessRulesExists = false;
       const serverAccessRules = initialAccessRulesState;
       const accessRulesDraft: AccessRulesFormState = {
         ...initialAccessRulesState,
+        durationMode: "lifetime",
         enableQA: false,
       };
 
@@ -241,20 +271,21 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
       expect(!isAccessRulesEqual(accessRulesDraft, serverAccessRules)).toBe(
         true,
       );
-      expect(
-        !accessRulesExists ||
-          !isAccessRulesEqual(accessRulesDraft, serverAccessRules),
-      ).toBe(true);
     });
   });
 
   describe("5. Publish Validation Reconciliation with Missing Access Rules", () => {
-    it("flushes unpersisted Access Rules during reconcileDirtyState before calling validation API", async () => {
+    it("flushes unpersisted Access Rules during reconcileDirtyState when needsAccessRulesSave is true", async () => {
       const courseId = "course-123";
       const isBasicsDirty = false;
-      const accessRulesExists = false; // missing resource
-      const isAccessRulesDirty = false; // default values
-      const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+      const accessRulesExists = false;
+      const isAccessRulesDirty = true; // User made a selection
+      const accessRulesDraft: AccessRulesFormState = {
+        ...initialAccessRulesState,
+        durationMode: "lifetime",
+      };
+      const needsAccessRulesSave =
+        isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
       const isPricingDirty = false;
       const isExtrasDirty = false;
 

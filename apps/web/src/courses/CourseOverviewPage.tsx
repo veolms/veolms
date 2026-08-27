@@ -953,7 +953,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
               ]),
           }));
 
-        // Inclusions / Perks from Access Rules & Settings
+        // Inclusions / Perks from Access Rules, Settings, Sections & Custom Includes
         const perks: string[] = [];
         if (props.previewData.accessRules?.durationType === "lifetime") {
           perks.push("Full lifetime access");
@@ -966,6 +966,24 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         if (props.previewData.settings?.certificateEnabled) {
           perks.push("Certificate of completion");
         }
+        if (props.previewData.settings?.allowDownloads) {
+          perks.push("Downloadable resources");
+        }
+        if (
+          props.previewData.sections?.some((s) =>
+            s.lessons?.some((l) => l.isPreview),
+          )
+        ) {
+          perks.push("Free preview");
+        }
+        if (props.previewData.includes && props.previewData.includes.length > 0) {
+          for (const inc of props.previewData.includes) {
+            if (inc.text && !perks.includes(inc.text)) {
+              perks.push(inc.text);
+            }
+          }
+        }
+        const finalPerks = Array.from(new Set(perks)).slice(0, 6);
 
         // Pricing with dynamic currency and sale window validation
         let pricingProps: CourseOverviewPricingProps;
@@ -1001,7 +1019,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
           categoryName: resolvedCategoryName,
           language: resolvedLanguage,
           sections: adaptedSections,
-          inclusions: perks,
+          inclusions: finalPerks,
           pricing: pricingProps,
         };
       })()

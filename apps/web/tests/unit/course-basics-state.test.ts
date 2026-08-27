@@ -25,6 +25,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "",
         difficulty: "",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       });
     });
 
@@ -36,6 +38,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "",
         difficulty: "",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       });
 
       const localData = normalizeBasicsState({
@@ -45,6 +49,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "",
         difficulty: "",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       });
 
       expect(isBasicsEqual(serverData, localData)).toBe(true);
@@ -58,6 +64,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "John Doe",
+        showInstructorName: true,
       };
 
       const localDraft: BasicsFormState = {
@@ -77,6 +85,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-backend",
         difficulty: "intermediate",
         language: "en",
+        instructorAlias: "Dr. Fastify",
+        showInstructorName: false,
       };
 
       const confirmedBaseline = normalizeBasicsState(serverResponse);
@@ -85,6 +95,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
       const isDirty = !isBasicsEqual(draftState, confirmedBaseline);
       expect(isDirty).toBe(false);
       expect(draftState).toEqual(confirmedBaseline);
+      expect(draftState.showInstructorName).toBe(false);
+      expect(draftState.instructorAlias).toBe("Dr. Fastify");
     });
   });
 
@@ -97,6 +109,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-py",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       };
 
       let draftState: BasicsFormState = { ...serverState };
@@ -146,6 +160,20 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
       // 6. Edit language
       draftState = { ...draftState, language: "es" };
       expect(!isBasicsEqual(draftState, serverState)).toBe(true);
+
+      // Reset
+      draftState = { ...serverState };
+
+      // 7. Edit instructorAlias
+      draftState = { ...draftState, instructorAlias: "Guido van Rossum" };
+      expect(!isBasicsEqual(draftState, serverState)).toBe(true);
+
+      // Reset
+      draftState = { ...serverState };
+
+      // 8. Edit showInstructorName (toggle to false)
+      draftState = { ...draftState, showInstructorName: false };
+      expect(!isBasicsEqual(draftState, serverState)).toBe(true);
     });
 
     it("reverting local draft back to server values restores clean isDirty = false", () => {
@@ -156,6 +184,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "Original Alias",
+        showInstructorName: true,
       };
 
       let draftState = { ...serverState, title: "Dirty Title" };
@@ -176,6 +206,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "Old Alias",
+        showInstructorName: true,
       };
 
       const localDraft: BasicsFormState = {
@@ -185,6 +217,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-2",
         difficulty: "intermediate",
         language: "fr",
+        instructorAlias: "New Alias",
+        showInstructorName: false,
       };
 
       expect(!isBasicsEqual(localDraft, serverState)).toBe(true);
@@ -196,6 +230,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         description: localDraft.description,
         categoryId: localDraft.categoryId,
         difficulty: (localDraft.difficulty || null) as Course["difficulty"],
+        instructorAlias: localDraft.instructorAlias,
         slug: "existing-course-refactored",
         creatorId: "user-1",
         status: "draft",
@@ -215,7 +250,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         allowComments: true,
         allowDownloads: false,
         certificateEnabled: false,
-        showInstructorName: true,
+        showInstructorName: false,
         estimatedDuration: null,
       };
 
@@ -232,6 +267,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         description: localDraft.description,
         categoryId: localDraft.categoryId,
         difficulty: localDraft.difficulty || null,
+        instructorAlias: localDraft.instructorAlias,
         version: 1,
       });
 
@@ -239,6 +275,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         sampleCourseId,
         {
           language: localDraft.language,
+          showInstructorName: localDraft.showInstructorName,
         },
       );
 
@@ -250,6 +287,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: updated.categoryId || "",
         difficulty: (updated.difficulty as BasicsFormState["difficulty"]) || "",
         language: updatedSettings.language || "en",
+        instructorAlias: updated.instructorAlias || "",
+        showInstructorName: updatedSettings.showInstructorName ?? true,
       });
 
       serverState = newBaseline;
@@ -257,6 +296,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
 
       expect(!isBasicsEqual(synchronizedDraft, serverState)).toBe(false);
       expect(serverState.title).toBe("Existing Course - Refactored");
+      expect(serverState.instructorAlias).toBe("New Alias");
+      expect(serverState.showInstructorName).toBe(false);
       expect(serverState.language).toBe("fr");
     });
 
@@ -268,6 +309,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
       };
 
       const localDraft: BasicsFormState = {
@@ -277,6 +320,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-1",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "Failed Alias",
+        showInstructorName: false,
       };
 
       vi.spyOn(coursesService, "updateCourseBasics").mockRejectedValue(
@@ -291,6 +336,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
           description: localDraft.description,
           categoryId: localDraft.categoryId,
           difficulty: localDraft.difficulty || null,
+          instructorAlias: localDraft.instructorAlias,
           version: 1,
         });
       } catch (err: any) {
@@ -316,6 +362,8 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         categoryId: "cat-new",
         difficulty: "beginner",
         language: "en",
+        instructorAlias: "Creator Alias",
+        showInstructorName: true,
       };
 
       expect(!isBasicsEqual(newDraft, serverState)).toBe(true);

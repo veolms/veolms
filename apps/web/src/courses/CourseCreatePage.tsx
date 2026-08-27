@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
-import { useIsMutating } from "@tanstack/react-query";
 import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import {
@@ -69,20 +68,25 @@ import {
 
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
+  coursesService,
   useCategories,
   useCourseEditor,
   useCoursePreview,
   useCourseValidation,
   useCreateCategory,
   useCreateCourse,
+  useCreateCourseInclude,
   useCreateLesson,
   useCreateSection,
   useDeleteCategory,
+  useDeleteCourseInclude,
   useDeleteLesson,
   useDeleteSection,
+  useReorderCourseIncludes,
   useReorderLessons,
   useReorderSections,
   useUpdateCourseBasics,
+  useUpdateCourseInclude,
   useUpdateLesson,
   useUpdateSection,
   useUpsertAccessRules,
@@ -91,6 +95,7 @@ import {
   usePublishCourse,
   useUnpublishCourse,
 } from "../services/courses";
+import type { Category, CourseIncludeItem } from "@veolms/contracts";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
   CourseInclude,
@@ -100,6 +105,8 @@ import { courses } from "./catalogue";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import { sections as initialCourseSections } from "../learning/courseContent";
 import type { CourseSection, Lesson } from "../learning/courseContent";
+
+const EMPTY_CATEGORIES: Category[] = [];
 
 export type CourseWizardStepId =
   "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
@@ -133,6 +140,8 @@ export interface BasicsFormState {
   categoryId: string;
   difficulty: "beginner" | "intermediate" | "advanced" | "";
   language: string;
+  instructorAlias: string;
+  showInstructorName: boolean;
 }
 
 export const initialBasicsState: BasicsFormState = {
@@ -142,6 +151,8 @@ export const initialBasicsState: BasicsFormState = {
   categoryId: "",
   difficulty: "",
   language: "en",
+  instructorAlias: "",
+  showInstructorName: true,
 };
 
 export const normalizeBasicsState = (
@@ -153,19 +164,28 @@ export const normalizeBasicsState = (
   categoryId: raw?.categoryId ?? "",
   difficulty: (raw?.difficulty ?? "") as BasicsFormState["difficulty"],
   language: raw?.language || "en",
+  instructorAlias: raw?.instructorAlias ?? "",
+  showInstructorName:
+    raw?.showInstructorName !== undefined
+      ? Boolean(raw.showInstructorName)
+      : true,
 });
 
 export const isBasicsEqual = (
   a: BasicsFormState,
   b: BasicsFormState,
 ): boolean => {
+  const normA = normalizeBasicsState(a);
+  const normB = normalizeBasicsState(b);
   return (
-    a.title === b.title &&
-    a.shortDescription === b.shortDescription &&
-    a.description === b.description &&
-    a.categoryId === b.categoryId &&
-    a.difficulty === b.difficulty &&
-    a.language === b.language
+    normA.title === normB.title &&
+    normA.shortDescription === normB.shortDescription &&
+    normA.description === normB.description &&
+    normA.categoryId === normB.categoryId &&
+    normA.difficulty === normB.difficulty &&
+    normA.language === normB.language &&
+    normA.instructorAlias === normB.instructorAlias &&
+    normA.showInstructorName === normB.showInstructorName
   );
 };
 
@@ -200,7 +220,7 @@ export function formatDatetimeLocalToIso(
 
 // Access Rules State Model & Normalization
 export type AccessType = "everyone" | "restricted";
-export type AccessDurationMode = "lifetime" | "fixed";
+export type AccessDurationMode = "lifetime" | "fixed" | "";
 export type DurationUnit = "Days" | "Weeks" | "Months" | "Years";
 
 export interface AccessRulesFormState {
@@ -215,7 +235,7 @@ export interface AccessRulesFormState {
 
 export const initialAccessRulesState: AccessRulesFormState = {
   accessType: "everyone",
-  durationMode: "lifetime",
+  durationMode: "",
   fixedDurationValue: 30,
   fixedDurationUnit: "Days",
   enableQA: true,
@@ -227,7 +247,7 @@ export const normalizeAccessRulesState = (
   raw?: Partial<AccessRulesFormState> | null,
 ): AccessRulesFormState => ({
   accessType: (raw?.accessType || "everyone") as AccessType,
-  durationMode: (raw?.durationMode || "lifetime") as AccessDurationMode,
+  durationMode: (raw?.durationMode || "") as AccessDurationMode,
   fixedDurationValue:
     typeof raw?.fixedDurationValue === "number" ? raw.fixedDurationValue : 30,
   fixedDurationUnit: (raw?.fixedDurationUnit || "Days") as DurationUnit,
@@ -323,6 +343,136 @@ export const isExtrasEqual = (
   b: ExtrasFormState,
 ): boolean => {
   return a.enableCertificate === b.enableCertificate;
+};
+
+export interface AutoIncludeItem {
+  id: string;
+  text: string;
+  source: string;
+}
+
+export function deriveAutoIncludes(params: {
+  durationMode?: string;
+  fixedDurationValue?: number;
+  fixedDurationUnit?: string;
+  enableCertificate?: boolean;
+  enableDownloads?: boolean;
+  hasPreviewLessons?: boolean;
+}): AutoIncludeItem[] {
+  const items: AutoIncludeItem[] = [];
+
+  if (params.durationMode === "lifetime") {
+    items.push({
+      id: "auto-lifetime",
+      text: "Full lifetime access",
+      source: "Access Rules",
+    });
+  } else if (
+    params.durationMode === "fixed" &&
+    params.fixedDurationValue &&
+    params.fixedDurationValue > 0
+  ) {
+    items.push({
+      id: "auto-fixed-duration",
+      text: `${params.fixedDurationValue} ${String(params.fixedDurationUnit || "Days").toLowerCase()} access`,
+      source: "Access Rules",
+    });
+  }
+
+  if (params.enableCertificate) {
+    items.push({
+      id: "auto-cert",
+      text: "Certificate of completion",
+      source: "Certificate",
+    });
+  }
+
+  if (params.enableDownloads) {
+    items.push({
+      id: "auto-downloads",
+      text: "Downloadable resources",
+      source: "Access Rules",
+    });
+  }
+
+  if (params.hasPreviewLessons) {
+    items.push({
+      id: "auto-preview",
+      text: "Free preview lessons",
+      source: "Curriculum",
+    });
+  }
+
+  return items;
+}
+
+export function deriveSuggestedInclusions(params: {
+  durationMode?: string;
+  fixedDurationValue?: number;
+  fixedDurationUnit?: string;
+  enableCertificate?: boolean;
+  enableDownloads?: boolean;
+  hasPreviewLessons?: boolean;
+  currentDraft?: Array<{ text: string }>;
+}): string[] {
+  const suggestions: string[] = [];
+
+  if (params.durationMode === "lifetime") {
+    suggestions.push("Full lifetime access");
+  } else if (
+    params.durationMode === "fixed" &&
+    params.fixedDurationValue &&
+    params.fixedDurationValue > 0
+  ) {
+    suggestions.push(
+      `${params.fixedDurationValue} ${String(params.fixedDurationUnit || "Days").toLowerCase()} access`,
+    );
+  }
+
+  if (params.enableCertificate) {
+    suggestions.push("Certificate of completion");
+  }
+
+  if (params.enableDownloads) {
+    suggestions.push("Downloadable resources");
+  }
+
+  if (params.hasPreviewLessons) {
+    suggestions.push("Free preview lessons");
+  }
+
+  suggestions.push(
+    "Personal guidance",
+    "One-on-one session",
+    "Community access",
+    "Assignments & feedback",
+    "Access on all devices",
+  );
+
+  const existing = new Set(
+    (params.currentDraft || []).map((d) => d.text.trim().toLowerCase()),
+  );
+
+  return suggestions.filter(
+    (sug, idx, arr) =>
+      arr.findIndex((x) => x.toLowerCase() === sug.toLowerCase()) === idx &&
+      !existing.has(sug.toLowerCase()),
+  );
+}
+
+export const isManualIncludesEqual = (
+  draft: Array<{ id: string; text: string }>,
+  server: Array<{ id: string; text: string }>,
+): boolean => {
+  if (draft.length !== server.length) return false;
+  for (let i = 0; i < draft.length; i++) {
+    const d = draft[i];
+    const s = server[i];
+    if (!d || !s) return false;
+    if (d.id !== s.id) return false;
+    if (d.text.trim() !== s.text.trim()) return false;
+  }
+  return true;
 };
 
 export const checkIsCurriculumDirty = (
@@ -846,6 +996,8 @@ export function CourseCreatePage({
   const categoryId = basicsDraft.categoryId;
   const difficultyLevel = basicsDraft.difficulty;
   const language = basicsDraft.language;
+  const instructorAlias = basicsDraft.instructorAlias;
+  const showInstructorName = basicsDraft.showInstructorName;
 
   const setCourseTitle = (title: string) =>
     setBasicsDraft((prev) => ({ ...prev, title }));
@@ -860,12 +1012,10 @@ export function CourseCreatePage({
   ) => setBasicsDraft((prev) => ({ ...prev, difficulty }));
   const setLanguage = (language: string) =>
     setBasicsDraft((prev) => ({ ...prev, language }));
-
-  // Instructor Alias & Visibility (Frontend Visual Demo)
-  const [instructorAliasVisual, setInstructorAliasVisual] =
-    useState<string>("");
-  const [showInstructorNameVisual, setShowInstructorNameVisual] =
-    useState<boolean>(true);
+  const setInstructorAlias = (instructorAlias: string) =>
+    setBasicsDraft((prev) => ({ ...prev, instructorAlias }));
+  const setShowInstructorName = (showInstructorName: boolean) =>
+    setBasicsDraft((prev) => ({ ...prev, showInstructorName }));
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
@@ -933,7 +1083,7 @@ export function CourseCreatePage({
     name: string;
   } | null>(null);
 
-  const { data: serverCategories = [], isLoading: isLoadingCategories } =
+  const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
   const { data: editorData } = useCourseEditor(currentCourseId);
   const {
@@ -972,6 +1122,8 @@ export function CourseCreatePage({
   >(null);
   const [isReorderingSections, setIsReorderingSections] =
     useState<boolean>(false);
+  const [isReorderingIncludes, setIsReorderingIncludes] =
+    useState<boolean>(false);
   const [updatingSectionId, setUpdatingSectionId] = useState<string | null>(
     null,
   );
@@ -983,6 +1135,10 @@ export function CourseCreatePage({
   const upsertAccessRulesMutation = useUpsertAccessRules();
   const upsertSettingsMutation = useUpsertSettings();
   const upsertPricingMutation = useUpsertPricing();
+  const createIncludeMutation = useCreateCourseInclude();
+  const updateIncludeMutation = useUpdateCourseInclude();
+  const deleteIncludeMutation = useDeleteCourseInclude();
+  const reorderIncludesMutation = useReorderCourseIncludes();
   const publishCourseMutation = usePublishCourse();
   const unpublishCourseMutation = useUnpublishCourse();
 
@@ -997,19 +1153,12 @@ export function CourseCreatePage({
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [isSavingExtras, setIsSavingExtras] = useState(false);
 
-  const isBasicsSaving =
-    isSavingBasics ||
-    updateBasicsMutation.isPending ||
-    (createCourseMutation.isPending && activeStep === "basics");
-  const isAccessRulesSaving =
-    isSavingAccessRules || upsertAccessRulesMutation.isPending;
-  const isPricingSaving = isSavingPricing || upsertPricingMutation.isPending;
-  const isExtrasSaving = isSavingExtras || upsertSettingsMutation.isPending;
-
-  const isMutatingCount = useIsMutating();
+  const isBasicsSaving = isSavingBasics;
+  const isAccessRulesSaving = isSavingAccessRules;
+  const isPricingSaving = isSavingPricing;
+  const isExtrasSaving = isSavingExtras;
 
   const isAnyApiInProgress =
-    isMutatingCount > 0 ||
     actionLoading !== null ||
     isBasicsSaving ||
     isAccessRulesSaving ||
@@ -1021,6 +1170,8 @@ export function CourseCreatePage({
     deletingLessonId !== null ||
     isReorderingSections ||
     reorderingLessonsSectionId !== null ||
+    isReorderingIncludes ||
+    reorderIncludesMutation.isPending ||
     updatingSectionId !== null ||
     deletingSectionId !== null ||
     createCategoryMutation.isPending ||
@@ -1238,7 +1389,8 @@ export function CourseCreatePage({
   const isAccessRulesDirtyRef = useRef(isAccessRulesDirty);
   isAccessRulesDirtyRef.current = isAccessRulesDirty;
 
-  const needsAccessRulesSave = !accessRulesExists || isAccessRulesDirty;
+  const needsAccessRulesSave =
+    isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
   const accessRules = accessRulesDraft;
   const setAccessRules = setAccessRulesDraft;
 
@@ -1345,12 +1497,19 @@ export function CourseCreatePage({
   // Extras Step server-confirmed and draft states
   const [serverExtras, setServerExtras] =
     useState<ExtrasFormState>(initialExtrasState);
+  const [serverIncludes, setServerIncludes] = useState<CourseIncludeItem[]>([]);
+  const [manualIncludesDraft, setManualIncludesDraft] = useState<
+    Array<{ id: string; text: string }>
+  >([]);
+  const manualIncludesDraftRef = useRef(manualIncludesDraft);
+  manualIncludesDraftRef.current = manualIncludesDraft;
+  const dragInitialIncludesStateRef = useRef<{
+    includeIds: string[];
+    previousIncludes: Array<{ id: string; text: string }>;
+  } | null>(null);
+
   const [extras, setExtras] = useState<ExtrasState>({
-    inclusions: [
-      { id: "inc-1", text: "Full lifetime access" },
-      { id: "inc-2", text: "Downloadable resources" },
-      { id: "inc-3", text: "Access on all devices" },
-    ],
+    inclusions: [],
     enableCertificate: false,
     certificateTemplate: "purple-certificate",
     issuanceType: "percentage",
@@ -1358,14 +1517,45 @@ export function CourseCreatePage({
     customRuleText: "Complete all quizzes with > 80% score",
     autoEmailCertificate: true,
   });
+
+  const suggestedInclusions = useMemo<string[]>(() => {
+    const hasPreviewLessons = sections.some((s) =>
+      s.lessons.some((l) => l.isPreview),
+    );
+    return deriveSuggestedInclusions({
+      durationMode: accessRulesDraft.durationMode,
+      fixedDurationValue: accessRulesDraft.fixedDurationValue,
+      fixedDurationUnit: accessRulesDraft.fixedDurationUnit,
+      enableCertificate: extras.enableCertificate,
+      enableDownloads: accessRulesDraft.enableDownloads,
+      hasPreviewLessons,
+      currentDraft: manualIncludesDraft,
+    });
+  }, [
+    accessRulesDraft.durationMode,
+    accessRulesDraft.fixedDurationValue,
+    accessRulesDraft.fixedDurationUnit,
+    accessRulesDraft.enableDownloads,
+    extras.enableCertificate,
+    sections,
+    manualIncludesDraft,
+  ]);
+
+  const isManualIncludesDirty = useMemo(
+    () => !isManualIncludesEqual(manualIncludesDraft, serverIncludes),
+    [manualIncludesDraft, serverIncludes],
+  );
+
   const isExtrasDirty = useMemo(
     () =>
       !isExtrasEqual(
         { enableCertificate: extras.enableCertificate },
         serverExtras,
-      ),
-    [extras.enableCertificate, serverExtras],
+      ) || isManualIncludesDirty,
+    [extras.enableCertificate, serverExtras, isManualIncludesDirty],
   );
+  const isExtrasDirtyRef = useRef(isExtrasDirty);
+  isExtrasDirtyRef.current = isExtrasDirty;
 
   const isStepDirty = (stepId: CourseWizardStepId): boolean => {
     if (stepId === "basics") return isBasicsDirty;
@@ -1387,6 +1577,11 @@ export function CourseCreatePage({
         categoryId: c.categoryId || "",
         difficulty: (c.difficulty as BasicsFormState["difficulty"]) || "",
         language: editorData.settings?.language || "en",
+        instructorAlias: c.instructorAlias || "",
+        showInstructorName:
+          editorData.settings?.showInstructorName !== undefined
+            ? editorData.settings.showInstructorName
+            : true,
       });
       setServerBasics(confirmedBasics);
       if (!isBasicsDirtyRef.current) {
@@ -1458,6 +1653,23 @@ export function CourseCreatePage({
           ...prev,
           enableCertificate: confirmedExtras.enableCertificate,
         }));
+      }
+
+      if (editorData.includes) {
+        setServerIncludes(editorData.includes);
+        if (!isExtrasDirtyRef.current) {
+          setManualIncludesDraft(
+            editorData.includes.map((inc) => ({
+              id: inc.id,
+              text: inc.text,
+            })),
+          );
+        }
+      } else {
+        setServerIncludes([]);
+        if (!isExtrasDirtyRef.current) {
+          setManualIncludesDraft([]);
+        }
       }
 
       if (editorData.pricing) {
@@ -1655,19 +1867,6 @@ export function CourseCreatePage({
         );
         setSections(generatedSections);
       }
-
-      setExtras((prev) => ({
-        ...prev,
-        inclusions: [
-          { id: "inc-1", text: "Full lifetime access" },
-          { id: "inc-2", text: "Downloadable resources" },
-          {
-            id: "inc-3",
-            text: `${targetCourse.sections} Sections & ${targetCourse.lectures} Lectures`,
-          },
-          { id: "inc-4", text: "Certificate of completion" },
-        ],
-      }));
     } else {
       setIsPublished(false);
     }
@@ -1680,34 +1879,35 @@ export function CourseCreatePage({
   const [dragEnabledInclusionId, setDragEnabledInclusionId] = useState<
     string | null
   >(null);
+  const [focusedInclusionId, setFocusedInclusionId] = useState<string | null>(
+    null,
+  );
 
-  const handleAddInclusion = () => {
-    setExtras((prev) => ({
+  const handleAddManualInclusion = (customText?: string) => {
+    if (manualIncludesDraft.length >= 6) return;
+    const defaultText =
+      customText?.trim().slice(0, 25) ||
+      `Benefit ${manualIncludesDraft.length + 1}`.slice(0, 25);
+    const newId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setManualIncludesDraft((prev) => [
       ...prev,
-      inclusions: [
-        ...prev.inclusions,
-        {
-          id: `inc-${Date.now()}`,
-          text: `New Inclusion ${prev.inclusions.length + 1}`,
-        },
-      ],
-    }));
+      {
+        id: newId,
+        text: defaultText,
+      },
+    ]);
+    setFocusedInclusionId(newId);
   };
 
-  const handleUpdateInclusionText = (id: string, text: string) => {
-    setExtras((prev) => ({
-      ...prev,
-      inclusions: prev.inclusions.map((item) =>
-        item.id === id ? { ...item, text } : item,
-      ),
-    }));
+  const handleUpdateManualInclusionText = (id: string, text: string) => {
+    const truncated = text.slice(0, 25);
+    setManualIncludesDraft((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, text: truncated } : item)),
+    );
   };
 
-  const handleDeleteInclusion = (id: string) => {
-    setExtras((prev) => ({
-      ...prev,
-      inclusions: prev.inclusions.filter((item) => item.id !== id),
-    }));
+  const handleDeleteManualInclusion = (id: string) => {
+    setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleInclusionDragStart = (
@@ -1715,6 +1915,18 @@ export function CourseCreatePage({
     index: number,
     text: string,
   ) => {
+    if (
+      isReorderingIncludes ||
+      reorderIncludesMutation.isPending ||
+      isExtrasSaving
+    ) {
+      e.preventDefault();
+      return;
+    }
+    dragInitialIncludesStateRef.current = {
+      includeIds: manualIncludesDraftRef.current.map((i) => i.id),
+      previousIncludes: structuredClone(manualIncludesDraftRef.current),
+    };
     setDraggedInclusionIndex(index);
     setCustomDragImage(
       e,
@@ -1727,20 +1939,70 @@ export function CourseCreatePage({
     e.preventDefault();
     if (draggedInclusionIndex === null || draggedInclusionIndex === index)
       return;
-    setExtras((prev) => {
-      const copy = [...prev.inclusions];
+    setManualIncludesDraft((prev) => {
+      const copy = [...prev];
       const [moved] = copy.splice(draggedInclusionIndex, 1);
       if (moved) {
         copy.splice(index, 0, moved);
       }
-      return { ...prev, inclusions: copy };
+      return copy;
     });
     setDraggedInclusionIndex(index);
   };
 
-  const handleInclusionDragEnd = () => {
+  const handleInclusionDragEnd = async () => {
+    const initial = dragInitialIncludesStateRef.current;
     setDraggedInclusionIndex(null);
     setDragEnabledInclusionId(null);
+    dragInitialIncludesStateRef.current = null;
+
+    if (!initial) return;
+
+    const initialIds = initial.includeIds;
+    const currentIncludes = manualIncludesDraftRef.current;
+    const currentIds = currentIncludes.map((i) => i.id);
+
+    // Check if order actually changed
+    const orderChanged =
+      initialIds.length === currentIds.length &&
+      initialIds.some((id, idx) => id !== currentIds[idx]);
+
+    if (!orderChanged) return;
+
+    if (currentCourseId) {
+      // Validate if all IDs are valid persisted UUIDs
+      const allValidUuids = currentIds.every((id) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id,
+        ),
+      );
+
+      if (allValidUuids && serverIncludes.length === currentIds.length) {
+        setIsReorderingIncludes(true);
+        try {
+          await reorderIncludesMutation.mutateAsync({
+            courseId: currentCourseId,
+            payload: {
+              orderedIds: currentIds,
+            },
+          });
+          const reorderedServer = currentIds
+            .map((id) => serverIncludes.find((s) => s.id === id))
+            .filter(Boolean) as CourseIncludeItem[];
+          setServerIncludes(reorderedServer);
+          setToastMessage("Inclusions reordered successfully.");
+        } catch (err: unknown) {
+          // Rollback to previous order on failure
+          setManualIncludesDraft(initial.previousIncludes);
+          const errorMsg =
+            (err as { message?: string })?.message ||
+            "Failed to save inclusion order. Restored previous order.";
+          setToastMessage(errorMsg);
+        } finally {
+          setIsReorderingIncludes(false);
+        }
+      }
+    }
   };
 
   // Certificate Handlers
@@ -2771,29 +3033,27 @@ export function CourseCreatePage({
         }))
       : [];
 
-  const rawInclusions = extras.inclusions
-    .map((inc) => inc.text.trim())
-    .filter((text) => text.length > 0);
+  const previewInclusions: string[] = useMemo(() => {
+    return manualIncludesDraft
+      .map((m) => m.text.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+  }, [manualIncludesDraft]);
 
-  // If certificate toggle is enabled in Card 1, include"Certificate of completion"
-  const nonCertInclusions = rawInclusions.filter(
-    (text) => !/certificate of completion/i.test(text),
-  );
-
-  const previewInclusions: string[] = [
-    ...(extras.enableCertificate ? ["Certificate of completion"] : []),
-    ...nonCertInclusions,
-  ];
-
-  const previewIncludes: CourseInclude[] = [
-    ...(extras.enableCertificate
-      ? [{ icon: Certificate, label: "Certificate of completion" }]
-      : []),
-    ...nonCertInclusions.map((text) => ({
-      icon: CheckCircle,
+  const previewIncludes: CourseInclude[] = useMemo(() => {
+    return previewInclusions.map((text) => ({
+      icon: /certificate/i.test(text)
+        ? Certificate
+        : /download/i.test(text)
+          ? DownloadSimple
+          : /lifetime|access/i.test(text)
+            ? Clock
+            : /preview/i.test(text)
+              ? PlayCircle
+              : CheckCircle,
       label: text,
-    })),
-  ];
+    }));
+  }, [previewInclusions]);
 
   const handlePricingTypeChange = (type: PricingType) => {
     setPricing((prev) => ({ ...prev, pricingType: type }));
@@ -2868,6 +3128,7 @@ export function CourseCreatePage({
         // Create initial course on server
         const created = await createCourseMutation.mutateAsync({
           title: basicsDraft.title.trim(),
+          instructorAlias: basicsDraft.instructorAlias.trim() || null,
         });
         setCurrentCourseId(created.id);
         setCourseVersion(created.version);
@@ -2879,13 +3140,16 @@ export function CourseCreatePage({
         let confirmedDiff: BasicsFormState["difficulty"] =
           (created.difficulty as BasicsFormState["difficulty"]) || "";
         let confirmedLang = "en";
+        let confirmedInstructorAlias = created.instructorAlias || "";
+        let confirmedShowInstructor = true;
 
-        // If shortDescription, description, category, or difficulty are filled, update basics immediately
+        // If shortDescription, description, category, difficulty, or instructorAlias are filled, update basics immediately
         if (
           basicsDraft.shortDescription.trim() ||
           basicsDraft.description.trim() ||
           basicsDraft.categoryId ||
-          basicsDraft.difficulty
+          basicsDraft.difficulty ||
+          basicsDraft.instructorAlias.trim()
         ) {
           const updated = await updateBasicsMutation.mutateAsync({
             id: created.id,
@@ -2895,6 +3159,7 @@ export function CourseCreatePage({
               description: basicsDraft.description.trim() || null,
               categoryId: basicsDraft.categoryId || null,
               difficulty: basicsDraft.difficulty || null,
+              instructorAlias: basicsDraft.instructorAlias.trim() || null,
               version: created.version,
             },
           });
@@ -2905,17 +3170,21 @@ export function CourseCreatePage({
           confirmedCat = updated.categoryId || "";
           confirmedDiff =
             (updated.difficulty as BasicsFormState["difficulty"]) || "";
+          confirmedInstructorAlias = updated.instructorAlias || "";
         }
 
-        if (basicsDraft.language) {
-          const settingsRes = await upsertSettingsMutation.mutateAsync({
-            courseId: created.id,
-            payload: {
-              language: basicsDraft.language,
-            },
-          });
-          confirmedLang = settingsRes.language || basicsDraft.language;
-        }
+        const settingsRes = await upsertSettingsMutation.mutateAsync({
+          courseId: created.id,
+          payload: {
+            language: basicsDraft.language || "en",
+            showInstructorName: basicsDraft.showInstructorName,
+          },
+        });
+        confirmedLang = settingsRes.language || basicsDraft.language || "en";
+        confirmedShowInstructor =
+          settingsRes.showInstructorName !== undefined
+            ? settingsRes.showInstructorName
+            : basicsDraft.showInstructorName;
 
         const newBaseline: BasicsFormState = {
           title: confirmedTitle,
@@ -2924,6 +3193,8 @@ export function CourseCreatePage({
           categoryId: confirmedCat,
           difficulty: confirmedDiff,
           language: confirmedLang,
+          instructorAlias: confirmedInstructorAlias,
+          showInstructorName: confirmedShowInstructor,
         };
         setServerBasics(newBaseline);
         setBasicsDraft(newBaseline);
@@ -2938,21 +3209,26 @@ export function CourseCreatePage({
             description: basicsDraft.description.trim() || null,
             categoryId: basicsDraft.categoryId || null,
             difficulty: basicsDraft.difficulty || null,
+            instructorAlias: basicsDraft.instructorAlias.trim() || null,
             version: courseVersion,
           },
         });
         setCourseVersion(updated.version);
 
         let confirmedLang = language;
-        if (basicsDraft.language) {
-          const settingsRes = await upsertSettingsMutation.mutateAsync({
-            courseId: targetCourseId,
-            payload: {
-              language: basicsDraft.language,
-            },
-          });
-          confirmedLang = settingsRes.language || basicsDraft.language;
-        }
+        let confirmedShowInstructor = basicsDraft.showInstructorName;
+        const settingsRes = await upsertSettingsMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            language: basicsDraft.language || "en",
+            showInstructorName: basicsDraft.showInstructorName,
+          },
+        });
+        confirmedLang = settingsRes.language || basicsDraft.language || "en";
+        confirmedShowInstructor =
+          settingsRes.showInstructorName !== undefined
+            ? settingsRes.showInstructorName
+            : basicsDraft.showInstructorName;
 
         const newBaseline: BasicsFormState = {
           title: updated.title,
@@ -2962,6 +3238,8 @@ export function CourseCreatePage({
           difficulty:
             (updated.difficulty as BasicsFormState["difficulty"]) || "",
           language: confirmedLang,
+          instructorAlias: updated.instructorAlias || "",
+          showInstructorName: confirmedShowInstructor,
         };
         setServerBasics(newBaseline);
         setBasicsDraft(newBaseline);
@@ -3083,6 +3361,9 @@ export function CourseCreatePage({
   };
 
   const saveAccessRulesStep = async (explicitCourseId?: string | null) => {
+    if (!accessRulesDraft.durationMode) {
+      throw new Error("Please select an access duration option.");
+    }
     setIsSavingAccessRules(true);
     try {
       let targetCourseId = explicitCourseId || currentCourseId;
@@ -3241,6 +3522,7 @@ export function CourseCreatePage({
         setCourseVersion(created.version);
       }
 
+      // 1. Save certificate settings
       const res = await upsertSettingsMutation.mutateAsync({
         courseId: targetCourseId,
         payload: {
@@ -3257,6 +3539,62 @@ export function CourseCreatePage({
         ...prev,
         enableCertificate: newBaseline.enableCertificate,
       }));
+
+      // 2. Sync manual includes if dirty
+      if (isManualIncludesDirty) {
+        // Delete removed items
+        const deleted = serverIncludes.filter(
+          (s) => !manualIncludesDraft.some((m) => m.id === s.id),
+        );
+        if (deleted.length > 0) {
+          await Promise.all(
+            deleted.map((d) =>
+              deleteIncludeMutation.mutateAsync({
+                courseId: targetCourseId!,
+                includeId: d.id,
+              }),
+            ),
+          );
+        }
+
+        // Update items with changed text
+        const updated = manualIncludesDraft.filter((m) => {
+          const existing = serverIncludes.find((s) => s.id === m.id);
+          return existing && existing.text.trim() !== m.text.trim();
+        });
+        if (updated.length > 0) {
+          await Promise.all(
+            updated.map((u) =>
+              updateIncludeMutation.mutateAsync({
+                courseId: targetCourseId!,
+                includeId: u.id,
+                payload: { text: u.text.trim() },
+              }),
+            ),
+          );
+        }
+
+        // Create new items (client-generated IDs)
+        const newItems = manualIncludesDraft.filter(
+          (m) => !serverIncludes.some((s) => s.id === m.id),
+        );
+        for (const n of newItems) {
+          if (n.text.trim()) {
+            await createIncludeMutation.mutateAsync({
+              courseId: targetCourseId!,
+              payload: { text: n.text.trim() },
+            });
+          }
+        }
+
+        // Refetch latest includes list from server
+        const listRes = await coursesService.listIncludes(targetCourseId!);
+        setServerIncludes(listRes.items);
+        setManualIncludesDraft(
+          listRes.items.map((inc) => ({ id: inc.id, text: inc.text })),
+        );
+      }
+
       return res;
     } finally {
       setIsSavingExtras(false);
@@ -3889,8 +4227,8 @@ export function CourseCreatePage({
                     maxLength={100}
                     placeholder="e.g. Alex Rivera or Design Guild"
                     disabled={isBasicsSaving}
-                    value={instructorAliasVisual}
-                    onChange={(e) => setInstructorAliasVisual(e.target.value)}
+                    value={instructorAlias}
+                    onChange={(e) => setInstructorAlias(e.target.value)}
                     className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                   <p className="m-0 text-(--muted) text-[0.78rem]">
@@ -3909,10 +4247,10 @@ export function CourseCreatePage({
                     </p>
                   </div>
                   <SettingsToggle
-                    checked={showInstructorNameVisual}
+                    checked={showInstructorName}
                     disabled={isBasicsSaving}
                     onChange={() =>
-                      setShowInstructorNameVisual(!showInstructorNameVisual)
+                      setShowInstructorName(!showInstructorName)
                     }
                     label="Toggle Show Instructor Name"
                   />
@@ -6270,61 +6608,201 @@ export function CourseCreatePage({
                   </div>
                 </div>
 
+                {/* Divider between Stats & Inclusions */}
+                <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
+
                 {/* Additional Inclusions Section */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <h4 className="m-0 text-(--text) text-[0.9rem] font-bold">
-                      Additional inclusions
-                    </h4>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                      Coming soon
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                        Course inclusions
+                      </h4>
+                      {(isReorderingIncludes ||
+                        reorderIncludesMutation.isPending) && (
+                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                          <CircleNotch
+                            size={12}
+                            className="animate-spin text-(--accent)"
+                          />
+                          <span>Saving inclusion order...</span>
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
+                        manualIncludesDraft.length >= 6
+                          ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                          : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+                      }`}
+                    >
+                      {manualIncludesDraft.length} / 6
                     </span>
                   </div>
-                  <p className="m-0 mb-1 text-(--muted) text-[0.78rem]">
-                    Add any additional benefits your learners will get with this
-                    course.
+                  <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
+                    Perks and benefits your learners will receive upon enrolling (max 6 items). Click suggestions below or add custom inclusions.
                   </p>
 
-                  <div className="flex flex-col gap-2 opacity-75">
-                    {extras.inclusions.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] cursor-not-allowed select-none"
-                      >
-                        <span
-                          className="flex items-center justify-center text-(--muted) opacity-40 select-none cursor-not-allowed"
-                          title="Reordering is coming soon"
-                        >
-                          <DotsSixVertical size={18} />
-                        </span>
-                        <input
-                          type="text"
-                          readOnly
-                          disabled
-                          className="flex-1 border-none text-(--text) bg-transparent text-[0.86rem] font-medium outline-none cursor-not-allowed"
-                          value={item.text}
-                          placeholder="e.g. Downloadable resources"
-                        />
-                        <button
-                          type="button"
-                          disabled
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) opacity-40 bg-transparent cursor-not-allowed p-0 pointer-events-none"
-                          aria-label="Remove inclusion (Coming soon)"
-                          title="Remove inclusion (Coming soon)"
-                        >
-                          <Trash size={15} />
-                        </button>
+                  {/* Active Inclusions List */}
+                  <div className="flex flex-col gap-2.5">
+                    {manualIncludesDraft.length === 0 ? (
+                      <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
+                        No inclusions added yet. Choose from the suggested perks below or add a custom benefit.
                       </div>
-                    ))}
+                    ) : (
+                      manualIncludesDraft.map((item, index) => (
+                        <div
+                          key={item.id}
+                          draggable={
+                            !isReorderingIncludes &&
+                            !reorderIncludesMutation.isPending &&
+                            !isExtrasSaving &&
+                            dragEnabledInclusionId === item.id
+                          }
+                          onDragStart={(e) =>
+                            handleInclusionDragStart(e, index, item.text)
+                          }
+                          onDragOver={(e) => handleInclusionDragOver(e, index)}
+                          onDragEnd={handleInclusionDragEnd}
+                          className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
+                            isReorderingIncludes || isExtrasSaving
+                              ? "opacity-60"
+                              : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                          }`}
+                        >
+                          <span
+                            className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
+                              isReorderingIncludes ||
+                              reorderIncludesMutation.isPending ||
+                              isExtrasSaving
+                                ? "opacity-30 cursor-not-allowed pointer-events-none"
+                                : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
+                            }`}
+                            onMouseEnter={() => {
+                              if (
+                                !isReorderingIncludes &&
+                                !reorderIncludesMutation.isPending &&
+                                !isExtrasSaving
+                              ) {
+                                setDragEnabledInclusionId(item.id);
+                              }
+                            }}
+                            onMouseLeave={() => setDragEnabledInclusionId(null)}
+                            title={
+                              isReorderingIncludes
+                                ? "Saving order..."
+                                : "Drag to reorder"
+                            }
+                          >
+                            <DotsSixVertical size={18} />
+                          </span>
+                          <input
+                            type="text"
+                            disabled={
+                              isReorderingIncludes ||
+                              reorderIncludesMutation.isPending ||
+                              isExtrasSaving
+                            }
+                            className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
+                            value={item.text}
+                            onFocus={() => setFocusedInclusionId(item.id)}
+                            onBlur={() => setFocusedInclusionId(null)}
+                            onChange={(e) =>
+                              handleUpdateManualInclusionText(
+                                item.id,
+                                e.target.value.slice(0, 25),
+                              )
+                            }
+                            placeholder="e.g. Personal guidance"
+                            maxLength={25}
+                          />
+                          {focusedInclusionId === item.id && (
+                            <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
+                              {item.text.length} / 25
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            disabled={
+                              isReorderingIncludes ||
+                              reorderIncludesMutation.isPending ||
+                              isExtrasSaving
+                            }
+                            onClick={() => handleDeleteManualInclusion(item.id)}
+                            className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
+                            aria-label="Remove inclusion"
+                            title="Remove inclusion"
+                          >
+                            <Trash size={15} />
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
 
+                  {/* Suggested quick-add chips */}
+                  {manualIncludesDraft.length < 6 && suggestedInclusions.length > 0 && (
+                    <div className="flex flex-col gap-2 mt-1">
+                      <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
+                        Suggested perks (click to add)
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedInclusions
+                          .slice(0, 6 - manualIncludesDraft.length)
+                          .map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              disabled={
+                                isReorderingIncludes ||
+                                reorderIncludesMutation.isPending ||
+                                isExtrasSaving ||
+                                manualIncludesDraft.length >= 6
+                              }
+                              onClick={() =>
+                                handleAddManualInclusion(suggestion)
+                              }
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                            >
+                              <Plus size={13} weight="bold" />
+                              <span>{suggestion}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add inclusion button */}
                   <button
                     type="button"
-                    disabled
-                    className="inline-flex items-center justify-center gap-1.5 h-[34px] w-full border border-dashed border-[color-mix(in_srgb,var(--text)_18%,transparent)] rounded-lg text-(--muted) bg-transparent text-[0.82rem] font-medium opacity-50 cursor-not-allowed pointer-events-none mt-1"
-                    title="Adding inclusions is coming soon"
+                    disabled={
+                      isReorderingIncludes ||
+                      reorderIncludesMutation.isPending ||
+                      isExtrasSaving ||
+                      manualIncludesDraft.length >= 6
+                    }
+                    onClick={() => handleAddManualInclusion()}
+                    className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
+                      manualIncludesDraft.length >= 6 ||
+                      isReorderingIncludes ||
+                      isExtrasSaving
+                        ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
+                        : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
+                    }`}
+                    title={
+                      isReorderingIncludes
+                        ? "Saving inclusion order..."
+                        : manualIncludesDraft.length >= 6
+                          ? "Maximum 6 inclusions reached"
+                          : "Add custom inclusion"
+                    }
                   >
-                    <Plus size={15} /> Add inclusion
+                    <Plus size={15} weight="bold" />
+                    <span>
+                      {manualIncludesDraft.length >= 6
+                        ? "Maximum 6 inclusions reached"
+                        : "Add custom inclusion"}
+                    </span>
                   </button>
                 </div>
               </div>

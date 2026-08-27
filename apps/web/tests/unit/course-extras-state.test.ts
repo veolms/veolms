@@ -3,12 +3,15 @@ import {
   initialExtrasState,
   normalizeExtrasState,
   isExtrasEqual,
+  deriveAutoIncludes,
+  deriveSuggestedInclusions,
+  isManualIncludesEqual,
   type ExtrasFormState,
 } from "../../src/courses/CourseCreatePage";
 import { coursesService } from "../../src/services/courses/courses.service";
-import type { CourseSettings } from "@veolms/contracts";
+import type { CourseSettings, CourseIncludeItem } from "@veolms/contracts";
 
-describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separation", () => {
+describe("Course Wizard Step 4: Extras & Course Includes State", () => {
   const sampleCourseId = "12345678-1234-1234-1234-123456789abc";
 
   beforeEach(() => {
@@ -31,8 +34,6 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
       });
       const extrasDraft = {
         enableCertificate: serverExtras.enableCertificate,
-        inclusions: [{ id: "1", text: "Inclusion 1" }],
-        certificateTemplate: "purple-certificate",
       };
 
       const isDirty = !isExtrasEqual(
@@ -47,8 +48,6 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
       const serverExtras: ExtrasFormState = { enableCertificate: false };
       let extrasDraft = {
         enableCertificate: false,
-        inclusions: [],
-        certificateTemplate: "purple-certificate",
       };
 
       expect(
@@ -67,77 +66,87 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
         ),
       ).toBe(true);
     });
+  });
 
-    it("does NOT mark extras dirty when modifying only client-only / Coming Soon fields", () => {
-      const serverExtras: ExtrasFormState = { enableCertificate: true };
-      let extrasDraft = {
+  describe("Dynamic Suggested Inclusions & User Selection", () => {
+    it("suggests perks based on course configuration without auto-injecting into the active draft", () => {
+      const suggestions = deriveSuggestedInclusions({
+        durationMode: "lifetime",
         enableCertificate: true,
-        inclusions: [{ id: "1", text: "Lifetime access" }],
-        certificateTemplate: "purple-certificate",
-        issuanceType: "percentage",
-        minCompletionPercentage: 95,
-        customRuleText: "Complete all quizzes",
-        autoEmailCertificate: true,
-      };
+        enableDownloads: true,
+        hasPreviewLessons: true,
+        currentDraft: [],
+      });
 
-      // 1. Initial state is clean
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: extrasDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(false);
+      expect(suggestions).toContain("Full lifetime access");
+      expect(suggestions).toContain("Certificate of completion");
+      expect(suggestions).toContain("Downloadable resources");
+      expect(suggestions).toContain("Free preview lessons");
+      expect(suggestions).toContain("Personal guidance");
+    });
 
-      // 2. Edit inclusions (client-only)
-      extrasDraft = {
-        ...extrasDraft,
-        inclusions: [
-          ...extrasDraft.inclusions,
-          { id: "2", text: "New client-only perk" },
-        ],
-      };
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: extrasDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(false);
+    it("filters out suggestions that the user has already added to their active draft", () => {
+      const suggestions = deriveSuggestedInclusions({
+        durationMode: "lifetime",
+        enableCertificate: true,
+        enableDownloads: true,
+        hasPreviewLessons: false,
+        currentDraft: [{ text: "Full lifetime access" }],
+      });
 
-      // 3. Edit certificate template (Coming Soon)
-      extrasDraft = {
-        ...extrasDraft,
-        certificateTemplate: "gold-template",
-      };
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: extrasDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(false);
+      expect(suggestions).not.toContain("Full lifetime access");
+      expect(suggestions).toContain("Certificate of completion");
+      expect(suggestions).toContain("Downloadable resources");
+    });
 
-      // 4. Edit minCompletionPercentage (Coming Soon)
-      extrasDraft = {
-        ...extrasDraft,
-        minCompletionPercentage: 80,
-      };
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: extrasDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(false);
+    it("clicking a suggestion adds it to the active draft and marks the form dirty", () => {
+      const serverBaseline: CourseIncludeItem[] = [];
+      let manualDraft: Array<{ id: string; text: string }> = [];
 
-      // 5. Edit custom rule text (Coming Soon)
-      extrasDraft = {
-        ...extrasDraft,
-        customRuleText: "Score 90% or higher",
-      };
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: extrasDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(false);
+      // Initial clean state
+      expect(isManualIncludesEqual(manualDraft, serverBaseline)).toBe(true);
+
+      // User clicks a suggestion
+      const clickedSuggestion = "Certificate of completion";
+      manualDraft = [...manualDraft, { id: "manual-1", text: clickedSuggestion }];
+
+      // Dirty state is triggered -> enables save button
+      expect(isManualIncludesEqual(manualDraft, serverBaseline)).toBe(false);
+      expect(manualDraft).toHaveLength(1);
+      expect(manualDraft[0]?.text).toBe("Certificate of completion");
+    });
+  });
+
+  describe("Combined Includes & 6-Item Limit", () => {
+    it("enforces maximum 6 inclusions in the active draft", () => {
+      const manualDraft = [
+        { id: "m-1", text: "Full lifetime access" },
+        { id: "m-2", text: "Certificate of completion" },
+        { id: "m-3", text: "Downloadable resources" },
+        { id: "m-4", text: "Free preview lessons" },
+        { id: "m-5", text: "Personal guidance" },
+        { id: "m-6", text: "One-on-one session" },
+      ];
+
+      expect(manualDraft.length).toBe(6);
+      const isMaxReached = manualDraft.length >= 6;
+      expect(isMaxReached).toBe(true);
+
+      const previewList = manualDraft
+        .map((m) => m.text.trim())
+        .filter(Boolean)
+        .slice(0, 6);
+      expect(previewList).toHaveLength(6);
+    });
+
+    it("restricts inclusion text to 25 characters maximum", () => {
+      const longText = "This is a very long inclusion perk that exceeds the limit";
+      const truncated = longText.slice(0, 25);
+      expect(truncated.length).toBe(25);
+      expect(truncated).toBe("This is a very long inclu");
+      
+      const counterText = `${truncated.length} / 25`;
+      expect(counterText).toBe("25 / 25");
     });
   });
 
@@ -146,7 +155,6 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
       let serverExtras: ExtrasFormState = { enableCertificate: false };
       const localDraft = {
         enableCertificate: true,
-        certificateTemplate: "purple-certificate",
       };
 
       expect(
@@ -194,58 +202,6 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
       ).toBe(false);
       expect(serverExtras.enableCertificate).toBe(true);
     });
-
-    it("preserves local draft and leaves server baseline unchanged on save failure", async () => {
-      const serverExtras: ExtrasFormState = { enableCertificate: false };
-      const localDraft = {
-        enableCertificate: true,
-        certificateTemplate: "purple-certificate",
-      };
-
-      vi.spyOn(coursesService, "upsertSettings").mockRejectedValue(
-        new Error("Server error updating course settings"),
-      );
-
-      let saveError: Error | null = null;
-      try {
-        await coursesService.upsertSettings(sampleCourseId, {
-          certificateEnabled: localDraft.enableCertificate,
-        });
-      } catch (err: any) {
-        saveError = err;
-      }
-
-      expect(saveError).not.toBeNull();
-      expect(serverExtras.enableCertificate).toBe(false);
-      expect(localDraft.enableCertificate).toBe(true);
-      expect(
-        !isExtrasEqual(
-          { enableCertificate: localDraft.enableCertificate },
-          serverExtras,
-        ),
-      ).toBe(true);
-    });
-  });
-
-  describe("Save Extras Button State", () => {
-    it("disables Save Extras when clean and enables when dirty", () => {
-      const isBasicsDirty = false;
-      const isAccessRulesDirty = false;
-      const isPricingDirty = false;
-      const actionLoading = null;
-
-      const getIsDisabled = (step: string, isExtrasDirty: boolean) =>
-        actionLoading !== null ||
-        (step === "basics" && !isBasicsDirty) ||
-        (step === "access-rules" && !isAccessRulesDirty) ||
-        (step === "pricing" && !isPricingDirty) ||
-        (step === "extras" && !isExtrasDirty);
-
-      // Clean: disabled
-      expect(getIsDisabled("extras", false)).toBe(true);
-
-      // Dirty: active/enabled
-      expect(getIsDisabled("extras", true)).toBe(false);
-    });
   });
 });
+

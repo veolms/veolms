@@ -22,6 +22,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       categoryId?: string | null;
       difficulty?: string | null;
       language?: string | null;
+      instructorAlias?: string | null;
+      showInstructorName?: boolean;
     },
   ): HydrationSimulationState => {
     const confirmedBasics = normalizeBasicsState({
@@ -32,6 +34,11 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       difficulty:
         (serverCourse.difficulty as BasicsFormState["difficulty"]) || "",
       language: serverCourse.language || "en",
+      instructorAlias: serverCourse.instructorAlias || "",
+      showInstructorName:
+        serverCourse.showInstructorName !== undefined
+          ? serverCourse.showInstructorName
+          : true,
     });
 
     const isDirty = current.isBasicsDirty;
@@ -56,6 +63,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       categoryId: "cat-development-uuid",
       difficulty: "intermediate",
       language: "en",
+      instructorAlias: "Lead Instructor",
+      showInstructorName: false,
     };
 
     let state: HydrationSimulationState = {
@@ -75,6 +84,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       categoryId: null,
       difficulty: null,
       language: "en",
+      instructorAlias: null,
+      showInstructorName: true,
     };
 
     // 3. editorData refetches from server
@@ -89,12 +100,16 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
     expect(state.basicsDraft.categoryId).toBe("cat-development-uuid");
     expect(state.basicsDraft.difficulty).toBe("intermediate");
     expect(state.basicsDraft.language).toBe("en");
+    expect(state.basicsDraft.instructorAlias).toBe("Lead Instructor");
+    expect(state.basicsDraft.showInstructorName).toBe(false);
 
     // 5. Server baseline represents what the server confirmed
     expect(state.serverBasics.shortDescription).toBe("");
     expect(state.serverBasics.description).toBe("");
     expect(state.serverBasics.categoryId).toBe("");
     expect(state.serverBasics.difficulty).toBe("");
+    expect(state.serverBasics.instructorAlias).toBe("");
+    expect(state.serverBasics.showInstructorName).toBe(true);
 
     // 6. Dirty flag remains true because draft still contains uncommitted changes
     expect(state.isBasicsDirty).toBe(true);
@@ -116,6 +131,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       categoryId: "cat-123",
       difficulty: "beginner",
       language: "es",
+      instructorAlias: "Prof. Smith",
+      showInstructorName: false,
     };
 
     state = simulateServerHydration(state, serverCourse);
@@ -126,6 +143,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
     expect(state.basicsDraft.categoryId).toBe("cat-123");
     expect(state.basicsDraft.difficulty).toBe("beginner");
     expect(state.basicsDraft.language).toBe("es");
+    expect(state.basicsDraft.instructorAlias).toBe("Prof. Smith");
+    expect(state.basicsDraft.showInstructorName).toBe(false);
     expect(state.isBasicsDirty).toBe(false);
   });
 
@@ -138,6 +157,8 @@ describe("Course Wizard: Curriculum Creation vs Unsaved Basics Draft Synchroniza
       categoryId: "cat-1",
       difficulty: "advanced",
       language: "en",
+      instructorAlias: "Prof. Alan",
+      showInstructorName: true,
     };
 
     let state: HydrationSimulationState = {

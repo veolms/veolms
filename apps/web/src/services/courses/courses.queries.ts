@@ -75,10 +75,11 @@ export function useCourseValidation(
   });
 }
 
-export function useCategories() {
+export function useCategories(options?: { enabled?: boolean }) {
   return useQuery<Category[], ApiError>({
     queryKey: courseKeys.categories(),
     queryFn: () => coursesService.listCategories(),
+    enabled: options?.enabled ?? false,
     staleTime: 5 * 60 * 1000,
   });
 }

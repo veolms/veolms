@@ -28,7 +28,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       const normalized = normalizeAccessRulesState(null);
       expect(normalized).toEqual({
         accessType: "everyone",
-        durationMode: "lifetime",
+        durationMode: "",
         fixedDurationValue: 30,
         fixedDurationUnit: "Days",
         enableQA: true,

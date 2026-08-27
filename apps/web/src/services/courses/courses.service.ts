@@ -9,16 +9,21 @@ import type {
   CourseSettings,
   CourseSummary,
   CourseValidationResponse,
+  CourseIncludeItem,
+  CourseIncludesListResponse,
   CreateCategoryRequest,
+  CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   MyCoursesListResponse,
   PublicCourse,
+  ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
+  UpdateCourseIncludeRequest,
   UpdateCourseLessonRequest,
   UpdateCoursePricingRequest,
   UpdateCourseSectionRequest,
@@ -203,5 +208,46 @@ export const coursesService = {
     payload: UpdateCoursePricingRequest,
   ): Promise<CoursePricing> => {
     return api.put<CoursePricing>(`/courses/${courseId}/pricing`, payload);
+  },
+
+  listIncludes: (courseId: string): Promise<CourseIncludesListResponse> => {
+    return api.get<CourseIncludesListResponse>(`/courses/${courseId}/includes`);
+  },
+
+  createInclude: (
+    courseId: string,
+    payload: CreateCourseIncludeRequest,
+  ): Promise<CourseIncludeItem> => {
+    return api.post<CourseIncludeItem>(`/courses/${courseId}/includes`, payload);
+  },
+
+  updateInclude: (
+    courseId: string,
+    includeId: string,
+    payload: UpdateCourseIncludeRequest,
+  ): Promise<CourseIncludeItem> => {
+    return api.patch<CourseIncludeItem>(
+      `/courses/${courseId}/includes/${includeId}`,
+      payload,
+    );
+  },
+
+  deleteInclude: (
+    courseId: string,
+    includeId: string,
+  ): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(
+      `/courses/${courseId}/includes/${includeId}`,
+    );
+  },
+
+  reorderIncludes: (
+    courseId: string,
+    payload: ReorderCourseIncludesRequest,
+  ): Promise<{ success: boolean }> => {
+    return api.post<{ success: boolean }>(
+      `/courses/${courseId}/includes/reorder`,
+      payload,
+    );
   },
 };

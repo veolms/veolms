@@ -6,14 +6,18 @@ import type {
   CourseEditorDataResponse,
   CoursePricing,
   CourseSettings,
+  CourseIncludeItem,
   CreateCategoryRequest,
+  CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
+  ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
+  UpdateCourseIncludeRequest,
   UpdateCourseLessonRequest,
   UpdateCoursePricingRequest,
   UpdateCourseSectionRequest,
@@ -480,3 +484,88 @@ export function useUnpublishCourse() {
     },
   });
 }
+
+export function useCreateCourseInclude() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    CourseIncludeItem,
+    ApiError,
+    { courseId: string; payload: CreateCourseIncludeRequest }
+  >({
+    mutationFn: ({ courseId, payload }) =>
+      coursesService.createInclude(courseId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useUpdateCourseInclude() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    CourseIncludeItem,
+    ApiError,
+    { courseId: string; includeId: string; payload: UpdateCourseIncludeRequest }
+  >({
+    mutationFn: ({ courseId, includeId, payload }) =>
+      coursesService.updateInclude(courseId, includeId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useDeleteCourseInclude() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    { courseId: string; includeId: string }
+  >({
+    mutationFn: ({ courseId, includeId }) =>
+      coursesService.deleteInclude(courseId, includeId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useReorderCourseIncludes() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    { courseId: string; payload: ReorderCourseIncludesRequest }
+  >({
+    mutationFn: ({ courseId, payload }) =>
+      coursesService.reorderIncludes(courseId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
