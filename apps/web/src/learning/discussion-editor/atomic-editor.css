@@ -1,0 +1,56 @@
+/* Atomic/CodeMirror owns these internals, so the feature-local overrides below
+ * cannot be expressed reliably with Tailwind utilities on React-owned nodes. */
+.learning-discussion-atomic-editor {
+  --atomic-editor-bg: transparent;
+  --atomic-editor-fg: var(--text);
+  --atomic-editor-muted: var(--muted);
+  --atomic-editor-link: var(--accent-ink, var(--accent));
+  --atomic-editor-measure: none;
+  --atomic-editor-font: inherit;
+  --atomic-editor-body-size: 0.9375rem;
+  --atomic-editor-body-leading: 1.6;
+  height: 100%;
+}
+
+.learning-discussion-atomic-editor .atomic-cm-editor,
+.learning-discussion-atomic-editor .cm-editor {
+  min-height: 100%;
+  background: transparent;
+}
+
+.learning-discussion-atomic-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.learning-discussion-atomic-editor .cm-scroller {
+  min-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.learning-discussion-atomic-editor .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.learning-discussion-atomic-editor .cm-content {
+  min-height: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 1rem;
+  caret-color: var(--text);
+}
+
+.learning-discussion-atomic-editor .cm-line {
+  padding-inline: 0;
+}
+
+.learning-discussion-atomic-editor .cm-placeholder {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.learning-discussion-atomic-editor .cm-selectionBackground,
+.learning-discussion-atomic-editor .cm-content ::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}

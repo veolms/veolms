@@ -14,6 +14,22 @@ import {
   getDiscussionComposerViewportGeometry,
 } from "../../src/learning/Discussion.tsx";
 
+const uploadAttachment = vi.hoisted(() =>
+  vi.fn(async (file: File) => ({
+    url: `/api/v1/dev/discussion-uploads/${encodeURIComponent(file.name)}`,
+    fileName: file.name,
+    mediaType: file.type.startsWith("video/")
+      ? ("video" as const)
+      : ("image" as const),
+    mimeType: file.type,
+    size: file.size,
+  })),
+);
+
+vi.mock("../../src/services/discussion", () => ({
+  discussionService: { uploadAttachment },
+}));
+
 describe("CommentCard", () => {
   it("tracks its pressed state and delegates like changes", () => {
     const onLike = vi.fn();
@@ -339,22 +355,11 @@ describe("Discussion", () => {
     const persistenceKey = "discussion-composer-outside-click-test";
     const storageBase = `veolms-learning-${persistenceKey}-discussion`;
     sessionStorage.setItem(
-      `${storageBase}-comment-draft`,
+      `${storageBase}-markdown-draft-v1`,
       JSON.stringify({
-        content: {
-          type: "doc",
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: "First draft line" }],
-            },
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: "Second draft line" }],
-            },
-          ],
-        },
-        text: "First draft line\nSecond draft line",
+        format: "markdown",
+        markdown: "First draft line\n\nSecond draft line",
+        plainText: "First draft line\n\nSecond draft line",
       }),
     );
 
@@ -449,11 +454,11 @@ describe("Discussion", () => {
     ).toBeInTheDocument();
   });
 
-  it("loads the complete rich comment into the main TipTap editor", async () => {
+  it("loads the complete Markdown comment into the main Atomic editor", async () => {
     const persistenceKey = "discussion-rich-edit-test";
     const storageBase = `veolms-learning-${persistenceKey}-discussion`;
     sessionStorage.setItem(
-      `${storageBase}-posted-comments`,
+      `${storageBase}-markdown-entries-v1`,
       JSON.stringify([
         {
           id: 9_001,
@@ -462,20 +467,10 @@ describe("Discussion", () => {
           avatar: "/assets/sofia-avatar-160.webp",
           text: "Rich body to edit",
           content: {
-            type: "doc",
-            content: [
-              {
-                type: "paragraph",
-                content: [{ type: "text", text: "Rich body to edit" }],
-              },
-              {
-                type: "image",
-                attrs: {
-                  src: "data:image/png;base64,edited-image",
-                  alt: "Editable diagram",
-                },
-              },
-            ],
+            format: "markdown",
+            markdown:
+              "Rich body to edit\n\n![Editable diagram](/api/v1/dev/discussion-uploads/edited-image.png)",
+            plainText: "Rich body to edit",
           },
           visibility: "unlisted",
           entryKind: "comment",
@@ -485,18 +480,11 @@ describe("Discussion", () => {
       ]),
     );
     sessionStorage.setItem(
-      `${storageBase}-comment-draft`,
+      `${storageBase}-markdown-draft-v1`,
       JSON.stringify({
-        content: {
-          type: "doc",
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: "Unfinished new comment" }],
-            },
-          ],
-        },
-        text: "Unfinished new comment",
+        format: "markdown",
+        markdown: "Unfinished new comment",
+        plainText: "Unfinished new comment",
       }),
     );
 
@@ -519,11 +507,6 @@ describe("Discussion", () => {
       { timeout: 1_500 },
     );
     expect(editor).toHaveTextContent("Rich body to edit");
-    expect(
-      container.querySelector(
-        '[data-comment-composer-surface] img[alt="Editable diagram"]',
-      ),
-    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "Next: choose publishing options",
@@ -579,11 +562,12 @@ describe("Discussion", () => {
       ).toBeNull();
     });
     const storedEntries = JSON.parse(
-      sessionStorage.getItem(`${storageBase}-posted-comments`) ?? "[]",
-    ) as Array<{ content?: { content?: Array<{ type?: string }> } }>;
-    expect(
-      storedEntries[0]?.content?.content?.some((node) => node.type === "image"),
-    ).toBe(true);
+      sessionStorage.getItem(`${storageBase}-markdown-entries-v1`) ?? "[]",
+    ) as Array<{ content?: { format?: string; markdown?: string } }>;
+    expect(storedEntries[0]?.content).toMatchObject({ format: "markdown" });
+    expect(storedEntries[0]?.content?.markdown).toContain(
+      "![Editable diagram](/api/v1/dev/discussion-uploads/edited-image.png)",
+    );
     expect(screen.getByText("Unfinished new comment")).toBeVisible();
   });
 
@@ -636,7 +620,8 @@ describe("Discussion", () => {
       "focus-within:outline-2",
     );
     const unlistedVisibility = screen.getByRole("radio", { name: "Unlisted" });
-    const unlistedTooltipId = unlistedVisibility.getAttribute("aria-describedby");
+    const unlistedTooltipId =
+      unlistedVisibility.getAttribute("aria-describedby");
     expect(unlistedTooltipId).toBeTruthy();
     expect(document.getElementById(unlistedTooltipId ?? "")).toHaveTextContent(
       "Only the creator and people with the link can see it.",
@@ -715,11 +700,7 @@ describe("Discussion", () => {
       },
     });
 
-    await waitFor(() => {
-      expect(
-        container.querySelector('img[alt="clipboard.png"]'),
-      ).toBeInTheDocument();
-    });
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalledWith(image));
     expect(
       screen.getByRole("button", {
         name: "Next: choose publishing options",
@@ -763,12 +744,12 @@ describe("Discussion", () => {
         "flex",
         "self-stretch",
       );
-      expect(
-        within(toolbar).getByRole("button", { name: "Undo" }),
-      ).toHaveClass("sm:hidden");
-      expect(
-        within(toolbar).getByRole("button", { name: "Redo" }),
-      ).toHaveClass("sm:hidden");
+      expect(within(toolbar).getByRole("button", { name: "Undo" })).toHaveClass(
+        "sm:hidden",
+      );
+      expect(within(toolbar).getByRole("button", { name: "Redo" })).toHaveClass(
+        "sm:hidden",
+      );
       const formattingGroup = toolbar.closest(
         "[data-comment-formatting-toolbar]",
       );
@@ -811,11 +792,6 @@ describe("Discussion", () => {
   });
 
   it("accepts a video as the complete content of a post", async () => {
-    const originalCreateObjectUrl = URL.createObjectURL;
-    const originalRevokeObjectUrl = URL.revokeObjectURL;
-    URL.createObjectURL = vi.fn(() => "blob:discussion-video");
-    URL.revokeObjectURL = vi.fn();
-
     try {
       const { container } = render(
         <Discussion persistenceKey="discussion-video-only-test" />,
@@ -842,12 +818,13 @@ describe("Discussion", () => {
       fireEvent.click(screen.getByRole("button", { name: "Post comment" }));
       await waitFor(() => {
         expect(
-          container.querySelector('video[src="blob:discussion-video"]'),
+          container.querySelector(
+            'video[src="/api/v1/dev/discussion-uploads/demo.mp4"]',
+          ),
         ).toBeInTheDocument();
       });
     } finally {
-      URL.createObjectURL = originalCreateObjectUrl;
-      URL.revokeObjectURL = originalRevokeObjectUrl;
+      uploadAttachment.mockClear();
     }
   });
 

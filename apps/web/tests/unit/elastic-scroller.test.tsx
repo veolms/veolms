@@ -96,9 +96,13 @@ describe("ElasticScroller", () => {
     render(<ScrollerHarness />);
 
     const scroller = document.querySelector(".elastic-scroller");
+    const progressCircle = scroller?.querySelector(
+      ".elastic-scroller__progress-puck circle",
+    );
     expect(scroller).toHaveAttribute("data-appearance", "3d");
     expect(
       scroller?.querySelectorAll(".elastic-scroller__progress-puck circle"),
     ).toHaveLength(1);
+    expect(progressCircle).toHaveAttribute("stroke", "var(--accent)");
   });
 });

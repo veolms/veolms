@@ -1,4 +1,3 @@
-import type { Editor } from "@tiptap/core";
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CodeBlockIcon as CodeBlock } from "@phosphor-icons/react/CodeBlock";
@@ -8,7 +7,6 @@ import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { TextBIcon as TextB } from "@phosphor-icons/react/TextB";
 import { TextItalicIcon as TextItalic } from "@phosphor-icons/react/TextItalic";
-import { useEditorState } from "@tiptap/react";
 import {
   useEffect,
   useRef,
@@ -16,10 +14,12 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
-import { insertCommentAttachment } from "./commentAttachments";
+import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
+import type { DiscussionFormattingState } from "./discussion-editor/commands";
 
 interface CommentFormattingToolbarProps {
-  editor: Editor;
+  editor: DiscussionEditorController;
+  formattingState: DiscussionFormattingState;
 }
 
 export function hasCommentToolbarOverflow(
@@ -31,6 +31,7 @@ export function hasCommentToolbarOverflow(
 
 export function CommentFormattingToolbar({
   editor,
+  formattingState,
 }: CommentFormattingToolbarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const scrollportRef = useRef<HTMLDivElement>(null);
@@ -38,42 +39,22 @@ export function CommentFormattingToolbar({
   const [linkUrl, setLinkUrl] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
-  const formattingState = useEditorState({
-    editor,
-    selector: ({ editor: currentEditor }) => ({
-      bold: currentEditor.isActive("bold"),
-      italic: currentEditor.isActive("italic"),
-      highlight: currentEditor.isActive("highlight"),
-      link: currentEditor.isActive("link"),
-      code: currentEditor.isActive("code"),
-      codeBlock: currentEditor.isActive("codeBlock"),
-      canUndo: currentEditor.can().undo(),
-      canRedo: currentEditor.can().redo(),
-    }),
-  });
 
   const openLinkEditor = () => {
     setNotice(null);
-    setLinkUrl(
-      editor.isActive("link")
-        ? String(editor.getAttributes("link").href ?? "")
-        : "",
-    );
+    setLinkUrl(formattingState.linkUrl);
     setLinkOpen(true);
   };
 
   const applyLink = () => {
     const href = normalizeLink(linkUrl);
-    if (!href) {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    } else {
-      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
-    }
+    if (!href) editor.removeLink();
+    else editor.applyLink(href);
     setLinkOpen(false);
   };
 
   const removeLink = () => {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    editor.removeLink();
     setLinkOpen(false);
   };
 
@@ -81,7 +62,7 @@ export function CommentFormattingToolbar({
     const [file] = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!file) return;
-    const result = await insertCommentAttachment(editor, file);
+    const result = await editor.attach(file);
     setNotice(result.message);
   };
 
@@ -130,7 +111,7 @@ export function CommentFormattingToolbar({
             event.preventDefault();
             event.stopPropagation();
             setLinkOpen(false);
-            editor.commands.focus();
+            editor.focus();
           }}
         >
           <input
@@ -186,7 +167,7 @@ export function CommentFormattingToolbar({
           label="Undo"
           mobileOnly
           disabled={!formattingState.canUndo}
-          onClick={() => editor.chain().focus().undo().run()}
+          onClick={() => editor.undo()}
         >
           <ArrowCounterClockwise size={17} />
         </ToolbarButton>
@@ -194,14 +175,14 @@ export function CommentFormattingToolbar({
           label="Redo"
           mobileOnly
           disabled={!formattingState.canRedo}
-          onClick={() => editor.chain().focus().redo().run()}
+          onClick={() => editor.redo()}
         >
           <ArrowClockwise size={17} />
         </ToolbarButton>
         <ToolbarButton
           label="Highlight"
           active={formattingState.highlight}
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
+          onClick={() => editor.toggleHighlight()}
         >
           <Highlighter size={17} />
         </ToolbarButton>
@@ -221,28 +202,28 @@ export function CommentFormattingToolbar({
         <ToolbarButton
           label="Bold"
           active={formattingState.bold}
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onClick={() => editor.toggleBold()}
         >
           <TextB size={17} weight="bold" />
         </ToolbarButton>
         <ToolbarButton
           label="Italic"
           active={formattingState.italic}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onClick={() => editor.toggleItalic()}
         >
           <TextItalic size={17} />
         </ToolbarButton>
         <ToolbarButton
           label="Inline code"
           active={formattingState.code}
-          onClick={() => editor.chain().focus().toggleCode().run()}
+          onClick={() => editor.toggleInlineCode()}
         >
           <Code size={17} />
         </ToolbarButton>
         <ToolbarButton
           label="Code block"
           active={formattingState.codeBlock}
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          onClick={() => editor.toggleCodeBlock()}
         >
           <CodeBlock size={17} />
         </ToolbarButton>

@@ -56,11 +56,7 @@ export function ElasticScrollerSocket({
           cy="20"
           r={ELASTIC_SCROLL_CONTROL_PROGRESS_RADIUS}
           fill="none"
-          stroke={
-            hasDepth
-              ? "color-mix(in srgb, var(--accent) 46%, var(--border-strong))"
-              : "var(--accent)"
-          }
+          stroke="var(--accent)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray={

@@ -3,6 +3,7 @@ node_modules/
 .turbo/
 .tmp/
 .codex-qa/
+.data/
 build/
 .react-router/
 .env

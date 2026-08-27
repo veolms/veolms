@@ -2,29 +2,29 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { EditorContent, useEditor } from "@tiptap/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import { CommentPublishingOptions } from "./CommentPublishingOptions";
 import {
-  getClipboardMediaFile,
-  insertCommentAttachment,
-} from "./commentAttachments";
-import {
-  createCommentEditorExtensions,
   type DiscussionEntryKind,
   type DiscussionVisibility,
-  type RichTextDraft,
-} from "./commentEditor";
+  type DiscussionDraft,
+} from "./discussion-editor/types";
+import {
+  DiscussionEditor,
+  type DiscussionEditorController,
+} from "./discussion-editor/DiscussionEditor";
+import type { DiscussionFormattingState } from "./discussion-editor/commands";
 
 interface CommentComposerProps {
-  draft: RichTextDraft;
+  draft: DiscussionDraft;
+  documentId: string;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   invalid: boolean;
   canSubmit: boolean;
   editing?: boolean;
-  onDraftChange: (value: RichTextDraft) => void;
+  onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
@@ -35,6 +35,7 @@ interface CommentComposerProps {
 
 export function CommentComposer({
   draft,
+  documentId,
   entryKind,
   visibility,
   invalid,
@@ -48,10 +49,11 @@ export function CommentComposer({
   autoFocus = false,
   presentation = "inline",
 }: CommentComposerProps) {
-  const onDraftChangeRef = useRef(onDraftChange);
-  const onSubmitRef = useRef(onSubmit);
-  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const reviewHeadingRef = useRef<HTMLDivElement>(null);
+  const [editorController, setEditorController] =
+    useState<DiscussionEditorController | null>(null);
+  const [formattingState, setFormattingState] =
+    useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [composerStep, setComposerStep] = useState<"compose" | "publish">(
     "compose",
@@ -59,94 +61,6 @@ export function CommentComposer({
   const [transitionDirection, setTransitionDirection] = useState<
     "forward" | "back"
   >("forward");
-  const extensions = useMemo(
-    () => createCommentEditorExtensions("Write something…"),
-    [],
-  );
-
-  useEffect(() => {
-    onDraftChangeRef.current = onDraftChange;
-    onSubmitRef.current = onSubmit;
-  }, [onDraftChange, onSubmit]);
-
-  const addAttachment = useCallback(async (file: File) => {
-    const currentEditor = editorRef.current;
-    if (!currentEditor) return;
-    const result = await insertCommentAttachment(currentEditor, file);
-    setAttachmentNotice(result.message);
-  }, []);
-
-  const editor = useEditor(
-    {
-      extensions,
-      content: draft.content,
-      immediatelyRender: false,
-      shouldRerenderOnTransaction: false,
-      editorProps: {
-        attributes: {
-          "aria-label": getEditorLabel(entryKind, editing),
-          "aria-multiline": "true",
-          "aria-invalid": invalid ? "true" : "false",
-          autocapitalize: "sentences",
-          class: "learning-comment-editor__document px-4!",
-          role: "textbox",
-          spellcheck: "true",
-        },
-        handlePaste: (_view, event) => {
-          const file = getClipboardMediaFile(event.clipboardData);
-          if (!file) return false;
-          event.preventDefault();
-          void addAttachment(file);
-          return true;
-        },
-      },
-      onUpdate: ({ editor: updatedEditor }) => {
-        onDraftChangeRef.current({
-          content: updatedEditor.getJSON(),
-          text: updatedEditor.getText({ blockSeparator: "\n" }),
-        });
-      },
-    },
-    [extensions],
-  );
-
-  useEffect(() => {
-    editorRef.current = editor;
-    return () => {
-      editorRef.current = null;
-    };
-  }, [editor]);
-
-  useEffect(() => {
-    if (!editor) return;
-    if (JSON.stringify(editor.getJSON()) === JSON.stringify(draft.content))
-      return;
-    editor.commands.setContent(draft.content, { emitUpdate: false });
-  }, [draft.content, editor]);
-
-  useEffect(() => {
-    if (!editor) return;
-    editor.setOptions({
-      editorProps: {
-        ...editor.options.editorProps,
-        attributes: {
-          ...editor.options.editorProps.attributes,
-          "aria-label": getEditorLabel(entryKind, editing),
-          "aria-invalid": invalid ? "true" : "false",
-        },
-      },
-    });
-  }, [editing, editor, entryKind, invalid]);
-
-  useEffect(() => {
-    if (!editor || !autoFocus) return undefined;
-    const focusTimer = window.setTimeout(
-      () => editor.commands.focus("end", { scrollIntoView: false }),
-      0,
-    );
-    return () => window.clearTimeout(focusTimer);
-  }, [autoFocus, editor]);
-
   useEffect(() => {
     if (composerStep !== "publish") return;
     reviewHeadingRef.current?.focus({ preventScroll: true });
@@ -161,10 +75,7 @@ export function CommentComposer({
   const returnToEditor = () => {
     setTransitionDirection("back");
     setComposerStep("compose");
-    window.setTimeout(
-      () => editor?.commands.focus("end", { scrollIntoView: false }),
-      0,
-    );
+    window.setTimeout(() => editorController?.focus(), 0);
   };
 
   return (
@@ -175,14 +86,6 @@ export function CommentComposer({
       data-editor-presentation={presentation}
       aria-invalid={invalid || undefined}
       className={`learning-comment-editor relative isolate overflow-hidden bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)] transition-[background-color,box-shadow] duration-150 focus-within:shadow-[0_18px_46px_color-mix(in_srgb,var(--canvas)_42%,transparent),0_0_0_2px_color-mix(in_srgb,var(--accent)_14%,transparent)] aria-[invalid=true]:shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_0_0_2px_color-mix(in_srgb,var(--danger)_42%,transparent)] ${presentation === "drawer" ? "flex min-h-0 flex-1 flex-col rounded-none" : "rounded-xl"}`}
-      onKeyDownCapture={(event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-          event.preventDefault();
-          if (!canSubmit) return;
-          if (composerStep === "compose") openPublishingOptions();
-          else onSubmitRef.current();
-        }
-      }}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         if (document.querySelector('[role="listbox"]')) return;
@@ -200,9 +103,18 @@ export function CommentComposer({
           <div
             className={`relative ${presentation === "drawer" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : ""}`}
           >
-            <EditorContent
-              editor={editor}
-              className={presentation === "drawer" ? "min-h-full" : undefined}
+            <DiscussionEditor
+              documentId={documentId}
+              value={draft}
+              label={getEditorLabel(entryKind, editing)}
+              placeholderText="Write something…"
+              invalid={invalid}
+              autoFocus={autoFocus}
+              className={presentation === "drawer" ? "min-h-full" : "min-h-34"}
+              onChange={onDraftChange}
+              onControllerChange={setEditorController}
+              onFormattingStateChange={setFormattingState}
+              onAttachmentNotice={setAttachmentNotice}
             />
             {attachmentNotice && (
               <div
@@ -223,7 +135,12 @@ export function CommentComposer({
               alt=""
               className="size-9 shrink-0 rounded-full object-cover sm:size-10"
             />
-            {editor && <CommentFormattingToolbar editor={editor} />}
+            {editorController && (
+              <CommentFormattingToolbar
+                editor={editorController}
+                formattingState={formattingState}
+              />
+            )}
             <button
               type="button"
               aria-label="Next: choose publishing options"
@@ -264,7 +181,11 @@ export function CommentComposer({
             </button>
             <button
               type="button"
-              aria-label={editing ? "Save changes" : `Post ${getEntryKindLabel(entryKind)}`}
+              aria-label={
+                editing
+                  ? "Save changes"
+                  : `Post ${getEntryKindLabel(entryKind)}`
+              }
               disabled={!canSubmit}
               onClick={onSubmit}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
@@ -293,4 +214,16 @@ const getEntryKindLabel = (entryKind: DiscussionEntryKind) => {
   if (entryKind === "question") return "Q&A";
   if (entryKind === "note") return "note";
   return "comment";
+};
+
+const EMPTY_FORMATTING_STATE: DiscussionFormattingState = {
+  bold: false,
+  italic: false,
+  highlight: false,
+  link: false,
+  code: false,
+  codeBlock: false,
+  canUndo: false,
+  canRedo: false,
+  linkUrl: "",
 };

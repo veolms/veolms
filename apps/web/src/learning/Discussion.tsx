@@ -15,16 +15,16 @@ import { CommentCard } from "./CommentCard";
 import type { Comment } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
 import {
-  createEmptyRichTextDraft,
-  createRichTextDraftFromText,
-  getRichTextAttachmentCount,
-  hasRichTextDraftContent,
-  isRichTextDocument,
-  isStoredRichTextDraft,
+  createDiscussionDraft,
+  createEmptyDiscussionDraft,
+  getDiscussionAttachmentCount,
+  hasDiscussionDraftContent,
+  isDiscussionContent,
+  isStoredDiscussionDraft,
+  type DiscussionDraft,
   type DiscussionEntryKind,
   type DiscussionVisibility,
-  type RichTextDraft,
-} from "./commentEditor";
+} from "./discussion-editor/types";
 import { useSessionStorageState } from "./useSessionStorageState";
 
 const CURRENT_USER = {
@@ -161,14 +161,9 @@ export const getDiscussionComposerViewportGeometry = (
   const resolvedVisualViewportOffsetTop = Math.min(
     Math.max(
       0,
-      Number.isFinite(visualViewportOffsetTop)
-        ? visualViewportOffsetTop
-        : 0,
+      Number.isFinite(visualViewportOffsetTop) ? visualViewportOffsetTop : 0,
     ),
-    Math.max(
-      0,
-      resolvedLayoutViewportHeight - resolvedVisualViewportHeight,
-    ),
+    Math.max(0, resolvedLayoutViewportHeight - resolvedVisualViewportHeight),
   );
   const visualViewportBottom =
     resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
@@ -186,14 +181,6 @@ export const getDiscussionComposerViewportGeometry = (
   };
 };
 
-interface LegacyLessonNote {
-  id: number;
-  time: string;
-  text: string;
-  content: RichTextDraft["content"];
-  visibility: DiscussionVisibility;
-}
-
 interface DiscussionProps {
   persistenceKey: string;
   mobileBottomNavigation?: boolean;
@@ -202,12 +189,12 @@ interface DiscussionProps {
 
 export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
 const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
-const initialDraft = createEmptyRichTextDraft();
+const initialDraft = createEmptyDiscussionDraft();
 const countCharacters = (value: string) => Array.from(value).length;
 
 interface EditingEntry {
   id: number;
-  draft: RichTextDraft;
+  draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
 }
@@ -248,7 +235,7 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
       (typeof (entry as Comment).entryKind === "undefined" ||
         isDiscussionEntryKind((entry as Comment).entryKind)) &&
       (typeof (entry as Comment).content === "undefined" ||
-        isRichTextDocument((entry as Comment).content)) &&
+        isDiscussionContent((entry as Comment).content)) &&
       (typeof (entry as Comment).visibility === "undefined" ||
         isDiscussionVisibility((entry as Comment).visibility)) &&
       (typeof (entry as Comment).liked === "undefined" ||
@@ -257,53 +244,21 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
         typeof (entry as Comment).isOwn === "boolean"),
   );
 
-const isStoredLegacyNotes = (value: unknown): value is LegacyLessonNote[] =>
-  Array.isArray(value) &&
-  value.every(
-    (note) =>
-      Boolean(note) &&
-      typeof note === "object" &&
-      typeof (note as LegacyLessonNote).id === "number" &&
-      typeof (note as LegacyLessonNote).time === "string" &&
-      typeof (note as LegacyLessonNote).text === "string" &&
-      isRichTextDocument((note as LegacyLessonNote).content) &&
-      isDiscussionVisibility((note as LegacyLessonNote).visibility),
-  );
-
-const asLegacyNoteEntry = (note: LegacyLessonNote): Comment => ({
-  id: note.id,
-  name: CURRENT_USER.name,
-  time: note.time,
-  avatar: CURRENT_USER.avatar,
-  text: note.text,
-  content: note.content,
-  visibility: note.visibility,
-  entryKind: "note",
-  likes: 0,
-  replies: 0,
-  isOwn: true,
-});
-
 export function Discussion({
   persistenceKey,
   mobileBottomNavigation = false,
   mobileBottomNavigationHidden = false,
 }: DiscussionProps) {
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
-  const [draft, setDraft] = useSessionStorageState<RichTextDraft>(
-    `${storageBase}-comment-draft`,
+  const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
+    `${storageBase}-markdown-draft-v1`,
     initialDraft,
-    isStoredRichTextDraft,
+    isStoredDiscussionDraft,
   );
   const [postedEntries, setPostedEntries] = useSessionStorageState<Comment[]>(
-    `${storageBase}-posted-comments`,
+    `${storageBase}-markdown-entries-v1`,
     [],
     isStoredEntries,
-  );
-  const [legacyNotes] = useSessionStorageState<LegacyLessonNote[]>(
-    `${storageBase}-posted-notes`,
-    [],
-    isStoredLegacyNotes,
   );
   const [entries, setEntries] = useState(initialEntries);
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
@@ -314,42 +269,24 @@ export function Discussion({
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
-  const draftAttachmentCount = getRichTextAttachmentCount(activeDraft.content);
-  const draftHasContent = hasRichTextDraftContent(activeDraft);
+  const draftAttachmentCount = getDiscussionAttachmentCount(
+    activeDraft.markdown,
+  );
+  const draftHasContent = hasDiscussionDraftContent(activeDraft);
   const draftIsTooLong =
-    countCharacters(activeDraft.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
+    countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
   const canSubmitDraft = draftHasContent && !draftIsTooLong;
 
   useEffect(() => {
-    const migratedNotes = legacyNotes.map(asLegacyNoteEntry);
-    const persistedById = new Map<number, Comment>();
-    [...postedEntries, ...migratedNotes].forEach((entry) => {
-      if (!persistedById.has(entry.id)) {
-        persistedById.set(entry.id, { ...entry, isOwn: true });
-      }
-    });
-    const persistedEntries = [...persistedById.values()];
-
-    if (persistedEntries.length > 0) {
-      setEntries((current) => [
-        ...persistedEntries,
-        ...current.filter(
-          (entry) =>
-            !persistedEntries.some((persisted) => persisted.id === entry.id),
-        ),
-      ]);
-    }
-
-    const notesMissingFromCurrentStorage = migratedNotes.filter(
-      (note) => !postedEntries.some((entry) => entry.id === note.id),
-    );
-    if (notesMissingFromCurrentStorage.length > 0) {
-      setPostedEntries((current) => [
-        ...notesMissingFromCurrentStorage,
-        ...current,
-      ]);
-    }
-  }, [legacyNotes, postedEntries, setPostedEntries]);
+    if (postedEntries.length === 0) return;
+    setEntries((current) => [
+      ...postedEntries.map((entry) => ({ ...entry, isOwn: true })),
+      ...current.filter(
+        (entry) =>
+          !postedEntries.some((persisted) => persisted.id === entry.id),
+      ),
+    ]);
+  }, [postedEntries]);
 
   const filteredEntries = useMemo(() => {
     const visibleEntries =
@@ -373,7 +310,7 @@ export function Discussion({
 
     if (!draftHasContent) return;
 
-    const text = activeDraft.text.trim();
+    const text = activeDraft.plainText.trim();
     const submittedVisibility = getAllowedVisibility(
       activeEntryKind,
       activeVisibility,
@@ -391,7 +328,7 @@ export function Discussion({
       const updatedEntry: Comment = {
         ...originalEntry,
         text,
-        content: activeDraft.content,
+        content: activeDraft,
         visibility: submittedVisibility,
         entryKind: activeEntryKind,
         isQuestion: activeEntryKind === "question",
@@ -420,7 +357,7 @@ export function Discussion({
       time: "Just now",
       avatar: CURRENT_USER.avatar,
       text,
-      content: activeDraft.content,
+      content: activeDraft,
       visibility: submittedVisibility,
       entryKind: activeEntryKind,
       likes: 0,
@@ -431,7 +368,7 @@ export function Discussion({
 
     setPostedEntries((current) => [entry, ...current]);
     setEntries((current) => [entry, ...current]);
-    setDraft(createEmptyRichTextDraft());
+    setDraft(createEmptyDiscussionDraft());
     setEntryFilter("all");
 
     setNotice("");
@@ -457,16 +394,9 @@ export function Discussion({
       entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
     setEditingEntry({
       id: entry.id,
-      draft: {
-        content:
-          entry.content ?? createRichTextDraftFromText(entry.text).content,
-        text: entry.text,
-      },
+      draft: entry.content ?? createDiscussionDraft(entry.text),
       entryKind,
-      visibility: getAllowedVisibility(
-        entryKind,
-        entry.visibility ?? "public",
-      ),
+      visibility: getAllowedVisibility(entryKind, entry.visibility ?? "public"),
     });
     setNotice("");
   };
@@ -504,7 +434,8 @@ export function Discussion({
             setDraft(value);
           }
           setNotice(
-            countCharacters(value.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT
+            countCharacters(value.plainText) >
+              DISCUSSION_COMMENT_CHARACTER_LIMIT
               ? COMMENT_LENGTH_NOTICE
               : "",
           );
@@ -516,10 +447,7 @@ export function Discussion({
                 ? {
                     ...current,
                     entryKind: value,
-                    visibility: getAllowedVisibility(
-                      value,
-                      current.visibility,
-                    ),
+                    visibility: getAllowedVisibility(value, current.visibility),
                   }
                 : current,
             );
@@ -535,9 +463,7 @@ export function Discussion({
           );
           if (editingEntry) {
             setEditingEntry((current) =>
-              current
-                ? { ...current, visibility: allowedVisibility }
-                : current,
+              current ? { ...current, visibility: allowedVisibility } : current,
             );
           } else {
             setVisibility(allowedVisibility);
@@ -558,7 +484,7 @@ export function Discussion({
 }
 
 interface ThreadSurfaceProps {
-  draft: RichTextDraft;
+  draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   editingEntryId: number | null;
@@ -570,7 +496,7 @@ interface ThreadSurfaceProps {
   canSubmitDraft: boolean;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
-  onDraftChange: (value: RichTextDraft) => void;
+  onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
@@ -777,6 +703,11 @@ function ThreadSurface({
           {composerMode === "desktop" ? (
             <CommentComposer
               draft={draft}
+              documentId={
+                editingEntryId === null
+                  ? "discussion-new"
+                  : `discussion-edit-${editingEntryId}`
+              }
               entryKind={entryKind}
               visibility={visibility}
               invalid={draftIsTooLong}
@@ -916,6 +847,11 @@ function ThreadSurface({
             </DrawerDescription>
             <CommentComposer
               draft={draft}
+              documentId={
+                editingEntryId === null
+                  ? "discussion-new"
+                  : `discussion-edit-${editingEntryId}`
+              }
               entryKind={entryKind}
               visibility={visibility}
               invalid={draftIsTooLong}
@@ -937,7 +873,7 @@ function ThreadSurface({
 }
 
 interface CompactComposerProps {
-  draft: RichTextDraft;
+  draft: DiscussionDraft;
   attachmentCount: number;
   mobile?: boolean;
   onOpen: () => void;
@@ -950,7 +886,7 @@ function CompactComposer({
   onOpen,
 }: CompactComposerProps) {
   const preview =
-    draft.text
+    draft.plainText
       .split(/\r?\n/)
       .map((line) => line.trim())
       .find(Boolean) ?? "";

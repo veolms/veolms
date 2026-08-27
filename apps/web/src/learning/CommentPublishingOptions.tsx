@@ -9,7 +9,7 @@ import { useId, type ReactNode } from "react";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,
-} from "./commentEditor";
+} from "./discussion-editor/types";
 
 interface CommentPublishingOptionsProps {
   entryKind: DiscussionEntryKind;
@@ -174,8 +174,9 @@ function PublishingSegment<Value extends string>({
   );
 }
 
-interface PublishingRowProps<Value extends string>
-  extends PublishingControlProps<Value> {
+interface PublishingRowProps<
+  Value extends string,
+> extends PublishingControlProps<Value> {
   separated: boolean;
 }
 

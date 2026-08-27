@@ -7,14 +7,21 @@ import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSi
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import type { JSONContent } from "@tiptap/core";
 import React, { useEffect, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
+  DiscussionContent,
+  DiscussionDraft,
   DiscussionEntryKind,
   DiscussionVisibility,
-} from "./commentEditor";
-import { RichTextContent } from "./RichTextContent";
+} from "./discussion-editor/types";
+import {
+  createDiscussionDraft,
+  createEmptyDiscussionDraft,
+  hasDiscussionDraftContent,
+} from "./discussion-editor/types";
+import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
+import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 
 export interface CommentReply {
   id: number;
@@ -22,6 +29,7 @@ export interface CommentReply {
   time: string;
   avatar: string;
   text: string;
+  content?: DiscussionContent;
   likes: number;
   role?: "Instructor";
   isOwn?: boolean;
@@ -33,7 +41,7 @@ export interface Comment {
   time: string;
   avatar: string;
   text: string;
-  content?: JSONContent;
+  content?: DiscussionContent;
   visibility?: DiscussionVisibility;
   likes: number;
   liked?: boolean;
@@ -69,7 +77,9 @@ export function CommentCard({
     comment.repliesExpanded ?? false,
   );
   const [replyComposerOpen, setReplyComposerOpen] = useState(false);
-  const [replyDraft, setReplyDraft] = useState("");
+  const [replyDraft, setReplyDraft] = useState<DiscussionDraft>(
+    createEmptyDiscussionDraft,
+  );
   const [localReplies, setLocalReplies] = useState<CommentReply[]>(
     comment.thread ?? [],
   );
@@ -81,8 +91,8 @@ export function CommentCard({
   const replyCount = unloadedReplyCount + localReplies.length;
 
   const addReply = () => {
-    const text = replyDraft.trim();
-    if (!text) return;
+    const text = replyDraft.plainText.trim();
+    if (!hasDiscussionDraftContent(replyDraft)) return;
     setLocalReplies((current) => [
       ...current,
       {
@@ -91,19 +101,23 @@ export function CommentCard({
         time: "Just now",
         avatar: "/assets/sofia-avatar-160.webp",
         text,
+        content: replyDraft,
         likes: 0,
         isOwn: true,
       },
     ]);
-    setReplyDraft("");
+    setReplyDraft(createEmptyDiscussionDraft());
     setReplyComposerOpen(false);
     setRepliesOpen(true);
   };
 
-  const updateReply = (id: number, text: string) => {
+  const updateReply = (id: number, draft: DiscussionDraft) => {
+    const text = draft.plainText.trim();
     setLocalReplies((current) =>
       current.map((reply) =>
-        reply.id === id ? { ...reply, text, time: "Just now (edited)" } : reply,
+        reply.id === id
+          ? { ...reply, text, content: draft, time: "Just now (edited)" }
+          : reply,
       ),
     );
   };
@@ -179,18 +193,11 @@ export function CommentCard({
                 />
               </div>
 
-              {comment.content ? (
-                <RichTextContent
-                  content={comment.content}
-                  fallback={comment.text}
-                  label={`${entryLabel} by ${comment.name}`}
-                  className="mt-1.5 max-w-[72ch]"
-                />
-              ) : (
-                <p className="mt-1.5 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
-                  {comment.text}
-                </p>
-              )}
+              <DiscussionMarkdown
+                content={comment.content ?? createDiscussionDraft(comment.text)}
+                label={`${entryLabel} by ${comment.name}`}
+                className="mt-1.5"
+              />
 
               {comment.attachment && (
                 <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
@@ -259,26 +266,21 @@ export function CommentCard({
                 <div className="mt-3 flex max-w-2xl items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
-                    <textarea
-                      value={replyDraft}
-                      onChange={(event) => setReplyDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (
-                          (event.ctrlKey || event.metaKey) &&
-                          event.key === "Enter"
-                        ) {
-                          event.preventDefault();
-                          addReply();
-                        }
-                      }}
-                      placeholder={`Reply to ${comment.name}…`}
-                      className="block min-h-12 w-full resize-y rounded-lg border bg-(--surface) px-3 py-2 text-sm leading-5 text-(--text) outline-none [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] placeholder:text-(--muted) focus:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]"
-                    />
+                    <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
+                      <DiscussionEditor
+                        value={replyDraft}
+                        documentId={`reply-new-${comment.id}`}
+                        label={`Reply to ${comment.name}`}
+                        placeholderText={`Reply to ${comment.name}…`}
+                        className="min-h-12 max-h-40"
+                        onChange={setReplyDraft}
+                      />
+                    </span>
                   </label>
                   <button
                     type="button"
                     onClick={addReply}
-                    disabled={!replyDraft.trim()}
+                    disabled={!hasDiscussionDraftContent(replyDraft)}
                     className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
                   >
                     Reply
@@ -323,7 +325,7 @@ export function CommentCard({
 interface ReplyCardProps {
   reply: CommentReply;
   onReply: () => void;
-  onEdit: (text: string) => void;
+  onEdit: (draft: DiscussionDraft) => void;
   onDelete: () => void;
   onReport: () => void;
 }
@@ -337,13 +339,14 @@ function ReplyCard({
 }: ReplyCardProps) {
   const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState(reply.text);
+  const [editDraft, setEditDraft] = useState<DiscussionDraft>(
+    reply.content ?? createDiscussionDraft(reply.text),
+  );
   const deletion = useUndoableDeletion(onDelete);
 
   const saveEdit = () => {
-    const text = editDraft.trim();
-    if (!text) return;
-    onEdit(text);
+    if (!hasDiscussionDraftContent(editDraft)) return;
+    onEdit(editDraft);
     setEditing(false);
   };
 
@@ -387,7 +390,9 @@ function ReplyCard({
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
                   onEdit={() => {
-                    setEditDraft(reply.text);
+                    setEditDraft(
+                      reply.content ?? createDiscussionDraft(reply.text),
+                    );
                     setEditing(true);
                   }}
                   onShare={() =>
@@ -401,19 +406,24 @@ function ReplyCard({
 
               {editing ? (
                 <InlineEditForm
+                  documentId={`reply-edit-${reply.id}`}
                   label={`Edit reply by ${reply.name}`}
                   value={editDraft}
                   onChange={setEditDraft}
                   onCancel={() => {
-                    setEditDraft(reply.text);
+                    setEditDraft(
+                      reply.content ?? createDiscussionDraft(reply.text),
+                    );
                     setEditing(false);
                   }}
                   onSave={saveEdit}
                 />
               ) : (
-                <p className="mt-1 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
-                  {reply.text}
-                </p>
+                <DiscussionMarkdown
+                  content={reply.content ?? createDiscussionDraft(reply.text)}
+                  label={`Reply by ${reply.name}`}
+                  className="mt-1"
+                />
               )}
 
               <div
@@ -456,49 +466,43 @@ function ReplyCard({
 }
 
 interface InlineEditFormProps {
+  documentId: string;
   label: string;
-  value: string;
-  onChange: (value: string) => void;
+  value: DiscussionDraft;
+  onChange: (value: DiscussionDraft) => void;
   onCancel: () => void;
   onSave: () => void;
-  formattingWarning?: boolean;
 }
 
 function InlineEditForm({
+  documentId,
   label,
   value,
   onChange,
   onCancel,
   onSave,
-  formattingWarning = false,
 }: InlineEditFormProps) {
   return (
-    <div className="mt-2 max-w-2xl">
-      <label>
-        <span className="sr-only">{label}</span>
-        <textarea
-          autoFocus
+    <div
+      className="mt-2 max-w-2xl"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <div className="min-h-18 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
+        <DiscussionEditor
           value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-              event.preventDefault();
-              onSave();
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
-          className="block min-h-18 w-full resize-y rounded-lg border bg-(--surface) px-3 py-2 text-sm leading-6 text-(--text) outline-none [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]"
+          documentId={documentId}
+          label={label}
+          placeholderText="Write a reply…"
+          autoFocus
+          className="min-h-18 max-h-56"
+          onChange={onChange}
         />
-      </label>
-      {formattingWarning && (
-        <p className="mt-1.5 text-xs leading-5 text-(--warning,var(--muted))">
-          This basic editor does not preserve rich-text formatting. Saving will
-          keep only the text.
-        </p>
-      )}
+      </div>
       <div className="mt-2 flex justify-end gap-2">
         <button
           type="button"
@@ -510,7 +514,7 @@ function InlineEditForm({
         <button
           type="button"
           onClick={onSave}
-          disabled={!value.trim()}
+          disabled={!hasDiscussionDraftContent(value)}
           className="h-9 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
         >
           Save
