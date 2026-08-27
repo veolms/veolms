@@ -81,9 +81,7 @@ export function createPricingService({
         if (pricing && pricing.pricing_type === "paid") {
           const isSaleActive =
             pricing.sale_price !== null &&
-            pricing.sale_price !== undefined &&
-            (!pricing.sale_starts_at || new Date(pricing.sale_starts_at) <= now) &&
-            (!pricing.sale_ends_at || new Date(pricing.sale_ends_at) >= now);
+            pricing.sale_price !== undefined;
 
           unitPrice = isSaleActive && pricing.sale_price !== null ? pricing.sale_price : pricing.price;
 

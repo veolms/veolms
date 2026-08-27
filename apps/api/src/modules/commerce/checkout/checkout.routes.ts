@@ -50,7 +50,7 @@ const checkoutRoutes: RoutePlugin = async (app, options) => {
         operationId: "createCheckoutOrder",
         tags: ["Commerce - Checkout"],
         summary: "Create order and initialize payment",
-        description: "Creates an internal VeoLMS order, records item price snapshots, and initializes the upstream payment order.",
+        description: "Creates an internal  order, records item price snapshots, and initializes the upstream payment order.",
         body: createCheckoutOrderRequestSchema,
         response: {
           200: jsonResponse("Order created and payment initialized", createCheckoutOrderResponseSchema),
