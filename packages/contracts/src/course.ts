@@ -360,12 +360,58 @@ export const updateCourseBasicsRequestSchema = z.object({
   version: z.number().int(),
 });
 
+// --- Course Includes ("This Course Includes") ---
+export const courseIncludeItemSchema = z.object({
+  id: z.uuid(),
+  courseId: z.uuid(),
+  text: z.string().min(1).max(255),
+  icon: z.string().nullable().optional(),
+  position: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const createCourseIncludeRequestSchema = z.object({
+  text: z.string().min(1).max(255),
+  icon: z.string().max(100).nullable().optional(),
+  position: z.number().int().nonnegative().optional(),
+});
+
+export const updateCourseIncludeRequestSchema = z.object({
+  text: z.string().min(1).max(255).optional(),
+  icon: z.string().max(100).nullable().optional(),
+  position: z.number().int().nonnegative().optional(),
+});
+
+export const reorderCourseIncludesRequestSchema = z.object({
+  orderedIds: z.array(z.uuid()),
+});
+
+export const courseIncludesListResponseSchema = z.object({
+  items: z.array(courseIncludeItemSchema),
+});
+
+export type CourseIncludeItem = z.infer<typeof courseIncludeItemSchema>;
+export type CreateCourseIncludeRequest = z.infer<
+  typeof createCourseIncludeRequestSchema
+>;
+export type UpdateCourseIncludeRequest = z.infer<
+  typeof updateCourseIncludeRequestSchema
+>;
+export type ReorderCourseIncludesRequest = z.infer<
+  typeof reorderCourseIncludesRequestSchema
+>;
+export type CourseIncludesListResponse = z.infer<
+  typeof courseIncludesListResponseSchema
+>;
+
 export const courseEditorDataResponseSchema = z.object({
   course: courseSchema,
   sections: z.array(courseSectionSchema),
   accessRules: courseAccessRuleSchema.nullable().optional(),
   pricing: coursePricingSchema.nullable().optional(),
   settings: courseSettingsSchema.nullable().optional(),
+  includes: z.array(courseIncludeItemSchema).optional(),
 });
 
 export const myCoursesListResponseSchema = z.object({
@@ -415,6 +461,7 @@ export const courseOverviewSchema = z.object({
   accessRules: courseAccessRuleSchema.nullable().optional(),
   pricing: coursePricingSchema.nullable().optional(),
   settings: courseSettingsSchema.nullable().optional(),
+  includes: z.array(courseIncludeItemSchema).optional(),
   stats: z.object({
     totalSections: z.number().int().nonnegative(),
     totalLessons: z.number().int().nonnegative(),
@@ -434,6 +481,10 @@ z.globalRegistry.add(createLessonResourceRequestSchema, {
 });
 z.globalRegistry.add(courseLessonSchema, { id: "CourseLesson" });
 z.globalRegistry.add(courseSectionSchema, { id: "CourseSection" });
+z.globalRegistry.add(courseIncludeItemSchema, { id: "CourseIncludeItem" });
+z.globalRegistry.add(courseIncludesListResponseSchema, {
+  id: "CourseIncludesListResponse",
+});
 z.globalRegistry.add(courseSchema, { id: "Course" });
 z.globalRegistry.add(courseEditorDataResponseSchema, {
   id: "CourseEditorDataResponse",

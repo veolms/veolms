@@ -33,6 +33,10 @@ import {
   type ConfigurationService,
 } from "../configuration/configuration.service.ts";
 import {
+  createIncludesService,
+  type IncludesService,
+} from "../includes/includes.service.ts";
+import {
   createMediaService,
   type MediaService,
 } from "../../media/index.ts";
@@ -44,6 +48,7 @@ export interface CourseServiceOptions {
   categoryService?: CategoryService;
   curriculumService?: CurriculumService;
   configurationService?: ConfigurationService;
+  includesService?: IncludesService;
   mediaService?: MediaService;
 }
 
@@ -54,6 +59,7 @@ export function createCourseService({
   categoryService = createCategoryService({ database }),
   curriculumService = createCurriculumService({ database, services }),
   configurationService = createConfigurationService({ database }),
+  includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
 }: CourseServiceOptions) {
 
@@ -391,13 +397,14 @@ export function createCourseService({
   async function getCourseEditorData(courseId: string, creatorId: string) {
     const course = await getCourseAndVerifyOwner(courseId, creatorId);
 
-    const [sections, lessons, accessRules, pricing, settings] =
+    const [sections, lessons, accessRules, pricing, settings, includes] =
       await Promise.all([
         curriculumService.findSectionsByCourseId(courseId),
         curriculumService.findLessonsByCourseId(courseId),
         configurationService.findAccessRuleByCourseId(courseId),
         configurationService.findPricingByCourseId(courseId),
         configurationService.findSettingsByCourseId(courseId),
+        includesService.listCourseIncludes(courseId),
       ]);
     const lessonIds = lessons.map((l) => l.id);
     const resources = await curriculumService.listResourcesForLessons(
@@ -494,6 +501,7 @@ export function createCourseService({
             estimatedDuration: settings.estimated_duration,
           }
         : null,
+      includes,
     };
   }
 
@@ -538,6 +546,7 @@ export function createCourseService({
       accessRules,
       pricing,
       settings,
+      includes,
     ] = await Promise.all([
       course.creator_id
         ? authService.findUserById(course.creator_id)
@@ -550,6 +559,7 @@ export function createCourseService({
       configurationService.findAccessRuleByCourseId(courseId),
       configurationService.findPricingByCourseId(courseId),
       configurationService.findSettingsByCourseId(courseId),
+      includesService.listCourseIncludes(courseId),
     ]);
 
     const creator = creatorUser
@@ -697,6 +707,7 @@ export function createCourseService({
             estimatedDuration: settings.estimated_duration,
           }
         : null,
+      includes,
       stats: {
         totalSections: sections.length,
         totalLessons: lessons.length,

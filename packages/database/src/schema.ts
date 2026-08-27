@@ -272,6 +272,16 @@ export interface CourseSettingsTable {
   updated_at: Generated<Date>;
 }
 
+export interface CourseIncludeTable {
+  id: string;
+  course_id: string;
+  text: string;
+  icon: string | null;
+  position: Generated<number>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export type VideoJobStatus = "queued" | "processing" | "completed" | "failed";
 export type JobStatus = VideoJobStatus;
 export type VideoJobStage =
@@ -329,6 +339,7 @@ export interface Database {
   course_access_rules: CourseAccessRuleTable;
   course_pricing: CoursePricingTable;
   course_settings: CourseSettingsTable;
+  course_includes: CourseIncludeTable;
   video_jobs: VideoJobTable;
   video_outputs: VideoOutputTable;
 }
