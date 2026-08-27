@@ -521,6 +521,7 @@ export type WebhookEventStatus = z.infer<typeof webhookEventStatusSchema>;
 export const normalizedPaymentEventTypeSchema = z.enum([
   "payment.succeeded",
   "payment.failed",
+  "refund.pending",
   "refund.succeeded",
   "refund.failed",
 ]);
@@ -597,6 +598,10 @@ export interface GatewayPaymentDetails {
   amount: number;
   currency: string;
   status: PaymentStatus;
+  captured?: boolean;
+  amountRefunded?: number;
+  fee?: number | null;
+  tax?: number | null;
   method?: string;
   bank?: string | null;
   wallet?: string | null;
@@ -605,6 +610,9 @@ export interface GatewayPaymentDetails {
   cardNetwork?: string | null;
   errorCode?: string | null;
   errorDescription?: string | null;
+  errorSource?: string | null;
+  errorStep?: string | null;
+  errorReason?: string | null;
 }
 
 export interface CreateGatewayRefundInput {
@@ -613,10 +621,27 @@ export interface CreateGatewayRefundInput {
   currency: string;
   reason?: string;
   notes?: Record<string, string>;
+  idempotencyKey?: string;
 }
 
 export interface GatewayRefundOutput {
   gatewayRefundId: string;
+  amount: number;
+  currency: string;
+  status: RefundStatus;
+}
+
+export interface GatewayOrderStatus {
+  gatewayOrderId: string;
+  amount: number;
+  currency: string;
+  /** 'created' = not yet paid; 'attempted' = payment initiated; 'paid' = successfully paid */
+  status: "created" | "attempted" | "paid";
+}
+
+export interface GatewayRefundDetails {
+  gatewayRefundId: string;
+  gatewayPaymentId: string;
   amount: number;
   currency: string;
   status: RefundStatus;
@@ -629,6 +654,17 @@ export interface PaymentGateway {
    * Create an upstream order with the payment provider.
    */
   createOrder(input: CreateGatewayOrderInput): Promise<GatewayOrderOutput>;
+
+  /**
+   * Fetch current order status from the gateway (used by reconciliation recovery workers).
+   */
+  fetchOrder(gatewayOrderId: string): Promise<GatewayOrderStatus>;
+
+  /**
+   * Fetch payments associated with a gateway order (GET /v1/orders/:id/payments).
+   * Used by reconciliation workers when an order is paid but local gateway_payment_id is missing.
+   */
+  fetchOrderPayments(gatewayOrderId: string): Promise<GatewayPaymentDetails[]>;
 
   /**
    * Verify the checkout payment signature returned from client.
@@ -646,12 +682,19 @@ export interface PaymentGateway {
   refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput>;
 
   /**
+   * Fetch refund status from the gateway (used by refund reconciliation).
+   */
+  fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails>;
+
+  /**
    * Verify webhook request authenticity using raw body (string or binary buffer) and header signature.
    */
   verifyWebhookSignature(rawBody: string | Uint8Array, signature: string): boolean;
 
   /**
    * Translate provider-specific webhook payload into normalized domain event.
+   * Can accept an explicit eventId (e.g. from x-razorpay-event-id header).
    */
-  normalizeWebhookEvent(rawPayload: unknown): NormalizedPaymentEvent;
+  normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent;
 }
+

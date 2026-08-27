@@ -7,12 +7,14 @@ import type { EmailService } from "../../../services/email/index.ts";
 import { createAccessService, type AccessService } from "../../access/access.service.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
-import * as couponRepo from "../coupons/coupon.repository.ts";
+import * as refundRepo from "../refunds/refund.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
-import * as refundRepo from "../refunds/refund.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
 import * as webhookRepo from "../webhooks/webhook.repository.ts";
+import {
+  createPaymentReconciliationService,
+} from "../payments/payment-reconciliation.service.ts";
 
 export interface PaymentWorkerOptions {
   database: Kysely<Database>;
@@ -31,9 +33,10 @@ export interface PaymentWorker {
 }
 
 /**
- * Robust, idempotent background worker for processing payment confirmations,
- * creating AccessGrants, expanding course bundles, provisioning learning enrollments,
- * and queueing outbox side-effects.
+ * Robust, idempotent background worker for processing payment confirmations.
+ * Fulfillment (capture, order paid, coupon, access grants, enrollments, outbox)
+ * is delegated to the PaymentReconciliationService which provides a single
+ * concurrency-safe gate shared with the /payments/verify endpoint.
  */
 export function createPaymentWorker({
   database,
@@ -41,6 +44,8 @@ export function createPaymentWorker({
   accessService = createAccessService(),
   logger,
 }: PaymentWorkerOptions): PaymentWorker {
+  const reconciliation = createPaymentReconciliationService({ database, accessService });
+
   async function processPaymentJob(event: NormalizedPaymentEvent) {
     const log = logger?.child({
       job: "payment-worker",
@@ -81,210 +86,110 @@ export function createPaymentWorker({
       return { status: "skipped" as const };
     }
 
+    if (!event.gatewayPaymentId) {
+      log?.warn("Event missing gatewayPaymentId, skipping");
+      return { status: "skipped" as const };
+    }
+
     const payment = await paymentRepo.findPaymentByGatewayOrderId(database, event.gatewayOrderId);
     if (!payment) {
       log?.warn(`No payment record found for gatewayOrderId: ${event.gatewayOrderId}`);
       return { status: "skipped" as const };
     }
 
-    const order = await orderRepo.findOrderById(database, payment.order_id);
-    if (!order) {
-      log?.warn(`No order record found for orderId: ${payment.order_id}`);
-      return { status: "skipped" as const };
-    }
-
-    const now = new Date();
-
-    // 1. Transactional State Transition: Payment Captured -> Order PAID -> AccessGrants -> Enrollments
-    const fulfillmentResults = await database.transaction().execute(async (trx) => {
-      // Mark Payment Captured & Record Attempt
-      await paymentRepo.updatePayment(trx, payment.id, {
-        gateway_payment_id: event.gatewayPaymentId,
-        status: "captured",
-        payment_method: event.paymentMethod ?? null,
-        updated_at: now,
-      });
-
-      await paymentRepo.insertPaymentAttempt(trx, {
-        id: crypto.randomUUID(),
-        payment_id: payment.id,
-        gateway_payment_id: event.gatewayPaymentId ?? null,
-        attempt_number: 1,
-        status: "captured",
-      });
-
-      // Optimistically Mark Order / Purchase PAID
-      await orderRepo.markOrderPaidIfPending(trx, order.id, now);
-
-      // Record Coupon Redemption if applied
-      if (order.coupon_id) {
-        await couponRepo.insertCouponRedemption(trx, {
-          id: crypto.randomUUID(),
-          coupon_id: order.coupon_id,
-          user_id: order.user_id,
-          order_id: order.id,
-          discount_amount: order.discount_amount,
-          created_at: now,
-        });
-      }
-
-      // Resolve Order Items & Expand Bundles
-      const orderItems = await orderRepo.listOrderItems(trx, order.id);
-      const enrolledCourses: string[] = [];
-
-      for (const item of orderItems) {
-        if (item.item_type === "course" && item.course_id) {
-          // 1A. Canonical Access Grant
-          await accessService.grantAccess(trx, {
-            userId: order.user_id,
-            courseId: item.course_id,
-            orderId: order.id,
-            source: "purchase",
-            validFrom: now,
-          });
-
-          // 1B. Learning Enrollment
-          await enrollmentRepo.insertEnrollment(trx, {
-            id: crypto.randomUUID(),
-            user_id: order.user_id,
-            course_id: item.course_id,
-            order_id: order.id,
-            status: "active",
-            source: "direct_purchase",
-            access_starts_at: now,
-            access_expires_at: null,
-            created_at: now,
-            updated_at: now,
-          });
-          enrolledCourses.push(item.course_id);
-        } else if (item.item_type === "bundle" && item.bundle_id) {
-          const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
-          for (const bc of bundleCourses) {
-            // 1A. Canonical Access Grant
-            await accessService.grantAccess(trx, {
-              userId: order.user_id,
-              courseId: bc.course_id,
-              orderId: order.id,
-              source: "bundle_purchase",
-              validFrom: now,
-            });
-
-            // 1B. Learning Enrollment
-            await enrollmentRepo.insertEnrollment(trx, {
-              id: crypto.randomUUID(),
-              user_id: order.user_id,
-              course_id: bc.course_id,
-              order_id: order.id,
-              status: "active",
-              source: "bundle_purchase",
-              access_starts_at: now,
-              access_expires_at: null,
-              created_at: now,
-              updated_at: now,
-            });
-            enrolledCourses.push(bc.course_id);
-          }
-        }
-      }
-
-      // 1C. Record Outbox Event for durable post-purchase processing
-      await trx
-        .insertInto("outbox_events")
-        .values({
-          id: crypto.randomUUID(),
-          event_name: "purchase.completed",
-          aggregate_type: "purchase",
-          aggregate_id: order.id,
-          payload: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            userId: order.user_id,
-            totalAmount: order.total_amount,
-            enrolledCourseIds: enrolledCourses,
-          },
-          processed_at: null,
-          error: null,
-          created_at: now,
-        })
-        .execute();
-
-      return enrolledCourses;
+    // Delegate to the reconciliation service — same function used by /payments/verify.
+    // The conditional UPDATE inside ensures exactly-once fulfillment even when
+    // verify and webhook race each other.
+    const result = await reconciliation.finalizeSuccessfulPayment({
+      paymentId: payment.id,
+      gatewayPaymentId: event.gatewayPaymentId,
+      paymentMethod: event.paymentMethod ?? null,
     });
 
-    // 2. Mark Webhook Processed
-    await webhookRepo.markWebhookEventProcessed(database, event.eventId);
-
-    // 3. Post-Purchase Side Effects (Non-blocking: failures must never fail payment or enrollment)
-    try {
-      const orderItems = await orderRepo.listOrderItems(database, order.id);
-      const user = await authRepo.findUserById(database, order.user_id);
-
-      const itemsSummary = orderItems
-        .map((it) => `- ${it.title_snapshot} (₹${(it.final_amount / 100).toFixed(2)})`)
-        .join("\n");
-      const itemsHtmlList = orderItems
-        .map(
-          (it) =>
-            `<li><strong>${it.title_snapshot}</strong>: ₹${(it.final_amount / 100).toFixed(2)}</li>`,
-        )
-        .join("");
-
-      const subtotalFormatted = `₹${(order.subtotal_amount / 100).toFixed(2)}`;
-      const discountFormatted = `₹${(order.discount_amount / 100).toFixed(2)}`;
-      const totalFormatted = `₹${(order.total_amount / 100).toFixed(2)}`;
-      const paymentRef = event.gatewayPaymentId ?? payment.gateway_payment_id ?? "N/A";
-
-      // 3A. Generate Invoice / Purchase Confirmation Event
+    if (result.outcome === "already_captured") {
       log?.info(
-        {
-          orderNumber: order.order_number,
-          userId: order.user_id,
-          totalAmount: order.total_amount,
-          discountAmount: order.discount_amount,
-          paymentReference: paymentRef,
-          itemCount: orderItems.length,
-        },
-        "Post-purchase invoice event recorded",
+        { paymentId: payment.id },
+        "Payment already captured by another path (verify/webhook race); skipping fulfillment",
       );
-
-      // 3B. Queue Confirmation Email
-      if (emailService && user?.email) {
-        await emailService.send(user.email, {
-          subject: `Order Confirmation & Receipt - ${order.order_number}`,
-          text: `Hi ${user.display_name},\n\nThank you for your purchase!\n\nOrder Number: ${order.order_number}\nPayment Reference: ${paymentRef}\nSubtotal: ${subtotalFormatted}\nDiscount: ${discountFormatted}\nTotal Paid: ${totalFormatted}\n\nPurchased Courses:\n${itemsSummary}\n\nYour course access is now active in your dashboard.\n\nHappy Learning,\nVeoLMS Team`,
-          html: `
-            <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
-              <h2>Thank You for Your Order!</h2>
-              <p>Hi <strong>${user.display_name}</strong>, your payment was successful.</p>
-              <table style="width: 100%; max-width: 500px; border-collapse: collapse; margin: 16px 0;">
-                <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Order Number:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${order.order_number}</td></tr>
-                <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Payment Reference:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${paymentRef}</td></tr>
-                <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Subtotal:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${subtotalFormatted}</td></tr>
-                <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Discount Applied:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">-${discountFormatted}</td></tr>
-                <tr><td style="padding: 8px 0; font-size: 16px;"><strong>Total Paid:</strong></td><td style="text-align: right; padding: 8px 0; font-size: 16px;"><strong>${totalFormatted}</strong></td></tr>
-              </table>
-              <h3>Purchased Courses</h3>
-              <ul style="padding-left: 20px;">
-                ${itemsHtmlList}
-              </ul>
-              <p>You can now start learning immediately from your courses dashboard.</p>
-            </div>
-          `,
-        });
-      }
-    } catch (sideEffectErr) {
-      log?.error({ err: sideEffectErr }, "Post-purchase side effect execution encountered an error");
+    } else {
+      log?.info(
+        { orderId: result.orderId, enrollmentCount: result.enrollmentCount },
+        "Payment finalized and enrollments granted",
+      );
     }
 
-    log?.info(
-      { orderId: order.id, count: fulfillmentResults.length },
-      "Successfully fulfilled order and completed post-purchase side effects",
-    );
+    // Mark webhook processed regardless of outcome
+    await webhookRepo.markWebhookEventProcessed(database, event.eventId);
+
+    // Post-purchase side effects (non-blocking — failures must never affect payment/enrollment)
+    if (result.outcome === "finalized" && result.orderId) {
+      try {
+        const order = await orderRepo.findOrderById(database, result.orderId);
+        if (order) {
+          const orderItems = await orderRepo.listOrderItems(database, order.id);
+          const user = await authRepo.findUserById(database, order.user_id);
+
+          const itemsSummary = orderItems
+            .map((it) => `- ${it.title_snapshot} (₹${(it.final_amount / 100).toFixed(2)})`)
+            .join("\n");
+          const itemsHtmlList = orderItems
+            .map(
+              (it) =>
+                `<li><strong>${it.title_snapshot}</strong>: ₹${(it.final_amount / 100).toFixed(2)}</li>`,
+            )
+            .join("");
+
+          const subtotalFormatted = `₹${(order.subtotal_amount / 100).toFixed(2)}`;
+          const discountFormatted = `₹${(order.discount_amount / 100).toFixed(2)}`;
+          const totalFormatted = `₹${(order.total_amount / 100).toFixed(2)}`;
+          const paymentRef = event.gatewayPaymentId ?? payment.gateway_payment_id ?? "N/A";
+
+          log?.info(
+            {
+              orderNumber: order.order_number,
+              userId: order.user_id,
+              totalAmount: order.total_amount,
+              discountAmount: order.discount_amount,
+              paymentReference: paymentRef,
+              itemCount: orderItems.length,
+            },
+            "Post-purchase invoice event recorded",
+          );
+
+          if (emailService && user?.email) {
+            await emailService.send(user.email, {
+              subject: `Order Confirmation & Receipt - ${order.order_number}`,
+              text: `Hi ${user.display_name},\n\nThank you for your purchase!\n\nOrder Number: ${order.order_number}\nPayment Reference: ${paymentRef}\nSubtotal: ${subtotalFormatted}\nDiscount: ${discountFormatted}\nTotal Paid: ${totalFormatted}\n\nPurchased Courses:\n${itemsSummary}\n\nYour course access is now active in your dashboard.\n\nHappy Learning,\nVeoLMS Team`,
+              html: `
+                <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                  <h2>Thank You for Your Order!</h2>
+                  <p>Hi <strong>${user.display_name}</strong>, your payment was successful.</p>
+                  <table style="width: 100%; max-width: 500px; border-collapse: collapse; margin: 16px 0;">
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Order Number:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${order.order_number}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Payment Reference:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${paymentRef}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Subtotal:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${subtotalFormatted}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Discount Applied:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">-${discountFormatted}</td></tr>
+                    <tr><td style="padding: 8px 0; font-size: 16px;"><strong>Total Paid:</strong></td><td style="text-align: right; padding: 8px 0; font-size: 16px;"><strong>${totalFormatted}</strong></td></tr>
+                  </table>
+                  <h3>Purchased Courses</h3>
+                  <ul style="padding-left: 20px;">
+                    ${itemsHtmlList}
+                  </ul>
+                  <p>You can now start learning immediately from your courses dashboard.</p>
+                </div>
+              `,
+            });
+          }
+        }
+      } catch (sideEffectErr) {
+        log?.error({ err: sideEffectErr }, "Post-purchase side effect execution encountered an error");
+      }
+    }
 
     return {
       status: "processed" as const,
-      orderId: order.id,
-      enrollmentCount: fulfillmentResults.length,
+      orderId: result.orderId,
+      enrollmentCount: result.enrollmentCount,
     };
   }
 
@@ -297,12 +202,17 @@ export function createPaymentWorker({
     const payment = await paymentRepo.findPaymentByGatewayOrderId(database, event.gatewayOrderId);
     if (!payment || payment.status === "captured") return { status: "skipped" as const };
 
-    await paymentRepo.updatePayment(database, payment.id, {
-      status: "failed",
-      error_code: event.errorCode ?? "PAYMENT_FAILED",
-      error_description: event.errorDescription ?? "Payment failed",
-      updated_at: new Date(),
-    });
+    await paymentRepo.transitionPaymentStatus(
+      database,
+      payment.id,
+      "failed",
+      ["initiated", "processing"],
+      {
+        error_code: event.errorCode ?? "PAYMENT_FAILED",
+        error_description: event.errorDescription ?? "Payment failed",
+        updated_at: new Date(),
+      },
+    );
 
     await paymentRepo.insertPaymentAttempt(database, {
       id: crypto.randomUUID(),
@@ -325,36 +235,58 @@ export function createPaymentWorker({
     log?: FastifyBaseLogger,
   ) {
     if (!event.gatewayPaymentId) return { status: "skipped" as const };
+    if (!event.gatewayRefundId) return { status: "skipped" as const };
 
     const payment = await paymentRepo.findPaymentByGatewayPaymentId(database, event.gatewayPaymentId);
     if (!payment) return { status: "skipped" as const };
 
+    const order = await orderRepo.findOrderById(database, payment.order_id);
+    if (!order) return { status: "skipped" as const };
+
     const refundAmount = event.amount ?? payment.amount;
-
-    await refundRepo.insertRefund(database, {
-      id: crypto.randomUUID(),
-      order_id: payment.order_id,
-      payment_id: payment.id,
-      gateway_refund_id: event.gatewayRefundId ?? null,
-      amount: refundAmount,
-      currency: event.currency ?? payment.currency,
-      status: "processed",
-    });
-
     const isFullRefund = refundAmount >= payment.amount;
-    await orderRepo.updateOrderStatus(database, payment.order_id, {
-      status: isFullRefund ? "refunded" : "partially_refunded",
-    });
+    const now = new Date();
 
-    // Revoke access grants if full refund
-    if (isFullRefund) {
-      await accessService.revokeAccessForOrder(database, payment.order_id);
-    }
+    await database.transaction().execute(async (trx) => {
+      await refundRepo.upsertRefundByGatewayRefundId(trx, {
+        id: crypto.randomUUID(),
+        order_id: payment.order_id,
+        payment_id: payment.id,
+        gateway_refund_id: event.gatewayRefundId!,
+        amount: refundAmount,
+        currency: event.currency ?? payment.currency,
+        status: "processed",
+        updated_at: now,
+      });
+
+      await orderRepo.updateOrderStatus(trx, order.id, {
+        status: isFullRefund ? "refunded" : "partially_refunded",
+        updated_at: now,
+      });
+
+      if (isFullRefund) {
+        await accessService.revokeAccessForOrder(trx, order.id);
+
+        const orderItems = await orderRepo.listOrderItems(trx, order.id);
+        for (const item of orderItems) {
+          const courseIds: string[] = [];
+          if (item.item_type === "course" && item.course_id) {
+            courseIds.push(item.course_id);
+          } else if (item.item_type === "bundle" && item.bundle_id) {
+            const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
+            courseIds.push(...bundleCourses.map((bc) => bc.course_id));
+          }
+          for (const courseId of courseIds) {
+            await enrollmentRepo.updateEnrollmentStatus(trx, order.user_id, courseId, "revoked");
+          }
+        }
+      }
+    });
 
     await webhookRepo.markWebhookEventProcessed(database, event.eventId);
-    log?.info({ orderId: payment.order_id, refundAmount }, "Refund processed successfully");
+    log?.info({ orderId: order.id, refundAmount }, "Refund processed successfully");
 
-    return { status: "processed" as const, orderId: payment.order_id };
+    return { status: "processed" as const, orderId: order.id };
   }
 
   return {

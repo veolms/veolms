@@ -65,6 +65,71 @@ export async function insertPayment(
     .executeTakeFirstOrThrow();
 }
 
+/**
+ * Atomically transitions a payment from a non-captured status to "captured".
+ * This is the concurrency gate for payment finalization: only one concurrent
+ * caller wins. Returns the updated row if the claim succeeded, or undefined
+ * if the payment was already captured (another caller won the race).
+ */
+export async function claimPaymentForFinalization(
+  database: Executor,
+  paymentId: string,
+  gatewayPaymentId: string,
+  paymentMethod: unknown | null,
+  now: Date,
+) {
+  return await database
+    .updateTable("payments")
+    .set({
+      gateway_payment_id: gatewayPaymentId,
+      status: "captured",
+      payment_method: paymentMethod,
+      updated_at: now,
+    })
+    .where("id", "=", paymentId)
+    .where("status", "not in", ["captured", "refunded"])
+    .returningAll()
+    .executeTakeFirst();
+}
+
+/**
+ * Updates a payment status only when the current status is one of the
+ * allowed "from" states. Returns the updated row if the transition succeeded,
+ * or undefined if the current status was not in the allowed list (i.e. the
+ * transition is forbidden). This prevents backward state moves such as
+ * captured → processing.
+ *
+ * Allowed transitions:
+ *   initiated  → processing | captured | failed
+ *   processing → captured | failed
+ *   captured   → refunded
+ *   failed     → (terminal)
+ *   refunded   → (terminal)
+ */
+export async function transitionPaymentStatus(
+  database: Executor,
+  paymentId: string,
+  toStatus: PaymentStatus,
+  fromStatuses: PaymentStatus[],
+  extra?: {
+    error_code?: string | null;
+    error_description?: string | null;
+    updated_at?: Date;
+  },
+) {
+  return await database
+    .updateTable("payments")
+    .set({
+      status: toStatus,
+      ...(extra ?? {}),
+      updated_at: extra?.updated_at ?? new Date(),
+    })
+    .where("id", "=", paymentId)
+    .where("status", "in", fromStatuses)
+    .returningAll()
+    .executeTakeFirst();
+}
+
 export async function updatePayment(
   database: Executor,
   paymentId: string,

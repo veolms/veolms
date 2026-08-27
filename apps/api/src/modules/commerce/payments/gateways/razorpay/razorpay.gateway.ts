@@ -3,10 +3,12 @@ import type {
   PaymentGateway,
   CreateGatewayOrderInput,
   GatewayOrderOutput,
+  GatewayOrderStatus,
   VerifyGatewayPaymentInput,
   GatewayPaymentDetails,
   CreateGatewayRefundInput,
   GatewayRefundOutput,
+  GatewayRefundDetails,
   NormalizedPaymentEvent,
 } from "@veolms/contracts";
 import { AppError } from "../../../../../lib/errors.ts";
@@ -130,6 +132,10 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       amount: number;
       currency: string;
       status: string;
+      captured?: boolean;
+      amount_refunded?: number;
+      fee?: number | null;
+      tax?: number | null;
       method: string;
       bank?: string | null;
       wallet?: string | null;
@@ -137,6 +143,9 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       card?: { last4?: string; network?: string } | null;
       error_code?: string | null;
       error_description?: string | null;
+      error_source?: string | null;
+      error_step?: string | null;
+      error_reason?: string | null;
     }>(`/payments/${gatewayPaymentId}`, {
       method: "GET",
     });
@@ -156,6 +165,10 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       amount: payment.amount,
       currency: payment.currency,
       status: mappedStatus,
+      captured: payment.captured,
+      amountRefunded: payment.amount_refunded,
+      fee: payment.fee,
+      tax: payment.tax,
       method: payment.method,
       bank: payment.bank,
       wallet: payment.wallet,
@@ -164,11 +177,15 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       cardNetwork: payment.card?.network,
       errorCode: payment.error_code,
       errorDescription: payment.error_description,
+      errorSource: payment.error_source,
+      errorStep: payment.error_step,
+      errorReason: payment.error_reason,
     };
   }
 
   /**
    * Initiates a refund in Razorpay (POST /v1/payments/:id/refund)
+   * Passes X-Refund-Idempotency header if idempotencyKey is provided to prevent duplicate refunds.
    */
   async refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput> {
     const payload = {
@@ -179,6 +196,11 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       },
     };
 
+    const headers: Record<string, string> = {};
+    if (input.idempotencyKey) {
+      headers["X-Refund-Idempotency"] = input.idempotencyKey;
+    }
+
     const response = await this.request<{
       id: string;
       amount: number;
@@ -186,6 +208,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       status: string;
     }>(`/payments/${input.gatewayPaymentId}/refund`, {
       method: "POST",
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -194,6 +217,110 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       amount: response.amount,
       currency: response.currency,
       status: response.status === "processed" ? "processed" : "pending",
+    };
+  }
+
+  /**
+   * Fetches Razorpay order status (GET /v1/orders/:id)
+   */
+  async fetchOrder(gatewayOrderId: string): Promise<GatewayOrderStatus> {
+    const order = await this.request<{
+      id: string;
+      amount: number;
+      currency: string;
+      status: string;
+    }>(`/orders/${gatewayOrderId}`, { method: "GET" });
+
+    let status: GatewayOrderStatus["status"] = "created";
+    if (order.status === "paid") status = "paid";
+    else if (order.status === "attempted") status = "attempted";
+
+    return {
+      gatewayOrderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      status,
+    };
+  }
+
+  /**
+   * Fetches payments associated with a Razorpay order (GET /v1/orders/:id/payments)
+   */
+  async fetchOrderPayments(gatewayOrderId: string): Promise<GatewayPaymentDetails[]> {
+    const response = await this.request<{
+      entity: string;
+      count: number;
+      items: Array<{
+        id: string;
+        order_id: string;
+        amount: number;
+        currency: string;
+        status: string;
+        captured?: boolean;
+        amount_refunded?: number;
+        fee?: number | null;
+        tax?: number | null;
+        method?: string;
+        bank?: string | null;
+        wallet?: string | null;
+        vpa?: string | null;
+        card?: { last4?: string; network?: string } | null;
+        error_code?: string | null;
+        error_description?: string | null;
+      }>;
+    }>(`/orders/${gatewayOrderId}/payments`, { method: "GET" });
+
+    return (response.items || []).map((p) => {
+      let mappedStatus: GatewayPaymentDetails["status"] = "processing";
+      if (p.status === "captured") mappedStatus = "captured";
+      else if (p.status === "failed") mappedStatus = "failed";
+      else if (p.status === "refunded") mappedStatus = "refunded";
+
+      return {
+        gatewayPaymentId: p.id,
+        gatewayOrderId: p.order_id,
+        amount: p.amount,
+        currency: p.currency,
+        status: mappedStatus,
+        captured: p.captured,
+        amountRefunded: p.amount_refunded,
+        fee: p.fee,
+        tax: p.tax,
+        method: p.method,
+        bank: p.bank,
+        wallet: p.wallet,
+        vpa: p.vpa,
+        cardLast4: p.card?.last4,
+        cardNetwork: p.card?.network,
+        errorCode: p.error_code,
+        errorDescription: p.error_description,
+      };
+    });
+  }
+
+  /**
+   * Fetches Razorpay refund status (GET /v1/refunds/:id)
+   */
+  async fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails> {
+    const refund = await this.request<{
+      id: string;
+      payment_id: string;
+      amount: number;
+      currency: string;
+      status: string;
+    }>(`/refunds/${gatewayRefundId}`, { method: "GET" });
+
+    return {
+      gatewayRefundId: refund.id,
+      gatewayPaymentId: refund.payment_id,
+      amount: refund.amount,
+      currency: refund.currency,
+      status:
+        refund.status === "processed"
+          ? "processed"
+          : refund.status === "failed"
+          ? "failed"
+          : "pending",
     };
   }
 
@@ -224,27 +351,53 @@ export class RazorpayPaymentGateway implements PaymentGateway {
   }
 
   /**
-   * Normalizes Razorpay webhook event into domain event
+   * Normalizes Razorpay webhook event into domain event.
+   * Uses explicit switch mapping and refuses unknown events to prevent false payment approvals.
    */
-  normalizeWebhookEvent(rawPayload: any): NormalizedPaymentEvent {
+  normalizeWebhookEvent(rawPayload: any, eventId?: string): NormalizedPaymentEvent {
     const event = rawPayload?.event as string;
     const paymentEntity = rawPayload?.payload?.payment?.entity;
     const refundEntity = rawPayload?.payload?.refund?.entity;
 
-    let eventType: NormalizedPaymentEvent["eventType"] = "payment.succeeded";
-    if (event === "payment.failed") {
-      eventType = "payment.failed";
-    } else if (event === "refund.processed") {
-      eventType = "refund.succeeded";
-    } else if (event === "refund.failed") {
-      eventType = "refund.failed";
+    let eventType: NormalizedPaymentEvent["eventType"];
+
+    switch (event) {
+      case "payment.captured":
+      case "order.paid":
+        eventType = "payment.succeeded";
+        break;
+
+      case "payment.failed":
+        eventType = "payment.failed";
+        break;
+
+      case "refund.created":
+        eventType = "refund.pending";
+        break;
+
+      case "refund.processed":
+        eventType = "refund.succeeded";
+        break;
+
+      case "refund.failed":
+        eventType = "refund.failed";
+        break;
+
+      default:
+        throw new AppError(
+          400,
+          "UNSUPPORTED_PAYMENT_EVENT",
+          `Unsupported Razorpay webhook event: "${event}". Unhandled events are rejected to prevent accidental fulfillment.`,
+        );
     }
 
+    const resolvedEventId = eventId || rawPayload?.id || paymentEntity?.id || refundEntity?.id || crypto.randomUUID();
+
     return {
-      eventId: rawPayload?.id ?? crypto.randomUUID(),
+      eventId: resolvedEventId,
       eventType,
       provider: this.providerName,
-      gatewayOrderId: paymentEntity?.order_id,
+      gatewayOrderId: paymentEntity?.order_id ?? rawPayload?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
       amount: paymentEntity?.amount ?? refundEntity?.amount,

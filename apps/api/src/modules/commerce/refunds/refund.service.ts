@@ -72,12 +72,15 @@ export function createRefundService({
       );
     }
 
+    const refundId = crypto.randomUUID();
+
     // 1. Dispatch refund through the PaymentGateway abstraction (outside DB transaction)
     const gatewayResult = await paymentGateway.refundPayment({
       gatewayPaymentId: payment.gateway_payment_id,
       amount: requestedAmount,
       currency: payment.currency,
       reason: reason ?? "Admin initiated refund",
+      idempotencyKey: refundId,
       notes: {
         orderId: order.id,
         adminUserId,
@@ -85,7 +88,6 @@ export function createRefundService({
     });
 
     const now = new Date();
-    const refundId = crypto.randomUUID();
 
     // 2. Transactionally record refund and update order state
     const createdRefund = await database.transaction().execute(async (trx) => {

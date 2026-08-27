@@ -60,3 +60,51 @@ export async function updateRefundStatus(
     .returningAll()
     .executeTakeFirst();
 }
+
+/**
+ * Idempotently records a refund confirmed by the gateway.
+ * If a refund record with this gateway_refund_id already exists, updates its status.
+ * If not, inserts a new record. Returns the upserted row.
+ */
+export async function upsertRefundByGatewayRefundId(
+  database: Executor,
+  values: {
+    id: string;
+    order_id: string;
+    payment_id: string;
+    gateway_refund_id: string;
+    amount: number;
+    currency: string;
+    reason?: string | null;
+    status: RefundStatus;
+    updated_at?: Date;
+  },
+) {
+  return await database
+    .insertInto("refunds")
+    .values(values)
+    .onConflict((oc) =>
+      oc.column("gateway_refund_id").doUpdateSet({
+        status: values.status,
+        updated_at: values.updated_at ?? new Date(),
+      }),
+    )
+    .returningAll()
+    .executeTakeFirstOrThrow();
+}
+
+export async function listStaleRefunds(
+  database: Executor,
+  olderThanMinutes: number,
+) {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+  return await database
+    .selectFrom("refunds")
+    .selectAll()
+    .where("status", "=", "pending")
+    .where("gateway_refund_id", "is not", null)
+    .where("created_at", "<", cutoff)
+    .orderBy("created_at", "asc")
+    .execute();
+}
+

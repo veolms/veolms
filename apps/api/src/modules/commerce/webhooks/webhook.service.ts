@@ -10,6 +10,7 @@ export interface WebhookService {
     rawBody: string | Uint8Array,
     signature: string | undefined,
     parsedPayload: unknown,
+    eventId?: string,
   ): Promise<{ received: boolean; eventId: string }>;
 }
 
@@ -26,6 +27,7 @@ export function createWebhookService({
     rawBody: string | Uint8Array,
     signature: string | undefined,
     parsedPayload: unknown,
+    eventId?: string,
   ) {
     if (!signature) {
       throw CommerceErrors.WEBHOOK_SIGNATURE_INVALID();
@@ -37,8 +39,8 @@ export function createWebhookService({
       throw CommerceErrors.WEBHOOK_SIGNATURE_INVALID();
     }
 
-    // 2. Normalize provider payload to gateway-independent domain event
-    const normalizedEvent = paymentGateway.normalizeWebhookEvent(parsedPayload);
+    // 2. Normalize provider payload to gateway-independent domain event (using header eventId if present)
+    const normalizedEvent = paymentGateway.normalizeWebhookEvent(parsedPayload, eventId);
 
     // 3. Idempotently deduplicate by event_id in database
     const existing = await webhookRepo.findWebhookEvent(

@@ -64,6 +64,56 @@ export async function insertCouponRedemption(
     .executeTakeFirst(); // returns undefined if conflict — that is correct and expected
 }
 
+/**
+ * Atomically checks the global usage limit and inserts a redemption.
+ * Locks the coupon row with SELECT FOR UPDATE to prevent concurrent over-redemption.
+ * Returns the inserted row, or undefined if already at the limit or duplicate.
+ * Must be called inside a transaction.
+ */
+export async function insertCouponRedemptionIfLimitNotReached(
+  database: Executor,
+  values: {
+    id: string;
+    coupon_id: string;
+    user_id: string;
+    order_id: string;
+    discount_amount: number;
+    global_usage_limit: number | null;
+    created_at?: Date;
+  },
+) {
+  const { global_usage_limit, ...insertValues } = values;
+
+  if (global_usage_limit !== null) {
+    // Lock the coupon row to serialize concurrent limit checks
+    await database
+      .selectFrom("coupons")
+      .select("id")
+      .where("id", "=", values.coupon_id)
+      .forUpdate()
+      .executeTakeFirst();
+
+    const countResult = await database
+      .selectFrom("coupon_redemptions")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .where("coupon_id", "=", values.coupon_id)
+      .executeTakeFirst();
+
+    const currentCount = Number(countResult?.count ?? 0);
+    if (currentCount >= global_usage_limit) {
+      return undefined;
+    }
+  }
+
+  return await database
+    .insertInto("coupon_redemptions")
+    .values(insertValues)
+    .onConflict((oc) => oc.columns(["coupon_id", "order_id"]).doNothing())
+    .returningAll()
+    .executeTakeFirst();
+}
+
+
 export async function insertCoupon(
   database: Executor,
   values: {

@@ -3,15 +3,21 @@ import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { BackgroundPaymentEventQueue } from "./payment-event.queue.ts";
-import { createPaymentEventProcessor } from "./payment-event.processor.ts";
+import { createPaymentWorker } from "../fulfillment/payment.worker.ts";
 import { createWebhookService } from "./webhook.service.ts";
 import { createWebhookController } from "./webhook.controller.ts";
 
 const webhookRoutes: RoutePlugin = async (app, options) => {
-  const processor = createPaymentEventProcessor({ database: options.database });
+  const worker = createPaymentWorker({
+    database: options.database,
+    emailService: options.services.email,
+    logger: app.log,
+  });
   const eventQueue = new BackgroundPaymentEventQueue({
     logger: app.log,
-    handler: processor.processEvent,
+    handler: async (event) => {
+      await worker.processPaymentJob(event);
+    },
   });
 
   const service = createWebhookService({

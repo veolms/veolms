@@ -7,14 +7,14 @@ import type {
   Refund,
   CreateRefundRequest,
 } from "@veolms/contracts";
+import type { Database } from "@veolms/database";
+import type { Kysely } from "kysely";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
-import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as refundRepo from "../refunds/refund.repository.ts";
-import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import * as bundleRepo from "../bundles/bundle.repository.ts";
+import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
 
 export interface PaymentService {
   initializePayment(params: {
@@ -42,7 +42,7 @@ export interface PaymentService {
 }
 
 export interface PaymentServiceOptions {
-  database: Executor;
+  database: Kysely<Database>;
   paymentGateway: PaymentGateway;
 }
 
@@ -50,6 +50,7 @@ export function createPaymentService({
   database,
   paymentGateway,
 }: PaymentServiceOptions): PaymentService {
+  const reconciliation = createPaymentReconciliationService({ database });
   /**
    * Initializes a payment for an internal pending order through the injected PaymentGateway.
    */
@@ -148,6 +149,8 @@ export function createPaymentService({
 
   /**
    * Verifies client payment signature and transitions order to PAID and fulfills enrollments.
+   * Delegates concurrency-safe fulfillment to the PaymentReconciliationService so that
+   * concurrent calls from /payments/verify and the Razorpay webhook cannot double-fulfill.
    */
   async function verifyPayment(userId: string, input: VerifyPaymentRequest): Promise<VerifyPaymentResponse> {
     const { orderId, gatewayOrderId, gatewayPaymentId, gatewaySignature } = input;
@@ -163,7 +166,8 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
     }
 
-    // Idempotent short-circuit if already verified
+    // Idempotent short-circuit if already fully captured — safe to return early
+    // without going to the gateway again (signature was already verified once).
     if (order.status === "paid" && payment.status === "captured") {
       return {
         verified: true,
@@ -174,6 +178,11 @@ export function createPaymentService({
       };
     }
 
+    // Reject payment verification for expired orders
+    if (new Date(order.expires_at) < new Date()) {
+      throw CommerceErrors.ORDER_EXPIRED();
+    }
+
     // 1. Verify signature via Gateway Abstraction
     const isValid = paymentGateway.verifyPaymentSignature({
       gatewayOrderId,
@@ -181,16 +190,14 @@ export function createPaymentService({
       gatewaySignature,
     });
 
-    // Determine next attempt number from existing records
-    const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
-    const nextAttemptNumber = existingAttempts.length + 1;
-
     if (!isValid) {
+      // Record the failed attempt outside a transaction — it is diagnostic only
+      const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
       await paymentRepo.insertPaymentAttempt(database, {
         id: crypto.randomUUID(),
         payment_id: payment.id,
         gateway_payment_id: gatewayPaymentId,
-        attempt_number: nextAttemptNumber,
+        attempt_number: existingAttempts.length + 1,
         status: "failed",
         error_code: "SIGNATURE_VERIFICATION_FAILED",
         error_description: "Invalid payment signature.",
@@ -201,6 +208,11 @@ export function createPaymentService({
     // 2. Fetch authoritative payment status from Gateway (OUTSIDE transaction)
     const paymentDetails = await paymentGateway.getPayment(gatewayPaymentId);
 
+    // Verify payment belongs to this gateway order
+    if (paymentDetails.gatewayOrderId !== gatewayOrderId) {
+      throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
+    }
+
     if (paymentDetails.amount !== order.total_amount) {
       throw CommerceErrors.PAYMENT_AMOUNT_MISMATCH();
     }
@@ -208,84 +220,27 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_CURRENCY_MISMATCH();
     }
 
-    const now = new Date();
+    // Explicitly require captured status (authorized is not sufficient)
+    if (paymentDetails.status !== "captured") {
+      throw CommerceErrors.PAYMENT_NOT_CAPTURED(paymentDetails.status);
+    }
 
-    // 3. Transactional fulfillment: payment captured + order paid + coupon + enrollments
-    await database.transaction().execute(async (trx) => {
-      // 3a. Mark payment captured
-      await paymentRepo.updatePayment(trx, payment.id, {
-        gateway_payment_id: gatewayPaymentId,
-        status: "captured",
-        payment_method: paymentDetails.method
-          ? {
-              method: paymentDetails.method,
-              bank: paymentDetails.bank,
-              wallet: paymentDetails.wallet,
-              vpa: paymentDetails.vpa,
-              cardLast4: paymentDetails.cardLast4,
-            }
-          : null,
-        updated_at: now,
-      });
-
-      // 3b. Record successful attempt
-      await paymentRepo.insertPaymentAttempt(trx, {
-        id: crypto.randomUUID(),
-        payment_id: payment.id,
-        gateway_payment_id: gatewayPaymentId,
-        attempt_number: nextAttemptNumber,
-        status: "captured",
-      });
-
-      // 3c. Mark order PAID (idempotent — only if pending/processing)
-      await orderRepo.markOrderPaidIfPending(trx, order.id, now);
-
-      // 3d. Record coupon redemption (idempotent via ON CONFLICT DO NOTHING)
-      if (order.coupon_id) {
-        await couponRepo.insertCouponRedemption(trx, {
-          id: crypto.randomUUID(),
-          coupon_id: order.coupon_id,
-          user_id: order.user_id,
-          order_id: order.id,
-          discount_amount: order.discount_amount,
-          created_at: now,
-        });
-      }
-
-      // 3e. Fulfill enrollments
-      const orderItems = await orderRepo.listOrderItems(trx, order.id);
-      for (const item of orderItems) {
-        if (item.item_type === "course" && item.course_id) {
-          await enrollmentRepo.insertEnrollment(trx, {
-            id: crypto.randomUUID(),
-            user_id: order.user_id,
-            course_id: item.course_id,
-            order_id: order.id,
-            status: "active",
-            source: "direct_purchase",
-            access_starts_at: now,
-            access_expires_at: null,
-            created_at: now,
-            updated_at: now,
-          });
-        } else if (item.item_type === "bundle" && item.bundle_id) {
-          const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
-          for (const bc of bundleCourses) {
-            await enrollmentRepo.insertEnrollment(trx, {
-              id: crypto.randomUUID(),
-              user_id: order.user_id,
-              course_id: bc.course_id,
-              order_id: order.id,
-              status: "active",
-              source: "bundle_purchase",
-              access_starts_at: now,
-              access_expires_at: null,
-              created_at: now,
-              updated_at: now,
-            });
+    // 3. Concurrency-safe fulfillment — delegates to the PaymentReconciliationService.
+    //    Both this path and the webhook worker converge here.
+    //    The reconciliation service uses a conditional UPDATE as its concurrency gate
+    //    so payment capture + order paid + coupon + access + enrollments happen exactly once.
+    await reconciliation.finalizeSuccessfulPayment({
+      paymentId: payment.id,
+      gatewayPaymentId,
+      paymentMethod: paymentDetails.method
+        ? {
+            method: paymentDetails.method,
+            bank: paymentDetails.bank,
+            wallet: paymentDetails.wallet,
+            vpa: paymentDetails.vpa,
+            cardLast4: paymentDetails.cardLast4,
           }
-        }
-      }
+        : null,
     });
 
     return {

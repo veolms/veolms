@@ -59,6 +59,8 @@ export const CommerceErrors = {
     new AppError(400, "PAYMENT_CURRENCY_MISMATCH", "Payment currency does not match the order currency."),
   PAYMENT_ALREADY_PROCESSED: () =>
     new AppError(409, "PAYMENT_ALREADY_PROCESSED", "This payment has already been processed."),
+  PAYMENT_NOT_CAPTURED: (status: string) =>
+    new AppError(400, "PAYMENT_NOT_CAPTURED", `Payment cannot be finalized because gateway status is "${status}" (expected "captured").`),
   REFUND_NOT_ALLOWED: (reason: string) =>
     new AppError(400, "REFUND_NOT_ALLOWED", `Refund could not be processed: ${reason}`),
   WEBHOOK_SIGNATURE_INVALID: () =>
