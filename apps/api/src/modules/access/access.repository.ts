@@ -1,7 +1,9 @@
-import type { Database } from "@veolms/database";
-import type { Kysely, Transaction } from "kysely";
-
-export type Executor = Kysely<Database> | Transaction<Database>;
+// Re-exports the single canonical definition from @veolms/database — see
+// commerce/shared/repository.types.ts for the full history of this type
+// having been separately (and, in auth's case, incorrectly) redefined in 4
+// places.
+import type { DatabaseExecutor as Executor } from "@veolms/database";
+export type { Executor };
 
 export async function findAccessGrant(
   database: Executor,

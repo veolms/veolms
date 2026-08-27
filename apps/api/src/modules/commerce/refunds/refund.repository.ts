@@ -96,6 +96,10 @@ export async function upsertRefundByGatewayRefundId(
 export async function listStaleRefunds(
   database: Executor,
   olderThanMinutes: number,
+  // Bounds how much work one scheduler tick can take on — without this a
+  // backlog of N stale refunds (gateway outage, traffic spike) makes a
+  // single tick's cost scale with N instead of a fixed batch size.
+  limit = 100,
 ) {
   const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
   return await database
@@ -105,6 +109,7 @@ export async function listStaleRefunds(
     .where("gateway_refund_id", "is not", null)
     .where("created_at", "<", cutoff)
     .orderBy("created_at", "asc")
+    .limit(limit)
     .execute();
 }
 

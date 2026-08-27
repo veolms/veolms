@@ -5,6 +5,7 @@ import type { PaymentGateway } from "@veolms/contracts";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import { createPaymentReconciliationService } from "../payments/payment-reconciliation.service.ts";
+import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 
 export interface PaymentRecoveryWorkerOptions {
   database: Kysely<Database>;
@@ -15,6 +16,16 @@ export interface PaymentRecoveryWorkerOptions {
   staleAfterMinutes?: number;
   /** Maximum age in hours — payments older than this are skipped (likely abandoned). Default: 24 */
   maxAgeHours?: number;
+  /**
+   * Max stale payments processed in one tick. Without this, a backlog of N
+   * (gateway outage, traffic spike) makes a single tick's gateway-call count
+   * scale with N. Default: 50
+   */
+  batchSize?: number;
+  /**
+   * Max gateway calls in flight at once (see mapWithConcurrency). Default: 5
+   */
+  concurrency?: number;
 }
 
 /**
@@ -34,6 +45,8 @@ export function createPaymentRecoveryWorker({
   logger,
   staleAfterMinutes = 5,
   maxAgeHours = 24,
+  batchSize = 50,
+  concurrency = 5,
 }: PaymentRecoveryWorkerOptions) {
   const reconciliation = createPaymentReconciliationService({ database, accessService });
 
@@ -48,7 +61,11 @@ export function createPaymentRecoveryWorker({
     const staleMinuteCutoff = new Date(Date.now() - staleAfterMinutes * 60 * 1000);
     const maxAgeCutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
-    // Find payments stuck in initiated/processing within our time window
+    // Find payments stuck in initiated/processing within our time window.
+    // Bounded by batchSize so a backlog doesn't turn one tick's cost into N
+    // sequential gateway calls — see fulfillment.scheduler.ts's isRunning
+    // guard, which would otherwise skip the next cycle and fall further
+    // behind under exactly the conditions this worker exists to handle.
     const stalePayments = await database
       .selectFrom("payments")
       .selectAll()
@@ -56,6 +73,7 @@ export function createPaymentRecoveryWorker({
       .where("updated_at", "<", staleMinuteCutoff)
       .where("created_at", ">", maxAgeCutoff)
       .orderBy("created_at", "asc")
+      .limit(batchSize)
       .execute();
 
     log?.info({ count: stalePayments.length }, "Found stale payments for recovery");
@@ -65,7 +83,11 @@ export function createPaymentRecoveryWorker({
     let skipped = 0;
     let errors = 0;
 
-    for (const payment of stalePayments) {
+    // Bounded concurrency instead of a fully serial loop: caps how many
+    // gateway calls are in flight at once instead of either processing one
+    // payment at a time (tick duration scales with backlog size) or firing
+    // every call at once (Promise.all — unbounded against the gateway).
+    await mapWithConcurrency(stalePayments, concurrency, async (payment) => {
       try {
         // Query the gateway for current order status
         const gatewayOrder = await paymentGateway.fetchOrder(payment.gateway_order_id);
@@ -128,7 +150,7 @@ export function createPaymentRecoveryWorker({
         log?.error({ err, paymentId: payment.id }, "Error recovering stale payment");
         errors++;
       }
-    }
+    });
 
     log?.info({ recovered, failed, skipped, errors }, "Payment recovery run complete");
     return { recovered, failed, skipped, errors };

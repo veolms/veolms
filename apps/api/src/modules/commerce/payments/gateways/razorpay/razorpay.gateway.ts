@@ -12,6 +12,7 @@ import type {
   NormalizedPaymentEvent,
 } from "@veolms/contracts";
 import { AppError } from "../../../../../lib/errors.ts";
+import { secureCompare } from "../../../../../lib/secure-compare.ts";
 
 export interface RazorpayGatewayConfig {
   keyId: string;
@@ -112,14 +113,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       .update(body)
       .digest("hex");
 
-    const expectedBuf = Buffer.from(expectedSignature, "utf-8");
-    const signatureBuf = Buffer.from(gatewaySignature, "utf-8");
-
-    if (expectedBuf.length !== signatureBuf.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+    return secureCompare(expectedSignature, gatewaySignature);
   }
 
   /**
@@ -340,19 +334,22 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       .update(payloadBuffer)
       .digest("hex");
 
-    const expectedBuf = Buffer.from(expectedSignature, "utf-8");
-    const signatureBuf = Buffer.from(signature, "utf-8");
-
-    if (expectedBuf.length !== signatureBuf.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+    return secureCompare(expectedSignature, signature);
   }
 
   /**
    * Normalizes Razorpay webhook event into domain event.
-   * Uses explicit switch mapping and refuses unknown events to prevent false payment approvals.
+   *
+   * Uses an explicit switch mapping so only recognized event types can ever
+   * trigger fulfillment — but an event type outside that switch (e.g.
+   * subscription/dispute events, or any new Razorpay event type added after
+   * this code was written) is normalized to "ignored" rather than rejected.
+   * The webhook signature has already been verified by this point, so an
+   * unrecognized-but-legitimate event is real Razorpay traffic, just not
+   * anything this integration acts on; throwing here would surface as a
+   * failing webhook and Razorpay would retry it forever. "ignored" events
+   * flow through the normal store-and-enqueue path and land in
+   * PaymentWorker's fallback branch (ack + mark processed, no fulfillment).
    */
   normalizeWebhookEvent(rawPayload: any, eventId?: string): NormalizedPaymentEvent {
     const event = rawPayload?.event as string;
@@ -384,11 +381,10 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         break;
 
       default:
-        throw new AppError(
-          400,
-          "UNSUPPORTED_PAYMENT_EVENT",
-          `Unsupported Razorpay webhook event: "${event}". Unhandled events are rejected to prevent accidental fulfillment.`,
-        );
+        // Not one of the event types this integration acts on. Acknowledge
+        // it rather than 400 it — see the doc comment above.
+        eventType = "ignored";
+        break;
     }
 
     const resolvedEventId = eventId || rawPayload?.id || paymentEntity?.id || refundEntity?.id || crypto.randomUUID();

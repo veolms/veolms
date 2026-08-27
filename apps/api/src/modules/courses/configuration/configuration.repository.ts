@@ -95,6 +95,21 @@ export async function findPricingByCourseId(
     .executeTakeFirst();
 }
 
+/**
+ * Batched sibling of findPricingByCourseId — one `WHERE course_id IN (...)`
+ * query instead of N sequential ones. Used by pricing.service.ts's
+ * calculatePricing, which runs on every GET /cart, checkout preview, and
+ * order-creation call.
+ */
+export async function findPricingByCourseIds(database: DatabaseExecutor, courseIds: string[]) {
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("course_pricing")
+    .selectAll()
+    .where("course_id", "in", courseIds)
+    .execute();
+}
+
 export async function insertPricing(
   database: Kysely<Database>,
   values: {

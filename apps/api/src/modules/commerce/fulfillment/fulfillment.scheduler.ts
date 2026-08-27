@@ -76,16 +76,34 @@ export class CommerceFulfillmentScheduler {
     this.isRunning = true;
 
     try {
-      // 1. Expire stale orders
-      await this.orderExpirationWorker.expireStaleOrders();
+      // These three operate on disjoint tables (orders, payments, refunds)
+      // with no dependency between them, so they run concurrently instead
+      // of one after another — a tick's cost is the max of the three
+      // instead of their sum, and (combined with the batch/concurrency caps
+      // in payment-recovery.worker.ts / refund-reconciliation.worker.ts) one
+      // worker's backlog no longer delays the other two.
+      //
+      // allSettled rather than Promise.all: each worker already isolates
+      // per-item failures internally, but if one worker's own query throws
+      // (e.g. a DB blip), the other two should still run to completion and
+      // get logged as their own successes — not get short-circuited or have
+      // their outcome hidden behind whichever error happened to reject
+      // first.
+      const results = await Promise.allSettled([
+        this.orderExpirationWorker.expireStaleOrders(),
+        this.paymentRecoveryWorker.recoverStalePayments(),
+        this.refundReconciliationWorker.reconcileStaleRefunds(),
+      ]);
 
-      // 2. Reconcile in-flight stale payments against gateway
-      await this.paymentRecoveryWorker.recoverStalePayments();
-
-      // 3. Reconcile pending refunds against gateway
-      await this.refundReconciliationWorker.reconcileStaleRefunds();
-    } catch (err: any) {
-      this.logger?.error({ err }, "Error occurred during commerce fulfillment scheduled cycle");
+      const workerNames = ["order-expiration", "payment-recovery", "refund-reconciliation"] as const;
+      results.forEach((result, i) => {
+        if (result.status === "rejected") {
+          this.logger?.error(
+            { err: result.reason, worker: workerNames[i] },
+            "Error occurred during commerce fulfillment scheduled cycle",
+          );
+        }
+      });
     } finally {
       this.isRunning = false;
     }

@@ -588,6 +588,15 @@ export const normalizedPaymentEventTypeSchema = z.enum([
   "refund.pending",
   "refund.succeeded",
   "refund.failed",
+  /**
+   * A signature-valid webhook event whose provider-specific type isn't one
+   * this gateway adapter acts on (e.g. Razorpay subscription/dispute events).
+   * Acknowledged and stored like any other event — see PaymentWorker's
+   * fallback branch — rather than rejected, so the provider doesn't see a
+   * failing webhook and retry forever. The original provider event name is
+   * still recoverable from the stored payload.
+   */
+  "ignored",
 ]);
 export type NormalizedPaymentEventType = z.infer<typeof normalizedPaymentEventTypeSchema>;
 

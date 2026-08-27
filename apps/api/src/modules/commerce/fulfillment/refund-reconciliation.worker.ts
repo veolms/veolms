@@ -1,10 +1,11 @@
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { GatewayRefundDetails, PaymentGateway } from "@veolms/contracts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
+import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 
 export interface RefundReconciliationWorkerOptions {
   database: Kysely<Database>;
@@ -12,6 +13,21 @@ export interface RefundReconciliationWorkerOptions {
   logger?: FastifyBaseLogger;
   /** How old (in minutes) a pending refund must be before reconciliation queries the gateway. Default: 10 */
   staleAfterMinutes?: number;
+  /**
+   * Max stale refunds processed in one tick. Without this, a backlog of N
+   * (gateway outage, traffic spike) makes a single tick's gateway-call count
+   * scale with N. Default: 100 — see refund.repository.ts's listStaleRefunds.
+   */
+  batchSize?: number;
+  /**
+   * Max gateway calls in flight at once (see mapWithConcurrency). Only the
+   * read-only gateway fetch is parallelized — the DB reconciliation writes
+   * below stay strictly serial, since two stale refunds against the *same*
+   * order racing their "total refunded so far" read-then-write would risk
+   * the same cumulative-refund bug fixed elsewhere (see payment.worker.ts's
+   * handleRefundSucceeded). Default: 5
+   */
+  concurrency?: number;
 }
 
 export function createRefundReconciliationWorker({
@@ -19,6 +35,8 @@ export function createRefundReconciliationWorker({
   paymentGateway,
   logger,
   staleAfterMinutes = 10,
+  batchSize = 100,
+  concurrency = 5,
 }: RefundReconciliationWorkerOptions) {
   const courseAccessService = createCourseAccessService();
 
@@ -33,21 +51,42 @@ export function createRefundReconciliationWorker({
     errors: number;
   }> {
     const log = logger?.child({ job: "refund-reconciliation-worker" });
-    const staleRefunds = await refundRepo.listStaleRefunds(database, staleAfterMinutes);
+    const staleRefunds = await refundRepo.listStaleRefunds(database, staleAfterMinutes, batchSize);
 
     let resolved = 0;
     let skipped = 0;
     let errors = 0;
 
-    for (const refund of staleRefunds) {
+    // 1. Fetch gateway status for every stale refund concurrently — this is
+    //    the actual bottleneck (N sequential network round-trips), not the
+    //    DB reconciliation below.
+    const fetchResults = await mapWithConcurrency(staleRefunds, concurrency, async (refund) => {
+      if (!refund.gateway_refund_id) {
+        return { refund, gatewayRefund: null as GatewayRefundDetails | null, error: null as unknown };
+      }
       try {
-        if (!refund.gateway_refund_id) {
-          skipped++;
-          continue;
-        }
-
         const gatewayRefund = await paymentGateway.fetchRefund(refund.gateway_refund_id);
+        return { refund, gatewayRefund, error: null as unknown };
+      } catch (err) {
+        return { refund, gatewayRefund: null as GatewayRefundDetails | null, error: err };
+      }
+    });
 
+    // 2. Apply DB writes strictly serially, same as before parallelizing the
+    //    fetch above — only the network calls were parallelized.
+    for (const { refund, gatewayRefund, error } of fetchResults) {
+      if (error) {
+        log?.error({ err: error, refundId: refund.id }, "Error fetching stale refund from gateway");
+        errors++;
+        continue;
+      }
+
+      if (!refund.gateway_refund_id || !gatewayRefund) {
+        skipped++;
+        continue;
+      }
+
+      try {
         if (gatewayRefund.status === refund.status) {
           // Already in sync
           skipped++;

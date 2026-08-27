@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
-import type { Database } from "@veolms/database";
-import type { Kysely, Transaction } from "kysely";
 import type { AccessGrant, AccessGrantSource, AccessGrantStatus } from "@veolms/contracts";
 import * as accessRepo from "./access.repository.ts";
+// access.repository.ts is the module's canonical source for this type — see
+// the comment there for the full history of it having been separately (and,
+// in auth's case, incorrectly) redefined in 4 places.
+import type { Executor } from "./access.repository.ts";
 
-export type Executor = Kysely<Database> | Transaction<Database>;
+export type { Executor };
 
 export interface AccessService {
   grantAccess(

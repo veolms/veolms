@@ -60,11 +60,41 @@ export function createPricingService({
     let detectedCurrency = "INR";
     let currencyInitialized = false;
 
-    // 2. Authoritatively resolve every item from DB (courses / bundles)
+    // 2. Authoritatively resolve every item from DB (courses / bundles).
+    //    Batched up front — one query per repo function instead of one per
+    //    cart item — since this runs on every GET /cart, checkout preview,
+    //    and order-creation call (the module's hottest paths). The
+    //    validation loop below is otherwise unchanged: same checks, same
+    //    order, same first-invalid-item-throws semantics — it just reads
+    //    from these pre-fetched Maps instead of awaiting a query per item.
+    const courseIds = [
+      ...new Set(items.filter((it) => it.itemType === "course").map((it) => it.courseId!)),
+    ];
+    const bundleIds = [
+      ...new Set(items.filter((it) => it.itemType === "bundle").map((it) => it.bundleId!)),
+    ];
+
+    const [courseRows, pricingRows, bundleRows, bundleCourseRows] = await Promise.all([
+      courseRepo.findCoursesByIds(database, courseIds),
+      courseConfigRepo.findPricingByCourseIds(database, courseIds),
+      bundleRepo.findBundlesByIds(database, bundleIds),
+      bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
+    ]);
+
+    const coursesById = new Map(courseRows.map((c) => [c.id, c]));
+    const pricingByCourseId = new Map(pricingRows.map((p) => [p.course_id, p]));
+    const bundlesById = new Map(bundleRows.map((b) => [b.id, b]));
+    const bundleCoursesByBundleId = new Map<string, typeof bundleCourseRows>();
+    for (const bc of bundleCourseRows) {
+      const list = bundleCoursesByBundleId.get(bc.bundle_id) ?? [];
+      list.push(bc);
+      bundleCoursesByBundleId.set(bc.bundle_id, list);
+    }
+
     for (const item of items) {
       if (item.itemType === "course") {
         const courseId = item.courseId!;
-        const course = await courseRepo.findCourseById(database, courseId);
+        const course = coursesById.get(courseId);
         if (!course) {
           throw CommerceErrors.COURSE_NOT_FOUND(courseId);
         }
@@ -76,7 +106,7 @@ export function createPricingService({
         }
 
         // Fetch live pricing
-        const pricing = await courseConfigRepo.findPricingByCourseId(database, courseId);
+        const pricing = pricingByCourseId.get(courseId);
         let unitPrice = 0;
         if (pricing && pricing.pricing_type === "paid") {
           const isSaleActive =
@@ -109,7 +139,7 @@ export function createPricingService({
         itemCourseMap.set(courseId, [courseId]);
       } else if (item.itemType === "bundle") {
         const bundleId = item.bundleId!;
-        const bundle = await bundleRepo.findBundleById(database, bundleId);
+        const bundle = bundlesById.get(bundleId);
         if (!bundle) {
           throw CommerceErrors.BUNDLE_NOT_FOUND(bundleId);
         }
@@ -117,7 +147,7 @@ export function createPricingService({
           throw CommerceErrors.BUNDLE_NOT_AVAILABLE(bundle.title);
         }
 
-        const bundleCourses = await bundleRepo.listBundleCourses(database, bundleId);
+        const bundleCourses = bundleCoursesByBundleId.get(bundleId) ?? [];
         const bundleCourseIds = bundleCourses.map((c) => c.course_id);
 
         // Check if student already owns ALL courses in bundle

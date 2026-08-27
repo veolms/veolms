@@ -10,6 +10,21 @@ export async function findBundleById(database: Executor, bundleId: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Batched sibling of findBundleById — one `WHERE id IN (...)` query instead
+ * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
+ * runs on every GET /cart, checkout preview, and order-creation call.
+ */
+export async function findBundlesByIds(database: Executor, bundleIds: string[]) {
+  if (bundleIds.length === 0) return [];
+  return await database
+    .selectFrom("course_bundles")
+    .selectAll()
+    .where("id", "in", bundleIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
 export async function findBundleBySlug(database: Executor, slug: string) {
   return await database
     .selectFrom("course_bundles")
@@ -66,6 +81,33 @@ export async function listBundleCourses(database: Executor, bundleId: string) {
       "course_bundle_items.created_at",
     ])
     .where("course_bundle_items.bundle_id", "=", bundleId)
+    .where("courses.deleted_at", "is", null)
+    .orderBy("course_bundle_items.created_at", "asc")
+    .execute();
+}
+
+/**
+ * Batched sibling of listBundleCourses — one `WHERE bundle_id IN (...)`
+ * query instead of N sequential ones. Callers group the flat result by
+ * `bundle_id` themselves. Used by pricing.service.ts's calculatePricing,
+ * which runs on every GET /cart, checkout preview, and order-creation call.
+ */
+export async function listBundleCoursesForBundleIds(database: Executor, bundleIds: string[]) {
+  if (bundleIds.length === 0) return [];
+  return await database
+    .selectFrom("course_bundle_items")
+    .innerJoin("courses", "courses.id", "course_bundle_items.course_id")
+    .select([
+      "course_bundle_items.id as item_id",
+      "course_bundle_items.bundle_id",
+      "courses.id as course_id",
+      "courses.title as course_title",
+      "courses.slug as course_slug",
+      "courses.thumbnail_media_id as course_thumbnail_media_id",
+      "courses.status as course_status",
+      "course_bundle_items.created_at",
+    ])
+    .where("course_bundle_items.bundle_id", "in", bundleIds)
     .where("courses.deleted_at", "is", null)
     .orderBy("course_bundle_items.created_at", "asc")
     .execute();

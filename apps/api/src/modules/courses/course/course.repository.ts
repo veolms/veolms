@@ -40,6 +40,22 @@ export async function findCourseById(
     .executeTakeFirst();
 }
 
+/**
+ * Batched sibling of findCourseById — same filters (no status filter; the
+ * caller checks `status` itself), but one `WHERE id IN (...)` query instead
+ * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
+ * runs on every GET /cart, checkout preview, and order-creation call.
+ */
+export async function findCoursesByIds(database: DatabaseExecutor, courseIds: string[]) {
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("courses")
+    .selectAll()
+    .where("id", "in", courseIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
 export async function findCourseBySlug(
   database: Kysely<Database>,
   slug: string,
