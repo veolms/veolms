@@ -4,8 +4,6 @@ import type {
   PaymentGateway,
   VerifyPaymentRequest,
   VerifyPaymentResponse,
-  Refund,
-  CreateRefundRequest,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -13,7 +11,6 @@ import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
-import * as refundRepo from "../refunds/refund.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
 
 export interface PaymentService {
@@ -38,7 +35,6 @@ export interface PaymentService {
   verifyPayment(userId: string, input: VerifyPaymentRequest): Promise<VerifyPaymentResponse>;
   getPaymentById(paymentId: string): Promise<Payment | undefined>;
   getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
-  refundPayment(input: CreateRefundRequest & { createdBy?: string }): Promise<Refund>;
 }
 
 export interface PaymentServiceOptions {
@@ -293,67 +289,20 @@ export function createPaymentService({
     };
   }
 
-  async function refundPayment(
-    input: CreateRefundRequest & { createdBy?: string },
-  ): Promise<Refund> {
-    const { orderId, amount, reason, createdBy } = input;
-    const order = await orderRepo.findOrderById(database, orderId);
-    if (!order) {
-      throw CommerceErrors.ORDER_NOT_FOUND(orderId);
-    }
-
-    const payment = await paymentRepo.findPaymentByOrderId(database, orderId);
-    if (!payment || !payment.gateway_payment_id || payment.status !== "captured") {
-      throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
-    }
-
-    const refundAmount = amount ?? payment.amount;
-
-    // Call payment gateway refund method
-    const gatewayRefund = await paymentGateway.refundPayment({
-      gatewayPaymentId: payment.gateway_payment_id,
-      amount: refundAmount,
-      currency: payment.currency,
-      reason,
-    });
-
-    const refundRecord = await refundRepo.insertRefund(database, {
-      id: crypto.randomUUID(),
-      order_id: order.id,
-      payment_id: payment.id,
-      gateway_refund_id: gatewayRefund.gatewayRefundId,
-      amount: refundAmount,
-      currency: payment.currency,
-      reason: reason ?? null,
-      status: gatewayRefund.status,
-      created_by: createdBy ?? null,
-    });
-
-    const isFullRefund = refundAmount >= payment.amount;
-    await orderRepo.updateOrderStatus(database, order.id, {
-      status: isFullRefund ? "refunded" : "partially_refunded",
-    });
-
-    return {
-      id: refundRecord.id,
-      orderId: refundRecord.order_id,
-      paymentId: refundRecord.payment_id,
-      gatewayRefundId: refundRecord.gateway_refund_id,
-      amount: refundRecord.amount,
-      currency: refundRecord.currency,
-      reason: refundRecord.reason,
-      status: refundRecord.status as any,
-      createdBy: refundRecord.created_by,
-      createdAt: refundRecord.created_at,
-      updatedAt: refundRecord.updated_at,
-    };
-  }
+  // Note: refunds are NOT handled here. The real refund flow is
+  // refund.service.ts's processRefund — transactional, checks the running
+  // refund total against prior refunds, and passes an idempotency key to the
+  // gateway. A duplicate, weaker refundPayment used to live on this service
+  // (unreachable — no route ever called it) and was removed: it ran the
+  // gateway call, refund insert, and order-status update as three separate
+  // un-atomic awaits, never checked cumulative refunds, sent no idempotency
+  // key, and carried the same single-event isFullRefund bug fixed in
+  // handleRefundSucceeded. Wire refunds through refund.service.ts instead.
 
   return {
     initializePayment,
     verifyPayment,
     getPaymentById,
     getPaymentByOrderId,
-    refundPayment,
   };
 }
