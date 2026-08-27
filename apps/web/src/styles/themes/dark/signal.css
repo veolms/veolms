@@ -1,4 +1,4 @@
-/* signal palette — dark mode. */
+/* signal palette - dark mode. */
 :root[data-palette="signal"] {
   --canvas: #190c10;
   --header: #1d0c10;

@@ -1,3 +1,10 @@
+import {
+  CURRICULUM_LECTURE_COUNT_DEFAULT,
+  CURRICULUM_LECTURE_COUNT_MAX,
+  CURRICULUM_SECTION_COUNT_DEFAULT,
+  normalizeCurriculumSize,
+} from "./curriculumSize";
+
 export interface CourseVideo {
   fileName: string;
   duration: number;
@@ -74,10 +81,20 @@ const sourceLessonVideos = [
 ];
 
 const repeatedSectionLessonCounts = [6, 7, 8, 5, 5];
-const lessonMediaAssignments = [
+const preservedLessonMediaAssignments = [
   ...sourceLessonVideos,
   ...repeatedSectionLessonCounts.flatMap((count) =>
     sourceLessonVideos.slice(0, count),
+  ),
+];
+
+export const totalCourseLectures = CURRICULUM_LECTURE_COUNT_DEFAULT;
+
+const lessonMediaAssignments = [
+  ...preservedLessonMediaAssignments,
+  ...Array.from(
+    { length: totalCourseLectures - preservedLessonMediaAssignments.length },
+    (_, index) => sourceLessonVideos[index % sourceLessonVideos.length]!,
   ),
 ];
 
@@ -86,6 +103,16 @@ export const lessonVideoMap: Record<number, CourseVideo | undefined> =
     lessonMediaAssignments.map((video, index) => [index + 1, video]),
   );
 
+export const getCourseVideoForLesson = (lessonNumber: number): CourseVideo => {
+  const normalizedLessonNumber = Math.max(1, Math.round(lessonNumber));
+  return (
+    lessonMediaAssignments[normalizedLessonNumber - 1] ??
+    sourceLessonVideos[
+      (normalizedLessonNumber - 1) % sourceLessonVideos.length
+    ]!
+  );
+};
+
 const lesson = (
   number: number,
   title: string,
@@ -93,7 +120,7 @@ const lesson = (
 ): Lesson => [
   number,
   title,
-  formatMediaTime(lessonVideoMap[number]!.duration),
+  formatMediaTime(getCourseVideoForLesson(number).duration),
   status,
 ];
 
@@ -115,7 +142,7 @@ const repeatedLessons = (startNumber: number, count: number): Lesson[] =>
     lesson(startNumber + index, sourceLessonTitles[index]!, "todo"),
   );
 
-export const sections: CourseSection[] = [
+const coreSections: CourseSection[] = [
   {
     id: 1,
     title: "Introduction",
@@ -172,11 +199,144 @@ export const sections: CourseSection[] = [
   },
 ];
 
-export const lessonsById = new Map<number, Lesson>(
-  sections.flatMap((section) =>
+const advancedSectionTitles = [
+  "Node.js Foundations",
+  "Package Management and Modules",
+  "Async JavaScript Patterns",
+  "Express Essentials",
+  "REST API Design",
+  "MongoDB Integration",
+  "SQL and Data Modeling",
+  "Authentication and Authorization",
+  "Validation and Error Handling",
+  "Testing Node.js Applications",
+  "Caching and Queues",
+  "File Uploads and Media",
+  "Observability and Performance",
+  "Security Hardening",
+  "Deployment and DevOps",
+  "Capstone Production API",
+] as const;
+
+const advancedLessonTopics = [
+  "Runtime and Event Loop",
+  "Modules and Packages",
+  "Async Control Flow",
+  "HTTP Fundamentals",
+  "Express Routing",
+  "Middleware Design",
+  "API Validation",
+  "Database Integration",
+  "Authentication",
+  "Testing and Debugging",
+] as const;
+
+const coreLessonsById = new Map<number, Lesson>(
+  coreSections.flatMap((section) =>
     section.lessons.map((item): [number, Lesson] => [item[0], item]),
   ),
 );
+
+const getCurriculumSectionLessonCounts = (
+  sectionCount: number,
+  lectureCount: number,
+) => {
+  const counts = Array.from({ length: sectionCount }, () => 0);
+  let remainingLectures = lectureCount;
+  const preservedSectionCount = Math.min(coreSections.length, sectionCount);
+
+  for (let index = 0; index < preservedSectionCount; index += 1) {
+    const preferredCount = coreSections[index]!.lessons.length;
+    const nextCount = Math.min(preferredCount, remainingLectures);
+    counts[index] = nextCount;
+    remainingLectures -= nextCount;
+  }
+
+  const generatedSectionCount = sectionCount - preservedSectionCount;
+  if (generatedSectionCount > 0) {
+    const baseCount = Math.floor(remainingLectures / generatedSectionCount);
+    const largerSectionCount = remainingLectures % generatedSectionCount;
+    for (let index = 0; index < generatedSectionCount; index += 1) {
+      counts[preservedSectionCount + index] =
+        baseCount + (index < largerSectionCount ? 1 : 0);
+    }
+  } else if (remainingLectures > 0) {
+    counts[sectionCount - 1] =
+      (counts[sectionCount - 1] ?? 0) + remainingLectures;
+  }
+
+  return counts;
+};
+
+const getGeneratedSectionTitle = (sectionIndex: number) => {
+  if (sectionIndex < coreSections.length) {
+    return coreSections[sectionIndex]!.title;
+  }
+  return (
+    advancedSectionTitles[sectionIndex - coreSections.length] ??
+    `Load Test Section ${sectionIndex + 1}`
+  );
+};
+
+export const createCurriculumSections = (
+  requestedSectionCount: number,
+  requestedLectureCount: number,
+): CourseSection[] => {
+  const { sectionCount, lectureCount } = normalizeCurriculumSize({
+    sectionCount: requestedSectionCount,
+    lectureCount: requestedLectureCount,
+  });
+  const lessonCounts = getCurriculumSectionLessonCounts(
+    sectionCount,
+    lectureCount,
+  );
+  let nextLessonNumber = 1;
+
+  return lessonCounts.map((lessonCount, sectionIndex) => {
+    const lessons = Array.from({ length: lessonCount }, (_, lessonIndex) => {
+      const lessonNumber = nextLessonNumber;
+      nextLessonNumber += 1;
+      const preservedLesson = coreLessonsById.get(lessonNumber);
+      if (preservedLesson) return [...preservedLesson] as Lesson;
+
+      const topic =
+        advancedLessonTopics[lessonIndex % advancedLessonTopics.length]!;
+      return lesson(
+        lessonNumber,
+        `${topic} ${Math.floor(lessonIndex / advancedLessonTopics.length) + 1}`,
+        "todo",
+      );
+    });
+    const preservedSection = coreSections[sectionIndex];
+    const completedCount = lessons.filter(
+      ([, , , status]) => status === "done",
+    ).length;
+
+    return {
+      id: sectionIndex + 1,
+      title: getGeneratedSectionTitle(sectionIndex),
+      progress:
+        preservedSection && lessonCount === preservedSection.lessons.length
+          ? preservedSection.progress
+          : `${completedCount}/${lessonCount}`,
+      lessons,
+    };
+  });
+};
+
+export const createLessonsById = (courseSections: readonly CourseSection[]) =>
+  new Map<number, Lesson>(
+    courseSections.flatMap((section) =>
+      section.lessons.map((item): [number, Lesson] => [item[0], item]),
+    ),
+  );
+
+export const sections: CourseSection[] = createCurriculumSections(
+  CURRICULUM_SECTION_COUNT_DEFAULT,
+  totalCourseLectures,
+);
+
+export const lessonsById = createLessonsById(sections);
 export const lessonSequence = [...lessonsById.keys()];
 
 const slugifyLessonTitle = (title: string) =>
@@ -206,14 +366,26 @@ export const lessonIdBySlug = new Map<string, number>(
 );
 
 export function getLessonSlug(lessonId: number): string {
-  return lessonSlugById.get(lessonId) || lessonSlugById.get(1)!;
+  if (lessonSlugById.has(lessonId)) return lessonSlugById.get(lessonId)!;
+  if (
+    Number.isInteger(lessonId) &&
+    lessonId > 0 &&
+    lessonId <= CURRICULUM_LECTURE_COUNT_MAX
+  ) {
+    return `lecture-${lessonId}`;
+  }
+  return lessonSlugById.get(1)!;
 }
 
 export function resolveLessonIdentifier(
   identifier: string | number | null | undefined,
 ): number | null {
   if (typeof identifier === "number")
-    return lessonsById.has(identifier) ? identifier : null;
+    return Number.isInteger(identifier) &&
+      identifier > 0 &&
+      identifier <= CURRICULUM_LECTURE_COUNT_MAX
+      ? identifier
+      : null;
   if (!identifier) return null;
 
   const normalizedIdentifier = identifier.trim().toLowerCase();
@@ -223,5 +395,7 @@ export function resolveLessonIdentifier(
   const idMatch = /^(?:lesson-|lecture-)?(\d+)$/.exec(normalizedIdentifier);
   if (!idMatch) return null;
   const lessonId = Number(idMatch[1]);
-  return lessonsById.has(lessonId) ? lessonId : null;
+  return lessonId > 0 && lessonId <= CURRICULUM_LECTURE_COUNT_MAX
+    ? lessonId
+    : null;
 }

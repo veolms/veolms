@@ -1,8 +1,8 @@
 import type { ComponentType, CSSProperties } from "react";
-import { BookOpen } from "@phosphor-icons/react/BookOpen";
-import { Heart } from "@phosphor-icons/react/Heart";
-import { House } from "@phosphor-icons/react/House";
-import { UsersThree } from "@phosphor-icons/react/UsersThree";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 
 type PreviewIcon = ComponentType<{
   className?: string;
@@ -12,14 +12,14 @@ type PreviewIcon = ComponentType<{
 type MiniSurfacePreviewMode = "normal" | "dark" | "light" | "device";
 
 const sidebarIconPreviewClass = [
-  "settings-icon-preview grid h-[140px] w-[207px] flex-none basis-[207px]",
-  "content-start gap-2 rounded-xl px-2.5 py-3 text-[var(--accent-ink,var(--accent))]",
+  "settings-icon-preview grid h-35 w-51.75 flex-none basis-51.75",
+  "content-start gap-2 rounded-xl px-2.5 py-3 text-(--accent-ink,var(--accent))",
   "[background:color-mix(in_srgb,var(--canvas)_91%,var(--accent)_9%)]",
-  "max-[1120px]:w-[170px] max-[1120px]:basis-[170px]",
-  "max-[900px]:w-[136px] max-[900px]:basis-[136px] max-[900px]:py-[11px]",
+  "max-[1120px]:w-42.5 max-[1120px]:basis-42.5",
+  "max-[900px]:w-34 max-[900px]:basis-34 max-[900px]:py-2.75",
 ].join(" ");
 const sidebarIconPreviewRowClass =
-  "grid min-h-[23px] grid-cols-[22px_minmax(0,1fr)] items-center gap-[9px]";
+  "grid min-h-5.75 grid-cols-[22px_minmax(0,1fr)] items-center gap-2.25";
 
 export interface MiniSurfaceProps {
   variant?: string;
@@ -86,7 +86,7 @@ const PREVIEW_NAVIGATION: readonly (readonly [PreviewIcon, string, string])[] =
   [
     [House, "#2e9bff", "Dashboard"],
     [Heart, "#ee4f72", "Wishlist"],
-    [BookOpen, "#a26bff", "Explore Courses"],
+    [BookOpen, "#a26bff", "Courses"],
     [UsersThree, "#27c968", "Students"],
   ];
 
@@ -118,9 +118,9 @@ export function SidebarIconPreview({
           className={sidebarIconPreviewRowClass}
           style={monochrome ? undefined : { color }}
         >
-          <Icon className="size-[21px] shrink-0" size={15} weight="duotone" />
+          <Icon className="size-5.25 shrink-0" size={15} weight="duotone" />
           <b
-            className={`min-w-0 truncate text-[0.78rem] font-[650] leading-[1.2] max-[900px]:text-[0.64rem] ${monochrome ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
+            className={`min-w-0 truncate text-[0.78rem] font-[650] leading-[1.2] max-[900px]:text-[0.64rem] ${monochrome ? "text-(--text-secondary)" : "text-(--text)"}`}
           >
             {label}
           </b>

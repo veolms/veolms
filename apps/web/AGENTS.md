@@ -60,6 +60,7 @@ Example:
 ### State Ownership Rules
 
 Use the correct state tool based on data ownership:
+
 - **Server / Backend Data -> TanStack Query**: All data fetched from or synchronized with the backend (`currentUser`, `courses`, `sessions`, `notifications`, `reviews`, etc.).
 - **Shared Frontend State -> Store**: Global or cross-component UI state only (`theme`, `sidebar`, `player preferences`, `temporary auth navigation state`).
 - **Component State -> useState / useReducer**: State local to a single screen or component (`modal open`, `form field state`, `dropdown toggle`).
@@ -67,6 +68,7 @@ Use the correct state tool based on data ownership:
 ### Anti-Duplication Rule (Single Source of Truth)
 
 Never duplicate server data into a global store.
+
 - Avoid: `GET /me` -> TanStack Query -> copy full user object -> `auth.store`.
 - Prefer: `GET /me` -> TanStack Query -> UI components consume query hook directly.
 - `auth.store.ts` should only contain lightweight client-side authentication flags or temporary tokens if needed.
@@ -125,6 +127,9 @@ Always import DTO request/response types and schemas from `@veolms/contracts`. D
 - Do not add new rules to global CSS files.
 - Existing CSS is legacy code and may remain unchanged unless the task explicitly requires refactoring it. Do not perform unrelated CSS migrations while implementing a feature.
 - When repeated Tailwind classes represent a reusable UI element, create a small reusable component or a typed class/variant helper. Do not solve repetition by moving ordinary component styling into plain CSS.
+- Use canonical Tailwind CSS v4 syntax. Prefer custom-property shorthand such as `bg-(--surface)`, `text-(--text)`, and `h-(--panel-height)` over arbitrary values such as `bg-[var(--surface)]`, `text-[var(--text)]`, and `h-[var(--panel-height)]`.
+- Prefer Tailwind v4's generated numeric utilities such as `h-18`, `w-59.5`, or `max-w-345` when the value is derived from the spacing scale. Use an arbitrary dimension such as `h-[73px]` only when no canonical utility represents the intentional value.
+- Keep arbitrary values for expressions Tailwind cannot represent canonically, including `calc(...)`, `color-mix(...)`, unusual units, and complex grid or shadow declarations.
 
 ---
 
@@ -133,6 +138,7 @@ Always import DTO request/response types and schemas from `@veolms/contracts`. D
 Plain CSS is allowed only when the required behavior cannot reasonably be implemented with Tailwind CSS, including Tailwind's responsive, state, arbitrary-value, and arbitrary-variant capabilities.
 
 When an exception is necessary:
+
 1. Create a feature-local CSS file owned by that module; never place the rule in a global stylesheet.
 2. Import the file only from the feature or component entry point that needs it.
 3. Keep selectors narrowly scoped and namespaced to the owning feature.
@@ -148,4 +154,14 @@ When an exception is necessary:
 - Keep state and side effects as close as possible to the feature that owns them; extract focused hooks when logic becomes independently testable or reusable.
 - Use semantic names based on product behavior, not visual accidents or temporary implementation details.
 - Avoid hidden coupling between features, broad selectors, and imports that cause one module's styling or behavior to leak into another.
-- Add or update focused tests for changed behavior.
+- Add or update focused tests for changed behavior. Run the relevant typecheck, lint, and tests before completing the work.
+
+## Manual commit verification
+
+- Do not add or configure a pre-commit hook for the browser memory regression tests.
+- Before creating a commit that includes changes under `apps/web`, manually run the production-browser memory regression test suite in addition to the relevant typecheck, lint, and functional tests.
+- Run memory checks against the production build and use the configured per-page baselines and budgets. Include ordinary pages without video and learning pages when they are affected by the change.
+- If a memory check fails, do not proceed with the commit. Diagnose whether the failure is a product regression, a test problem, or an unstable measurement; fix the underlying issue and rerun the complete verification until it passes.
+- If the memory suite is unavailable or cannot be run, report that clearly and do not claim that commit verification passed.
+
+Before adding plain CSS or growing an already large file, stop and confirm that the change cannot be expressed as Tailwind utilities, a small feature component, a focused hook, or a reusable variant.

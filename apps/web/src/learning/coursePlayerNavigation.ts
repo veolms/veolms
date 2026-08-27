@@ -1,9 +1,9 @@
 import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
 
-export type CoursePlayerOrigin =
-  "home" | "explore-courses" | "my-courses" | "wishlist";
+export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
 
-type LegacyCoursePlayerOrigin = "courses" | "my-learning";
+type LegacyCoursePlayerOrigin =
+  "explore-courses" | "my-courses" | "my-learning";
 
 type CoursePlayerStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -12,6 +12,7 @@ export interface CoursePlayerSession {
   lessonId: number;
   origin: CoursePlayerOrigin;
   path: string;
+  returnPath: string;
   updatedAt: number;
 }
 
@@ -23,11 +24,14 @@ export interface PendingCourseCommentDraft {
   commentsStorageKey: string;
 }
 
-export const COURSE_PLAYER_SESSION_STORAGE_KEY = "veolms-active-course-player";
+export const COURSE_PLAYER_SESSIONS_STORAGE_KEY =
+  "veolms-open-course-player-sessions";
 export const COURSE_PLAYER_SESSION_CHANGE_EVENT =
   "veolms-course-player-session-change";
 
-const DEFAULT_COURSE_PLAYER_ORIGIN: CoursePlayerOrigin = "explore-courses";
+const LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY = "veolms-active-course-player";
+const DEFAULT_COURSE_PLAYER_ORIGIN: CoursePlayerOrigin = "courses";
+const INTERNAL_URL_ORIGIN = "https://procodrr.local";
 const LEGACY_COURSE_PLAYER_STORAGE_KEYS = [
   "veolms-resume-course-player-home",
   "veolms-resume-course-player-courses",
@@ -37,22 +41,13 @@ const LEGACY_COURSE_PLAYER_STORAGE_KEYS = [
 
 const COURSE_PLAYER_PARENT_PATHS: Record<CoursePlayerOrigin, string> = {
   home: "/",
-  "explore-courses": "/explore-courses",
-  "my-courses": "/my-courses",
+  courses: "/courses",
   wishlist: "/wishlist",
-};
-
-const COURSE_PLAYER_SECTIONS: Record<CoursePlayerOrigin, string> = {
-  home: "Home",
-  "explore-courses": "Explore Courses",
-  "my-courses": "My Courses",
-  wishlist: "Wishlist",
 };
 
 const COURSE_PLAYER_BACK_LABELS: Record<CoursePlayerOrigin, string> = {
   home: "Return to Home",
-  "explore-courses": "Return to Explore Courses",
-  "my-courses": "Return to My Courses",
+  courses: "Return to Courses",
   wishlist: "Return to Wishlist",
 };
 
@@ -61,33 +56,23 @@ const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
 > = {
   "/": "home",
   "/home": "home",
-  "/my-courses": "my-courses",
-  "/my-learning": "my-courses",
-  "/explore-courses": "explore-courses",
-  "/courses": "explore-courses",
+  "/courses": "courses",
   "/wishlist": "wishlist",
 };
 
 const isCoursePlayerOrigin = (value: unknown): value is CoursePlayerOrigin =>
-  value === "home" ||
-  value === "explore-courses" ||
-  value === "my-courses" ||
-  value === "wishlist";
+  value === "home" || value === "courses" || value === "wishlist";
 
 const normalizeCoursePlayerOrigin = (
   value: unknown,
 ): CoursePlayerOrigin | null => {
   if (isCoursePlayerOrigin(value)) return value;
-  if (value === "courses") return "explore-courses";
-  if (value === "my-learning") return "my-courses";
-  return null;
-};
-
-const getLegacyCoursePlayerOrigin = (
-  origin: CoursePlayerOrigin,
-): LegacyCoursePlayerOrigin | null => {
-  if (origin === "explore-courses") return "courses";
-  if (origin === "my-courses") return "my-learning";
+  if (
+    value === "explore-courses" ||
+    value === "my-courses" ||
+    value === "my-learning"
+  )
+    return "courses";
   return null;
 };
 
@@ -100,11 +85,50 @@ const getBrowserStorage = (): CoursePlayerStorage | null => {
   }
 };
 
+const normalizePathname = (pathname: string) =>
+  pathname.replace(/\/+$/, "") || "/";
+
 const getCoursePlayerOriginForPath = (
-  pathname: string,
+  path: string,
 ): CoursePlayerOrigin | null => {
-  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
-  return COURSE_PLAYER_ORIGINS_BY_PATH[normalizedPathname] ?? null;
+  try {
+    const url = new URL(path, INTERNAL_URL_ORIGIN);
+    if (url.origin !== INTERNAL_URL_ORIGIN) return null;
+    return (
+      COURSE_PLAYER_ORIGINS_BY_PATH[normalizePathname(url.pathname)] ?? null
+    );
+  } catch {
+    return null;
+  }
+};
+
+const normalizeInternalReturnPath = (
+  value: unknown,
+  fallback: string,
+): string => {
+  if (typeof value !== "string") return fallback;
+  const candidate = value.trim();
+  if (
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\") ||
+    /^[a-z][a-z\d+.-]*:/i.test(candidate)
+  )
+    return fallback;
+
+  try {
+    const url = new URL(candidate, INTERNAL_URL_ORIGIN);
+    if (url.origin !== INTERNAL_URL_ORIGIN) return fallback;
+    const decodedPathname = decodeURIComponent(url.pathname);
+    if (
+      decodedPathname.includes("\\") ||
+      /^\/+learn(?:\/|$)/i.test(decodedPathname)
+    )
+      return fallback;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
 };
 
 const notifyCoursePlayerSessionChange = () => {
@@ -113,78 +137,198 @@ const notifyCoursePlayerSessionChange = () => {
 };
 
 const removeLegacyCoursePlayerDestinations = (
-  storage: CoursePlayerStorage | null,
-) => {
-  for (const key of LEGACY_COURSE_PLAYER_STORAGE_KEYS) storage?.removeItem(key);
-};
-
-const isCoursePlayerPathForOrigin = (
-  path: string,
-  origin: CoursePlayerOrigin,
-) => {
-  if (!path.startsWith("/") || path.startsWith("//")) return false;
-  try {
-    const url = new URL(path, "https://procodrr.local");
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    return (
-      url.origin === "https://procodrr.local" &&
-      pathParts.length === 3 &&
-      pathParts[0] === "learn" &&
-      Boolean(pathParts[1]) &&
-      Boolean(pathParts[2]) &&
-      url.searchParams.size === 1 &&
-      normalizeCoursePlayerOrigin(url.searchParams.get("from")) === origin &&
-      !url.hash
-    );
-  } catch {
-    return false;
+  storage: CoursePlayerStorage,
+): boolean => {
+  let didRemoveDestination = false;
+  for (const key of LEGACY_COURSE_PLAYER_STORAGE_KEYS) {
+    if (storage.getItem(key) === null) continue;
+    storage.removeItem(key);
+    didRemoveDestination = true;
   }
+  return didRemoveDestination;
 };
 
-const parseCoursePlayerSession = (
-  value: string | null | undefined,
+const parseCoursePlayerSessionCandidate = (
+  value: unknown,
 ): CoursePlayerSession | null => {
-  if (!value) return null;
   try {
-    const parsed: unknown = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object") return null;
-    const candidate = parsed as Partial<CoursePlayerSession>;
-    const pathUrl = new URL(candidate.path || "", "https://procodrr.local");
-    const pathParts = pathUrl.pathname.split("/").filter(Boolean);
-    const lessonId = resolveLessonIdentifier(pathParts[2]);
-    const origin = normalizeCoursePlayerOrigin(candidate.origin);
+    if (!value || typeof value !== "object") return null;
+    const candidate = value as Partial<CoursePlayerSession>;
     if (
       typeof candidate.courseId !== "string" ||
       !candidate.courseId ||
-      lessonId === null ||
-      !origin ||
       typeof candidate.path !== "string" ||
-      !isCoursePlayerPathForOrigin(candidate.path, origin) ||
       typeof candidate.updatedAt !== "number" ||
       !Number.isFinite(candidate.updatedAt)
     )
       return null;
-    const canonicalPath = getCoursePlayerPath(
-      candidate.courseId,
-      origin,
-      lessonId,
-    );
-    const legacyOrigin = getLegacyCoursePlayerOrigin(origin);
-    const legacyPath = legacyOrigin
-      ? getCoursePlayerPath(candidate.courseId, legacyOrigin, lessonId)
-      : null;
-    if (candidate.path !== canonicalPath && candidate.path !== legacyPath)
+
+    const pathUrl = new URL(candidate.path, INTERNAL_URL_ORIGIN);
+    if (pathUrl.origin !== INTERNAL_URL_ORIGIN || pathUrl.hash) return null;
+    const pathParts = pathUrl.pathname.split("/").filter(Boolean);
+    if (pathParts.length !== 3 || pathParts[0] !== "learn") return null;
+    if (decodeURIComponent(pathParts[1] || "") !== candidate.courseId)
       return null;
+
+    const lessonId = resolveLessonIdentifier(pathParts[2]);
+    const pathOrigin = normalizeCoursePlayerOrigin(
+      pathUrl.searchParams.get("from"),
+    );
+    const candidateOrigin = normalizeCoursePlayerOrigin(candidate.origin);
+    const origin = candidateOrigin ?? pathOrigin;
+    if (
+      lessonId === null ||
+      !origin ||
+      !pathOrigin ||
+      pathOrigin !== origin ||
+      pathUrl.searchParams.size > 2 ||
+      [...pathUrl.searchParams.keys()].some(
+        (key) => key !== "from" && key !== "returnTo",
+      )
+    )
+      return null;
+
+    const fallbackReturnPath = COURSE_PLAYER_PARENT_PATHS[origin];
+    const returnPath = normalizeInternalReturnPath(
+      candidate.returnPath ?? pathUrl.searchParams.get("returnTo"),
+      fallbackReturnPath,
+    );
+
     return {
       courseId: candidate.courseId,
       lessonId,
       origin,
-      path: canonicalPath,
+      path: getCoursePlayerPath(
+        candidate.courseId,
+        origin,
+        lessonId,
+        returnPath,
+      ),
+      returnPath,
       updatedAt: candidate.updatedAt,
     };
   } catch {
     return null;
   }
+};
+
+const parseStoredCoursePlayerSession = (
+  value: string | null,
+): CoursePlayerSession | null => {
+  if (!value) return null;
+  try {
+    return parseCoursePlayerSessionCandidate(JSON.parse(value));
+  } catch {
+    return null;
+  }
+};
+
+interface CoursePlayerSessionState {
+  sessions: CoursePlayerSession[];
+}
+
+const writeSessionCollectionWithoutNotification = (
+  storage: CoursePlayerStorage,
+  sessions: readonly CoursePlayerSession[],
+) => {
+  if (sessions.length > 0) {
+    storage.setItem(
+      COURSE_PLAYER_SESSIONS_STORAGE_KEY,
+      JSON.stringify(sessions),
+    );
+  } else {
+    storage.removeItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY);
+  }
+};
+
+const readCoursePlayerSessionState = (
+  storage: CoursePlayerStorage | null,
+): CoursePlayerSessionState => {
+  const state: CoursePlayerSessionState = { sessions: [] };
+  if (!storage) return state;
+
+  try {
+    const storedSessions = storage.getItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY);
+    let collectionNeedsWrite = false;
+    if (storedSessions !== null) {
+      try {
+        const parsedCollection: unknown = JSON.parse(storedSessions);
+        if (!Array.isArray(parsedCollection)) {
+          collectionNeedsWrite = true;
+        } else {
+          for (const value of parsedCollection) {
+            const session = parseCoursePlayerSessionCandidate(value);
+            if (!session) {
+              collectionNeedsWrite = true;
+              continue;
+            }
+            const existingIndex = state.sessions.findIndex(
+              ({ courseId }) => courseId === session.courseId,
+            );
+            if (existingIndex === -1) state.sessions.push(session);
+            else {
+              state.sessions[existingIndex] = session;
+              collectionNeedsWrite = true;
+            }
+          }
+          if (storedSessions !== JSON.stringify(state.sessions))
+            collectionNeedsWrite = true;
+        }
+      } catch {
+        collectionNeedsWrite = true;
+      }
+    }
+
+    const storedLegacySingleton = storage.getItem(
+      LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY,
+    );
+    const legacySingleton = parseStoredCoursePlayerSession(
+      storedLegacySingleton,
+    );
+    if (storedLegacySingleton !== null) {
+      storage.removeItem(LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY);
+      collectionNeedsWrite = true;
+    }
+    if (legacySingleton) {
+      const existingIndex = state.sessions.findIndex(
+        ({ courseId }) => courseId === legacySingleton.courseId,
+      );
+      if (existingIndex === -1) {
+        state.sessions.push(legacySingleton);
+      } else if (
+        legacySingleton.updatedAt >
+        (state.sessions[existingIndex]?.updatedAt ?? -Infinity)
+      ) {
+        state.sessions[existingIndex] = legacySingleton;
+      }
+      collectionNeedsWrite = true;
+    }
+
+    if (removeLegacyCoursePlayerDestinations(storage))
+      collectionNeedsWrite = true;
+    if (collectionNeedsWrite)
+      writeSessionCollectionWithoutNotification(storage, state.sessions);
+  } catch {
+    // A partial or unavailable store should not block normal navigation.
+  }
+
+  return state;
+};
+
+const persistCoursePlayerSessions = (
+  sessions: readonly CoursePlayerSession[],
+  storage: CoursePlayerStorage | null,
+) => {
+  if (!storage) return;
+  let didWrite = false;
+  try {
+    writeSessionCollectionWithoutNotification(storage, sessions);
+    removeLegacyCoursePlayerDestinations(storage);
+    didWrite = true;
+  } catch {
+    // Session persistence is best-effort when storage is unavailable.
+  }
+  if (didWrite) notifyCoursePlayerSessionChange();
 };
 
 export function getCoursePlayerOrigin(search: string): CoursePlayerOrigin {
@@ -198,13 +342,46 @@ export function getCoursePlayerOriginFromPathname(
   return getCoursePlayerOriginForPath(pathname) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
 }
 
+export function getCoursePlayerParentPath(origin: CoursePlayerOrigin): string {
+  return COURSE_PLAYER_PARENT_PATHS[origin];
+}
+
+export function getCoursePlayerReturnPath(search: string): string {
+  const origin = getCoursePlayerOrigin(search);
+  return normalizeInternalReturnPath(
+    new URLSearchParams(search).get("returnTo"),
+    COURSE_PLAYER_PARENT_PATHS[origin],
+  );
+}
+
 export function getCoursePlayerPath(
   courseId: string,
   origin: CoursePlayerOrigin | LegacyCoursePlayerOrigin,
   lessonIdentifier: string | number = 1,
+  returnPath?: string,
 ): string {
+  const normalizedOrigin =
+    normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
-  return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?from=${origin}`;
+  const fallbackReturnPath = COURSE_PLAYER_PARENT_PATHS[normalizedOrigin];
+  const normalizedReturnPath = normalizeInternalReturnPath(
+    returnPath,
+    fallbackReturnPath,
+  );
+  const search = new URLSearchParams({ from: normalizedOrigin });
+  if (normalizedReturnPath !== fallbackReturnPath)
+    search.set("returnTo", normalizedReturnPath);
+  return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
+}
+
+export function getCoursePlayerLaunchPath(
+  courseId: string,
+  sourcePath: string,
+  lessonIdentifier: string | number = getStoredCourseLessonId(courseId),
+): string {
+  const returnPath = normalizeInternalReturnPath(sourcePath, "/courses");
+  const origin = getCoursePlayerOriginFromPathname(returnPath);
+  return getCoursePlayerPath(courseId, origin, lessonIdentifier, returnPath);
 }
 
 export function getStoredCourseLessonId(
@@ -214,94 +391,132 @@ export function getStoredCourseLessonId(
   try {
     const courseKey = encodeURIComponent(courseId);
     const savedLesson =
-      storage?.getItem(`veolms-last-lesson-${courseKey}`) ??
-      storage?.getItem("veolms-last-lesson") ??
-      1;
+      storage?.getItem(`veolms-last-lesson-${courseKey}`) ?? 1;
     return resolveLessonIdentifier(savedLesson) ?? 1;
   } catch {
     return 1;
   }
 }
 
-export function getActiveCoursePlayerSession(
+export function getOpenCoursePlayerSessions(
   storage: CoursePlayerStorage | null = getBrowserStorage(),
-): CoursePlayerSession | null {
-  try {
-    const storedSession = storage?.getItem(COURSE_PLAYER_SESSION_STORAGE_KEY);
-    const session = parseCoursePlayerSession(storedSession);
-    if (session) {
-      const canonicalSession = JSON.stringify(session);
-      if (storedSession !== canonicalSession) {
-        storage?.setItem(COURSE_PLAYER_SESSION_STORAGE_KEY, canonicalSession);
-      }
-      return session;
-    }
-    storage?.removeItem(COURSE_PLAYER_SESSION_STORAGE_KEY);
-    removeLegacyCoursePlayerDestinations(storage);
-  } catch {
-    // A missing session simply sends navigation to its normal destination.
-  }
-  return null;
+): CoursePlayerSession[] {
+  return readCoursePlayerSessionState(storage).sessions;
 }
 
-export function rememberCoursePlayerDestination(
+export function getCoursePlayerSession(
   courseId: string,
-  origin: CoursePlayerOrigin,
+  storage: CoursePlayerStorage | null = getBrowserStorage(),
+): CoursePlayerSession | null {
+  return (
+    readCoursePlayerSessionState(storage).sessions.find(
+      (session) => session.courseId === courseId,
+    ) ?? null
+  );
+}
+
+export function upsertCoursePlayerSessionFromRoute(
+  courseId: string,
+  search: string,
   lessonIdentifier: string | number = getStoredCourseLessonId(courseId),
   storage: CoursePlayerStorage | null = getBrowserStorage(),
 ): string {
+  const state = readCoursePlayerSessionState(storage);
+  const existingIndex = state.sessions.findIndex(
+    (openSession) => openSession.courseId === courseId,
+  );
+  const existingSession =
+    existingIndex === -1 ? null : (state.sessions[existingIndex] ?? null);
+  const searchParams = new URLSearchParams(search);
+  const hasLaunchContext =
+    searchParams.has("from") || searchParams.has("returnTo");
+  const origin =
+    !hasLaunchContext && existingSession
+      ? existingSession.origin
+      : getCoursePlayerOrigin(search);
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
-  const path = getCoursePlayerPath(courseId, origin, lessonId);
+  const returnPath =
+    !hasLaunchContext && existingSession
+      ? existingSession.returnPath
+      : getCoursePlayerReturnPath(search);
+  const path = getCoursePlayerPath(courseId, origin, lessonId, returnPath);
   const session: CoursePlayerSession = {
     courseId,
     lessonId,
     origin,
     path,
+    returnPath,
     updatedAt: Date.now(),
   };
-  try {
-    storage?.setItem(
-      COURSE_PLAYER_SESSION_STORAGE_KEY,
-      JSON.stringify(session),
-    );
-    removeLegacyCoursePlayerDestinations(storage);
-    notifyCoursePlayerSessionChange();
-  } catch {
-    // Navigation remains available when browser storage is unavailable.
-  }
+  if (existingIndex === -1) state.sessions.push(session);
+  else state.sessions[existingIndex] = session;
+  persistCoursePlayerSessions(state.sessions, storage);
   return path;
 }
 
-export function getRememberedCoursePlayerDestination(
-  origin: CoursePlayerOrigin,
+export function activateCoursePlayerSession(
+  courseId: string,
   storage: CoursePlayerStorage | null = getBrowserStorage(),
 ): string | null {
-  const session = getActiveCoursePlayerSession(storage);
-  return session?.origin === origin ? session.path : null;
+  const state = readCoursePlayerSessionState(storage);
+  const sessionIndex = state.sessions.findIndex(
+    (session) => session.courseId === courseId,
+  );
+  if (sessionIndex === -1) return null;
+
+  const session = state.sessions[sessionIndex];
+  if (!session) return null;
+  const activatedSession: CoursePlayerSession = {
+    ...session,
+    updatedAt: Date.now(),
+  };
+  state.sessions[sessionIndex] = activatedSession;
+  persistCoursePlayerSessions(state.sessions, storage);
+  return activatedSession.path;
 }
 
-export function clearRememberedCoursePlayerDestination(
-  origin: CoursePlayerOrigin,
+export function closeCoursePlayerSession(
+  courseId: string,
   storage: CoursePlayerStorage | null = getBrowserStorage(),
-) {
-  try {
-    const session = getActiveCoursePlayerSession(storage);
-    if (session?.origin !== origin) return;
-    storage?.removeItem(COURSE_PLAYER_SESSION_STORAGE_KEY);
-    notifyCoursePlayerSessionChange();
-  } catch {
-    // Clearing a resume route is best-effort when storage is unavailable.
+): CoursePlayerSession | null {
+  const state = readCoursePlayerSessionState(storage);
+  if (!state.sessions.some((session) => session.courseId === courseId)) {
+    return state.sessions.reduce<CoursePlayerSession | null>(
+      (mostRecent, session) =>
+        !mostRecent || session.updatedAt > mostRecent.updatedAt
+          ? session
+          : mostRecent,
+      null,
+    );
   }
+
+  const remainingSessions = state.sessions.filter(
+    (session) => session.courseId !== courseId,
+  );
+  persistCoursePlayerSessions(remainingSessions, storage);
+  return remainingSessions.reduce<CoursePlayerSession | null>(
+    (mostRecent, session) =>
+      !mostRecent || session.updatedAt > mostRecent.updatedAt
+        ? session
+        : mostRecent,
+    null,
+  );
 }
 
-export function getResumableCoursePlayerNavigationPath(
-  path: string,
-  storage: CoursePlayerStorage | null = getBrowserStorage(),
+export function getCoursePlayerBackLabel(
+  source: CoursePlayerOrigin | string,
 ): string {
-  const origin = getCoursePlayerOriginForPath(path);
+  if (isCoursePlayerOrigin(source)) return COURSE_PLAYER_BACK_LABELS[source];
+  const returnPath = normalizeInternalReturnPath(source, "/courses");
+  const pathname = normalizePathname(
+    new URL(returnPath, INTERNAL_URL_ORIGIN).pathname,
+  );
+  if (/^\/courses\/[^/]+\/overview$/.test(pathname))
+    return "Return to Course Overview";
+  const origin = getCoursePlayerOriginForPath(pathname);
   return origin
-    ? getRememberedCoursePlayerDestination(origin, storage) || path
-    : path;
+    ? COURSE_PLAYER_BACK_LABELS[origin]
+    : "Return to the previous page";
 }
 
 export function getPendingCourseCommentDraft(
@@ -383,26 +598,4 @@ export function postPendingCourseCommentDraft(
   } catch {
     // The caller still owns the pending switch and can offer a retry.
   }
-}
-
-export function getCoursePlayerParentPath(origin: CoursePlayerOrigin): string {
-  return COURSE_PLAYER_PARENT_PATHS[origin];
-}
-
-export function getCoursePlayerSection(origin: CoursePlayerOrigin): string {
-  return COURSE_PLAYER_SECTIONS[origin];
-}
-
-export function getCoursePlayerBackLabel(origin: CoursePlayerOrigin): string {
-  return COURSE_PLAYER_BACK_LABELS[origin];
-}
-
-export function getCoursePlayerOriginFromSection(
-  section: string,
-): CoursePlayerOrigin | null {
-  const origin = Object.entries(COURSE_PLAYER_SECTIONS).find(
-    ([, label]) => label === section,
-  )?.[0];
-  if (!origin || !isCoursePlayerOrigin(origin)) return null;
-  return origin;
 }

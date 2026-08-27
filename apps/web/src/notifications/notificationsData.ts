@@ -65,7 +65,7 @@ export const initialNotificationsList: readonly NotificationItem[] = [
     iconType: "graduation",
     iconColor: "rgba(139, 92, 246, 0.16)", // Purple soft
     iconTextColor: "#a78bfa",
-    actionUrl: "/explore-courses",
+    actionUrl: "/courses",
   },
   {
     id: "notif-2",
@@ -133,7 +133,7 @@ export const initialNotificationsList: readonly NotificationItem[] = [
     iconType: "book",
     iconColor: "rgba(20, 184, 166, 0.16)", // Teal soft
     iconTextColor: "#2dd4bf",
-    actionUrl: "/my-courses",
+    actionUrl: "/courses",
   },
   {
     id: "notif-7",

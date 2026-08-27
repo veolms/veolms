@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Check } from "@phosphor-icons/react/Check";
-import { Bell } from "@phosphor-icons/react/Bell";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import type { NavigateTo } from "../routing/navigation";
 import { NotificationCard } from "./NotificationCard";
 import { NotificationFiltersBar } from "./NotificationFiltersBar";
@@ -86,16 +86,17 @@ export function NotificationsPage({
           <div className="flex items-center gap-2.5">
             <h1
               id="notifications-page-title"
-              className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-[var(--text)]"
+              className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
             >
               Notifications
             </h1>
-            <span className="rounded-full bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] px-2.5 py-0.5 text-xs font-bold text-[var(--text-secondary)] shadow-sm">
+            <span className="rounded-full bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] px-2.5 py-0.5 text-xs font-bold text-(--text-secondary) shadow-sm">
               {notifications.length}
             </span>
           </div>
-          <p className="mt-2 text-[0.92rem] text-[var(--muted)] leading-[1.5]">
-            Stay updated with course activity, replies, reminders, and announcements.
+          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+            Stay updated with course activity, replies, reminders, and
+            announcements.
           </p>
         </div>
 
@@ -103,7 +104,7 @@ export function NotificationsPage({
         <button
           type="button"
           onClick={markAllAsRead}
-          className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card-surface)] px-4 py-2 text-xs md:text-sm font-semibold text-[var(--text)] shadow-sm transition-all hover:bg-[var(--hover)] hover:text-[var(--text)] active:scale-[0.98] cursor-pointer flex-shrink-0 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs md:text-sm font-semibold text-(--text) shadow-sm transition-all hover:bg-(--hover) hover:text-(--text) active:scale-[0.98] cursor-pointer shrink-0 self-start sm:self-auto"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
           <Check size={16} weight="bold" className="text-emerald-400" />
@@ -114,7 +115,7 @@ export function NotificationsPage({
       {/* Tab Navigation Bar with delicate thin bottom line and live count badges */}
       <nav
         aria-label="Notification categories"
-        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] scrollbar-none"
+        className="mb-5 flex min-w-0 gap-1 md:gap-3 overflow-x-auto bg-transparent border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)]"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {
@@ -130,10 +131,10 @@ export function NotificationsPage({
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-[46px] flex-shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
+              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
                 isActive
-                  ? "text-[var(--text)]"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
+                  ? "text-(--text)"
+                  : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <span>{tab.label}</span>
@@ -141,8 +142,8 @@ export function NotificationsPage({
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
                     isActive
-                      ? "bg-[var(--accent)] text-[var(--on-accent,#ffffff)]"
-                      : "bg-[var(--surface-strong)] text-[var(--muted)]"
+                      ? "bg-(--accent) text-(--on-accent,#ffffff)"
+                      : "bg-(--surface-strong) text-(--muted)"
                   }`}
                 >
                   {count}
@@ -150,7 +151,7 @@ export function NotificationsPage({
               )}
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-[var(--accent)]"
+                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -184,7 +185,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-today">
                   <h2
                     id="heading-today"
-                    className="text-xs font-bold uppercase tracking-wider text-[var(--muted)] mb-2.5 px-0.5"
+                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
                   >
                     Today
                   </h2>
@@ -207,7 +208,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-yesterday">
                   <h2
                     id="heading-yesterday"
-                    className="text-xs font-bold uppercase tracking-wider text-[var(--muted)] mb-2.5 px-0.5"
+                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
                   >
                     Yesterday
                   </h2>
@@ -230,7 +231,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-earlier">
                   <h2
                     id="heading-earlier"
-                    className="text-xs font-bold uppercase tracking-wider text-[var(--muted)] mb-2.5 px-0.5"
+                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
                   >
                     Earlier
                   </h2>
@@ -250,16 +251,16 @@ export function NotificationsPage({
             </>
           ) : (
             <div
-              className="flex flex-col items-center justify-center rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-12 text-center"
+              className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--hover)] text-[var(--muted)] mb-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
                 <Bell size={24} />
               </div>
-              <h3 className="text-base font-semibold text-[var(--text)]">
+              <h3 className="text-base font-semibold text-(--text)">
                 No notifications found
               </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-[var(--muted)]">
+              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
                 {searchQuery ||
                 categoryFilter !== "all" ||
                 statusFilter !== "all"
@@ -269,7 +270,7 @@ export function NotificationsPage({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--on-accent,#ffffff)] shadow-sm hover:opacity-90 cursor-pointer"
+                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
               >
                 Reset filters
               </button>

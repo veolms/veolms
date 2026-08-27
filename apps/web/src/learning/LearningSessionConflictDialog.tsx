@@ -1,6 +1,7 @@
-import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { X } from "@phosphor-icons/react/X";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef } from "react";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 
 interface LearningSessionConflictDialogProps {
   currentCourseTitle: string;
@@ -20,6 +21,8 @@ export function LearningSessionConflictDialog({
   onPost,
 }: LearningSessionConflictDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useBackDismiss({ open: true, onDismiss: onCancel });
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -47,6 +50,7 @@ export function LearningSessionConflictDialog({
     >
       <button
         type="button"
+        data-fixed-radius
         className="learning-session-dialog__close"
         aria-label="Keep the current learning session"
         onClick={onCancel}
@@ -74,7 +78,12 @@ export function LearningSessionConflictDialog({
         <button type="button" onClick={onDiscard}>
           Discard &amp; switch
         </button>
-        <button type="button" onClick={onPost} autoFocus>
+        <button
+          type="button"
+          data-control-radius-action
+          onClick={onPost}
+          autoFocus
+        >
           Post &amp; switch
         </button>
       </div>

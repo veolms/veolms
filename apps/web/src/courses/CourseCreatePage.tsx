@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
 import { useIsMutating } from "@tanstack/react-query";
 import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import {
   ArrowLeft,
   ArrowRight,
@@ -694,7 +695,12 @@ export function CourseCreatePage({
     return courses.find((c) => c.id === activeEditId) ?? null;
   }, [activeEditId]);
 
-  const [activeStep, setActiveStep] = useState<CourseWizardStepId>("basics");
+  const requestedStep = searchParams.get("step");
+  const initialStep = WIZARD_STEPS.some((step) => step.id === requestedStep)
+    ? (requestedStep as CourseWizardStepId)
+    : "basics";
+  const [activeStep, setActiveStep] =
+    useState<CourseWizardStepId>(initialStep);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
@@ -2737,6 +2743,7 @@ export function CourseCreatePage({
     duration: computedDuration,
     students: 0,
     thumbnail: thumbnail || "/assets/instructor-poster.jpg",
+    lifecycleStatus: isPublished ? "published" : "draft",
   };
 
   const previewSections: CourseSection[] =
@@ -3456,14 +3463,14 @@ export function CourseCreatePage({
   };
 
   return (
-    <div className="relative flex w-full flex-1 flex-col p-0 text-[var(--text)] box-border max-[768px]:pb-0">
+    <div className="relative flex w-full flex-1 flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
-        <div className="flex items-start justify-between gap-4 mb-[18px] max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
+        <div className="flex items-start justify-between gap-4 mb-4.5 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
           <div className="flex items-start gap-3 min-w-0">
             <button
               type="button"
-              className="flex w-[36px] h-[36px] shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-[var(--text-secondary)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-[var(--text)]"
+              className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
               onClick={handleBack}
               aria-label="Go back to courses"
             >
@@ -3471,20 +3478,20 @@ export function CourseCreatePage({
             </button>
             <div className="pt-0.5 min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="m-0 text-[var(--text)] text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
                   {isPublished ? "Edit Course" : "Create New Course"}
                 </h1>
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] ${
                     isPublished
-                      ? "is-published border border-green-500/35 text-green-400 bg-green-500/[0.12]"
-                      : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--muted)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                      ? "is-published border border-green-500/35 text-green-400 bg-green-500/12"
+                      : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
                   }`}
                 >
                   {isPublished ? "Published" : "Draft"}
                 </span>
               </div>
-              <p className="m-0 mt-1 text-[var(--muted)] text-[0.84rem] max-w-[620px] leading-[1.4]">
+              <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
                 {activeStep === "curriculum"
                   ? "Build your course structure by adding sections and lessons."
                   : activeStep === "access-rules"
@@ -3522,7 +3529,7 @@ export function CourseCreatePage({
                 <>
                   <CircleNotch
                     size={14}
-                    className="animate-spin text-[var(--accent)]"
+                    className="animate-spin text-(--accent)"
                   />
                   <span>Opening...</span>
                 </>
@@ -3700,7 +3707,7 @@ export function CourseCreatePage({
 
         {/* Publish validation error toast if any */}
         {publishValidationError && activeStep === "publish" && (
-          <div className="flex items-center gap-2.5 mb-3 border border-red-400/35 rounded-[10px] px-4 py-2 text-red-400 bg-red-500/[0.12] backdrop-blur-[12px] shadow-[0_4px_16px_rgba(239,68,68,0.15)] text-[0.84rem] font-semibold animate-[bannerSlideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+          <div className="flex items-center gap-2.5 mb-3 border border-red-400/35 rounded-[10px] px-4 py-2 text-red-400 bg-red-500/12 backdrop-blur-md shadow-[0_4px_16px_rgba(239,68,68,0.15)] text-[0.84rem] font-semibold animate-[bannerSlideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
             <Info size={16} weight="bold" />
             <span>{publishValidationError}</span>
           </div>
@@ -3709,7 +3716,7 @@ export function CourseCreatePage({
         {/* Wizard Steps Navigation */}
         <nav
           ref={stepsNavRef}
-          className="course-wizard-steps-nav settings-tabs page-tabs relative !mt-0 !bg-transparent !pt-0 border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:!hidden"
+          className="course-wizard-steps-nav settings-tabs page-tabs relative mt-0! bg-transparent! pt-0! border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:hidden!"
           aria-label="Course creation steps"
           role="tablist"
           onMouseDown={handleNavMouseDown}
@@ -3717,7 +3724,7 @@ export function CourseCreatePage({
           onMouseUp={handleNavMouseUp}
           onMouseMove={handleNavMouseMove}
         >
-          {/* Standard page-tabs indicator — driven by --page-tab-indicator-* CSS vars */}
+          {/* Standard page-tabs indicator - driven by --page-tab-indicator-* CSS vars */}
           <span className="page-tabs__indicator" aria-hidden="true" />
           {WIZARD_STEPS.map((step, idx) => {
             const Icon = step.Icon;
@@ -3787,16 +3794,16 @@ export function CourseCreatePage({
         key={activeStep}
       >
         {activeStep === "basics" ? (
-          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-[18px]">
+          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-4.5">
             {/* Left Column: Form Sections */}
             <div className="flex flex-col gap-5">
               {/* Basic Information Section */}
-              <section className="relative z-10 rounded-[14px] p-6 bg-[var(--surface)] shadow-[var(--card-shadow)] max-[768px]:p-4">
+              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
                 <div className="mb-4.5">
-                  <h2 className="m-0 text-[var(--text)] text-[1.18rem] font-[650] tracking-[-0.015em]">
+                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
                     Basic Information
                   </h2>
-                  <p className="m-0 mt-1 mb-5 text-[var(--muted)] text-[0.82rem]">
+                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
                     Add the essential details of your course.
                   </p>
                 </div>
@@ -3804,7 +3811,7 @@ export function CourseCreatePage({
                 <div className="flex flex-col gap-2 mb-5">
                   <label
                     htmlFor="course-title"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
                   >
                     Course Title{" "}
                     <span className="text-[#ff5252] ml-0.5">*</span>
@@ -3857,7 +3864,7 @@ export function CourseCreatePage({
                 <div className="flex flex-col gap-2 mb-5">
                   <label
                     htmlFor="course-description"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
                   >
                     Course Description{" "}
                     <span className="text-[#ff5252] ml-0.5">*</span>
@@ -3917,12 +3924,12 @@ export function CourseCreatePage({
               </section>
 
               {/* Course Media Section */}
-              <section className="relative z-10 rounded-[14px] p-6 bg-[var(--surface)] shadow-[var(--card-shadow)] max-[768px]:p-4">
+              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
                 <div className="mb-4.5">
-                  <h2 className="m-0 text-[var(--text)] text-[1.18rem] font-[650] tracking-[-0.015em]">
+                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
                     Course Media
                   </h2>
-                  <p className="m-0 mt-1 mb-5 text-[var(--muted)] text-[0.82rem]">
+                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
                     Add media that best represents your course.
                   </p>
                 </div>
@@ -3950,14 +3957,14 @@ export function CourseCreatePage({
 
                   {/* Thumbnail Upload */}
                   <div className="flex flex-col min-w-0">
-                    <h3 className="m-0 mb-1 text-[var(--text-secondary)] text-[0.86rem] font-semibold">
+                    <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
                       Thumbnail <span className="text-[#ff5252] ml-0.5">*</span>
                     </h3>
-                    <p className="m-0 mb-3 text-[var(--muted)] text-[0.78rem] min-h-[1.15rem]">
+                    <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
                       Upload a thumbnail for your course.
                     </p>
                     {thumbnail ? (
-                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-[175px] box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
                         <img
                           src={thumbnail}
                           alt="Course thumbnail preview"
@@ -4002,8 +4009,8 @@ export function CourseCreatePage({
                         </div>
                       </div>
                     ) : (
-                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-[175px] box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                        <div className="mb-2 text-[var(--muted)]">
+                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                        <div className="mb-2 text-(--muted)">
                           <ImageIcon size={30} weight="light" />
                         </div>
                         <div className="flex items-center justify-center gap-2.5 flex-wrap">
@@ -4025,7 +4032,7 @@ export function CourseCreatePage({
                             <UploadSimple size={15} /> Upload
                           </button>
                         </div>
-                        <p className="m-0 mt-2 text-[var(--muted)] text-[0.74rem]">
+                        <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
                           Recommended: 1280x720px (16:9)
                         </p>
                       </div>
@@ -4034,14 +4041,14 @@ export function CourseCreatePage({
 
                   {/* Video Trailer Upload */}
                   <div className="flex flex-col min-w-0">
-                    <h3 className="m-0 mb-1 text-[var(--text-secondary)] text-[0.86rem] font-semibold">
+                    <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
                       Video Trailer (Optional)
                     </h3>
                     <p className="m-0 mb-3 text-[var(--muted)] text-[0.78rem] min-h-[1.15rem]">
                       Add a trailer video to your course.
                     </p>
                     {videoTrailer ? (
-                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-[175px] box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
                         <video
                           src={videoTrailer}
                           className="w-full h-full object-cover block"
@@ -4086,8 +4093,8 @@ export function CourseCreatePage({
                         </div>
                       </div>
                     ) : (
-                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-[175px] box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                        <div className="mb-2 text-[var(--muted)]">
+                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                        <div className="mb-2 text-(--muted)">
                           <PlayCircle size={30} weight="light" />
                         </div>
                         <div className="flex items-center justify-center gap-2.5 flex-wrap">
@@ -4128,7 +4135,7 @@ export function CourseCreatePage({
                             <PlayCircle size={15} /> Select from Media
                           </button>
                         </div>
-                        <p className="m-0 mt-2 text-[var(--muted)] text-[0.74rem]">
+                        <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
                           Recommended: 16:9 video
                         </p>
                       </div>
@@ -4140,18 +4147,18 @@ export function CourseCreatePage({
 
             {/* Right Column: Live Course Preview */}
             <div className="">
-              <section className="rounded-[14px] p-5 bg-[var(--surface)] shadow-[var(--card-shadow)]">
-                <h2 className="m-0 text-[var(--text)] text-[1.1rem] font-[650]">
+              <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
+                <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
                 </h2>
-                <p className="m-0 mt-1 mb-4 text-[var(--muted)] text-[0.8rem]">
+                <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
                   This is how your course will appear to students.
                 </p>
 
                 <div
                   className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
                     !thumbnail
-                      ? "is-clickable cursor-pointer hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
+                      ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
                       : ""
                   }`}
                   onClick={!thumbnail ? triggerThumbnailUpload : undefined}
@@ -4177,14 +4184,14 @@ export function CourseCreatePage({
                       />
                     </div>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--muted)] text-[0.8rem]">
-                      <div className="flex items-center justify-center text-[var(--muted)] opacity-60">
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
+                      <div className="flex items-center justify-center text-(--muted) opacity-60">
                         <ImageIcon size={32} weight="light" />
                       </div>
-                      <span className="text-[var(--muted)] opacity-70">
+                      <span className="text-(--muted) opacity-70">
                         Course thumbnail will appear here
                       </span>
-                      <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
+                      <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
                         Click to upload
                       </span>
                     </div>
@@ -4192,19 +4199,19 @@ export function CourseCreatePage({
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="m-0 mb-2 text-[var(--text)] text-[1.15rem] font-bold leading-[1.3]">
+                  <h3 className="m-0 mb-2 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
                     {courseTitle.trim() ? courseTitle : "Course Title"}
                   </h3>
 
                   {difficultyLevel && (
                     <div className="inline-block mb-3">
-                      <span className="rounded-md px-2.5 py-0.75 text-[var(--accent-ink,var(--accent))] bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[0.74rem] font-semibold">
+                      <span className="rounded-md px-2.5 py-0.75 text-(--accent-ink,var(--accent)) bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[0.74rem] font-semibold">
                         {difficultyLevel}
                       </span>
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-[var(--muted)] text-[0.8rem]">
+                  <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
                     <span className="flex items-center gap-1.25">
                       <BookOpen size={15} /> {totalSections} Sections
                     </span>
@@ -4214,14 +4221,14 @@ export function CourseCreatePage({
                     <span className="flex items-center gap-1.25">0h 0m</span>
                   </div>
 
-                  <div className="mt-3.5 min-w-0 max-w-full overflow-hidden [overflow-wrap:anywhere] break-words">
-                    <h4 className="m-0 mb-1.5 text-[var(--text-secondary)] text-[0.84rem] font-[650]">
+                  <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
+                    <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
                       About this course
                     </h4>
                     {courseDescription.trim() ? (
                       <RenderMarkdown content={courseDescription} />
                     ) : (
-                      <p className="m-0 text-[var(--muted)] text-[0.82rem] leading-normal [overflow-wrap:anywhere] break-words">
+                      <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
                         This is a short description of your course. It will
                         appear here on the course card.
                       </p>
@@ -4236,10 +4243,10 @@ export function CourseCreatePage({
             {/* Header row */}
             <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
               <div className="">
-                <h2 className="m-0 text-[var(--text)] text-[1.25rem] font-bold tracking-[-0.015em]">
+                <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
                   Course Curriculum
                 </h2>
-                <p className="m-0 mt-1 text-[var(--muted)] text-[0.85rem]">
+                <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
                   Organize your course into sections and lessons. You can
                   reorder them anytime.
                 </p>
@@ -5411,12 +5418,12 @@ export function CourseCreatePage({
             {/* Top Grid: 1. Who can access & 2. Access duration */}
             <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
               {/* Card 1: Who can access this course? */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     1. Who can access this course?
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Choose who is allowed to access this course.
                   </p>
                 </div>
@@ -5432,21 +5439,21 @@ export function CourseCreatePage({
                     onClick={() => handleAccessTypeChange("everyone")}
                   >
                     <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                         accessRules.accessType === "everyone"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
+                          ? "border-(--accent)"
+                          : "border-(--muted)"
                       }`}
                     >
                       {accessRules.accessType === "everyone" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                         Everyone
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Anyone with access to the platform can access this
                         course.
                       </p>
@@ -5478,12 +5485,12 @@ export function CourseCreatePage({
               </div>
 
               {/* Card 2: Access duration */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     2. Access duration
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Set how long learners can access this course.
                   </p>
                 </div>
@@ -5506,21 +5513,21 @@ export function CourseCreatePage({
                     }
                   >
                     <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                         accessRules.durationMode === "lifetime"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
+                          ? "border-(--accent)"
+                          : "border-(--muted)"
                       }`}
                     >
                       {accessRules.durationMode === "lifetime" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                         Lifetime access
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Learners can access this course forever.
                       </p>
                     </div>
@@ -5542,21 +5549,21 @@ export function CourseCreatePage({
                     }
                   >
                     <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                         accessRules.durationMode === "fixed"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
+                          ? "border-(--accent)"
+                          : "border-(--muted)"
                       }`}
                     >
                       {accessRules.durationMode === "fixed" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                         Fixed duration
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Set a duration for how long learners can access this
                         course.
                       </p>
@@ -5602,12 +5609,12 @@ export function CourseCreatePage({
             </div>
 
             {/* Bottom Card: 3. Learner interactions */}
-            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)] w-full">
+            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
               <div className="mb-4.5">
-                <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                   3. Learner interactions
                 </h3>
-                <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                <p className="m-0 text-(--muted) text-[0.83rem]">
                   Manage how learners can interact within this course.
                 </p>
               </div>
@@ -5623,7 +5630,7 @@ export function CourseCreatePage({
                       <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                         Q&A
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
                         Allow learners to ask questions about lessons.
                       </p>
                     </div>
@@ -5646,7 +5653,7 @@ export function CourseCreatePage({
                       <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                         Comments
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
                         Allow learners to comment on course content.
                       </p>
                     </div>
@@ -5697,12 +5704,12 @@ export function CourseCreatePage({
             {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
             <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
               {/* Card 1: Course pricing */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)] transition-opacity duration-200">
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     1. Course pricing
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Choose how you want to sell this course.
                   </p>
                 </div>
@@ -5724,21 +5731,21 @@ export function CourseCreatePage({
                     }
                   >
                     <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                         pricing.pricingType === "free"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
+                          ? "border-(--accent)"
+                          : "border-(--muted)"
                       }`}
                     >
                       {pricing.pricingType === "free" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                         Free
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Anyone who can access the course can enroll for free.
                       </p>
                     </div>
@@ -5760,21 +5767,21 @@ export function CourseCreatePage({
                     }
                   >
                     <div
-                      className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                         pricing.pricingType === "paid"
-                          ? "border-[var(--accent)]"
-                          : "border-[var(--muted)]"
+                          ? "border-(--accent)"
+                          : "border-(--muted)"
                       }`}
                     >
                       {pricing.pricingType === "paid" && (
-                        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                         Paid
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Learners must purchase the course to get access.
                       </p>
                     </div>
@@ -5784,17 +5791,17 @@ export function CourseCreatePage({
 
               {/* Card 2: Price details */}
               <div
-                className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)] transition-opacity duration-200 ${
+                className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
                   pricing.pricingType === "free"
                     ? "is-disabled opacity-55 pointer-events-none"
                     : ""
                 }`}
               >
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     2. Price details
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Set the pricing for your course.
                   </p>
                 </div>
@@ -5829,7 +5836,7 @@ export function CourseCreatePage({
                   <div className="flex flex-col gap-2 mb-5">
                     <label
                       htmlFor="selling-price"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
                     >
                       Selling price{" "}
                       <span className="text-[#ff5252] ml-0.5">*</span>
@@ -5852,7 +5859,7 @@ export function CourseCreatePage({
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
-                    <p className="m-0 mt-1 text-[var(--muted)] text-[0.78rem]">
+                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
                       This is the price learners will pay.
                     </p>
                   </div>
@@ -5861,7 +5868,7 @@ export function CourseCreatePage({
                   <div className="flex flex-col gap-2 mb-5">
                     <label
                       htmlFor="original-price"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
                     >
                       Original price
                     </label>
@@ -5883,7 +5890,7 @@ export function CourseCreatePage({
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
-                    <p className="m-0 mt-1 text-[var(--muted)] text-[0.78rem]">
+                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
                       Enter original price to show discount.
                     </p>
                   </div>
@@ -5916,8 +5923,8 @@ export function CourseCreatePage({
                         <div
                           className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
                             isValidDiscount && pricing.pricingType === "paid"
-                              ? "is-active border-green-500/40 text-green-400 bg-green-500/[0.12]"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-[var(--muted)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                              ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
                           }`}
                         >
                           <Tag size={15} weight="bold" className="shrink-0" />
@@ -5927,7 +5934,7 @@ export function CourseCreatePage({
                               : "0% OFF"}
                           </span>
                         </div>
-                        <span className="text-[var(--muted)] text-[0.8rem] leading-tight">
+                        <span className="text-(--muted) text-[0.8rem] leading-tight">
                           Discount is calculated automatically.
                         </span>
                       </div>
@@ -5938,16 +5945,16 @@ export function CourseCreatePage({
             </div>
 
             {/* Bottom Card: Coupons Banner */}
-            <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-[var(--surface)] shadow-[var(--card-shadow)] max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
+            <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
               <div className="flex items-center gap-3.5">
-                <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                   <Info size={20} weight="bold" />
                 </div>
                 <div>
-                  <strong className="block mb-0.5 text-[var(--text)] text-[0.92rem] font-[650]">
+                  <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
                     Coupons
                   </strong>
-                  <p className="m-0 text-[var(--muted)] text-[0.82rem]">
+                  <p className="m-0 text-(--muted) text-[0.82rem]">
                     Create and manage coupon codes separately from the Coupons
                     section.
                   </p>
@@ -5965,7 +5972,7 @@ export function CourseCreatePage({
                   paddingLeft: "18px",
                   paddingRight: "18px",
                 }}
-                className="inline-flex items-center justify-center border-none text-[var(--on-accent,#ffffff)] bg-[var(--accent)] cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-[var(--accent-hover,var(--accent))] hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
+                className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
                 onClick={() => {
                   if (onNavigatePage) {
                     onNavigatePage("settings");
@@ -5981,12 +5988,12 @@ export function CourseCreatePage({
             {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
             <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
               {/* Card 1: Certificates */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     1. Certificates
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Configure how certificates will be issued for this course.
                   </p>
                 </div>
@@ -5997,7 +6004,7 @@ export function CourseCreatePage({
                     <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                       Enable certificate
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                    <p className="m-0 text-(--muted) text-[0.8rem]">
                       Issue certificates to learners on course completion.
                     </p>
                   </div>
@@ -6071,21 +6078,21 @@ export function CourseCreatePage({
                         }`}
                       >
                         <div
-                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                             extras.issuanceType === "completion"
-                              ? "border-[var(--accent)]"
-                              : "border-[var(--muted)]"
+                              ? "border-(--accent)"
+                              : "border-(--muted)"
                           }`}
                         >
                           {extras.issuanceType === "completion" && (
-                            <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
                           )}
                         </div>
                         <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                             On course completion
                           </strong>
-                          <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                             Issue certificate when the learner completes all
                             lessons.
                           </p>
@@ -6101,19 +6108,19 @@ export function CourseCreatePage({
                         }`}
                       >
                         <div
-                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                             extras.issuanceType === "percentage"
-                              ? "border-[var(--accent)]"
-                              : "border-[var(--muted)]"
+                              ? "border-(--accent)"
+                              : "border-(--muted)"
                           }`}
                         >
                           {extras.issuanceType === "percentage" && (
-                            <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
                           )}
                         </div>
                         <div className="flex flex-1 flex-col gap-0.75">
                           <div className="flex items-center justify-between w-full">
-                            <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                               Minimum completion percentage
                             </strong>
                             {extras.issuanceType === "percentage" && (
@@ -6127,13 +6134,13 @@ export function CourseCreatePage({
                                   value={extras.minCompletionPercentage}
                                   readOnly
                                 />
-                                <span className="text-[var(--text)] text-[0.86rem] font-bold">
+                                <span className="text-(--text) text-[0.86rem] font-bold">
                                   %
                                 </span>
                               </div>
                             )}
                           </div>
-                          <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                             Issue certificate when learner reaches the selected
                             percentage.
                           </p>
@@ -6149,21 +6156,21 @@ export function CourseCreatePage({
                         }`}
                       >
                         <div
-                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                             extras.issuanceType === "custom"
-                              ? "border-[var(--accent)]"
-                              : "border-[var(--muted)]"
+                              ? "border-(--accent)"
+                              : "border-(--muted)"
                           }`}
                         >
                           {extras.issuanceType === "custom" && (
-                            <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
                           )}
                         </div>
                         <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                             Custom rule
                           </strong>
-                          <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                             Define your own custom rule for certificate
                             issuance.
                           </p>
@@ -6212,12 +6219,12 @@ export function CourseCreatePage({
               </div>
 
               {/* Card 2: This course includes */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     2. This course includes
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     These details are calculated from your curriculum.
                   </p>
                 </div>
@@ -6229,10 +6236,10 @@ export function CourseCreatePage({
                       <BookOpen size={20} weight="fill" />
                     </div>
                     <div className="flex flex-col">
-                      <strong className="text-[var(--text)] text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
                         {totalSections}
                       </strong>
-                      <span className="text-[var(--muted)] text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                         Sections
                       </span>
                     </div>
@@ -6243,10 +6250,10 @@ export function CourseCreatePage({
                       <PlayCircle size={20} weight="fill" />
                     </div>
                     <div className="flex flex-col">
-                      <strong className="text-[var(--text)] text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
                         {totalLessons}
                       </strong>
-                      <span className="text-[var(--muted)] text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                         Lessons
                       </span>
                     </div>
@@ -6260,7 +6267,7 @@ export function CourseCreatePage({
                       <strong className="text-[var(--text)] text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
                         0m
                       </strong>
-                      <span className="text-[var(--muted)] text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                         Content length
                       </span>
                     </div>
@@ -6332,33 +6339,33 @@ export function CourseCreatePage({
             {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
             <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
               {/* Card 1: Publish settings */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     1. Publish settings
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Choose when and how your course becomes visible.
                   </p>
                 </div>
 
                 {/* Informational Course Status Display */}
                 <div className="flex flex-col gap-1.5 mb-4.5">
-                  <label className="text-[var(--text)] text-[0.86rem] font-[650]">
+                  <label className="text-(--text) text-[0.86rem] font-[650]">
                     Course status
                   </label>
                   <div className="flex items-center mt-0.5">
                     <span
                       className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
                         isPublished
-                          ? "is-published border border-green-500/35 text-green-500 bg-green-500/[0.12]"
-                          : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-[var(--muted)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                          ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
+                          : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
                       }`}
                     >
                       {isPublished ? "Published" : "Draft"}
                     </span>
                   </div>
-                  <p className="m-0 mt-1 text-[var(--muted)] text-[0.78rem] leading-[1.4]">
+                  <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
                     {isPublished
                       ? "Your course is currently published and visible to students according to your settings."
                       : "Your course is currently a draft and hasn't been published yet."}
@@ -6427,19 +6434,19 @@ export function CourseCreatePage({
                       <div
                         className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                           publishSettings.scheduleOption === "now"
-                            ? "border-[var(--accent)]"
-                            : "border-[var(--muted)]"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
                         }`}
                       >
                         {publishSettings.scheduleOption === "now" && (
-                          <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
                         )}
                       </div>
                       <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                           Publish immediately
                         </strong>
-                        <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                           Make this course live immediately upon saving.
                         </p>
                       </div>
@@ -6456,19 +6463,19 @@ export function CourseCreatePage({
                       <div
                         className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                           publishSettings.scheduleOption === "later"
-                            ? "border-[var(--accent)]"
-                            : "border-[var(--muted)]"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
                         }`}
                       >
                         {publishSettings.scheduleOption === "later" && (
-                          <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
                         )}
                       </div>
                       <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-[var(--text)] text-[0.9rem] font-[650] leading-[18px]">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
                           Schedule for a future date
                         </strong>
-                        <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                           Set a specific date and time when this course should
                           go live.
                         </p>
@@ -6479,12 +6486,12 @@ export function CourseCreatePage({
               </div>
 
               {/* Card 2: Pre-publish Checklist */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
                     2. Pre-publish Checklist
                   </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
                     Review all required items before publishing your course.
                   </p>
                 </div>
@@ -6505,11 +6512,11 @@ export function CourseCreatePage({
                             : "is-invalid text-rose-400/50"
                         }
                       />
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650]">
                         Basics
                       </strong>
                     </div>
-                    <div className="flex items-center gap-2 text-[var(--muted)] text-[0.82rem]">
+                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                       <span>{isBasicsValid ? "Completed" : "Incomplete"}</span>
                       <CaretRight size={16} />
                     </div>
@@ -6530,11 +6537,11 @@ export function CourseCreatePage({
                             : "is-invalid text-rose-400/50"
                         }
                       />
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650]">
                         Curriculum
                       </strong>
                     </div>
-                    <div className="flex items-center gap-2 text-[var(--muted)] text-[0.82rem]">
+                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                       <span>
                         {totalSections} Sections, {totalLessons} Lessons
                       </span>
@@ -6557,11 +6564,11 @@ export function CourseCreatePage({
                             : "is-invalid text-rose-400/50"
                         }
                       />
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650]">
                         Access Rules
                       </strong>
                     </div>
-                    <div className="flex items-center gap-2 text-[var(--muted)] text-[0.82rem]">
+                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                       <span>
                         {accessRules.accessType === "everyone"
                           ? "Everyone"
@@ -6586,11 +6593,11 @@ export function CourseCreatePage({
                             : "is-invalid text-rose-400/50"
                         }
                       />
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650]">
                         Pricing
                       </strong>
                     </div>
-                    <div className="flex items-center gap-2 text-[var(--muted)] text-[0.82rem]">
+                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                       <span>
                         {pricing.pricingType === "free"
                           ? "Free"
@@ -6615,11 +6622,11 @@ export function CourseCreatePage({
                             : "is-invalid text-rose-400/50"
                         }
                       />
-                      <strong className="text-[var(--text)] text-[0.9rem] font-[650]">
+                      <strong className="text-(--text) text-[0.9rem] font-[650]">
                         Extras
                       </strong>
                     </div>
-                    <div className="flex items-center gap-2 text-[var(--muted)] text-[0.82rem]">
+                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                       <span>
                         {extras.enableCertificate
                           ? "Certificate Enabled"
@@ -6633,29 +6640,29 @@ export function CourseCreatePage({
                 {/* Ready-to-publish State Box */}
                 {isCourseReadyToPublish ? (
                   <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-[42px] h-[42px] shrink-0 items-center justify-center rounded-xl text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
+                    <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
                       <BookOpen size={24} weight="fill" />
                     </div>
                     <div>
-                      <strong className="block mb-0.75 text-[var(--text)] text-[0.94rem] font-bold">
+                      <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
                         Your course is ready to be published!
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                         Once published, students can see and enroll in this
                         course according to your settings.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/[0.08]">
-                    <div className="flex w-[42px] h-[42px] shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
+                  <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
+                    <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
                       <Info size={24} weight="bold" />
                     </div>
                     <div>
-                      <strong className="block mb-0.75 text-[var(--text)] text-[0.94rem] font-bold">
+                      <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
                         Course needs attention
                       </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
                         Please fix incomplete sections highlighted above before
                         publishing.
                       </p>
@@ -6666,8 +6673,8 @@ export function CourseCreatePage({
             </div>
 
             {/* Bottom Card 3: What happens after publishing? */}
-            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)]">
-              <h3 className="m-0 mb-4.5 text-[var(--text)] text-[1.05rem] font-bold">
+            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
                 3. What happens after publishing?
               </h3>
 
@@ -6678,10 +6685,10 @@ export function CourseCreatePage({
                     <Eye size={22} weight="bold" />
                   </div>
                   <div>
-                    <strong className="block mb-1 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
                       Visible to students
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                       Students will be able to discover your course on the
                       platform.
                     </p>
@@ -6694,10 +6701,10 @@ export function CourseCreatePage({
                     <UserPlus size={22} weight="bold" />
                   </div>
                   <div>
-                    <strong className="block mb-1 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
                       Enrollment starts
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                       Students who meet the access rules can enroll in your
                       course.
                     </p>
@@ -6710,10 +6717,10 @@ export function CourseCreatePage({
                     <PlayCircle size={22} weight="fill" />
                   </div>
                   <div>
-                    <strong className="block mb-1 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
                       Track performance
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                       Monitor enrollments, progress, and engagement in
                       real-time.
                     </p>
@@ -6726,10 +6733,10 @@ export function CourseCreatePage({
                     <ChartBar size={22} weight="bold" />
                   </div>
                   <div>
-                    <strong className="block mb-1 text-[var(--text)] text-[0.9rem] font-[650]">
+                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
                       Earn with every sale
                     </strong>
-                    <p className="m-0 text-[var(--muted)] text-[0.8rem] leading-[1.4]">
+                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
                       Get paid for every successful enrollment.
                     </p>
                   </div>
@@ -6738,13 +6745,13 @@ export function CourseCreatePage({
             </div>
           </div>
         ) : (
-          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-[18px]">
-            <section className="relative z-10 rounded-[14px] p-6 bg-[var(--surface)] shadow-[var(--card-shadow)] max-[768px]:p-4">
+          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-4.5">
+            <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
               <div className="mb-4.5">
-                <h2 className="m-0 text-[var(--text)] text-[1.18rem] font-[650] tracking-[-0.015em]">
+                <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
                   {WIZARD_STEPS.find((s) => s.id === activeStep)?.label}
                 </h2>
-                <p className="m-0 mt-1 mb-5 text-[var(--muted)] text-[0.82rem]">
+                <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
                   This section will allow configuring course {activeStep}.
                 </p>
               </div>
@@ -6777,7 +6784,7 @@ export function CourseCreatePage({
             <>
               <CircleNotch
                 size={14}
-                className="animate-spin text-[var(--accent)]"
+                className="animate-spin text-(--accent)"
               />
               <span>Opening...</span>
             </>
@@ -6938,14 +6945,14 @@ export function CourseCreatePage({
       {/* Floating Action Feedback Toast */}
       {toastMessage && (
         <div
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] rounded-xl px-4.5 py-3 text-[var(--text)] bg-[var(--surface)] shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-[0.86rem] font-semibold animate-[toastPopIn_0.3s_cubic-bezier(0.16,1,0.3,1)]"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] rounded-xl px-4.5 py-3 text-(--text) bg-(--surface) shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-[0.86rem] font-semibold animate-[toastPopIn_0.3s_cubic-bezier(0.16,1,0.3,1)]"
           role="status"
           aria-live="polite"
         >
           <CheckCircle
             size={18}
             weight="fill"
-            className="text-[var(--accent)]"
+            className="text-(--accent)"
           />
           <span>{toastMessage}</span>
         </div>
@@ -6966,30 +6973,30 @@ export function CourseCreatePage({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[1200] flex flex-col bg-black/80 backdrop-blur-xl [animation:deleteModalFadeIn_0.2s_ease-out] p-4 box-border max-[640px]:p-0"
+            className="fixed inset-0 z-1200 flex flex-col bg-black/80 backdrop-blur-xl animate-[deleteModalFadeIn_0.2s_ease-out] p-4 box-border max-[640px]:p-0"
             onClick={() => setIsPreviewModalOpen(false)}
             role="dialog"
             aria-modal="true"
             aria-label="Course Overview Preview"
           >
             <div
-              className="relative flex flex-col w-full max-w-[1380px] h-full max-h-[94vh] m-auto border border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[20px] bg-[color-mix(in_srgb,var(--surface)_24%,var(--canvas))] shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)] max-[640px]:max-h-screen max-[640px]:h-screen max-[640px]:rounded-none max-[640px]:border-none"
+              className="relative flex flex-col w-full max-w-345 h-full max-h-[94vh] m-auto border border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[20px] bg-[color-mix(in_srgb,var(--surface)_24%,var(--canvas))] shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden animate-[deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)] max-[640px]:max-h-screen max-[640px]:h-screen max-[640px]:rounded-none max-[640px]:border-none"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Top Bar */}
-              <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] shrink-0 max-[640px]:px-3.5 max-[640px]:py-2.5">
+              <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shrink-0 max-[640px]:px-3.5 max-[640px]:py-2.5">
                 <div className="flex items-center flex-wrap gap-x-3 gap-y-2 min-w-0 flex-1 max-[640px]:gap-1.5">
-                  <div className="inline-flex items-center gap-2 text-[0.92rem] font-bold text-[var(--text)] tracking-[-0.01em] whitespace-nowrap overflow-hidden text-ellipsis max-[640px]:text-[0.85rem]">
+                  <div className="inline-flex items-center gap-2 text-[0.92rem] font-bold text-(--text) tracking-[-0.01em] whitespace-nowrap overflow-hidden text-ellipsis max-[640px]:text-[0.85rem]">
                     <Eye size={18} weight="bold" />
                     <span>Student Course Overview Preview</span>
                   </div>
-                  <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[var(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent))] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent))] text-[var(--accent-ink,var(--accent))] text-[0.7rem] font-[650] whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
+                  <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent)) bg-(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent)) text-(--accent-ink,var(--accent)) text-[0.7rem] font-[650] whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
                     Live Preview (Read-Only)
                   </span>
                 </div>
                 <button
                   type="button"
-                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0"
+                  className="inline-flex w-7 h-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0"
                   onClick={() => setIsPreviewModalOpen(false)}
                   aria-label="Close Preview"
                 >

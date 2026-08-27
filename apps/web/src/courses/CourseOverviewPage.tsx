@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import {
@@ -19,14 +19,14 @@ import {
   Ticket,
   User,
 } from "@phosphor-icons/react";
+import type { Category, CourseEditorDataResponse } from "@veolms/contracts";
 import { courses } from "./catalogue";
-import type { Course, CourseLevel, CourseCategory } from "./catalogue";
+import type { Course, CourseLevel, CourseCategory, CourseLifecycleStatus } from "./catalogue";
 import { sections } from "../learning/courseContent";
 import type { CourseSection } from "../learning/courseContent";
 import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
 import type { NavigateTo } from "../routing/navigation";
 import { RenderMarkdown } from "./RichTextEditor";
-import type { CourseEditorDataResponse, Category } from "@veolms/contracts";
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
@@ -273,7 +273,7 @@ function CurriculumSectionItem({
 
   return (
     <div
-      className={`rounded-xl border bg-[var(--surface)] shadow-[var(--card-shadow)] overflow-hidden transition-[border-color,box-shadow] duration-150 ${
+      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${
         isOpen
           ? "border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
           : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
@@ -283,26 +283,26 @@ function CurriculumSectionItem({
       <button
         id={buttonId}
         type="button"
-        className="flex w-full min-h-[52px] items-center gap-3.5 border-0 px-[18px] py-3 text-[var(--text)] bg-transparent text-[0.92rem] font-semibold text-left cursor-pointer transition-colors duration-140 hover:bg-[var(--hover)] max-[640px]:p-[10px_14px] max-[640px]:text-[0.88rem]"
+        className="flex w-full min-h-13 items-center gap-3.5 border-0 px-4.5 py-3 text-(--text) bg-transparent text-[0.92rem] font-semibold text-left cursor-pointer transition-colors duration-140 hover:bg-(--hover) max-[640px]:p-[10px_14px] max-[640px]:text-[0.88rem]"
         aria-expanded={isOpen}
         aria-controls={panelId}
         onClick={onToggle}
       >
         <span
-          className="inline-flex w-[26px] h-[26px] shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--on-accent,#ffffff)] text-[0.82rem] font-bold"
+          className="inline-flex w-6.5 h-6.5 shrink-0 items-center justify-center rounded-md bg-(--accent) text-(--on-accent,#ffffff) text-[0.82rem] font-bold"
           aria-hidden="true"
         >
           {index + 1}
         </span>
-        <span className="flex-1 min-w-0 text-[var(--text)]">
+        <span className="flex-1 min-w-0 text-(--text)">
           {section.title}
         </span>
-        <span className="shrink-0 text-[var(--muted)] text-[0.82rem] font-normal mr-1">
+        <span className="shrink-0 text-(--muted) text-[0.82rem] font-normal mr-1">
           {lessonCount} Lesson{lessonCount === 1 ? "" : "s"}
           {durationLabel ? ` • ${durationLabel}` : ""}
         </span>
         <span
-          className={`shrink-0 text-[var(--muted)] inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
+          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
             isOpen ? "rotate-180" : ""
           }`}
           aria-hidden="true"
@@ -318,7 +318,7 @@ function CurriculumSectionItem({
         aria-hidden={!isOpen}
         className={`grid motion-reduce:transition-none ${
           isOpen
-            ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
             : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
         }`}
       >
@@ -336,11 +336,11 @@ function CurriculumSectionItem({
                   title.toLowerCase().endsWith(".docx");
                 return (
                   <div
-                    className="group/lesson flex items-center gap-3 min-h-[38px] px-3 py-1.5 rounded-md text-[var(--text-secondary)] text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-[var(--text)]"
+                    className="group/lesson flex items-center gap-3 min-h-9.5 px-3 py-1.5 rounded-md text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
                     key={number}
                   >
                     <span
-                      className="inline-flex w-5 shrink-0 items-center justify-center text-[var(--muted)] transition-colors duration-140 group-hover/lesson:text-[var(--accent)]"
+                      className="inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 group-hover/lesson:text-(--accent)"
                       aria-hidden="true"
                     >
                       {isDoc ? (
@@ -349,11 +349,11 @@ function CurriculumSectionItem({
                         <PlayCircle size={16} weight="regular" />
                       )}
                     </span>
-                    <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-[var(--text-secondary)]">
+                    <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
                       {title}
                     </span>
                     {duration ? (
-                      <span className="text-[var(--muted)] text-[0.78rem] shrink-0 w-[45px] text-right">
+                      <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
                         {duration}
                       </span>
                     ) : null}
@@ -373,14 +373,14 @@ function CurriculumSectionItem({
                         className="inline-flex items-center justify-center shrink-0"
                         aria-hidden="true"
                       >
-                        <Circle size={16} className="text-[var(--muted)]" />
+                        <Circle size={16} className="text-(--muted)" />
                       </span>
                     ) : null}
                   </div>
                 );
               })
             ) : (
-              <div className="px-3.5 py-3 text-[var(--muted)] text-[0.82rem] italic">
+              <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                 No lessons added yet
               </div>
             )}
@@ -422,322 +422,318 @@ function CourseHeroSection({
   onNavigateCourses,
   onToggleWishlist,
   onNavigatePage,
-  isReadOnlyPreview,
+  isReadOnlyPreview = false,
 }: CourseHeroSectionProps) {
-  const handlePreviewClick = () => {
-    if (!isReadOnlyPreview && onNavigatePage) {
+  const price = pricing?.price ?? DEFAULT_PRICE;
+  const originalPrice = pricing?.originalPrice ?? (pricing?.price ? undefined : DEFAULT_ORIGINAL_PRICE);
+  const discount = pricing?.discount ?? (pricing?.price ? undefined : DEFAULT_DISCOUNT);
+  const perksList = inclusions ?? [
+    "Full lifetime access",
+    "Access on mobile & desktop",
+    "Certificate of completion",
+  ];
+  const priceSizeVariant = getPriceSizeVariant(price);
+
+  const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (isReadOnlyPreview) return;
+    if (onNavigatePage) {
       onNavigatePage(`/learn/${encodeURIComponent(course.id)}`);
     }
   };
 
-  const price = pricing?.price ?? (isReadOnlyPreview ? "Free" : DEFAULT_PRICE);
-  const originalPrice = pricing?.originalPrice;
-  const discount = pricing?.discount;
-  const priceSizeVariant = getPriceSizeVariant(price);
-
-  const defaultPerks = isReadOnlyPreview
-    ? []
-    : [
-        "Full lifetime access",
-        "Certificate of completion",
-        "Access on all devices",
-      ];
-  const perksList = inclusions !== undefined ? inclusions : defaultPerks;
-
   return (
-    <div className="flex flex-col w-full">
-      {/* Responsive Hero: 2 columns on desktop (>=1200px) with ~42/58 ratio and bottom-aligned lower content; stacked (Info -> Trailer -> Price) on tablet and mobile */}
-      <div className="flex flex-col min-[1200px]:grid min-[1200px]:grid-cols-[minmax(0,42%)_minmax(0,58%)] gap-5 min-[1200px]:gap-7 min-[1200px]:items-stretch w-full box-border">
-        {/* Left Column: Top row at top, Lower group (Title + Meta + Pricing) pushed to bottom on desktop */}
-        <div className="flex flex-col min-w-0 w-full min-[1200px]:h-full min-[1200px]:justify-between gap-3.5 max-[1200px]:contents">
-          {/* Top Row: Back Button + Level Badge Only */}
-          <div className="flex items-center gap-2.5 shrink-0 max-[1200px]:order-1">
-            {onNavigateCourses && (
-              <button
-                type="button"
-                className="inline-flex items-center justify-center w-[38px] h-[38px] rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,#000)] text-[var(--text)] cursor-pointer p-0 shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-[border-color,background-color,color] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-                aria-label="Back to courses"
-                onClick={onNavigateCourses}
-                title="Back to courses"
-              >
-                <ArrowLeft size={18} weight="bold" />
-              </button>
-            )}
+    <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5">
+      {/* Left Column: Title, Metadata, Pricing Section */}
+      <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
+        {/* Upper Navigation & Category / Level Badges */}
+        <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
+          {onNavigateCourses && (
+            <button
+              type="button"
+              className="inline-flex items-center justify-center w-9.5 h-9.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,#000)] text-(--text) cursor-pointer p-0 shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-[border-color,background-color,color] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover) hover:text-(--text)"
+              aria-label="Back to courses"
+              onClick={onNavigateCourses}
+              title="Back to courses"
+            >
+              <ArrowLeft size={18} weight="bold" />
+            </button>
+          )}
 
-            {course.level ? (
-              <span
-                className="inline-flex items-center border border-[var(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent))] rounded-full px-[13px] py-[5px] text-[var(--accent-ink,var(--accent))] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent))] text-[0.74rem] font-[750] tracking-[0.06em] leading-none"
-                aria-label={`Level: ${course.level}`}
-              >
-                {course.level.toUpperCase()}
+          {course.level ? (
+            <span
+              className="inline-flex items-center border border-(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent)) rounded-full px-3.25 py-1.25 text-(--accent-ink,var(--accent)) bg-(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent)) text-[0.74rem] font-[750] tracking-[0.06em] leading-none"
+              aria-label={`Level: ${course.level}`}
+            >
+              {course.level.toUpperCase()}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Lower Content Group: Title, Meta row, Pricing Card */}
+        <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
+          {/* Title & Metadata Group */}
+          <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
+            {/* 1. Title */}
+            <h1 className="m-0 text-(--text) text-[2.15rem] font-extrabold leading-[1.16] tracking-[-0.025em] max-[900px]:text-[1.85rem] max-[640px]:text-[1.65rem]">
+              {title}
+            </h1>
+
+            {/* 2. Metadata row immediately below title */}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-(--text-secondary) text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
+              {!isReadOnlyPreview && (
+                <>
+                  <span className="inline-flex items-center gap-1.5 text-(--text) font-[650]">
+                    <User size={17} weight="bold" aria-hidden="true" />
+                    <span>Instructor</span>
+                  </span>
+                  <span
+                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                    aria-hidden="true"
+                  >
+                    •
+                  </span>
+                </>
+              )}
+              <span className="inline-flex items-center gap-1.5">
+                <Stack size={17} aria-hidden="true" />
+                <span>{course.sections} Section{course.sections === 1 ? "" : "s"}</span>
               </span>
-            ) : null}
+              <span
+                className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                aria-hidden="true"
+              >
+                •
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <BookOpen size={17} aria-hidden="true" />
+                <span>{course.lectures} Lesson{course.lectures === 1 ? "" : "s"}</span>
+              </span>
+              {language ? (
+                <>
+                  <span
+                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                    aria-hidden="true"
+                  >
+                    •
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Globe size={17} aria-hidden="true" />
+                    <span>{language}</span>
+                  </span>
+                </>
+              ) : null}
+              {categoryName ? (
+                <>
+                  <span
+                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                    aria-hidden="true"
+                  >
+                    •
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Tag size={17} aria-hidden="true" />
+                    <span>{categoryName}</span>
+                  </span>
+                </>
+              ) : null}
+              {course.duration ? (
+                <>
+                  <span
+                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                    aria-hidden="true"
+                  >
+                    •
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock size={17} aria-hidden="true" />
+                    <span>{course.duration}</span>
+                  </span>
+                </>
+              ) : null}
+            </div>
           </div>
 
-          {/* Lower Content Group: Title, Meta row, Pricing Card */}
-          <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
-            {/* Title & Metadata Group */}
-            <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
-              {/* 1. Title */}
-              <h1 className="m-0 text-[var(--text)] text-[2.15rem] font-extrabold leading-[1.16] tracking-[-0.025em] max-[900px]:text-[1.85rem] max-[640px]:text-[1.65rem]">
-                {title}
-              </h1>
-
-              {/* 2. Metadata row immediately below title */}
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[var(--text-secondary)] text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
-                {!isReadOnlyPreview && (
-                  <>
-                    <span className="inline-flex items-center gap-1.5 text-[var(--text)] font-[650]">
-                      <User size={17} weight="bold" aria-hidden="true" />
-                      <span>Instructor</span>
-                    </span>
-                    <span
-                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                      aria-hidden="true"
-                    >
-                      •
-                    </span>
-                  </>
-                )}
-                <span className="inline-flex items-center gap-1.5">
-                  <Stack size={17} aria-hidden="true" />
-                  <span>{course.sections} Section{course.sections === 1 ? "" : "s"}</span>
-                </span>
+          {/* Full-width Rich Pricing Section in Left Column */}
+          <div
+            className={`flex flex-col min-h-0 rounded-[14px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,transparent)] shadow-(--card-shadow) w-full box-border max-[1200px]:order-3 max-[1200px]:w-full max-[1200px]:mt-0 max-[640px]:p-[16px_14px] max-[640px]:gap-3 p-[18px_20px] gap-3.5`}
+            aria-label="Course pricing and enrollment"
+          >
+            {/* Top Row: Prominent Price + Original Price + Discount (Left) and Favourite Button (Top Right) */}
+            <div className="flex items-start justify-between gap-3 w-full">
+              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
                 <span
-                  className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                  aria-hidden="true"
+                  className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
                 >
-                  •
+                  {price}
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <BookOpen size={17} aria-hidden="true" />
-                  <span>{course.lectures} Lesson{course.lectures === 1 ? "" : "s"}</span>
-                </span>
-                {language ? (
-                  <>
-                    <span
-                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                      aria-hidden="true"
-                    >
-                      •
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Globe size={17} aria-hidden="true" />
-                      <span>{language}</span>
-                    </span>
-                  </>
-                ) : null}
-                {categoryName ? (
-                  <>
-                    <span
-                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                      aria-hidden="true"
-                    >
-                      •
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Tag size={17} aria-hidden="true" />
-                      <span>{categoryName}</span>
-                    </span>
-                  </>
-                ) : null}
-                {course.duration ? (
-                  <>
-                    <span
-                      className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                      aria-hidden="true"
-                    >
-                      •
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock size={17} aria-hidden="true" />
-                      <span>{course.duration}</span>
-                    </span>
-                  </>
-                ) : null}
+                {originalPrice && (
+                  <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
+                    {originalPrice}
+                  </span>
+                )}
+                {discount && (
+                  <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
+                    {discount}
+                  </span>
+                )}
               </div>
+
+              <button
+                type="button"
+                className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
+                  wishlisted
+                    ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
+                    : ""
+                }`}
+                aria-label={
+                  wishlisted ? "Remove from wishlist" : "Add to wishlist"
+                }
+                aria-pressed={wishlisted}
+                disabled={isReadOnlyPreview}
+                onClick={onToggleWishlist}
+                title={
+                  wishlisted ? "Remove from wishlist" : "Add to wishlist"
+                }
+              >
+                <Heart
+                  size={20}
+                  weight={wishlisted ? "fill" : "regular"}
+                  aria-hidden="true"
+                />
+              </button>
             </div>
 
-            {/* Full-width Rich Pricing Section in Left Column */}
-            <div
-              className={`flex flex-col min-h-0 rounded-[14px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,transparent)] shadow-[var(--card-shadow)] w-full box-border max-[1200px]:order-3 max-[1200px]:w-full max-[1200px]:mt-0 max-[640px]:p-[16px_14px] max-[640px]:gap-3 p-[18px_20px] gap-3.5`}
-              aria-label="Course pricing and enrollment"
-            >
-              {/* Top Row: Prominent Price + Original Price + Discount (Left) and Favourite Button (Top Right) */}
-              <div className="flex items-start justify-between gap-3 w-full">
-                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
-                  <span
-                    className={`text-[var(--text)] font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
-                  >
-                    {price}
-                  </span>
-                  {originalPrice && (
-                    <span className="text-[var(--muted)] text-[1.05rem] font-medium line-through whitespace-nowrap">
-                      {originalPrice}
-                    </span>
-                  )}
-                  {discount && (
-                    <span className="inline-flex items-center rounded-md px-2 py-[3px] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent))] text-[var(--accent-ink,var(--accent))] text-[0.75rem] font-[750] leading-none whitespace-nowrap">
-                      {discount}
-                    </span>
-                  )}
-                </div>
+            {/* Middle Row: Actions (Apply Coupon + Buy Now / Continue Learning) */}
+            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-bold font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isReadOnlyPreview}
+              >
+                <Ticket
+                  size="1.15em"
+                  weight="bold"
+                  className="shrink-0"
+                  aria-hidden="true"
+                />
+                <span className="font-bold font-[750] truncate">
+                  Apply coupon
+                </span>
+              </button>
 
-                <button
-                  type="button"
-                  className={`inline-flex items-center justify-center w-[38px] h-[38px] shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-[var(--muted)] cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:scale-[1.06] ${
-                    wishlisted
-                      ? "!border-[#ec4899] !text-[#ec4899] !bg-[rgba(236,72,153,0.14)]"
-                      : ""
-                  }`}
-                  aria-label={
-                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-extrabold font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
+                disabled={isReadOnlyPreview}
+                onClick={() => {
+                  if (!isReadOnlyPreview && onNavigatePage) {
+                    onNavigatePage(`/learn/${encodeURIComponent(course.id)}`);
                   }
-                  aria-pressed={wishlisted}
-                  disabled={isReadOnlyPreview}
-                  onClick={onToggleWishlist}
-                  title={
-                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
-                  }
-                >
-                  <Heart
-                    size={20}
-                    weight={wishlisted ? "fill" : "regular"}
+                }}
+              >
+                {course.enrolled ? (
+                  <Play
+                    size="1.15em"
+                    weight="fill"
+                    className="shrink-0"
                     aria-hidden="true"
                   />
-                </button>
-              </div>
-
-              {/* Middle Row: Actions (Apply Coupon + Buy Now / Continue Learning) */}
-              <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-1.5 min-h-[40px] border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-[var(--text)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-bold font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent))] hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-[120px] max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isReadOnlyPreview}
-                >
-                  <Ticket
+                ) : price.toLowerCase() === "free" ? (
+                  <BookOpen
                     size="1.15em"
                     weight="bold"
                     className="shrink-0"
                     aria-hidden="true"
                   />
-                  <span className="font-bold font-[750] truncate">
-                    Apply coupon
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 flex-1 min-h-[42px] min-w-[140px] px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-[var(--on-accent,#ffffff)] bg-[var(--accent)] shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-extrabold font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-[var(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text)))] hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
-                  disabled={isReadOnlyPreview}
-                  onClick={() => {
-                    if (!isReadOnlyPreview && onNavigatePage) {
-                      onNavigatePage(`/learn/${encodeURIComponent(course.id)}`);
-                    }
-                  }}
-                >
-                  {course.enrolled ? (
-                    <Play
-                      size="1.15em"
-                      weight="fill"
-                      className="shrink-0"
-                      aria-hidden="true"
-                    />
-                  ) : price.toLowerCase() === "free" ? (
-                    <BookOpen
-                      size="1.15em"
-                      weight="bold"
-                      className="shrink-0"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <ShoppingBag
-                      size="1.15em"
-                      weight="bold"
-                      className="shrink-0"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="font-extrabold font-[800] truncate">
-                    {price.toLowerCase() === "free"
-                      ? "Enroll for Free"
-                      : course.enrolled
-                        ? "Continue Learning"
-                        : "Buy Now"}
-                  </span>
-                </button>
-              </div>
-
-              {/* Bottom Row: Additional Inclusions / Value Perks */}
-              {perksList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] text-[var(--muted)] text-[0.82rem] max-[640px]:text-[0.78rem] max-[640px]:gap-x-3 max-[640px]:gap-y-2">
-                  {perksList.map((perk, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5"
-                    >
-                      <CheckCircle
-                        size={16}
-                        weight="fill"
-                        className="text-[#10b981] shrink-0"
-                      />
-                      <span>{perk}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
+                ) : (
+                  <ShoppingBag
+                    size="1.15em"
+                    weight="bold"
+                    className="shrink-0"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="font-extrabold font-[800] truncate">
+                  {price.toLowerCase() === "free"
+                    ? "Enroll for Free"
+                    : course.enrolled
+                      ? "Continue Learning"
+                      : "Buy Now"}
+                </span>
+              </button>
             </div>
+
+            {/* Bottom Row: Additional Inclusions / Value Perks */}
+            {perksList.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) text-[0.82rem] max-[640px]:text-[0.78rem] max-[640px]:gap-x-3 max-[640px]:gap-y-2">
+                {perksList.map((perk, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 font-medium whitespace-nowrap"
+                  >
+                    <CheckCircle
+                      size={15}
+                      weight="fill"
+                      className="text-[var(--accent)] shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span>{perk}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Right Column: 16:9 Course Trailer */}
-        <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full">
-          <div
-            className="group w-full aspect-video rounded-[14px] overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-[var(--card-shadow)] relative flex items-center justify-center"
-            aria-label="Course preview player"
+      {/* Right Column: 16:9 Course Trailer */}
+      <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full">
+        <div
+          className="group w-full aspect-video rounded-[14px] overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center"
+          aria-label="Course preview player"
+        >
+          <img
+            src={thumbnail}
+            alt={`Preview thumbnail for ${title}`}
+            className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
+          />
+          <div className="absolute inset-0 bg-linear-to-b from-black/8 to-black/45 pointer-events-none" />
+
+          {/* Center Play Button */}
+          <button
+            type="button"
+            className="group/play absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent cursor-pointer p-0 z-2"
+            aria-label={`Play preview for ${title}`}
+            onClick={handlePreviewClick}
+            disabled={isReadOnlyPreview}
           >
-            <img
-              src={thumbnail}
-              alt={`Preview thumbnail for ${title}`}
-              className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/[0.08] to-black/[0.45] pointer-events-none" />
-
-            {/* Center Play Button */}
-            <button
-              type="button"
-              className="group/play absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent cursor-pointer p-0 z-[2]"
-              aria-label={`Play preview for ${title}`}
-              onClick={handlePreviewClick}
-              disabled={isReadOnlyPreview}
+            <span
+              className="inline-flex w-13.5 h-13.5 items-center justify-center rounded-full bg-black/55 backdrop-blur-md border-[1.5px] border-white/25 text-white shadow-[0_4px_18px_rgba(0,0,0,0.35)] transition-[transform,background-color,border-color] duration-180 ease-out motion-reduce:transition-none group-hover/play:scale-[1.08] group-hover/play:bg-black/75 group-hover/play:border-white/50 max-[640px]:w-12.5 max-[640px]:h-12.5"
+              aria-hidden="true"
             >
-              <span
-                className="inline-flex w-[54px] h-[54px] items-center justify-center rounded-full bg-black/55 backdrop-blur-md border-[1.5px] border-white/25 text-white shadow-[0_4px_18px_rgba(0,0,0,0.35)] transition-[transform,background-color,border-color] duration-180 ease-out motion-reduce:transition-none group-hover/play:scale-[1.08] group-hover/play:bg-black/75 group-hover/play:border-white/50 max-[640px]:w-[50px] max-[640px]:h-[50px]"
-                aria-hidden="true"
-              >
-                <Play size={22} weight="fill" />
-              </span>
-            </button>
+              <Play size={22} weight="fill" />
+            </span>
+          </button>
 
-            {/* Bottom Left Pill Button */}
-            <button
-              type="button"
-              className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/[0.18] text-white text-[0.78rem] font-semibold px-[13px] py-1.5 rounded-full cursor-pointer z-[2] transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
-              onClick={handlePreviewClick}
-              disabled={isReadOnlyPreview}
-              aria-label="View trailer"
-            >
-              <Play size={13} weight="fill" aria-hidden="true" />
-              <span>View trailer</span>
-            </button>
-          </div>
+          {/* Bottom Left Pill Button */}
+          <button
+            type="button"
+            className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
+            onClick={handlePreviewClick}
+            disabled={isReadOnlyPreview}
+            aria-label="View trailer"
+          >
+            <PlayCircle size={15} weight="bold" />
+            <span>Preview this course</span>
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── About Card sub-component ────────────────────────────────────────────────
+// ─── about this course card ──────────────────────────────────────────────────
 
 interface CourseAboutCardProps {
   description?: string;
@@ -760,59 +756,53 @@ function CourseAboutCard({
 }: CourseAboutCardProps) {
   return (
     <section
-      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] shadow-[var(--card-shadow)] max-[640px]:p-[18px_16px]"
+      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
       aria-labelledby="cov-about-heading"
     >
       <h2
         id="cov-about-heading"
-        className="m-0 mb-3 text-[var(--text)] text-[1.24rem] font-bold tracking-[-0.015em]"
+        className="m-0 mb-3 text-(--text) text-[1.24rem] font-bold tracking-[-0.015em]"
       >
         About this course
       </h2>
-      <div className="flex flex-col gap-2">
+
+      <div className="flex flex-col gap-3">
         {description ? (
-          <div className="course-preview-markdown-content">
+          <div className="cov-prose text-[0.88rem] leading-[1.65]">
             <RenderMarkdown content={description} />
           </div>
-        ) : isReadOnlyPreview ? (
-          <p className="m-0 text-[var(--muted)] text-[0.87rem] italic">
-            No description provided yet.
-          </p>
         ) : (
           <>
             {aboutLead && (
-              <p className="m-0 text-[var(--text-secondary)] text-[0.87rem] leading-[1.6]">
+              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
                 {aboutLead}
               </p>
             )}
             {aboutBody && (
-              <p className="m-0 text-[var(--text-secondary)] text-[0.87rem] leading-[1.6]">
+              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
                 {aboutBody}
               </p>
             )}
             {showMore && aboutExtra && (
-              <p className="m-0 text-[var(--text-secondary)] text-[0.87rem] leading-[1.6]">
+              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
                 {aboutExtra}
               </p>
             )}
           </>
         )}
       </div>
+
       {!description && !isReadOnlyPreview && (
         <button
           type="button"
-          className="inline-flex items-center gap-1 mt-2.5 border-0 bg-transparent text-[var(--accent)] text-[0.82rem] font-semibold p-0 cursor-pointer transition-opacity duration-140 hover:opacity-85"
+          className="inline-flex items-center gap-1 mt-2.5 border-0 bg-transparent text-(--accent) text-[0.82rem] font-semibold p-0 cursor-pointer transition-opacity duration-140 hover:opacity-85"
           aria-expanded={showMore}
           onClick={onToggleShowMore}
         >
-          <span>{showMore ? "See less" : "See more"}</span>
+          <span>{showMore ? "Show less" : "Show more"}</span>
           <CaretDown
             size={14}
-            weight="bold"
-            className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${
-              showMore ? "rotate-180" : ""
-            }`}
-            aria-hidden="true"
+            className={`transition-transform duration-200 ${showMore ? "rotate-180" : ""}`}
           />
         </button>
       )}
@@ -820,7 +810,7 @@ function CourseAboutCard({
   );
 }
 
-// ─── Curriculum Section List sub-component ───────────────────────────────────
+// ─── course curriculum card ──────────────────────────────────────────────────
 
 interface CourseCurriculumCardProps {
   course: Course;
@@ -837,18 +827,18 @@ function CourseCurriculumCard({
 }: CourseCurriculumCardProps) {
   return (
     <section
-      className="p-0 border-0 bg-transparent"
+      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[var(--surface)] shadow-[var(--card-shadow)] max-[640px]:p-[18px_16px]"
       aria-labelledby="cov-curriculum-heading"
     >
-      <div className="flex items-end justify-between gap-4 mb-2.5">
+      <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h2
             id="cov-curriculum-heading"
-            className="m-0 mb-2.5 text-[var(--text)] text-[1.1rem] font-bold tracking-[-0.015em]"
+            className="m-0 mb-2.5 text-(--text) text-[1.1rem] font-bold tracking-[-0.015em]"
           >
             Course curriculum
           </h2>
-          <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.82rem]">
+          <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem]">
             {course.sections} Section{course.sections === 1 ? "" : "s"} &bull;{" "}
             {course.lectures} Lesson{course.lectures === 1 ? "" : "s"}
           </p>
@@ -898,33 +888,17 @@ export interface CourseOverviewPageProps {
   isReadOnlyPreview?: boolean;
 }
 
-export function CourseOverviewPage({
-  courseSlug: propCourseSlug,
-  onNavigateCourses,
-  onNavigatePage,
-  previewData,
-  categories = [],
-  customCourse,
-  customDescription,
-  customShortDescription,
-  customCategoryName,
-  customLanguage,
-  customSections,
-  customIncludes,
-  customInclusions,
-  customPricing,
-  isReadOnlyPreview = false,
-}: CourseOverviewPageProps) {
+export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
-  const courseSlug = propCourseSlug ?? routeCourseSlug;
-  const serverCategories = categories;
+  const courseSlug = props.courseSlug ?? routeCourseSlug;
+  const serverCategories = props.categories ?? [];
 
   // If previewData is provided, adapt it cleanly from persisted server state
-  const adaptedFromPreview = previewData
+  const adaptedFromPreview = props.previewData
     ? (() => {
-        const c = previewData.course;
-        const totalSections = previewData.sections.length;
-        const totalLessons = previewData.sections.reduce(
+        const c = props.previewData.course;
+        const totalSections = props.previewData.sections.length;
+        const totalLessons = props.previewData.sections.reduce(
           (acc, sec) => acc + (sec.lessons?.length ?? 0),
           0,
         );
@@ -938,7 +912,7 @@ export function CourseOverviewPage({
           : undefined;
 
         const resolvedLanguage = getLanguageLabel(
-          previewData.settings?.language,
+          props.previewData.settings?.language,
         );
 
         const adaptedCourse: Course = {
@@ -951,16 +925,17 @@ export function CourseOverviewPage({
           lectures: totalLessons,
           progress: null,
           enrolled: false,
-          duration: previewData.settings?.estimatedDuration
-            ? `${previewData.settings.estimatedDuration}h`
+          duration: props.previewData.settings?.estimatedDuration
+            ? `${props.previewData.settings.estimatedDuration}h`
             : "",
           students: 0,
           thumbnail: c.thumbnailMediaId
             ? `/api/v1/media/${c.thumbnailMediaId}`
             : "/assets/instructor-poster.jpg",
+          lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
         };
 
-        const adaptedSections: CourseSection[] = (previewData.sections || [])
+        const adaptedSections: CourseSection[] = (props.previewData.sections || [])
           .slice()
           .sort((a, b) => a.position - b.position)
           .map((sec, secIdx) => ({
@@ -980,21 +955,21 @@ export function CourseOverviewPage({
 
         // Inclusions / Perks from Access Rules & Settings
         const perks: string[] = [];
-        if (previewData.accessRules?.durationType === "lifetime") {
+        if (props.previewData.accessRules?.durationType === "lifetime") {
           perks.push("Full lifetime access");
         } else if (
-          previewData.accessRules?.durationType === "fixed_duration" &&
-          previewData.accessRules.durationDays
+          props.previewData.accessRules?.durationType === "fixed_duration" &&
+          props.previewData.accessRules.durationDays
         ) {
-          perks.push(`${previewData.accessRules.durationDays} days access`);
+          perks.push(`${props.previewData.accessRules.durationDays} days access`);
         }
-        if (previewData.settings?.certificateEnabled) {
+        if (props.previewData.settings?.certificateEnabled) {
           perks.push("Certificate of completion");
         }
 
         // Pricing with dynamic currency and sale window validation
         let pricingProps: CourseOverviewPricingProps;
-        const pr = previewData.pricing;
+        const pr = props.previewData.pricing;
         if (!pr || pr.pricingType === "free") {
           pricingProps = { price: "Free" };
         } else {
@@ -1036,26 +1011,29 @@ export function CourseOverviewPage({
 
   const course =
     adaptedFromPreview?.course ??
-    customCourse ??
-    (courseSlug ? courses.find((c) => c.id === courseSlug) : undefined);
+    props.customCourse ??
+    (courseSlug
+      ? courses.find((candidate) => candidate.id === courseSlug)
+      : undefined);
 
   if (!course) {
     return (
-      <div className="w-full max-w-[1100px] mx-auto box-border text-[var(--text)]">
+      <div className="w-full max-w-275 mx-auto box-border text-(--text)">
         <div className="courses-empty">
           <BookOpen size={34} />
           <h2>Course not found</h2>
           <p>
-            The course you are looking for does not exist or may have been removed.
+            The course you are looking for does not exist or may have been
+            removed.
           </p>
-          {onNavigateCourses ? (
-            <button type="button" onClick={onNavigateCourses}>
+          {props.onNavigateCourses ? (
+            <button type="button" onClick={props.onNavigateCourses}>
               Explore courses
             </button>
-          ) : onNavigatePage ? (
+          ) : props.onNavigatePage ? (
             <button
               type="button"
-              onClick={() => onNavigatePage("/explore-courses")}
+              onClick={() => props.onNavigatePage?.("/courses")}
             >
               Explore courses
             </button>
@@ -1064,6 +1042,74 @@ export function CourseOverviewPage({
       </div>
     );
   }
+
+  return (
+    <CourseOverviewContent
+      {...props}
+      key={course.id}
+      course={course}
+      courseSlug={courseSlug}
+      adaptedFromPreview={adaptedFromPreview}
+    />
+  );
+}
+
+type CourseOverviewContentProps = CourseOverviewPageProps & {
+  course: Course;
+  courseSlug: string | undefined;
+  adaptedFromPreview: {
+    course: Course;
+    description: string;
+    shortDescription: string | undefined;
+    categoryName: string | undefined;
+    language: string | undefined;
+    sections: CourseSection[];
+    inclusions: string[];
+    pricing: CourseOverviewPricingProps;
+  } | null;
+};
+
+function CourseOverviewContent({
+  course,
+  courseSlug,
+  adaptedFromPreview,
+  onNavigateCourses,
+  onNavigatePage,
+  customCourse,
+  customDescription,
+  customShortDescription,
+  customCategoryName,
+  customLanguage,
+  customSections,
+  customIncludes,
+  customInclusions,
+  customPricing,
+  isReadOnlyPreview = false,
+}: CourseOverviewContentProps) {
+  const locationHash =
+    typeof window === "undefined" ? "" : window.location.hash;
+
+  useLayoutEffect(() => {
+    if (!locationHash) return undefined;
+
+    let targetId: string;
+    try {
+      targetId = decodeURIComponent(locationHash.slice(1));
+    } catch {
+      return undefined;
+    }
+    if (!targetId) return undefined;
+
+    const revealTarget = () => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "auto",
+        block: "start",
+      });
+    };
+    revealTarget();
+    const frame = window.requestAnimationFrame(revealTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [courseSlug, locationHash]);
 
   const title = adaptedFromPreview?.course.title ?? customCourse?.title ?? course.title;
   const thumbnail = adaptedFromPreview?.course.thumbnail ?? customCourse?.thumbnail ?? course.thumbnail;
@@ -1160,10 +1206,10 @@ export function CourseOverviewPage({
 
   return (
     <div
-      className={`w-full max-w-[1100px] mx-auto flex flex-col gap-6 box-border text-[var(--text)] ${
+      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${
         isReadOnlyPreview
-          ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-[18px] max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"
-          : "max-[900px]:gap-[18px] max-[640px]:gap-4"
+          ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-4.5 max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"
+          : "max-[900px]:gap-4.5 max-[640px]:gap-4"
       }`}
     >
       {/* 1. Two-Column Hero Section with Info & Pricing on Left, Trailer on Right */}
