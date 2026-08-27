@@ -94,7 +94,6 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
           fixedDurationUnit: "Days",
           enableQA: editorData.settings.allowQa,
           enableComments: editorData.settings.allowComments,
-          enableReviews: editorData.settings.allowReviews,
           enableDownloads: editorData.settings.allowDownloads,
         });
 
@@ -133,7 +132,6 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         fixedDurationUnit: "Days",
         enableQA: true,
         enableComments: true,
-        enableReviews: true,
         enableDownloads: false,
       };
 
@@ -202,7 +200,6 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         fixedDurationUnit: "Days",
         enableQA: res.settings.allowQa,
         enableComments: res.settings.allowComments,
-        enableReviews: res.settings.allowReviews,
         enableDownloads: res.settings.allowDownloads,
       });
 

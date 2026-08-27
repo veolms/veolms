@@ -464,12 +464,14 @@ function CourseHeroSection({
               </button>
             )}
 
-            <span
-              className="inline-flex items-center border border-[var(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent))] rounded-full px-[13px] py-[5px] text-[var(--accent-ink,var(--accent))] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent))] text-[0.74rem] font-[750] tracking-[0.06em] leading-none"
-              aria-label={`Level: ${course.level}`}
-            >
-              {course.level.toUpperCase()}
-            </span>
+            {course.level ? (
+              <span
+                className="inline-flex items-center border border-[var(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent))] rounded-full px-[13px] py-[5px] text-[var(--accent-ink,var(--accent))] bg-[var(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent))] text-[0.74rem] font-[750] tracking-[0.06em] leading-none"
+                aria-label={`Level: ${course.level}`}
+              >
+                {course.level.toUpperCase()}
+              </span>
+            ) : null}
           </div>
 
           {/* Lower Content Group: Title, Meta row, Pricing Card */}
@@ -929,7 +931,7 @@ export function CourseOverviewPage({
 
         const difficultyStr = c.difficulty
           ? c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1)
-          : "Beginner";
+          : "";
 
         const resolvedCategoryName = c.categoryId
           ? serverCategories.find((cat) => cat.id === c.categoryId)?.name
@@ -944,7 +946,7 @@ export function CourseOverviewPage({
           title: c.title || "Untitled Course",
           description: c.description || "",
           level: difficultyStr as CourseLevel,
-          category: (resolvedCategoryName || "Development") as CourseCategory,
+          category: (resolvedCategoryName || "") as CourseCategory,
           sections: totalSections,
           lectures: totalLessons,
           progress: null,
@@ -1070,9 +1072,10 @@ export function CourseOverviewPage({
     customShortDescription ??
     undefined;
   const categoryName =
-    adaptedFromPreview?.categoryName ??
-    customCategoryName ??
-    (!isReadOnlyPreview && course.category ? course.category : undefined);
+    adaptedFromPreview !== null
+      ? adaptedFromPreview?.categoryName
+      : customCategoryName ??
+        (!isReadOnlyPreview && course.category ? course.category : undefined);
   const language =
     adaptedFromPreview?.language ??
     customLanguage ??
@@ -1147,8 +1150,12 @@ export function CourseOverviewPage({
     });
   };
 
-  const aboutLead = `This course is designed to take you from the basics of ${course.title} to building complex, scalable ${course.category.toLowerCase()} applications.`;
-  const aboutBody = `${course.description} You'll learn core concepts, work with databases, authentication, APIs, and deploy real-world projects. Whether you're a beginner or looking to level up your ${course.category.toLowerCase()} skills, this course provides practical knowledge and hands-on experience to help you build professional-grade applications.`;
+  const categoryTopic =
+    course.category && course.category.trim()
+      ? course.category.toLowerCase()
+      : "software";
+  const aboutLead = `This course is designed to take you from the basics of ${course.title} to building complex, scalable ${categoryTopic} applications.`;
+  const aboutBody = `${course.description} You'll learn core concepts, work with databases, authentication, APIs, and deploy real-world projects. Whether you're a beginner or looking to level up your ${categoryTopic} skills, this course provides practical knowledge and hands-on experience to help you build professional-grade applications.`;
   const aboutExtra = `By the end of this course, you will have built complete production-ready projects, learned testing and deployment workflows, and acquired the professional skill set needed for industry roles.`;
 
   return (

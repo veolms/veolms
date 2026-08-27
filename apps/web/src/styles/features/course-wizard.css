@@ -779,3 +779,15 @@
   border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   margin: 1.25rem 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Mobile Scrollport Bottom Space Optimization
+   Eliminate excess trailing blank space beneath cards on small viewports.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 820px) {
+  .student-surface-main:has(.course-wizard-steps-nav),
+  .student-surface-main:has(.course-wizard-mobile-action-bar) {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+  }
+}
+

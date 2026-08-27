@@ -33,8 +33,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         pricingType: "free",
         sellingPrice: "",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       };
       const result = validatePricing(freeState);
@@ -47,8 +45,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         pricingType: "paid",
         sellingPrice: "",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       };
       expect(validatePricing(emptyState).isValid).toBe(false);
@@ -65,8 +61,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         pricingType: "paid",
         sellingPrice: "3500",
         originalPrice: "2000",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       };
       const result = validatePricing(state);
@@ -79,91 +73,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         pricingType: "paid",
         sellingPrice: "1999",
         originalPrice: "2999",
-        saleStartsAt: "",
-        saleEndsAt: "",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(true);
-      expect(result.error).toBeNull();
-    });
-
-    it("rejects if only sale startsAt is provided without endsAt", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "2028-09-01T10:00",
-        saleEndsAt: "",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain("both sale start and end dates");
-    });
-
-    it("rejects if only sale endsAt is provided without startsAt", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "",
-        saleEndsAt: "2028-09-10T10:00",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain("both sale start and end dates");
-    });
-
-    it("rejects past sale start date", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "2020-01-01T10:00",
-        saleEndsAt: "2028-09-10T10:00",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain("Sale start date cannot be in the past");
-    });
-
-    it("rejects past sale end date", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "2020-01-01T10:00",
-        saleEndsAt: "2020-01-05T10:00",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(false);
-    });
-
-    it("rejects when sale end date is earlier than or equal to start date", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "2028-09-10T10:00",
-        saleEndsAt: "2028-09-05T10:00",
-        currency: "USD",
-      };
-      const result = validatePricing(state);
-      expect(result.isValid).toBe(false);
-      expect(result.error).toContain("Sale end date must be later than sale start date");
-    });
-
-    it("accepts valid future sale date range", () => {
-      const state: PricingState = {
-        pricingType: "paid",
-        sellingPrice: "1999",
-        originalPrice: "2999",
-        saleStartsAt: "2028-09-01T10:00",
-        saleEndsAt: "2028-09-15T18:00",
         currency: "USD",
       };
       const result = validatePricing(state);

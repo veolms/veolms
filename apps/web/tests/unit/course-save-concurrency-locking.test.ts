@@ -123,7 +123,6 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         fixedDurationUnit: "Months",
         enableQA: false,
         enableComments: true,
-        enableReviews: false,
         enableDownloads: true,
       };
 
@@ -162,7 +161,6 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         fixedDurationUnit: "Days",
         enableQA: true,
         enableComments: false,
-        enableReviews: true,
         enableDownloads: false,
       };
 
@@ -189,8 +187,6 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         pricingType: "paid",
         sellingPrice: "49",
         originalPrice: "99",
-        saleStartsAt: "2026-09-01T00:00",
-        saleEndsAt: "2026-09-15T00:00",
         currency: "USD",
       };
 
@@ -217,8 +213,6 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         pricingType: "paid",
         sellingPrice: "199",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "EUR",
       };
 

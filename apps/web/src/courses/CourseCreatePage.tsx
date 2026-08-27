@@ -209,7 +209,6 @@ export interface AccessRulesFormState {
   fixedDurationUnit: DurationUnit;
   enableQA: boolean;
   enableComments: boolean;
-  enableReviews: boolean;
   enableDownloads: boolean;
 }
 
@@ -220,7 +219,6 @@ export const initialAccessRulesState: AccessRulesFormState = {
   fixedDurationUnit: "Days",
   enableQA: true,
   enableComments: true,
-  enableReviews: true,
   enableDownloads: false,
 };
 
@@ -235,8 +233,6 @@ export const normalizeAccessRulesState = (
   enableQA: raw?.enableQA !== undefined ? Boolean(raw.enableQA) : true,
   enableComments:
     raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
-  enableReviews:
-    raw?.enableReviews !== undefined ? Boolean(raw.enableReviews) : true,
   enableDownloads:
     raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
 });
@@ -254,7 +250,6 @@ export const isAccessRulesEqual = (
     normA.fixedDurationUnit === normB.fixedDurationUnit &&
     normA.enableQA === normB.enableQA &&
     normA.enableComments === normB.enableComments &&
-    normA.enableReviews === normB.enableReviews &&
     normA.enableDownloads === normB.enableDownloads
   );
 };
@@ -266,8 +261,6 @@ export interface PricingFormState {
   pricingType: PricingType;
   sellingPrice: string;
   originalPrice: string;
-  saleStartsAt: string;
-  saleEndsAt: string;
   currency: string;
 }
 
@@ -277,8 +270,6 @@ export const initialPricingState: PricingFormState = {
   pricingType: "paid",
   sellingPrice: "",
   originalPrice: "",
-  saleStartsAt: "",
-  saleEndsAt: "",
   currency: "USD",
 };
 
@@ -288,8 +279,6 @@ export const normalizePricingState = (
   pricingType: raw?.pricingType === "free" ? "free" : "paid",
   sellingPrice: raw?.sellingPrice ? String(raw.sellingPrice).trim() : "",
   originalPrice: raw?.originalPrice ? String(raw.originalPrice).trim() : "",
-  saleStartsAt: raw?.saleStartsAt ? String(raw.saleStartsAt).trim() : "",
-  saleEndsAt: raw?.saleEndsAt ? String(raw.saleEndsAt).trim() : "",
   currency: raw?.currency ? String(raw.currency).trim() : "USD",
 });
 
@@ -309,9 +298,7 @@ export const isPricingEqual = (
 
   return (
     normA.sellingPrice === normB.sellingPrice &&
-    normA.originalPrice === normB.originalPrice &&
-    normA.saleStartsAt === normB.saleStartsAt &&
-    normA.saleEndsAt === normB.saleEndsAt
+    normA.originalPrice === normB.originalPrice
   );
 };
 
@@ -507,64 +494,6 @@ export function validatePricing(pricing: PricingState): {
       return {
         isValid: false,
         error: "Sale price cannot be greater than original price.",
-      };
-    }
-  }
-
-  // Date validations
-  const hasStart = Boolean(pricing.saleStartsAt && pricing.saleStartsAt.trim());
-  const hasEnd = Boolean(pricing.saleEndsAt && pricing.saleEndsAt.trim());
-
-  if (hasStart && !hasEnd) {
-    return {
-      isValid: false,
-      error:
-        "Please provide both sale start and end dates, or leave both empty.",
-    };
-  }
-  if (!hasStart && hasEnd) {
-    return {
-      isValid: false,
-      error:
-        "Please provide both sale start and end dates, or leave both empty.",
-    };
-  }
-
-  if (hasStart && hasEnd) {
-    const startDate = new Date(pricing.saleStartsAt);
-    const endDate = new Date(pricing.saleEndsAt);
-    const now = new Date();
-    // 60-second leeway buffer for user input latency
-    const bufferTime = now.getTime() - 60000;
-
-    if (isNaN(startDate.getTime())) {
-      return {
-        isValid: false,
-        error: "Please enter a valid sale start date and time.",
-      };
-    }
-    if (isNaN(endDate.getTime())) {
-      return {
-        isValid: false,
-        error: "Please enter a valid sale end date and time.",
-      };
-    }
-    if (startDate.getTime() < bufferTime) {
-      return {
-        isValid: false,
-        error: "Sale start date cannot be in the past.",
-      };
-    }
-    if (endDate.getTime() < bufferTime) {
-      return {
-        isValid: false,
-        error: "Sale end date cannot be in the past.",
-      };
-    }
-    if (endDate.getTime() <= startDate.getTime()) {
-      return {
-        isValid: false,
-        error: "Sale end date must be later than sale start date.",
       };
     }
   }
@@ -925,6 +854,12 @@ export function CourseCreatePage({
   ) => setBasicsDraft((prev) => ({ ...prev, difficulty }));
   const setLanguage = (language: string) =>
     setBasicsDraft((prev) => ({ ...prev, language }));
+
+  // Instructor Alias & Visibility (Frontend Visual Demo)
+  const [instructorAliasVisual, setInstructorAliasVisual] =
+    useState<string>("");
+  const [showInstructorNameVisual, setShowInstructorNameVisual] =
+    useState<boolean>(true);
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
@@ -1492,8 +1427,6 @@ export function CourseCreatePage({
             enableQA: s?.allowQa !== undefined ? s.allowQa : true,
             enableComments:
               s?.allowComments !== undefined ? s.allowComments : true,
-            enableReviews:
-              s?.allowReviews !== undefined ? s.allowReviews : true,
             enableDownloads:
               s?.allowDownloads !== undefined ? s.allowDownloads : false,
           });
@@ -1535,8 +1468,6 @@ export function CourseCreatePage({
                 ? String(p.price)
                 : "",
           originalPrice: !isFree && hasSale ? String(p.price) : "",
-          saleStartsAt: formatIsoToDatetimeLocal(p.saleStartsAt),
-          saleEndsAt: formatIsoToDatetimeLocal(p.saleEndsAt),
           currency: p.currency || "USD",
         });
         setServerPricing(confirmedPricing);
@@ -1656,8 +1587,6 @@ export function CourseCreatePage({
         pricingType: "paid",
         sellingPrice: "",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       });
 
@@ -1869,13 +1798,6 @@ export function CourseCreatePage({
     setAccessRules((prev) => ({
       ...prev,
       enableComments: !prev.enableComments,
-    }));
-  };
-
-  const handleToggleReviews = () => {
-    setAccessRules((prev) => ({
-      ...prev,
-      enableReviews: !prev.enableReviews,
     }));
   };
 
@@ -2881,16 +2803,6 @@ export function CourseCreatePage({
     if (pricingValidationError) setPricingValidationError(null);
   };
 
-  const handleSaleStartsAtChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, saleStartsAt: val }));
-    if (pricingValidationError) setPricingValidationError(null);
-  };
-
-  const handleSaleEndsAtChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, saleEndsAt: val }));
-    if (pricingValidationError) setPricingValidationError(null);
-  };
-
   const handleCurrencyChange = (val: string) => {
     setPricing((prev) => ({ ...prev, currency: val }));
     if (pricingValidationError) setPricingValidationError(null);
@@ -3209,7 +3121,6 @@ export function CourseCreatePage({
             language: language || undefined,
             allowQa: accessRulesDraft.enableQA,
             allowComments: accessRulesDraft.enableComments,
-            allowReviews: accessRulesDraft.enableReviews,
             allowDownloads: accessRulesDraft.enableDownloads,
           },
         }),
@@ -3223,7 +3134,6 @@ export function CourseCreatePage({
         fixedDurationUnit: accessRulesDraft.fixedDurationUnit,
         enableQA: settingsRes.allowQa,
         enableComments: settingsRes.allowComments,
-        enableReviews: settingsRes.allowReviews,
         enableDownloads: settingsRes.allowDownloads,
       });
 
@@ -3278,10 +3188,6 @@ export function CourseCreatePage({
 
         const price = origNum && origNum > 0 ? origNum : sellNum;
         const salePrice = origNum && origNum > 0 ? sellNum : null;
-        const saleStartsAt = formatDatetimeLocalToIso(
-          pricingDraft.saleStartsAt,
-        );
-        const saleEndsAt = formatDatetimeLocalToIso(pricingDraft.saleEndsAt);
 
         res = await upsertPricingMutation.mutateAsync({
           courseId: targetCourseId,
@@ -3289,8 +3195,8 @@ export function CourseCreatePage({
             pricingType: "paid",
             price,
             salePrice,
-            saleStartsAt,
-            saleEndsAt,
+            saleStartsAt: null,
+            saleEndsAt: null,
             currency: pricingDraft.currency || "USD",
           },
         });
@@ -3308,8 +3214,6 @@ export function CourseCreatePage({
               ? String(res.price)
               : "",
         originalPrice: !isFree && hasSale ? String(res.price) : "",
-        saleStartsAt: formatIsoToDatetimeLocal(res.saleStartsAt),
-        saleEndsAt: formatIsoToDatetimeLocal(res.saleEndsAt),
         currency: res.currency || "USD",
       });
 
@@ -3879,7 +3783,7 @@ export function CourseCreatePage({
 
       {/* Step Content Region */}
       <div
-        className={`w-full flex-1 flex flex-col min-h-0 pb-12 will-change-[transform,opacity] max-[768px]:pb-[110px] slide-from-${slideDirection}`}
+        className={`w-full flex-1 flex flex-col min-h-0  will-change-[transform,opacity]  slide-from-${slideDirection}`}
         key={activeStep}
       >
         {activeStep === "basics" ? (
@@ -3968,68 +3872,47 @@ export function CourseCreatePage({
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 max-[900px]:grid-cols-2 max-[640px]:grid-cols-1">
-                  <div className="flex flex-col gap-2 mb-0">
-                    <label
-                      id="category-label"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
-                    >
-                      Category <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
-                    <ThemedSelect
-                      disabled={isBasicsSaving}
-                      value={categoryId}
-                      onValueChange={setCategoryId}
-                      options={categoryOptions}
-                      ariaLabel="Select category"
-                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] disabled:!opacity-60 disabled:!cursor-not-allowed"
-                      action={
-                        isBasicsSaving
-                          ? undefined
-                          : {
-                              label: "Add / Manage categories",
-                              onSelect: handleOpenAddCategoryModal,
-                            }
-                      }
-                    />
-                  </div>
+                {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
+                <div className="flex flex-col gap-2 mb-4.5">
+                  <label
+                    htmlFor="instructor-alias"
+                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
+                  >
+                    Instructor Alias
+                  </label>
+                  <input
+                    id="instructor-alias"
+                    type="text"
+                    maxLength={100}
+                    placeholder="e.g. Alex Rivera or Design Guild"
+                    disabled={isBasicsSaving}
+                    value={instructorAliasVisual}
+                    onChange={(e) => setInstructorAliasVisual(e.target.value)}
+                    className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                  <p className="m-0 text-[var(--muted)] text-[0.78rem]">
+                    Optional custom name shown to students instead of your account name.
+                  </p>
+                </div>
 
-                  <div className="flex flex-col gap-2 mb-0">
-                    <label
-                      id="difficulty-label"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
-                    >
-                      Difficulty Level{" "}
-                      <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
-                    <ThemedSelect
-                      disabled={isBasicsSaving}
-                      value={difficultyLevel}
-                      onValueChange={(val) => setDifficultyLevel(val as any)}
-                      options={difficultyOptions}
-                      ariaLabel="Select difficulty level"
-                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] disabled:!opacity-60 disabled:!cursor-not-allowed"
-                    />
+                {/* Show Instructor Name Settings Row */}
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex flex-col min-w-0 pr-3">
+                    <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
+                      Show Instructor Name
+                    </strong>
+                    <p className="m-0 text-[var(--muted)] text-[0.8rem]">
+                      Control whether the instructor name is shown to students.
+                    </p>
                   </div>
-
-                  <div className="flex flex-col gap-2 mb-0 max-[900px]:col-span-2 max-[640px]:col-span-1">
-                    <label
-                      id="language-label"
-                      className="text-[var(--text-secondary)] text-[0.84rem] font-semibold"
-                    >
-                      Course Language
-                    </label>
-                    <ThemedSelect
-                      disabled={isBasicsSaving}
-                      value={language}
-                      onValueChange={setLanguage}
-                      options={languageOptions}
-                      ariaLabel="Select course language"
-                      searchable
-                      searchPlaceholder="Search languages..."
-                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-[var(--text)] !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] disabled:!opacity-60 disabled:!cursor-not-allowed"
-                    />
-                  </div>
+                  <SettingsToggle
+                    checked={showInstructorNameVisual}
+                    disabled={isBasicsSaving}
+                    onChange={() =>
+                      setShowInstructorNameVisual(!showInstructorNameVisual)
+                    }
+                    label="Toggle Show Instructor Name"
+                  />
                 </div>
               </section>
 
@@ -4155,7 +4038,7 @@ export function CourseCreatePage({
                       Video Trailer (Optional)
                     </h3>
                     <p className="m-0 mb-3 text-[var(--muted)] text-[0.78rem] min-h-[1.15rem]">
-                      Add a trailer video to showcase your course.
+                      Add a trailer video to your course.
                     </p>
                     {videoTrailer ? (
                       <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-[175px] box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
@@ -5732,11 +5615,11 @@ export function CourseCreatePage({
               <div className="flex flex-col gap-3">
                 {/* Toggle 1: Q&A */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <Question size={20} weight="bold" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                         Q&A
                       </strong>
@@ -5755,11 +5638,11 @@ export function CourseCreatePage({
 
                 {/* Toggle 2: Comments */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <ChatCircleText size={20} weight="fill" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                         Comments
                       </strong>
@@ -5776,36 +5659,13 @@ export function CourseCreatePage({
                   />
                 </div>
 
-                {/* Toggle 3: Reviews */}
+                {/* Toggle 3: Downloads */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
-                      <Star size={20} weight="fill" />
-                    </div>
-                    <div>
-                      <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
-                        Reviews
-                      </strong>
-                      <p className="m-0 text-[var(--muted)] text-[0.8rem]">
-                        Allow learners to leave star ratings and reviews.
-                      </p>
-                    </div>
-                  </div>
-                  <SettingsToggle
-                    checked={accessRules.enableReviews}
-                    disabled={isAccessRulesSaving}
-                    onChange={handleToggleReviews}
-                    label="Toggle Reviews"
-                  />
-                </div>
-
-                {/* Toggle 4: Downloads */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
                       <DownloadSimple size={20} weight="bold" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                         Downloads
                       </strong>
@@ -5827,6 +5687,13 @@ export function CourseCreatePage({
           </div>
         ) : activeStep === "pricing" ? (
           <div className="flex w-full flex-col gap-5">
+            {pricingValidationError && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
+                <WarningCircle size={18} weight="bold" className="shrink-0" />
+                <span>{pricingValidationError}</span>
+              </div>
+            )}
+
             {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
             <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
               {/* Card 1: Course pricing */}
@@ -6070,88 +5937,6 @@ export function CourseCreatePage({
               </div>
             </div>
 
-            {/* Card 3: Sale schedule (Optional) */}
-            <div
-              className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-[var(--surface)] shadow-[var(--card-shadow)] transition-opacity duration-200 ${
-                pricing.pricingType === "free"
-                  ? "is-disabled opacity-55 pointer-events-none"
-                  : ""
-              }`}
-            >
-              <div className="mb-4.5 flex items-start justify-between flex-wrap gap-2">
-                <div>
-                  <h3 className="m-0 mb-1 text-[var(--text)] text-[1.05rem] font-bold">
-                    3. Sale schedule (Optional)
-                  </h3>
-                  <p className="m-0 text-[var(--muted)] text-[0.83rem]">
-                    Set an optional start and end date/time for promotional
-                    pricing countdowns.
-                  </p>
-                </div>
-              </div>
-
-              {pricingValidationError && (
-                <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
-                  <WarningCircle size={18} weight="bold" className="shrink-0" />
-                  <span>{pricingValidationError}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
-                {/* Sale Start Date */}
-                <div className="flex flex-col gap-2">
-                  <label
-                    htmlFor="sale-starts-at"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold flex items-center gap-1.5"
-                  >
-                    <Calendar size={15} className="text-[var(--accent)]" />
-                    Sale Start Date & Time
-                  </label>
-                  <div className="relative flex items-center w-full">
-                    <input
-                      id="sale-starts-at"
-                      type="datetime-local"
-                      disabled={
-                        pricing.pricingType === "free" || isPricingSaving
-                      }
-                      value={pricing.saleStartsAt}
-                      onChange={(e) => handleSaleStartsAtChange(e.target.value)}
-                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 px-3.5 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:dark_light]"
-                    />
-                  </div>
-                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
-                    When the promotion begins.
-                  </p>
-                </div>
-
-                {/* Sale End Date */}
-                <div className="flex flex-col gap-2">
-                  <label
-                    htmlFor="sale-ends-at"
-                    className="text-[var(--text-secondary)] text-[0.84rem] font-semibold flex items-center gap-1.5"
-                  >
-                    <Clock size={15} className="text-[var(--accent)]" />
-                    Sale End Date & Time
-                  </label>
-                  <div className="relative flex items-center w-full">
-                    <input
-                      id="sale-ends-at"
-                      type="datetime-local"
-                      disabled={
-                        pricing.pricingType === "free" || isPricingSaving
-                      }
-                      value={pricing.saleEndsAt}
-                      onChange={(e) => handleSaleEndsAtChange(e.target.value)}
-                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 px-3.5 text-[var(--text)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium outline-none transition-[border-color] duration-150 focus:border-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:dark_light]"
-                    />
-                  </div>
-                  <p className="m-0 mt-0.5 text-[var(--muted)] text-[0.78rem]">
-                    When the promotional discount ends.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Bottom Card: Coupons Banner */}
             <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-[var(--surface)] shadow-[var(--card-shadow)] max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
               <div className="flex items-center gap-3.5">
@@ -6208,7 +5993,7 @@ export function CourseCreatePage({
 
                 {/* Enable Certificate Toggle Row */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
-                  <div>
+                  <div className="flex flex-col min-w-0 pr-3">
                     <strong className="block mb-0.5 text-[var(--text)] text-[0.9rem] font-[650]">
                       Enable certificate
                     </strong>

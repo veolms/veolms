@@ -33,7 +33,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         fixedDurationUnit: "Days",
         enableQA: true,
         enableComments: true,
-        enableReviews: true,
         enableDownloads: false,
       });
     });
@@ -46,7 +45,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         fixedDurationUnit: "Days",
         enableQA: true,
         enableComments: false,
-        enableReviews: true,
         enableDownloads: true,
       };
 
@@ -83,11 +81,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       draftState = { ...serverState, enableComments: false };
       expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
 
-      // 6. Toggle Reviews
-      draftState = { ...serverState, enableReviews: false };
-      expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
-
-      // 7. Toggle Downloads
+      // 6. Toggle Downloads
       draftState = { ...serverState, enableDownloads: true };
       expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
     });
@@ -101,7 +95,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         fixedDurationUnit: "Days",
         enableQA: true,
         enableComments: true,
-        enableReviews: false,
         enableDownloads: true,
       };
 
@@ -123,7 +116,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         language: "en",
         allowQa: true,
         allowComments: true,
-        allowReviews: false,
+        allowReviews: true,
         allowDownloads: true,
         certificateEnabled: false,
         estimatedDuration: null,
@@ -145,7 +138,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       const settingsRes = await coursesService.upsertSettings(sampleCourseId, {
         allowQa: localDraft.enableQA,
         allowComments: localDraft.enableComments,
-        allowReviews: localDraft.enableReviews,
         allowDownloads: localDraft.enableDownloads,
       });
 
@@ -157,7 +149,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         fixedDurationUnit: localDraft.fixedDurationUnit,
         enableQA: settingsRes.allowQa,
         enableComments: settingsRes.allowComments,
-        enableReviews: settingsRes.allowReviews,
         enableDownloads: settingsRes.allowDownloads,
       });
 
@@ -165,7 +156,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       const synchronizedDraft = newBaseline;
 
       expect(!isAccessRulesEqual(synchronizedDraft, serverState)).toBe(false);
-      expect(serverState.enableReviews).toBe(false);
       expect(serverState.enableDownloads).toBe(true);
     });
 
@@ -205,8 +195,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       });
     });
@@ -216,8 +204,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "4999",
         originalPrice: "9999",
-        saleStartsAt: "2026-09-01T00:00",
-        saleEndsAt: "2026-09-10T23:59",
         currency: "USD",
       };
 
@@ -233,8 +219,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "2999",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       };
 
@@ -272,8 +256,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "1999",
         originalPrice: "",
-        saleStartsAt: "",
-        saleEndsAt: "",
         currency: "USD",
       };
 
@@ -281,8 +263,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "1499",
         originalPrice: "2999",
-        saleStartsAt: "2026-09-01T00:00",
-        saleEndsAt: "2026-09-07T23:59",
         currency: "USD",
       };
 
@@ -294,8 +274,8 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         price: 2999,
         salePrice: 1499,
-        saleStartsAt: "2026-09-01T00:00:00.000Z",
-        saleEndsAt: "2026-09-07T23:59:00.000Z",
+        saleStartsAt: null,
+        saleEndsAt: null,
         currency: "USD",
       };
 
@@ -307,8 +287,8 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         price: 2999,
         salePrice: 1499,
-        saleStartsAt: "2026-09-01T00:00:00.000Z",
-        saleEndsAt: "2026-09-07T23:59:00.000Z",
+        saleStartsAt: null,
+        saleEndsAt: null,
         currency: "USD",
       });
 
@@ -324,8 +304,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
               ? String(res.price)
               : "",
         originalPrice: !isFree && hasSale ? String(res.price) : "",
-        saleStartsAt: "2026-09-01T00:00",
-        saleEndsAt: "2026-09-07T23:59",
         currency: res.currency || "USD",
       });
 
