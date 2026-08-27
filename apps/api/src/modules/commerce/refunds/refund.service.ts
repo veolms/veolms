@@ -89,7 +89,11 @@ export function createRefundService({
 
     const now = new Date();
 
-    // 2. Transactionally record refund and update order state
+    // 2. Transactionally record refund and update order state if processed immediately
+    const isProcessed = gatewayResult.status === "processed";
+    const newTotalRefunded = totalRefundedAlready + requestedAmount;
+    const isFullRefund = isProcessed && newTotalRefunded >= payment.amount;
+
     const createdRefund = await database.transaction().execute(async (trx) => {
       const record = await refundRepo.insertRefund(trx, {
         id: refundId,
@@ -105,38 +109,34 @@ export function createRefundService({
         updated_at: now,
       });
 
-      const newTotalRefunded = totalRefundedAlready + requestedAmount;
-      const isFullRefund = newTotalRefunded >= payment.amount;
+      // Only update order status and revoke access if gateway settled the refund immediately
+      if (isProcessed) {
+        await orderRepo.updateOrderStatus(trx, order.id, {
+          status: isFullRefund ? "refunded" : "partially_refunded",
+          updated_at: now,
+        });
 
-      await orderRepo.updateOrderStatus(trx, order.id, {
-        status: isFullRefund ? "refunded" : "partially_refunded",
-        updated_at: now,
-      });
+        if (isFullRefund) {
+          await accessService.revokeAccessForOrder(trx, order.id);
+
+          const orderItems = await orderRepo.listOrderItems(trx, order.id);
+          for (const item of orderItems) {
+            const courseIds: string[] = [];
+            if (item.item_type === "course" && item.course_id) {
+              courseIds.push(item.course_id);
+            } else if (item.item_type === "bundle" && item.bundle_id) {
+              const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
+              courseIds.push(...bundleCourses.map((bc) => bc.course_id));
+            }
+            for (const courseId of courseIds) {
+              await enrollmentRepo.updateEnrollmentStatus(trx, order.user_id, courseId, "revoked");
+            }
+          }
+        }
+      }
 
       return record;
     });
-
-    const newTotalRefundedFinal = totalRefundedAlready + requestedAmount;
-    const isFullRefund = newTotalRefundedFinal >= payment.amount;
-
-    // 3. Post-transaction: revoke access and suspend enrollments on full refund
-    if (isFullRefund) {
-      await accessService.revokeAccessForOrder(database, order.id);
-
-      const orderItems = await orderRepo.listOrderItems(database, order.id);
-      for (const item of orderItems) {
-        const courseIds: string[] = [];
-        if (item.item_type === "course" && item.course_id) {
-          courseIds.push(item.course_id);
-        } else if (item.item_type === "bundle" && item.bundle_id) {
-          const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
-          courseIds.push(...bundleCourses.map((bc) => bc.course_id));
-        }
-        for (const courseId of courseIds) {
-          await enrollmentRepo.updateEnrollmentStatus(database, order.user_id, courseId, "revoked");
-        }
-      }
-    }
 
     return {
       id: createdRefund.id,
