@@ -31,8 +31,8 @@ export interface CourseAccessService {
   /**
    * Grants access + creates an active enrollment for every course an order's
    * items resolve to (expanding bundle items to their member courses).
-   * Returns the flat list of granted course IDs, e.g. for the
-   * purchase.completed outbox event payload.
+   * Returns the flat list of granted course IDs (callers use the count for
+   * FinalizePaymentResult.enrollmentCount).
    */
   grantAccessForOrder(
     database: Executor,

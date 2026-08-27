@@ -166,26 +166,12 @@ export function createPaymentReconciliationService({
         })),
       );
 
-      // 6. Record outbox event for durable post-purchase processing
-      await trx
-        .insertInto("outbox_events")
-        .values({
-          id: crypto.randomUUID(),
-          event_name: "purchase.completed",
-          aggregate_type: "purchase",
-          aggregate_id: order.id,
-          payload: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            userId: order.user_id,
-            totalAmount: order.total_amount,
-            enrolledCourseIds,
-          },
-          processed_at: null,
-          error: null,
-          created_at: now,
-        })
-        .execute();
+      // Note: this used to also insert a "purchase.completed" row into
+      // outbox_events for "durable post-purchase processing" — removed.
+      // Grepped the whole apps/api/src tree: nothing ever reads outbox_events
+      // (no dispatcher/worker exists), so it was a write-only table growing
+      // unbounded forever. If a real consumer is built later (analytics,
+      // notifications, CRM sync, etc.), re-add the write alongside it.
     });
 
     // If orderId was never set, the claim returned undefined → already captured
