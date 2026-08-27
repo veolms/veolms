@@ -2,13 +2,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useLayoutEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ElasticScrollControl,
+  ElasticScroller,
   getElasticScrollSpeed,
   getScrollDirectionAtEdge,
   getScrollProgress,
-} from "../../src/components/elastic-scroll-control/index.js";
+} from "../../src/components/elastic-scroller/index.js";
 
-function ScrollControlHarness() {
+function ScrollerHarness() {
   const scrollportRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -22,7 +22,7 @@ function ScrollControlHarness() {
 
   return (
     <div ref={scrollportRef} data-testid="sample-scrollport" tabIndex={0}>
-      <ElasticScrollControl
+      <ElasticScroller
         scrollportRef={scrollportRef}
         ariaControls="sample-scrollport"
         scrollAreaLabel="Sample list"
@@ -31,8 +31,9 @@ function ScrollControlHarness() {
   );
 }
 
-describe("ElasticScrollControl", () => {
+describe("ElasticScroller", () => {
   beforeEach(() => {
+    window.localStorage.removeItem("veolms-elastic-scroll-appearance");
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -52,10 +53,10 @@ describe("ElasticScrollControl", () => {
     expect(getElasticScrollSpeed(72)).toBeGreaterThan(
       getElasticScrollSpeed(24),
     );
-    expect(getElasticScrollSpeed(96)).toBe(1560);
-    expect(getElasticScrollSpeed(144)).toBeGreaterThan(1560);
-    expect(getElasticScrollSpeed(192)).toBe(2800);
-    expect(getElasticScrollSpeed(1000)).toBe(2800);
+    expect(getElasticScrollSpeed(96)).toBe(2800);
+    expect(getElasticScrollSpeed(144)).toBeGreaterThan(2800);
+    expect(getElasticScrollSpeed(192)).toBe(5600);
+    expect(getElasticScrollSpeed(1000)).toBe(5600);
   });
 
   it("normalizes scroll progress and edge direction", () => {
@@ -70,7 +71,7 @@ describe("ElasticScrollControl", () => {
   });
 
   it("attaches to any supplied scrollport with reusable labels", () => {
-    render(<ScrollControlHarness />);
+    render(<ScrollerHarness />);
     const scrollport = screen.getByTestId("sample-scrollport");
     scrollport.scrollTop = 120;
     fireEvent.scroll(scrollport);
@@ -79,7 +80,7 @@ describe("ElasticScrollControl", () => {
       name: "Scroll sample list to bottom",
     });
     expect(control).toHaveAttribute("aria-controls", "sample-scrollport");
-    const gestureBoundary = control.closest(".elastic-scroll-control");
+    const gestureBoundary = control.closest(".elastic-scroller");
     expect(gestureBoundary).toHaveAttribute("data-base-ui-swipe-ignore");
     expect(gestureBoundary).toHaveAttribute("data-learning-swipe-ignore");
     expect(gestureBoundary).toHaveAttribute("data-sidebar-swipe-ignore");
@@ -87,5 +88,17 @@ describe("ElasticScrollControl", () => {
     expect(
       screen.getByRole("progressbar", { name: "Sample list scroll position" }),
     ).toHaveAttribute("aria-valuenow", "20");
+  });
+
+  it("uses one progress circle for the 3D recessed socket", () => {
+    window.localStorage.setItem("veolms-elastic-scroll-appearance", "3d");
+
+    render(<ScrollerHarness />);
+
+    const scroller = document.querySelector(".elastic-scroller");
+    expect(scroller).toHaveAttribute("data-appearance", "3d");
+    expect(
+      scroller?.querySelectorAll(".elastic-scroller__progress-puck circle"),
+    ).toHaveLength(1);
   });
 });

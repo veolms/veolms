@@ -84,7 +84,7 @@ export const ELASTIC_SCROLL_APPEARANCE_KEY = "veolms-elastic-scroll-appearance";
 export const ELASTIC_SCROLL_APPEARANCE_VALUES = ["2d", "3d"] as const;
 export type ElasticScrollAppearance =
   (typeof ELASTIC_SCROLL_APPEARANCE_VALUES)[number];
-export const ELASTIC_SCROLL_APPEARANCE_DEFAULT: ElasticScrollAppearance = "3d";
+export const ELASTIC_SCROLL_APPEARANCE_DEFAULT: ElasticScrollAppearance = "2d";
 export const ELASTIC_SCROLL_ICON_KEY = "veolms-elastic-scroll-icon";
 export const ELASTIC_SCROLL_ICON_VALUES = [
   "arrow",

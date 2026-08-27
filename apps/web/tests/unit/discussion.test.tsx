@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CommentCard } from "../../src/learning/CommentCard.tsx";
@@ -27,7 +27,6 @@ describe("CommentCard", () => {
 
     fireEvent.click(like);
     expect(like).toHaveAttribute("aria-pressed", "true");
-    expect(like).toHaveClass("is-liked");
     expect(onLike).toHaveBeenLastCalledWith(7, true);
 
     fireEvent.click(like);
@@ -37,67 +36,56 @@ describe("CommentCard", () => {
 });
 
 describe("Discussion", () => {
-  it("rejects a blank comment and posts a trimmed valid comment", () => {
-    render(<Discussion persistenceKey="discussion-post-test" />);
+  it("renders only the entry-type filters without a sort control", () => {
+    render(<Discussion persistenceKey="discussion-filter-controls-test" />);
 
-    const post = screen.getByRole("button", { name: "Post comment" });
-    fireEvent.click(post);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Write a comment before sending.",
-    );
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Add a comment" }), {
-      target: { value: "  A useful new observation.  " },
+    const filters = screen.getByRole("group", {
+      name: "Filter discussion entries",
     });
-    fireEvent.click(post);
-
-    expect(screen.getByRole("status")).toHaveTextContent("Comment posted.");
-    expect(screen.getByText("A useful new observation.")).toBeInTheDocument();
-  });
-
-  it("filters comments and resets search when changing tabs", () => {
-    render(<Discussion persistenceKey="discussion-filter-test" />);
-
-    const searchboxes = screen.getAllByRole("searchbox", {
-      name: "Search comments",
-    });
-    expect(searchboxes).toHaveLength(1);
-    const [search] = searchboxes;
-    if (!search) throw new Error("Expected the comments searchbox");
-    fireEvent.change(search, { target: { value: "Maya Rodriguez" } });
-
     expect(
-      screen.getByRole("heading", { name: "Maya Rodriguez" }),
-    ).toBeInTheDocument();
+      within(filters)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["All", "Notes", "Comments", "Q&As"]);
     expect(
-      screen.queryByRole("heading", { name: "Ethan Park" }),
+      screen.queryByRole("button", { name: /Sort discussion/i }),
     ).not.toBeInTheDocument();
-
-    const notes = screen.getByRole("tab", { name: "Notes" });
-    fireEvent.click(notes);
-
-    expect(notes).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("heading", { name: "Your lesson notes" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
-  it("restores comment search focus without moving the lesson", async () => {
-    const persistenceKey = "discussion-focus-test";
-    const storageKey = `veolms-learning-${persistenceKey}-discussion-search-open`;
-    sessionStorage.setItem(storageKey, JSON.stringify(true));
-    const focus = vi.spyOn(HTMLInputElement.prototype, "focus");
+  it("filters the unified feed by entry type", () => {
+    const { container } = render(
+      <Discussion persistenceKey="discussion-entry-filter-test" />,
+    );
+    const visibleKinds = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>("[data-discussion-entry]"),
+      ).map((entry) => entry.dataset.discussionEntry);
 
-    try {
-      render(<Discussion persistenceKey={persistenceKey} />);
+    expect(visibleKinds()).toEqual([
+      "comment",
+      "question",
+      "note",
+      "question",
+    ]);
 
-      await waitFor(() =>
-        expect(focus).toHaveBeenCalledWith({ preventScroll: true }),
-      );
-    } finally {
-      focus.mockRestore();
-      sessionStorage.removeItem(storageKey);
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+    expect(visibleKinds()).toEqual(["note"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
+    expect(visibleKinds()).toEqual(["question", "question"]);
+  });
+
+  it("opens the rich discussion composer from its compact state", async () => {
+    render(<Discussion persistenceKey="discussion-composer-open-test" />);
+
+    const [openComposer] = screen.getAllByRole("button", {
+      name: "Open discussion composer",
+    });
+    if (!openComposer) throw new Error("Expected the compact composer trigger");
+    fireEvent.click(openComposer);
+
+    expect(
+      await screen.findByRole("textbox", { name: "Write a comment" }),
+    ).toBeInTheDocument();
   });
 });

@@ -88,7 +88,7 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
 
 const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
-  ".elastic-scroll-control",
+  ".elastic-scroller",
   "[data-learning-space-panel]",
   "input",
   "textarea",

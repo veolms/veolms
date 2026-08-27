@@ -5,17 +5,17 @@ import { CaretDoubleUpIcon as CaretDoubleUp } from "@phosphor-icons/react/CaretD
 import { CaretUpIcon as CaretUp } from "@phosphor-icons/react/CaretUp";
 import type { ElasticScrollIcon } from "../../settings/settingsPreferences";
 
-interface ElasticScrollIconProps {
+interface ElasticScrollerIconProps {
   icon: ElasticScrollIcon;
   className?: string;
   size?: number;
 }
 
-export function ElasticScrollGlyph({
+export function ElasticScrollerGlyph({
   icon,
   className,
   size = 20,
-}: ElasticScrollIconProps) {
+}: ElasticScrollerIconProps) {
   const props = {
     className,
     size,

@@ -2,7 +2,10 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { CSSProperties } from "react";
 import { memo, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { CoursePlayerSession } from "../learning/coursePlayerNavigation";
+import {
+  getMostRecentCoursePlayerSession,
+  type CoursePlayerSession,
+} from "../learning/coursePlayerNavigation";
 import { LearningSpacePanel } from "./LearningSpacePanel";
 import { useFloatingLearningSpacePanel } from "./useFloatingLearningSpacePanel";
 
@@ -49,6 +52,8 @@ export const LearningSpace = memo(function LearningSpace({
     triggerRef,
   });
   const active = Boolean(activeCourseId);
+  const emptyOpen = !active && sessions.length === 0 && expanded;
+  const mostRecentSession = getMostRecentCoursePlayerSession(sessions);
 
   const dismissPanel = () => {
     floatingPanel.setPinned(false);
@@ -67,7 +72,13 @@ export const LearningSpace = memo(function LearningSpace({
       <button
         ref={triggerRef}
         type="button"
-        className={active ? "is-active" : ""}
+        className={
+          active
+            ? "is-active"
+            : emptyOpen
+              ? "bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]!"
+              : ""
+        }
         style={{ "--nav-icon-color": iconColor } as CSSProperties}
         aria-label={triggerLabel}
         aria-expanded={expanded}
@@ -79,6 +90,7 @@ export const LearningSpace = memo(function LearningSpace({
             : undefined
         }
         data-learning-space-trigger
+        data-empty-open={emptyOpen ? "true" : undefined}
         data-navigation-label={mobile ? "Learning Space" : undefined}
         onPointerDown={(event) => {
           lastPointerTypeRef.current = event.pointerType;
@@ -108,14 +120,15 @@ export const LearningSpace = memo(function LearningSpace({
             clickPointerType || lastPointerTypeRef.current,
           );
           lastPointerTypeRef.current = null;
+          const transientPopup =
+            Boolean(mostRecentSession) &&
+            !mobile &&
+            !directPointer &&
+            floatingPanel.hoverCapable &&
+            event.detail !== 0;
 
-          if (
-            mobile ||
-            directPointer ||
-            !floatingPanel.hoverCapable ||
-            event.detail === 0
-          )
-            onExpandedChange(!expanded);
+          floatingPanel.openFromClick(transientPopup);
+          if (mostRecentSession) onActivate(mostRecentSession);
         }}
       >
         {mobile && mobileNavigationPlacement === "bottom" ? (

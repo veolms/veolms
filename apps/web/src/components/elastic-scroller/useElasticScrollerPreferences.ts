@@ -19,7 +19,7 @@ const ELASTIC_SCROLL_STORAGE_KEYS = new Set([
   ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
 ]);
 
-export function useElasticScrollPreferences(): ElasticScrollPreferences {
+export function useElasticScrollerPreferences(): ElasticScrollPreferences {
   const [preferences, setPreferences] = useState<ElasticScrollPreferences>({
     ...ELASTIC_SCROLL_PREFERENCES_DEFAULT,
   });

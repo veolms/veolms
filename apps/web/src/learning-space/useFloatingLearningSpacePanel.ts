@@ -26,6 +26,7 @@ export const PANEL_MAX_WIDTH = 460;
 const PANEL_DEFAULT_WIDTH = 440;
 const MOVE_ACTIVATION_DISTANCE = 4;
 const HOVER_CLOSE_DELAY_MS = 160;
+const CLICK_PANEL_GRACE_MS = 800;
 
 interface PanelPosition {
   left: number;
@@ -178,6 +179,7 @@ export function useFloatingLearningSpacePanel({
   const [triggerVisible, setTriggerVisible] = useState(true);
   const [stateReady, setStateReady] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
+  const clickCloseTimerRef = useRef<number | null>(null);
   const resizeRef = useRef<ResizeInteraction | null>(null);
   const moveRef = useRef<MoveInteraction | null>(null);
   const pointerInsideTriggerRef = useRef(false);
@@ -193,6 +195,12 @@ export function useFloatingLearningSpacePanel({
     if (closeTimerRef.current === null) return;
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
+  }, []);
+
+  const cancelClickClose = useCallback(() => {
+    if (clickCloseTimerRef.current === null) return;
+    window.clearTimeout(clickCloseTimerRef.current);
+    clickCloseTimerRef.current = null;
   }, []);
 
   const clearDetachedPosition = useCallback(() => {
@@ -217,6 +225,41 @@ export function useFloatingLearningSpacePanel({
       onOpenChange(false);
     }, HOVER_CLOSE_DELAY_MS);
   }, [cancelClose, clearDetachedPosition, mobile, onOpenChange]);
+
+  const openFromClick = useCallback(
+    (transient: boolean) => {
+      cancelClose();
+      cancelClickClose();
+      onOpenChange(true);
+      if (!transient || mobile || !hoverCapable) return;
+
+      clickCloseTimerRef.current = window.setTimeout(() => {
+        clickCloseTimerRef.current = null;
+        const activeElement = document.activeElement;
+        const panelHasFocus =
+          activeElement instanceof Node &&
+          Boolean(panelRef.current?.contains(activeElement));
+        if (
+          pinnedRef.current ||
+          pointerInsidePanelRef.current ||
+          panelHasFocus ||
+          interactionLockedRef.current
+        )
+          return;
+        clearDetachedPosition();
+        onOpenChange(false);
+      }, CLICK_PANEL_GRACE_MS);
+    },
+    [
+      cancelClickClose,
+      cancelClose,
+      clearDetachedPosition,
+      hoverCapable,
+      mobile,
+      onOpenChange,
+      panelRef,
+    ],
+  );
 
   const updatePosition = useCallback(() => {
     if (!open || mobile) return;
@@ -367,10 +410,18 @@ export function useFloatingLearningSpacePanel({
   useEffect(() => {
     if (!open) {
       cancelClose();
+      cancelClickClose();
       if (!pinnedRef.current) clearDetachedPosition();
     }
-    return cancelClose;
-  }, [cancelClose, clearDetachedPosition, open]);
+  }, [cancelClickClose, cancelClose, clearDetachedPosition, open]);
+
+  useEffect(
+    () => () => {
+      cancelClose();
+      cancelClickClose();
+    },
+    [cancelClickClose, cancelClose],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -403,6 +454,7 @@ export function useFloatingLearningSpacePanel({
       if (nextPinned) {
         detachedUntilCloseRef.current = false;
         cancelClose();
+        cancelClickClose();
         onOpenChange(true);
         return;
       }
@@ -414,7 +466,7 @@ export function useFloatingLearningSpacePanel({
       )
         scheduleClose();
     },
-    [cancelClose, onOpenChange, scheduleClose],
+    [cancelClickClose, cancelClose, onOpenChange, scheduleClose],
   );
 
   const enterTrigger = useCallback(() => {
@@ -431,7 +483,8 @@ export function useFloatingLearningSpacePanel({
   const enterPanel = useCallback(() => {
     pointerInsidePanelRef.current = true;
     cancelClose();
-  }, [cancelClose]);
+    cancelClickClose();
+  }, [cancelClickClose, cancelClose]);
 
   const leavePanel = useCallback(() => {
     pointerInsidePanelRef.current = false;
@@ -441,8 +494,9 @@ export function useFloatingLearningSpacePanel({
   const enterFocus = useCallback(() => {
     focusInsideRef.current = true;
     cancelClose();
+    if (panelRef.current?.contains(document.activeElement)) cancelClickClose();
     onOpenChange(true);
-  }, [cancelClose, onOpenChange]);
+  }, [cancelClickClose, cancelClose, onOpenChange, panelRef]);
 
   const leaveFocus = useCallback(
     (event: ReactFocusEvent<HTMLElement>) => {
@@ -462,15 +516,17 @@ export function useFloatingLearningSpacePanel({
   const setInteractionLocked = useCallback(
     (locked: boolean) => {
       interactionLockedRef.current = locked;
-      if (locked) cancelClose();
-      else if (
+      if (locked) {
+        cancelClose();
+        cancelClickClose();
+      } else if (
         !pointerInsidePanelRef.current &&
         !pointerInsideTriggerRef.current &&
         !focusInsideRef.current
       )
         scheduleClose();
     },
-    [cancelClose, scheduleClose],
+    [cancelClickClose, cancelClose, scheduleClose],
   );
 
   const startMove = useCallback(
@@ -743,6 +799,7 @@ export function useFloatingLearningSpacePanel({
     movePanel,
     moveWithKeyboard,
     moving,
+    openFromClick,
     panelStyle,
     pinned: mobile ? false : pinned,
     resizePanel,

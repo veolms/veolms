@@ -2299,7 +2299,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
   const curriculum = dialog.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
+  const scrollTopButton = curriculum.locator(".elastic-scroller__button");
 
   const initialMetrics = await curriculum.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -2330,7 +2330,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
     );
     const lastSection = sectionToggles?.[sectionToggles.length - 1];
     const scrollTopButton = curriculum?.querySelector<HTMLElement>(
-      ".elastic-scroll-control__button",
+      ".elastic-scroller__button",
     );
     if (!curriculum || !lastSection || !scrollTopButton) return null;
     const curriculumBounds = curriculum.getBoundingClientRect();
@@ -2377,9 +2377,9 @@ test("mobile curriculum scroll control owns diagonal gestures inside its drawer"
   const curriculum = dialog.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const gestureBoundary = curriculum.locator(".elastic-scroll-control");
+  const gestureBoundary = curriculum.locator(".elastic-scroller");
   const scrollControl = gestureBoundary.locator(
-    ".elastic-scroll-control__button",
+    ".elastic-scroller__button",
   );
 
   await curriculum.evaluate((element) => {
@@ -2457,15 +2457,15 @@ test("curriculum scroll control follows direction, stops, and accelerates with d
   const curriculum = page.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollControl = curriculum.locator(".elastic-scroll-control__button");
+  const scrollControl = curriculum.locator(".elastic-scroller__button");
   const scrollControlIcon = scrollControl.locator(
-    ".elastic-scroll-control__icon",
+    ".elastic-scroller__icon",
   );
   const scrollProgressPuck = curriculum.locator(
-    ".elastic-scroll-control__progress-puck",
+    ".elastic-scroller__progress-puck",
   );
   const scrollProgressRing = curriculum.locator(
-    ".elastic-scroll-control__progress-ring",
+    ".elastic-scroller__progress-ring",
   );
   const readScrollMetrics = () =>
     curriculum.evaluate((element) => ({
@@ -2881,7 +2881,7 @@ test("curriculum overview, section, and chapter zones keep their actions separat
   const lessonSearchButton = curriculum.getByRole("button", {
     name: "Search lessons",
   });
-  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
+  const scrollTopButton = curriculum.locator(".elastic-scroller__button");
 
   await expect(scrollTopButton).toBeHidden();
   await curriculum.evaluate((container) => container.scrollTo({ top: 160 }));

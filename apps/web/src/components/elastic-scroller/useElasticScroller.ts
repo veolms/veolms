@@ -17,13 +17,13 @@ import {
   getElasticScrollSpeed,
   getScrollDirectionAtEdge,
   getScrollProgress,
-} from "./elasticScrollControlModel";
+} from "./elasticScrollerModel";
 import type {
   ElasticScrollMode,
   ScrollDirection,
-} from "./elasticScrollControlModel";
+} from "./elasticScrollerModel";
 
-interface UseElasticScrollControlOptions {
+interface UseElasticScrollerOptions {
   scrollportRef: RefObject<HTMLElement | null>;
   contentRevision: string | number;
   lockSide: ElasticScrollGestureSide;
@@ -43,13 +43,13 @@ type DragAxis = "horizontal" | "vertical" | null;
 const ELASTIC_SCROLL_CONTROL_AXIS_SWITCH_DISTANCE = 8;
 const ELASTIC_SCROLL_CONTROL_AXIS_SWITCH_DOMINANCE = 1.25;
 
-export function useElasticScrollControl({
+export function useElasticScroller({
   scrollportRef,
   contentRevision,
   lockSide,
   unlockSide,
   disabled = false,
-}: UseElasticScrollControlOptions) {
+}: UseElasticScrollerOptions) {
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<ScrollDirection>("up");
   const [mode, setMode] = useState<ElasticScrollMode>("idle");

@@ -1,4 +1,3 @@
-import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -7,8 +6,6 @@ import {
   DrawerDescription,
   DrawerTitle,
 } from "../components/ui/drawer";
-import { ThemedSelect } from "../ThemedSelect";
-import type { ThemedSelectOption } from "../ThemedSelect";
 import { CommentCard } from "./CommentCard";
 import type { Comment } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
@@ -114,7 +111,6 @@ const initialEntries: Comment[] = [
   },
 ];
 
-type FeedFilter = "top" | "newest";
 type EntryFilter = "all" | DiscussionEntryKind;
 type ComposerMode = "collapsed" | "desktop" | "mobile";
 
@@ -153,11 +149,6 @@ export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
 const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
 const initialDraft = createEmptyRichTextDraft();
 const countCharacters = (value: string) => Array.from(value).length;
-
-const feedFilterOptions = [
-  ["top", "Top", { flag: <Fire size={17} weight="fill" aria-hidden="true" /> }],
-  ["newest", "Newest"],
-] as const satisfies readonly ThemedSelectOption<FeedFilter>[];
 
 const entryFilters = [
   ["all", "All"],
@@ -248,7 +239,6 @@ export function Discussion({
   const [entries, setEntries] = useState(initialEntries);
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
-  const [feedFilter, setFeedFilter] = useState<FeedFilter>("top");
   const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
   const [notice, setNotice] = useState("");
   const draftIsTooLong =
@@ -294,17 +284,10 @@ export function Discussion({
               (entry.entryKind ??
                 (entry.isQuestion ? "question" : "comment")) === entryFilter,
           );
-    const uniqueEntries = Array.from(
+    return Array.from(
       new Map(visibleEntries.map((entry) => [entry.id, entry])).values(),
     );
-
-    return uniqueEntries.sort((left, right) => {
-      if (feedFilter === "newest") return right.id - left.id;
-      const leftScore = left.likes + (left.replies ?? 0) * 2;
-      const rightScore = right.likes + (right.replies ?? 0) * 2;
-      return rightScore - leftScore || right.id - left.id;
-    });
-  }, [entries, entryFilter, feedFilter]);
+  }, [entries, entryFilter]);
 
   const addEntry = () => {
     if (draftIsTooLong) {
@@ -342,7 +325,6 @@ export function Discussion({
     setPostedEntries((current) => [entry, ...current]);
     setEntries((current) => [entry, ...current]);
     setDraft(createEmptyRichTextDraft());
-    setFeedFilter("newest");
     setEntryFilter("all");
 
     const entryName =
@@ -409,7 +391,6 @@ export function Discussion({
         entryKind={entryKind}
         visibility={visibility}
         notice={notice}
-        feedFilter={feedFilter}
         entryFilter={entryFilter}
         entries={filteredEntries}
         draftIsTooLong={draftIsTooLong}
@@ -425,7 +406,6 @@ export function Discussion({
         onEntryKindChange={setEntryKind}
         onVisibilityChange={setVisibility}
         onSubmit={addEntry}
-        onFeedFilterChange={setFeedFilter}
         onEntryFilterChange={setEntryFilter}
         onLike={onLike}
         onEdit={editEntry}
@@ -443,7 +423,6 @@ interface ThreadSurfaceProps {
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   notice: string;
-  feedFilter: FeedFilter;
   entryFilter: EntryFilter;
   entries: Comment[];
   draftIsTooLong: boolean;
@@ -452,7 +431,6 @@ interface ThreadSurfaceProps {
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
-  onFeedFilterChange: (filter: FeedFilter) => void;
   onEntryFilterChange: (filter: EntryFilter) => void;
   onLike: (id: number, liked: boolean) => void;
   onEdit: (id: number, text: string) => void;
@@ -465,7 +443,6 @@ function ThreadSurface({
   entryKind,
   visibility,
   notice,
-  feedFilter,
   entryFilter,
   entries,
   draftIsTooLong,
@@ -474,7 +451,6 @@ function ThreadSurface({
   onEntryKindChange,
   onVisibilityChange,
   onSubmit,
-  onFeedFilterChange,
   onEntryFilterChange,
   onLike,
   onEdit,
@@ -602,34 +578,21 @@ function ThreadSurface({
       </p>
 
       <div
-        className={`learning-discussion__filter-bar ${isPhone ? "mt-2" : "mt-5"}`}
+        role="group"
+        aria-label="Filter discussion entries"
+        className={`learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isPhone ? "mt-2" : "mt-5"}`}
       >
-        <div
-          role="group"
-          aria-label="Filter discussion entries"
-          className="learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {entryFilters.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={entryFilter === value}
-              onClick={() => onEntryFilterChange(value)}
-              className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="learning-discussion__sort w-[5.4rem] shrink-0 sm:w-[5.8rem]">
-          <ThemedSelect
-            value={feedFilter}
-            onValueChange={onFeedFilterChange}
-            options={feedFilterOptions}
-            ariaLabel="Sort discussion"
-            triggerClassName="learning-discussion__sort-trigger h-8 px-2 sm:px-2.5"
-          />
-        </div>
+        {entryFilters.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={entryFilter === value}
+            onClick={() => onEntryFilterChange(value)}
+            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className={`mt-1 ${isPhone ? "pb-36" : "pb-4"}`}>

@@ -5,7 +5,11 @@ import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { useEffect, useState } from "react";
-import { ElasticScrollGlyph } from "../../components/elastic-scroll-control";
+import {
+  ElasticScrollerGlyph,
+  ElasticScrollerSocket,
+  elasticScrollerButtonSurface,
+} from "../../components/elastic-scroller";
 import {
   ELASTIC_SCROLL_PREFERENCES_DEFAULT,
   HIDE_SCROLLBARS_DEFAULT,
@@ -186,24 +190,14 @@ function ElasticScrollAppearancePreview({
       className="relative block h-20 overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--canvas)_82%,var(--surface-strong))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)]"
       aria-hidden="true"
     >
+      <ElasticScrollerSocket
+        appearance={appearance}
+        className="absolute top-2 left-1/2 -translate-x-1/2"
+      />
       <span
-        className={`absolute top-2 left-1/2 size-12 -translate-x-1/2 rounded-full ${
-          hasDepth
-            ? "border border-[color-mix(in_srgb,var(--border-strong)_72%,var(--text)_28%)] bg-(--canvas) shadow-[inset_0_4px_8px_color-mix(in_srgb,black_52%,transparent),inset_0_-1px_1px_color-mix(in_srgb,white_8%,transparent)]"
-            : "bg-[color-mix(in_srgb,var(--surface-strong)_92%,var(--canvas))] shadow-[inset_0_1px_0_color-mix(in_srgb,white_8%,transparent)]"
-        }`}
+        className={`absolute bottom-1 left-1/2 inline-flex size-10 -translate-x-1/2 items-center justify-center rounded-full border text-(--text) ${elasticScrollerButtonSurface(appearance)}`}
       >
-        <span className="absolute inset-1 rounded-full border border-[color-mix(in_srgb,var(--accent)_46%,var(--border-strong))]" />
-        <span className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-(--accent)" />
-      </span>
-      <span
-        className={`absolute bottom-1 left-1/2 inline-flex size-10 -translate-x-1/2 items-center justify-center rounded-full border text-(--text) ${
-          hasDepth
-            ? "border-[color-mix(in_srgb,var(--border-strong)_66%,var(--text)_34%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_88%,white),color-mix(in_srgb,var(--surface-strong)_78%,var(--canvas)))] shadow-[inset_0_1px_0_color-mix(in_srgb,white_28%,transparent),inset_0_-2px_2px_color-mix(in_srgb,var(--canvas)_52%,transparent),0_7px_14px_color-mix(in_srgb,black_42%,transparent)]"
-            : "border-[color-mix(in_srgb,var(--border-strong)_88%,var(--accent)_12%)] bg-(--surface-strong) shadow-[0_5px_12px_color-mix(in_srgb,var(--canvas)_30%,transparent)]"
-        }`}
-      >
-        <ElasticScrollGlyph
+        <ElasticScrollerGlyph
           icon={icon}
           size={19}
           className={
@@ -224,7 +218,7 @@ function ElasticScrollIconPreview({ icon }: { icon: ElasticScrollIcon }) {
       aria-hidden="true"
     >
       <span className="inline-flex size-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--border-strong)_72%,var(--text)_28%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_88%,white),color-mix(in_srgb,var(--surface-strong)_78%,var(--canvas)))] text-(--text) shadow-[inset_0_1px_0_color-mix(in_srgb,white_24%,transparent),0_6px_14px_color-mix(in_srgb,black_36%,transparent)]">
-        <ElasticScrollGlyph icon={icon} size={20} />
+        <ElasticScrollerGlyph icon={icon} size={20} />
       </span>
     </span>
   );
@@ -251,7 +245,7 @@ function ElasticScrollGesturePreview({
         <StateIcon size={14} weight={action === "lock" ? "bold" : "fill"} />
       </span>
       <span className="inline-flex size-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--border-strong)_72%,var(--text)_28%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_88%,white),color-mix(in_srgb,var(--surface-strong)_78%,var(--canvas)))] text-(--text) shadow-[inset_0_1px_0_color-mix(in_srgb,white_24%,transparent),0_5px_10px_color-mix(in_srgb,black_30%,transparent)]">
-        <ElasticScrollGlyph icon="arrow" size={16} />
+        <ElasticScrollerGlyph icon="arrow" size={16} />
       </span>
       <DirectionIcon
         className={`absolute top-1/2 -translate-y-1/2 text-(--muted) ${side === "left" ? "left-11" : "right-11"}`}
@@ -310,7 +304,7 @@ export function ScrollbarSettings() {
   const selectedElasticAppearanceLabel =
     ELASTIC_SCROLL_APPEARANCES.find(
       ({ id }) => id === elasticScrollPreferences.appearance,
-    )?.label ?? "3D";
+    )?.label ?? "2D";
   const selectedElasticIconLabel =
     ELASTIC_SCROLL_ICONS.find(
       ({ id }) => id === elasticScrollPreferences.icon,
@@ -378,7 +372,7 @@ export function ScrollbarSettings() {
       <section className="settings-section">
         <div className="settings-section__heading-row">
           <div>
-            <h2>Elastic scroll control</h2>
+            <h2>Elastic scroller</h2>
             <p>
               Customize the floating drag control that appears while scrolling
               long lists.
@@ -400,7 +394,7 @@ export function ScrollbarSettings() {
             </p>
           </div>
           <RadioGroup
-            label="Elastic scroll control depth"
+            label="Elastic scroller depth"
             className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           >
             {ELASTIC_SCROLL_APPEARANCES.map(({ id, label, note }) => (

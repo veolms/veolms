@@ -499,6 +499,14 @@ test("appearance and sidebar preferences persist through their direct settings r
   );
 
   await expectAppearanceSettingsReady(page);
+  const appearanceHeadings = await page
+    .locator(
+      ".settings-content--appearance:visible > .settings-section > h2",
+    )
+    .allTextContents();
+  expect(appearanceHeadings.indexOf("Theme rotation")).toBe(
+    appearanceHeadings.indexOf("Color theme") + 1,
+  );
   const randomTheme = page.getByRole("switch", {
     name: "Random theme on app open",
   });
@@ -532,7 +540,9 @@ test("appearance and sidebar preferences persist through their direct settings r
   await randomTheme.click();
   await expect(randomTheme).toHaveAttribute("aria-checked", "false");
 
-  await page.getByRole("radio", { name: /Light/ }).click();
+  await page
+    .getByRole("radio", { name: "Light Use a light color scheme" })
+    .click();
   await page.getByRole("radio", { name: /Ocean Blue/ }).click();
   await page.getByRole("switch", { name: "Reduce animations" }).click();
   await page.getByRole("radio", { name: "Extra large" }).click();

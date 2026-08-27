@@ -931,31 +931,13 @@
 }
 
 .learning-discussion {
-  container-type: inline-size;
   margin: 15px 0 0;
   padding: 0 0 28px;
 }
 
-.learning-discussion__filter-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 6px;
-}
-
-.learning-discussion__filter-button,
-.learning-discussion__sort-trigger {
+.learning-discussion__filter-button {
   font-size: 15px;
   line-height: 20px;
-}
-
-.learning-discussion__sort
-  .themed-select__trigger.learning-discussion__sort-trigger {
-  font-size: 15px;
-}
-
-.learning-discussion__sort {
-  justify-self: start;
 }
 
 .learning-discussion__composer-prompt {
@@ -966,18 +948,6 @@
 @media (min-width: 640px) {
   .learning-discussion__composer-prompt {
     font-size: 15px;
-  }
-}
-
-@container (min-width: 25rem) {
-  .learning-discussion__filter-bar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .learning-discussion__sort {
-    justify-self: auto;
   }
 }
 

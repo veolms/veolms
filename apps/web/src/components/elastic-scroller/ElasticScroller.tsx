@@ -2,15 +2,15 @@ import { forwardRef, useImperativeHandle } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { cn } from "../../lib/utils";
-import { ElasticScrollGlyph } from "./ElasticScrollIcon";
+import { ElasticScrollerGlyph } from "./ElasticScrollerIcon";
+import { useElasticScroller } from "./useElasticScroller";
+import { useElasticScrollerPreferences } from "./useElasticScrollerPreferences";
 import {
-  ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE,
-  ELASTIC_SCROLL_CONTROL_PROGRESS_RADIUS,
-} from "./elasticScrollControlModel";
-import { useElasticScrollControl } from "./useElasticScrollControl";
-import { useElasticScrollPreferences } from "./useElasticScrollPreferences";
+  ElasticScrollerSocket,
+  elasticScrollerButtonSurface,
+} from "./ElasticScrollerVisual";
 
-export interface ElasticScrollControlProps {
+export interface ElasticScrollerProps {
   scrollportRef: RefObject<HTMLElement | null>;
   ariaControls?: string;
   scrollAreaLabel?: string;
@@ -18,29 +18,27 @@ export interface ElasticScrollControlProps {
   className?: string;
   buttonClassName?: string;
   bottomClearance?: number | string;
-  borderColor?: string;
   disabled?: boolean;
 }
 
-type ElasticScrollControlStyle = CSSProperties & {
-  "--elastic-scroll-control-spring": string;
-  "--elastic-scroll-control-bottom-clearance": string;
-  "--elastic-scroll-control-border": string;
+type ElasticScrollerStyle = CSSProperties & {
+  "--elastic-scroller-spring": string;
+  "--elastic-scroller-bottom-clearance": string;
 };
 
-export interface ElasticScrollControlHandle {
+export interface ElasticScrollerHandle {
   stop: () => void;
   scrollToStart: () => void;
 }
 
 /**
- * A distance-sensitive scroll control for an existing scrollport. Render it
+ * A distance-sensitive scroller for an existing scrollport. Render it
  * inside the scrollport and pass the same ref used by the scrolling element.
  */
-export const ElasticScrollControl = forwardRef<
-  ElasticScrollControlHandle,
-  ElasticScrollControlProps
->(function ElasticScrollControl(
+export const ElasticScroller = forwardRef<
+  ElasticScrollerHandle,
+  ElasticScrollerProps
+>(function ElasticScroller(
   {
     scrollportRef,
     ariaControls,
@@ -49,13 +47,12 @@ export const ElasticScrollControl = forwardRef<
     className,
     buttonClassName,
     bottomClearance = 268,
-    borderColor = "var(--border-strong)",
     disabled = false,
   },
   ref,
 ) {
-  const preferences = useElasticScrollPreferences();
-  const control = useElasticScrollControl({
+  const preferences = useElasticScrollerPreferences();
+  const control = useElasticScroller({
     scrollportRef,
     contentRevision,
     lockSide: preferences.lockSide,
@@ -105,7 +102,7 @@ export const ElasticScrollControl = forwardRef<
   return (
     <div
       className={cn(
-        "elastic-scroll-control pointer-events-none sticky top-[calc(100%-var(--elastic-scroll-control-bottom-clearance))] z-30 flex h-0 flex-none justify-center",
+        "elastic-scroller pointer-events-none sticky top-[calc(100%-var(--elastic-scroller-bottom-clearance))] z-30 flex h-0 flex-none justify-center",
         control.visible
           ? "visible translate-y-0 opacity-100"
           : control.direction === "down"
@@ -127,81 +124,39 @@ export const ElasticScrollControl = forwardRef<
       data-tab-swipe-ignore
       style={
         {
-          "--elastic-scroll-control-spring": spring,
-          "--elastic-scroll-control-bottom-clearance":
+          "--elastic-scroller-spring": spring,
+          "--elastic-scroller-bottom-clearance":
             normalizedBottomClearance,
-          "--elastic-scroll-control-border": borderColor,
           transition: control.visible
             ? "visibility 0s linear 0s, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)"
             : "visibility 0s linear 280ms, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",
-        } as ElasticScrollControlStyle
+        } as ElasticScrollerStyle
       }
       aria-hidden={!control.visible}
     >
-      <span
-        className={cn(
-          "elastic-scroll-control__progress-puck pointer-events-none absolute -top-1 left-1/2 z-2 size-12 rounded-full transition-[translate] duration-160 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-          hasDepth
-            ? "border border-[color-mix(in_srgb,var(--elastic-scroll-control-border)_82%,var(--text)_18%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong,var(--surface))_88%,white)_0%,color-mix(in_srgb,var(--surface)_76%,var(--canvas))_44%,var(--canvas)_100%)] shadow-[inset_0_3px_6px_color-mix(in_srgb,black_58%,transparent),inset_0_-1px_0_color-mix(in_srgb,white_9%,transparent),0_1px_0_color-mix(in_srgb,white_8%,transparent),0_5px_12px_color-mix(in_srgb,var(--canvas)_28%,transparent)]"
-            : "bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_94%,var(--canvas))] shadow-[inset_0_1px_0_color-mix(in_srgb,white_8%,transparent),0_7px_18px_color-mix(in_srgb,var(--canvas)_34%,transparent)]",
-        )}
+      <ElasticScrollerSocket
+        appearance={preferences.appearance}
+        className="elastic-scroller__progress-puck pointer-events-none absolute -top-1 left-1/2 z-2 transition-[translate] duration-160 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
         style={{
           transform: `translate(-50%, ${-control.dragOffset}px)`,
           translate: `0 ${puckFeedbackOffset}px`,
           transition:
             control.mode === "drag"
               ? "translate 160ms cubic-bezier(0.16, 1, 0.3, 1)"
-              : "transform 520ms var(--elastic-scroll-control-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
+              : "transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
-        aria-hidden="true"
+        progressRingRef={control.progressRingRef}
+        showStatusDot={!control.lockFeedback}
       >
-        {hasDepth && (
-          <span className="absolute inset-1 rounded-full border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[radial-gradient(circle_at_50%_58%,color-mix(in_srgb,var(--surface)_22%,var(--canvas))_0%,var(--canvas)_72%,color-mix(in_srgb,var(--surface)_14%,var(--canvas))_100%)] shadow-[inset_0_5px_9px_color-mix(in_srgb,black_54%,transparent),inset_0_-1px_1px_color-mix(in_srgb,white_7%,transparent)]" />
-        )}
-        <svg
-          className="absolute inset-0 z-2 size-full -rotate-90 overflow-visible"
-          viewBox="0 0 40 40"
-        >
-          <circle
-            cx="20"
-            cy="20"
-            r={ELASTIC_SCROLL_CONTROL_PROGRESS_RADIUS}
-            fill="none"
-            stroke="color-mix(in srgb, var(--elastic-scroll-control-border) 76%, var(--surface))"
-            strokeWidth="2.5"
-          />
-          <circle
-            ref={control.progressRingRef}
-            className="elastic-scroll-control__progress-ring"
-            cx="20"
-            cy="20"
-            r={ELASTIC_SCROLL_CONTROL_PROGRESS_RADIUS}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeDasharray={ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE}
-            strokeDashoffset={ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE}
-          />
-        </svg>
         {control.lockFeedback ? (
           <span
-            className="elastic-scroll-control__lock-icon pointer-events-none absolute inset-0 z-10 inline-flex items-center justify-center text-[color-mix(in_srgb,var(--accent)_78%,white)] drop-shadow-[0_2px_2px_color-mix(in_srgb,var(--canvas)_88%,transparent)]"
+            className="elastic-scroller__lock-icon pointer-events-none absolute inset-0 z-10 inline-flex items-center justify-center text-[color-mix(in_srgb,var(--accent)_78%,white)] drop-shadow-[0_2px_2px_color-mix(in_srgb,var(--canvas)_88%,transparent)]"
             data-lock-feedback={control.lockFeedback}
           >
             <Lock size={20} weight="fill" />
           </span>
-        ) : (
-          <span
-            className={cn(
-              "elastic-scroll-control__status-dot absolute top-1/2 left-1/2 z-3 -translate-x-1/2 -translate-y-1/2 rounded-full",
-              hasDepth
-                ? "size-2 border border-[color-mix(in_srgb,var(--canvas)_76%,var(--accent))] bg-[color-mix(in_srgb,var(--accent)_76%,var(--text))] shadow-[0_0_0_2px_color-mix(in_srgb,var(--canvas)_88%,transparent),0_0_8px_color-mix(in_srgb,var(--accent-shadow)_76%,transparent),inset_0_1px_1px_color-mix(in_srgb,white_28%,transparent)]"
-                : "size-1.5 bg-[color-mix(in_srgb,var(--accent)_68%,var(--text))]",
-            )}
-          />
-        )}
-      </span>
+        ) : null}
+      </ElasticScrollerSocket>
       <span
         ref={control.progressValueRef}
         className="sr-only"
@@ -213,7 +168,7 @@ export const ElasticScrollControl = forwardRef<
         aria-valuetext="0% scrolled"
       />
       <span
-        className="elastic-scroll-control__connector pointer-events-none absolute -top-43 left-1/2 z-1 h-96 w-1 origin-center rounded-full bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--accent)_88%,var(--surface)),color-mix(in_srgb,var(--accent)_44%,transparent)_50%,color-mix(in_srgb,var(--accent)_88%,var(--surface)))] shadow-[0_4px_12px_color-mix(in_srgb,var(--accent-shadow)_26%,transparent)] motion-reduce:transition-none"
+        className="elastic-scroller__connector pointer-events-none absolute -top-43 left-1/2 z-1 h-96 w-1 origin-center rounded-full bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--accent)_88%,var(--surface)),color-mix(in_srgb,var(--accent)_44%,transparent)_50%,color-mix(in_srgb,var(--accent)_88%,var(--surface)))] shadow-[0_4px_12px_color-mix(in_srgb,var(--accent-shadow)_26%,transparent)] motion-reduce:transition-none"
         data-visible
         style={{
           opacity: control.dragIntensity,
@@ -221,7 +176,7 @@ export const ElasticScrollControl = forwardRef<
           transition:
             control.mode === "drag"
               ? "none"
-              : "opacity 180ms ease, transform 520ms var(--elastic-scroll-control-spring)",
+              : "opacity 180ms ease, transform 520ms var(--elastic-scroller-spring)",
         }}
         aria-hidden="true"
       />
@@ -229,10 +184,11 @@ export const ElasticScrollControl = forwardRef<
         type="button"
         data-fixed-radius
         className={cn(
-          "elastic-scroll-control__button pointer-events-auto relative z-10 isolate inline-flex size-10 flex-none touch-none cursor-pointer items-center justify-center rounded-full p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none",
+          "elastic-scroller__button pointer-events-auto relative z-10 isolate inline-flex size-10 flex-none touch-none cursor-pointer items-center justify-center rounded-full border p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none",
+          elasticScrollerButtonSurface(preferences.appearance),
           hasDepth
-            ? "border border-[color-mix(in_srgb,var(--elastic-scroll-control-border)_72%,var(--text)_28%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong,var(--surface))_88%,white)_0%,color-mix(in_srgb,var(--surface-strong,var(--surface))_84%,var(--accent))_48%,color-mix(in_srgb,var(--surface-strong,var(--surface))_80%,var(--canvas))_100%)] text-[color-mix(in_srgb,var(--text)_76%,var(--muted)_24%)] shadow-[inset_0_1px_0_color-mix(in_srgb,white_28%,transparent),inset_0_-2px_3px_color-mix(in_srgb,var(--canvas)_52%,transparent),0_2px_0_color-mix(in_srgb,var(--canvas)_72%,var(--accent)),0_8px_18px_color-mix(in_srgb,black_42%,transparent),0_14px_28px_color-mix(in_srgb,var(--accent-shadow)_20%,transparent)] hover:bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong,var(--surface))_82%,white)_0%,color-mix(in_srgb,var(--surface-strong,var(--surface))_66%,var(--accent))_52%,color-mix(in_srgb,var(--surface-strong,var(--surface))_72%,var(--canvas))_100%)] hover:text-(--accent-contrast,#fff) hover:shadow-[inset_0_1px_0_color-mix(in_srgb,white_34%,transparent),inset_0_-2px_3px_color-mix(in_srgb,var(--canvas)_46%,transparent),0_3px_0_color-mix(in_srgb,var(--canvas)_68%,var(--accent)),0_12px_24px_color-mix(in_srgb,black_52%,transparent),0_18px_34px_color-mix(in_srgb,var(--accent-shadow)_30%,transparent)]"
-            : "border border-[color-mix(in_srgb,var(--elastic-scroll-control-border)_88%,var(--accent)_12%)] bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_94%,var(--accent)_6%)] text-[color-mix(in_srgb,var(--text)_68%,var(--muted)_32%)] shadow-[inset_0_1px_0_color-mix(in_srgb,white_8%,transparent),0_6px_18px_color-mix(in_srgb,var(--canvas)_38%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_76%,var(--accent)_24%)] hover:text-(--accent-contrast,#fff) hover:shadow-[inset_0_1px_0_color-mix(in_srgb,white_16%,transparent),0_10px_28px_color-mix(in_srgb,var(--canvas)_56%,transparent)]",
+            ? "text-(--text) hover:bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_82%,white),color-mix(in_srgb,var(--surface-strong)_66%,var(--accent)))] hover:text-(--accent-contrast,#fff)"
+            : "text-[color-mix(in_srgb,var(--text)_68%,var(--muted)_32%)] hover:bg-[color-mix(in_srgb,var(--surface-strong)_76%,var(--accent)_24%)] hover:text-(--accent-contrast,#fff)",
           control.mode !== "idle" &&
             (hasDepth
               ? "bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong,var(--surface))_72%,white)_0%,color-mix(in_srgb,var(--surface-strong,var(--surface))_56%,var(--accent))_54%,color-mix(in_srgb,var(--accent)_38%,var(--canvas))_100%)] text-(--accent-contrast,#fff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_34%,transparent),inset_0_-2px_3px_color-mix(in_srgb,var(--canvas)_42%,transparent),0_3px_0_color-mix(in_srgb,var(--canvas)_62%,var(--accent)),0_10px_24px_color-mix(in_srgb,black_48%,transparent),0_18px_34px_color-mix(in_srgb,var(--accent-shadow)_38%,transparent)]"
@@ -257,7 +213,7 @@ export const ElasticScrollControl = forwardRef<
           transition:
             control.mode === "drag"
               ? "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, translate 160ms cubic-bezier(0.16, 1, 0.3, 1)"
-              : "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 520ms var(--elastic-scroll-control-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
+              : "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
         aria-controls={ariaControls}
         aria-label={
@@ -301,16 +257,10 @@ export const ElasticScrollControl = forwardRef<
         onPointerUp={control.handlePointerFinish}
         onPointerCancel={control.handlePointerCancel}
       >
-        {hasDepth && (
-          <span
-            className="pointer-events-none absolute inset-1 rounded-full border border-[color-mix(in_srgb,white_9%,transparent)] bg-[radial-gradient(circle_at_36%_24%,color-mix(in_srgb,white_20%,transparent)_0%,transparent_52%)] shadow-[inset_0_1px_0_color-mix(in_srgb,white_18%,transparent),inset_0_-2px_3px_color-mix(in_srgb,var(--canvas)_34%,transparent)]"
-            aria-hidden="true"
-          />
-        )}
-        <ElasticScrollGlyph
+        <ElasticScrollerGlyph
           icon={preferences.icon}
           className={cn(
-            "elastic-scroll-control__icon relative z-10 motion-reduce:transition-none",
+            "elastic-scroller__icon relative z-10 motion-reduce:transition-none",
             hasDepth &&
               "drop-shadow-[0_2px_1px_color-mix(in_srgb,var(--canvas)_74%,transparent)]",
             preferences.animateIcon
