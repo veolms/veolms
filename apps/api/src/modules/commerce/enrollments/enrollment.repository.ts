@@ -63,7 +63,27 @@ export async function insertEnrollment(
   return await database
     .insertInto("enrollments")
     .values(values)
-    .onConflict((oc) => oc.columns(["user_id", "course_id"]).doNothing())
+    .onConflict((oc) =>
+      // Reactivates on repurchase — mirrors access.repository.ts's
+      // insertAccessGrant upsert. A plain `doNothing()` here (the previous
+      // behavior) meant a course bought again after a refund left this row
+      // stuck "revoked" forever even though the matching access_grants row
+      // correctly flips back to "active": grantAccessForOrder calls this
+      // with status "active" on every purchase, and the unique constraint
+      // on (user_id, course_id) made that a no-op instead of a reactivation.
+      // Refreshes every field a fresh insert would set — order_id included,
+      // so this reactivated row correctly points at the *new* purchase
+      // (the order that will actually revoke it on refund), not whichever
+      // order originally created the row.
+      oc.columns(["user_id", "course_id"]).doUpdateSet({
+        order_id: values.order_id ?? null,
+        status: values.status,
+        source: values.source,
+        access_starts_at: values.access_starts_at ?? new Date(),
+        access_expires_at: values.access_expires_at ?? null,
+        updated_at: new Date(),
+      }),
+    )
     .returningAll()
     .executeTakeFirst();
 }
@@ -84,4 +104,28 @@ export async function updateEnrollmentStatus(
     .where("course_id", "=", courseId)
     .returningAll()
     .executeTakeFirst();
+}
+
+/**
+ * Revokes every enrollment row belonging to an order — mirrors
+ * access.repository.ts's revokeAccessGrantsByOrderId. Scoping by `order_id`
+ * (not `(user_id, course_id)` alone, which `updateEnrollmentStatus` above
+ * does) matters because a user can own the same course through two
+ * different orders — e.g. bought directly under order A, then separately
+ * bought a bundle containing it under order C (bundle purchase is only
+ * blocked when *every* member course is already owned). Refunding order C
+ * must revoke only the enrollment order C is currently responsible for, not
+ * every enrollment for that (user, course) pair regardless of which order
+ * granted it.
+ */
+export async function revokeEnrollmentsByOrderId(database: Executor, orderId: string) {
+  return await database
+    .updateTable("enrollments")
+    .set({
+      status: "revoked",
+      updated_at: new Date(),
+    })
+    .where("order_id", "=", orderId)
+    .returningAll()
+    .execute();
 }

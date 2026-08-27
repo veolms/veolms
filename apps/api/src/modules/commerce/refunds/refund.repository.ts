@@ -93,6 +93,40 @@ export async function upsertRefundByGatewayRefundId(
     .executeTakeFirstOrThrow();
 }
 
+/**
+ * Sums every OTHER refund for an order that counts toward "how much has
+ * already been refunded" — `status IN ('processed', 'pending')` — so a
+ * caller can compare `thisRefundAmount + sumOtherCountedRefunds(...)`
+ * against the payment total to decide full vs. partial. `exclude` lets a
+ * caller that already has its own row (or is about to insert/upsert one)
+ * avoid double-counting itself, by `id` and/or `gateway_refund_id`.
+ *
+ * Single shared implementation of a cumulative-refund-total check that used
+ * to be reimplemented independently in 3 places (refund.service.ts,
+ * fulfillment/payment.worker.ts, fulfillment/refund-reconciliation.worker.ts)
+ * with 3 different — and in one case incomplete — filter predicates.
+ * refund-reconciliation.worker.ts's old inline version didn't count other
+ * `pending` refunds toward the total at all, only `processed` ones, which
+ * could under-count the true refunded total whenever more than one refund
+ * for the same order was in flight at once — a future correctness fix
+ * applied to one copy silently not reaching the other two is exactly the
+ * failure mode this consolidation removes.
+ */
+export async function sumOtherCountedRefunds(
+  database: Executor,
+  orderId: string,
+  exclude?: { refundId?: string; gatewayRefundId?: string | null },
+): Promise<number> {
+  const existingRefunds = await listRefundsByOrderId(database, orderId);
+  return existingRefunds
+    .filter((r) => {
+      if (exclude?.refundId && r.id === exclude.refundId) return false;
+      if (exclude?.gatewayRefundId && r.gateway_refund_id === exclude.gatewayRefundId) return false;
+      return r.status === "processed" || r.status === "pending";
+    })
+    .reduce((sum, r) => sum + r.amount, 0);
+}
+
 export async function listStaleRefunds(
   database: Executor,
   olderThanMinutes: number,

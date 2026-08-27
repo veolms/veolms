@@ -100,10 +100,21 @@ export function createRefundReconciliationWorker({
             continue;
           }
 
-          const allRefunds = await refundRepo.listRefundsByOrderId(database, refund.order_id);
-          const totalProcessed = allRefunds
-            .filter((r) => r.status === "processed" || r.id === refund.id)
-            .reduce((sum, r) => sum + r.amount, 0);
+          // Cumulative check via the shared helper (see refund.repository.ts's
+          // sumOtherCountedRefunds) — previously reimplemented inline here
+          // with a filter that only counted OTHER "processed" refunds, not
+          // "pending" ones, unlike refund.service.ts / payment.worker.ts's
+          // equivalent checks. That could under-count the true refunded
+          // total whenever more than one refund for this order was in
+          // flight at once. `refund` itself isn't "processed" yet at this
+          // point (that update happens inside the transaction below), so
+          // it's excluded by id and its amount added explicitly instead.
+          const totalOtherRefundsAlready = await refundRepo.sumOtherCountedRefunds(
+            database,
+            refund.order_id,
+            { refundId: refund.id },
+          );
+          const totalProcessed = totalOtherRefundsAlready + refund.amount;
 
           await database.transaction().execute(async (trx) => {
             await refundRepo.updateRefundStatus(trx, refund.id, {

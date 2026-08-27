@@ -95,7 +95,23 @@ export function createPaymentReconciliationService({
       orderId = claimed.order_id;
 
       const order = await orderRepo.findOrderById(trx, claimed.order_id);
-      if (!order) return; // defensive; should not happen in a consistent DB
+      if (!order) {
+        // Should not happen in a consistent DB (payments.order_id is an FK
+        // into orders), but a bare `return` here — unlike the identical-
+        // looking `markedPaid` guard just below — would commit the payment
+        // claim (already applied above via `trx`) as "captured" with zero
+        // fulfillment: no coupon, no access, no enrollment, no cart
+        // cleanup. The caller would still see `orderId` truthy and report
+        // `outcome: "finalized"` as if everything succeeded. Throwing
+        // aborts the whole transaction (the payment claim rolls back too),
+        // so this surfaces as a failure to retry/investigate instead of a
+        // silent charge-with-nothing-delivered.
+        throw new Error(
+          `finalizeSuccessfulPayment: claimed payment ${paymentId} references order ` +
+            `${claimed.order_id}, which does not exist — refusing to commit the ` +
+            `payment as captured with no fulfillment`,
+        );
+      }
 
       // 1. Record successful payment attempt
       const existingAttempts = await paymentRepo.listPaymentAttempts(trx, paymentId);

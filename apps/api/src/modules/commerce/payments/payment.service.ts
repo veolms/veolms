@@ -108,6 +108,29 @@ export function createPaymentService({
         currency: order.currency,
         status: "initiated",
       });
+    } else {
+      // A payment row already existed (e.g. an earlier abandoned/retried
+      // checkout) but wasn't captured, so a fresh gateway order was just
+      // created above. Without persisting its id here, the DB would keep
+      // the stale gateway_order_id from the earlier attempt while the
+      // client is handed this new one — verifyPayment's
+      // findPaymentByGatewayOrderId(newId) would then find nothing and
+      // throw PAYMENT_NOT_FOUND even though the gateway actually processed
+      // the charge against the new order.
+      const updated = await paymentRepo.updatePayment(database, payment.id, {
+        gateway_order_id: gatewayOrder.gatewayOrderId,
+        gateway_key_id: gatewayOrder.keyId ?? null,
+        status: "initiated",
+        error_code: null,
+        error_description: null,
+        updated_at: new Date(),
+      });
+      if (!updated) {
+        throw new Error(
+          `initializePayment: payment ${payment.id} disappeared while re-initializing`,
+        );
+      }
+      payment = updated;
     }
 
     // Record initial payment attempt

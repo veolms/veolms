@@ -48,9 +48,23 @@ export async function insertAccessGrant(
     .insertInto("access_grants")
     .values(values)
     .onConflict((oc) =>
+      // Reactivates on repurchase. Previously only refreshed `status` and
+      // `valid_until`, leaving `order_id` pointed at whichever order
+      // originally created the row: buy course X under order A, get
+      // refunded, buy X again under order C — this upsert flipped `status`
+      // back to `active` but left `order_id = A`. Refunding order C later
+      // then revokes zero rows (`revokeAccessGrantsByOrderId` filters
+      // `WHERE order_id = 'C'`), leaving access granted despite the
+      // purchase that's actually being refunded. Now refreshes every field
+      // a fresh insert would set, same as enrollment.repository.ts's
+      // insertEnrollment upsert (#24) — order_id included, so a reactivated
+      // grant correctly points at the new purchase.
       oc.columns(["user_id", "course_id"]).doUpdateSet({
+        order_id: values.order_id ?? null,
         status: values.status,
-        valid_until: values.valid_until,
+        source: values.source,
+        valid_from: values.valid_from ?? new Date(),
+        valid_until: values.valid_until ?? null,
         updated_at: new Date(),
       }),
     )

@@ -107,6 +107,37 @@ export function createCheckoutService({
                 },
           };
         }
+
+        // Order exists (from a prior attempt with this idempotency key) but
+        // no payment row does — a paid (non-free) checkout creates its
+        // payment row via paymentService.initializePayment() *outside* the
+        // order-creation transaction (step 5 below), so a gateway timeout
+        // or crash between the two leaves exactly this state: order
+        // committed, payment never initialized. A free checkout can't reach
+        // this branch — its payment row is created atomically with the
+        // order in the same transaction (step 3), so it always exists by
+        // the time the order does.
+        //
+        // Resume for the SAME order instead of falling through to
+        // insertOrder() below, which would generate a fresh order id but
+        // reuse this idempotencyKey — colliding with the UNIQUE constraint
+        // on orders.idempotency_key and throwing an unhandled
+        // constraint-violation error instead of completing the checkout.
+        const { gatewayOrder } = await paymentService.initializePayment({
+          orderId: existingOrder.id,
+          customer: user,
+        });
+
+        return {
+          order: toOrderContract(existingOrder, orderItems),
+          gateway: {
+            provider: gatewayOrder.provider,
+            gatewayOrderId: gatewayOrder.gatewayOrderId,
+            keyId: gatewayOrder.keyId,
+            amount: gatewayOrder.amount,
+            currency: gatewayOrder.currency,
+          },
+        };
       }
     }
 

@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import type { Executor } from "./repository.types.ts";
-import * as orderRepo from "../orders/order.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 
@@ -117,21 +116,16 @@ export function createCourseAccessService({
   }
 
   async function revokeAccessForOrder(database: Executor, order: OrderRefLike): Promise<void> {
+    // Both revokes are scoped by order_id, not by resolving order items to
+    // (user_id, course_id) pairs and revoking those — a user can own the
+    // same course through two different orders (bought directly, then
+    // separately via a bundle that also contains it: bundle purchase is
+    // only blocked when *every* member course is already owned), and
+    // revoking by (user_id, course_id) alone would wrongly revoke the
+    // *other* order's still-valid access/enrollment for that course. See
+    // revokeEnrollmentsByOrderId's doc comment for the full scenario.
     await accessService.revokeAccessForOrder(database, order.id);
-
-    const orderItems = await orderRepo.listOrderItems(database, order.id);
-    for (const item of orderItems) {
-      const courseIds: string[] = [];
-      if (item.item_type === "course" && item.course_id) {
-        courseIds.push(item.course_id);
-      } else if (item.item_type === "bundle" && item.bundle_id) {
-        const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
-        courseIds.push(...bundleCourses.map((bc) => bc.course_id));
-      }
-      for (const courseId of courseIds) {
-        await enrollmentRepo.updateEnrollmentStatus(database, order.user_id, courseId, "revoked");
-      }
-    }
+    await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
   }
 
   return { grantAccessForOrder, revokeAccessForOrder };

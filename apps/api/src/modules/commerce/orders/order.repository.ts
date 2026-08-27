@@ -9,6 +9,24 @@ export async function findOrderById(database: Executor, orderId: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Same as findOrderById, but takes a `SELECT ... FOR UPDATE` row lock. Must
+ * be called inside a transaction. Used to serialize concurrent operations
+ * against the same order — e.g. refund.service.ts's processRefund, so two
+ * concurrent refund requests for the same order can't both read the same
+ * "already refunded" total and both pass validation before either writes.
+ * The second caller's query blocks here until the first transaction commits
+ * or rolls back, then sees the first's effect on re-read.
+ */
+export async function findOrderByIdForUpdate(database: Executor, orderId: string) {
+  return await database
+    .selectFrom("orders")
+    .selectAll()
+    .where("id", "=", orderId)
+    .forUpdate()
+    .executeTakeFirst();
+}
+
 export async function findOrderByOrderNumber(
   database: Executor,
   orderNumber: string,

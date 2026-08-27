@@ -134,6 +134,7 @@ export async function updatePayment(
   database: Executor,
   paymentId: string,
   updates: {
+    gateway_order_id?: string;
     gateway_payment_id?: string | null;
     gateway_key_id?: string | null;
     status?: PaymentStatus;

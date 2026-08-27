@@ -32,80 +32,125 @@ export function createRefundService({
 
   /**
    * Processes a refund (full or partial) via PaymentGateway and tracks refund status idempotently.
+   *
+   * Concurrency: two admin sessions (or a double-click) requesting a refund
+   * for the same order at the same time must not both pass validation and
+   * both fire a real, irreversible Razorpay refund. The old shape read
+   * `existingRefunds` and validated with no lock, then called the gateway —
+   * two concurrent calls could both read the same "already refunded" total
+   * before either had written its own row. Fixed by splitting into a short
+   * "reserve" transaction (locks the order row, revalidates and recomputes
+   * the running total under that lock, inserts a `pending` refund row —
+   * itself what the next concurrent request's total will see — before ever
+   * calling the gateway) and a separate "finalize" step that updates that
+   * same row once the gateway responds. The gateway call deliberately stays
+   * outside both transactions: never hold a row lock across a network call.
    */
   async function processRefund(
     adminUserId: string,
     request: CreateRefundRequest,
   ): Promise<Refund> {
     const { orderId, amount, reason } = request;
-
-    const order = await orderRepo.findOrderById(database, orderId);
-    if (!order) {
-      throw CommerceErrors.ORDER_NOT_FOUND(orderId);
-    }
-    if (order.status !== "paid" && order.status !== "partially_refunded") {
-      throw CommerceErrors.REFUND_NOT_ALLOWED("Order is not in a refundable state.");
-    }
-
-    const payment = await paymentRepo.findPaymentByOrderId(database, orderId);
-    if (!payment || !payment.gateway_payment_id || payment.status !== "captured") {
-      throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
-    }
-
-    // Calculate total already refunded
-    const existingRefunds = await refundRepo.listRefundsByOrderId(database, orderId);
-    const totalRefundedAlready = existingRefunds
-      .filter((r) => r.status === "processed" || r.status === "pending")
-      .reduce((sum, r) => sum + r.amount, 0);
-
-    const maxRefundable = payment.amount - totalRefundedAlready;
-    if (maxRefundable <= 0) {
-      throw CommerceErrors.REFUND_NOT_ALLOWED("This order has already been fully refunded.");
-    }
-
-    const requestedAmount = amount ?? maxRefundable;
-    if (requestedAmount > maxRefundable) {
-      throw CommerceErrors.REFUND_NOT_ALLOWED(
-        `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
-      );
-    }
-
     const refundId = crypto.randomUUID();
 
-    // 1. Dispatch refund through the PaymentGateway abstraction (outside DB transaction)
-    const gatewayResult = await paymentGateway.refundPayment({
-      gatewayPaymentId: payment.gateway_payment_id,
-      amount: requestedAmount,
-      currency: payment.currency,
-      reason: reason ?? "Admin initiated refund",
-      idempotencyKey: refundId,
-      notes: {
-        orderId: order.id,
-        adminUserId,
-      },
-    });
+    // 1. Reserve — see the concurrency note above.
+    const { order, payment, requestedAmount, totalRefundedAlready } = await database
+      .transaction()
+      .execute(async (trx) => {
+        const order = await orderRepo.findOrderByIdForUpdate(trx, orderId);
+        if (!order) {
+          throw CommerceErrors.ORDER_NOT_FOUND(orderId);
+        }
+        if (order.status !== "paid" && order.status !== "partially_refunded") {
+          throw CommerceErrors.REFUND_NOT_ALLOWED("Order is not in a refundable state.");
+        }
+
+        const payment = await paymentRepo.findPaymentByOrderId(trx, orderId);
+        if (!payment || !payment.gateway_payment_id || payment.status !== "captured") {
+          throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
+        }
+
+        // Calculate total already refunded — safe from the race now that
+        // this read happens under the order row's lock. No exclusion
+        // needed: this refund doesn't exist as a row yet.
+        const totalRefundedAlready = await refundRepo.sumOtherCountedRefunds(trx, orderId);
+
+        const maxRefundable = payment.amount - totalRefundedAlready;
+        if (maxRefundable <= 0) {
+          throw CommerceErrors.REFUND_NOT_ALLOWED("This order has already been fully refunded.");
+        }
+
+        const requestedAmount = amount ?? maxRefundable;
+        if (requestedAmount > maxRefundable) {
+          throw CommerceErrors.REFUND_NOT_ALLOWED(
+            `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
+          );
+        }
+
+        const now = new Date();
+        await refundRepo.insertRefund(trx, {
+          id: refundId,
+          order_id: order.id,
+          payment_id: payment.id,
+          gateway_refund_id: null,
+          amount: requestedAmount,
+          currency: payment.currency,
+          reason: reason ?? null,
+          status: "pending",
+          created_by: adminUserId,
+          created_at: now,
+          updated_at: now,
+        });
+
+        return { order, payment, requestedAmount, totalRefundedAlready };
+      });
+
+    // 2. Dispatch refund through the PaymentGateway abstraction (outside
+    //    the reservation transaction/lock above).
+    let gatewayResult;
+    try {
+      gatewayResult = await paymentGateway.refundPayment({
+        gatewayPaymentId: payment.gateway_payment_id!,
+        amount: requestedAmount,
+        currency: payment.currency,
+        reason: reason ?? "Admin initiated refund",
+        idempotencyKey: refundId,
+        notes: {
+          orderId: order.id,
+          adminUserId,
+        },
+      });
+    } catch (err) {
+      // Release the reservation so it doesn't permanently eat into this
+      // order's refundable amount — a retry generates a fresh idempotency
+      // key regardless, so there's no resumption path that depends on
+      // keeping this row "pending".
+      await refundRepo.updateRefundStatus(database, refundId, {
+        status: "failed",
+        updated_at: new Date(),
+      });
+      throw err;
+    }
 
     const now = new Date();
 
-    // 2. Transactionally record refund and update order state if processed immediately
+    // 3. Finalize the reserved row (update, not insert) and update order
+    //    state if the gateway settled the refund immediately.
     const isProcessed = gatewayResult.status === "processed";
     const newTotalRefunded = totalRefundedAlready + requestedAmount;
     const isFullRefund = isProcessed && newTotalRefunded >= payment.amount;
 
     const createdRefund = await database.transaction().execute(async (trx) => {
-      const record = await refundRepo.insertRefund(trx, {
-        id: refundId,
-        order_id: order.id,
-        payment_id: payment.id,
+      const record = await refundRepo.updateRefundStatus(trx, refundId, {
         gateway_refund_id: gatewayResult.gatewayRefundId,
-        amount: requestedAmount,
-        currency: payment.currency,
-        reason: reason ?? null,
         status: gatewayResult.status,
-        created_by: adminUserId,
-        created_at: now,
         updated_at: now,
       });
+      if (!record) {
+        throw new Error(
+          `processRefund: reserved refund row ${refundId} was not found at finalization`,
+        );
+      }
 
       // Only update order status and revoke access if gateway settled the refund immediately
       if (isProcessed) {

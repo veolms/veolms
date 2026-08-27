@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { CartItemInput, CartResponse, CartItem } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { AppError } from "../../../lib/errors.ts";
 import * as cartRepo from "./cart.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
@@ -65,8 +66,18 @@ export function createCartService({
       pricingItems = pricing.items;
       subtotalAmount = pricing.subtotalAmount;
       currency = pricing.currency;
-    } catch {
-      // Pricing failed (e.g., a course was unpublished); show items at zero price.
+    } catch (err) {
+      if (!(err instanceof AppError)) {
+        // Not a known business-rule rejection — a genuine bug or infra
+        // failure (DB blip, a mapping error) must not be silently swallowed
+        // as "item unavailable" and shown to the customer as a ₹0 cart.
+        // Only AppError-typed failures (unpublished course, already owned,
+        // bundle unavailable, mixed currency, etc.) degrade gracefully
+        // below; anything else propagates as a real error.
+        throw err;
+      }
+      // Pricing failed for a business reason (e.g., a course was unpublished);
+      // show items at zero price rather than breaking the whole cart view.
       pricingItems = [];
     }
 
