@@ -612,7 +612,7 @@
     min-height: 100vh;
     min-height: 100dvh;
     border-radius: 0;
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-bottom: calc(104px + var(--app-viewport-safe-area-max-bottom));
     box-shadow: none;
   }
 

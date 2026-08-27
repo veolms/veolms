@@ -114,6 +114,11 @@ export const LearningSpace = memo(function LearningSpace({
         }
         onBlur={mobile ? undefined : floatingPanel.leaveFocus}
         onClick={(event) => {
+          if (expanded && active) {
+            dismissPanel();
+            return;
+          }
+
           const clickPointerType = (event.nativeEvent as PointerEvent)
             .pointerType;
           const directPointer = isDirectPointer(
@@ -126,8 +131,16 @@ export const LearningSpace = memo(function LearningSpace({
             !directPointer &&
             floatingPanel.hoverCapable &&
             event.detail !== 0;
+          const keepHoverOpenedPanel =
+            expanded &&
+            !active &&
+            !mobile &&
+            !directPointer &&
+            floatingPanel.hoverCapable;
 
-          floatingPanel.openFromClick(transientPopup);
+          floatingPanel.openFromClick(
+            keepHoverOpenedPanel ? false : transientPopup,
+          );
           if (mostRecentSession) onActivate(mostRecentSession);
         }}
       >

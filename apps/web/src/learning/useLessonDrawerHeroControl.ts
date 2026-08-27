@@ -71,14 +71,22 @@ export interface LessonDrawerHeroControlProps {
 export interface LessonDrawerViewportBounds {
   left: number;
   width: number;
+  top?: number;
+  bottom?: number;
+  borderRadius?: string;
 }
 
-export const LESSON_DRAWER_MAX_TABLET_WIDTH = 500;
+export const LESSON_DRAWER_DEFAULT_FLOATING_WIDTH = 500;
+export const LESSON_DRAWER_MIN_FLOATING_WIDTH = 300;
+export const LESSON_DRAWER_MAX_FLOATING_WIDTH = 680;
+export const LESSON_DRAWER_MAX_TABLET_WIDTH =
+  LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
 export const LESSON_DRAWER_TABLET_GUTTER = 12;
 
 export function getSideLessonDrawerBounds(
   playerBounds: Pick<DOMRect, "left" | "width">,
   viewportWidth: number,
+  preferredWidth = LESSON_DRAWER_DEFAULT_FLOATING_WIDTH,
 ): LessonDrawerViewportBounds | null {
   if (
     !Number.isFinite(playerBounds.left) ||
@@ -96,15 +104,29 @@ export function getSideLessonDrawerBounds(
     playerBounds.left + playerBounds.width,
   );
   const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+  const availableWidth = Math.max(
+    0,
+    visibleWidth - LESSON_DRAWER_TABLET_GUTTER,
+  );
+  const safePreferredWidth = Number.isFinite(preferredWidth)
+    ? preferredWidth
+    : LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
+  const minimumWidth = Math.min(
+    LESSON_DRAWER_MIN_FLOATING_WIDTH,
+    availableWidth,
+  );
   const width = Math.min(
-    LESSON_DRAWER_MAX_TABLET_WIDTH,
-    Math.max(0, visibleWidth - LESSON_DRAWER_TABLET_GUTTER * 2),
+    availableWidth,
+    Math.max(
+      minimumWidth,
+      Math.min(LESSON_DRAWER_MAX_FLOATING_WIDTH, safePreferredWidth),
+    ),
   );
 
   if (width <= 0) return null;
 
   return {
-    left: visibleRight - LESSON_DRAWER_TABLET_GUTTER - width,
+    left: visibleRight - width,
     width,
   };
 }

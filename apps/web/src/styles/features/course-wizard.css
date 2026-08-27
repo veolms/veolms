@@ -41,7 +41,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(58px + env(safe-area-inset-bottom));
+  bottom: calc(58px + var(--app-viewport-safe-area-bottom));
   z-index: 135;
   box-sizing: border-box;
   padding: 10px 14px;
@@ -74,7 +74,7 @@
   opacity: 0;
   transform: translate3d(
     0,
-    calc(100% + 58px + env(safe-area-inset-bottom) + 4px),
+    calc(100% + 58px + var(--app-viewport-safe-area-bottom) + 4px),
     0
   );
   transition:

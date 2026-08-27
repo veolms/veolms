@@ -1,12 +1,14 @@
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import type { JSONContent } from "@tiptap/core";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
   DiscussionEntryKind,
@@ -50,7 +52,7 @@ export interface Comment {
 interface CommentCardProps {
   comment: Comment;
   onLike: (id: number, liked: boolean) => void;
-  onEdit?: (id: number, text: string) => void;
+  onEdit?: (comment: Comment) => void;
   onDelete?: (id: number) => void;
   onReport?: (id: number) => void;
 }
@@ -68,11 +70,10 @@ export function CommentCard({
   );
   const [replyComposerOpen, setReplyComposerOpen] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
-  const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState(comment.text);
   const [localReplies, setLocalReplies] = useState<CommentReply[]>(
     comment.thread ?? [],
   );
+  const deletion = useUndoableDeletion(() => onDelete(comment.id));
   const unloadedReplyCount = Math.max(
     0,
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
@@ -99,13 +100,6 @@ export function CommentCard({
     setRepliesOpen(true);
   };
 
-  const saveEdit = () => {
-    const text = editDraft.trim();
-    if (!text) return;
-    onEdit(comment.id, text);
-    setEditing(false);
-  };
-
   const updateReply = (id: number, text: string) => {
     setLocalReplies((current) =>
       current.map((reply) =>
@@ -125,182 +119,202 @@ export function CommentCard({
 
   return (
     <article
+      id={`discussion-entry-${comment.id}`}
       data-discussion-entry={entryKind}
-      className="relative border-b py-5 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] sm:py-5"
+      data-deletion-pending={deletion.pending || undefined}
+      className={`relative border-b py-5 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] sm:py-5 ${deletion.pending ? "min-h-19" : ""}`}
     >
-      <div className="relative flex gap-3 sm:gap-3.5">
-        <img
-          src={comment.avatar}
-          alt=""
-          className="relative z-10 size-10 shrink-0 rounded-full object-cover sm:size-11"
-        />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-h-6 flex-wrap items-center gap-2 pr-2">
-            <h2 className="text-[15px] font-semibold text-(--text) sm:text-base">
-              {comment.name}
-            </h2>
-            <span className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-(--accent-ink,var(--accent)) sm:text-xs">
-              {entryLabel}
-            </span>
-            {comment.visibility && comment.visibility !== "public" && (
-              <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
-                {comment.visibility}
-              </span>
-            )}
-          </div>
-
-          {editing ? (
-            <InlineEditForm
-              label={`Edit comment by ${comment.name}`}
-              value={editDraft}
-              onChange={setEditDraft}
-              onCancel={() => {
-                setEditDraft(comment.text);
-                setEditing(false);
-              }}
-              onSave={saveEdit}
-              formattingWarning={Boolean(comment.content)}
+      <div
+        inert={deletion.pending ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="relative flex gap-3 sm:gap-3.5">
+            <img
+              src={comment.avatar}
+              alt=""
+              className="relative z-10 size-10 shrink-0 rounded-full object-cover sm:size-11"
             />
-          ) : comment.content ? (
-            <RichTextContent
-              content={comment.content}
-              fallback={comment.text}
-              label={`${entryLabel} by ${comment.name}`}
-              className="mt-1.5 max-w-[72ch]"
-            />
-          ) : (
-            <p className="mt-1.5 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
-              {comment.text}
-            </p>
-          )}
 
-          {comment.attachment && !editing && (
-            <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
-              <FileText
-                size={26}
-                weight="light"
-                className="shrink-0 text-(--text)"
-                aria-hidden="true"
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-(--text)">
-                  {comment.attachment.name}
-                </p>
-                <p className="mt-0.5 text-xs text-(--muted)">
-                  {comment.attachment.meta}
-                </p>
+            <div className="min-w-0 flex-1">
+              <div data-comment-meta className="flex min-h-9 items-start gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                  <h2 className="text-[15px] font-semibold text-(--text) sm:text-base">
+                    {comment.name}
+                  </h2>
+                  <span className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-(--accent-ink,var(--accent)) sm:text-xs">
+                    {entryLabel}
+                  </span>
+                  {comment.visibility && comment.visibility !== "public" && (
+                    <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
+                      {comment.visibility}
+                    </span>
+                  )}
+                  <span
+                    data-comment-time-separator
+                    aria-hidden="true"
+                    className="text-xs text-(--muted) sm:text-sm"
+                  >
+                    ·
+                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">
+                    {comment.time}
+                  </span>
+                </div>
+                <CommentActionMenu
+                  name={comment.name}
+                  kind={entryKind}
+                  isOwn={Boolean(comment.isOwn)}
+                  onEdit={() => onEdit(comment)}
+                  onShare={() =>
+                    void shareDiscussionEntry(
+                      comment.id,
+                      comment.name,
+                      comment.text,
+                    )
+                  }
+                  onDelete={deletion.begin}
+                  onReport={() => onReport(comment.id)}
+                  className="relative z-20 shrink-0"
+                />
               </div>
-            </div>
-          )}
 
-          <div className="mt-2.5 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm">
-            <button
-              type="button"
-              onClick={() => {
-                setLiked(!liked);
-                onLike(comment.id, !liked);
-              }}
-              aria-pressed={liked}
-              aria-label={liked ? "Unlike" : "Like"}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
-            >
-              <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
-              <span>{comment.likes}</span>
-            </button>
-
-            {replyCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setRepliesOpen((open) => !open)}
-                aria-expanded={repliesOpen}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-              >
-                View {replyCount} {replyCount === 1 ? "reply" : "replies"}
-                <CaretDown
-                  size={16}
-                  className={`transition-transform duration-200 ${repliesOpen ? "rotate-180" : ""}`}
+              {comment.content ? (
+                <RichTextContent
+                  content={comment.content}
+                  fallback={comment.text}
+                  label={`${entryLabel} by ${comment.name}`}
+                  className="mt-1.5 max-w-[72ch]"
                 />
-              </button>
-            )}
+              ) : (
+                <p className="mt-1.5 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
+                  {comment.text}
+                </p>
+              )}
 
-            <button
-              type="button"
-              onClick={() => setReplyComposerOpen((open) => !open)}
-              aria-expanded={replyComposerOpen}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-            >
-              <ChatCenteredDots size={18} />
-              <span>Reply</span>
-            </button>
+              {comment.attachment && (
+                <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
+                  <FileText
+                    size={26}
+                    weight="light"
+                    className="shrink-0 text-(--text)"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-(--text)">
+                      {comment.attachment.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-(--muted)">
+                      {comment.attachment.meta}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-            <span className="ml-auto pl-2 text-xs text-(--muted) sm:text-sm">
-              {comment.time}
-            </span>
-            <CommentActionMenu
-              name={comment.name}
-              kind={entryKind}
-              isOwn={Boolean(comment.isOwn)}
-              onEdit={() => {
-                setEditDraft(comment.text);
-                setEditing(true);
-              }}
-              onDelete={() => onDelete(comment.id)}
-              onReport={() => onReport(comment.id)}
-              className="relative z-20 shrink-0"
-            />
+              <div
+                data-comment-engagement
+                className="mt-2.5 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLiked(!liked);
+                    onLike(comment.id, !liked);
+                  }}
+                  aria-pressed={liked}
+                  aria-label={liked ? "Unlike" : "Like"}
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                >
+                  <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
+                  <span>{comment.likes}</span>
+                </button>
+
+                {replyCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRepliesOpen((open) => !open)}
+                    aria-expanded={repliesOpen}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                  >
+                    View {replyCount} {replyCount === 1 ? "reply" : "replies"}
+                    <CaretDown
+                      size={16}
+                      className={`transition-transform duration-200 ${repliesOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setReplyComposerOpen((open) => !open)}
+                  aria-expanded={replyComposerOpen}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                >
+                  <ChatCenteredDots size={18} />
+                  <span>Reply</span>
+                </button>
+              </div>
+
+              {replyComposerOpen && (
+                <div className="mt-3 flex max-w-2xl items-end gap-2">
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">Reply to {comment.name}</span>
+                    <textarea
+                      value={replyDraft}
+                      onChange={(event) => setReplyDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (
+                          (event.ctrlKey || event.metaKey) &&
+                          event.key === "Enter"
+                        ) {
+                          event.preventDefault();
+                          addReply();
+                        }
+                      }}
+                      placeholder={`Reply to ${comment.name}…`}
+                      className="block min-h-12 w-full resize-y rounded-lg border bg-(--surface) px-3 py-2 text-sm leading-5 text-(--text) outline-none [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] placeholder:text-(--muted) focus:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addReply}
+                    disabled={!replyDraft.trim()}
+                    className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                  >
+                    Reply
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {replyComposerOpen && (
-            <div className="mt-3 flex max-w-2xl items-end gap-2">
-              <label className="min-w-0 flex-1">
-                <span className="sr-only">Reply to {comment.name}</span>
-                <textarea
-                  value={replyDraft}
-                  onChange={(event) => setReplyDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (
-                      (event.ctrlKey || event.metaKey) &&
-                      event.key === "Enter"
-                    ) {
-                      event.preventDefault();
-                      addReply();
-                    }
-                  }}
-                  placeholder={`Reply to ${comment.name}…`}
-                  className="block min-h-12 w-full resize-y rounded-lg border bg-(--surface) px-3 py-2 text-sm leading-5 text-(--text) outline-none [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] placeholder:text-(--muted) focus:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]"
+          {repliesOpen && localReplies.length > 0 && (
+            <div className="mt-4 space-y-4">
+              {localReplies.map((reply) => (
+                <ReplyCard
+                  key={reply.id}
+                  reply={reply}
+                  onReply={() => setReplyComposerOpen(true)}
+                  onEdit={(text) => updateReply(reply.id, text)}
+                  onDelete={() =>
+                    setLocalReplies((current) =>
+                      current.filter((item) => item.id !== reply.id),
+                    )
+                  }
+                  onReport={() => onReport(reply.id)}
                 />
-              </label>
-              <button
-                type="button"
-                onClick={addReply}
-                disabled={!replyDraft.trim()}
-                className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-              >
-                Reply
-              </button>
+              ))}
             </div>
           )}
         </div>
       </div>
-
-      {repliesOpen && localReplies.length > 0 && (
-        <div className="mt-4 space-y-4">
-          {localReplies.map((reply) => (
-            <ReplyCard
-              key={reply.id}
-              reply={reply}
-              onReply={() => setReplyComposerOpen(true)}
-              onEdit={(text) => updateReply(reply.id, text)}
-              onDelete={() =>
-                setLocalReplies((current) =>
-                  current.filter((item) => item.id !== reply.id),
-                )
-              }
-              onReport={() => onReport(reply.id)}
-            />
-          ))}
-        </div>
+      {deletion.pending && (
+        <UndoDeleteButton
+          name={comment.name}
+          seconds={deletion.seconds}
+          onUndo={deletion.undo}
+          className="absolute top-5 right-0"
+        />
       )}
     </article>
   );
@@ -324,6 +338,7 @@ function ReplyCard({
   const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(reply.text);
+  const deletion = useUndoableDeletion(onDelete);
 
   const saveEdit = () => {
     const text = editDraft.trim();
@@ -333,73 +348,109 @@ function ReplyCard({
   };
 
   return (
-    <article className="relative flex gap-3 pl-8 sm:pl-14">
-      <img
-        src={reply.avatar}
-        alt=""
-        className="relative z-10 size-9 shrink-0 rounded-full object-cover sm:size-10"
-      />
+    <article
+      id={`discussion-entry-${reply.id}`}
+      data-deletion-pending={deletion.pending || undefined}
+      className={`relative pl-8 sm:pl-14 ${deletion.pending ? "min-h-9" : ""}`}
+    >
+      <div
+        inert={deletion.pending ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="relative flex gap-3">
+            <img
+              src={reply.avatar}
+              alt=""
+              className="relative z-10 size-9 shrink-0 rounded-full object-cover sm:size-10"
+            />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-2">
-          <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
-            {reply.name}
-          </h3>
-        </div>
+            <div className="min-w-0 flex-1">
+              <div data-reply-meta className="flex min-h-9 items-start gap-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                  <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
+                    {reply.name}
+                  </h3>
+                  <span
+                    data-reply-time-separator
+                    aria-hidden="true"
+                    className="text-xs text-(--muted) sm:text-sm"
+                  >
+                    ·
+                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">
+                    {reply.time}
+                  </span>
+                </div>
+                <CommentActionMenu
+                  name={reply.name}
+                  kind="reply"
+                  isOwn={Boolean(reply.isOwn)}
+                  onEdit={() => {
+                    setEditDraft(reply.text);
+                    setEditing(true);
+                  }}
+                  onShare={() =>
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text)
+                  }
+                  onDelete={deletion.begin}
+                  onReport={onReport}
+                  className="relative z-20 shrink-0"
+                />
+              </div>
 
-        {editing ? (
-          <InlineEditForm
-            label={`Edit reply by ${reply.name}`}
-            value={editDraft}
-            onChange={setEditDraft}
-            onCancel={() => {
-              setEditDraft(reply.text);
-              setEditing(false);
-            }}
-            onSave={saveEdit}
-          />
-        ) : (
-          <p className="mt-1 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
-            {reply.text}
-          </p>
-        )}
+              {editing ? (
+                <InlineEditForm
+                  label={`Edit reply by ${reply.name}`}
+                  value={editDraft}
+                  onChange={setEditDraft}
+                  onCancel={() => {
+                    setEditDraft(reply.text);
+                    setEditing(false);
+                  }}
+                  onSave={saveEdit}
+                />
+              ) : (
+                <p className="mt-1 max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px]">
+                  {reply.text}
+                </p>
+              )}
 
-        <div className="mt-2 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
-          <button
-            type="button"
-            onClick={() => setLiked((current) => !current)}
-            aria-pressed={liked}
-            aria-label={liked ? "Unlike reply" : "Like reply"}
-            className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
-          >
-            <ThumbsUp size={18} weight={liked ? "fill" : "regular"} />
-            <span>{reply.likes + (liked ? 1 : 0)}</span>
-          </button>
-          <button
-            type="button"
-            onClick={onReply}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-          >
-            <ChatCenteredDots size={17} />
-            <span>Reply</span>
-          </button>
-          <span className="ml-auto pl-2 text-xs text-(--muted) sm:text-sm">
-            {reply.time}
-          </span>
-          <CommentActionMenu
-            name={reply.name}
-            kind="reply"
-            isOwn={Boolean(reply.isOwn)}
-            onEdit={() => {
-              setEditDraft(reply.text);
-              setEditing(true);
-            }}
-            onDelete={onDelete}
-            onReport={onReport}
-            className="relative z-20 shrink-0"
-          />
+              <div
+                data-reply-engagement
+                className="mt-2 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => setLiked((current) => !current)}
+                  aria-pressed={liked}
+                  aria-label={liked ? "Unlike reply" : "Like reply"}
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                >
+                  <ThumbsUp size={18} weight={liked ? "fill" : "regular"} />
+                  <span>{reply.likes + (liked ? 1 : 0)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onReply}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                >
+                  <ChatCenteredDots size={17} />
+                  <span>Reply</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      {deletion.pending && (
+        <UndoDeleteButton
+          name={reply.name}
+          seconds={deletion.seconds}
+          onUndo={deletion.undo}
+          className="absolute top-0 right-0"
+        />
+      )}
     </article>
   );
 }
@@ -474,6 +525,7 @@ interface CommentActionMenuProps {
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
   onEdit: () => void;
+  onShare: () => void;
   onDelete: () => void;
   onReport: () => void;
   className: string;
@@ -484,6 +536,7 @@ function CommentActionMenu({
   kind,
   isOwn,
   onEdit,
+  onShare,
   onDelete,
   onReport,
   className,
@@ -512,6 +565,11 @@ function CommentActionMenu({
             label={`Edit ${actionLabel}`}
             onClick={onEdit}
           />
+          <MenuAction
+            Icon={ShareNetwork}
+            label={`Share ${actionLabel}`}
+            onClick={onShare}
+          />
           <MenuDivider />
           <MenuAction
             Icon={Trash}
@@ -521,12 +579,130 @@ function CommentActionMenu({
           />
         </>
       ) : (
-        <MenuAction
-          Icon={Flag}
-          label={`Report ${actionLabel}`}
-          onClick={onReport}
-        />
+        <>
+          <MenuAction
+            Icon={ShareNetwork}
+            label={`Share ${actionLabel}`}
+            onClick={onShare}
+          />
+          <MenuDivider />
+          <MenuAction
+            Icon={Flag}
+            label={`Report ${actionLabel}`}
+            onClick={onReport}
+          />
+        </>
       )}
     </CourseActionMenu>
   );
+}
+
+const UNDO_DELETE_TIMEOUT_MS = 10_000;
+
+function useUndoableDeletion(onCommit: () => void) {
+  const commitRef = useRef(onCommit);
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [seconds, setSeconds] = useState(10);
+
+  useEffect(() => {
+    commitRef.current = onCommit;
+  }, [onCommit]);
+
+  useEffect(() => {
+    if (deadline === null) return;
+
+    const updateSeconds = () => {
+      setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    };
+    updateSeconds();
+    const interval = window.setInterval(updateSeconds, 250);
+    const timeout = window.setTimeout(
+      () => {
+        setDeadline(null);
+        commitRef.current();
+      },
+      Math.max(0, deadline - Date.now()),
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [deadline]);
+
+  return {
+    pending: deadline !== null,
+    seconds,
+    begin: () => {
+      setSeconds(10);
+      setDeadline(Date.now() + UNDO_DELETE_TIMEOUT_MS);
+    },
+    undo: () => setDeadline(null),
+  };
+}
+
+interface UndoDeleteButtonProps {
+  name: string;
+  seconds: number;
+  onUndo: () => void;
+  className: string;
+}
+
+function UndoDeleteButton({
+  name,
+  seconds,
+  onUndo,
+  className,
+}: UndoDeleteButtonProps) {
+  return (
+    <button
+      type="button"
+      data-undo-delete
+      aria-label={`Undo deletion of ${name}'s entry`}
+      onClick={onUndo}
+      className={`${className} z-30 inline-flex h-9 items-center gap-2 rounded-full bg-(--surface-elevated,var(--surface)) px-3 text-xs font-semibold text-(--text) shadow-[0_10px_30px_rgba(0,0,0,0.28),0_0_0_1px_color-mix(in_srgb,var(--accent)_38%,transparent)] transition-[background-color,box-shadow] hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)`}
+    >
+      <ArrowCounterClockwise
+        size={16}
+        weight="bold"
+        className="text-(--accent-ink,var(--accent))"
+        aria-hidden="true"
+      />
+      <span>Undo</span>
+      <span className="min-w-5 text-right font-medium tabular-nums text-(--muted)">
+        {seconds}s
+      </span>
+    </button>
+  );
+}
+
+async function shareDiscussionEntry(
+  entryId: number,
+  name: string,
+  text: string,
+) {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  url.hash = `discussion-entry-${entryId}`;
+  const shareText = text.trim();
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: `${name}'s discussion entry`,
+        text: shareText || undefined,
+        url: url.toString(),
+      });
+      return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(
+        [shareText, url.toString()].filter(Boolean).join("\n\n"),
+      );
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+  }
 }

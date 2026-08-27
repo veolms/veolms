@@ -1,5 +1,10 @@
-import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Drawer,
   DrawerContent,
@@ -11,6 +16,9 @@ import type { Comment } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
 import {
   createEmptyRichTextDraft,
+  createRichTextDraftFromText,
+  getRichTextAttachmentCount,
+  hasRichTextDraftContent,
   isRichTextDocument,
   isStoredRichTextDraft,
   type DiscussionEntryKind,
@@ -132,6 +140,52 @@ export const getDiscussionComposerCollapsedSnapPoint = (
   return Math.max(2, Math.round(viewportHeight - playerBottom));
 };
 
+export const getDiscussionComposerViewportGeometry = (
+  layoutViewportHeight: number,
+  visualViewportHeight: number,
+  visualViewportOffsetTop: number,
+  playerBottom: number | undefined,
+) => {
+  const resolvedLayoutViewportHeight =
+    Number.isFinite(layoutViewportHeight) && layoutViewportHeight > 0
+      ? layoutViewportHeight
+      : visualViewportHeight;
+  const rawVisualViewportHeight =
+    Number.isFinite(visualViewportHeight) && visualViewportHeight > 0
+      ? visualViewportHeight
+      : resolvedLayoutViewportHeight;
+  const resolvedVisualViewportHeight = Math.min(
+    resolvedLayoutViewportHeight,
+    rawVisualViewportHeight,
+  );
+  const resolvedVisualViewportOffsetTop = Math.min(
+    Math.max(
+      0,
+      Number.isFinite(visualViewportOffsetTop)
+        ? visualViewportOffsetTop
+        : 0,
+    ),
+    Math.max(
+      0,
+      resolvedLayoutViewportHeight - resolvedVisualViewportHeight,
+    ),
+  );
+  const visualViewportBottom =
+    resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
+
+  return {
+    collapsedSnapPoint: getDiscussionComposerCollapsedSnapPoint(
+      visualViewportBottom,
+      playerBottom,
+    ),
+    keyboardInset: Math.max(
+      0,
+      Math.round(resolvedLayoutViewportHeight - visualViewportBottom),
+    ),
+    visualViewportHeight: Math.max(2, Math.round(resolvedVisualViewportHeight)),
+  };
+};
+
 interface LegacyLessonNote {
   id: number;
   time: string;
@@ -143,12 +197,20 @@ interface LegacyLessonNote {
 interface DiscussionProps {
   persistenceKey: string;
   mobileBottomNavigation?: boolean;
+  mobileBottomNavigationHidden?: boolean;
 }
 
 export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
 const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
 const initialDraft = createEmptyRichTextDraft();
 const countCharacters = (value: string) => Array.from(value).length;
+
+interface EditingEntry {
+  id: number;
+  draft: RichTextDraft;
+  entryKind: DiscussionEntryKind;
+  visibility: DiscussionVisibility;
+}
 
 const entryFilters = [
   ["all", "All"],
@@ -219,6 +281,7 @@ const asLegacyNoteEntry = (note: LegacyLessonNote): Comment => ({
 export function Discussion({
   persistenceKey,
   mobileBottomNavigation = false,
+  mobileBottomNavigationHidden = false,
 }: DiscussionProps) {
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<RichTextDraft>(
@@ -240,9 +303,16 @@ export function Discussion({
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
   const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
+  const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [notice, setNotice] = useState("");
+  const activeDraft = editingEntry?.draft ?? draft;
+  const activeEntryKind = editingEntry?.entryKind ?? entryKind;
+  const activeVisibility = editingEntry?.visibility ?? visibility;
+  const draftAttachmentCount = getRichTextAttachmentCount(activeDraft.content);
+  const draftHasContent = hasRichTextDraftContent(activeDraft);
   const draftIsTooLong =
-    countCharacters(draft.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
+    countCharacters(activeDraft.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
+  const canSubmitDraft = draftHasContent && !draftIsTooLong;
 
   useEffect(() => {
     const migratedNotes = legacyNotes.map(asLegacyNoteEntry);
@@ -289,21 +359,48 @@ export function Discussion({
     );
   }, [entries, entryFilter]);
 
-  const addEntry = () => {
+  const submitEntry = () => {
     if (draftIsTooLong) {
       setNotice(COMMENT_LENGTH_NOTICE);
       return;
     }
 
-    const text = draft.text.trim();
-    if (!text) {
-      setNotice(
-        entryKind === "note"
-          ? "Write a note before posting."
-          : entryKind === "question"
-            ? "Write a Q&A before posting."
-            : "Write a comment before posting.",
+    if (!draftHasContent) return;
+
+    const text = activeDraft.text.trim();
+
+    if (editingEntry) {
+      const originalEntry = entries.find(
+        (entry) => entry.id === editingEntry.id,
       );
+      if (!originalEntry) {
+        setEditingEntry(null);
+        return;
+      }
+
+      const updatedEntry: Comment = {
+        ...originalEntry,
+        text,
+        content: activeDraft.content,
+        visibility: activeVisibility,
+        entryKind: activeEntryKind,
+        isQuestion: activeEntryKind === "question",
+        time: "Just now (edited)",
+      };
+      const update = (current: Comment[]) =>
+        current.map((entry) =>
+          entry.id === updatedEntry.id ? updatedEntry : entry,
+        );
+
+      setEntries(update);
+      setPostedEntries((current) =>
+        current.some((entry) => entry.id === updatedEntry.id)
+          ? update(current)
+          : [updatedEntry, ...current],
+      );
+      setEditingEntry(null);
+      setEntryFilter("all");
+      setNotice("");
       return;
     }
 
@@ -313,12 +410,12 @@ export function Discussion({
       time: "Just now",
       avatar: CURRENT_USER.avatar,
       text,
-      content: draft.content,
-      visibility,
-      entryKind,
+      content: activeDraft.content,
+      visibility: activeVisibility,
+      entryKind: activeEntryKind,
       likes: 0,
       replies: 0,
-      isQuestion: entryKind === "question",
+      isQuestion: activeEntryKind === "question",
       isOwn: true,
     };
 
@@ -327,26 +424,7 @@ export function Discussion({
     setDraft(createEmptyRichTextDraft());
     setEntryFilter("all");
 
-    const entryName =
-      entryKind === "note"
-        ? "Note"
-        : entryKind === "question"
-          ? "Q&A"
-          : "Comment";
-    const visibilityPrefix =
-      visibility === "private"
-        ? "Private "
-        : visibility === "unlisted"
-          ? "Unlisted "
-          : "";
-    const noticeEntryName = visibilityPrefix
-      ? `${visibilityPrefix}${entryName.toLowerCase()}`
-      : entryName;
-    setNotice(
-      entryKind === "note"
-        ? `${noticeEntryName} saved.`
-        : `${noticeEntryName} posted.`,
-    );
+    setNotice("");
   };
 
   const onLike = (id: number, liked: boolean) => {
@@ -364,16 +442,20 @@ export function Discussion({
     setPostedEntries(update);
   };
 
-  const editEntry = (id: number, text: string) => {
-    const update = (current: Comment[]) =>
-      current.map((entry) =>
-        entry.id === id
-          ? { ...entry, text, content: undefined, time: "Just now (edited)" }
-          : entry,
-      );
-    setEntries(update);
-    setPostedEntries(update);
-    setNotice("Entry updated.");
+  const beginEditingEntry = (entry: Comment) => {
+    const entryKind =
+      entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
+    setEditingEntry({
+      id: entry.id,
+      draft: {
+        content:
+          entry.content ?? createRichTextDraftFromText(entry.text).content,
+        text: entry.text,
+      },
+      entryKind,
+      visibility: entry.visibility ?? "public",
+    });
+    setNotice("");
   };
 
   const deleteEntry = (id: number) => {
@@ -381,34 +463,62 @@ export function Discussion({
       current.filter((entry) => entry.id !== id);
     setEntries(remove);
     setPostedEntries(remove);
-    setNotice("Entry deleted.");
+    setEditingEntry((current) => (current?.id === id ? null : current));
+    setNotice("");
   };
 
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
       <ThreadSurface
-        draft={draft}
-        entryKind={entryKind}
-        visibility={visibility}
+        draft={activeDraft}
+        entryKind={activeEntryKind}
+        visibility={activeVisibility}
+        editingEntryId={editingEntry?.id ?? null}
         notice={notice}
         entryFilter={entryFilter}
         entries={filteredEntries}
         draftIsTooLong={draftIsTooLong}
+        draftAttachmentCount={draftAttachmentCount}
+        canSubmitDraft={canSubmitDraft}
         mobileBottomNavigation={mobileBottomNavigation}
+        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
         onDraftChange={(value) => {
-          setDraft(value);
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current ? { ...current, draft: value } : current,
+            );
+          } else {
+            setDraft(value);
+          }
           setNotice(
             countCharacters(value.text) > DISCUSSION_COMMENT_CHARACTER_LIMIT
               ? COMMENT_LENGTH_NOTICE
               : "",
           );
         }}
-        onEntryKindChange={setEntryKind}
-        onVisibilityChange={setVisibility}
-        onSubmit={addEntry}
+        onEntryKindChange={(value) => {
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current ? { ...current, entryKind: value } : current,
+            );
+          } else {
+            setEntryKind(value);
+          }
+        }}
+        onVisibilityChange={(value) => {
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current ? { ...current, visibility: value } : current,
+            );
+          } else {
+            setVisibility(value);
+          }
+        }}
+        onSubmit={submitEntry}
+        onCancelEdit={() => setEditingEntry(null)}
         onEntryFilterChange={setEntryFilter}
         onLike={onLike}
-        onEdit={editEntry}
+        onEdit={beginEditingEntry}
         onDelete={deleteEntry}
         onReport={() =>
           setNotice("Report received. Our moderation team will review it.")
@@ -422,18 +532,23 @@ interface ThreadSurfaceProps {
   draft: RichTextDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
+  editingEntryId: number | null;
   notice: string;
   entryFilter: EntryFilter;
   entries: Comment[];
   draftIsTooLong: boolean;
+  draftAttachmentCount: number;
+  canSubmitDraft: boolean;
   mobileBottomNavigation: boolean;
+  mobileBottomNavigationHidden: boolean;
   onDraftChange: (value: RichTextDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
+  onCancelEdit: () => void;
   onEntryFilterChange: (filter: EntryFilter) => void;
   onLike: (id: number, liked: boolean) => void;
-  onEdit: (id: number, text: string) => void;
+  onEdit: (comment: Comment) => void;
   onDelete: (id: number) => void;
   onReport: (id: number) => void;
 }
@@ -442,15 +557,20 @@ function ThreadSurface({
   draft,
   entryKind,
   visibility,
+  editingEntryId,
   notice,
   entryFilter,
   entries,
   draftIsTooLong,
+  draftAttachmentCount,
+  canSubmitDraft,
   mobileBottomNavigation,
+  mobileBottomNavigationHidden,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
   onSubmit,
+  onCancelEdit,
   onEntryFilterChange,
   onLike,
   onEdit,
@@ -458,6 +578,9 @@ function ThreadSurface({
   onReport,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
+  const composerHostRef = useRef<HTMLDivElement>(null);
+  const compactComposerScrollHidden =
+    mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
   const [
     mobileComposerCollapsedSnapPoint,
@@ -466,27 +589,41 @@ function ThreadSurface({
   const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
     number | null
   >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const [mobileComposerKeyboardInset, setMobileComposerKeyboardInset] =
+    useState(0);
+  const [mobileComposerViewportHeight, setMobileComposerViewportHeight] =
+    useState<number | null>(null);
   const mobileComposerSnapPoints = useMemo(
     () => [mobileComposerCollapsedSnapPoint, 1],
     [mobileComposerCollapsedSnapPoint],
   );
 
-  const getMobileComposerCollapsedSnapPoint = useCallback(() => {
+  const getMobileComposerViewportGeometry = useCallback(() => {
     const playerBottom = document
       .querySelector<HTMLElement>(".learning-workspace__player-wrap")
       ?.getBoundingClientRect().bottom;
-    return getDiscussionComposerCollapsedSnapPoint(
-      window.innerHeight,
+    const visualViewport = window.visualViewport;
+    return getDiscussionComposerViewportGeometry(
+      document.documentElement.clientHeight || window.innerHeight,
+      visualViewport?.height ?? window.innerHeight,
+      visualViewport?.offsetTop ?? 0,
       playerBottom,
     );
   }, []);
 
   const openMobileComposer = useCallback(() => {
-    const collapsedSnapPoint = getMobileComposerCollapsedSnapPoint();
-    setMobileComposerCollapsedSnapPoint(collapsedSnapPoint);
-    setMobileComposerSnapPoint(collapsedSnapPoint);
+    const geometry = getMobileComposerViewportGeometry();
+    setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
+    setMobileComposerSnapPoint(geometry.collapsedSnapPoint);
+    setMobileComposerKeyboardInset(geometry.keyboardInset);
+    setMobileComposerViewportHeight(geometry.visualViewportHeight);
     setComposerMode("mobile");
-  }, [getMobileComposerCollapsedSnapPoint]);
+  }, [getMobileComposerViewportGeometry]);
+
+  const closeComposer = useCallback(() => {
+    setComposerMode("collapsed");
+    if (editingEntryId !== null) onCancelEdit();
+  }, [editingEntryId, onCancelEdit]);
 
   useEffect(() => {
     setComposerMode((current) => {
@@ -497,23 +634,48 @@ function ThreadSurface({
   }, [isPhone]);
 
   useEffect(() => {
+    if (editingEntryId === null) return undefined;
+    if (isPhone) {
+      openMobileComposer();
+      return undefined;
+    }
+
+    setComposerMode("desktop");
+    const frame = window.requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      composerHostRef.current?.scrollIntoView?.({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingEntryId, isPhone, openMobileComposer]);
+
+  useEffect(() => {
     if (!isPhone || composerMode !== "mobile") return undefined;
 
     const player = document.querySelector<HTMLElement>(
       ".learning-workspace__player-wrap",
     );
     let frame: number | null = null;
+    let settleTimer: number | null = null;
     const syncSnapPoint = () => {
       frame = null;
-      const collapsedSnapPoint = getMobileComposerCollapsedSnapPoint();
-      setMobileComposerCollapsedSnapPoint(collapsedSnapPoint);
+      const geometry = getMobileComposerViewportGeometry();
+      setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
       setMobileComposerSnapPoint((current) =>
-        current === 1 ? 1 : collapsedSnapPoint,
+        current === 1 ? 1 : geometry.collapsedSnapPoint,
       );
+      setMobileComposerKeyboardInset(geometry.keyboardInset);
+      setMobileComposerViewportHeight(geometry.visualViewportHeight);
     };
     const scheduleSnapPointSync = () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(syncSnapPoint);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(syncSnapPoint, 180);
     };
     const playerResizeObserver =
       typeof ResizeObserver === "undefined"
@@ -522,58 +684,93 @@ function ThreadSurface({
 
     if (player) playerResizeObserver?.observe(player);
     window.addEventListener("resize", scheduleSnapPointSync);
+    window.addEventListener("orientationchange", scheduleSnapPointSync);
+    document.addEventListener("fullscreenchange", scheduleSnapPointSync);
+    document.addEventListener("webkitfullscreenchange", scheduleSnapPointSync);
     window.visualViewport?.addEventListener("resize", scheduleSnapPointSync);
+    window.visualViewport?.addEventListener("scroll", scheduleSnapPointSync);
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
       playerResizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleSnapPointSync);
+      window.removeEventListener("orientationchange", scheduleSnapPointSync);
+      document.removeEventListener("fullscreenchange", scheduleSnapPointSync);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        scheduleSnapPointSync,
+      );
       window.visualViewport?.removeEventListener(
         "resize",
         scheduleSnapPointSync,
       );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        scheduleSnapPointSync,
+      );
     };
-  }, [composerMode, getMobileComposerCollapsedSnapPoint, isPhone]);
+  }, [composerMode, getMobileComposerViewportGeometry, isPhone]);
+
+  useEffect(() => {
+    if (composerMode === "collapsed") return undefined;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("[data-comment-composer-container]")
+      ) {
+        return;
+      }
+      if (document.querySelector('[role="listbox"]')) return;
+      closeComposer();
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+  }, [closeComposer, composerMode]);
 
   const submitAndCollapse = () => {
+    if (!canSubmitDraft) return;
     onSubmit();
-    if (!draft.text.trim() || draftIsTooLong) return;
     setComposerMode("collapsed");
   };
 
   return (
     <div>
       {!isPhone && (
-        <div className="mt-4">
+        <div
+          ref={composerHostRef}
+          data-comment-composer-container
+          className="mt-4 scroll-mt-4"
+        >
           {composerMode === "desktop" ? (
             <CommentComposer
               draft={draft}
               entryKind={entryKind}
               visibility={visibility}
               invalid={draftIsTooLong}
+              canSubmit={canSubmitDraft}
+              editing={editingEntryId !== null}
               autoFocus
               onDraftChange={onDraftChange}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
               onSubmit={submitAndCollapse}
+              onClose={closeComposer}
             />
           ) : (
             <CompactComposer
               draft={draft}
+              attachmentCount={draftAttachmentCount}
               onOpen={() => setComposerMode("desktop")}
-              onSubmit={submitAndCollapse}
             />
           )}
         </div>
       )}
 
-      <p
-        role="status"
-        className={
-          notice
-            ? `mt-2 text-xs ${notice.includes("posted") || notice.includes("saved") || notice.includes("updated") || notice.includes("deleted") ? "text-(--success)" : notice.includes("Report") ? "text-(--muted)" : "text-(--danger)"}`
-            : "sr-only"
-        }
-      >
+      <p role="status" className="sr-only">
         {notice}
       </p>
 
@@ -622,13 +819,16 @@ function ThreadSurface({
 
       {isPhone && composerMode !== "mobile" && (
         <div
-          className={`fixed inset-x-0 z-130 bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl ${mobileBottomNavigation ? "bottom-[calc(58px+env(safe-area-inset-bottom))]" : "bottom-0"}`}
+          data-testid="mobile-discussion-composer"
+          data-scroll-hidden={compactComposerScrollHidden}
+          aria-hidden={compactComposerScrollHidden}
+          className={`fixed inset-x-0 z-130 bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${mobileBottomNavigation ? "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]" : "bottom-0"} ${compactComposerScrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
         >
           <CompactComposer
             draft={draft}
+            attachmentCount={draftAttachmentCount}
             mobile
             onOpen={openMobileComposer}
-            onSubmit={submitAndCollapse}
           />
         </div>
       )}
@@ -638,7 +838,7 @@ function ThreadSurface({
           open={composerMode === "mobile"}
           onOpenChange={(open) => {
             if (open) openMobileComposer();
-            else setComposerMode("collapsed");
+            else closeComposer();
           }}
           modal={false}
           snapPoints={mobileComposerSnapPoints}
@@ -654,11 +854,33 @@ function ThreadSurface({
           swipeHandleClassName="pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_34%,transparent)]"
         >
           <DrawerContent
-            aria-label="Create a discussion entry"
-            className="learning-comment-composer-drawer overflow-hidden rounded-t-[26px]! bg-[color-mix(in_srgb,var(--canvas)_92%,var(--surface))] px-0 pt-0 pb-[max(12px,env(safe-area-inset-bottom))] shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] data-expanded:rounded-none!"
+            data-comment-composer-container
+            style={
+              {
+                "--drawer-content-height": mobileComposerViewportHeight
+                  ? `${mobileComposerViewportHeight}px`
+                  : "100dvh",
+                "--drawer-content-max-height": mobileComposerViewportHeight
+                  ? `${mobileComposerViewportHeight}px`
+                  : "100dvh",
+                bottom: `${mobileComposerKeyboardInset}px`,
+                paddingBottom:
+                  mobileComposerKeyboardInset > 0
+                    ? "0px"
+                    : "var(--app-safe-area-bottom)",
+              } as React.CSSProperties
+            }
+            aria-label={
+              editingEntryId === null
+                ? "Create a discussion entry"
+                : "Edit a discussion entry"
+            }
+            className="learning-comment-composer-drawer overflow-hidden rounded-t-[22px]! bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] px-0 pt-0 shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-expanded:rounded-none!"
           >
             <DrawerTitle className="sr-only">
-              Create a discussion entry
+              {editingEntryId === null
+                ? "Create a discussion entry"
+                : "Edit a discussion entry"}
             </DrawerTitle>
             <DrawerDescription className="sr-only">
               Write a comment, Q&A, or note for this lesson.
@@ -668,12 +890,15 @@ function ThreadSurface({
               entryKind={entryKind}
               visibility={visibility}
               invalid={draftIsTooLong}
+              canSubmit={canSubmitDraft}
+              editing={editingEntryId !== null}
               autoFocus
               presentation="drawer"
               onDraftChange={onDraftChange}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
               onSubmit={submitAndCollapse}
+              onClose={closeComposer}
             />
           </DrawerContent>
         </Drawer>
@@ -684,48 +909,42 @@ function ThreadSurface({
 
 interface CompactComposerProps {
   draft: RichTextDraft;
+  attachmentCount: number;
   mobile?: boolean;
   onOpen: () => void;
-  onSubmit: () => void;
 }
 
 function CompactComposer({
   draft,
+  attachmentCount,
   mobile = false,
   onOpen,
-  onSubmit,
 }: CompactComposerProps) {
-  const preview = draft.text.trim();
+  const preview =
+    draft.text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+  const attachmentPreview = `${attachmentCount} ${attachmentCount === 1 ? "attachment" : "attachments"}`;
 
   return (
-    <div
+    <button
+      type="button"
       data-compact-comment-composer
-      className={`flex items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
+      aria-label="Open discussion composer"
+      onClick={onOpen}
+      className={`flex w-full items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] text-left shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_94%,var(--hover))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
     >
       <img
         src={CURRENT_USER.avatar}
         alt=""
-        className="size-9 shrink-0 rounded-full object-cover"
+        className="pointer-events-none size-9 shrink-0 rounded-full object-cover"
       />
-      <button
-        type="button"
-        aria-label="Open discussion composer"
-        onClick={onOpen}
-        className="learning-discussion__composer-prompt min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text-secondary) focus-visible:outline-2 focus-visible:outline-(--accent)"
-      >
-        {preview || "Write something…"}
-      </button>
-      <button
-        type="button"
-        aria-label={
-          preview ? "Send discussion entry" : "Open discussion composer"
-        }
-        onClick={preview ? onSubmit : onOpen}
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-      >
-        <PaperPlaneTilt size={20} weight="fill" aria-hidden="true" />
-      </button>
-    </div>
+      <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
+        {preview ||
+          (attachmentCount > 0 ? attachmentPreview : "Write something…")}
+      </span>
+    </button>
   );
 }
 

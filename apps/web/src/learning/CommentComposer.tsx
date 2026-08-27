@@ -1,20 +1,20 @@
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
-import { CodeBlockIcon as CodeBlock } from "@phosphor-icons/react/CodeBlock";
-import { CodeIcon as Code } from "@phosphor-icons/react/Code";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { TextBIcon as TextB } from "@phosphor-icons/react/TextB";
-import { TextItalicIcon as TextItalic } from "@phosphor-icons/react/TextItalic";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
-import React, { useEffect, useMemo, useRef } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ThemedSelect } from "../ThemedSelect";
 import type { ThemedSelectOption } from "../ThemedSelect";
-import { CommentBlockControls } from "./CommentBlockControls";
+import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
+import {
+  getClipboardMediaFile,
+  insertCommentAttachment,
+} from "./commentAttachments";
 import {
   createCommentEditorExtensions,
   type DiscussionEntryKind,
@@ -27,10 +27,13 @@ interface CommentComposerProps {
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   invalid: boolean;
+  canSubmit: boolean;
+  editing?: boolean;
   onDraftChange: (value: RichTextDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
+  onClose: () => void;
   autoFocus?: boolean;
   presentation?: "inline" | "drawer";
 }
@@ -51,29 +54,27 @@ const visibilityOptions = [
   ["unlisted", "Unlisted", { flag: <EyeSlash size={17} aria-hidden="true" /> }],
 ] as const satisfies readonly ThemedSelectOption<DiscussionVisibility>[];
 
-const defaultFormattingState = {
-  bold: false,
-  italic: false,
-  code: false,
-  codeBlock: false,
-};
-
 export function CommentComposer({
   draft,
   entryKind,
   visibility,
   invalid,
+  canSubmit,
+  editing = false,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
   onSubmit,
+  onClose,
   autoFocus = false,
   presentation = "inline",
 }: CommentComposerProps) {
   const onDraftChangeRef = useRef(onDraftChange);
   const onSubmitRef = useRef(onSubmit);
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const extensions = useMemo(
-    () => createCommentEditorExtensions("Write, type '/' for commands…"),
+    () => createCommentEditorExtensions("Write something…"),
     [],
   );
 
@@ -81,6 +82,13 @@ export function CommentComposer({
     onDraftChangeRef.current = onDraftChange;
     onSubmitRef.current = onSubmit;
   }, [onDraftChange, onSubmit]);
+
+  const addAttachment = useCallback(async (file: File) => {
+    const currentEditor = editorRef.current;
+    if (!currentEditor) return;
+    const result = await insertCommentAttachment(currentEditor, file);
+    setAttachmentNotice(result.message);
+  }, []);
 
   const editor = useEditor(
     {
@@ -90,13 +98,20 @@ export function CommentComposer({
       shouldRerenderOnTransaction: false,
       editorProps: {
         attributes: {
-          "aria-label": getEditorLabel(entryKind),
+          "aria-label": getEditorLabel(entryKind, editing),
           "aria-multiline": "true",
           "aria-invalid": invalid ? "true" : "false",
           autocapitalize: "sentences",
-          class: "learning-comment-editor__document",
+          class: "learning-comment-editor__document px-4!",
           role: "textbox",
           spellcheck: "true",
+        },
+        handlePaste: (_view, event) => {
+          const file = getClipboardMediaFile(event.clipboardData);
+          if (!file) return false;
+          event.preventDefault();
+          void addAttachment(file);
+          return true;
         },
       },
       onUpdate: ({ editor: updatedEditor }) => {
@@ -109,18 +124,12 @@ export function CommentComposer({
     [extensions],
   );
 
-  const formattingState = useEditorState({
-    editor,
-    selector: ({ editor: currentEditor }) =>
-      currentEditor
-        ? {
-            bold: currentEditor.isActive("bold"),
-            italic: currentEditor.isActive("italic"),
-            code: currentEditor.isActive("code"),
-            codeBlock: currentEditor.isActive("codeBlock"),
-          }
-        : defaultFormattingState,
-  });
+  useEffect(() => {
+    editorRef.current = editor;
+    return () => {
+      editorRef.current = null;
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -136,12 +145,12 @@ export function CommentComposer({
         ...editor.options.editorProps,
         attributes: {
           ...editor.options.editorProps.attributes,
-          "aria-label": getEditorLabel(entryKind),
+          "aria-label": getEditorLabel(entryKind, editing),
           "aria-invalid": invalid ? "true" : "false",
         },
       },
     });
-  }, [editor, entryKind, invalid]);
+  }, [editing, editor, entryKind, invalid]);
 
   useEffect(() => {
     if (!editor || !autoFocus) return undefined;
@@ -156,14 +165,23 @@ export function CommentComposer({
     <div
       data-comment-composer-surface
       data-editor-kind={entryKind}
+      data-editor-mode={editing ? "edit" : "create"}
       data-editor-presentation={presentation}
       aria-invalid={invalid || undefined}
       className={`learning-comment-editor relative isolate overflow-hidden bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)] transition-[background-color,box-shadow] duration-150 focus-within:shadow-[0_18px_46px_color-mix(in_srgb,var(--canvas)_42%,transparent),0_0_0_2px_color-mix(in_srgb,var(--accent)_14%,transparent)] aria-[invalid=true]:shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_0_0_2px_color-mix(in_srgb,var(--danger)_42%,transparent)] ${presentation === "drawer" ? "flex min-h-0 flex-1 flex-col rounded-none" : "rounded-xl"}`}
       onKeyDownCapture={(event) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
           event.preventDefault();
+          if (!canSubmit) return;
           onSubmitRef.current();
         }
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        if (document.querySelector('[role="listbox"]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
       }}
     >
       <div
@@ -173,110 +191,68 @@ export function CommentComposer({
           editor={editor}
           className={presentation === "drawer" ? "min-h-full" : undefined}
         />
-        {editor && <CommentBlockControls editor={editor} />}
-        {editor && (
-          <BubbleMenu
-            editor={editor}
-            className="learning-comment-editor__bubble-menu"
+        {attachmentNotice && (
+          <div
+            role="status"
+            className="absolute top-15 right-3 left-3 z-10 rounded-lg bg-(--surface-elevated,var(--surface)) px-3 py-2 text-xs text-(--text-secondary) shadow-[0_12px_34px_rgba(0,0,0,0.3),0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] sm:left-auto sm:max-w-72"
           >
-            <FormattingButton
-              label="Bold"
-              active={formattingState?.bold ?? false}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-            >
-              <TextB size={17} weight="bold" />
-            </FormattingButton>
-            <FormattingButton
-              label="Italic"
-              active={formattingState?.italic ?? false}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-            >
-              <TextItalic size={17} />
-            </FormattingButton>
-            <FormattingButton
-              label="Inline code"
-              active={formattingState?.code ?? false}
-              onClick={() => editor.chain().focus().toggleCode().run()}
-            >
-              <Code size={17} />
-            </FormattingButton>
-            <FormattingButton
-              label="Code block"
-              active={formattingState?.codeBlock ?? false}
-              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            >
-              <CodeBlock size={17} />
-            </FormattingButton>
-          </BubbleMenu>
+            {attachmentNotice}
+          </div>
         )}
       </div>
 
       <div
         data-comment-toolbar
-        className="grid shrink-0 grid-cols-[auto_minmax(0,1.15fr)_minmax(0,0.85fr)_auto] items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-2.5 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:px-3"
+        className="flex shrink-0 items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-2.5 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:gap-2 sm:px-3"
       >
         <img
           src="/assets/sofia-avatar-160.webp"
           alt=""
           className="size-9 shrink-0 rounded-full object-cover sm:size-10"
         />
-        <ThemedSelect
-          value={entryKind}
-          onValueChange={onEntryKindChange}
-          options={entryKindOptions}
-          ariaLabel="Post type"
-          triggerClassName="h-10 min-w-0 w-full px-2 text-[11px] sm:px-2.5 sm:text-sm"
-        />
-        <ThemedSelect
-          value={visibility}
-          onValueChange={onVisibilityChange}
-          options={visibilityOptions}
-          ariaLabel="Visibility"
-          triggerClassName="h-10 min-w-0 w-full px-2 text-[11px] sm:px-2.5 sm:text-sm"
-        />
-        <button
-          type="button"
-          aria-label="Post"
-          disabled={invalid}
-          onClick={onSubmit}
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,transform,opacity] hover:-translate-y-0.5 hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
+        {editor && <CommentFormattingToolbar editor={editor} />}
+        <div
+          data-comment-toolbar-actions
+          className="ml-auto flex shrink-0 items-center justify-end gap-1.5 sm:gap-2"
         >
-          <PaperPlaneTilt size={19} weight="fill" aria-hidden="true" />
-        </button>
+          <ThemedSelect
+            value={entryKind}
+            onValueChange={onEntryKindChange}
+            options={entryKindOptions}
+            ariaLabel="Post type"
+            compactOnMobile
+            triggerClassName="h-10 min-w-0 w-max! shrink px-2 text-[11px] max-sm:size-10! max-sm:justify-center max-sm:gap-0 max-sm:p-0 sm:px-2.5 sm:text-sm"
+          />
+          <ThemedSelect
+            value={visibility}
+            onValueChange={onVisibilityChange}
+            options={visibilityOptions}
+            ariaLabel="Visibility"
+            compactOnMobile
+            triggerClassName="h-10 min-w-0 w-max! shrink px-2 text-[11px] max-sm:size-10! max-sm:justify-center max-sm:gap-0 max-sm:p-0 sm:px-2.5 sm:text-sm"
+          />
+          <button
+            type="button"
+            aria-label={editing ? "Save changes" : "Post"}
+            title={editing ? "Save changes" : "Post"}
+            disabled={!canSubmit}
+            onClick={onSubmit}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
+          >
+            {editing ? (
+              <Check size={24} weight="bold" aria-hidden="true" />
+            ) : (
+              <PaperPlaneTilt size={24} weight="fill" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-const getEditorLabel = (entryKind: DiscussionEntryKind) => {
-  if (entryKind === "note") return "Write a note";
-  if (entryKind === "question") return "Write a Q&A";
-  return "Write a comment";
+const getEditorLabel = (entryKind: DiscussionEntryKind, editing: boolean) => {
+  if (entryKind === "note") return editing ? "Edit note" : "Write a note";
+  if (entryKind === "question") return editing ? "Edit Q&A" : "Write a Q&A";
+  return editing ? "Edit comment" : "Write a comment";
 };
-
-interface FormattingButtonProps {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-
-function FormattingButton({
-  label,
-  active,
-  onClick,
-  children,
-}: FormattingButtonProps) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      className={`grid size-8 place-items-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${active ? "bg-(--accent-soft) text-(--accent-ink,var(--accent))" : "text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"}`}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}

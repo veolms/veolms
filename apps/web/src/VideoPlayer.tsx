@@ -806,6 +806,7 @@ export function VideoPlayer({
         ref={frameRef}
         role="region"
         aria-label={`Lesson video player for ${lessonTitle}`}
+        data-playing={playing ? "true" : "false"}
         tabIndex={0}
         onPointerDownCapture={handleFramePointerDown}
         onPointerUpCapture={clearTempSpeed}
@@ -826,7 +827,7 @@ export function VideoPlayer({
           event.currentTarget.focus({ preventScroll: true });
           runPlayerAction(togglePlay);
         }}
-        className={`youtube-player group relative z-10 w-full overflow-hidden rounded-[13px] border border-(--learning-panel-border) bg-black shadow-[0_18px_50px_rgba(0,0,0,.2)] focus-visible:outline-4 focus-visible:outline-(--accent) focus-visible:outline-offset-2 ${theaterMode ? "lg:h-[calc(100vh-94px)] lg:min-h-105" : ""} ${playing && !controlsAreVisible ? "cursor-none" : ""}`}
+        className={`youtube-player group relative z-10 w-full overflow-hidden rounded-[13px] border-0 bg-black shadow-[0_18px_50px_rgba(0,0,0,.2)] focus-visible:outline-4 focus-visible:outline-(--accent) focus-visible:outline-offset-2 ${theaterMode ? "lg:h-[calc(100vh-94px)] lg:min-h-105" : ""} ${playing && !controlsAreVisible ? "cursor-none" : ""}`}
       >
         <video
           ref={videoRef}

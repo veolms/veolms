@@ -33,12 +33,14 @@ const sessions: CoursePlayerSession[] = [
 
 interface HarnessProps {
   sessions: readonly CoursePlayerSession[];
+  activeCourseId?: string | null;
   onActivate: (session: CoursePlayerSession) => void;
   onExpandedChange: (expanded: boolean) => void;
 }
 
 function Harness({
   sessions: openSessions,
+  activeCourseId = null,
   onActivate,
   onExpandedChange,
 }: HarnessProps) {
@@ -47,7 +49,7 @@ function Harness({
   return (
     <LearningSpace
       sessions={openSessions}
-      activeCourseId={null}
+      activeCourseId={activeCourseId}
       expanded={expanded}
       onExpandedChange={(nextExpanded) => {
         onExpandedChange(nextExpanded);
@@ -139,6 +141,73 @@ describe("Learning Space trigger", () => {
     });
 
     expect(panel).toBeVisible();
+  });
+
+  it("closes an open panel from the active Learning Space trigger without activating a session again", () => {
+    const onActivate = vi.fn();
+    const onExpandedChange = vi.fn();
+    render(
+      <Harness
+        sessions={sessions}
+        activeCourseId="backend-nodejs"
+        onActivate={onActivate}
+        onExpandedChange={onExpandedChange}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Learning Space, 3 active sessions",
+    });
+    fireEvent.click(trigger, { detail: 1 });
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("region", { name: "Learning Space" }),
+    ).toBeVisible();
+
+    fireEvent.click(trigger, { detail: 1 });
+
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+    expect(
+      screen.queryByRole("region", { name: "Learning Space" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an inactive hover-open panel visible through navigation until the pointer leaves", async () => {
+    const onActivate = vi.fn();
+    render(
+      <Harness
+        sessions={sessions}
+        onActivate={onActivate}
+        onExpandedChange={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Learning Space, 3 active sessions",
+    });
+    fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
+    expect(
+      screen.getByRole("region", { name: "Learning Space" }),
+    ).toBeVisible();
+
+    fireEvent.click(trigger, { detail: 1 });
+    expect(onActivate).toHaveBeenCalledWith(sessions[1]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(
+      screen.getByRole("region", { name: "Learning Space" }),
+    ).toBeVisible();
+
+    fireEvent.pointerLeave(trigger, { pointerType: "mouse" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(
+      screen.queryByRole("region", { name: "Learning Space" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an empty panel without navigation and uses only a subtle trigger fill", async () => {

@@ -752,22 +752,20 @@ export const LearningSpacePanel = memo(function LearningSpacePanel({
               Learning Space. {sessionCountLabel}
             </span>
           )}
-          {pinned && (
-            <button
-              type="button"
-              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-transparent text-(--muted) outline-none transition-[color,background-color] duration-150 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-              aria-label="Close pinned Learning Space panel"
-              title="Close Learning Space"
-              onPointerDown={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onDismiss();
-              }}
-            >
-              <X size={15} weight="bold" aria-hidden="true" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-transparent text-(--muted) outline-none transition-[color,background-color] duration-150 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            aria-label="Close Learning Space panel"
+            title="Close Learning Space"
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDismiss();
+            }}
+          >
+            <X size={15} weight="bold" aria-hidden="true" />
+          </button>
         </header>
       )}
 

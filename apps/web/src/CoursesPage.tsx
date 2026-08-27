@@ -40,6 +40,7 @@ import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import { subscribeToPointerGestureClaims } from "./gestures/pointerGestureOwnership";
+import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
@@ -208,6 +209,7 @@ interface CoursesPageProps {
 
 export interface CoursesPageRenderContext {
   mobileBottomNavigation: boolean;
+  mobileBottomNavigationHidden: boolean;
 }
 
 interface NavigationDropTarget {
@@ -2837,6 +2839,22 @@ export function CoursesPage({
     setEdgeSidebarOpen(false);
   };
 
+  const floatSidebar = useCallback(() => {
+    setSidebarMode("hidden");
+    setPaletteMenu(false);
+    setEdgeSidebarOpen(true);
+  }, []);
+
+  const sidebarToggleGesture = useSecondPressHold<HTMLButtonElement>({
+    onPress: toggleSidebarWidth,
+    onSecondPressHold: floatSidebar,
+    deferFirstPress: compactNavigation,
+    secondPressWindow: compactNavigation ? 700 : undefined,
+  });
+  const sidebarLogoGesture = useSecondPressHold<HTMLSpanElement>({
+    onSecondPressHold: floatSidebar,
+  });
+
   const handleSidebarBrandDoubleClick = (
     event: ReactMouseEvent<HTMLDivElement>,
   ) => {
@@ -3002,6 +3020,11 @@ export function CoursesPage({
                 className="courses-logo-clip"
                 role="img"
                 aria-label="ProCodrr"
+                title="Click, then hold to float sidebar"
+                data-second-press-holding={
+                  sidebarLogoGesture.isSecondPressHolding || undefined
+                }
+                {...sidebarLogoGesture.handlers}
                 dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
               />
               <button
@@ -3011,7 +3034,10 @@ export function CoursesPage({
                 aria-pressed={compactNavigation ? undefined : sidebarCollapsed}
                 aria-keyshortcuts={`${primaryShortcutModifier}+B`}
                 title={sidebarControlTitle}
-                onClick={toggleSidebarWidth}
+                data-second-press-holding={
+                  sidebarToggleGesture.isSecondPressHolding || undefined
+                }
+                {...sidebarToggleGesture.handlers}
               >
                 <span className="sidebar-collapse__asset" aria-hidden="true">
                   <SidebarToggleIcon
@@ -3501,6 +3527,7 @@ export function CoursesPage({
             renderMain({
               mobileBottomNavigation:
                 compactNavigation && !mobileSidebarNavigationActive,
+              mobileBottomNavigationHidden: mobileBottomNavHidden,
             })
           ) : role === "creator" && page === "home" ? (
             <CreatorDashboard
@@ -3758,7 +3785,7 @@ export function CoursesPage({
           initialFocus={mobileSheetRef}
           finalFocus={mobileMoreRef}
           tabIndex={-1}
-          className="mobile-menu-sheet data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,env(safe-area-inset-bottom))] shadow-[0_-24px_70px_rgba(0,0,0,0.42)]"
+          className="mobile-menu-sheet data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))] shadow-[0_-24px_70px_rgba(0,0,0,0.42)]"
           data-sidebar-swipe-ignore
           onPointerDownCapture={(event) => {
             if (

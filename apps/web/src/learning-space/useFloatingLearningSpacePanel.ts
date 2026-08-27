@@ -763,14 +763,14 @@ export function useFloatingLearningSpacePanel({
     ? {
         right: "0.75rem",
         bottom: mobileBottomNavigation
-          ? "calc(66px + env(safe-area-inset-bottom))"
-          : "max(0.75rem, env(safe-area-inset-bottom))",
+          ? "calc(66px + var(--app-safe-area-bottom))"
+          : "max(0.75rem, var(--app-safe-area-bottom))",
         left: "0.75rem",
         width: "calc(100vw - 1.5rem)",
         maxWidth: "calc(100dvw - 1.5rem)",
         maxHeight: mobileBottomNavigation
-          ? "calc(100dvh - max(4.5rem, env(safe-area-inset-top)) - calc(66px + env(safe-area-inset-bottom)))"
-          : "calc(100dvh - max(4.5rem, env(safe-area-inset-top)) - max(0.75rem, env(safe-area-inset-bottom)))",
+          ? "calc(100dvh - max(4.5rem, env(safe-area-inset-top)) - calc(66px + var(--app-safe-area-bottom)))"
+          : "calc(100dvh - max(4.5rem, env(safe-area-inset-top)) - max(0.75rem, var(--app-safe-area-bottom)))",
       }
     : {
         left: position.left,

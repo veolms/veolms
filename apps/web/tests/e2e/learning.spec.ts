@@ -726,6 +726,46 @@ test("player edge control uses a native title and the short content shortcut", a
   await expect(curriculumColumn).not.toHaveClass(/is-collapsed/);
 });
 
+test("a held second player press floats the desktop course content", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const playerWrap = page.locator(".learning-workspace__player-wrap");
+  const curriculumColumn = page.locator(
+    ".learning-workspace__curriculum-column",
+  );
+  await playerWrap.hover();
+  await page.getByRole("button", { name: "Collapse course content" }).click();
+
+  const secondPress = page.getByRole("button", {
+    name: "Expand course content",
+  });
+  const secondPressBounds = await secondPress.boundingBox();
+  expect(secondPressBounds).not.toBeNull();
+  await page.mouse.move(
+    secondPressBounds!.x + secondPressBounds!.width / 2,
+    secondPressBounds!.y + secondPressBounds!.height / 2,
+  );
+  await page.mouse.down();
+  await expect(secondPress).toHaveAttribute("data-second-press-holding", "true");
+  await page.waitForTimeout(520);
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
+  await expect(curriculumColumn).toHaveClass(/is-collapsed/);
+  await page.mouse.up();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(curriculumColumn).toHaveClass(/is-collapsed/);
+});
+
 test("course content panel slides symmetrically when opened and closed", async ({
   page,
 }) => {
@@ -832,6 +872,67 @@ test("course content shortcut opens and closes the mobile lesson drawer", async 
   await page.keyboard.press("Alt+C");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+test("tablet player control opens a translucent floating course drawer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 779 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  const back = page.getByRole("button", { name: "Return to Courses" });
+  const player = page.getByRole("region", {
+    name: "Lesson video player for What is UI/UX Design?",
+  });
+  const video = player.locator("video");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(player).toHaveAttribute("data-playing", "false");
+  await expect(toggle).toHaveCSS("opacity", "1");
+  await expect(back).toHaveCSS("opacity", "1");
+
+  await video.evaluate((element) =>
+    element.dispatchEvent(new Event("play", { bubbles: true })),
+  );
+  await expect(player).toHaveAttribute("data-playing", "true");
+  await expect(toggle).toHaveCSS("opacity", "0");
+  await expect(toggle).toHaveCSS("pointer-events", "none");
+  await expect(back).toHaveCSS("opacity", "0");
+  await expect(back).toHaveCSS("pointer-events", "none");
+
+  await video.evaluate((element) =>
+    element.dispatchEvent(new Event("pause", { bubbles: true })),
+  );
+  await expect(player).toHaveAttribute("data-playing", "false");
+  await expect(toggle).toHaveCSS("opacity", "1");
+  await expect(back).toHaveCSS("opacity", "1");
+  await toggle.click();
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  await expect(dialog).toBeVisible({ timeout: 300 });
+  await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
+  await expect
+    .poll(() =>
+      dialog.evaluate((element) => {
+        const color = getComputedStyle(element).backgroundColor;
+        const rgbaAlpha = color.match(
+          /rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/,
+        )?.[1];
+        const colorFunctionAlpha = color.match(/\/\s*([\d.]+)\s*\)$/)?.[1];
+        return Number(rgbaAlpha ?? colorFunctionAlpha ?? 1);
+      }),
+    )
+    .toBeLessThan(1);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.setViewportSize({ width: 640, height: 844 });
+  await expect(toggle).toBeHidden();
 });
 
 test("course drawer stays closed when a resize exits the compact workspace", async ({
