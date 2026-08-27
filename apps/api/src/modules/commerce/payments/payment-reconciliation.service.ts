@@ -109,7 +109,20 @@ export function createPaymentReconciliationService({
 
       // 2. Mark order paid — idempotent conditional UPDATE
       //    (safe even if somehow called twice because WHERE filters non-paid statuses)
-      await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+      const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+      if (!markedPaid) {
+        // The payment claim gate above succeeded, but the order itself is in
+        // a settled state (cancelled/paid/partially_refunded/refunded) that
+        // markOrderPaidIfPending refuses to overwrite. Proceeding past this
+        // point would grant access/enrollment for money attached to an order
+        // that's cancelled or already refunded. Abort the whole transaction
+        // — the payment claim rolls back too — so this gets caught and
+        // retried/investigated instead of silently fulfilling.
+        throw new Error(
+          `finalizeSuccessfulPayment: order ${order.id} is not in a fulfillable ` +
+            `status (was "${order.status}") — refusing to grant access for payment ${paymentId}`,
+        );
+      }
 
       // 3. Record coupon redemption — atomic global & per-user usage limit check + idempotent insert
       if (order.coupon_id) {

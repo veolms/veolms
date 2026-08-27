@@ -134,7 +134,17 @@ export async function updateOrderStatus(
 }
 
 /**
- * Optimistically transition order to paid only if currently in pending/processing.
+ * Optimistically transition order to paid if it hasn't already been settled.
+ *
+ * Includes "expired" alongside "pending"/"payment_processing": a payment can
+ * settle after checkout.service's 1-hour expiry window has already flipped
+ * the order to "expired" (delayed webhook, slow gateway checkout). Without
+ * this, a real successful payment leaves `orders.status` stuck at "expired"
+ * forever even though access/enrollment/etc. all proceed — and the order
+ * becomes unrefundable via the admin API, which only allows refunds from
+ * "paid"/"partially_refunded". "cancelled", "paid", "partially_refunded", and
+ * "refunded" are intentionally excluded — those are settled outcomes a late
+ * payment claim must not silently overwrite.
  */
 export async function markOrderPaidIfPending(
   database: Executor,
@@ -149,7 +159,7 @@ export async function markOrderPaidIfPending(
       updated_at: new Date(),
     })
     .where("id", "=", orderId)
-    .where("status", "in", ["pending", "payment_processing"])
+    .where("status", "in", ["pending", "payment_processing", "expired"])
     .returningAll()
     .executeTakeFirst();
 }
