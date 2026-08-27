@@ -27,8 +27,6 @@ export async function insertAccessRule(
     access_type: AccessType;
     duration_type: AccessDurationType;
     duration_days: number | null;
-    starts_at: Date | null;
-    expires_at: Date | null;
     created_at: Date;
     updated_at: Date;
   },
@@ -44,8 +42,6 @@ export async function upsertAccessRule(
     access_type: AccessType;
     duration_type: AccessDurationType;
     duration_days: number | null;
-    starts_at: Date | null;
-    expires_at: Date | null;
     created_at: Date;
     updated_at: Date;
   },
@@ -58,8 +54,6 @@ export async function upsertAccessRule(
         access_type: values.access_type,
         duration_type: values.duration_type,
         duration_days: values.duration_days,
-        starts_at: values.starts_at,
-        expires_at: values.expires_at,
         updated_at: values.updated_at,
       }),
     )
@@ -75,8 +69,6 @@ export async function updateAccessRule(
     access_type: AccessType;
     duration_type: AccessDurationType;
     duration_days: number | null;
-    starts_at: Date | null;
-    expires_at: Date | null;
     updated_at: Date;
   },
 ) {
@@ -109,8 +101,6 @@ export async function insertPricing(
     price: number;
     currency: string;
     sale_price: number | null;
-    sale_starts_at: Date | null;
-    sale_ends_at: Date | null;
     created_at: Date;
     updated_at: Date;
   },
@@ -127,8 +117,6 @@ export async function upsertPricing(
     price: number;
     currency: string;
     sale_price: number | null;
-    sale_starts_at: Date | null;
-    sale_ends_at: Date | null;
     created_at: Date;
     updated_at: Date;
   },
@@ -142,8 +130,6 @@ export async function upsertPricing(
         price: values.price,
         currency: values.currency,
         sale_price: values.sale_price,
-        sale_starts_at: values.sale_starts_at,
-        sale_ends_at: values.sale_ends_at,
         updated_at: values.updated_at,
       }),
     )
@@ -160,8 +146,6 @@ export async function updatePricing(
     price: number;
     currency: string;
     sale_price: number | null;
-    sale_starts_at: Date | null;
-    sale_ends_at: Date | null;
     updated_at: Date;
   },
 ) {
@@ -192,7 +176,6 @@ export async function insertSettings(
     course_id: string;
     allow_qa: boolean;
     allow_comments: boolean;
-    allow_reviews: boolean;
     allow_downloads: boolean;
     certificate_enabled: boolean;
     show_instructor_name: boolean;
@@ -212,7 +195,6 @@ export async function upsertSettings(
     course_id: string;
     allow_qa: boolean;
     allow_comments: boolean;
-    allow_reviews: boolean;
     allow_downloads: boolean;
     certificate_enabled: boolean;
     show_instructor_name: boolean;
@@ -229,7 +211,6 @@ export async function upsertSettings(
       oc.column("course_id").doUpdateSet({
         allow_qa: values.allow_qa,
         allow_comments: values.allow_comments,
-        allow_reviews: values.allow_reviews,
         allow_downloads: values.allow_downloads,
         certificate_enabled: values.certificate_enabled,
         show_instructor_name: values.show_instructor_name,
@@ -249,7 +230,6 @@ export async function updateSettings(
   values: {
     allow_qa?: boolean;
     allow_comments?: boolean;
-    allow_reviews?: boolean;
     allow_downloads?: boolean;
     certificate_enabled?: boolean;
     show_instructor_name?: boolean;

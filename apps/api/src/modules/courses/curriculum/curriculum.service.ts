@@ -38,7 +38,6 @@ export function createCurriculumService({
     courseId: string,
     creatorId: string,
     title: string,
-    description?: string | null,
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId);
 
@@ -54,7 +53,6 @@ export function createCurriculumService({
       id: sectionId,
       course_id: courseId,
       title,
-      description: description ?? null,
       position,
       created_at: now,
       updated_at: now,
@@ -68,7 +66,6 @@ export function createCurriculumService({
     sectionId: string,
     creatorId: string,
     title?: string,
-    description?: string | null,
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId);
 
@@ -83,7 +80,6 @@ export function createCurriculumService({
 
     await curriculumRepo.updateSection(database, sectionId, courseId, {
       title,
-      description,
       updated_at: new Date(),
     });
 

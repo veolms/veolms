@@ -196,7 +196,6 @@ export interface CourseSectionTable {
   id: string;
   course_id: string;
   title: string;
-  description: string | null;
   position: number;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
@@ -242,8 +241,6 @@ export interface CourseAccessRuleTable {
   access_type: AccessType;
   duration_type: AccessDurationType;
   duration_days: number | null;
-  starts_at: Date | null;
-  expires_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -255,10 +252,8 @@ export interface CoursePricingTable {
   course_id: string;
   pricing_type: PricingType;
   price: number;
-  currency: string;
+  currency: Generated<string>;
   sale_price: number | null;
-  sale_starts_at: Date | null;
-  sale_ends_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -268,7 +263,6 @@ export interface CourseSettingsTable {
   course_id: string;
   allow_qa: Generated<boolean>;
   allow_comments: Generated<boolean>;
-  allow_reviews: Generated<boolean>;
   allow_downloads: Generated<boolean>;
   certificate_enabled: Generated<boolean>;
   show_instructor_name: Generated<boolean>;

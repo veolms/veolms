@@ -436,7 +436,6 @@ export function createCourseService({
         id: sec.id,
         courseId: sec.course_id,
         title: sec.title,
-        description: sec.description,
         position: sec.position,
         lessons: secLessons,
       };
@@ -470,8 +469,6 @@ export function createCourseService({
             accessType: accessRules.access_type as AccessType,
             durationType: accessRules.duration_type as AccessDurationType,
             durationDays: accessRules.duration_days,
-            startsAt: accessRules.starts_at?.toISOString() ?? null,
-            expiresAt: accessRules.expires_at?.toISOString() ?? null,
           }
         : null,
       pricing: pricing
@@ -482,8 +479,6 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
-            saleStartsAt: pricing.sale_starts_at?.toISOString() ?? null,
-            saleEndsAt: pricing.sale_ends_at?.toISOString() ?? null,
           }
         : null,
       settings: settings
@@ -492,7 +487,6 @@ export function createCourseService({
             courseId: settings.course_id,
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
-            allowReviews: settings.allow_reviews,
             allowDownloads: settings.allow_downloads,
             certificateEnabled: settings.certificate_enabled,
             showInstructorName: settings.show_instructor_name,
@@ -635,7 +629,6 @@ export function createCourseService({
         id: sec.id,
         courseId: sec.course_id,
         title: sec.title,
-        description: sec.description,
         position: sec.position,
         lessons: secLessons,
       };
@@ -679,8 +672,6 @@ export function createCourseService({
             accessType: accessRules.access_type as AccessType,
             durationType: accessRules.duration_type as AccessDurationType,
             durationDays: accessRules.duration_days,
-            startsAt: accessRules.starts_at?.toISOString() ?? null,
-            expiresAt: accessRules.expires_at?.toISOString() ?? null,
           }
         : null,
       pricing: pricing
@@ -691,8 +682,6 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
-            saleStartsAt: pricing.sale_starts_at?.toISOString() ?? null,
-            saleEndsAt: pricing.sale_ends_at?.toISOString() ?? null,
           }
         : null,
       settings: settings
@@ -701,7 +690,6 @@ export function createCourseService({
             courseId: settings.course_id,
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
-            allowReviews: settings.allow_reviews,
             allowDownloads: settings.allow_downloads,
             certificateEnabled: settings.certificate_enabled,
             showInstructorName: settings.show_instructor_name,

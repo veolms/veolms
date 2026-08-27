@@ -105,8 +105,6 @@ export const courseAccessRuleSchema = z.object({
   accessType: accessTypeSchema,
   durationType: accessDurationTypeSchema,
   durationDays: z.number().int().positive().nullable().optional(),
-  startsAt: z.iso.datetime().nullable().optional(),
-  expiresAt: z.iso.datetime().nullable().optional(),
 });
 
 export const updateCourseAccessRuleRequestSchema = z
@@ -114,8 +112,6 @@ export const updateCourseAccessRuleRequestSchema = z
     accessType: accessTypeSchema,
     durationType: accessDurationTypeSchema,
     durationDays: z.number().int().positive().nullable().optional(),
-    startsAt: z.iso.datetime().nullable().optional(),
-    expiresAt: z.iso.datetime().nullable().optional(),
   })
   .refine(
     (data) => {
@@ -132,18 +128,6 @@ export const updateCourseAccessRuleRequestSchema = z
       message: "durationDays is required when durationType is fixed_duration",
       path: ["durationDays"],
     },
-  )
-  .refine(
-    (data) => {
-      if (data.durationType === "custom_expiration") {
-        return Boolean(data.expiresAt);
-      }
-      return true;
-    },
-    {
-      message: "expiresAt is required when durationType is custom_expiration",
-      path: ["expiresAt"],
-    },
   );
 
 export type CourseAccessRule = z.infer<typeof courseAccessRuleSchema>;
@@ -159,20 +143,16 @@ export const coursePricingSchema = z.object({
   courseId: z.uuid(),
   pricingType: pricingTypeSchema,
   price: z.number().int().nonnegative(), // in minor units (cents)
-  currency: z.string().min(3).max(3),
+  currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().optional(),
-  saleStartsAt: z.iso.datetime().nullable().optional(),
-  saleEndsAt: z.iso.datetime().nullable().optional(),
 });
 
 export const updateCoursePricingRequestSchema = z
   .object({
     pricingType: pricingTypeSchema,
     price: z.number().int().nonnegative(),
-    currency: z.string().min(3).max(3).default("USD"),
+    currency: z.string().min(3).max(3).default("INR"),
     salePrice: z.number().int().nonnegative().nullable().optional(),
-    saleStartsAt: z.iso.datetime().nullable().optional(),
-    saleEndsAt: z.iso.datetime().nullable().optional(),
   })
   .refine(
     (data) => {
@@ -189,18 +169,6 @@ export const updateCoursePricingRequestSchema = z
       message: "salePrice cannot exceed price",
       path: ["salePrice"],
     },
-  )
-  .refine(
-    (data) => {
-      if (data.saleStartsAt && data.saleEndsAt) {
-        return new Date(data.saleEndsAt) >= new Date(data.saleStartsAt);
-      }
-      return true;
-    },
-    {
-      message: "saleEndsAt cannot precede saleStartsAt",
-      path: ["saleEndsAt"],
-    },
   );
 
 export type CoursePricing = z.infer<typeof coursePricingSchema>;
@@ -214,7 +182,6 @@ export const courseSettingsSchema = z.object({
   courseId: z.uuid(),
   allowQa: z.boolean(),
   allowComments: z.boolean(),
-  allowReviews: z.boolean(),
   allowDownloads: z.boolean(),
   certificateEnabled: z.boolean(),
   showInstructorName: z.boolean().default(true),
@@ -225,7 +192,6 @@ export const courseSettingsSchema = z.object({
 export const updateCourseSettingsRequestSchema = z.object({
   allowQa: z.boolean().optional(),
   allowComments: z.boolean().optional(),
-  allowReviews: z.boolean().optional(),
   allowDownloads: z.boolean().optional(),
   certificateEnabled: z.boolean().optional(),
   showInstructorName: z.boolean().optional(),
@@ -273,19 +239,16 @@ export const courseSectionSchema = z.object({
   id: z.uuid(),
   courseId: z.uuid(),
   title: z.string().min(1),
-  description: z.string().nullable().optional(),
   position: z.number().int().nonnegative(),
   lessons: z.array(courseLessonSchema).optional(),
 });
 
 export const createCourseSectionRequestSchema = z.object({
   title: z.string().min(1).max(255),
-  description: z.string().max(1000).nullable().optional(),
 });
 
 export const updateCourseSectionRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
-  description: z.string().max(1000).nullable().optional(),
 });
 
 export const reorderSectionsRequestSchema = z.object({
