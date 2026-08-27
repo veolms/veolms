@@ -69,6 +69,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("trailer_media_id", "uuid", (column) =>
       column.references("media_assets.id").onDelete("set null"),
     )
+    .addColumn("instructor_alias", "text")
     .addColumn("version", "integer", (column) => column.notNull().defaultTo(1))
     .addColumn("published_at", "timestamptz")
     .addColumn("deleted_at", "timestamptz")
@@ -230,6 +231,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("certificate_enabled", "boolean", (column) =>
       column.notNull().defaultTo(false),
     )
+    .addColumn("show_instructor_name", "boolean", (column) =>
+      column.notNull().defaultTo(true),
+    )
     .addColumn("language", "text", (column) => column.notNull().defaultTo("en"))
     .addColumn("estimated_duration", "integer")
     .addColumn("created_at", "timestamptz", (column) =>
@@ -380,6 +384,7 @@ export async function down(database: Kysely<unknown>): Promise<void> {
     .dropColumn("difficulty")
     .dropColumn("thumbnail_media_id")
     .dropColumn("trailer_media_id")
+    .dropColumn("instructor_alias")
     .dropColumn("version")
     .dropColumn("published_at")
     .dropColumn("deleted_at")

@@ -195,6 +195,7 @@ export async function insertSettings(
     allow_reviews: boolean;
     allow_downloads: boolean;
     certificate_enabled: boolean;
+    show_instructor_name: boolean;
     language: string;
     estimated_duration: number | null;
     created_at: Date;
@@ -214,6 +215,7 @@ export async function upsertSettings(
     allow_reviews: boolean;
     allow_downloads: boolean;
     certificate_enabled: boolean;
+    show_instructor_name: boolean;
     language: string;
     estimated_duration: number | null;
     created_at: Date;
@@ -230,6 +232,7 @@ export async function upsertSettings(
         allow_reviews: values.allow_reviews,
         allow_downloads: values.allow_downloads,
         certificate_enabled: values.certificate_enabled,
+        show_instructor_name: values.show_instructor_name,
         language: values.language,
         estimated_duration: values.estimated_duration,
         updated_at: values.updated_at,
@@ -249,6 +252,7 @@ export async function updateSettings(
     allow_reviews?: boolean;
     allow_downloads?: boolean;
     certificate_enabled?: boolean;
+    show_instructor_name?: boolean;
     language?: string;
     estimated_duration?: number | null;
     updated_at: Date;

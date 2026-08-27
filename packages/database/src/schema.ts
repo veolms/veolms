@@ -19,6 +19,7 @@ export interface CourseTable {
   difficulty: CourseDifficulty | null;
   thumbnail_media_id: string | null;
   trailer_media_id: string | null;
+  instructor_alias: string | null;
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
@@ -270,6 +271,7 @@ export interface CourseSettingsTable {
   allow_reviews: Generated<boolean>;
   allow_downloads: Generated<boolean>;
   certificate_enabled: Generated<boolean>;
+  show_instructor_name: Generated<boolean>;
   language: Generated<string>;
   estimated_duration: number | null;
   created_at: Generated<Date>;

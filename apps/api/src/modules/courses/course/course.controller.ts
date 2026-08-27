@@ -55,9 +55,9 @@ export function createCourseController({
     request: FastifyRequest<{ Body: CreateCourseRequest }>,
     reply: FastifyReply,
   ) {
-    const { title } = request.body;
+    const payload = request.body;
     const creatorId = request.user!.id;
-    const course = await service.createCourse(title, creatorId);
+    const course = await service.createCourse(payload, creatorId);
     reply.code(201);
     return course;
   }

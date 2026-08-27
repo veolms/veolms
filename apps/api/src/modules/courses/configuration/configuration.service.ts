@@ -125,6 +125,7 @@ export function createConfigurationService({
     const allowReviews = updates.allowReviews ?? true;
     const allowDownloads = updates.allowDownloads ?? false;
     const certificateEnabled = updates.certificateEnabled ?? false;
+    const showInstructorName = updates.showInstructorName ?? true;
     const language = updates.language ?? "en";
     const estimatedDuration = updates.estimatedDuration ?? null;
 
@@ -136,6 +137,7 @@ export function createConfigurationService({
       allow_reviews: allowReviews,
       allow_downloads: allowDownloads,
       certificate_enabled: certificateEnabled,
+      show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
       created_at: now,
@@ -150,6 +152,7 @@ export function createConfigurationService({
       allowReviews,
       allowDownloads,
       certificateEnabled,
+      showInstructorName,
       language,
       estimatedDuration,
     };

@@ -217,6 +217,7 @@ export const courseSettingsSchema = z.object({
   allowReviews: z.boolean(),
   allowDownloads: z.boolean(),
   certificateEnabled: z.boolean(),
+  showInstructorName: z.boolean().default(true),
   language: z.string(),
   estimatedDuration: z.number().int().positive().nullable().optional(),
 });
@@ -227,6 +228,7 @@ export const updateCourseSettingsRequestSchema = z.object({
   allowReviews: z.boolean().optional(),
   allowDownloads: z.boolean().optional(),
   certificateEnabled: z.boolean().optional(),
+  showInstructorName: z.boolean().optional(),
   language: z.string().optional(),
   estimatedDuration: z.number().int().positive().nullable().optional(),
 });
@@ -350,6 +352,7 @@ export const courseSchema = z.object({
   categoryId: z.uuid().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   trailerMediaId: z.uuid().nullable().optional(),
+  instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -358,18 +361,39 @@ export const courseSchema = z.object({
 
 export const createCourseRequestSchema = z.object({
   title: z.string().min(1).max(120),
-});
-
-export const updateCourseBasicsRequestSchema = z.object({
-  title: z.string().min(1).max(120).optional(),
+  shortDescription: z.string().max(500).nullable().optional(),
   description: z.string().max(1500).nullable().optional(),
   categoryId: z.uuid().nullable().optional(),
   difficulty: z
     .enum(["beginner", "intermediate", "advanced"])
     .nullable()
     .optional(),
+  difficultyLevel: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .nullable()
+    .optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   trailerMediaId: z.uuid().nullable().optional(),
+  instructorAlias: z.string().max(120).nullable().optional(),
+});
+
+export const updateCourseBasicsRequestSchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  shortDescription: z.string().max(500).nullable().optional(),
+  description: z.string().max(1500).nullable().optional(),
+  categoryId: z.uuid().nullable().optional(),
+  category: z.uuid().nullable().optional(),
+  difficulty: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .nullable()
+    .optional(),
+  difficultyLevel: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .nullable()
+    .optional(),
+  thumbnailMediaId: z.uuid().nullable().optional(),
+  trailerMediaId: z.uuid().nullable().optional(),
+  instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),
 });
 
