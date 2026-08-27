@@ -7,8 +7,15 @@ export async function insertCourse(
     id: string;
     slug: string;
     title: string;
+    short_description?: string | null;
+    description?: string | null;
     status: "draft";
     creator_id: string;
+    category_id?: string | null;
+    difficulty?: "beginner" | "intermediate" | "advanced" | null;
+    thumbnail_media_id?: string | null;
+    trailer_media_id?: string | null;
+    instructor_alias?: string | null;
     version: number;
     created_at: Date;
     updated_at: Date;
@@ -139,11 +146,13 @@ export async function updateCourse(
   version: number,
   updates: {
     title?: string;
+    short_description?: string | null;
     description?: string | null;
     category_id?: string | null;
     difficulty?: "beginner" | "intermediate" | "advanced" | null;
     thumbnail_media_id?: string | null;
     trailer_media_id?: string | null;
+    instructor_alias?: string | null;
     status?: "draft" | "published" | "archived";
     published_at?: Date | null;
     version: number;
@@ -157,4 +166,18 @@ export async function updateCourse(
     .where("version", "=", version)
     .executeTakeFirst();
 }
+
+export async function softDeleteCourse(
+  database: Kysely<Database>,
+  courseId: string,
+  now: Date,
+) {
+  return await database
+    .updateTable("courses")
+    .set({ deleted_at: now, updated_at: now })
+    .where("id", "=", courseId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
 
