@@ -108,3 +108,64 @@ export async function insertBundleItem(
     .returningAll()
     .executeTakeFirstOrThrow();
 }
+
+export async function listAllBundles(database: Executor) {
+  return await database
+    .selectFrom("course_bundles")
+    .selectAll()
+    .where("deleted_at", "is", null)
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+export async function updateBundle(
+  database: Executor,
+  bundleId: string,
+  updates: {
+    slug?: string;
+    title?: string;
+    description?: string | null;
+    thumbnail_media_id?: string | null;
+    status?: BundleStatus;
+    price?: number;
+    currency?: string;
+    updated_at?: Date;
+  },
+) {
+  return await database
+    .updateTable("course_bundles")
+    .set({
+      ...updates,
+      updated_at: updates.updated_at ?? new Date(),
+    })
+    .where("id", "=", bundleId)
+    .where("deleted_at", "is", null)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export async function deleteBundleItems(
+  database: Executor,
+  bundleId: string,
+) {
+  return await database
+    .deleteFrom("course_bundle_items")
+    .where("bundle_id", "=", bundleId)
+    .execute();
+}
+
+export async function softDeleteBundle(
+  database: Executor,
+  bundleId: string,
+) {
+  return await database
+    .updateTable("course_bundles")
+    .set({
+      deleted_at: new Date(),
+      updated_at: new Date(),
+    })
+    .where("id", "=", bundleId)
+    .where("deleted_at", "is", null)
+    .returningAll()
+    .executeTakeFirst();
+}

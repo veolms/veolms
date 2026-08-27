@@ -113,6 +113,30 @@ export const courseBundleSchema = z.strictObject({
 });
 export type CourseBundle = z.infer<typeof courseBundleSchema>;
 
+export const createBundleRequestSchema = z.strictObject({
+  slug: z.string().min(1).max(160),
+  title: z.string().min(1).max(255),
+  description: z.string().max(2000).optional(),
+  thumbnailMediaId: z.uuid().optional(),
+  status: bundleStatusSchema.default("draft"),
+  price: z.number().int().nonnegative(),
+  currency: z.string().length(3).default("INR"),
+  courseIds: z.array(z.uuid()).min(1),
+});
+export type CreateBundleRequest = z.infer<typeof createBundleRequestSchema>;
+
+export const updateBundleRequestSchema = z.strictObject({
+  slug: z.string().min(1).max(160).optional(),
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  thumbnailMediaId: z.uuid().nullable().optional(),
+  status: bundleStatusSchema.optional(),
+  price: z.number().int().nonnegative().optional(),
+  currency: z.string().length(3).optional(),
+  courseIds: z.array(z.uuid()).optional(),
+});
+export type UpdateBundleRequest = z.infer<typeof updateBundleRequestSchema>;
+
 // ============================================================================
 // 3. CART & CART ITEMS
 // ============================================================================
