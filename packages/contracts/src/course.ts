@@ -169,7 +169,7 @@ export const updateCoursePricingRequestSchema = z
   .object({
     pricingType: pricingTypeSchema,
     price: z.number().int().nonnegative(),
-    currency: z.string().min(3).max(3).default("USD"),
+    currency: z.string().min(3).max(3).default("INR"),
     salePrice: z.number().int().nonnegative().nullable().optional(),
     saleStartsAt: z.iso.datetime().nullable().optional(),
     saleEndsAt: z.iso.datetime().nullable().optional(),

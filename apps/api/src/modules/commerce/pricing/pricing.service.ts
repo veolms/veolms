@@ -57,6 +57,9 @@ export function createPricingService({
     let subtotalAmount = 0;
     const itemCourseMap = new Map<string, string[]>(); // itemId -> included course IDs
 
+    let detectedCurrency = "INR";
+    let currencyInitialized = false;
+
     // 2. Authoritatively resolve every item from DB (courses / bundles)
     for (const item of items) {
       if (item.itemType === "course") {
@@ -83,6 +86,16 @@ export function createPricingService({
             (!pricing.sale_ends_at || new Date(pricing.sale_ends_at) >= now);
 
           unitPrice = isSaleActive && pricing.sale_price !== null ? pricing.sale_price : pricing.price;
+
+          const itemCurrency = (pricing as any).currency ?? "INR";
+          if (!currencyInitialized) {
+            detectedCurrency = itemCurrency;
+            currencyInitialized = true;
+          } else if (itemCurrency !== detectedCurrency && unitPrice > 0) {
+            throw CommerceErrors.PRICE_CALCULATION_FAILED(
+              `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
+            );
+          }
         }
 
         calculatedItems.push({
@@ -119,6 +132,16 @@ export function createPricingService({
         }
 
         const unitPrice = bundle.price;
+        const itemCurrency = bundle.currency ?? "INR";
+        if (!currencyInitialized) {
+          detectedCurrency = itemCurrency;
+          currencyInitialized = true;
+        } else if (itemCurrency !== detectedCurrency && unitPrice > 0) {
+          throw CommerceErrors.PRICE_CALCULATION_FAILED(
+            `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
+          );
+        }
+
         calculatedItems.push({
           itemType: "bundle",
           itemId: bundleId,
@@ -250,7 +273,7 @@ export function createPricingService({
       discountAmount: totalDiscount,
       taxAmount: totalTax,
       totalAmount,
-      currency: "INR",
+      currency: detectedCurrency,
       couponCode: couponValidation?.code,
       couponId,
       items: calculatedItems,

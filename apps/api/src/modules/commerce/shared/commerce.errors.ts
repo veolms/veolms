@@ -65,4 +65,6 @@ export const CommerceErrors = {
     new AppError(400, "REFUND_NOT_ALLOWED", `Refund could not be processed: ${reason}`),
   WEBHOOK_SIGNATURE_INVALID: () =>
     new AppError(400, "WEBHOOK_SIGNATURE_INVALID", "Webhook signature verification failed."),
+  PRICE_CALCULATION_FAILED: (reason: string) =>
+    new AppError(400, "PRICE_CALCULATION_FAILED", reason),
 };
