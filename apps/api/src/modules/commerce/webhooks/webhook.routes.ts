@@ -14,10 +14,18 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
     logger: app.log,
   });
   const eventQueue = new BackgroundPaymentEventQueue({
+    database: options.database,
+    paymentGateway: options.services.paymentGateway,
     logger: app.log,
     handler: async (event) => {
       await worker.processPaymentJob(event);
     },
+  });
+
+  eventQueue.start();
+
+  app.addHook("onClose", async () => {
+    eventQueue.stop();
   });
 
   const service = createWebhookService({
