@@ -6,9 +6,8 @@ import { createAccessService } from "../../access/access.service.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
-import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as cartRepo from "../cart/cart.repository.ts";
+import { createCourseAccessService } from "../shared/course-access.service.ts";
 
 export interface FinalizePaymentParams {
   /** Internal payment record id */
@@ -51,6 +50,7 @@ export function createPaymentReconciliationService({
   database: Kysely<Database>;
   accessService?: AccessService;
 }): PaymentReconciliationService {
+  const courseAccessService = createCourseAccessService({ accessService });
   /**
    * Idempotently captures a payment and fulfills the associated order.
    *
@@ -144,59 +144,17 @@ export function createPaymentReconciliationService({
         });
       }
 
-      // 4. Grant access + enroll for every order item
+      // 4. Grant access + enroll for every order item (course + bundle-expanded).
       //    Both access_grants and enrollments use ON CONFLICT DO NOTHING,
       //    providing an additional safety layer on top of the payment gate.
+      //    Single shared owner of this two-table write — see course-access.service.ts.
       const orderItems = await orderRepo.listOrderItems(trx, order.id);
-
-      for (const item of orderItems) {
-        if (item.item_type === "course" && item.course_id) {
-          await accessService.grantAccess(trx, {
-            userId: order.user_id,
-            courseId: item.course_id,
-            orderId: order.id,
-            source: "purchase",
-            validFrom: now,
-          });
-          await enrollmentRepo.insertEnrollment(trx, {
-            id: crypto.randomUUID(),
-            user_id: order.user_id,
-            course_id: item.course_id,
-            order_id: order.id,
-            status: "active",
-            source: "direct_purchase",
-            access_starts_at: now,
-            access_expires_at: null,
-            created_at: now,
-            updated_at: now,
-          });
-          enrolledCourseIds.push(item.course_id);
-        } else if (item.item_type === "bundle" && item.bundle_id) {
-          const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
-          for (const bc of bundleCourses) {
-            await accessService.grantAccess(trx, {
-              userId: order.user_id,
-              courseId: bc.course_id,
-              orderId: order.id,
-              source: "bundle_purchase",
-              validFrom: now,
-            });
-            await enrollmentRepo.insertEnrollment(trx, {
-              id: crypto.randomUUID(),
-              user_id: order.user_id,
-              course_id: bc.course_id,
-              order_id: order.id,
-              status: "active",
-              source: "bundle_purchase",
-              access_starts_at: now,
-              access_expires_at: null,
-              created_at: now,
-              updated_at: now,
-            });
-            enrolledCourseIds.push(bc.course_id);
-          }
-        }
-      }
+      enrolledCourseIds = await courseAccessService.grantAccessForOrder(
+        trx,
+        order,
+        orderItems,
+        now,
+      );
 
       // 5. Clean up purchased items from student's active cart
       await cartRepo.removeItemsFromUserCart(

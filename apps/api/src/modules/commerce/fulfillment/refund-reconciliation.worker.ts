@@ -2,11 +2,9 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
 import type { PaymentGateway } from "@veolms/contracts";
-import { createAccessService } from "../../access/access.service.ts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
-import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import * as bundleRepo from "../bundles/bundle.repository.ts";
+import { createCourseAccessService } from "../shared/course-access.service.ts";
 
 export interface RefundReconciliationWorkerOptions {
   database: Kysely<Database>;
@@ -22,7 +20,7 @@ export function createRefundReconciliationWorker({
   logger,
   staleAfterMinutes = 10,
 }: RefundReconciliationWorkerOptions) {
-  const accessService = createAccessService();
+  const courseAccessService = createCourseAccessService();
 
   /**
    * Polls the gateway for any refunds that have been pending for longer than
@@ -82,21 +80,9 @@ export function createRefundReconciliationWorker({
             });
 
             if (isFullOrderRefund) {
-              await accessService.revokeAccessForOrder(trx, order.id);
-
-              const orderItems = await orderRepo.listOrderItems(trx, order.id);
-              for (const item of orderItems) {
-                const courseIds: string[] = [];
-                if (item.item_type === "course" && item.course_id) {
-                  courseIds.push(item.course_id);
-                } else if (item.item_type === "bundle" && item.bundle_id) {
-                  const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
-                  courseIds.push(...bundleCourses.map((bc) => bc.course_id));
-                }
-                for (const courseId of courseIds) {
-                  await enrollmentRepo.updateEnrollmentStatus(trx, order.user_id, courseId, "revoked");
-                }
-              }
+              // Single shared owner of the access_grants + enrollments
+              // revoke write — see course-access.service.ts.
+              await courseAccessService.revokeAccessForOrder(trx, order);
             }
           });
 

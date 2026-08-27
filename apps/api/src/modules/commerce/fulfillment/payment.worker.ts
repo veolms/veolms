@@ -8,13 +8,12 @@ import { createAccessService, type AccessService } from "../../access/access.ser
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as refundRepo from "../refunds/refund.repository.ts";
-import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
 import * as webhookRepo from "../webhooks/webhook.repository.ts";
 import {
   createPaymentReconciliationService,
 } from "../payments/payment-reconciliation.service.ts";
+import { createCourseAccessService } from "../shared/course-access.service.ts";
 
 export interface PaymentWorkerOptions {
   database: Kysely<Database>;
@@ -45,6 +44,7 @@ export function createPaymentWorker({
   logger,
 }: PaymentWorkerOptions): PaymentWorker {
   const reconciliation = createPaymentReconciliationService({ database, accessService });
+  const courseAccessService = createCourseAccessService({ accessService });
 
   async function processPaymentJob(event: NormalizedPaymentEvent) {
     const log = logger?.child({
@@ -285,21 +285,9 @@ export function createPaymentWorker({
       });
 
       if (isFullRefund) {
-        await accessService.revokeAccessForOrder(trx, order.id);
-
-        const orderItems = await orderRepo.listOrderItems(trx, order.id);
-        for (const item of orderItems) {
-          const courseIds: string[] = [];
-          if (item.item_type === "course" && item.course_id) {
-            courseIds.push(item.course_id);
-          } else if (item.item_type === "bundle" && item.bundle_id) {
-            const bundleCourses = await bundleRepo.listBundleCourses(trx, item.bundle_id);
-            courseIds.push(...bundleCourses.map((bc) => bc.course_id));
-          }
-          for (const courseId of courseIds) {
-            await enrollmentRepo.updateEnrollmentStatus(trx, order.user_id, courseId, "revoked");
-          }
-        }
+        // Single shared owner of the access_grants + enrollments revoke
+        // write — see course-access.service.ts.
+        await courseAccessService.revokeAccessForOrder(trx, order);
       }
     });
 
