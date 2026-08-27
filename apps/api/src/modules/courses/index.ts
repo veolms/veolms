@@ -21,7 +21,12 @@ export * from "./curriculum/curriculum.types.ts";
 export * from "./configuration/configuration.service.ts";
 export * from "./configuration/configuration.controller.ts";
 
+// Includes
+export * from "./includes/includes.service.ts";
+export * from "./includes/includes.controller.ts";
+
 // Lifecycle
 export * from "./lifecycle/lifecycle.service.ts";
 export * from "./lifecycle/lifecycle.controller.ts";
+
 

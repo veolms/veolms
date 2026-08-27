@@ -220,6 +220,26 @@ const courseRoutes: RoutePlugin = async (app, options) => {
     },
     controller.updateCourseBasics,
   );
+
+  app.delete(
+    "/courses/:id",
+    {
+      schema: {
+        operationId: "deleteCourse",
+        tags: ["Course Authoring"],
+        summary: "Soft delete a course",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse("Course deleted", z.object({ success: z.boolean() })),
+          403: errorResponse("Forbidden - not course owner"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.requireCourseAuthor,
+    },
+    controller.deleteCourse,
+  );
 };
 
 export default courseRoutes;
+

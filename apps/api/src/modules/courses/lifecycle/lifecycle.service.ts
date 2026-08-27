@@ -65,13 +65,6 @@ export function createLifecycleService({
       });
     }
 
-    if (!course.category_id) {
-      issues.push({
-        code: "MISSING_CATEGORY",
-        message: "Course must have a category selected.",
-      });
-    }
-
     if (!course.thumbnail_media_id) {
       issues.push({
         code: "MISSING_THUMBNAIL",
@@ -244,6 +237,7 @@ export function createLifecycleService({
       categoryId: course.category_id,
       thumbnailMediaId: course.thumbnail_media_id,
       trailerMediaId: course.trailer_media_id,
+      instructorAlias: course.instructor_alias ?? null,
       version: course.version + 1,
       createdAt: course.created_at.toISOString(),
       updatedAt: now.toISOString(),
@@ -280,6 +274,7 @@ export function createLifecycleService({
       categoryId: course.category_id,
       thumbnailMediaId: course.thumbnail_media_id,
       trailerMediaId: course.trailer_media_id,
+      instructorAlias: course.instructor_alias ?? null,
       version: course.version + 1,
       createdAt: course.created_at.toISOString(),
       updatedAt: now.toISOString(),
