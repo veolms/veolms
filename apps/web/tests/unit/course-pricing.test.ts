@@ -150,8 +150,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         price: 0,
         currency: "USD",
         salePrice: null,
-        saleStartsAt: null,
-        saleEndsAt: null,
       };
 
       const spy = vi.spyOn(coursesService, "upsertPricing").mockResolvedValue(mockPricing);
@@ -161,8 +159,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         price: 0,
         currency: "USD",
         salePrice: null,
-        saleStartsAt: null,
-        saleEndsAt: null,
       };
 
       const result = await coursesService.upsertPricing(courseId, payload);
@@ -172,7 +168,7 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
       expect(result.price).toBe(0);
     });
 
-    it("calls upsertPricing with paid payload including promotion dates", async () => {
+    it("calls upsertPricing with paid payload", async () => {
       const mockPricing: CoursePricing = {
         id: "pricing-2",
         courseId,
@@ -180,8 +176,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         price: 2999,
         currency: "USD",
         salePrice: 1999,
-        saleStartsAt: "2028-09-01T10:00:00.000Z",
-        saleEndsAt: "2028-09-15T18:00:00.000Z",
       };
 
       const spy = vi.spyOn(coursesService, "upsertPricing").mockResolvedValue(mockPricing);
@@ -191,8 +185,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
         price: 2999,
         currency: "USD",
         salePrice: 1999,
-        saleStartsAt: "2028-09-01T10:00:00.000Z",
-        saleEndsAt: "2028-09-15T18:00:00.000Z",
       };
 
       const result = await coursesService.upsertPricing(courseId, payload);
@@ -201,8 +193,6 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
       expect(result.pricingType).toBe("paid");
       expect(result.price).toBe(2999);
       expect(result.salePrice).toBe(1999);
-      expect(result.saleStartsAt).toBe("2028-09-01T10:00:00.000Z");
-      expect(result.saleEndsAt).toBe("2028-09-15T18:00:00.000Z");
     });
   });
 });

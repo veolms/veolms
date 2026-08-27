@@ -72,6 +72,16 @@ export function createLifecycleService({
       });
     }
 
+    if (!course.thumbnail_media_id) {
+      const msg = "Course thumbnail is required.";
+      basicsErrors.push(msg);
+      errors.push({
+        code: "MISSING_THUMBNAIL",
+        message: msg,
+        area: "basics",
+      });
+    }
+
     // 2. Concurrently load curriculum, access rules, pricing, and settings
     const [sections, lessons, accessRules, pricing, settings] =
       await Promise.all([
@@ -224,20 +234,6 @@ export function createLifecycleService({
           area: "accessRules",
         });
       }
-      if (accessRules.duration_type === "custom_expiration") {
-        if (
-          !accessRules.expires_at ||
-          accessRules.expires_at.getTime() <= Date.now()
-        ) {
-          const msg = "Expiration date must be in the future.";
-          accessRulesErrors.push(msg);
-          errors.push({
-            code: "INVALID_EXPIRATION_DATE",
-            message: msg,
-            area: "accessRules",
-          });
-        }
-      }
     }
 
     // 5. Pricing Validation
@@ -267,19 +263,6 @@ export function createLifecycleService({
             pricingErrors.push(msg);
             errors.push({
               code: "INVALID_SALE_PRICE",
-              message: msg,
-              area: "pricing",
-            });
-          }
-        }
-        if (pricing.sale_starts_at && pricing.sale_ends_at) {
-          if (
-            pricing.sale_ends_at.getTime() < pricing.sale_starts_at.getTime()
-          ) {
-            const msg = "Sale end date must be later than sale start date.";
-            pricingErrors.push(msg);
-            errors.push({
-              code: "INVALID_SALE_DATES",
               message: msg,
               area: "pricing",
             });
@@ -418,6 +401,7 @@ export function createLifecycleService({
       categoryId: course.category_id,
       thumbnailMediaId: course.thumbnail_media_id,
       trailerMediaId: course.trailer_media_id,
+      instructorAlias: course.instructor_alias ?? null,
       version: course.version + 1,
       createdAt: course.created_at.toISOString(),
       updatedAt: now.toISOString(),
@@ -454,6 +438,7 @@ export function createLifecycleService({
       categoryId: course.category_id,
       thumbnailMediaId: course.thumbnail_media_id,
       trailerMediaId: course.trailer_media_id,
+      instructorAlias: course.instructor_alias ?? null,
       version: course.version + 1,
       createdAt: course.created_at.toISOString(),
       updatedAt: now.toISOString(),

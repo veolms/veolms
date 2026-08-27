@@ -3182,8 +3182,6 @@ export function CourseCreatePage({
             pricingType: "free",
             price: 0,
             salePrice: null,
-            saleStartsAt: null,
-            saleEndsAt: null,
             currency: pricingDraft.currency || "USD",
           },
         });
@@ -3202,8 +3200,6 @@ export function CourseCreatePage({
             pricingType: "paid",
             price,
             salePrice,
-            saleStartsAt: null,
-            saleEndsAt: null,
             currency: pricingDraft.currency || "USD",
           },
         });

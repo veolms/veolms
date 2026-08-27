@@ -63,8 +63,6 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
           accessType: "everyone",
           durationType: "lifetime",
           durationDays: null,
-          startsAt: null,
-          expiresAt: null,
         } as CourseAccessRule,
         pricing: null,
         settings: {
@@ -72,9 +70,10 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
           courseId: "c1",
           allowQa: true,
           allowComments: true,
-          allowReviews: true,
           allowDownloads: false,
           certificateEnabled: false,
+          showInstructorName: true,
+          language: "en",
         } as CourseSettings,
       };
 
@@ -174,17 +173,16 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
           accessType: "everyone",
           durationType: "lifetime",
           durationDays: null,
-          startsAt: null,
-          expiresAt: null,
         } as CourseAccessRule,
         settings: {
           id: "new-settings-uuid",
           courseId: "c1",
           allowQa: true,
           allowComments: true,
-          allowReviews: true,
           allowDownloads: false,
           certificateEnabled: false,
+          showInstructorName: true,
+          language: "en",
         } as CourseSettings,
       });
 

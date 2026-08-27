@@ -25,8 +25,6 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       accessType: "everyone",
       durationType: "lifetime",
       durationDays: null,
-      startsAt: null,
-      expiresAt: null,
     };
 
     const spy = vi.spyOn(coursesService, "upsertAccessRules").mockResolvedValue(mockRule);
@@ -51,8 +49,6 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       accessType: "everyone",
       durationType: "fixed_duration",
       durationDays: 60,
-      startsAt: null,
-      expiresAt: null,
     };
 
     const spy = vi.spyOn(coursesService, "upsertAccessRules").mockResolvedValue(mockRule);
@@ -70,15 +66,15 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
     expect(result.durationDays).toBe(60);
   });
 
-  it("calls upsertSettings with learner interactions payload (Q&A, Comments, Reviews, Downloads)", async () => {
+  it("calls upsertSettings with learner interactions payload (Q&A, Comments, Downloads)", async () => {
     const mockSettings: CourseSettings = {
       id: "settings-1",
       courseId,
       allowQa: true,
       allowComments: true,
-      allowReviews: true,
       allowDownloads: true,
       certificateEnabled: false,
+      showInstructorName: true,
       language: "en",
       estimatedDuration: null,
     };
@@ -88,14 +84,13 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
     const payload: UpdateCourseSettingsRequest = {
       allowQa: true,
       allowComments: true,
-      allowReviews: true,
       allowDownloads: true,
     };
 
     const result = await coursesService.upsertSettings(courseId, payload);
 
     expect(spy).toHaveBeenCalledWith(courseId, payload);
-    expect(result.allowReviews).toBe(true);
+    expect(result.allowComments).toBe(true);
     expect(result.allowDownloads).toBe(true);
   });
 
@@ -105,9 +100,9 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       courseId,
       allowQa: true,
       allowComments: true,
-      allowReviews: true,
       allowDownloads: false,
       certificateEnabled: true,
+      showInstructorName: true,
       language: "en",
       estimatedDuration: null,
     };

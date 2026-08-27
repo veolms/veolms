@@ -213,9 +213,9 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         language: "fr",
         allowQa: true,
         allowComments: true,
-        allowReviews: true,
         allowDownloads: false,
         certificateEnabled: false,
+        showInstructorName: true,
         estimatedDuration: null,
       };
 

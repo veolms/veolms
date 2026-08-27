@@ -162,9 +162,9 @@ describe("Course Wizard Step 4: Server-Backed Extras State & Coming Soon Separat
         language: "en",
         allowQa: true,
         allowComments: true,
-        allowReviews: true,
         allowDownloads: false,
         certificateEnabled: true,
+        showInstructorName: true,
         estimatedDuration: null,
       };
 

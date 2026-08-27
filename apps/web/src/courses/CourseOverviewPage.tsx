@@ -976,8 +976,6 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
           const activeSale = isCourseSaleActive(
             pr.salePrice,
             pr.price,
-            pr.saleStartsAt,
-            pr.saleEndsAt,
           );
 
           if (activeSale) {

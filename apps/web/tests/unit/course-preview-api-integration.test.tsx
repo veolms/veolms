@@ -41,7 +41,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
         id: "22222222-2222-4222-a222-222222222222",
         courseId: "11111111-1111-4111-a111-111111111111",
         title: "Architecture & Foundations",
-        description: "Core architecture principles",
         position: 0,
         lessons: [
           {
@@ -74,7 +73,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
         id: "22222222-2222-4222-a222-222222222223",
         courseId: "11111111-1111-4111-a111-111111111111",
         title: "Empty Section for Testing",
-        description: null,
         position: 1,
         lessons: [],
       },
@@ -85,8 +83,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       accessType: "everyone",
       durationType: "lifetime",
       durationDays: null,
-      startsAt: null,
-      expiresAt: null,
     },
     pricing: {
       id: "pr-1",
@@ -95,8 +91,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       price: 100,
       currency: "USD",
       salePrice: 80,
-      saleStartsAt: null,
-      saleEndsAt: null,
     },
     settings: {
       id: "set-1",
@@ -105,9 +99,9 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       estimatedDuration: 4,
       allowQa: true,
       allowComments: true,
-      allowReviews: true,
       allowDownloads: true,
       certificateEnabled: true,
+      showInstructorName: true,
     },
   };
 
@@ -236,8 +230,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
         price: 700000,
         currency: "INR",
         salePrice: 500000,
-        saleStartsAt: null,
-        saleEndsAt: null,
       },
     };
 
@@ -293,33 +285,29 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     expect(screen.getByText("20% OFF")).toBeVisible();
   });
 
-  it("respects sale window: inactive when saleEndsAt is in the past", () => {
-    const pastSaleData: CourseEditorDataResponse = {
+  it("respects sale window: inactive when salePrice is invalid or zero", () => {
+    const invalidSaleData: CourseEditorDataResponse = {
       ...mockPreviewData,
       pricing: {
-        id: "pr-expired",
+        id: "pr-invalid",
         courseId: mockPreviewData.course.id,
         pricingType: "paid",
         price: 100,
         currency: "USD",
-        salePrice: 70,
-        saleStartsAt: "2020-01-01T00:00:00.000Z",
-        saleEndsAt: "2020-01-02T00:00:00.000Z", // In the past
+        salePrice: 0,
       },
     };
 
     expect(
       isCourseSaleActive(
-        pastSaleData.pricing?.salePrice,
-        pastSaleData.pricing?.price!,
-        pastSaleData.pricing?.saleStartsAt,
-        pastSaleData.pricing?.saleEndsAt,
+        invalidSaleData.pricing?.salePrice,
+        invalidSaleData.pricing?.price!,
       ),
     ).toBe(false);
 
     render(
       <CourseOverviewPage
-        previewData={pastSaleData}
+        previewData={invalidSaleData}
         categories={mockCategories}
         isReadOnlyPreview={true}
       />,
@@ -327,45 +315,18 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
 
     // Regular price displayed, no discount
     expect(screen.getByText("$100")).toBeVisible();
-    expect(screen.queryByText("$70")).toBeNull();
-    expect(screen.queryByText("30% OFF")).toBeNull();
+    expect(screen.queryByText("0% OFF")).toBeNull();
   });
 
   it("respects sale window: inactive when saleStartsAt is in the future", () => {
-    const futureSaleData: CourseEditorDataResponse = {
-      ...mockPreviewData,
-      pricing: {
-        id: "pr-future",
-        courseId: mockPreviewData.course.id,
-        pricingType: "paid",
-        price: 200,
-        currency: "USD",
-        salePrice: 150,
-        saleStartsAt: "2099-01-01T00:00:00.000Z", // In the future
-        saleEndsAt: "2099-01-10T00:00:00.000Z",
-      },
-    };
-
     expect(
       isCourseSaleActive(
-        futureSaleData.pricing?.salePrice,
-        futureSaleData.pricing?.price!,
-        futureSaleData.pricing?.saleStartsAt,
-        futureSaleData.pricing?.saleEndsAt,
+        150,
+        200,
+        "2099-01-01T00:00:00.000Z",
+        "2099-01-10T00:00:00.000Z",
       ),
     ).toBe(false);
-
-    render(
-      <CourseOverviewPage
-        previewData={futureSaleData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
-
-    expect(screen.getByText("$200")).toBeVisible();
-    expect(screen.queryByText("$150")).toBeNull();
-    expect(screen.queryByText("25% OFF")).toBeNull();
   });
 
   it("renders server access rules: lifetime access", () => {
@@ -389,8 +350,6 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
         accessType: "everyone",
         durationType: "fixed_duration",
         durationDays: 30,
-        startsAt: null,
-        expiresAt: null,
       },
     };
 

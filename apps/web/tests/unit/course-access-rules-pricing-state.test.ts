@@ -106,8 +106,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         accessType: "everyone",
         durationType: "fixed_duration",
         durationDays: 180,
-        startsAt: null,
-        expiresAt: null,
       };
 
       const mockSettingsRes: CourseSettings = {
@@ -116,9 +114,9 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         language: "en",
         allowQa: true,
         allowComments: true,
-        allowReviews: true,
         allowDownloads: true,
         certificateEnabled: false,
+        showInstructorName: true,
         estimatedDuration: null,
       };
 
@@ -274,8 +272,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         price: 2999,
         salePrice: 1499,
-        saleStartsAt: null,
-        saleEndsAt: null,
         currency: "USD",
       };
 
@@ -287,8 +283,6 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         price: 2999,
         salePrice: 1499,
-        saleStartsAt: null,
-        saleEndsAt: null,
         currency: "USD",
       });
 
