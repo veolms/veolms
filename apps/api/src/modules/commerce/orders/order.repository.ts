@@ -52,6 +52,19 @@ export async function listOrderItems(database: Executor, orderId: string) {
     .execute();
 }
 
+export async function listOrderItemsByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("order_items")
+    .selectAll()
+    .where("order_id", "in", orderIds)
+    .orderBy("created_at", "asc")
+    .execute();
+}
+
 export async function insertOrder(
   database: Executor,
   values: {

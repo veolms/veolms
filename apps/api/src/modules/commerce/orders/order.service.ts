@@ -55,11 +55,22 @@ export function createOrderService({
 
   async function listUserOrders(userId: string): Promise<Order[]> {
     const orders = await orderRepo.listOrdersByUserId(database, userId);
-    const result: Order[] = [];
+    if (orders.length === 0) return [];
 
-    for (const order of orders) {
-      const items = await orderRepo.listOrderItems(database, order.id);
-      result.push({
+    const orderIds = orders.map((o) => o.id);
+    const allItems = await orderRepo.listOrderItemsByOrderIds(database, orderIds);
+
+    // Group items by order_id in memory
+    const itemsByOrderId = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByOrderId.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrderId.set(item.order_id, list);
+    }
+
+    return orders.map((order) => {
+      const items = itemsByOrderId.get(order.id) ?? [];
+      return {
         id: order.id,
         orderNumber: order.order_number,
         userId: order.user_id,
@@ -88,10 +99,8 @@ export function createOrderService({
         paidAt: order.paid_at,
         createdAt: order.created_at,
         updatedAt: order.updated_at,
-      });
-    }
-
-    return result;
+      };
+    });
   }
 
   return {
