@@ -1,39 +1,16 @@
+import type { Invoice } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
 
-export interface InvoiceData {
-  invoiceNumber: string;
-  orderNumber: string;
-  purchaseId: string;
-  buyer: {
-    userId: string;
-    name: string;
-    email?: string | null;
-  };
-  seller: {
-    name: string;
-  };
-  currency: string;
-  subtotalAmount: number;
-  discountAmount: number;
-  taxAmount: number;
-  totalAmount: number;
-  paymentReference: string;
-  items: Array<{
-    title: string;
-    unitPrice: number;
-    discountAmount: number;
-    finalAmount: number;
-  }>;
-  paidAt: Date | null;
-  createdAt: Date;
-}
-
 export interface InvoiceService {
-  generateInvoiceData(orderId: string): Promise<InvoiceData>;
+  generateInvoiceData(
+    userId: string,
+    orderId: string,
+    isAdmin?: boolean,
+  ): Promise<Invoice>;
 }
 
 export function createInvoiceService({
@@ -41,9 +18,13 @@ export function createInvoiceService({
 }: {
   database: Executor;
 }): InvoiceService {
-  async function generateInvoiceData(orderId: string): Promise<InvoiceData> {
+  async function generateInvoiceData(
+    userId: string,
+    orderId: string,
+    isAdmin = false,
+  ): Promise<Invoice> {
     const order = await orderRepo.findOrderById(database, orderId);
-    if (!order) {
+    if (!order || (!isAdmin && order.user_id !== userId)) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
 

@@ -338,6 +338,42 @@ export const orderSchema = purchaseSchema;
 export type Order = Purchase;
 
 // ============================================================================
+// 6.1 INVOICES
+// ============================================================================
+
+export const invoiceItemSchema = z.strictObject({
+  title: z.string(),
+  unitPrice: z.number().int().nonnegative(),
+  discountAmount: z.number().int().nonnegative(),
+  finalAmount: z.number().int().nonnegative(),
+});
+export type InvoiceItem = z.infer<typeof invoiceItemSchema>;
+
+export const invoiceSchema = z.strictObject({
+  invoiceNumber: z.string(),
+  orderNumber: z.string(),
+  purchaseId: z.uuid(),
+  buyer: z.strictObject({
+    userId: z.uuid(),
+    name: z.string(),
+    email: z.string().nullable().optional(),
+  }),
+  seller: z.strictObject({
+    name: z.string(),
+  }),
+  currency: z.string().length(3),
+  subtotalAmount: z.number().int().nonnegative(),
+  discountAmount: z.number().int().nonnegative(),
+  taxAmount: z.number().int().nonnegative(),
+  totalAmount: z.number().int().nonnegative(),
+  paymentReference: z.string(),
+  items: z.array(invoiceItemSchema),
+  paidAt: z.string().or(z.date()).nullable().optional(),
+  createdAt: z.string().or(z.date()),
+});
+export type Invoice = z.infer<typeof invoiceSchema>;
+
+// ============================================================================
 // 7. CHECKOUT REQUESTS & RESPONSES
 // ============================================================================
 

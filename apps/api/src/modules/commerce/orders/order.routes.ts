@@ -1,16 +1,18 @@
 import { z } from "zod";
-import { orderSchema } from "@veolms/contracts";
+import { orderSchema, invoiceSchema } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createOrderService } from "./order.service.ts";
+import { createInvoiceService } from "../invoices/invoice.service.ts";
 import { createOrderController } from "./order.controller.ts";
 
 const orderRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
   const service = createOrderService({ database: options.database });
-  const controller = createOrderController({ service });
+  const invoiceService = createInvoiceService({ database: options.database });
+  const controller = createOrderController({ service, invoiceService });
 
   // 1. GET /orders - List authenticated student orders
   app.get(
@@ -50,6 +52,27 @@ const orderRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getOrder,
+  );
+
+  // 3. GET /orders/:orderId/invoice - Get order invoice receipt
+  app.get(
+    "/orders/:orderId/invoice",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "getOrderInvoice",
+        tags: ["Commerce - Orders"],
+        summary: "Get order invoice details",
+        description: "Returns full invoice receipt data for an owned or admin-inspected order.",
+        params: z.object({ orderId: z.uuid() }),
+        response: {
+          200: jsonResponse("Order invoice data", invoiceSchema),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Order not found"),
+        },
+      },
+    },
+    controller.getInvoice,
   );
 };
 
