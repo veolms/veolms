@@ -9,20 +9,35 @@ import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { TextBIcon as TextB } from "@phosphor-icons/react/TextB";
 import { TextItalicIcon as TextItalic } from "@phosphor-icons/react/TextItalic";
 import { useEditorState } from "@tiptap/react";
-import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { insertCommentAttachment } from "./commentAttachments";
 
 interface CommentFormattingToolbarProps {
   editor: Editor;
 }
 
+export function hasCommentToolbarOverflow(
+  scrollWidth: number,
+  clientWidth: number,
+) {
+  return scrollWidth > clientWidth + 1;
+}
+
 export function CommentFormattingToolbar({
   editor,
 }: CommentFormattingToolbarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const scrollportRef = useRef<HTMLDivElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const formattingState = useEditorState({
     editor,
     selector: ({ editor: currentEditor }) => ({
@@ -70,8 +85,38 @@ export function CommentFormattingToolbar({
     setNotice(result.message);
   };
 
+  useEffect(() => {
+    const scrollport = scrollportRef.current;
+    if (!scrollport) return;
+
+    const updateOverflow = () => {
+      setHasHorizontalOverflow(
+        hasCommentToolbarOverflow(
+          scrollport.scrollWidth,
+          scrollport.clientWidth,
+        ),
+      );
+    };
+
+    updateOverflow();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateOverflow);
+    resizeObserver?.observe(scrollport);
+    window.addEventListener("resize", updateOverflow);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateOverflow);
+    };
+  }, []);
+
   return (
-    <div data-comment-formatting-toolbar className="relative min-w-0 flex-1">
+    <div
+      data-comment-formatting-toolbar
+      className="relative -my-2.5 flex min-w-0 flex-1 self-stretch items-center"
+    >
       {linkOpen && (
         <form
           aria-label="Edit link"
@@ -125,13 +170,21 @@ export function CommentFormattingToolbar({
         </div>
       )}
 
+      <span
+        data-comment-toolbar-separator="leading"
+        aria-hidden="true"
+        className="h-6 w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+      />
+
       <div
+        ref={scrollportRef}
         role="toolbar"
         aria-label="Comment formatting"
-        className="flex max-w-full items-center gap-0.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="learning-comment-formatting-scrollport flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
       >
         <ToolbarButton
           label="Undo"
+          mobileOnly
           disabled={!formattingState.canUndo}
           onClick={() => editor.chain().focus().undo().run()}
         >
@@ -139,12 +192,12 @@ export function CommentFormattingToolbar({
         </ToolbarButton>
         <ToolbarButton
           label="Redo"
+          mobileOnly
           disabled={!formattingState.canRedo}
           onClick={() => editor.chain().focus().redo().run()}
         >
           <ArrowClockwise size={17} />
         </ToolbarButton>
-        <ToolbarDivider />
         <ToolbarButton
           label="Highlight"
           active={formattingState.highlight}
@@ -165,7 +218,6 @@ export function CommentFormattingToolbar({
         >
           <Paperclip size={17} />
         </ToolbarButton>
-        <ToolbarDivider />
         <ToolbarButton
           label="Bold"
           active={formattingState.bold}
@@ -196,6 +248,14 @@ export function CommentFormattingToolbar({
         </ToolbarButton>
       </div>
 
+      {hasHorizontalOverflow && (
+        <span
+          data-comment-toolbar-separator="trailing"
+          aria-hidden="true"
+          className="h-6 w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+        />
+      )}
+
       <input
         ref={attachmentInputRef}
         type="file"
@@ -212,6 +272,7 @@ interface ToolbarButtonProps {
   label: string;
   active?: boolean;
   disabled?: boolean;
+  mobileOnly?: boolean;
   onClick: () => void;
   children: ReactNode;
 }
@@ -220,6 +281,7 @@ function ToolbarButton({
   label,
   active = false,
   disabled = false,
+  mobileOnly = false,
   onClick,
   children,
 }: ToolbarButtonProps) {
@@ -230,21 +292,12 @@ function ToolbarButton({
       aria-label={label}
       aria-pressed={active}
       disabled={disabled}
-      className={`grid size-8 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-35 ${active ? "bg-(--accent-soft) text-(--accent-ink,var(--accent))" : "text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"}`}
+      className={`size-8 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-35 ${mobileOnly ? "grid sm:hidden" : "grid"} ${active ? "bg-(--accent-soft) text-(--accent-ink,var(--accent))" : "text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"}`}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
       {children}
     </button>
-  );
-}
-
-function ToolbarDivider() {
-  return (
-    <span
-      aria-hidden="true"
-      className="mx-0.5 h-5 w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-    />
   );
 }
 

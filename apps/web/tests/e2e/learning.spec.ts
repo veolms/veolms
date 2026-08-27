@@ -935,6 +935,85 @@ test("tablet player control opens a translucent floating course drawer", async (
   await expect(toggle).toBeHidden();
 });
 
+test("tablet curriculum scrollbar stays on the floating drawer edge", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 679, height: 779 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("veolms-hide-scrollbars", "false");
+    window.localStorage.setItem("veolms-scrollbar-style", "theme");
+    window.localStorage.setItem("veolms-floating-curriculum-width", "300");
+  });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  await toggle.click({ force: true });
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const curriculumScrollbar = page.locator(
+    '.floating-scrollbar[aria-controls="lesson-drawer-curriculum-scrollport"]',
+  );
+  await expect(dialog).toBeVisible();
+  await expect(curriculumScrollbar).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const [dialogBounds, scrollbarBounds, viewportWidth] = await Promise.all([
+        dialog.boundingBox(),
+        curriculumScrollbar.boundingBox(),
+        page.evaluate(() => window.innerWidth),
+      ]);
+      if (!dialogBounds || !scrollbarBounds) return Number.POSITIVE_INFINITY;
+      const visibleDialogRight = Math.min(
+        viewportWidth,
+        dialogBounds.x + dialogBounds.width,
+      );
+      return Math.abs(
+        visibleDialogRight - (scrollbarBounds.x + scrollbarBounds.width),
+      );
+    })
+    .toBeLessThanOrEqual(0.5);
+});
+
+test("tablet curriculum resize rail can drag the floating drawer closed", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 800, height: 779 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("veolms-floating-curriculum-width", "300");
+  });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  await toggle.click({ force: true });
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const resizeRail = page.getByRole("separator", {
+    name: "Resize floating course curriculum",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(resizeRail).toBeVisible();
+
+  const railBounds = await resizeRail.boundingBox();
+  expect(railBounds).not.toBeNull();
+  const startX = railBounds!.x + railBounds!.width / 2;
+  const startY = railBounds!.y + railBounds!.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 180, startY, { steps: 6 });
+  await expect
+    .poll(async () => (await dialog.boundingBox())?.width ?? Infinity)
+    .toBeLessThanOrEqual(150);
+  await page.mouse.up();
+
+  await expect(dialog).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
 test("course drawer stays closed when a resize exits the compact workspace", async ({
   page,
 }) => {

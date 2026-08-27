@@ -227,6 +227,12 @@ const isDiscussionVisibility = (
 ): value is DiscussionVisibility =>
   value === "public" || value === "private" || value === "unlisted";
 
+const getAllowedVisibility = (
+  entryKind: DiscussionEntryKind,
+  visibility: DiscussionVisibility,
+): DiscussionVisibility =>
+  entryKind === "note" || visibility !== "private" ? visibility : "public";
+
 const isStoredEntries = (value: unknown): value is Comment[] =>
   Array.isArray(value) &&
   value.every(
@@ -368,6 +374,10 @@ export function Discussion({
     if (!draftHasContent) return;
 
     const text = activeDraft.text.trim();
+    const submittedVisibility = getAllowedVisibility(
+      activeEntryKind,
+      activeVisibility,
+    );
 
     if (editingEntry) {
       const originalEntry = entries.find(
@@ -382,7 +392,7 @@ export function Discussion({
         ...originalEntry,
         text,
         content: activeDraft.content,
-        visibility: activeVisibility,
+        visibility: submittedVisibility,
         entryKind: activeEntryKind,
         isQuestion: activeEntryKind === "question",
         time: "Just now (edited)",
@@ -411,7 +421,7 @@ export function Discussion({
       avatar: CURRENT_USER.avatar,
       text,
       content: activeDraft.content,
-      visibility: activeVisibility,
+      visibility: submittedVisibility,
       entryKind: activeEntryKind,
       likes: 0,
       replies: 0,
@@ -453,7 +463,10 @@ export function Discussion({
         text: entry.text,
       },
       entryKind,
-      visibility: entry.visibility ?? "public",
+      visibility: getAllowedVisibility(
+        entryKind,
+        entry.visibility ?? "public",
+      ),
     });
     setNotice("");
   };
@@ -499,19 +512,35 @@ export function Discussion({
         onEntryKindChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
-              current ? { ...current, entryKind: value } : current,
+              current
+                ? {
+                    ...current,
+                    entryKind: value,
+                    visibility: getAllowedVisibility(
+                      value,
+                      current.visibility,
+                    ),
+                  }
+                : current,
             );
           } else {
             setEntryKind(value);
+            setVisibility((current) => getAllowedVisibility(value, current));
           }
         }}
         onVisibilityChange={(value) => {
+          const allowedVisibility = getAllowedVisibility(
+            activeEntryKind,
+            value,
+          );
           if (editingEntry) {
             setEditingEntry((current) =>
-              current ? { ...current, visibility: value } : current,
+              current
+                ? { ...current, visibility: allowedVisibility }
+                : current,
             );
           } else {
-            setVisibility(value);
+            setVisibility(allowedVisibility);
           }
         }}
         onSubmit={submitEntry}

@@ -58,6 +58,8 @@ const CURRICULUM_MIN_WIDTH = 300;
 const CURRICULUM_DEFAULT_WIDTH = 400;
 const CURRICULUM_MAX_WIDTH = 560;
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
+const FLOATING_LESSON_DRAWER_SNAP_WIDTH =
+  LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
 const LESSON_DRAWER_FALLBACK_SNAP_POINT = 0.72;
 const CURRICULUM_SWIPE_ACTIVATION_DISTANCE = 12;
 const CURRICULUM_SWIPE_DIRECTION_RATIO = 1.2;
@@ -195,6 +197,7 @@ interface FloatingLessonDrawerResize {
   startWidth: number;
   originalWidth: number;
   previewWidth: number;
+  dismissOnEnd: boolean;
   handle: HTMLElement;
 }
 
@@ -284,6 +287,7 @@ export function LearningWorkspace({
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
   const curriculumScrollportRef = useRef<HTMLElement>(null);
+  const lessonDrawerSurfaceRef = useRef<HTMLDivElement>(null);
   const lessonDrawerScrollportRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const lessonDrawerSkipFinalFocusRef = useRef(false);
@@ -543,7 +547,6 @@ export function LearningWorkspace({
   const closeLessonDrawer = useCallback(() => {
     setLessonDrawer(false);
     setLessonDrawerForcedFloating(false);
-    setLessonDrawerViewportBounds(null);
   }, []);
 
   const openFloatingLessonDrawer = useCallback(() => {
@@ -900,12 +903,27 @@ export function LearningWorkspace({
   }, []);
 
   const previewFloatingLessonDrawerWidth = useCallback(
-    (value: number) => {
-      const bounds = getLessonDrawerViewportBounds(value);
+    (value: number, allowCollapsePreview = false) => {
+      const bounds = getLessonDrawerViewportBounds(
+        Math.max(LESSON_DRAWER_MIN_FLOATING_WIDTH, value),
+      );
       if (!bounds) return null;
-      setFloatingLessonDrawerWidth(bounds.width);
-      setLessonDrawerViewportBounds(bounds);
-      return bounds.width;
+      const previewWidth = allowCollapsePreview
+        ? Math.max(0, Math.min(bounds.width, value))
+        : bounds.width;
+      const previewBounds =
+        previewWidth < bounds.width
+          ? {
+              ...bounds,
+              left: bounds.left + bounds.width - previewWidth,
+              width: previewWidth,
+            }
+          : bounds;
+      if (!allowCollapsePreview) {
+        setFloatingLessonDrawerWidth(previewBounds.width);
+      }
+      setLessonDrawerViewportBounds(previewBounds);
+      return previewBounds.width;
     },
     [getLessonDrawerViewportBounds],
   );
@@ -941,6 +959,7 @@ export function LearningWorkspace({
       startWidth,
       originalWidth: startWidth,
       previewWidth: startWidth,
+      dismissOnEnd: false,
       handle: event.currentTarget,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -951,10 +970,17 @@ export function LearningWorkspace({
     (event: CurriculumPointerEvent) => {
       const resize = floatingLessonDrawerResizeRef.current;
       if (!resize || resize.pointerId !== event.pointerId) return;
+      const requestedWidth =
+        resize.startWidth + resize.startX - event.clientX;
       const nextWidth = previewFloatingLessonDrawerWidth(
-        resize.startWidth + resize.startX - event.clientX,
+        requestedWidth,
+        true,
       );
-      if (nextWidth !== null) resize.previewWidth = nextWidth;
+      if (nextWidth !== null) {
+        resize.previewWidth = nextWidth;
+        resize.dismissOnEnd =
+          requestedWidth <= FLOATING_LESSON_DRAWER_SNAP_WIDTH;
+      }
     },
     [previewFloatingLessonDrawerWidth],
   );
@@ -970,9 +996,17 @@ export function LearningWorkspace({
         previewFloatingLessonDrawerWidth(resize.originalWidth);
         return;
       }
+      if (resize.dismissOnEnd) {
+        closeLessonDrawer();
+        return;
+      }
       commitFloatingLessonDrawerWidth(resize.previewWidth);
     },
-    [commitFloatingLessonDrawerWidth, previewFloatingLessonDrawerWidth],
+    [
+      closeLessonDrawer,
+      commitFloatingLessonDrawerWidth,
+      previewFloatingLessonDrawerWidth,
+    ],
   );
 
   useEffect(() => {
@@ -1006,7 +1040,7 @@ export function LearningWorkspace({
       commitFloatingLessonDrawerWidth(floatingLessonDrawerWidth + direction);
     } else if (event.key === "Home") {
       event.preventDefault();
-      commitFloatingLessonDrawerWidth(LESSON_DRAWER_MIN_FLOATING_WIDTH);
+      closeLessonDrawer();
     } else if (event.key === "End") {
       event.preventDefault();
       commitFloatingLessonDrawerWidth(LESSON_DRAWER_MAX_FLOATING_WIDTH);
@@ -1256,6 +1290,11 @@ export function LearningWorkspace({
     courseContentDrawerViewport || lessonDrawerForcedFloating
       ? lessonDrawer
       : !curriculumCollapsed;
+  const floatingLessonDrawerViewportWidth =
+    lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth;
+  const floatingLessonDrawerSlidingClosed =
+    floatingLessonDrawerResizing &&
+    floatingLessonDrawerViewportWidth < LESSON_DRAWER_MIN_FLOATING_WIDTH;
 
   return (
     <div
@@ -1429,8 +1468,11 @@ export function LearningWorkspace({
           else closeLessonDrawer();
         }}
         onOpenChangeComplete={(open) => {
-          if (!open && phoneLessonDrawer)
-            setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
+          if (!open) {
+            setLessonDrawerViewportBounds(null);
+            if (phoneLessonDrawer)
+              setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
+          }
         }}
         snapPoints={phoneLessonDrawer ? lessonDrawerSnapPoints : undefined}
         snapPoint={phoneLessonDrawer ? lessonDrawerSnapPoint : undefined}
@@ -1444,6 +1486,7 @@ export function LearningWorkspace({
         triggerId="learning-course-content-trigger"
       >
         <DrawerContent
+          ref={lessonDrawerSurfaceRef}
           aria-label="Course lessons"
           initialFocus
           finalFocus={() => {
@@ -1501,9 +1544,20 @@ export function LearningWorkspace({
               aria-valuemin={LESSON_DRAWER_MIN_FLOATING_WIDTH}
               aria-valuemax={LESSON_DRAWER_MAX_FLOATING_WIDTH}
               aria-valuenow={Math.round(
-                lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth,
+                Math.max(
+                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
+                  floatingLessonDrawerViewportWidth,
+                ),
               )}
-              title="Resize floating course content"
+              aria-valuetext={`${Math.round(
+                Math.max(
+                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
+                  floatingLessonDrawerViewportWidth,
+                ),
+              )} pixels wide${
+                floatingLessonDrawerSlidingClosed ? ", sliding closed" : ""
+              }`}
+              title="Resize or close floating course content"
               tabIndex={0}
               onKeyDown={handleFloatingLessonDrawerResizeKeyDown}
               onPointerDown={startFloatingLessonDrawerResize}
@@ -1542,6 +1596,7 @@ export function LearningWorkspace({
       </Drawer>
       <FloatingScrollbar
         scrollportRef={lessonDrawerScrollportRef}
+        rightEdgeRef={lessonDrawerSurfaceRef}
         ariaControls="lesson-drawer-curriculum-scrollport"
         ariaLabel="Course curriculum scroll position"
         className="floating-scrollbar--curriculum floating-scrollbar--drawer"

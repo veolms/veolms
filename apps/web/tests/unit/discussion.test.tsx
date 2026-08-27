@@ -8,6 +8,7 @@ import {
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CommentCard } from "../../src/learning/CommentCard.tsx";
+import { hasCommentToolbarOverflow } from "../../src/learning/CommentFormattingToolbar.tsx";
 import {
   Discussion,
   getDiscussionComposerViewportGeometry,
@@ -221,6 +222,14 @@ describe("CommentCard", () => {
   });
 });
 
+describe("comment formatting toolbar", () => {
+  it("shows the trailing separator only for meaningful horizontal overflow", () => {
+    expect(hasCommentToolbarOverflow(320, 320)).toBe(false);
+    expect(hasCommentToolbarOverflow(321, 320)).toBe(false);
+    expect(hasCommentToolbarOverflow(322, 320)).toBe(true);
+  });
+});
+
 describe("discussion composer viewport geometry", () => {
   it("keeps the drawer between the player and an Android on-screen keyboard", () => {
     expect(getDiscussionComposerViewportGeometry(779, 430, 0, 250)).toEqual({
@@ -417,22 +426,17 @@ describe("Discussion", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Choose image or video")).toBeInTheDocument();
 
-    const postType = screen.getByRole("button", {
-      name: "Post type: Comment",
-    });
-    expect(postType).toHaveAttribute("data-compact-mobile", "true");
     expect(
-      screen.getByRole("button", { name: "Visibility: Public" }),
-    ).toHaveAttribute("data-compact-mobile", "true");
-
-    fireEvent.click(postType);
-    const postTypeMenu = await screen.findByRole("listbox", {
-      name: "Post type",
-    });
-    fireEvent.keyDown(postTypeMenu, { key: "Escape" });
+      screen.queryByRole("button", { name: /Post type:/ }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("textbox", { name: "Write a comment" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Visibility:/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Next: choose publishing options",
+      }),
+    ).toBeDisabled();
 
     fireEvent.click(
       within(toolbar).getByRole("button", { name: "Add or edit link" }),
@@ -520,15 +524,28 @@ describe("Discussion", () => {
         '[data-comment-composer-surface] img[alt="Editable diagram"]',
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Visibility: Unlisted" }),
-    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: choose publishing options",
+      }),
+    );
+    expect(screen.getByRole("radio", { name: "Unlisted" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Comment" })).toBeChecked();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
     expect(
       container.querySelector("[data-comment-composer-surface] textarea"),
     ).toBeNull();
 
-    fireEvent.keyDown(editor, { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("group", { name: "Visibility" }), {
+      key: "Escape",
+    });
+    expect(
+      screen.getByRole("textbox", { name: "Edit comment" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Edit comment" }), {
+      key: "Escape",
+    });
     await waitFor(() => {
       expect(
         screen.queryByRole("textbox", { name: "Edit comment" }),
@@ -549,6 +566,11 @@ describe("Discussion", () => {
       { name: "Edit comment" },
       { timeout: 1_500 },
     );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: choose publishing options",
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
@@ -565,7 +587,7 @@ describe("Discussion", () => {
     expect(screen.getByText("Unfinished new comment")).toBeVisible();
   });
 
-  it("keeps Post disabled for an empty draft and enables attachment-only posts", async () => {
+  it("keeps Next disabled for an empty draft and allows attachment-only posts after review", async () => {
     const { container } = render(
       <Discussion persistenceKey="discussion-attachment-only-test" />,
     );
@@ -576,8 +598,10 @@ describe("Discussion", () => {
     if (!openComposer) throw new Error("Expected the compact composer trigger");
     fireEvent.click(openComposer);
 
-    const post = await screen.findByRole("button", { name: "Post" });
-    expect(post).toBeDisabled();
+    const next = await screen.findByRole("button", {
+      name: "Next: choose publishing options",
+    });
+    expect(next).toBeDisabled();
     expect(screen.queryByText("Write a comment before posting.")).toBeNull();
 
     const file = new File(["image-data"], "diagram.png", {
@@ -587,8 +611,68 @@ describe("Discussion", () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(post).toBeEnabled());
-    fireEvent.click(post);
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    const postAsGroup = screen.getByRole("group", { name: "Post as" });
+    const visibilityGroup = screen.getByRole("group", { name: "Visibility" });
+    expect(postAsGroup.compareDocumentPosition(visibilityGroup)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.queryByText("Choose how to share")).not.toBeInTheDocument();
+    const publicVisibility = screen.getByRole("radio", { name: "Public" });
+    expect(publicVisibility).toBeChecked();
+    const publicTooltipId = publicVisibility.getAttribute("aria-describedby");
+    expect(publicTooltipId).toBeTruthy();
+    expect(document.getElementById(publicTooltipId ?? "")).toHaveTextContent(
+      "Everyone can see it.",
+    );
+    expect(
+      screen.getByRole("tooltip", { name: "Everyone can see it." }),
+    ).toBeInTheDocument();
+    expect(publicVisibility.closest("label")).toHaveClass(
+      "has-[:focus-visible]:outline-2",
+    );
+    expect(publicVisibility.closest("label")).not.toHaveClass(
+      "focus-within:outline-2",
+    );
+    const unlistedVisibility = screen.getByRole("radio", { name: "Unlisted" });
+    const unlistedTooltipId = unlistedVisibility.getAttribute("aria-describedby");
+    expect(unlistedTooltipId).toBeTruthy();
+    expect(document.getElementById(unlistedTooltipId ?? "")).toHaveTextContent(
+      "Only the creator and people with the link can see it.",
+    );
+    const commentKind = screen.getByRole("radio", { name: "Comment" });
+    expect(commentKind).toBeChecked();
+    expect(commentKind.closest("label")).toHaveClass(
+      "has-[:focus-visible]:outline-2",
+    );
+    expect(commentKind.closest("label")).not.toHaveClass(
+      "focus-within:outline-2",
+    );
+    expect(screen.queryByRole("radio", { name: "Private" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Q&A" }));
+    expect(screen.queryByRole("radio", { name: "Private" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Note" }));
+    const privateVisibility = screen.getByRole("radio", { name: "Private" });
+    expect(privateVisibility).toBeVisible();
+    fireEvent.click(privateVisibility);
+    expect(privateVisibility).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Q&A" }));
+    expect(screen.queryByRole("radio", { name: "Private" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "Public" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      screen.getByRole("textbox", { name: "Write a Q&A" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: choose publishing options",
+      }),
+    );
+    expect(screen.queryByRole("radio", { name: "Private" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "Public" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Q&A" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Post Q&A" }));
 
     await waitFor(() => {
       expect(
@@ -636,7 +720,11 @@ describe("Discussion", () => {
         container.querySelector('img[alt="clipboard.png"]'),
       ).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Next: choose publishing options",
+      }),
+    ).toBeEnabled();
   });
 
   it("keeps the attachment control in the mobile footer without duplicating it over the editor", async () => {
@@ -662,6 +750,49 @@ describe("Discussion", () => {
 
       const toolbar = await screen.findByRole("toolbar", {
         name: "Comment formatting",
+      });
+      expect(toolbar).toHaveClass(
+        "learning-comment-formatting-scrollport",
+        "h-full",
+        "min-w-0",
+        "flex-1",
+        "overflow-x-auto",
+      );
+      expect(toolbar.parentElement).toHaveClass(
+        "-my-2.5",
+        "flex",
+        "self-stretch",
+      );
+      expect(
+        within(toolbar).getByRole("button", { name: "Undo" }),
+      ).toHaveClass("sm:hidden");
+      expect(
+        within(toolbar).getByRole("button", { name: "Redo" }),
+      ).toHaveClass("sm:hidden");
+      const formattingGroup = toolbar.closest(
+        "[data-comment-formatting-toolbar]",
+      );
+      expect(
+        formattingGroup?.querySelectorAll(
+          '[data-comment-toolbar-separator="leading"]',
+        ),
+      ).toHaveLength(1);
+      expect(
+        formattingGroup?.querySelector(
+          '[data-comment-toolbar-separator="trailing"]',
+        ),
+      ).toBeNull();
+      Object.defineProperties(toolbar, {
+        clientWidth: { configurable: true, value: 120 },
+        scrollWidth: { configurable: true, value: 280 },
+      });
+      window.dispatchEvent(new Event("resize"));
+      await waitFor(() => {
+        expect(
+          formattingGroup?.querySelector(
+            '[data-comment-toolbar-separator="trailing"]',
+          ),
+        ).toBeInTheDocument();
       });
       expect(
         within(toolbar).getByRole("button", {
@@ -696,7 +827,9 @@ describe("Discussion", () => {
         throw new Error("Expected the compact composer trigger");
       fireEvent.click(openComposer);
 
-      const post = await screen.findByRole("button", { name: "Post" });
+      const next = await screen.findByRole("button", {
+        name: "Next: choose publishing options",
+      });
       const file = new File(["video-data"], "demo.mp4", {
         type: "video/mp4",
       });
@@ -704,8 +837,9 @@ describe("Discussion", () => {
         target: { files: [file] },
       });
 
-      await waitFor(() => expect(post).toBeEnabled());
-      fireEvent.click(post);
+      await waitFor(() => expect(next).toBeEnabled());
+      fireEvent.click(next);
+      fireEvent.click(screen.getByRole("button", { name: "Post comment" }));
       await waitFor(() => {
         expect(
           container.querySelector('video[src="blob:discussion-video"]'),

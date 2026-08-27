@@ -1378,6 +1378,17 @@
 }
 
 /* Compact TipTap composer and read-only rich discussion content. */
+.learning-comment-formatting-scrollport {
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+
+.learning-comment-formatting-scrollport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 .learning-comment-editor__document,
 .learning-rich-text-document {
   width: 100%;
