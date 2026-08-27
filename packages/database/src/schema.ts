@@ -1,4 +1,4 @@
-import type { Generated } from "kysely";
+import type { Generated, Kysely, Transaction } from "kysely";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type OtpIdentifierType = "email" | "phone";
@@ -593,5 +593,18 @@ export interface Database {
 
 export type PurchaseTable = OrderTable;
 export type PurchaseItemTable = OrderItemTable;
+
+/**
+ * A query runner over the whole `Database` schema — either the top-level
+ * connection or a `Kysely<Database>.transaction()` context. Repository
+ * functions that need to compose inside a caller's transaction (e.g.
+ * commerce services calling into courses' repositories from within a
+ * checkout transaction) should accept this instead of a bare
+ * `Kysely<Database>`, so callers can pass a `Transaction<Database>` without
+ * an `as any` cast. `Transaction<Database>` is not structurally assignable
+ * to `Kysely<Database>` in Kysely's types, which is why this union has to be
+ * spelled out explicitly rather than relying on `Kysely<Database>` alone.
+ */
+export type DatabaseExecutor = Kysely<Database> | Transaction<Database>;
 
 

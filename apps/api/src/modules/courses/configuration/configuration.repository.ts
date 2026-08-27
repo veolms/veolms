@@ -1,6 +1,7 @@
 import { type Kysely } from "kysely";
 import type {
   Database,
+  DatabaseExecutor,
   AccessType,
   AccessDurationType,
   PricingType,
@@ -82,7 +83,9 @@ export async function updateAccessRule(
 // --- Pricing ---
 
 export async function findPricingByCourseId(
-  database: Kysely<Database>,
+  // Accepts a transaction too — see the comment on course.repository.ts's
+  // findCourseById for why (same cross-module Executor mismatch).
+  database: DatabaseExecutor,
   courseId: string,
 ) {
   return await database

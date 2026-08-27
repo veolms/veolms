@@ -80,7 +80,7 @@ export function createCartService({
       let thumbnailMediaId: string | null | undefined = null;
 
       if (raw.item_type === "course" && raw.course_id) {
-        const course = await courseRepo.findCourseById(database as any, raw.course_id);
+        const course = await courseRepo.findCourseById(database, raw.course_id);
         slug = course?.slug ?? "";
         thumbnailMediaId = course?.thumbnail_media_id;
       } else if (raw.item_type === "bundle" && raw.bundle_id) {

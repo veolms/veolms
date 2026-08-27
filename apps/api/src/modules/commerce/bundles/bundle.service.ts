@@ -90,7 +90,7 @@ export function createBundleService({
 
     // Verify all courses exist
     for (const courseId of request.courseIds) {
-      const course = await courseRepo.findCourseById(database as any, courseId);
+      const course = await courseRepo.findCourseById(database, courseId);
       if (!course) {
         throw CommerceErrors.COURSE_NOT_FOUND(courseId);
       }
@@ -146,7 +146,7 @@ export function createBundleService({
 
     if (request.courseIds) {
       for (const courseId of request.courseIds) {
-        const course = await courseRepo.findCourseById(database as any, courseId);
+        const course = await courseRepo.findCourseById(database, courseId);
         if (!course) {
           throw CommerceErrors.COURSE_NOT_FOUND(courseId);
         }

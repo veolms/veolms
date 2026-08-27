@@ -2,6 +2,7 @@ import type { Order } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "./order.repository.ts";
+import { toOrderContract } from "./order.mapper.ts";
 
 export interface OrderService {
   getOrderById(userId: string, orderId: string): Promise<Order>;
@@ -21,36 +22,7 @@ export function createOrderService({
 
     const items = await orderRepo.listOrderItems(database, order.id);
 
-    return {
-      id: order.id,
-      orderNumber: order.order_number,
-      userId: order.user_id,
-      status: order.status as any,
-      currency: order.currency,
-      subtotalAmount: order.subtotal_amount,
-      discountAmount: order.discount_amount,
-      taxAmount: order.tax_amount,
-      totalAmount: order.total_amount,
-      couponId: order.coupon_id,
-      idempotencyKey: order.idempotency_key,
-      items: items.map((oi) => ({
-        id: oi.id,
-        orderId: oi.order_id,
-        itemType: oi.item_type as any,
-        courseId: oi.course_id,
-        bundleId: oi.bundle_id,
-        titleSnapshot: oi.title_snapshot,
-        unitPrice: oi.unit_price,
-        discountAmount: oi.discount_amount,
-        taxAmount: oi.tax_amount,
-        finalAmount: oi.final_amount,
-        createdAt: oi.created_at,
-      })),
-      expiresAt: order.expires_at,
-      paidAt: order.paid_at,
-      createdAt: order.created_at,
-      updatedAt: order.updated_at,
-    };
+    return toOrderContract(order, items);
   }
 
   async function listUserOrders(userId: string): Promise<Order[]> {
@@ -70,36 +42,7 @@ export function createOrderService({
 
     return orders.map((order) => {
       const items = itemsByOrderId.get(order.id) ?? [];
-      return {
-        id: order.id,
-        orderNumber: order.order_number,
-        userId: order.user_id,
-        status: order.status as any,
-        currency: order.currency,
-        subtotalAmount: order.subtotal_amount,
-        discountAmount: order.discount_amount,
-        taxAmount: order.tax_amount,
-        totalAmount: order.total_amount,
-        couponId: order.coupon_id,
-        idempotencyKey: order.idempotency_key,
-        items: items.map((oi) => ({
-          id: oi.id,
-          orderId: oi.order_id,
-          itemType: oi.item_type as any,
-          courseId: oi.course_id,
-          bundleId: oi.bundle_id,
-          titleSnapshot: oi.title_snapshot,
-          unitPrice: oi.unit_price,
-          discountAmount: oi.discount_amount,
-          taxAmount: oi.tax_amount,
-          finalAmount: oi.final_amount,
-          createdAt: oi.created_at,
-        })),
-        expiresAt: order.expires_at,
-        paidAt: order.paid_at,
-        createdAt: order.created_at,
-        updatedAt: order.updated_at,
-      };
+      return toOrderContract(order, items);
     });
   }
 

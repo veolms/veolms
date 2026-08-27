@@ -19,6 +19,8 @@ import {
   createPaymentReconciliationService,
   type PaymentReconciliationService,
 } from "../payments/payment-reconciliation.service.ts";
+import { toOrderContract } from "../orders/order.mapper.ts";
+import { toPaymentProvider } from "../payments/payment.mapper.ts";
 
 export interface CheckoutService {
   previewCheckout(
@@ -93,42 +95,13 @@ export function createCheckoutService({
         if (payment) {
           const isFreeOrder = payment.gateway_provider === "free" || payment.amount === 0;
           return {
-            order: {
-              id: existingOrder.id,
-              orderNumber: existingOrder.order_number,
-              userId: existingOrder.user_id,
-              status: existingOrder.status as any,
-              currency: existingOrder.currency,
-              subtotalAmount: existingOrder.subtotal_amount,
-              discountAmount: existingOrder.discount_amount,
-              taxAmount: existingOrder.tax_amount,
-              totalAmount: existingOrder.total_amount,
-              couponId: existingOrder.coupon_id,
-              idempotencyKey: existingOrder.idempotency_key,
-              items: orderItems.map((oi) => ({
-                id: oi.id,
-                orderId: oi.order_id,
-                itemType: oi.item_type as any,
-                courseId: oi.course_id,
-                bundleId: oi.bundle_id,
-                titleSnapshot: oi.title_snapshot,
-                unitPrice: oi.unit_price,
-                discountAmount: oi.discount_amount,
-                taxAmount: oi.tax_amount,
-                finalAmount: oi.final_amount,
-                createdAt: oi.created_at,
-              })),
-              expiresAt: existingOrder.expires_at,
-              paidAt: existingOrder.paid_at,
-              createdAt: existingOrder.created_at,
-              updatedAt: existingOrder.updated_at,
-            },
+            order: toOrderContract(existingOrder, orderItems),
             gateway: isFreeOrder
               ? null
               : {
-                  provider: payment.gateway_provider as any,
+                  provider: toPaymentProvider(payment.gateway_provider),
                   gatewayOrderId: payment.gateway_order_id,
-                  keyId: (payment as any).gateway_key_id ?? undefined,
+                  keyId: payment.gateway_key_id ?? undefined,
                   amount: payment.amount,
                   currency: payment.currency,
                 },
@@ -221,36 +194,10 @@ export function createCheckoutService({
       });
 
       return {
-        order: {
-          id: createdOrder.id,
-          orderNumber: createdOrder.order_number,
-          userId: createdOrder.user_id,
+        order: toOrderContract(createdOrder, createdOrder.items, {
           status: "paid",
-          currency: createdOrder.currency,
-          subtotalAmount: createdOrder.subtotal_amount,
-          discountAmount: createdOrder.discount_amount,
-          taxAmount: createdOrder.tax_amount,
-          totalAmount: createdOrder.total_amount,
-          couponId: createdOrder.coupon_id,
-          idempotencyKey: createdOrder.idempotency_key,
-          items: createdOrder.items.map((oi) => ({
-            id: oi.id,
-            orderId: oi.order_id,
-            itemType: oi.item_type as any,
-            courseId: oi.course_id,
-            bundleId: oi.bundle_id,
-            titleSnapshot: oi.title_snapshot,
-            unitPrice: oi.unit_price,
-            discountAmount: oi.discount_amount,
-            taxAmount: oi.tax_amount,
-            finalAmount: oi.final_amount,
-            createdAt: oi.created_at,
-          })),
-          expiresAt: createdOrder.expires_at,
           paidAt: now,
-          createdAt: createdOrder.created_at,
-          updatedAt: now,
-        },
+        }),
         gateway: null,
       };
     }
@@ -262,38 +209,9 @@ export function createCheckoutService({
     });
 
     return {
-      order: {
-        id: createdOrder.id,
-        orderNumber: createdOrder.order_number,
-        userId: createdOrder.user_id,
-        status: createdOrder.status as any,
-        currency: createdOrder.currency,
-        subtotalAmount: createdOrder.subtotal_amount,
-        discountAmount: createdOrder.discount_amount,
-        taxAmount: createdOrder.tax_amount,
-        totalAmount: createdOrder.total_amount,
-        couponId: createdOrder.coupon_id,
-        idempotencyKey: createdOrder.idempotency_key,
-        items: createdOrder.items.map((oi) => ({
-          id: oi.id,
-          orderId: oi.order_id,
-          itemType: oi.item_type as any,
-          courseId: oi.course_id,
-          bundleId: oi.bundle_id,
-          titleSnapshot: oi.title_snapshot,
-          unitPrice: oi.unit_price,
-          discountAmount: oi.discount_amount,
-          taxAmount: oi.tax_amount,
-          finalAmount: oi.final_amount,
-          createdAt: oi.created_at,
-        })),
-        expiresAt: createdOrder.expires_at,
-        paidAt: createdOrder.paid_at,
-        createdAt: createdOrder.created_at,
-        updatedAt: createdOrder.updated_at,
-      },
+      order: toOrderContract(createdOrder, createdOrder.items),
       gateway: {
-        provider: gatewayOrder.provider as any,
+        provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
         keyId: gatewayOrder.keyId,
         amount: gatewayOrder.amount,

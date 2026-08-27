@@ -1,5 +1,5 @@
 import { type Kysely } from "kysely";
-import type { Database } from "@veolms/database";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 
 export async function insertCourse(
   database: Kysely<Database>,
@@ -25,7 +25,11 @@ export async function insertCourse(
 }
 
 export async function findCourseById(
-  database: Kysely<Database>,
+  // Accepts a transaction too (not just Kysely<Database>) so cross-module
+  // callers — e.g. commerce's pricing/cart/bundle services, whose own
+  // `Executor` type is Kysely<Database> | Transaction<Database> — can call
+  // this from inside their own transaction without an `as any` cast.
+  database: DatabaseExecutor,
   courseId: string,
 ) {
   return await database

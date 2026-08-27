@@ -2,6 +2,7 @@ export { createDatabase } from "./client.ts";
 export type {
   CourseStatus,
   Database,
+  DatabaseExecutor,
   AcademyTable,
   MediaAssetStatus,
   AccessType,

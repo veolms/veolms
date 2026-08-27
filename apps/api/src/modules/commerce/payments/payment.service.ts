@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type {
   Payment,
   PaymentGateway,
+  PaymentProvider,
   VerifyPaymentRequest,
   VerifyPaymentResponse,
 } from "@veolms/contracts";
@@ -12,6 +13,7 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
+import { toPaymentContract } from "./payment.mapper.ts";
 
 export interface PaymentService {
   initializePayment(params: {
@@ -25,7 +27,7 @@ export interface PaymentService {
   }): Promise<{
     payment: Payment;
     gatewayOrder: {
-      provider: string;
+      provider: PaymentProvider;
       gatewayOrderId: string;
       amount: number;
       currency: string;
@@ -118,21 +120,7 @@ export function createPaymentService({
     });
 
     return {
-      payment: {
-        id: payment.id,
-        orderId: payment.order_id,
-        gatewayProvider: payment.gateway_provider as any,
-        gatewayOrderId: payment.gateway_order_id,
-        gatewayPaymentId: payment.gateway_payment_id,
-        amount: payment.amount,
-        currency: payment.currency,
-        status: payment.status as any,
-        paymentMethod: payment.payment_method as any,
-        errorCode: payment.error_code,
-        errorDescription: payment.error_description,
-        createdAt: payment.created_at,
-        updatedAt: payment.updated_at,
-      },
+      payment: toPaymentContract(payment),
       gatewayOrder: {
         provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
@@ -252,41 +240,13 @@ export function createPaymentService({
   async function getPaymentById(paymentId: string) {
     const p = await paymentRepo.findPaymentById(database, paymentId);
     if (!p) return undefined;
-    return {
-      id: p.id,
-      orderId: p.order_id,
-      gatewayProvider: p.gateway_provider as any,
-      gatewayOrderId: p.gateway_order_id,
-      gatewayPaymentId: p.gateway_payment_id,
-      amount: p.amount,
-      currency: p.currency,
-      status: p.status as any,
-      paymentMethod: p.payment_method as any,
-      errorCode: p.error_code,
-      errorDescription: p.error_description,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-    };
+    return toPaymentContract(p);
   }
 
   async function getPaymentByOrderId(orderId: string) {
     const p = await paymentRepo.findPaymentByOrderId(database, orderId);
     if (!p) return undefined;
-    return {
-      id: p.id,
-      orderId: p.order_id,
-      gatewayProvider: p.gateway_provider as any,
-      gatewayOrderId: p.gateway_order_id,
-      gatewayPaymentId: p.gateway_payment_id,
-      amount: p.amount,
-      currency: p.currency,
-      status: p.status as any,
-      paymentMethod: p.payment_method as any,
-      errorCode: p.error_code,
-      errorDescription: p.error_description,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-    };
+    return toPaymentContract(p);
   }
 
   // Note: refunds are NOT handled here. The real refund flow is

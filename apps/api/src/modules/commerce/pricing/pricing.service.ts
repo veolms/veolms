@@ -64,7 +64,7 @@ export function createPricingService({
     for (const item of items) {
       if (item.itemType === "course") {
         const courseId = item.courseId!;
-        const course = await courseRepo.findCourseById(database as any, courseId);
+        const course = await courseRepo.findCourseById(database, courseId);
         if (!course) {
           throw CommerceErrors.COURSE_NOT_FOUND(courseId);
         }
@@ -76,7 +76,7 @@ export function createPricingService({
         }
 
         // Fetch live pricing
-        const pricing = await courseConfigRepo.findPricingByCourseId(database as any, courseId);
+        const pricing = await courseConfigRepo.findPricingByCourseId(database, courseId);
         let unitPrice = 0;
         if (pricing && pricing.pricing_type === "paid") {
           const isSaleActive =
