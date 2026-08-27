@@ -8,6 +8,7 @@ import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createPaymentService } from "./payment.service.ts";
 import { createPaymentController } from "./payment.controller.ts";
+import { CommerceFulfillmentScheduler } from "../fulfillment/fulfillment.scheduler.ts";
 
 const paymentRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
@@ -16,6 +17,18 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
     paymentGateway: options.services.paymentGateway,
   });
   const controller = createPaymentController({ service });
+
+  // Initialize and run periodic fulfillment reconciliation worker
+  const scheduler = new CommerceFulfillmentScheduler({
+    database: options.database,
+    paymentGateway: options.services.paymentGateway,
+    logger: app.log,
+  });
+  scheduler.start();
+
+  app.addHook("onClose", async () => {
+    scheduler.stop();
+  });
 
   // POST /payments/verify — Verify Razorpay payment signature and fulfill order
   app.post(
