@@ -65,9 +65,9 @@ export async function insertCouponRedemption(
 }
 
 /**
- * Atomically checks the global usage limit and inserts a redemption.
- * Locks the coupon row with SELECT FOR UPDATE to prevent concurrent over-redemption.
- * Returns the inserted row, or undefined if already at the limit or duplicate.
+ * Atomically checks the global and per-user usage limits and inserts a redemption.
+ * Locks the coupon row with SELECT FOR UPDATE to prevent concurrent over-redemption across simultaneous requests.
+ * Returns the inserted row, or undefined if already at any limit or duplicate.
  * Must be called inside a transaction.
  */
 export async function insertCouponRedemptionIfLimitNotReached(
@@ -79,28 +79,43 @@ export async function insertCouponRedemptionIfLimitNotReached(
     order_id: string;
     discount_amount: number;
     global_usage_limit: number | null;
+    per_user_limit?: number | null;
     created_at?: Date;
   },
 ) {
-  const { global_usage_limit, ...insertValues } = values;
+  const { global_usage_limit, per_user_limit, ...insertValues } = values;
 
-  if (global_usage_limit !== null) {
-    // Lock the coupon row to serialize concurrent limit checks
-    await database
-      .selectFrom("coupons")
-      .select("id")
-      .where("id", "=", values.coupon_id)
-      .forUpdate()
-      .executeTakeFirst();
+  // Lock the coupon row to serialize concurrent limit checks
+  await database
+    .selectFrom("coupons")
+    .select("id")
+    .where("id", "=", values.coupon_id)
+    .forUpdate()
+    .executeTakeFirst();
 
-    const countResult = await database
+  if (global_usage_limit !== null && global_usage_limit !== undefined) {
+    const globalCountResult = await database
       .selectFrom("coupon_redemptions")
       .select((eb) => eb.fn.countAll<number>().as("count"))
       .where("coupon_id", "=", values.coupon_id)
       .executeTakeFirst();
 
-    const currentCount = Number(countResult?.count ?? 0);
-    if (currentCount >= global_usage_limit) {
+    const currentGlobalCount = Number(globalCountResult?.count ?? 0);
+    if (currentGlobalCount >= global_usage_limit) {
+      return undefined;
+    }
+  }
+
+  if (per_user_limit !== null && per_user_limit !== undefined) {
+    const userCountResult = await database
+      .selectFrom("coupon_redemptions")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .where("coupon_id", "=", values.coupon_id)
+      .where("user_id", "=", values.user_id)
+      .executeTakeFirst();
+
+    const currentUserCount = Number(userCountResult?.count ?? 0);
+    if (currentUserCount >= per_user_limit) {
       return undefined;
     }
   }

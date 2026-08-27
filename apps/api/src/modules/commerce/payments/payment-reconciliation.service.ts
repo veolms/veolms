@@ -111,11 +111,11 @@ export function createPaymentReconciliationService({
       //    (safe even if somehow called twice because WHERE filters non-paid statuses)
       await orderRepo.markOrderPaidIfPending(trx, order.id, now);
 
-      // 3. Record coupon redemption — atomic global usage limit check + idempotent insert
+      // 3. Record coupon redemption — atomic global & per-user usage limit check + idempotent insert
       if (order.coupon_id) {
         const coupon = await trx
           .selectFrom("coupons")
-          .select(["global_usage_limit"])
+          .select(["global_usage_limit", "per_user_limit"])
           .where("id", "=", order.coupon_id)
           .executeTakeFirst();
 
@@ -126,6 +126,7 @@ export function createPaymentReconciliationService({
           order_id: order.id,
           discount_amount: order.discount_amount,
           global_usage_limit: coupon?.global_usage_limit ?? null,
+          per_user_limit: coupon?.per_user_limit ?? null,
           created_at: now,
         });
       }
