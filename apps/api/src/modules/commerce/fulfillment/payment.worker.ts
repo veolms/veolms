@@ -246,10 +246,28 @@ export function createPaymentWorker({
     if (!order) return { status: "skipped" as const };
 
     const refundAmount = event.amount ?? payment.amount;
-    const isFullRefund = refundAmount >= payment.amount;
     const now = new Date();
+    let isFullRefund = false;
 
     await database.transaction().execute(async (trx) => {
+      // Cumulative check, matching refund.service.ts's totalRefundedAlready pattern:
+      // a single webhook event's amount is not enough on its own to detect a full
+      // refund — two separate 50% gateway-side partial refunds each individually
+      // look partial (refundAmount < payment.amount both times), so comparing only
+      // this event's amount never flips isFullRefund to true and access is never
+      // revoked. Sum every other refund already recorded for this order instead.
+      // Excludes this event's own gateway_refund_id so a retried webhook delivery
+      // for the same refund doesn't double-count it.
+      const existingRefunds = await refundRepo.listRefundsByOrderId(trx, order.id);
+      const totalOtherRefundsAlready = existingRefunds
+        .filter(
+          (r) =>
+            r.gateway_refund_id !== event.gatewayRefundId &&
+            (r.status === "processed" || r.status === "pending"),
+        )
+        .reduce((sum, r) => sum + r.amount, 0);
+      isFullRefund = totalOtherRefundsAlready + refundAmount >= payment.amount;
+
       await refundRepo.upsertRefundByGatewayRefundId(trx, {
         id: crypto.randomUUID(),
         order_id: payment.order_id,
@@ -286,7 +304,7 @@ export function createPaymentWorker({
     });
 
     await webhookRepo.markWebhookEventProcessed(database, event.eventId);
-    log?.info({ orderId: order.id, refundAmount }, "Refund processed successfully");
+    log?.info({ orderId: order.id, refundAmount, isFullRefund }, "Refund processed successfully");
 
     return { status: "processed" as const, orderId: order.id };
   }
