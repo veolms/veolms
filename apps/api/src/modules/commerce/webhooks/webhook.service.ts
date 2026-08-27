@@ -29,7 +29,7 @@ export function createWebhookService({
     parsedPayload: unknown,
     eventId?: string,
   ) {
-    if (!signature) {
+    if (!signature || !rawBody) {
       throw CommerceErrors.WEBHOOK_SIGNATURE_INVALID();
     }
 

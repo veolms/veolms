@@ -329,7 +329,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
    * HMAC_SHA256(raw_body, webhook_secret) == x-razorpay-signature
    */
   verifyWebhookSignature(rawBody: string | Uint8Array, signature: string): boolean {
-    if (!this.webhookSecret) {
+    if (!this.webhookSecret || !rawBody) {
       return false;
     }
 

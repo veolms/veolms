@@ -12,7 +12,7 @@ export function createWebhookController({
   ) {
     const signature = request.headers["x-razorpay-signature"] as string | undefined;
     const eventId = request.headers["x-razorpay-event-id"] as string | undefined;
-    const rawBody = (request as any).rawBody || JSON.stringify(request.body);
+    const rawBody = (request as any).rawBody;
 
     const result = await service.processGatewayWebhook(
       rawBody,

@@ -51,6 +51,26 @@ export async function createApp({
   await registerOpenApi(app);
   registerErrorHandler(app);
 
+  // Retain raw byte buffer on request for HMAC signature verification (e.g., Razorpay webhooks)
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (req, body: Buffer, done) => {
+      (req as any).rawBody = body;
+      if (body.length === 0) {
+        done(null, null);
+        return;
+      }
+      try {
+        const json = JSON.parse(body.toString("utf-8"));
+        done(null, json);
+      } catch (err: any) {
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
+
   app.addHook("preSerialization", async (request, reply, payload) => {
     if (request.url.startsWith("/api/docs")) {
       return payload;
