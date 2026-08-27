@@ -68,7 +68,9 @@ export function createPaymentWorker({
       return { status: "processed" as const };
     } catch (err: any) {
       log?.error({ err }, `Payment worker job execution failed`);
-      await webhookRepo.markWebhookEventProcessed(
+      // Do NOT mark processed — leave processed_at NULL so the queue's
+      // poller retries this event instead of burying it silently.
+      await webhookRepo.markWebhookEventFailed(
         database,
         event.eventId,
         err?.message || "Worker error",

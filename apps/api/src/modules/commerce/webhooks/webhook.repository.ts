@@ -33,17 +33,37 @@ export async function insertWebhookEvent(
     .executeTakeFirstOrThrow();
 }
 
-export async function markWebhookEventProcessed(
-  database: Executor,
-  id: string,
-  error?: string | null,
-) {
+/**
+ * Mark a webhook event as successfully processed. Only call this once the
+ * handler has actually completed — this is what removes the event from the
+ * poller's retry pickup (`WHERE processed_at IS NULL`).
+ */
+export async function markWebhookEventProcessed(database: Executor, id: string) {
   return await database
     .updateTable("webhook_events")
     .set({
       processed_at: new Date(),
-      error: error ?? null,
+      error: null,
     })
+    .where("id", "=", id)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+/**
+ * Record a failed processing attempt without marking the event processed.
+ *
+ * Deliberately leaves `processed_at` untouched (NULL) so the event stays
+ * eligible for the poller's `WHERE processed_at IS NULL` retry query — only
+ * the `error` column is updated, for visibility into the last failure. Using
+ * `markWebhookEventProcessed` here instead (as before) would set
+ * `processed_at = now()` on a failed attempt, permanently burying the event
+ * with no retry and no alert.
+ */
+export async function markWebhookEventFailed(database: Executor, id: string, error: string) {
+  return await database
+    .updateTable("webhook_events")
+    .set({ error })
     .where("id", "=", id)
     .returningAll()
     .executeTakeFirst();

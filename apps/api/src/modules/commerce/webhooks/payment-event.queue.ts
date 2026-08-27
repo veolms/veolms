@@ -27,6 +27,13 @@ export interface DurablePaymentEventQueueOptions {
  * 3. Runs a background recovery loop that polls for any unprocessed `webhook_events`
  *    (e.g., from server restarts, crash recoveries, or unhandled exceptions).
  * 4. Supports multi-instance deployments safely without duplicate fulfillment.
+ *
+ * A handler failure records the error but leaves `processed_at` NULL (see
+ * `markWebhookEventFailed`), so the row is picked up again on the next poll
+ * tick instead of being silently buried. There is currently no attempt cap,
+ * backoff, or alert on repeated failures — an event that fails every time
+ * will retry forever at `pollIntervalMs` cadence with only a log line per
+ * attempt.
  */
 export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   private readonly database: Kysely<Database>;
@@ -122,7 +129,9 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
           log?.info("Durable webhook event processed successfully");
         } catch (err: any) {
           log?.error({ err }, "Error processing durable webhook event");
-          await webhookRepo.markWebhookEventProcessed(
+          // Do NOT mark processed — leave processed_at NULL so the next poll
+          // picks this event back up. See markWebhookEventFailed.
+          await webhookRepo.markWebhookEventFailed(
             this.database,
             eventRow.id,
             err?.message || "Worker error",
