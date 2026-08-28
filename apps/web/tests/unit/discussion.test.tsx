@@ -145,10 +145,9 @@ describe("CommentCard", () => {
     if (!meta) throw new Error("Expected comment metadata row");
     expect(within(meta).queryByText("Note")).toBeNull();
     expect(within(meta).getByRole("img", { name: "Note" })).toBeVisible();
-    expect(within(meta).getByText("Just now").nextElementSibling).toHaveAttribute(
-      "aria-label",
-      "Note",
-    );
+    expect(
+      within(meta).getByText("Just now").nextElementSibling,
+    ).toHaveAttribute("aria-label", "Note");
 
     rerender(
       <CommentCard
@@ -347,6 +346,66 @@ describe("discussion composer viewport geometry", () => {
 });
 
 describe("Discussion", () => {
+  it("opens a swipeable discussion thread from the whole comment and closes it from the header", async () => {
+    render(<Discussion persistenceKey="discussion-thread-panel-test" />);
+
+    fireEvent.click(
+      screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+    );
+
+    const thread = await screen.findByRole("dialog", {
+      name: "Discussion thread",
+    });
+    expect(
+      within(thread).getByRole("heading", { name: "Discussion thread" }),
+    ).toBeVisible();
+    expect(
+      within(thread).getByRole("document", {
+        name: "Discussion entry by Rohit Sharma",
+      }),
+    ).toBeVisible();
+    expect(
+      within(thread).getByRole("document", { name: "Reply by Ashi Singh" }),
+    ).toBeVisible();
+    expect(
+      within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
+    ).toBeVisible();
+
+    fireEvent.click(
+      within(thread).getByRole("button", {
+        name: "Close discussion thread",
+      }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Discussion thread" }),
+      ).toBeNull();
+    });
+  });
+
+  it("opens the thread composer from the comment Reply action", async () => {
+    render(<Discussion persistenceKey="discussion-thread-reply-test" />);
+
+    const rohitComment = screen
+      .getByRole("document", { name: "Comment by Rohit Sharma" })
+      .closest("article");
+    if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+    const engagement = rohitComment.querySelector<HTMLElement>(
+      '[data-comment-engagement="true"]',
+    );
+    if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
+    fireEvent.click(within(engagement).getByRole("button", { name: "Reply" }));
+
+    const thread = await screen.findByRole("dialog", {
+      name: "Discussion thread",
+    });
+    expect(
+      within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
+    ).toBeVisible();
+  });
+
   it("renders only the entry-type filters without a sort control", () => {
     render(<Discussion persistenceKey="discussion-filter-controls-test" />);
 

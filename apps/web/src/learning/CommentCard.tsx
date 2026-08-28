@@ -62,6 +62,7 @@ export interface Comment {
 interface CommentCardProps {
   comment: Comment;
   onLike: (id: number, liked: boolean) => void;
+  onOpenThread?: (id: number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: number) => void;
   onReport?: (id: number) => void;
@@ -70,6 +71,7 @@ interface CommentCardProps {
 export function CommentCard({
   comment,
   onLike,
+  onOpenThread,
   onEdit = () => undefined,
   onDelete = () => undefined,
   onReport = () => undefined,
@@ -91,6 +93,10 @@ export function CommentCard({
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
   );
   const replyCount = unloadedReplyCount + localReplies.length;
+
+  useEffect(() => {
+    setLocalReplies(comment.thread ?? []);
+  }, [comment.thread]);
 
   const addReply = () => {
     const text = replyDraft.plainText.trim();
@@ -138,7 +144,20 @@ export function CommentCard({
       id={`discussion-entry-${comment.id}`}
       data-discussion-entry={entryKind}
       data-deletion-pending={deletion.pending || undefined}
-      className={`relative border-b py-5 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] sm:py-5 ${deletion.pending ? "min-h-19" : ""}`}
+      className={`relative border-b py-5 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] sm:py-5 ${onOpenThread ? "cursor-pointer" : ""} ${deletion.pending ? "min-h-19" : ""}`}
+      onClick={(event) => {
+        if (!onOpenThread) return;
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest(
+            "button,a,input,textarea,select,[contenteditable=true],[role=menu],[role=menuitem],[data-discussion-atomic-editor]",
+          )
+        ) {
+          return;
+        }
+        onOpenThread(comment.id);
+      }}
     >
       <div
         inert={deletion.pending ? true : undefined}
@@ -270,7 +289,10 @@ export function CommentCard({
 
                 <button
                   type="button"
-                  onClick={() => setReplyComposerOpen((open) => !open)}
+                  onClick={() => {
+                    if (onOpenThread) onOpenThread(comment.id, true);
+                    else setReplyComposerOpen((open) => !open);
+                  }}
                   aria-expanded={replyComposerOpen}
                   className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
                 >
@@ -279,7 +301,7 @@ export function CommentCard({
                 </button>
               </div>
 
-              {replyComposerOpen && (
+              {replyComposerOpen && !onOpenThread && (
                 <div className="mt-3 flex max-w-2xl items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
@@ -313,7 +335,10 @@ export function CommentCard({
                 <ReplyCard
                   key={reply.id}
                   reply={reply}
-                  onReply={() => setReplyComposerOpen(true)}
+                  onReply={() => {
+                    if (onOpenThread) onOpenThread(comment.id, true);
+                    else setReplyComposerOpen(true);
+                  }}
                   onEdit={(text) => updateReply(reply.id, text)}
                   onDelete={() =>
                     setLocalReplies((current) =>
@@ -491,7 +516,7 @@ interface InlineEditFormProps {
   onSave: () => void;
 }
 
-function InlineEditForm({
+export function InlineEditForm({
   documentId,
   label,
   value,
@@ -552,7 +577,7 @@ interface CommentActionMenuProps {
   className: string;
 }
 
-function CommentActionMenu({
+export function CommentActionMenu({
   name,
   kind,
   isOwn,
@@ -697,7 +722,7 @@ function UndoDeleteButton({
   );
 }
 
-async function shareDiscussionEntry(
+export async function shareDiscussionEntry(
   entryId: number,
   name: string,
   text: string,

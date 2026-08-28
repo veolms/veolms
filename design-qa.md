@@ -1,36 +1,38 @@
-# Theme Menu Design QA
+# Discussion Thread Design QA
 
 ## Source of truth
 
-- Reference: supplied theme palette reference
-- Implemented view: captured locally during design QA
-- Reference dimensions: 1254 × 1254 px
-- Implementation capture: 879 × 678 CSS px at 1.35 device-pixel ratio
-- Captured state: `/explore-courses`, collapsed desktop sidebar, dark mode, Copper Slate selected, theme menu open
+- Reference: `C:/Users/anura/Downloads/ChatGPT Image Aug 28, 2026, 06_47_12 PM.png`
+- Implemented view: `C:/Users/anura/.codex/visualizations/2026/08/26/01a03c55-b6c8-7c61-baac-61c38dfdcd4d/discussion-thread-implementation.png`
+- Side-by-side comparison: `C:/Users/anura/.codex/visualizations/2026/08/26/01a03c55-b6c8-7c61-baac-61c38dfdcd4d/discussion-thread-comparison.png`
+- Captured state: TypeScript learning page, dark reading mode, Rohit Sharma discussion thread open.
 
-The reference is an isolated component render while the implementation capture includes the full application. Comparisons therefore use component proportions, hierarchy, material, and state treatment rather than raw whole-image pixel dimensions.
+The reference uses a wider source viewport and includes one additional sample reply. The implementation comparison therefore evaluates panel proportions, hierarchy, material, spacing, and editor placement rather than matching the reference's mock data count.
 
 ## Fidelity review
 
-- Typography: The palette has no visible copy in the reference or implementation. Existing accessible labels and theme names remain intact.
-- Spacing and layout: Preserved the 4 × 3 theme order. The implemented tray is 212 × 163 CSS px with a 20 px radius; each selected well is approximately 41 × 41 px and each key face approximately 30 × 30 px. Padding and grid rhythm match the reference's compact proportions.
-- Color and tokens: Each key remains driven by its existing `--theme-swatch` token. The selected key's underside, recessed well, and glow derive from that same theme color. The tray uses the reference's warm charcoal material.
-- Image and material: Added a real 512 × 512 WebP micro-grain texture at `apps/web/public/assets/theme-menu-grain.webp`; no placeholder imagery is used.
-- Content: All 12 existing themes, accessible names, titles, and selection semantics are preserved.
+- Layout: The panel enters from the right, leaves the underlying discussion visible under a dim overlay, and becomes edge-to-edge on phone-sized layouts.
+- Surface: The implementation keeps the reference's dark translucent material, restrained border, deep shadow, and theme-aware glow in the top-right corner.
+- Hierarchy: The back action and title lead the panel, the root comment is elevated in its own card, replies use quieter divided rows, and the reply editor is anchored at the bottom.
+- Typography and spacing: Names, timestamps, body copy, engagement actions, avatars, and row spacing use the existing learning-page typography and density while following the reference's hierarchy.
+- Editor: The existing Atomic rich-text editor and formatting toolbar are reused instead of introducing a separate reply editor.
 
-## Interaction and runtime checks
+## Interaction and responsive checks
 
-- Pointer selection keeps the palette open.
-- Arrow navigation remains reversible and follows the 4-column grid; ArrowRight and ArrowLeft were also exercised in the running app.
-- Enter and Escape behavior remain covered by the focused Playwright flow.
-- The focused Playwright test passed with the app fixture's console-error and page-error guards enabled.
-- TypeScript typecheck and the production build passed.
+- Clicking the body of a comment opens its thread.
+- Clicking any Reply action opens the same thread and focuses its composer.
+- Swiper powers horizontal movement between available discussion threads.
+- The desktop/tablet panel can be resized by pointer or keyboard; dragging it below the close threshold dismisses it.
+- The phone layout fills the available viewport and uses visual-viewport height so the composer remains usable with an on-screen keyboard.
+- The reply list scrolls without exposing a second scrollbar track.
+- The panel closes from the back button, Escape, the overlay, or a rightward drawer gesture.
 
 ## Comparison history
 
-1. First pass: 3D lift, recessed wells, color depth, and active glow matched; the missing fine material grain was a P3 fidelity gap.
-2. Fix: Generated and applied a subtle warm-charcoal micro-grain texture without changing component geometry or interaction behavior.
-3. Final pass: No actionable P0, P1, or P2 visual differences remain.
+1. First pass matched the reference structure, but the editor toolbar overflowed beneath the panel at the captured viewport.
+2. The composer was converted to a fixed-height grid so its editor and controls remain fully inside the panel.
+3. The thread scroll track was hidden to match the clean reference surface, and mobile width calculation was corrected to use the actual layout width.
+4. Final desktop and mobile browser checks found no actionable P0, P1, or P2 visual differences.
 
 ## Final result
 
