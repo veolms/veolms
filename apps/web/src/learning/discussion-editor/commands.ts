@@ -96,11 +96,11 @@ function toggleInlineMarkup(view: EditorView, marker: string) {
   const markerLength = marker.length;
   const wrappedSelection =
     from >= markerLength &&
-    document.slice(from - markerLength, from) === marker &&
-    document.slice(to, to + markerLength) === marker;
+    isCompleteInlineMarkerAt(document, from - markerLength, marker) &&
+    isCompleteInlineMarkerAt(document, to, marker);
   const selectionIncludesMarkers =
-    selected.startsWith(marker) &&
-    selected.endsWith(marker) &&
+    isCompleteInlineMarkerAt(document, from, marker) &&
+    isCompleteInlineMarkerAt(document, to - markerLength, marker) &&
     selected.length >= markerLength * 2;
 
   if (wrappedSelection) {
@@ -296,8 +296,8 @@ function hasInlineMarkup(
   const length = marker.length;
   if (
     selection.from >= length &&
-    document.slice(selection.from - length, selection.from) === marker &&
-    document.slice(selection.to, selection.to + length) === marker
+    isCompleteInlineMarkerAt(document, selection.from - length, marker) &&
+    isCompleteInlineMarkerAt(document, selection.to, marker)
   ) {
     return true;
   }
@@ -308,9 +308,55 @@ function hasInlineMarkup(
     lineEnd === -1 ? document.length : lineEnd,
   );
   const offset = selection.head - lineStart;
-  const before = line.lastIndexOf(marker, offset);
-  const after = line.indexOf(marker, offset);
+  const before = findCompleteMarkerBefore(line, marker, offset);
+  const after = findCompleteMarkerAfter(line, marker, offset);
   return before !== -1 && after !== -1 && before < after;
+}
+
+function findCompleteMarkerBefore(
+  source: string,
+  marker: string,
+  offset: number,
+) {
+  let index = source.lastIndexOf(marker, offset);
+  while (index !== -1) {
+    if (isCompleteInlineMarkerAt(source, index, marker)) return index;
+    if (index === 0) break;
+    index = source.lastIndexOf(marker, index - 1);
+  }
+  return -1;
+}
+
+function findCompleteMarkerAfter(
+  source: string,
+  marker: string,
+  offset: number,
+) {
+  for (
+    let index = source.indexOf(marker, offset);
+    index !== -1;
+    index = source.indexOf(marker, index + marker.length)
+  ) {
+    if (isCompleteInlineMarkerAt(source, index, marker)) return index;
+  }
+  return -1;
+}
+
+function isCompleteInlineMarkerAt(
+  source: string,
+  index: number,
+  marker: string,
+) {
+  if (index < 0 || source.slice(index, index + marker.length) !== marker) {
+    return false;
+  }
+  if (marker !== "*") return true;
+
+  let runStart = index;
+  while (runStart > 0 && source[runStart - 1] === "*") runStart -= 1;
+  let runEnd = index + 1;
+  while (runEnd < source.length && source[runEnd] === "*") runEnd += 1;
+  return (runEnd - runStart) % 2 === 1;
 }
 
 function isInsideFence(document: string, position: number) {

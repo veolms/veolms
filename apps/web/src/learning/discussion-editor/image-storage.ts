@@ -12,6 +12,8 @@ export interface DiscussionAttachmentStorage {
   upload(file: File): Promise<StoredDiscussionAttachment>;
 }
 
+export const DISCUSSION_ATTACHMENTS_ENABLED = import.meta.env.DEV;
+
 export const localDiscussionAttachmentStorage: DiscussionAttachmentStorage = {
   upload: (file) => discussionService.uploadAttachment(file),
 };

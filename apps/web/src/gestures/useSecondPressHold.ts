@@ -97,7 +97,9 @@ export function useSecondPressHold<T extends HTMLElement>({
     try {
       event.currentTarget.setPointerCapture?.(event.pointerId);
     } catch {
-      // Window-level pointer delivery remains sufficient when capture fails.
+      secondPointerRef.current = null;
+      setIsSecondPressHolding(false);
+      return;
     }
 
     holdTimerRef.current = window.setTimeout(() => {

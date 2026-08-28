@@ -21,6 +21,7 @@ import {
 import { insertDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
+import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
   attach(file: File): Promise<{ inserted: boolean; message: string | null }>;
@@ -68,6 +69,11 @@ export function DiscussionEditor({
       ...commands,
       getMarkdown: () => atomicHandleRef.current?.getMarkdown() ?? "",
       attach: async (file) => {
+        if (!DISCUSSION_ATTACHMENTS_ENABLED) {
+          const message = "Attachments are not available in this deployment.";
+          onAttachmentNoticeRef.current?.(message);
+          return { inserted: false, message };
+        }
         onAttachmentNoticeRef.current?.("Uploading attachment…");
         const result = await insertDiscussionAttachment(commands, file);
         onAttachmentNoticeRef.current?.(result.message);
@@ -88,13 +94,17 @@ export function DiscussionEditor({
         role: "textbox",
         spellcheck: "true",
       }),
-      createDiscussionClipboardExtension({
-        onFiles: (files) => {
-          void (async () => {
-            for (const file of files) await controller.attach(file);
-          })();
-        },
-      }),
+      ...(DISCUSSION_ATTACHMENTS_ENABLED
+        ? [
+            createDiscussionClipboardExtension({
+              onFiles: (files) => {
+                void (async () => {
+                  for (const file of files) await controller.attach(file);
+                })();
+              },
+            }),
+          ]
+        : []),
       ViewPlugin.fromClass(
         class {
           constructor(view: EditorView) {

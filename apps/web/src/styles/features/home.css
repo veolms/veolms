@@ -129,15 +129,18 @@
   }
 
   .mobile-bottom-nav {
+    --mobile-nav-inset: env(safe-area-inset-bottom, 0px);
+    --mobile-nav-max-inset: var(--app-viewport-safe-area-max-bottom);
+    --mobile-nav-offset: calc(
+      var(--mobile-nav-inset) - var(--mobile-nav-max-inset)
+    );
+
     position: fixed;
     right: 0;
     /* Chrome's optimized edge-to-edge pattern: the surface grows once using
        the maximum inset, then follows the dynamic chin using only `bottom`.
        This avoids layout thrashing and removes the empty gesture-area band. */
-    bottom: calc(
-      env(safe-area-inset-bottom, 0px) -
-        var(--app-viewport-safe-area-max-bottom)
-    );
+    bottom: var(--mobile-nav-offset);
     left: 0;
     z-index: 140;
     display: grid;
