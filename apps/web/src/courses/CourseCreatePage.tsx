@@ -816,6 +816,741 @@ const inclusionGhostHtml = (text: string) => `
   </div>
 `;
 
+export function parseWizardTab(
+  rawParam: string | null | undefined,
+): CourseWizardStepId | null {
+  if (!rawParam) return null;
+  const normalized = rawParam.toLowerCase().trim();
+  if (
+    normalized === "access" ||
+    normalized === "accessrules" ||
+    normalized === "access-rules"
+  ) {
+    return "access-rules";
+  }
+  if (WIZARD_STEPS.some((s) => s.id === normalized)) {
+    return normalized as CourseWizardStepId;
+  }
+  return null;
+}
+
+export function CourseWizardSkeleton({
+  activeStep = "basics",
+  isEditing = true,
+  onBack,
+}: {
+  activeStep?: CourseWizardStepId;
+  isEditing?: boolean;
+  onBack?: () => void;
+}) {
+  return (
+    <div
+      className="relative flex w-full flex-1 flex-col p-0 text-[--text] box-border animate-pulse"
+      data-testid="course-wizard-skeleton"
+    >
+      {/* Wizard Header Skeleton */}
+      <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full">
+        <div className="flex items-start justify-between gap-4 mb-4.5 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <button
+              type="button"
+              className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer"
+              onClick={onBack}
+              aria-label="Go back to courses"
+            >
+              <ArrowLeft size={17} weight="bold" />
+            </button>
+            <div className="pt-0.5 min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+                  {isEditing ? "Edit Course" : "Create New Course"}
+                </h1>
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
+                  Draft
+                </span>
+              </div>
+              <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+                {activeStep === "curriculum"
+                  ? "Manage and organize your course sections, lessons, and resources."
+                  : activeStep === "access-rules"
+                    ? "Control who can access this course and how long their access lasts."
+                    : activeStep === "pricing"
+                      ? "Set how learners will purchase this course."
+                      : activeStep === "extras"
+                        ? "Add extra information and settings to enhance your course."
+                        : activeStep === "publish"
+                          ? "Review your course checklist and publish when ready."
+                          : "Update the essential details of your course."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 pt-0.5 max-[768px]:hidden">
+            <div className="inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-[0.80rem] font-bold">
+              <Eye size={15} />
+              <span>Preview</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 h-8.5 px-4 rounded-lg bg-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-white text-[0.80rem] font-bold">
+              <FloppyDisk size={15} weight="bold" />
+              <span>Save Changes</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Wizard Steps Navigation Bar */}
+        <nav
+          className="course-wizard-steps-nav settings-tabs page-tabs relative mt-0! bg-transparent! pt-0! border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)]"
+          aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
+        >
+          {WIZARD_STEPS.map((step) => {
+            const Icon = step.Icon;
+            const isActive = activeStep === step.id;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                className={`!border-b-transparent shrink-0 whitespace-nowrap ${
+                  isActive ? "is-active font-bold text-(--text)" : "opacity-60"
+                }`}
+                disabled
+              >
+                <Icon size={18} />
+                <span>{step.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      {/* Main step content skeleton matching activeStep */}
+      <div className="flex-1 w-full min-w-0">
+        {activeStep === "basics" ? (
+          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-1 max-[768px]:gap-4.5">
+            {/* Left Column: Basic Information Form */}
+            <div className="flex flex-col gap-5">
+              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                <div className="mb-4.5">
+                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                    Basic Information
+                  </h2>
+                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                    Update the essential details of your course.
+                  </p>
+                </div>
+
+                {/* Course Title */}
+                <div className="flex flex-col gap-2 mb-5">
+                  <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                  <div className="h-11 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                </div>
+
+                {/* Short Description */}
+                <div className="flex flex-col gap-2 mb-5">
+                  <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                  <div className="h-18 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                </div>
+
+                {/* Course Description with Rich Text Toolbar */}
+                <div className="flex flex-col gap-2 mb-5">
+                  <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                  <div className="border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                    <div className="h-10 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] flex items-center gap-2 px-3">
+                      <div className="h-6 w-16 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                      <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                      <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                      <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                      <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                    </div>
+                    <div className="h-36 w-full p-3.5">
+                      <div className="h-4 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] mb-2.5" />
+                      <div className="h-4 w-1/2 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2-Column: Category & Difficulty */}
+                <div className="grid grid-cols-2 gap-4 mb-5 max-[640px]:grid-cols-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 w-24 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                  </div>
+                </div>
+
+                {/* 2-Column: Language & Instructor Alias */}
+                <div className="grid grid-cols-2 gap-4 mb-5 max-[640px]:grid-cols-1">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 w-20 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                  </div>
+                </div>
+
+                {/* Media Uploaders */}
+                <div className="grid grid-cols-2 gap-4 pt-2 max-[640px]:grid-cols-1">
+                  <div className="aspect-video w-full rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex flex-col items-center justify-center p-3">
+                    <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] mb-2" />
+                    <div className="h-7 w-20 rounded-md bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
+                  </div>
+                  <div className="aspect-video w-full rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex flex-col items-center justify-center p-3">
+                    <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] mb-2" />
+                    <div className="h-7 w-20 rounded-md bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* Right Column: Live Course Preview */}
+            <div className="flex flex-col">
+              <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
+                <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
+                  Course Preview
+                </h2>
+                <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
+                  This is how your course will appear to students.
+                </p>
+
+                {/* Aspect-video dashed preview */}
+                <div className="aspect-video w-full border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] flex flex-col items-center justify-center gap-2 p-4 mb-4">
+                  <div className="w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] flex items-center justify-center">
+                    <div className="w-4 h-4 rounded bg-[color-mix(in_srgb,var(--text)_15%,transparent)]" />
+                  </div>
+                  <div className="h-3 w-44 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  <div className="h-5 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                  <div className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3 text-(--muted) text-[0.8rem]">
+                    <div className="h-3.5 w-20 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-3.5 w-20 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-3.5 w-16 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                  <div className="pt-1 flex flex-col gap-2">
+                    <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                    <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-3 w-4/5 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        ) : activeStep === "curriculum" ? (
+          <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
+            {/* Top Toolbar */}
+            <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
+              <div>
+                <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
+                  Course Curriculum
+                </h2>
+                <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
+                  Organize your course into sections and lessons. You can reorder them anytime.
+                </p>
+              </div>
+              <div className="inline-flex items-center justify-center gap-1.5 h-[34px] px-4 rounded-lg bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-white text-[0.80rem] font-bold max-[768px]:self-start">
+                <Plus size={15} weight="bold" />
+                <span>Add Section</span>
+              </div>
+            </div>
+
+            {/* Section 1 Card */}
+            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden">
+              {/* Section Header */}
+              <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
+                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                  <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                  <CaretDown size={16} className="text-(--muted) shrink-0" />
+                  <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
+                  <div className="h-4.5 flex-1 max-w-36 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                  <div className="h-5 w-18 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] shrink-0 max-[480px]:hidden" />
+                </div>
+                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                </div>
+              </div>
+
+              {/* Lessons List inside Section 1 */}
+              <div className="p-[14px_18px] max-[768px]:p-[12px_14px] flex flex-col gap-2.5">
+                {/* Lesson 1 */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
+                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <div className="h-4 flex-1 max-w-64 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
+                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                </div>
+
+                {/* Lesson 2 */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
+                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <div className="h-4 flex-1 max-w-48 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
+                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                </div>
+
+                {/* Lesson 3 */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
+                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <div className="h-4 flex-1 max-w-56 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
+                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  </div>
+                </div>
+
+                {/* Add Lesson action */}
+                <div className="mt-1">
+                  <div className="inline-flex items-center gap-1.5 text-(--muted) text-[0.82rem] font-semibold">
+                    <Plus size={16} />
+                    <span>Add Lesson</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2 Card */}
+            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden">
+              <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
+                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                  <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                  <CaretRight size={16} className="text-(--muted) shrink-0" />
+                  <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
+                  <div className="h-4.5 flex-1 max-w-44 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                  <div className="h-5 w-18 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] shrink-0 max-[480px]:hidden" />
+                </div>
+                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeStep === "access-rules" ? (
+          <div className="flex w-full flex-col gap-5">
+            {/* Top Grid: 1. Who can access & 2. Access duration */}
+            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+              {/* Card 1: Who can access this course? */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    1. Who can access this course?
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Choose who is allowed to access this course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {/* Option: Everyone */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                        Everyone
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Anyone with access to the platform can access this course.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option: Restricted access */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] opacity-60">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
+                          Restricted access
+                        </strong>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          Coming soon
+                        </span>
+                      </div>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Only users who meet the selected requirements can access this course.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Access duration */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    2. Access duration
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Set how long learners can access this course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {/* Option 1: Lifetime access */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                        Lifetime access
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Learners can access this course forever.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Fixed duration */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                        Fixed duration
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Set a specific number of days or months learners have access.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Additional Settings (Toggles) */}
+            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="mb-4.5">
+                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  3. Additional Settings
+                </h3>
+                <p className="m-0 text-(--muted) text-[0.83rem]">
+                  Configure social and learning features for this course.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <ChatCircleText size={20} weight="fill" />
+                    </div>
+                    <div>
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Comments</strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">Allow learners to comment on course content.</p>
+                    </div>
+                  </div>
+                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+                </div>
+
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <DownloadSimple size={20} weight="bold" />
+                    </div>
+                    <div>
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Downloads</strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">Allow learners to download lesson resources for offline access.</p>
+                    </div>
+                  </div>
+                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeStep === "pricing" ? (
+          <div className="flex w-full flex-col gap-5">
+            {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
+            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+              {/* Card 1: Course pricing */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    1. Course pricing
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Choose how you want to sell this course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {/* Radio Option: Free */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                        Free
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Anyone who can access the course can enroll for free.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Radio Option: Paid */}
+                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0.75">
+                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                        Paid
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Learners must purchase the course to get access.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Price details */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    2. Price details
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Set the pricing for your course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                      Currency <span className="text-[#ff5252] ml-0.5">*</span>
+                    </label>
+                    <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center justify-between bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                      <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      <CaretDown size={14} className="text-(--muted)" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3.5 max-[640px]:grid-cols-1">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        Price (INR) <span className="text-[#ff5252] ml-0.5">*</span>
+                      </label>
+                      <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                        <div className="h-4 w-16 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        Original Price (Optional)
+                      </label>
+                      <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                        <div className="h-4 w-16 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Pricing Summary */}
+            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow) flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] flex items-center justify-center text-(--accent)">
+                  <Tag size={20} weight="bold" />
+                </div>
+                <div>
+                  <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] mb-1" />
+                  <div className="h-3 w-48 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                </div>
+              </div>
+              <div className="h-7 w-24 rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]" />
+            </div>
+          </div>
+        ) : activeStep === "extras" ? (
+          <div className="flex w-full flex-col gap-5">
+            {/* Card 1: What's included */}
+            <div className="rounded-[14px] p-6 bg-(--surface) border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-(--card-shadow) flex flex-col gap-4">
+              <div className="mb-2">
+                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  1. What's included in this course?
+                </h3>
+                <p className="m-0 text-(--muted) text-[0.83rem]">
+                  Add benefits and features that students will see on the course overview page.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                {/* Inclusion item 1 */}
+                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
+                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
+                  <div className="h-4 w-52 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                </div>
+
+                {/* Inclusion item 2 */}
+                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
+                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
+                  <div className="h-4 w-64 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                </div>
+
+                {/* Inclusion item 3 */}
+                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
+                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
+                  <div className="h-4 w-44 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                </div>
+              </div>
+
+              {/* Add custom inclusion button */}
+              <div className="inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed border-[color-mix(in_srgb,var(--accent)_35%,transparent)] rounded-xl text-(--accent) text-[0.84rem] font-bold mt-1 bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]">
+                <Plus size={15} weight="bold" />
+                <span>Add custom inclusion</span>
+              </div>
+            </div>
+
+            {/* Card 2: Certificates */}
+            <div className="rounded-[14px] p-6 bg-(--surface) border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-(--card-shadow) flex flex-col gap-4">
+              <div className="mb-2">
+                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  2. Certificates
+                </h3>
+                <p className="m-0 text-(--muted) text-[0.83rem]">
+                  Configure how certificates will be issued for this course.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                <div>
+                  <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Enable certificate</strong>
+                  <p className="m-0 text-(--muted) text-[0.8rem]">Issue certificates to learners on course completion.</p>
+                </div>
+                <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* activeStep === 'publish' */
+          <div className="flex w-full flex-col gap-5">
+            {/* Top 2-Column Grid: 1. Publish settings & 2. Pre-publish Checklist */}
+            <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+              {/* Card 1: Publish settings */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    1. Publish settings
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Choose when and how your course becomes visible.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  {/* Status row */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">Course status</label>
+                    <div className="flex items-center mt-0.5">
+                      <span className="inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
+                        Draft
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Visibility */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">Course visibility</label>
+                    <div className="h-10 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3.5 flex items-center justify-between bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                      <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      <CaretDown size={14} className="text-(--muted)" />
+                    </div>
+                  </div>
+
+                  {/* Schedule */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">Publish on</label>
+                    <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                      <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                      </div>
+                      <strong className="text-(--text) text-[0.88rem] font-[650]">Publish immediately</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Pre-publish Checklist */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    2. Pre-publish Checklist
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Review all required items before publishing your course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {/* Step Checklist Items */}
+                  {["Basics", "Curriculum", "Access Rules", "Pricing", "Extras"].map((stepTitle) => (
+                    <div
+                      key={stepTitle}
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle size={20} weight="fill" className="text-green-500 opacity-80" />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">{stepTitle}</strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>Ready</span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Readiness banner */}
+            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow) flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] flex items-center justify-center text-(--accent)">
+                  <Lightning size={22} weight="fill" />
+                </div>
+                <div>
+                  <div className="h-4.5 w-48 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] mb-1" />
+                  <div className="h-3.5 w-72 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                </div>
+              </div>
+              <div className="h-9 w-28 rounded-lg bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export interface CourseCreatePageProps {
   courseId?: string;
   editCourseId?: string;
@@ -846,10 +1581,10 @@ export function CourseCreatePage({
     return courses.find((c) => c.id === activeEditId) ?? null;
   }, [activeEditId]);
 
-  const requestedStep = searchParams.get("step");
-  const initialStep = WIZARD_STEPS.some((step) => step.id === requestedStep)
-    ? (requestedStep as CourseWizardStepId)
-    : "basics";
+  const initialStep =
+    parseWizardTab(searchParams.get("tab")) ||
+    parseWizardTab(searchParams.get("step")) ||
+    "basics";
   const [activeStep, setActiveStep] =
     useState<CourseWizardStepId>(initialStep);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
@@ -976,6 +1711,39 @@ export function CourseCreatePage({
     document.addEventListener("keydown", navigateWizardTab);
     return () => document.removeEventListener("keydown", navigateWizardTab);
   }, [activeStep]);
+
+  // Synchronize URL search params with active wizard tab
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const currentUrl = new URL(window.location.href);
+    const currentTabInUrl = currentUrl.searchParams.get("tab");
+    if (currentTabInUrl !== activeStep) {
+      if (
+        activeStep === "basics" &&
+        !currentTabInUrl &&
+        !currentUrl.searchParams.has("step")
+      ) {
+        return;
+      }
+      currentUrl.searchParams.set("tab", activeStep);
+      currentUrl.searchParams.delete("step");
+      window.history.replaceState(null, "", currentUrl.toString());
+    }
+  }, [activeStep]);
+
+  // Keep state synced if URL params change (e.g. popstate / back-forward navigation)
+  useEffect(() => {
+    const tabFromUrl =
+      parseWizardTab(searchParams.get("tab")) ||
+      parseWizardTab(searchParams.get("step"));
+    if (tabFromUrl && tabFromUrl !== activeStep) {
+      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
+      const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === tabFromUrl);
+      if (targetIdx > currentIdx) setSlideDirection("right");
+      else if (targetIdx < currentIdx) setSlideDirection("left");
+      setActiveStep(tabFromUrl);
+    }
+  }, [searchParams]);
 
   // Basics server-confirmed baseline and local draft states
   const [serverBasics, setServerBasics] =
@@ -3823,47 +4591,11 @@ export function CourseCreatePage({
 
   if (isInitialLoadingCourse) {
     return (
-      <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
-        <header className="relative shrink-0 mb-4 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
-          <div className="flex items-start justify-between gap-4 mb-3 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-2">
-            <div className="flex items-start gap-3 min-w-0">
-              <button
-                type="button"
-                className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
-                onClick={handleBack}
-                aria-label="Go back to courses"
-              >
-                <ArrowLeft size={17} weight="bold" />
-              </button>
-              <div className="pt-0.5 min-w-0">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
-                    Edit Course
-                  </h1>
-                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
-                    Loading
-                  </span>
-                </div>
-                <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
-                  Fetching course details and preparing editor...
-                </p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="relative flex flex-1 flex-col items-center justify-center w-full min-h-[calc(100dvh-230px)] rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-8 text-center shadow-(--card-shadow) my-auto">
-          <div className="relative mb-5 flex h-18 w-18 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
-            <CircleNotch size={38} weight="bold" className="animate-spin text-(--accent)" />
-          </div>
-          <h2 className="m-0 text-[1.28rem] font-bold tracking-[-0.015em] text-(--text)">
-            Loading course details...
-          </h2>
-          <p className="m-0 mt-2 max-w-md text-[0.88rem] leading-relaxed text-(--muted)">
-            Preparing the course wizard with your sections, curriculum, access rules, and pricing. Please hold on.
-          </p>
-        </div>
-      </div>
+      <CourseWizardSkeleton
+        activeStep={activeStep}
+        isEditing={isEditing}
+        onBack={handleBack}
+      />
     );
   }
 

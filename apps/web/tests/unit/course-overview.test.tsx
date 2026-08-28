@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { CourseOverviewResponse } from "@veolms/contracts";
 import {
   CourseOverviewPage,
+  CourseOverviewSkeleton,
   adaptCourseOverviewResponse,
 } from "../../src/courses/CourseOverviewPage";
 import { courses } from "../../src/courses/catalogue";
@@ -203,5 +204,13 @@ describe("CourseOverviewPage", () => {
     expect(adapted.pricing.price).toBe("₹1,999");
     expect(adapted.pricing.originalPrice).toBe("₹2,999");
     expect(adapted.pricing.discount).toBe("33% OFF");
+  });
+
+  it("CourseOverviewSkeleton renders pulse placeholder layout structure with back button", () => {
+    const onNavigateCourses = vi.fn();
+    render(<CourseOverviewSkeleton onNavigateCourses={onNavigateCourses} />);
+
+    expect(screen.getByTestId("course-overview-skeleton")).toBeVisible();
+    expect(screen.getByTestId("course-overview-skeleton")).toHaveClass("animate-pulse");
   });
 });

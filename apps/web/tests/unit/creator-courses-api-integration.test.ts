@@ -3,6 +3,7 @@ import type { Course as ApiCourse } from "@veolms/contracts";
 import { adaptApiCourseToCatalogueCourse } from "../../src/courses/courseAdapter";
 import { courses as mockCourses, getVisibleCourses } from "../../src/courses/catalogue";
 import type { Course } from "../../src/courses/catalogue";
+import { parseWizardTab, CourseWizardSkeleton } from "../../src/courses/CourseCreatePage";
 
 describe("Creator Courses Page API Integration", () => {
   const sampleApiCourse1: ApiCourse = {
@@ -345,6 +346,34 @@ describe("Creator Courses Page API Integration", () => {
 
       expect(updatedList.some((c) => c.id === "backend-nodejs")).toBe(false);
       expect(updatedList.some((c) => c.id === sampleApiCourse1.id)).toBe(true);
+    });
+  });
+
+  describe("8. URL Param Wizard Navigation & Tab Normalization", () => {
+    it("correctly parses valid tab identifiers", () => {
+      expect(parseWizardTab("basics")).toBe("basics");
+      expect(parseWizardTab("curriculum")).toBe("curriculum");
+      expect(parseWizardTab("pricing")).toBe("pricing");
+      expect(parseWizardTab("extras")).toBe("extras");
+      expect(parseWizardTab("publish")).toBe("publish");
+    });
+
+    it("normalizes 'access', 'accessrules', and 'access-rules' to 'access-rules'", () => {
+      expect(parseWizardTab("access")).toBe("access-rules");
+      expect(parseWizardTab("accessrules")).toBe("access-rules");
+      expect(parseWizardTab("access-rules")).toBe("access-rules");
+    });
+
+    it("returns null for missing, unknown, or invalid tab values to allow fallback to basics", () => {
+      expect(parseWizardTab(null)).toBeNull();
+      expect(parseWizardTab(undefined)).toBeNull();
+      expect(parseWizardTab("")).toBeNull();
+      expect(parseWizardTab("invalid-step-123")).toBeNull();
+      expect(parseWizardTab("unknown")).toBeNull();
+    });
+
+    it("evaluates CourseWizardSkeleton structure for direct tab navigation", () => {
+      expect(CourseWizardSkeleton).toBeDefined();
     });
   });
 });

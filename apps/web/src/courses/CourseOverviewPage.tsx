@@ -680,9 +680,9 @@ function CourseHeroSection({
       </div>
 
       {/* Right Column: 16:9 Course Trailer */}
-      <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full">
+      <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
         <div
-          className="group w-full aspect-video rounded-[14px] overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center"
+          className="group w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0"
           aria-label="Course preview player"
         >
           <img
@@ -1123,6 +1123,89 @@ export function adaptPreviewDataToOverview(
   };
 }
 
+export function CourseOverviewSkeleton({
+  onNavigateCourses,
+}: {
+  onNavigateCourses?: () => void;
+}) {
+  return (
+    <div
+      className="w-full max-w-275 mx-auto flex flex-col gap-6 max-[900px]:gap-4.5 max-[640px]:gap-4 box-border text-(--text) animate-pulse"
+      data-testid="course-overview-skeleton"
+    >
+      <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5 w-full">
+        {/* Left Column Skeleton */}
+        <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
+          {/* Top badges & Back button */}
+          <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
+            {onNavigateCourses && (
+              <div className="w-9.5 h-9.5 rounded-xl bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+            )}
+            <div className="h-6.5 w-24 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+            <div className="h-6.5 w-20 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+          </div>
+
+          <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
+            {/* Title & Metadata row skeleton */}
+            <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
+              <div className="flex flex-col gap-2">
+                <div className="h-9 w-11/12 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                <div className="h-9 w-3/5 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+              </div>
+
+              <div className="flex items-center gap-3 py-1">
+                <div className="h-5 w-28 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="h-5 w-24 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="h-5 w-20 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+              </div>
+            </div>
+
+            {/* Pricing Box skeleton */}
+            <div className="flex flex-col min-h-0 rounded-[14px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,transparent)] shadow-(--card-shadow) w-full box-border max-[1200px]:order-3 max-[1200px]:w-full max-[1200px]:mt-0 max-[640px]:p-[16px_14px] max-[640px]:gap-3 p-[18px_20px] gap-3.5">
+              <div className="flex items-baseline gap-3 mb-2">
+                <div className="h-9 w-32 rounded-lg bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                <div className="h-6 w-20 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+              </div>
+              <div className="h-11 w-full rounded-xl bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] mb-2" />
+              <div className="flex flex-col gap-2.5 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                <div className="h-4 w-48 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="h-4 w-52 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: 16:9 Course Trailer Video Placeholder */}
+        <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
+          <div
+            className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0"
+          >
+            <div className="w-13.5 h-13.5 rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)]" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Lower section: Description & Curriculum skeletons */}
+      <div className="mt-6 max-[640px]:mt-2 flex flex-col gap-6 max-[640px]:gap-4 w-full">
+        <div className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-6 max-[640px]:p-4 shadow-(--card-shadow) flex flex-col gap-3">
+          <div className="h-7 w-48 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)] mb-1" />
+          <div className="h-4 w-full rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+          <div className="h-4 w-5/6 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+          <div className="h-4 w-4/6 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+        </div>
+
+        <div className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-6 max-[640px]:p-4 shadow-(--card-shadow) flex flex-col gap-4">
+          <div className="h-7 w-56 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)] mb-1" />
+          <div className="h-14 w-full rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = props.courseSlug ?? routeCourseSlug;
@@ -1160,21 +1243,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
       : undefined);
 
   if (isOverviewLoading && !course && !props.previewData && !props.customCourse) {
-    return (
-      <div className="w-full max-w-275 mx-auto flex flex-1 flex-col items-center justify-center min-h-[calc(100dvh-140px)] box-border text-(--text)">
-        <div className="flex flex-col items-center justify-center gap-4 text-center p-8 rounded-2xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-w-md w-full my-auto">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
-            <CircleNotch size={36} weight="bold" className="animate-spin text-(--accent)" />
-          </div>
-          <h2 className="m-0 text-[1.2rem] font-bold text-(--text)">
-            Loading course overview...
-          </h2>
-          <p className="m-0 text-[0.85rem] text-(--muted) leading-relaxed">
-            Fetching course syllabus, instructor details, pricing, and curriculum.
-          </p>
-        </div>
-      </div>
-    );
+    return <CourseOverviewSkeleton onNavigateCourses={props.onNavigateCourses} />;
   }
 
   if (!course) {

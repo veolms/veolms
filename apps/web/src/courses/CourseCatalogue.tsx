@@ -127,7 +127,7 @@ export function CourseCatalogue({
       }
       onManage={(selected) =>
         onNavigatePage(
-          `/courses/create?edit=${encodeURIComponent(selected.id)}&step=curriculum`,
+          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=curriculum`,
         )
       }
       onDeleteRequested={setPendingDelete}
