@@ -28,6 +28,7 @@ import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
+import { ToastNotification } from "./ToastNotification";
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
@@ -1437,11 +1438,6 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
-  useEffect(() => {
-    if (!notice) return undefined;
-    const timer = window.setTimeout(() => setNotice(""), 3200);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   const navigation = getVisibleOrderedNavigation(
     role,
@@ -3985,9 +3981,11 @@ export function CoursesPage({
       </Drawer>
 
       {notice && (
-        <div className="courses-toast" role="status">
-          <Question size={18} /> {notice}
-        </div>
+        <ToastNotification
+          message={notice}
+          type="info"
+          onDismiss={() => setNotice("")}
+        />
       )}
     </div>
   );

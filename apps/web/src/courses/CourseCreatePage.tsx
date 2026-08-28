@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
 import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ToastNotification } from "../ToastNotification";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1399,64 +1400,208 @@ export function CourseWizardSkeleton({
           </div>
         ) : activeStep === "extras" ? (
           <div className="flex w-full flex-col gap-5">
-            {/* Card 1: What's included */}
-            <div className="rounded-[14px] p-6 bg-(--surface) border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-(--card-shadow) flex flex-col gap-4">
-              <div className="mb-2">
-                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                  1. What's included in this course?
-                </h3>
-                <p className="m-0 text-(--muted) text-[0.83rem]">
-                  Add benefits and features that students will see on the course overview page.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2.5">
-                {/* Inclusion item 1 */}
-                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
-                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
-                  <div className="h-4 w-52 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+              {/* Card 1: Certificates */}
+              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    1. Certificates
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Configure how certificates will be issued for this course.
+                  </p>
                 </div>
 
-                {/* Inclusion item 2 */}
-                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
-                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
-                  <div className="h-4 w-64 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                {/* Enable Certificate Toggle Row */}
+                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
+                  <div className="flex flex-col min-w-0 pr-3">
+                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                      Enable certificate
+                    </strong>
+                    <p className="m-0 text-(--muted) text-[0.8rem]">
+                      Issue certificates to learners on course completion.
+                    </p>
+                  </div>
+                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)] shrink-0" />
                 </div>
 
-                {/* Inclusion item 3 */}
-                <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3.5 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <DotsSixVertical size={18} className="text-(--muted) opacity-40" />
-                  <CheckCircle size={18} weight="fill" className="text-green-500 opacity-75 shrink-0" />
-                  <div className="h-4 w-44 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                {/* Certificate Configuration Controls */}
+                <div className="flex flex-col gap-4.5 opacity-60">
+                  {/* Template Selector */}
+                  <div className="flex flex-col gap-2 mb-5">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        Certificate template
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
+                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                      Choose from pre-designed certificate templates.
+                    </p>
+                    <div className="h-10 w-full rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 flex items-center justify-between">
+                      <div className="h-4 w-44 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                      <CaretDown size={14} className="text-(--muted)" />
+                    </div>
+                  </div>
+
+                  {/* Certificate Issuance Options */}
+                  <div className="flex flex-col gap-2 mb-5">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        Certificate issuance
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
+                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                      Choose when the certificate should be issued.
+                    </p>
+
+                    <div className="flex flex-col gap-2.5">
+                      {/* Option 1: On course completion */}
+                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        </div>
+                        <div className="flex flex-1 flex-col gap-0.75">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            On course completion
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Issue certificate when the learner completes all lessons.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Option 2: Minimum completion percentage */}
+                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                        <div className="flex flex-1 flex-col gap-0.75">
+                          <div className="flex items-center justify-between w-full">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              Minimum completion percentage
+                            </strong>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-[76px] h-8 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex items-center justify-center text-(--muted) text-[0.86rem] font-semibold">
+                                95
+                              </div>
+                              <span className="text-(--text) text-[0.86rem] font-bold">%</span>
+                            </div>
+                          </div>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Issue certificate when learner reaches the selected percentage.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Add custom inclusion button */}
-              <div className="inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed border-[color-mix(in_srgb,var(--accent)_35%,transparent)] rounded-xl text-(--accent) text-[0.84rem] font-bold mt-1 bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]">
-                <Plus size={15} weight="bold" />
-                <span>Add custom inclusion</span>
-              </div>
-            </div>
-
-            {/* Card 2: Certificates */}
-            <div className="rounded-[14px] p-6 bg-(--surface) border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-(--card-shadow) flex flex-col gap-4">
-              <div className="mb-2">
-                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                  2. Certificates
-                </h3>
-                <p className="m-0 text-(--muted) text-[0.83rem]">
-                  Configure how certificates will be issued for this course.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                <div>
-                  <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Enable certificate</strong>
-                  <p className="m-0 text-(--muted) text-[0.8rem]">Issue certificates to learners on course completion.</p>
+              {/* Card 2: This course includes */}
+              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    2. This course includes
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    These details are calculated from your curriculum.
+                  </p>
                 </div>
-                <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+
+                {/* 3 Metrics Cards */}
+                <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
+                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
+                      <BookOpen size={20} weight="fill" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
+                      <span className="text-(--muted) text-[0.74rem] font-medium">Sections</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
+                      <PlayCircle size={20} weight="fill" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
+                      <span className="text-(--muted) text-[0.74rem] font-medium">Lessons</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
+                      <Clock size={20} weight="bold" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="h-4 w-8 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
+                      <span className="text-(--muted) text-[0.74rem] font-medium">Content length</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Course Inclusions Header */}
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                      Course inclusions
+                    </h4>
+                    <span className="inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      3 / 6
+                    </span>
+                  </div>
+                  <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
+                    Perks and benefits your learners will receive upon enrolling (max 6 items). Click suggestions below or add custom inclusions.
+                  </p>
+
+                  {/* Inclusion items */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
+                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                        <Trash size={14} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
+                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                        <Trash size={14} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
+                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                        <Trash size={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Suggested perks chips */}
+                  <div className="flex flex-col gap-2 mt-2">
+                    <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
+                      Suggested perks (click to add)
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] text-(--muted) text-[0.8rem] font-medium bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <Plus size={13} weight="bold" />
+                        <span>Community access</span>
+                      </div>
+                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] text-(--muted) text-[0.8rem] font-medium bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <Plus size={13} weight="bold" />
+                        <span>Assignments & feedback</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2256,12 +2401,6 @@ export function CourseCreatePage({
     useState<boolean>(false);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -8326,18 +8465,11 @@ export function CourseCreatePage({
 
       {/* Floating Action Feedback Toast */}
       {toastMessage && (
-        <div
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] rounded-xl px-4.5 py-3 text-(--text) bg-(--surface) shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-[0.86rem] font-semibold animate-[toastPopIn_0.3s_cubic-bezier(0.16,1,0.3,1)]"
-          role="status"
-          aria-live="polite"
-        >
-          <CheckCircle
-            size={18}
-            weight="fill"
-            className="text-(--accent)"
-          />
-          <span>{toastMessage}</span>
-        </div>
+        <ToastNotification
+          message={toastMessage}
+          type="success"
+          onDismiss={() => setToastMessage(null)}
+        />
       )}
       {/* Reusable Delete Confirmation Modal */}
       <ConfirmDeleteModal

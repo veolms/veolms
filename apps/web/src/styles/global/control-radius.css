@@ -37,7 +37,9 @@
     .learning-comment-composer__search
   ):not(.learning-comment-card__like):not(.learning-comment-card__replies):not(
     .lesson-tool-tab
-  ):not(.player-menu-row):not(.player-text-control) {
+  ):not(.player-menu-row):not(.player-text-control):not(
+    .settings-tabs button
+  ):not(.settings-tabs [role="tab"]) {
   border-radius: var(--control-radius-structured) !important;
 }
 
@@ -80,13 +82,12 @@
   border-radius: var(--control-radius-structured) !important;
 }
 
-/* Settings & Wizard section navigation uses an underline, so rounded tab backgrounds
-   add visual noise and can deform into capsules. */
+/* Settings section navigation uses flat bottom underline styling */
 :root[data-control-radius]
   .courses-app
-  :is(.settings-tabs, .course-wizard-steps-nav)
+  .settings-tabs
   button {
-  border-radius: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
 }
 
 :root[data-control-radius]
