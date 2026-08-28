@@ -47,6 +47,9 @@ export interface Course {
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;
+  slug?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CourseCatalogueFilters {
@@ -263,6 +266,16 @@ export function getVisibleCourses(
         ...result.slice(contrastingCourseIndex + 1),
       ];
     }
+  }
+  if (role === "creator" && sort === "latest") {
+    result = [...result].sort((a, b) => {
+      const dateA = a.updatedAt || a.createdAt;
+      const dateB = b.updatedAt || b.createdAt;
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+      if (timeA !== timeB) return timeB - timeA;
+      return 0;
+    });
   }
   if (sort === "title")
     result = [...result].sort((a, b) => a.title.localeCompare(b.title));

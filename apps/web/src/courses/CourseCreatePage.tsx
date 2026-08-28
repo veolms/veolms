@@ -95,6 +95,7 @@ import {
   usePublishCourse,
   useUnpublishCourse,
 } from "../services/courses";
+import { useIsMutating } from "@tanstack/react-query";
 import type { Category, CourseIncludeItem } from "@veolms/contracts";
 import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
 import type {
@@ -291,7 +292,7 @@ export const initialPricingState: PricingFormState = {
   pricingType: "paid",
   sellingPrice: "",
   originalPrice: "",
-  currency: "USD",
+  currency: "INR",
 };
 
 export const normalizePricingState = (
@@ -300,7 +301,7 @@ export const normalizePricingState = (
   pricingType: raw?.pricingType === "free" ? "free" : "paid",
   sellingPrice: raw?.sellingPrice ? String(raw.sellingPrice).trim() : "",
   originalPrice: raw?.originalPrice ? String(raw.originalPrice).trim() : "",
-  currency: raw?.currency ? String(raw.currency).trim() : "USD",
+  currency: raw?.currency ? String(raw.currency).trim() : "INR",
 });
 
 export const isPricingEqual = (
@@ -591,7 +592,7 @@ export function getCurrencyOptions(): Array<
 }
 
 export function getCurrencySymbol(currencyCode: string): string {
-  if (!currencyCode) return "$";
+  if (!currencyCode) return "₹";
   try {
     const parts = new Intl.NumberFormat("en", {
       style: "currency",
@@ -1083,9 +1084,20 @@ export function CourseCreatePage({
     name: string;
   } | null>(null);
 
+  const isEditing = Boolean(activeEditId);
+
   const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
-  const { data: editorData } = useCourseEditor(currentCourseId);
+  const {
+    data: editorData,
+    isLoading: isLoadingEditor,
+    isFetching: isFetchingEditor,
+    isError: isEditorError,
+    error: editorError,
+    refetch: refetchEditor,
+  } = useCourseEditor(currentCourseId);
+  const isInitialLoadingCourse =
+    isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   const {
     data: previewData,
     isLoading: isPreviewLoading,
@@ -1144,7 +1156,7 @@ export function CourseCreatePage({
 
   // Footer Action Loading States
   const [actionLoading, setActionLoading] = useState<
-    "preview" | "draft" | "save" | "publish" | "unpublish" | "validate" | null
+    "draft" | "save" | "publish" | "unpublish" | "validate" | null
   >(null);
 
   // Page-specific in-flight save states
@@ -1158,7 +1170,10 @@ export function CourseCreatePage({
   const isPricingSaving = isSavingPricing;
   const isExtrasSaving = isSavingExtras;
 
+  const isMutatingCount = useIsMutating();
+
   const isAnyApiInProgress =
+    isMutatingCount > 0 ||
     actionLoading !== null ||
     isBasicsSaving ||
     isAccessRulesSaving ||
@@ -1178,7 +1193,8 @@ export function CourseCreatePage({
     deleteCategoryMutation.isPending ||
     publishCourseMutation.isPending ||
     unpublishCourseMutation.isPending ||
-    isValidating;
+    isValidating ||
+    isPreviewLoading;
 
   const categoryOptions = useMemo(() => {
     const options: Array<readonly [string, string]> = [
@@ -1566,6 +1582,13 @@ export function CourseCreatePage({
     return false;
   };
 
+  const hasUnsavedChanges =
+    isBasicsDirty ||
+    isCurriculumDirty ||
+    needsAccessRulesSave ||
+    isPricingDirty ||
+    isExtrasDirty;
+
   // Pre-populate fields when editing an existing course
   useEffect(() => {
     if (editorData?.course) {
@@ -1686,7 +1709,7 @@ export function CourseCreatePage({
                 ? String(p.price)
                 : "",
           originalPrice: !isFree && hasSale ? String(p.price) : "",
-          currency: p.currency || "USD",
+          currency: p.currency || "INR",
         });
         setServerPricing(confirmedPricing);
         setPricingDraft(confirmedPricing);
@@ -1805,7 +1828,7 @@ export function CourseCreatePage({
         pricingType: "paid",
         sellingPrice: "",
         originalPrice: "",
-        currency: "USD",
+        currency: "INR",
       });
 
       if (targetCourse.id === "ui-ux-design-mastery") {
@@ -3061,12 +3084,14 @@ export function CourseCreatePage({
   };
 
   const handleSellingPriceChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, sellingPrice: val }));
+    const digitsOnly = val.replace(/\D/g, "");
+    setPricing((prev) => ({ ...prev, sellingPrice: digitsOnly }));
     if (pricingValidationError) setPricingValidationError(null);
   };
 
   const handleOriginalPriceChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, originalPrice: val }));
+    const digitsOnly = val.replace(/\D/g, "");
+    setPricing((prev) => ({ ...prev, originalPrice: digitsOnly }));
     if (pricingValidationError) setPricingValidationError(null);
   };
 
@@ -3075,7 +3100,7 @@ export function CourseCreatePage({
     if (pricingValidationError) setPricingValidationError(null);
   };
 
-  const currencySymbol = getCurrencySymbol(pricing.currency || "USD");
+  const currencySymbol = getCurrencySymbol(pricing.currency || "INR");
 
   const previewPricing: CourseOverviewPricingProps =
     pricing.pricingType === "free"
@@ -3113,7 +3138,7 @@ export function CourseCreatePage({
   const isCourseReadyToPublish = serverValidation?.canPublish ?? false;
 
   const handlePreviewAction = () => {
-    if (isAnyApiInProgress) return;
+    if (isAnyApiInProgress || isPreviewLoading) return;
     setIsPreviewModalOpen(true);
   };
 
@@ -3463,7 +3488,7 @@ export function CourseCreatePage({
             pricingType: "free",
             price: 0,
             salePrice: null,
-            currency: pricingDraft.currency || "USD",
+            currency: pricingDraft.currency || "INR",
           },
         });
       } else {
@@ -3481,7 +3506,7 @@ export function CourseCreatePage({
             pricingType: "paid",
             price,
             salePrice,
-            currency: pricingDraft.currency || "USD",
+            currency: pricingDraft.currency || "INR",
           },
         });
       }
@@ -3498,7 +3523,7 @@ export function CourseCreatePage({
               ? String(res.price)
               : "",
         originalPrice: !isFree && hasSale ? String(res.price) : "",
-        currency: res.currency || "USD",
+        currency: res.currency || "INR",
       });
 
       setServerPricing(newBaseline);
@@ -3796,6 +3821,109 @@ export function CourseCreatePage({
     }
   };
 
+  if (isInitialLoadingCourse) {
+    return (
+      <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
+        <header className="relative shrink-0 mb-4 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
+          <div className="flex items-start justify-between gap-4 mb-3 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-2">
+            <div className="flex items-start gap-3 min-w-0">
+              <button
+                type="button"
+                className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                onClick={handleBack}
+                aria-label="Go back to courses"
+              >
+                <ArrowLeft size={17} weight="bold" />
+              </button>
+              <div className="pt-0.5 min-w-0">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+                    Edit Course
+                  </h1>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
+                    Loading
+                  </span>
+                </div>
+                <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+                  Fetching course details and preparing editor...
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="relative flex flex-1 flex-col items-center justify-center w-full min-h-[calc(100dvh-230px)] rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-8 text-center shadow-(--card-shadow) my-auto">
+          <div className="relative mb-5 flex h-18 w-18 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
+            <CircleNotch size={38} weight="bold" className="animate-spin text-(--accent)" />
+          </div>
+          <h2 className="m-0 text-[1.28rem] font-bold tracking-[-0.015em] text-(--text)">
+            Loading course details...
+          </h2>
+          <p className="m-0 mt-2 max-w-md text-[0.88rem] leading-relaxed text-(--muted)">
+            Preparing the course wizard with your sections, curriculum, access rules, and pricing. Please hold on.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEditorError && !editorData && isEditing) {
+    return (
+      <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
+        <header className="relative shrink-0 mb-4 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
+          <div className="flex items-start justify-between gap-4 mb-3 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-2">
+            <div className="flex items-start gap-3 min-w-0">
+              <button
+                type="button"
+                className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                onClick={handleBack}
+                aria-label="Go back to courses"
+              >
+                <ArrowLeft size={17} weight="bold" />
+              </button>
+              <div className="pt-0.5 min-w-0">
+                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+                  Edit Course
+                </h1>
+                <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+                  Unable to load course data.
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="relative flex flex-1 flex-col items-center justify-center w-full min-h-[calc(100dvh-230px)] rounded-[14px] border border-red-500/20 bg-(--surface) p-8 text-center shadow-(--card-shadow) my-auto">
+          <div className="relative mb-5 flex h-18 w-18 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+            <WarningCircle size={38} weight="bold" />
+          </div>
+          <h2 className="m-0 text-[1.28rem] font-bold tracking-[-0.015em] text-(--text)">
+            Unable to load course details
+          </h2>
+          <p className="m-0 mt-2 max-w-md text-[0.88rem] leading-relaxed text-(--muted)">
+            {editorError?.message || "There was an error communicating with the server to fetch this course."}
+          </p>
+          <div className="mt-5 flex items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-4 text-[0.82rem] font-semibold text-(--text-secondary) cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              onClick={handleBack}
+            >
+              Back to Courses
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-lg border-none bg-(--accent) px-4 text-[0.82rem] font-semibold text-white cursor-pointer transition-colors hover:bg-(--accent-hover)"
+              onClick={() => void refetchEditor()}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex w-full flex-1 flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
       {/* Wizard Header */}
@@ -3813,7 +3941,7 @@ export function CourseCreatePage({
             <div className="pt-0.5 min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
-                  {isPublished ? "Edit Course" : "Create New Course"}
+                  {isEditing ? "Edit Course" : "Create New Course"}
                 </h1>
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] ${
@@ -3827,16 +3955,30 @@ export function CourseCreatePage({
               </div>
               <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
                 {activeStep === "curriculum"
-                  ? "Build your course structure by adding sections and lessons."
+                  ? isEditing
+                    ? "Manage and organize your course sections, lessons, and resources."
+                    : "Build your course structure by adding sections and lessons."
                   : activeStep === "access-rules"
-                    ? "Control who can access this course and how long their access lasts."
+                    ? isEditing
+                      ? "Update who can access this course and how long their access lasts."
+                      : "Control who can access this course and how long their access lasts."
                     : activeStep === "pricing"
-                      ? "Set how learners will purchase this course."
+                      ? isEditing
+                        ? "Update pricing, currency, and sale discounts for this course."
+                        : "Set how learners will purchase this course."
                       : activeStep === "extras"
-                        ? "Add extra information and settings to enhance your course."
+                        ? isEditing
+                          ? "Update extra course settings, inclusions, and completion certificate."
+                          : "Add extra information and settings to enhance your course."
                         : activeStep === "publish"
-                          ? "Review your course and publish it when you're ready."
-                          : "Add the essential details of your course. You can always edit these later."}
+                          ? isPublished
+                            ? "Review your changes and update the published course."
+                            : isEditing
+                              ? "Review your course checklist and publish when ready."
+                              : "Review your course and publish it when you're ready."
+                          : isEditing
+                            ? "Update the essential details of your course."
+                            : "Add the essential details of your course. You can always edit these later."}
               </p>
             </div>
           </div>
@@ -3855,11 +3997,15 @@ export function CourseCreatePage({
                 paddingLeft: "14px",
                 paddingRight: "14px",
               }}
-              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) disabled:opacity-60 disabled:cursor-not-allowed"
+              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                isAnyApiInProgress || isPreviewLoading
+                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              }`}
               onClick={handlePreviewAction}
-              disabled={isAnyApiInProgress}
+              disabled={isAnyApiInProgress || isPreviewLoading}
             >
-              {actionLoading === "preview" ? (
+              {isPreviewLoading ? (
                 <>
                   <CircleNotch
                     size={14}
@@ -4051,7 +4197,7 @@ export function CourseCreatePage({
         <nav
           ref={stepsNavRef}
           className="course-wizard-steps-nav settings-tabs page-tabs relative mt-0! bg-transparent! pt-0! border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:hidden!"
-          aria-label="Course creation steps"
+          aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
           role="tablist"
           onMouseDown={handleNavMouseDown}
           onMouseLeave={handleNavMouseLeave}
@@ -4138,7 +4284,9 @@ export function CourseCreatePage({
                     Basic Information
                   </h2>
                   <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                    Add the essential details of your course.
+                    {isEditing
+                      ? "Update the essential details of your course."
+                      : "Add the essential details of your course."}
                   </p>
                 </div>
 
@@ -6150,7 +6298,7 @@ export function CourseCreatePage({
                       Currency <span className="text-[#ff5252] ml-0.5">*</span>
                     </label>
                     <ThemedSelect
-                      value={pricing.currency || "USD"}
+                      value={pricing.currency || "INR"}
                       onValueChange={handleCurrencyChange}
                       options={currencyOptions}
                       disabled={
@@ -6177,11 +6325,13 @@ export function CourseCreatePage({
                     </label>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                        {getCurrencySymbol(pricing.currency || "USD")}
+                        {getCurrencySymbol(pricing.currency || "INR")}
                       </span>
                       <input
                         id="selling-price"
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         disabled={
                           pricing.pricingType === "free" || isPricingSaving
                         }
@@ -6189,7 +6339,7 @@ export function CourseCreatePage({
                         onChange={(e) =>
                           handleSellingPriceChange(e.target.value)
                         }
-                        placeholder="1,999"
+                        placeholder="1999"
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
@@ -6208,11 +6358,13 @@ export function CourseCreatePage({
                     </label>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                        {getCurrencySymbol(pricing.currency || "USD")}
+                        {getCurrencySymbol(pricing.currency || "INR")}
                       </span>
                       <input
                         id="original-price"
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         disabled={
                           pricing.pricingType === "free" || isPricingSaving
                         }
@@ -6220,7 +6372,7 @@ export function CourseCreatePage({
                         onChange={(e) =>
                           handleOriginalPriceChange(e.target.value)
                         }
-                        placeholder="2,999"
+                        placeholder="2999"
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
@@ -7250,11 +7402,15 @@ export function CourseCreatePage({
             borderRadius: "12px",
             gap: "6px",
           }}
-          className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+            isAnyApiInProgress || isPreviewLoading
+              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+          }`}
           onClick={handlePreviewAction}
-          disabled={isAnyApiInProgress}
+          disabled={isAnyApiInProgress || isPreviewLoading}
         >
-          {actionLoading === "preview" ? (
+          {isPreviewLoading ? (
             <>
               <CircleNotch
                 size={14}
@@ -7464,9 +7620,17 @@ export function CourseCreatePage({
                     <Eye size={18} weight="bold" />
                     <span>Student Course Overview Preview</span>
                   </div>
-                  <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent)) bg-(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent)) text-(--accent-ink,var(--accent)) text-[0.7rem] font-[650] whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
-                    Live Preview (Read-Only)
-                  </span>
+                  {hasUnsavedChanges ? (
+                    <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[color-mix(in_srgb,#f59e0b_35%,transparent)] bg-[color-mix(in_srgb,#f59e0b_15%,transparent)] text-[#d97706] dark:text-[#fbbf24] text-[0.7rem] font-[650] whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
+                      <Info size={12} weight="bold" />
+                      Last saved version
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_40%,transparent)] text-(--muted) text-[0.7rem] font-medium whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
+                      <CheckCircle size={12} weight="fill" className="text-(--accent)" />
+                      Previewing saved version
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -7477,6 +7641,16 @@ export function CourseCreatePage({
                   <X size={15} />
                 </button>
               </div>
+
+              {/* Informational banner when unsaved changes exist in editor */}
+              {hasUnsavedChanges && currentCourseId && (
+                <div className="flex items-center gap-2 px-5 py-2 bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))] border-b border-[color-mix(in_srgb,#f59e0b_22%,transparent)] text-[#d97706] dark:text-[#fbbf24] text-[0.79rem] font-medium shrink-0 max-[640px]:px-3.5 max-[640px]:py-1.75">
+                  <Info size={15} className="shrink-0 text-[#f59e0b]" weight="bold" />
+                  <span className="leading-snug">
+                    This preview reflects the last saved version on the server. Save your current changes in the editor to update the preview.
+                  </span>
+                </div>
+              )}
 
               {/* Modal Body: Render authentic CourseOverviewPage */}
               <div className="flex-1 min-h-0 overflow-y-auto p-0 flex flex-col">

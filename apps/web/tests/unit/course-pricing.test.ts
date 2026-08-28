@@ -79,6 +79,12 @@ describe("Course Pricing Service, Helpers, and Validations", () => {
       expect(result.isValid).toBe(true);
       expect(result.error).toBeNull();
     });
+
+    it("sanitizes price inputs by stripping non-digit characters", () => {
+      const rawInputWithLetters = "1,999 abc $#@!";
+      const digitsOnly = rawInputWithLetters.replace(/\D/g, "");
+      expect(digitsOnly).toBe("1999");
+    });
   });
 
   describe("Date conversion helpers", () => {

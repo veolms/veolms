@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   Category,
   CourseEditorDataResponse,
+  CourseOverviewResponse,
   CourseSummary,
   CourseValidationResponse,
   MyCoursesListResponse,
@@ -25,6 +26,20 @@ export function useCourse(slug: string) {
     queryFn: () => coursesService.getBySlug(slug),
     enabled: Boolean(slug),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCourseOverview(
+  idOrSlug: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery<CourseOverviewResponse, ApiError>({
+    queryKey: idOrSlug
+      ? courseKeys.overview(idOrSlug)
+      : ["courses", "overview", null],
+    queryFn: () => coursesService.getOverview(idOrSlug!),
+    enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
+    staleTime: 60 * 1000,
   });
 }
 

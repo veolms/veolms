@@ -218,7 +218,10 @@ export const coursesService = {
     courseId: string,
     payload: CreateCourseIncludeRequest,
   ): Promise<CourseIncludeItem> => {
-    return api.post<CourseIncludeItem>(`/courses/${courseId}/includes`, payload);
+    return api.post<CourseIncludeItem>(
+      `/courses/${courseId}/includes`,
+      payload,
+    );
   },
 
   updateInclude: (

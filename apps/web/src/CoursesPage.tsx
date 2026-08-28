@@ -58,6 +58,8 @@ import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
+import { useMyCourses } from "./services/courses";
+import { adaptApiCourseToCatalogueCourse } from "./courses/courseAdapter";
 import {
   getDefaultNavigationOrder,
   getInitialNavigationOrder,
@@ -693,6 +695,7 @@ export function CoursesPage({
   const storeUser = useAuthStore((s) => s.user);
   const activeUser = authUser || storeUser;
   const logoutMutation = useLogout();
+  const { data: myCoursesData } = useMyCourses();
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
@@ -1470,9 +1473,23 @@ export function CoursesPage({
     };
   }, [compactNavigation, navigation, role, sidebarMode]);
 
+  const allCourses = useMemo(() => {
+    if (role !== "creator") {
+      return courses;
+    }
+    const apiCourses = (myCoursesData?.courses || []).map(
+      adaptApiCourseToCatalogueCourse,
+    );
+    const existingIds = new Set(apiCourses.map((c) => c.id));
+    const nonConflictingMockCourses = courses.filter(
+      (c) => !existingIds.has(c.id),
+    );
+    return [...apiCourses, ...nonConflictingMockCourses];
+  }, [myCoursesData?.courses, role]);
+
   const visibleCourses = useMemo(
     () =>
-      getVisibleCourses(courses, {
+      getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
         role,
@@ -1483,6 +1500,7 @@ export function CoursesPage({
       }),
     [
       activeSection,
+      allCourses,
       enrollmentFilter,
       role,
       search,

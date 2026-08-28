@@ -193,7 +193,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         pricingType: "paid",
         sellingPrice: "",
         originalPrice: "",
-        currency: "USD",
+        currency: "INR",
       });
     });
 

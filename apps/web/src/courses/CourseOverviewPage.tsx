@@ -7,6 +7,7 @@ import {
   CaretDown,
   CheckCircle,
   Circle,
+  CircleNotch,
   Clock,
   FileText,
   Globe,
@@ -19,13 +20,19 @@ import {
   Ticket,
   User,
 } from "@phosphor-icons/react";
-import type { Category, CourseEditorDataResponse } from "@veolms/contracts";
+import type {
+  Category,
+  CourseEditorDataResponse,
+  CourseOverviewResponse,
+} from "@veolms/contracts";
 import { courses } from "./catalogue";
 import type { Course, CourseLevel, CourseCategory, CourseLifecycleStatus } from "./catalogue";
 import { sections } from "../learning/courseContent";
 import type { CourseSection } from "../learning/courseContent";
 import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
 import type { NavigateTo } from "../routing/navigation";
+import { useAuthStore } from "../store/auth.store";
+import { useCourseOverview } from "../services/courses";
 import { RenderMarkdown } from "./RichTextEditor";
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
@@ -49,7 +56,7 @@ export const priceTextClasses: Record<PriceSizeVariant, string> = {
   xlarge: "text-[1.55rem] max-[640px]:text-[1.4rem] tracking-[-0.015em]",
 };
 
-export function getCurrencySymbol(currency: string = "USD"): string {
+export function getCurrencySymbol(currency: string = "INR"): string {
   switch (currency.toUpperCase()) {
     case "INR":
       return "₹";
@@ -72,7 +79,7 @@ export function getCurrencySymbol(currency: string = "USD"): string {
 
 export function formatPriceWithCurrency(
   amount: number,
-  currency: string = "USD",
+  currency: string = "INR",
 ): string {
   const sym = getCurrencySymbol(currency);
   return `${sym}${amount.toLocaleString()}`;
@@ -398,6 +405,7 @@ interface CourseHeroSectionProps {
   title: string;
   thumbnail: string;
   wishlisted: boolean;
+  instructorName?: string;
   shortDescription?: string;
   categoryName?: string;
   language?: string;
@@ -414,6 +422,7 @@ function CourseHeroSection({
   title,
   thumbnail,
   wishlisted,
+  instructorName,
   shortDescription,
   categoryName,
   language,
@@ -481,11 +490,11 @@ function CourseHeroSection({
 
             {/* 2. Metadata row immediately below title */}
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-(--text-secondary) text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
-              {!isReadOnlyPreview && (
+              {instructorName && (
                 <>
                   <span className="inline-flex items-center gap-1.5 text-(--text) font-[650]">
                     <User size={17} weight="bold" aria-hidden="true" />
-                    <span>Instructor</span>
+                    <span>{instructorName}</span>
                   </span>
                   <span
                     className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
@@ -509,20 +518,7 @@ function CourseHeroSection({
                 <BookOpen size={17} aria-hidden="true" />
                 <span>{course.lectures} Lesson{course.lectures === 1 ? "" : "s"}</span>
               </span>
-              {language ? (
-                <>
-                  <span
-                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                    aria-hidden="true"
-                  >
-                    •
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Globe size={17} aria-hidden="true" />
-                    <span>{language}</span>
-                  </span>
-                </>
-              ) : null}
+              {/* Language metadata is temporarily hidden per requirements (retained for future use) */}
               {categoryName ? (
                 <>
                   <span
@@ -537,20 +533,16 @@ function CourseHeroSection({
                   </span>
                 </>
               ) : null}
-              {course.duration ? (
-                <>
-                  <span
-                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                    aria-hidden="true"
-                  >
-                    •
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock size={17} aria-hidden="true" />
-                    <span>{course.duration}</span>
-                  </span>
-                </>
-              ) : null}
+              <span
+                className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
+                aria-hidden="true"
+              >
+                •
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock size={17} aria-hidden="true" />
+                <span>{course.duration || "0h0m"}</span>
+              </span>
             </div>
           </div>
 
@@ -675,7 +667,7 @@ function CourseHeroSection({
                     <CheckCircle
                       size={15}
                       weight="fill"
-                      className="text-(--accent) shrink-0"
+                      className="text-emerald-500 dark:text-emerald-400 shrink-0"
                       aria-hidden="true"
                     />
                     <span>{perk}</span>
@@ -877,6 +869,7 @@ export interface CourseOverviewPageProps {
   categories?: Category[];
   // Custom overview data override for backwards compatibility or tests
   customCourse?: Course;
+  customInstructor?: string;
   customDescription?: string;
   customShortDescription?: string;
   customCategoryName?: string;
@@ -888,149 +881,301 @@ export interface CourseOverviewPageProps {
   isReadOnlyPreview?: boolean;
 }
 
+export interface AdaptedOverviewData {
+  course: Course;
+  description: string;
+  shortDescription: string | undefined;
+  categoryName: string | undefined;
+  language: string | undefined;
+  sections: CourseSection[];
+  inclusions: string[];
+  pricing: CourseOverviewPricingProps;
+  instructorName: string | undefined;
+}
+
+export function adaptCourseOverviewResponse(
+  overview: CourseOverviewResponse,
+  defaultInstructorName: string,
+): AdaptedOverviewData {
+  const c = overview.course;
+  const totalSections = overview.stats?.totalSections ?? overview.sections.length;
+  const totalLessons =
+    overview.stats?.totalLessons ??
+    overview.sections.reduce((acc, sec) => acc + (sec.lessons?.length ?? 0), 0);
+
+  const difficultyStr = c.difficulty
+    ? c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1)
+    : "";
+
+  const resolvedCategoryName = overview.category?.name;
+  const resolvedLanguage = getLanguageLabel(overview.settings?.language);
+
+  const showInstructor = overview.settings?.showInstructorName !== false;
+  const resolvedInstructorName = showInstructor
+    ? (c.instructorAlias?.trim() || overview.creator?.displayName || defaultInstructorName)
+    : undefined;
+
+  const resolvedDuration = overview.settings?.estimatedDuration
+    ? `${overview.settings.estimatedDuration}h`
+    : overview.stats?.totalDurationSeconds
+      ? `${Math.round(overview.stats.totalDurationSeconds / 3600)}h`
+      : "0h0m";
+
+  const resolvedThumbnail = c.thumbnailMediaId
+    ? `/api/v1/media/${c.thumbnailMediaId}`
+    : c.slug
+      ? getCourseThumbnail(c.slug)
+      : "/assets/instructor-poster.jpg";
+
+  const adaptedCourse: Course = {
+    id: c.id,
+    slug: c.slug,
+    title: c.title || "Untitled Course",
+    description: c.description || c.shortDescription || "",
+    level: (difficultyStr || "Beginner") as CourseLevel,
+    category: (resolvedCategoryName || "Development") as CourseCategory,
+    sections: totalSections,
+    lectures: totalLessons,
+    progress: null,
+    enrolled: false,
+    duration: resolvedDuration,
+    students: 0,
+    thumbnail: resolvedThumbnail,
+    lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
+  };
+
+  const adaptedSections: CourseSection[] = (overview.sections || [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((sec, secIdx) => ({
+      id: secIdx + 1,
+      title: sec.title || `Section ${secIdx + 1}`,
+      progress: `0/${sec.lessons?.length ?? 0}`,
+      lessons: (sec.lessons || [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((les, lesIdx) => [
+          lesIdx + 1,
+          les.title || `Lesson ${lesIdx + 1}`,
+          "",
+          "todo" as const,
+        ]),
+    }));
+
+  const finalPerks: string[] = Array.isArray(overview.includes)
+    ? overview.includes
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((inc) => inc.text.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  let pricingProps: CourseOverviewPricingProps;
+  const pr = overview.pricing;
+  if (!pr || pr.pricingType === "free") {
+    pricingProps = { price: "Free" };
+  } else {
+    const activeSale = isCourseSaleActive(
+      pr.salePrice,
+      pr.price,
+    );
+
+    if (activeSale && pr.salePrice != null) {
+      const discountPct = Math.round(
+        ((pr.price - pr.salePrice) / pr.price) * 100,
+      );
+      pricingProps = {
+        price: formatPriceWithCurrency(pr.salePrice, pr.currency),
+        originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
+        discount: `${discountPct}% OFF`,
+      };
+    } else {
+      pricingProps = {
+        price: formatPriceWithCurrency(pr.price, pr.currency),
+      };
+    }
+  }
+
+  return {
+    course: adaptedCourse,
+    description: c.description || "",
+    shortDescription: c.shortDescription?.trim() || undefined,
+    categoryName: resolvedCategoryName,
+    language: resolvedLanguage,
+    sections: adaptedSections,
+    inclusions: finalPerks,
+    pricing: pricingProps,
+    instructorName: resolvedInstructorName,
+  };
+}
+
+export function adaptPreviewDataToOverview(
+  previewData: CourseEditorDataResponse,
+  serverCategories: Category[],
+  defaultInstructorName: string,
+): AdaptedOverviewData {
+  const c = previewData.course;
+  const totalSections = previewData.sections.length;
+  const totalLessons = previewData.sections.reduce(
+    (acc, sec) => acc + (sec.lessons?.length ?? 0),
+    0,
+  );
+
+  const difficultyStr = c.difficulty
+    ? c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1)
+    : "";
+
+  const resolvedCategoryName = c.categoryId
+    ? serverCategories.find((cat) => cat.id === c.categoryId)?.name
+    : undefined;
+
+  const resolvedLanguage = getLanguageLabel(previewData.settings?.language);
+
+  const showInstructor = previewData.settings?.showInstructorName !== false;
+  const resolvedInstructorName = showInstructor
+    ? (c.instructorAlias?.trim() || defaultInstructorName)
+    : undefined;
+
+  const adaptedCourse: Course = {
+    id: c.id,
+    title: c.title || "Untitled Course",
+    description: c.description || "",
+    level: (difficultyStr || "Beginner") as CourseLevel,
+    category: (resolvedCategoryName || "") as CourseCategory,
+    sections: totalSections,
+    lectures: totalLessons,
+    progress: null,
+    enrolled: false,
+    duration: previewData.settings?.estimatedDuration
+      ? `${previewData.settings.estimatedDuration}h`
+      : "0h0m",
+    students: 0,
+    thumbnail: c.thumbnailMediaId
+      ? `/api/v1/media/${c.thumbnailMediaId}`
+      : "/assets/instructor-poster.jpg",
+    lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
+  };
+
+  const adaptedSections: CourseSection[] = (previewData.sections || [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((sec, secIdx) => ({
+      id: secIdx + 1,
+      title: sec.title || `Section ${secIdx + 1}`,
+      progress: `0/${sec.lessons?.length ?? 0}`,
+      lessons: (sec.lessons || [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((les, lesIdx) => [
+          lesIdx + 1,
+          les.title || `Lesson ${lesIdx + 1}`,
+          "", // No fake duration
+          "todo" as const,
+        ]),
+    }));
+
+  const finalPerks: string[] = Array.isArray(previewData.includes)
+    ? previewData.includes
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((inc) => inc.text.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  let pricingProps: CourseOverviewPricingProps;
+  const pr = previewData.pricing;
+  if (!pr || pr.pricingType === "free") {
+    pricingProps = { price: "Free" };
+  } else {
+    const activeSale = isCourseSaleActive(
+      pr.salePrice,
+      pr.price,
+    );
+
+    if (activeSale && pr.salePrice != null) {
+      const discountPct = Math.round(
+        ((pr.price - pr.salePrice) / pr.price) * 100,
+      );
+      pricingProps = {
+        price: formatPriceWithCurrency(pr.salePrice, pr.currency),
+        originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
+        discount: `${discountPct}% OFF`,
+      };
+    } else {
+      pricingProps = {
+        price: formatPriceWithCurrency(pr.price, pr.currency),
+      };
+    }
+  }
+
+  return {
+    course: adaptedCourse,
+    description: c.description || "",
+    shortDescription: c.shortDescription?.trim() || undefined,
+    categoryName: resolvedCategoryName,
+    language: resolvedLanguage,
+    sections: adaptedSections,
+    inclusions: finalPerks,
+    pricing: pricingProps,
+    instructorName: resolvedInstructorName,
+  };
+}
+
 export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = props.courseSlug ?? routeCourseSlug;
   const serverCategories = props.categories ?? [];
+  const authUser = useAuthStore((s) => s.user);
+  const defaultInstructorName =
+    authUser?.displayName || authUser?.username || "Instructor";
+
+  const { data: apiOverview, isLoading: isOverviewLoading } = useCourseOverview(
+    courseSlug,
+    {
+      enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
+    },
+  );
 
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
-    ? (() => {
-        const c = props.previewData.course;
-        const totalSections = props.previewData.sections.length;
-        const totalLessons = props.previewData.sections.reduce(
-          (acc, sec) => acc + (sec.lessons?.length ?? 0),
-          0,
-        );
-
-        const difficultyStr = c.difficulty
-          ? c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1)
-          : "";
-
-        const resolvedCategoryName = c.categoryId
-          ? serverCategories.find((cat) => cat.id === c.categoryId)?.name
-          : undefined;
-
-        const resolvedLanguage = getLanguageLabel(
-          props.previewData.settings?.language,
-        );
-
-        const adaptedCourse: Course = {
-          id: c.id,
-          title: c.title || "Untitled Course",
-          description: c.description || "",
-          level: difficultyStr as CourseLevel,
-          category: (resolvedCategoryName || "") as CourseCategory,
-          sections: totalSections,
-          lectures: totalLessons,
-          progress: null,
-          enrolled: false,
-          duration: props.previewData.settings?.estimatedDuration
-            ? `${props.previewData.settings.estimatedDuration}h`
-            : "",
-          students: 0,
-          thumbnail: c.thumbnailMediaId
-            ? `/api/v1/media/${c.thumbnailMediaId}`
-            : "/assets/instructor-poster.jpg",
-          lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
-        };
-
-        const adaptedSections: CourseSection[] = (props.previewData.sections || [])
-          .slice()
-          .sort((a, b) => a.position - b.position)
-          .map((sec, secIdx) => ({
-            id: secIdx + 1,
-            title: sec.title || `Section ${secIdx + 1}`,
-            progress: `0/${sec.lessons?.length ?? 0}`,
-            lessons: (sec.lessons || [])
-              .slice()
-              .sort((a, b) => a.position - b.position)
-              .map((les, lesIdx) => [
-                lesIdx + 1,
-                les.title || `Lesson ${lesIdx + 1}`,
-                "", // No fake duration
-                "todo" as const,
-              ]),
-          }));
-
-        // Inclusions / Perks from Access Rules, Settings, Sections & Custom Includes
-        const perks: string[] = [];
-        if (props.previewData.accessRules?.durationType === "lifetime") {
-          perks.push("Full lifetime access");
-        } else if (
-          props.previewData.accessRules?.durationType === "fixed_duration" &&
-          props.previewData.accessRules.durationDays
-        ) {
-          perks.push(`${props.previewData.accessRules.durationDays} days access`);
-        }
-        if (props.previewData.settings?.certificateEnabled) {
-          perks.push("Certificate of completion");
-        }
-        if (props.previewData.settings?.allowDownloads) {
-          perks.push("Downloadable resources");
-        }
-        if (
-          props.previewData.sections?.some((s) =>
-            s.lessons?.some((l) => l.isPreview),
-          )
-        ) {
-          perks.push("Free preview");
-        }
-        if (props.previewData.includes && props.previewData.includes.length > 0) {
-          for (const inc of props.previewData.includes) {
-            if (inc.text && !perks.includes(inc.text)) {
-              perks.push(inc.text);
-            }
-          }
-        }
-        const finalPerks = Array.from(new Set(perks)).slice(0, 6);
-
-        // Pricing with dynamic currency and sale window validation
-        let pricingProps: CourseOverviewPricingProps;
-        const pr = props.previewData.pricing;
-        if (!pr || pr.pricingType === "free") {
-          pricingProps = { price: "Free" };
-        } else {
-          const activeSale = isCourseSaleActive(
-            pr.salePrice,
-            pr.price,
-          );
-
-          if (activeSale) {
-            const discountPct = Math.round(
-              ((pr.price - pr.salePrice!) / pr.price) * 100,
-            );
-            pricingProps = {
-              price: formatPriceWithCurrency(pr.salePrice!, pr.currency),
-              originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
-              discount: `${discountPct}% OFF`,
-            };
-          } else {
-            pricingProps = {
-              price: formatPriceWithCurrency(pr.price, pr.currency),
-            };
-          }
-        }
-
-        return {
-          course: adaptedCourse,
-          description: c.description || "",
-          shortDescription: c.shortDescription?.trim() || undefined,
-          categoryName: resolvedCategoryName,
-          language: resolvedLanguage,
-          sections: adaptedSections,
-          inclusions: finalPerks,
-          pricing: pricingProps,
-        };
-      })()
+    ? adaptPreviewDataToOverview(props.previewData, serverCategories, defaultInstructorName)
     : null;
 
+  const adaptedFromOverview = apiOverview
+    ? adaptCourseOverviewResponse(apiOverview, defaultInstructorName)
+    : null;
+
+  const activeAdapted = adaptedFromPreview ?? adaptedFromOverview;
+
   const course =
-    adaptedFromPreview?.course ??
+    activeAdapted?.course ??
     props.customCourse ??
     (courseSlug
-      ? courses.find((candidate) => candidate.id === courseSlug)
+      ? courses.find(
+          (candidate) =>
+            candidate.id === courseSlug || candidate.slug === courseSlug,
+        )
       : undefined);
+
+  if (isOverviewLoading && !course && !props.previewData && !props.customCourse) {
+    return (
+      <div className="w-full max-w-275 mx-auto flex flex-1 flex-col items-center justify-center min-h-[calc(100dvh-140px)] box-border text-(--text)">
+        <div className="flex flex-col items-center justify-center gap-4 text-center p-8 rounded-2xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-w-md w-full my-auto">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
+            <CircleNotch size={36} weight="bold" className="animate-spin text-(--accent)" />
+          </div>
+          <h2 className="m-0 text-[1.2rem] font-bold text-(--text)">
+            Loading course overview...
+          </h2>
+          <p className="m-0 text-[0.85rem] text-(--muted) leading-relaxed">
+            Fetching course syllabus, instructor details, pricing, and curriculum.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!course) {
     return (
@@ -1065,7 +1210,8 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
       key={course.id}
       course={course}
       courseSlug={courseSlug}
-      adaptedFromPreview={adaptedFromPreview}
+      defaultInstructorName={defaultInstructorName}
+      adaptedFromPreview={activeAdapted}
     />
   );
 }
@@ -1073,25 +1219,19 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 type CourseOverviewContentProps = CourseOverviewPageProps & {
   course: Course;
   courseSlug: string | undefined;
-  adaptedFromPreview: {
-    course: Course;
-    description: string;
-    shortDescription: string | undefined;
-    categoryName: string | undefined;
-    language: string | undefined;
-    sections: CourseSection[];
-    inclusions: string[];
-    pricing: CourseOverviewPricingProps;
-  } | null;
+  defaultInstructorName: string;
+  adaptedFromPreview: AdaptedOverviewData | null;
 };
 
 function CourseOverviewContent({
   course,
   courseSlug,
+  defaultInstructorName,
   adaptedFromPreview,
   onNavigateCourses,
   onNavigatePage,
   customCourse,
+  customInstructor,
   customDescription,
   customShortDescription,
   customCategoryName,
@@ -1138,6 +1278,12 @@ function CourseOverviewContent({
       ? adaptedFromPreview?.categoryName
       : customCategoryName ??
         (!isReadOnlyPreview && course.category ? course.category : undefined);
+  const instructorName =
+    adaptedFromPreview !== null
+      ? adaptedFromPreview?.instructorName
+      : customInstructor !== undefined
+        ? customInstructor
+        : defaultInstructorName;
   const language =
     adaptedFromPreview?.language ??
     customLanguage ??
@@ -1234,6 +1380,7 @@ function CourseOverviewContent({
         title={title}
         thumbnail={thumbnail}
         wishlisted={wishlisted}
+        instructorName={instructorName}
         shortDescription={shortDescription}
         categoryName={categoryName}
         language={language}

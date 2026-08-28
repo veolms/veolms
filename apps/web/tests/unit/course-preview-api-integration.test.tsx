@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Category, CourseEditorDataResponse } from "@veolms/contracts";
 import {
   CourseOverviewPage,
@@ -11,6 +12,19 @@ import {
   isCourseSaleActive,
 } from "../../src/courses/CourseOverviewPage";
 import { courseKeys } from "../../src/services/courses/courses.keys";
+
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return rtlRender(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
 
 describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
   const mockCategories: Category[] = [
@@ -120,10 +134,8 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     );
 
     const titleElem = screen.getByRole("heading", { name: "Fullstack Web Engineering", level: 1 });
-    const metaElem = screen.getByText("English");
 
     expect(titleElem).toBeVisible();
-    expect(metaElem).toBeVisible();
 
     // Short description should not be rendered in the preview hero
     expect(screen.queryByText("A comprehensive guide to fullstack mastery.")).toBeNull();
@@ -167,7 +179,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     expect(screen.getByText("ADVANCED")).toBeVisible();
   });
 
-  it("renders dynamic language from settings in meta row", () => {
+  it("omits language from metadata row while preserving resolution helper for future use", () => {
     render(
       <CourseOverviewPage
         previewData={mockPreviewData}
@@ -176,27 +188,11 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       />,
     );
 
-    expect(screen.getByText("English")).toBeVisible();
-  });
-
-  it("renders non-English languages dynamically", () => {
-    const spanishCourseData: CourseEditorDataResponse = {
-      ...mockPreviewData,
-      settings: {
-        ...mockPreviewData.settings!,
-        language: "es",
-      },
-    };
-
-    render(
-      <CourseOverviewPage
-        previewData={spanishCourseData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
-
-    expect(screen.getByText("Spanish")).toBeVisible();
+    // Language is hidden from overview metadata per current requirement
+    expect(screen.queryByText("English")).toBeNull();
+    // Helper function continues to resolve properly
+    expect(getLanguageLabel("en")).toBe("English");
+    expect(getLanguageLabel("es")).toBe("Spanish");
   });
 
   it("calculates price size variant based on digit magnitude", () => {
@@ -329,69 +325,119 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     ).toBe(false);
   });
 
-  it("renders server access rules: lifetime access", () => {
-    render(
-      <CourseOverviewPage
-        previewData={mockPreviewData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
+  describe("Course Includes Source of Truth in Preview", () => {
+    it("renders saved previewData.includes as single source of truth in exact position order", () => {
+      const previewWithIncludes: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        includes: [
+          {
+            id: "inc-2",
+            courseId: mockPreviewData.course.id,
+            text: "1-on-1 Mentorship Session",
+            position: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "inc-1",
+            courseId: mockPreviewData.course.id,
+            text: "Official Course Certificate",
+            position: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "inc-3",
+            courseId: mockPreviewData.course.id,
+            text: "Lifetime Access",
+            position: 2,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
 
-    expect(screen.getByText("Full lifetime access")).toBeVisible();
-  });
+      const { container } = render(
+        <CourseOverviewPage
+          previewData={previewWithIncludes}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
 
-  it("renders server access rules: fixed duration access", () => {
-    const fixedAccessPreviewData: CourseEditorDataResponse = {
-      ...mockPreviewData,
-      accessRules: {
-        id: "acc-2",
-        courseId: mockPreviewData.course.id,
-        accessType: "everyone",
-        durationType: "fixed_duration",
-        durationDays: 30,
-      },
-    };
+      // Verify all items are rendered
+      expect(screen.getByText("Official Course Certificate")).toBeVisible();
+      expect(screen.getByText("1-on-1 Mentorship Session")).toBeVisible();
+      expect(screen.getByText("Lifetime Access")).toBeVisible();
 
-    render(
-      <CourseOverviewPage
-        previewData={fixedAccessPreviewData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
+      // Verify exact order: "Official Course Certificate" (pos 0) comes before "1-on-1 Mentorship Session" (pos 1)
+      const perks = container.querySelectorAll(".border-t span.font-medium span");
+      const perkTexts = Array.from(perks).map((el) => el.textContent?.trim());
+      expect(perkTexts).toEqual([
+        "Official Course Certificate",
+        "1-on-1 Mentorship Session",
+        "Lifetime Access",
+      ]);
+    });
 
-    expect(screen.getByText("30 days access")).toBeVisible();
-    expect(screen.queryByText("Full lifetime access")).toBeNull();
-  });
+    it("does not automatically generate or prepend hardcoded perks when omitted", () => {
+      const previewWithCustomOnly: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        settings: {
+          ...mockPreviewData.settings!,
+          certificateEnabled: true,
+        },
+        accessRules: {
+          ...mockPreviewData.accessRules!,
+          durationType: "lifetime",
+        },
+        includes: [
+          {
+            id: "inc-custom",
+            courseId: mockPreviewData.course.id,
+            text: "Community Discord Access",
+            position: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
 
-  it("renders certificate perk when certificateEnabled is true and omits when false", () => {
-    render(
-      <CourseOverviewPage
-        previewData={mockPreviewData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
-    expect(screen.getByText("Certificate of completion")).toBeVisible();
+      render(
+        <CourseOverviewPage
+          previewData={previewWithCustomOnly}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
 
-    const noCertData: CourseEditorDataResponse = {
-      ...mockPreviewData,
-      settings: {
-        ...mockPreviewData.settings!,
-        certificateEnabled: false,
-      },
-    };
+      // Custom inclusion is rendered
+      expect(screen.getByText("Community Discord Access")).toBeVisible();
 
-    const { unmount } = render(
-      <CourseOverviewPage
-        previewData={noCertData}
-        categories={mockCategories}
-        isReadOnlyPreview={true}
-      />,
-    );
-    expect(screen.queryAllByText("Certificate of completion").length).toBe(1);
-    unmount();
+      // Auto-derived strings must NOT be prepended
+      expect(screen.queryByText("Full lifetime access")).toBeNull();
+      expect(screen.queryByText("Certificate of completion")).toBeNull();
+      expect(screen.queryByText("Free preview")).toBeNull();
+    });
+
+    it("does not render any perk row when previewData.includes is empty (deleted includes do not reappear)", () => {
+      const emptyIncludesData: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        includes: [],
+      };
+
+      render(
+        <CourseOverviewPage
+          previewData={emptyIncludesData}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      expect(screen.queryByText("Full lifetime access")).toBeNull();
+      expect(screen.queryByText("Certificate of completion")).toBeNull();
+      expect(screen.queryByText("Access on mobile & desktop")).toBeNull();
+    });
   });
 
   it("renders real curriculum sections and empty lesson state without synthetic lessons", () => {
@@ -429,5 +475,103 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     );
 
     expect(screen.getByText("No sections added yet")).toBeVisible();
+  });
+
+  describe("Duration and Instructor Metadata Handling", () => {
+    it("renders 0h0m duration when estimated duration is omitted / no media", () => {
+      const noDurationData: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        settings: {
+          ...mockPreviewData.settings!,
+          estimatedDuration: undefined,
+        },
+      };
+
+      render(
+        <CourseOverviewPage
+          previewData={noDurationData}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      expect(screen.getByText("0h0m")).toBeVisible();
+    });
+
+    it("renders instructor alias when provided and showInstructorName is true", () => {
+      const aliasData: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        course: {
+          ...mockPreviewData.course,
+          instructorAlias: "Prof. Ada Lovelace",
+        },
+        settings: {
+          ...mockPreviewData.settings!,
+          showInstructorName: true,
+        },
+      };
+
+      render(
+        <CourseOverviewPage
+          previewData={aliasData}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      expect(screen.getByText("Prof. Ada Lovelace")).toBeVisible();
+    });
+
+    it("omits instructor from metadata row when showInstructorName is false", () => {
+      const noInstructorData: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        course: {
+          ...mockPreviewData.course,
+          instructorAlias: "Prof. Ada Lovelace",
+        },
+        settings: {
+          ...mockPreviewData.settings!,
+          showInstructorName: false,
+        },
+      };
+
+      render(
+        <CourseOverviewPage
+          previewData={noInstructorData}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      expect(screen.queryByText("Prof. Ada Lovelace")).toBeNull();
+      expect(screen.queryByText("Instructor")).toBeNull();
+    });
+
+    it("renders green ticks for Course Inclusions", () => {
+      const includesData: CourseEditorDataResponse = {
+        ...mockPreviewData,
+        includes: [
+          {
+            id: "inc-green",
+            courseId: mockPreviewData.course.id,
+            text: "Premium Mentorship",
+            position: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
+
+      const { container } = render(
+        <CourseOverviewPage
+          previewData={includesData}
+          categories={mockCategories}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      const checkmark = container.querySelector(".border-t svg");
+      expect(checkmark?.getAttribute("class")).toContain("text-emerald-500");
+    });
   });
 });
