@@ -4,6 +4,7 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
+import * as setupRepo from "../../auth/setup/setup.repository.ts";
 
 export interface InvoiceService {
   generateInvoiceData(
@@ -31,6 +32,7 @@ export function createInvoiceService({
     const items = await orderRepo.listOrderItems(database, orderId);
     const payment = await paymentRepo.findPaymentByOrderId(database, orderId);
     const user = await authRepo.findUserById(database, order.user_id);
+    const academy = await setupRepo.findAcademy(database);
 
     const paymentRef = payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";
 
@@ -44,7 +46,9 @@ export function createInvoiceService({
         email: user?.email,
       },
       seller: {
-        name: "VeoLMS Academy",
+        name: academy?.name || "Academy",
+        logoUrl: academy?.logo_url ?? null,
+        customDomain: academy?.custom_domain ?? null,
       },
       currency: order.currency,
       subtotalAmount: order.subtotal_amount,

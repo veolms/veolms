@@ -9,6 +9,7 @@ import * as paymentRepo from "../payments/payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
+import * as setupRepo from "../../auth/setup/setup.repository.ts";
 import * as webhookRepo from "../webhooks/webhook.repository.ts";
 import {
   createPaymentReconciliationService,
@@ -158,15 +159,23 @@ export function createPaymentWorker({
             "Post-purchase invoice event recorded",
           );
 
+          const academy = await setupRepo.findAcademy(database);
+          const academyName = academy?.name || "Academy";
+          const academyLogoHtml = academy?.logo_url
+            ? `<div style="margin-bottom: 16px;"><img src="${academy.logo_url}" alt="${academyName}" style="max-height: 48px; object-fit: contain;" /></div>`
+            : "";
+
           if (emailService && user?.email) {
             await emailService.send(user.email, {
               subject: `Order Confirmation & Receipt - ${order.order_number}`,
-              text: `Hi ${user.display_name},\n\nThank you for your purchase!\n\nOrder Number: ${order.order_number}\nPayment Reference: ${paymentRef}\nSubtotal: ${subtotalFormatted}\nDiscount: ${discountFormatted}\nTotal Paid: ${totalFormatted}\n\nPurchased Courses:\n${itemsSummary}\n\nYour course access is now active in your dashboard.\n\nHappy Learning,\nVeoLMS Team`,
+              text: `Hi ${user.display_name},\n\nThank you for your purchase!\n\nOrder Number: ${order.order_number}\nSeller: ${academyName}\nPayment Reference: ${paymentRef}\nSubtotal: ${subtotalFormatted}\nDiscount: ${discountFormatted}\nTotal Paid: ${totalFormatted}\n\nPurchased Courses:\n${itemsSummary}\n\nYour course access is now active in your dashboard.\n\nHappy Learning,\n${academyName} Team`,
               html: `
                 <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
+                  ${academyLogoHtml}
                   <h2>Thank You for Your Order!</h2>
-                  <p>Hi <strong>${user.display_name}</strong>, your payment was successful.</p>
+                  <p>Hi <strong>${user.display_name}</strong>, your payment to <strong>${academyName}</strong> was successful.</p>
                   <table style="width: 100%; max-width: 500px; border-collapse: collapse; margin: 16px 0;">
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Seller / Academy:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${academyName}</td></tr>
                     <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Order Number:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${order.order_number}</td></tr>
                     <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Payment Reference:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${paymentRef}</td></tr>
                     <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Subtotal:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${subtotalFormatted}</td></tr>
@@ -178,6 +187,7 @@ export function createPaymentWorker({
                     ${itemsHtmlList}
                   </ul>
                   <p>You can now start learning immediately from your courses dashboard.</p>
+                  <p style="margin-top: 24px; font-size: 13px; color: #777;">&mdash; ${academyName} Team</p>
                 </div>
               `,
             });

@@ -360,6 +360,8 @@ export const invoiceSchema = z.strictObject({
   }),
   seller: z.strictObject({
     name: z.string(),
+    logoUrl: z.string().nullable().optional(),
+    customDomain: z.string().nullable().optional(),
   }),
   currency: z.string().length(3),
   subtotalAmount: z.number().int().nonnegative(),
