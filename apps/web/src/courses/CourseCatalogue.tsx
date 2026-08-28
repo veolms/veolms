@@ -34,6 +34,7 @@ export interface CourseCatalogueProps {
   setNotice: (notice: string) => void;
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
+  onDeleteCourse?: (course: Course) => Promise<void> | void;
 }
 
 export function CourseCatalogue({
@@ -56,6 +57,7 @@ export function CourseCatalogue({
   setNotice,
   onNavigatePage,
   onResetCatalogue,
+  onDeleteCourse,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -274,8 +276,20 @@ export function CourseCatalogue({
         }
         confirmLabel="Delete Course"
         holdDurationMs={900}
-        onConfirm={() => {
-          if (pendingDelete) setNotice(`${pendingDelete.title} was deleted.`);
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          const target = pendingDelete;
+          try {
+            if (onDeleteCourse) {
+              await onDeleteCourse(target);
+            } else {
+              setNotice(`${target.title} was deleted.`);
+            }
+          } catch {
+            // Failure is handled by onDeleteCourse toast notification
+          } finally {
+            setPendingDelete(null);
+          }
         }}
         onClose={() => setPendingDelete(null)}
       />

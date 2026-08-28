@@ -80,6 +80,10 @@ export const coursesService = {
     return api.patch<Course>(`/courses/${id}/basics`, payload);
   },
 
+  deleteCourse: (id: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/courses/${id}`);
+  },
+
   listCategories: (): Promise<Category[]> => {
     return api.get<Category[]>("/categories");
   },

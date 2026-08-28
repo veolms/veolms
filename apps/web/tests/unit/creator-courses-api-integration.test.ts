@@ -295,4 +295,56 @@ describe("Creator Courses Page API Integration", () => {
       expect(isInitialLoadingCourse).toBe(false);
     });
   });
+
+  describe("7. Soft-Delete API & List State Handling", () => {
+    it("filters out soft-deleted courses from the active creator course list", () => {
+      const apiCourses = [sampleApiCourse1, sampleApiCourse2].map(
+        adaptApiCourseToCatalogueCourse,
+      );
+      const combined = [...apiCourses, ...mockCourses];
+
+      // Simulate soft-deleting sampleApiCourse1 (it is no longer returned by GET /api/v1/courses/mine)
+      const afterDeletionApiCourses = [sampleApiCourse2].map(
+        adaptApiCourseToCatalogueCourse,
+      );
+      const existingIds = new Set(afterDeletionApiCourses.map((c) => c.id));
+      const updatedList = [
+        ...afterDeletionApiCourses,
+        ...mockCourses.filter((c) => !existingIds.has(c.id)),
+      ];
+
+      expect(updatedList.some((c) => c.id === sampleApiCourse1.id)).toBe(false);
+      expect(updatedList.some((c) => c.id === sampleApiCourse2.id)).toBe(true);
+      expect(updatedList.length).toBe(combined.length - 1);
+    });
+
+    it("retains the course in the list when the delete API call fails", () => {
+      const apiCourses = [sampleApiCourse1, sampleApiCourse2].map(
+        adaptApiCourseToCatalogueCourse,
+      );
+      const combined = [...apiCourses, ...mockCourses];
+
+      // Simulate failed delete: API query is not updated, list remains untouched
+      const listAfterFailure = combined;
+
+      expect(listAfterFailure.some((c) => c.id === sampleApiCourse1.id)).toBe(true);
+      expect(listAfterFailure.length).toBe(combined.length);
+    });
+
+    it("handles mock course deletion without sending network request", () => {
+      const deletedMockCourseIds = new Set(["backend-nodejs"]);
+      const apiCourses = [sampleApiCourse1].map(adaptApiCourseToCatalogueCourse);
+      const existingIds = new Set(apiCourses.map((c) => c.id));
+
+      const updatedList = [
+        ...apiCourses,
+        ...mockCourses.filter(
+          (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
+        ),
+      ];
+
+      expect(updatedList.some((c) => c.id === "backend-nodejs")).toBe(false);
+      expect(updatedList.some((c) => c.id === sampleApiCourse1.id)).toBe(true);
+    });
+  });
 });

@@ -58,7 +58,7 @@ import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
-import { useMyCourses } from "./services/courses";
+import { useDeleteCourse, useMyCourses } from "./services/courses";
 import { adaptApiCourseToCatalogueCourse } from "./courses/courseAdapter";
 import {
   getDefaultNavigationOrder,
@@ -696,6 +696,10 @@ export function CoursesPage({
   const activeUser = authUser || storeUser;
   const logoutMutation = useLogout();
   const { data: myCoursesData } = useMyCourses();
+  const deleteCourseMutation = useDeleteCourse();
+  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
@@ -1482,10 +1486,34 @@ export function CoursesPage({
     );
     const existingIds = new Set(apiCourses.map((c) => c.id));
     const nonConflictingMockCourses = courses.filter(
-      (c) => !existingIds.has(c.id),
+      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
     );
     return [...apiCourses, ...nonConflictingMockCourses];
-  }, [myCoursesData?.courses, role]);
+  }, [deletedMockCourseIds, myCoursesData?.courses, role]);
+
+  const handleDeleteCourse = async (course: Course) => {
+    const isMock = !course.id.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+
+    if (isMock) {
+      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
+      setNotice(`${course.title} was deleted.`);
+      return;
+    }
+
+    try {
+      await deleteCourseMutation.mutateAsync(course.id);
+      setNotice(`${course.title} was deleted.`);
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      setNotice(
+        apiError?.message ||
+          `Failed to delete "${course.title}". Please try again.`,
+      );
+      throw err;
+    }
+  };
 
   const visibleCourses = useMemo(
     () =>
@@ -3496,6 +3524,7 @@ export function CoursesPage({
               setNotice={setNotice}
               onNavigatePage={onNavigatePage}
               onResetCatalogue={resetCatalogue}
+              onDeleteCourse={handleDeleteCourse}
             />
           )}
         </>

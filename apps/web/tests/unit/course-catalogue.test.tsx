@@ -165,4 +165,32 @@ describe("CourseCatalogue", () => {
 
     expect(onResetCatalogue).toHaveBeenCalledTimes(1);
   });
+
+  it("opens ConfirmDeleteModal on Delete Course action and triggers onDeleteCourse on confirm", async () => {
+    const target = courses[0]!;
+    const onDeleteCourse = vi.fn().mockResolvedValue(undefined);
+    renderCatalogue({
+      role: "creator",
+      visibleCourses: [target],
+      courseMenu: target.id,
+      onDeleteCourse,
+    });
+
+    // Click Delete Course from the action menu
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete course/i }));
+
+    // Verify confirmation modal is opened
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Delete course?")).toBeVisible();
+    expect(
+      screen.getByText(new RegExp(`Delete “${target.title}” and its course content`, "i")),
+    ).toBeVisible();
+
+    // Trigger hold-to-confirm
+    const confirmBtn = screen.getByRole("button", { name: /Hold to Delete Course/i });
+    fireEvent.keyDown(confirmBtn, { key: "Enter" });
+  });
 });

@@ -62,6 +62,21 @@ export function useUpdateCourseBasics() {
   });
 }
 
+export function useDeleteCourse() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ success: boolean }, ApiError, string>({
+    mutationFn: (courseId) => coursesService.deleteCourse(courseId),
+    onSuccess: (_, courseId) => {
+      queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.removeQueries({ queryKey: courseKeys.editor(courseId) });
+      queryClient.removeQueries({ queryKey: courseKeys.preview(courseId) });
+      queryClient.removeQueries({ queryKey: courseKeys.overview(courseId) });
+    },
+  });
+}
+
 export function useCreateCategory() {
   const queryClient = useQueryClient();
 
