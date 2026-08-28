@@ -3,7 +3,9 @@ import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
@@ -156,9 +158,6 @@ export function CommentCard({
                   <h2 className="text-[15px] font-semibold text-(--text) sm:text-base">
                     {comment.name}
                   </h2>
-                  <span className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-(--accent-ink,var(--accent)) sm:text-xs">
-                    {entryLabel}
-                  </span>
                   {comment.visibility && comment.visibility !== "public" && (
                     <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
                       {comment.visibility}
@@ -174,6 +173,24 @@ export function CommentCard({
                   <span className="text-xs text-(--muted) sm:text-sm">
                     {comment.time}
                   </span>
+                  {entryKind !== "comment" && (
+                    <span
+                      role="img"
+                      aria-label={entryLabel}
+                      title={entryLabel}
+                      className={`inline-flex size-5 items-center justify-center ${
+                        entryKind === "note"
+                          ? "text-amber-700 [[data-theme=dark]_&]:text-amber-300"
+                          : "text-violet-700 [[data-theme=dark]_&]:text-violet-400"
+                      }`}
+                    >
+                      {entryKind === "note" ? (
+                        <Notepad size={17} weight="bold" aria-hidden="true" />
+                      ) : (
+                        <Question size={17} weight="bold" aria-hidden="true" />
+                      )}
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={comment.name}

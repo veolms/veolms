@@ -125,6 +125,72 @@ describe("CommentCard", () => {
     expect(within(replyEngagement).queryByText("45 minutes ago")).toBeNull();
   });
 
+  it("uses trailing icons for notes and Q&As without labeling comments", () => {
+    const { container, rerender } = render(
+      <CommentCard
+        comment={{
+          id: 10,
+          name: "Ashi Singh",
+          time: "Just now",
+          avatar: "/ashi.jpg",
+          text: "Remember this.",
+          likes: 0,
+          entryKind: "note",
+        }}
+        onLike={vi.fn()}
+      />,
+    );
+
+    let meta = container.querySelector<HTMLElement>("[data-comment-meta]");
+    if (!meta) throw new Error("Expected comment metadata row");
+    expect(within(meta).queryByText("Note")).toBeNull();
+    expect(within(meta).getByRole("img", { name: "Note" })).toBeVisible();
+    expect(within(meta).getByText("Just now").nextElementSibling).toHaveAttribute(
+      "aria-label",
+      "Note",
+    );
+
+    rerender(
+      <CommentCard
+        comment={{
+          id: 11,
+          name: "Ashi Singh",
+          time: "Just now",
+          avatar: "/ashi.jpg",
+          text: "Why is this true?",
+          likes: 0,
+          entryKind: "question",
+        }}
+        onLike={vi.fn()}
+      />,
+    );
+
+    meta = container.querySelector<HTMLElement>("[data-comment-meta]");
+    if (!meta) throw new Error("Expected comment metadata row");
+    expect(within(meta).queryByText("Q&A")).toBeNull();
+    expect(within(meta).getByRole("img", { name: "Q&A" })).toBeVisible();
+
+    rerender(
+      <CommentCard
+        comment={{
+          id: 12,
+          name: "Ashi Singh",
+          time: "Just now",
+          avatar: "/ashi.jpg",
+          text: "A regular comment.",
+          likes: 0,
+          entryKind: "comment",
+        }}
+        onLike={vi.fn()}
+      />,
+    );
+
+    meta = container.querySelector<HTMLElement>("[data-comment-meta]");
+    if (!meta) throw new Error("Expected comment metadata row");
+    expect(within(meta).queryByText("Comment")).toBeNull();
+    expect(within(meta).queryByRole("img")).toBeNull();
+  });
+
   it("offers sharing for every entry while keeping owner actions scoped", async () => {
     const { unmount } = render(
       <CommentCard
