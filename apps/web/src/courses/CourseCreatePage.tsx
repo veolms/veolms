@@ -859,8 +859,8 @@ export function CourseWizardSkeleton({
       data-testid="course-wizard-skeleton"
     >
       {/* Wizard Header Skeleton */}
-      <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full">
-        <div className="flex items-start justify-between gap-4 mb-4.5 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
+      <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full">
+        <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
           <div className="flex items-start gap-3 min-w-0">
             <button
               type="button"
@@ -879,7 +879,7 @@ export function CourseWizardSkeleton({
                   Draft
                 </span>
               </div>
-              <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+              <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem] max-w-155 leading-[1.35]">
                 {activeStep === "curriculum"
                   ? "Manage and organize your course sections, lessons, and resources."
                   : activeStep === "access-rules"
@@ -906,31 +906,31 @@ export function CourseWizardSkeleton({
             </div>
           </div>
         </div>
-
-        {/* Wizard Steps Navigation Bar */}
-        <nav
-          className="course-wizard-steps-nav settings-tabs page-tabs relative mt-0! bg-transparent! pt-0! border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)]"
-          aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
-        >
-          {WIZARD_STEPS.map((step) => {
-            const Icon = step.Icon;
-            const isActive = activeStep === step.id;
-            return (
-              <button
-                key={step.id}
-                type="button"
-                className={`!border-b-transparent shrink-0 whitespace-nowrap ${
-                  isActive ? "is-active font-bold text-(--text)" : "opacity-60"
-                }`}
-                disabled
-              >
-                <Icon size={18} />
-                <span>{step.label}</span>
-              </button>
-            );
-          })}
-        </nav>
       </header>
+
+      {/* Wizard Steps Navigation Bar */}
+      <nav
+        className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+        aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
+      >
+        {WIZARD_STEPS.map((step) => {
+          const Icon = step.Icon;
+          const isActive = activeStep === step.id;
+          return (
+            <button
+              key={step.id}
+              type="button"
+              className={`!border-b-transparent shrink-0 whitespace-nowrap ${
+                isActive ? "is-active font-bold text-(--text)" : "opacity-60"
+              }`}
+              disabled
+            >
+              <Icon size={18} />
+              <span>{step.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Main step content skeleton matching activeStep */}
       <div className="flex-1 w-full min-w-0">
@@ -4648,14 +4648,14 @@ export function CourseCreatePage({
           <div className="mt-5 flex items-center gap-3">
             <button
               type="button"
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-4 text-[0.82rem] font-semibold text-(--text-secondary) cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-4 text-[0.82rem] font-semibold text-(--text) cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:text-(--text)"
               onClick={handleBack}
             >
               Back to Courses
             </button>
             <button
               type="button"
-              className="inline-flex h-9 items-center justify-center rounded-lg border-none bg-(--accent) px-4 text-[0.82rem] font-semibold text-white cursor-pointer transition-colors hover:bg-(--accent-hover)"
+              className="inline-flex h-9 items-center justify-center rounded-lg border-none bg-(--accent) px-4 text-[0.82rem] font-semibold text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow,rgba(0,0,0,0.2))] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) hover:brightness-110 active:scale-[0.98]"
               onClick={() => void refetchEditor()}
             >
               Retry
@@ -4669,8 +4669,8 @@ export function CourseCreatePage({
   return (
     <div className="relative flex w-full flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
       {/* Wizard Header */}
-      <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
-        <div className="flex items-start justify-between gap-4 mb-4.5 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
+      <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
+        <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
           <div className="flex items-start gap-3 min-w-0">
             <button
               type="button"
@@ -4695,7 +4695,7 @@ export function CourseCreatePage({
                   {isPublished ? "Published" : "Draft"}
                 </span>
               </div>
-              <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+              <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem] max-w-155 leading-[1.35]">
                 {activeStep === "curriculum"
                   ? isEditing
                     ? "Manage and organize your course sections, lessons, and resources."
@@ -4934,72 +4934,72 @@ export function CourseCreatePage({
             <span>{publishValidationError}</span>
           </div>
         )}
-
-        {/* Wizard Steps Navigation */}
-        <nav
-          ref={stepsNavRef}
-          className="course-wizard-steps-nav settings-tabs page-tabs relative mt-0! bg-transparent! pt-0! border-b border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:hidden!"
-          aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
-          role="tablist"
-          onMouseDown={handleNavMouseDown}
-          onMouseLeave={handleNavMouseLeave}
-          onMouseUp={handleNavMouseUp}
-          onMouseMove={handleNavMouseMove}
-        >
-          {/* Standard page-tabs indicator - driven by --page-tab-indicator-* CSS vars */}
-          <span className="page-tabs__indicator" aria-hidden="true" />
-          {WIZARD_STEPS.map((step, idx) => {
-            const Icon = step.Icon;
-            const isActive = activeStep === step.id;
-            const isDirty = isStepDirty(step.id);
-            return (
-              <button
-                key={step.id}
-                id={`course-wizard-tab-${step.id}`}
-                ref={(el) => {
-                  tabRefs.current[step.id] = el;
-                }}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls="course-wizard-tab-panel"
-                aria-keyshortcuts={`Alt+${idx + 1}`}
-                tabIndex={isActive ? 0 : -1}
-                data-page-tab-tone={step.tone}
-                data-swipe-tab-id={step.id}
-                disabled={
-                  isAnyApiInProgress
-                }
-                className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
-                onClick={() => {
-                  if (isAnyApiInProgress) {
-                    return;
-                  }
-                  const currentIdx = WIZARD_STEPS.findIndex(
-                    (s) => s.id === activeStep,
-                  );
-                  if (idx > currentIdx) setSlideDirection("right");
-                  else if (idx < currentIdx) setSlideDirection("left");
-                  setActiveStep(step.id);
-                }}
-                onKeyDown={handleRovingTabKeyDown}
-              >
-                <Icon size={17} weight={isActive ? "fill" : "regular"} />
-                <span className="inline-flex items-center gap-1.5">
-                  <span>{step.label}</span>
-                  {isDirty && (
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-(--accent) shrink-0"
-                      title="Unsaved changes"
-                      aria-label="Unsaved changes"
-                    />
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
       </header>
+
+      {/* Wizard Steps Navigation */}
+      <nav
+        ref={stepsNavRef}
+        className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:hidden!"
+        aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
+        role="tablist"
+        onMouseDown={handleNavMouseDown}
+        onMouseLeave={handleNavMouseLeave}
+        onMouseUp={handleNavMouseUp}
+        onMouseMove={handleNavMouseMove}
+      >
+        {/* Standard page-tabs indicator - driven by --page-tab-indicator-* CSS vars */}
+        <span className="page-tabs__indicator" aria-hidden="true" />
+        {WIZARD_STEPS.map((step, idx) => {
+          const Icon = step.Icon;
+          const isActive = activeStep === step.id;
+          const isDirty = isStepDirty(step.id);
+          return (
+            <button
+              key={step.id}
+              id={`course-wizard-tab-${step.id}`}
+              ref={(el) => {
+                tabRefs.current[step.id] = el;
+              }}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="course-wizard-tab-panel"
+              aria-keyshortcuts={`Alt+${idx + 1}`}
+              tabIndex={isActive ? 0 : -1}
+              data-page-tab-tone={step.tone}
+              data-swipe-tab-id={step.id}
+              disabled={
+                isAnyApiInProgress
+              }
+              className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
+              onClick={() => {
+                if (isAnyApiInProgress) {
+                  return;
+                }
+                const currentIdx = WIZARD_STEPS.findIndex(
+                  (s) => s.id === activeStep,
+                );
+                if (idx > currentIdx) setSlideDirection("right");
+                else if (idx < currentIdx) setSlideDirection("left");
+                setActiveStep(step.id);
+              }}
+              onKeyDown={handleRovingTabKeyDown}
+            >
+              <Icon size={17} weight={isActive ? "fill" : "regular"} />
+              <span className="inline-flex items-center gap-1.5">
+                <span>{step.label}</span>
+                {isDirty && (
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full bg-(--accent) shrink-0"
+                    title="Unsaved changes"
+                    aria-label="Unsaved changes"
+                  />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
       <SwipeableTabPanel
@@ -8053,7 +8053,7 @@ export function CourseCreatePage({
                 3. What happens after publishing?
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 min-[1024px]:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {/* Feature 1: Visible to students */}
                 <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
                   <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">

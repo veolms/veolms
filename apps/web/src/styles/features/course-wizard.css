@@ -3,6 +3,34 @@
    The wizard nav uses the .page-tabs contract so the user's "Page tab colors"
    setting is respected. The indicator must always be visible (no swipe state).
    ───────────────────────────────────────────────────────────────────────────── */
+/* Sticky Course Wizard Tabs Navigation */
+.course-wizard-steps-nav {
+  --wizard-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
+  position: sticky !important;
+  top: var(--page-tabs-sticky-top, 0px) !important;
+  z-index: 30 !important;
+  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 14px !important;
+  padding: 0 var(--wizard-tab-nav-bleed) !important;
+  gap: 8px !important;
+  background: color-mix(in srgb, var(--main-surface) 78%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent) !important;
+}
+
+:root[data-theme="light"] .course-wizard-steps-nav {
+  border-bottom-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--main-surface) 84%, transparent) !important;
+}
+
+.course-wizard-steps-nav button,
+.course-wizard-steps-nav [role="tab"] {
+  min-height: 48px !important;
+  padding: 0 14px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+}
+
 .course-wizard-steps-nav .page-tabs__indicator {
   opacity: 1;
   transition:
@@ -24,6 +52,14 @@
   border-right: 0 !important;
   border-top: 0 !important;
   border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+}
+
+.course-wizard-steps-nav [role="tab"]:hover,
+.course-wizard-steps-nav button:hover {
+  color: var(--text) !important;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .course-wizard-steps-nav [role="tab"]:focus-visible,
