@@ -70,6 +70,14 @@ export async function listOrderItems(database: Executor, orderId: string) {
     .execute();
 }
 
+export async function findOrderItemById(database: Executor, orderItemId: string) {
+  return await database
+    .selectFrom("order_items")
+    .selectAll()
+    .where("id", "=", orderItemId)
+    .executeTakeFirst();
+}
+
 export async function listOrderItemsByOrderIds(
   database: Executor,
   orderIds: string[],

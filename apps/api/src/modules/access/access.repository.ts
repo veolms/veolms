@@ -102,3 +102,20 @@ export async function revokeAccessGrantsByOrderId(
     .returningAll()
     .execute();
 }
+
+export async function revokeAccessGrantsForOrderCourse(
+  database: Executor,
+  orderId: string,
+  courseId: string,
+) {
+  return await database
+    .updateTable("access_grants")
+    .set({
+      status: "revoked",
+      updated_at: new Date(),
+    })
+    .where("order_id", "=", orderId)
+    .where("course_id", "=", courseId)
+    .returningAll()
+    .execute();
+}

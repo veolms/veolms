@@ -6,6 +6,7 @@ export type RefundStatus = z.infer<typeof refundStatusSchema>;
 export const refundSchema = z.strictObject({
   id: z.uuid(),
   orderId: z.uuid(),
+  orderItemId: z.uuid().nullable().optional(),
   paymentId: z.uuid(),
   gatewayRefundId: z.string().nullable().optional(),
   amount: z.number().int().positive(),
@@ -20,6 +21,7 @@ export type Refund = z.infer<typeof refundSchema>;
 
 export const createRefundRequestSchema = z.strictObject({
   orderId: z.uuid(),
+  orderItemId: z.uuid().optional(),
   amount: z.number().int().positive().optional(),
   reason: z.string().max(500).optional(),
   preserveAccess: z.boolean().default(false),

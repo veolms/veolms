@@ -170,6 +170,7 @@ export interface PaymentAttemptTable {
 export interface RefundTable {
   id: string;
   order_id: string;
+  order_item_id: string | null;
   payment_id: string;
   gateway_refund_id: string | null;
   amount: number;

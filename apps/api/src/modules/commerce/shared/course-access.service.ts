@@ -47,6 +47,16 @@ export interface CourseAccessService {
    * each re-implement the course/bundle resolution loop.
    */
   revokeAccessForOrder(database: Executor, order: OrderRefLike): Promise<void>;
+
+  /**
+   * Revokes access_grants and enrollments specifically for a single refunded order item
+   * (expanding bundle item courses if the refunded item was a bundle).
+   */
+  revokeAccessForOrderItem(
+    database: Executor,
+    order: OrderRefLike,
+    item: OrderItemRefLike,
+  ): Promise<void>;
 }
 
 export function createCourseAccessService({
@@ -128,5 +138,22 @@ export function createCourseAccessService({
     await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
   }
 
-  return { grantAccessForOrder, revokeAccessForOrder };
+  async function revokeAccessForOrderItem(
+    database: Executor,
+    order: OrderRefLike,
+    item: OrderItemRefLike,
+  ): Promise<void> {
+    if (item.item_type === "course" && item.course_id) {
+      await accessService.revokeAccessForOrderCourse(database, order.id, item.course_id);
+      await enrollmentRepo.revokeEnrollmentsForOrderCourse(database, order.id, item.course_id);
+    } else if (item.item_type === "bundle" && item.bundle_id) {
+      const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
+      for (const bc of bundleCourses) {
+        await accessService.revokeAccessForOrderCourse(database, order.id, bc.course_id);
+        await enrollmentRepo.revokeEnrollmentsForOrderCourse(database, order.id, bc.course_id);
+      }
+    }
+  }
+
+  return { grantAccessForOrder, revokeAccessForOrder, revokeAccessForOrderItem };
 }

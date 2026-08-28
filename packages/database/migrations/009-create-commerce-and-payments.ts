@@ -303,6 +303,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("order_id", "uuid", (col) =>
       col.notNull().references("orders.id").onDelete("restrict"),
     )
+    .addColumn("order_item_id", "uuid", (col) =>
+      col.references("order_items.id").onDelete("set null"),
+    )
     .addColumn("payment_id", "uuid", (col) =>
       col.notNull().references("payments.id").onDelete("restrict"),
     )

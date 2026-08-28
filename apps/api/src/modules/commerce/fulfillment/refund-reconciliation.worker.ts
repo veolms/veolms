@@ -133,6 +133,15 @@ export function createRefundReconciliationWorker({
               // Single shared owner of the access_grants + enrollments
               // revoke write — see course-access.service.ts.
               await courseAccessService.revokeAccessForOrder(trx, order);
+            } else if (refund.order_item_id) {
+              const targetItem = await orderRepo.findOrderItemById(trx, refund.order_item_id);
+              if (targetItem) {
+                await courseAccessService.revokeAccessForOrderItem(trx, order, {
+                  item_type: targetItem.item_type,
+                  course_id: targetItem.course_id,
+                  bundle_id: targetItem.bundle_id,
+                });
+              }
             }
           });
 

@@ -129,3 +129,20 @@ export async function revokeEnrollmentsByOrderId(database: Executor, orderId: st
     .returningAll()
     .execute();
 }
+
+export async function revokeEnrollmentsForOrderCourse(
+  database: Executor,
+  orderId: string,
+  courseId: string,
+) {
+  return await database
+    .updateTable("enrollments")
+    .set({
+      status: "revoked",
+      updated_at: new Date(),
+    })
+    .where("order_id", "=", orderId)
+    .where("course_id", "=", courseId)
+    .returningAll()
+    .execute();
+}

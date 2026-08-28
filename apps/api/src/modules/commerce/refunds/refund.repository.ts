@@ -26,6 +26,7 @@ export async function insertRefund(
   values: {
     id: string;
     order_id: string;
+    order_item_id?: string | null;
     payment_id: string;
     gateway_refund_id?: string | null;
     amount: number;
@@ -71,6 +72,7 @@ export async function upsertRefundByGatewayRefundId(
   values: {
     id: string;
     order_id: string;
+    order_item_id?: string | null;
     payment_id: string;
     gateway_refund_id: string;
     amount: number;

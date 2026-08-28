@@ -50,6 +50,12 @@ export interface AccessService {
     database: Executor,
     orderId: string,
   ): Promise<void>;
+
+  revokeAccessForOrderCourse(
+    database: Executor,
+    orderId: string,
+    courseId: string,
+  ): Promise<void>;
 }
 
 export function createAccessService(): AccessService {
@@ -202,6 +208,14 @@ export function createAccessService(): AccessService {
     await accessRepo.revokeAccessGrantsByOrderId(database, orderId);
   }
 
+  async function revokeAccessForOrderCourse(
+    database: Executor,
+    orderId: string,
+    courseId: string,
+  ): Promise<void> {
+    await accessRepo.revokeAccessGrantsForOrderCourse(database, orderId, courseId);
+  }
+
   return {
     grantAccess,
     grantManualAccess,
@@ -209,5 +223,6 @@ export function createAccessService(): AccessService {
     listUserGrants,
     hasActiveAccess,
     revokeAccessForOrder,
+    revokeAccessForOrderCourse,
   };
 }

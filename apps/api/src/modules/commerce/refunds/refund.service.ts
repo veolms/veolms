@@ -50,11 +50,11 @@ export function createRefundService({
     adminUserId: string,
     request: CreateRefundRequest,
   ): Promise<Refund> {
-    const { orderId, amount, reason } = request;
+    const { orderId, orderItemId, amount, reason } = request;
     const refundId = crypto.randomUUID();
 
     // 1. Reserve — see the concurrency note above.
-    const { order, payment, requestedAmount, totalRefundedAlready } = await database
+    const { order, targetItem, payment, requestedAmount, totalRefundedAlready } = await database
       .transaction()
       .execute(async (trx) => {
         const order = await orderRepo.findOrderByIdForUpdate(trx, orderId);
@@ -63,6 +63,14 @@ export function createRefundService({
         }
         if (order.status !== "paid" && order.status !== "partially_refunded") {
           throw CommerceErrors.REFUND_NOT_ALLOWED("Order is not in a refundable state.");
+        }
+
+        let targetItem = null;
+        if (orderItemId) {
+          targetItem = await orderRepo.findOrderItemById(trx, orderItemId);
+          if (!targetItem || targetItem.order_id !== orderId) {
+            throw CommerceErrors.REFUND_NOT_ALLOWED("Target order item not found on this order.");
+          }
         }
 
         const payment = await paymentRepo.findPaymentByOrderId(trx, orderId);
@@ -80,7 +88,8 @@ export function createRefundService({
           throw CommerceErrors.REFUND_NOT_ALLOWED("This order has already been fully refunded.");
         }
 
-        const requestedAmount = amount ?? maxRefundable;
+        // If orderItemId was provided without an explicit amount, default to target item final amount
+        const requestedAmount = amount ?? (targetItem ? Math.min(targetItem.final_amount, maxRefundable) : maxRefundable);
         if (requestedAmount > maxRefundable) {
           throw CommerceErrors.REFUND_NOT_ALLOWED(
             `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
@@ -91,6 +100,7 @@ export function createRefundService({
         await refundRepo.insertRefund(trx, {
           id: refundId,
           order_id: order.id,
+          order_item_id: targetItem?.id ?? null,
           payment_id: payment.id,
           gateway_refund_id: null,
           amount: requestedAmount,
@@ -102,7 +112,7 @@ export function createRefundService({
           updated_at: now,
         });
 
-        return { order, payment, requestedAmount, totalRefundedAlready };
+        return { order, targetItem, payment, requestedAmount, totalRefundedAlready };
       });
 
     // 2. Dispatch refund through the PaymentGateway abstraction (outside
@@ -118,6 +128,7 @@ export function createRefundService({
         notes: {
           orderId: order.id,
           adminUserId,
+          ...(targetItem ? { orderItemId: targetItem.id } : {}),
         },
       });
     } catch (err) {
@@ -178,10 +189,18 @@ export function createRefundService({
           })
           .execute();
 
-        if (isFullRefund && !request.preserveAccess) {
-          // Single shared owner of the access_grants + enrollments revoke
-          // write — see course-access.service.ts.
-          await courseAccessService.revokeAccessForOrder(trx, order);
+        if (!request.preserveAccess) {
+          if (isFullRefund) {
+            // Full refund: revoke all access and enrollments for this order
+            await courseAccessService.revokeAccessForOrder(trx, order);
+          } else if (targetItem) {
+            // Partial item-specific refund: revoke access specifically for this item
+            await courseAccessService.revokeAccessForOrderItem(trx, order, {
+              item_type: targetItem.item_type,
+              course_id: targetItem.course_id,
+              bundle_id: targetItem.bundle_id,
+            });
+          }
         }
       }
 
@@ -191,6 +210,7 @@ export function createRefundService({
     return {
       id: createdRefund.id,
       orderId: createdRefund.order_id,
+      orderItemId: createdRefund.order_item_id,
       paymentId: createdRefund.payment_id,
       gatewayRefundId: createdRefund.gateway_refund_id,
       amount: createdRefund.amount,
@@ -209,6 +229,7 @@ export function createRefundService({
     return {
       id: r.id,
       orderId: r.order_id,
+      orderItemId: r.order_item_id,
       paymentId: r.payment_id,
       gatewayRefundId: r.gateway_refund_id,
       amount: r.amount,
@@ -226,6 +247,7 @@ export function createRefundService({
     return list.map((r) => ({
       id: r.id,
       orderId: r.order_id,
+      orderItemId: r.order_item_id,
       paymentId: r.payment_id,
       gatewayRefundId: r.gateway_refund_id,
       amount: r.amount,

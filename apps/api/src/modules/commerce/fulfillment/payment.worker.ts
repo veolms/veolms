@@ -273,7 +273,7 @@ export function createPaymentWorker({
       });
       isFullRefund = totalOtherRefundsAlready + refundAmount >= payment.amount;
 
-      await refundRepo.upsertRefundByGatewayRefundId(trx, {
+      const upsertedRefund = await refundRepo.upsertRefundByGatewayRefundId(trx, {
         id: crypto.randomUUID(),
         order_id: payment.order_id,
         payment_id: payment.id,
@@ -293,6 +293,15 @@ export function createPaymentWorker({
         // Single shared owner of the access_grants + enrollments revoke
         // write — see course-access.service.ts.
         await courseAccessService.revokeAccessForOrder(trx, order);
+      } else if (upsertedRefund.order_item_id) {
+        const targetItem = await orderRepo.findOrderItemById(trx, upsertedRefund.order_item_id);
+        if (targetItem) {
+          await courseAccessService.revokeAccessForOrderItem(trx, order, {
+            item_type: targetItem.item_type,
+            course_id: targetItem.course_id,
+            bundle_id: targetItem.bundle_id,
+          });
+        }
       }
     });
 
