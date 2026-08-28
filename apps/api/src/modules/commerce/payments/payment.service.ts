@@ -185,11 +185,6 @@ export function createPaymentService({
       };
     }
 
-    // Reject payment verification for expired orders
-    if (new Date(order.expires_at) < new Date()) {
-      throw CommerceErrors.ORDER_EXPIRED();
-    }
-
     // 1. Verify signature via Gateway Abstraction
     const isValid = paymentGateway.verifyPaymentSignature({
       gatewayOrderId,
@@ -210,6 +205,16 @@ export function createPaymentService({
         error_description: "Invalid payment signature.",
       });
       throw CommerceErrors.PAYMENT_SIGNATURE_INVALID();
+    }
+
+    // Allow a 15-minute grace period past expires_at for in-flight checkouts where
+    // the user opened the gateway modal right before expiry and completed payment.
+    const GRACE_PERIOD_MS = 15 * 60 * 1000;
+    const isOrderPastGracePeriod =
+      new Date(order.expires_at).getTime() + GRACE_PERIOD_MS < Date.now();
+
+    if (isOrderPastGracePeriod) {
+      throw CommerceErrors.ORDER_EXPIRED();
     }
 
     // 2. Fetch authoritative payment status from Gateway (OUTSIDE transaction)
