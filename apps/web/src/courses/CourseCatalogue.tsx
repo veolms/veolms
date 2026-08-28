@@ -130,6 +130,11 @@ export function CourseCatalogue({
           `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=curriculum`,
         )
       }
+      onPublish={(selected) =>
+        onNavigatePage(
+          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=publish`,
+        )
+      }
       onDeleteRequested={setPendingDelete}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}

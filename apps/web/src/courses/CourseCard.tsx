@@ -63,6 +63,7 @@ export interface CourseCardProps {
   onExplore: (course: Course) => void;
   onEdit?: (course: Course) => void;
   onManage?: (course: Course) => void;
+  onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
   onNavigatePage: (destination: string) => void;
   menuOpen: boolean;
@@ -80,6 +81,7 @@ export function CourseCard({
   onExplore,
   onEdit,
   onManage,
+  onPublish,
   onDeleteRequested,
   onNavigatePage,
   menuOpen,
@@ -333,7 +335,19 @@ export function CourseCard({
                         ? "Publish Course"
                         : "Restore Course"
                   }
-                  onClick={() => closeThen(lifecycleAction)}
+                  onClick={() =>
+                    closeThen(() => {
+                      if (course.lifecycleStatus === "archived") {
+                        lifecycleAction();
+                      } else if (onPublish) {
+                        onPublish(course);
+                      } else {
+                        onNavigatePage(
+                          `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
+                        );
+                      }
+                    })
+                  }
                 />
                 {course.lifecycleStatus !== "archived" && (
                   <MenuAction
