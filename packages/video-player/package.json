@@ -1,0 +1,35 @@
+{
+  "name": "@veolms/video-player",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shaka": "./src/engines/shaka/index.ts",
+    "./styles.css": "./src/styles/player.css",
+    "./testing": "./src/testing/index.ts"
+  },
+  "sideEffects": ["**/*.css"],
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "shaka-player": "5.2.7"
+  },
+  "peerDependencies": {
+    "react": ">=18.2 <20",
+    "react-dom": ">=18.2 <20"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "jsdom": "^30.0.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vitest": "^4.1.10"
+  }
+}

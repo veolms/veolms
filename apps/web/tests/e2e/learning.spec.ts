@@ -421,21 +421,56 @@ test("lesson choice, curriculum width, and player preferences persist", async ({
     )
     .toBe(false);
   await expect(player.getByRole("switch", { name: /Autoplay/ })).toHaveCount(0);
-  await player.getByRole("button", { name: "Toggle captions" }).click();
-  await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  const settingsMenu = page.getByRole("menu", { name: "Video settings" });
+  await settingsMenu.getByRole("menuitem", { name: /^Captions\b/ }).click();
+  await settingsMenu.getByRole("menuitemradio", { name: /^English\b/ }).click();
+  await expect
+    .poll(() =>
+      lessonVideo.evaluate((video) =>
+        Array.from((video as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
 
-  await player.getByRole("button", { name: "Player settings" }).click();
-  await page.getByRole("button", { name: /Playback speed/ }).click();
-  await page.getByRole("button", { name: "1.5x" }).click();
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  await settingsMenu
+    .getByRole("menuitem", { name: /^Playback speed\b/ })
+    .click();
+  await settingsMenu
+    .getByRole("menuitemradio", { name: "1.75×", exact: true })
+    .click();
   await expect
     .poll(() =>
       page
         .locator("video")
         .evaluate((video) => (video as HTMLVideoElement).playbackRate),
     )
-    .toBe(1.5);
+    .toBe(1.75);
+
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  await settingsMenu
+    .getByRole("menuitem", { name: /^Playback speed\b/ })
+    .click();
+  const customSpeed = settingsMenu.getByRole("slider", {
+    name: "Custom playback speed",
+  });
+  await expect(customSpeed).toHaveAttribute("min", "0.25");
+  await expect(customSpeed).toHaveAttribute("max", "4");
+  await customSpeed.fill("3.25");
+  await expect
+    .poll(() =>
+      lessonVideo.evaluate((video) => (video as HTMLVideoElement).playbackRate),
+    )
+    .toBe(3.25);
+  await expect(settingsMenu).toBeVisible();
+  await customSpeed.fill("1");
+  await page.keyboard.press("Escape");
 
   await player.getByRole("button", { name: "Enter theater mode" }).click();
   await expect(
@@ -752,7 +787,10 @@ test("a held second player press floats the desktop course content", async ({
     secondPressBounds!.y + secondPressBounds!.height / 2,
   );
   await page.mouse.down();
-  await expect(secondPress).toHaveAttribute("data-second-press-holding", "true");
+  await expect(secondPress).toHaveAttribute(
+    "data-second-press-holding",
+    "true",
+  );
   await page.waitForTimeout(520);
 
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
@@ -2558,9 +2596,7 @@ test("mobile curriculum scroll control owns diagonal gestures inside its drawer"
     name: "Course curriculum",
   });
   const gestureBoundary = curriculum.locator(".elastic-scroller");
-  const scrollControl = gestureBoundary.locator(
-    ".elastic-scroller__button",
-  );
+  const scrollControl = gestureBoundary.locator(".elastic-scroller__button");
 
   await curriculum.evaluate((element) => {
     element.scrollTop = Math.min(
@@ -2638,9 +2674,7 @@ test("curriculum scroll control follows direction, stops, and accelerates with d
     name: "Course curriculum",
   });
   const scrollControl = curriculum.locator(".elastic-scroller__button");
-  const scrollControlIcon = scrollControl.locator(
-    ".elastic-scroller__icon",
-  );
+  const scrollControlIcon = scrollControl.locator(".elastic-scroller__icon");
   const scrollProgressPuck = curriculum.locator(
     ".elastic-scroller__progress-puck",
   );
@@ -3355,7 +3389,14 @@ test("lesson video loads directly without a thumbnail poster", async ({
     name: "Lesson video player for The Design Mindset",
   });
   const initialVideo = initialPlayer.locator("video");
-  const initialSource = await initialVideo.getAttribute("src");
+  await expect
+    .poll(() =>
+      initialVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
+    )
+    .not.toBe("");
+  const initialSource = await initialVideo.evaluate(
+    (video) => (video as HTMLVideoElement).currentSrc,
+  );
 
   await expect(initialVideo).toHaveAttribute("preload", "auto");
   await expect(initialVideo).not.toHaveAttribute("poster");
@@ -3374,11 +3415,13 @@ test("lesson video loads directly without a thumbnail poster", async ({
   await expect(nextVideo).toHaveAttribute("preload", "auto");
   await expect(nextVideo).not.toHaveAttribute("poster");
   await expect
-    .poll(() => nextVideo.getAttribute("src"))
+    .poll(() =>
+      nextVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
+    )
     .not.toBe(initialSource);
 });
 
-test("core player controls, shortcuts, seek state, and ambient preference remain functional", async ({
+test("custom player controls, timeline preview and seek, fullscreen shell, and ambient preference remain functional", async ({
   page,
 }) => {
   await openApp(page, "/learn/typescript-course");
@@ -3386,14 +3429,19 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
     name: /Lesson video player for The Beginning of a Design Journey/,
   });
   const video = player.locator("video");
-  const positionSlider = player.getByRole("slider", {
-    name: "Video position",
+  const timeline = player.getByRole("slider", {
+    name: "Video timeline",
   });
   const volumeSlider = player.getByRole("slider", { name: "Volume" });
 
-  await expect(positionSlider).toHaveClass(/app-slider--player/);
-  await expect(volumeSlider).toHaveClass(/app-slider--volume/);
-  await expect(volumeSlider).toHaveCSS("--app-slider-progress", "100%");
+  await expect
+    .poll(() =>
+      video.evaluate((element) => (element as HTMLVideoElement).duration),
+    )
+    .toBeGreaterThan(0);
+  await player.hover();
+  await expect(timeline).toHaveAttribute("aria-valuetext", /of/);
+  await expect(volumeSlider).toHaveValue("1");
 
   await player.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
@@ -3403,6 +3451,40 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
   await expect(
     player.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
+
+  const timelineBounds = await timeline.boundingBox();
+  if (!timelineBounds) throw new Error("Video timeline geometry missing");
+  await timeline.hover({
+    position: {
+      x: Math.floor(timelineBounds.width / 2),
+      y: Math.floor(timelineBounds.height / 2),
+    },
+  });
+  await expect(player.locator("[data-video-player-preview]")).toContainText(
+    "00:09",
+  );
+  await timeline.click({
+    position: {
+      x: Math.floor(timelineBounds.width * 0.75),
+      y: Math.floor(timelineBounds.height / 2),
+    },
+  });
+  await expect
+    .poll(() =>
+      video.evaluate((element) => {
+        const media = element as HTMLVideoElement;
+        return media.duration ? media.currentTime / media.duration : 0;
+      }),
+    )
+    .toBeGreaterThan(0.7);
+  await expect
+    .poll(() =>
+      video.evaluate((element) => {
+        const media = element as HTMLVideoElement;
+        return media.duration ? media.currentTime / media.duration : 1;
+      }),
+    )
+    .toBeLessThan(0.8);
 
   await player.getByRole("button", { name: "Mute", exact: true }).click();
   await expect(
@@ -3433,10 +3515,54 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
     "15",
   );
 
-  await player.getByRole("button", { name: "Player settings" }).click();
-  const ambient = page.getByRole("button", { name: "Ambient mode" });
+  const shell = page.locator(".video-shell").filter({ has: player });
+  await shell.evaluate((element) => {
+    Object.defineProperty(element, "requestFullscreen", {
+      configurable: true,
+      value: async () =>
+        element.setAttribute("data-fullscreen-requested", "true"),
+    });
+  });
+  await player.hover();
+  await player.getByRole("button", { name: "Toggle fullscreen" }).click();
+  await expect(shell).toHaveAttribute("data-fullscreen-requested", "true");
+
+  await player.hover();
+  const ambient = player.getByRole("button", { name: "Enable ambient mode" });
   await ambient.click();
   await expectStoredValue(page, "veolms-player-ambient", "on");
+
+  const inlineProjection = shell.locator("[data-ambient-inline-projection]");
+  await expect(inlineProjection).toHaveClass(/ambient-canvas--visible/);
+  await expect
+    .poll(() =>
+      inlineProjection.evaluate((canvas) => {
+        const shell = canvas.closest(".video-shell");
+        const player = shell?.querySelector(".youtube-player");
+        const video = player?.querySelector("video");
+        const canvasStyle = getComputedStyle(canvas);
+        const playerStyle = player ? getComputedStyle(player) : null;
+        const videoStyle = video ? getComputedStyle(video) : null;
+        return {
+          parentIsShell: canvas.parentElement === shell,
+          outsideForegroundPlayer: player ? !player.contains(canvas) : false,
+          canvasPosition: canvasStyle.position,
+          canvasPointerEvents: canvasStyle.pointerEvents,
+          canvasZIndex: canvasStyle.zIndex,
+          playerZIndex: playerStyle?.zIndex,
+          videoFilter: videoStyle?.filter,
+        };
+      }),
+    )
+    .toEqual({
+      parentIsShell: true,
+      outsideForegroundPlayer: true,
+      canvasPosition: "absolute",
+      canvasPointerEvents: "none",
+      canvasZIndex: "0",
+      playerZIndex: "10",
+      videoFilter: "none",
+    });
 
   const shellProjection = page.locator("[data-ambient-shell-projection]");
   await expect(shellProjection).toHaveClass(/ambient-canvas--visible/);
@@ -3479,7 +3605,10 @@ test("player shortcuts work page-wide outside editors and mute persists across l
   });
   const video = player.locator("video");
 
-  await page.locator("body").focus();
+  const gestureSurface = player.getByRole("button", {
+    name: "Play or pause video",
+  });
+  await gestureSurface.focus();
   await page.keyboard.press("Space");
   await expect
     .poll(() =>
@@ -3493,6 +3622,10 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     )
     .toBe(true);
 
+  const lessonTitle = page.getByRole("button", {
+    name: /Open course lessons for The Beginning of a Design Journey/,
+  });
+  await lessonTitle.focus();
   await page.keyboard.press("m");
   await expect
     .poll(() =>
@@ -3501,10 +3634,23 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     .toBe(true);
   await expectStoredValue(page, "veolms-player-muted", "true");
 
+  await expect
+    .poll(() =>
+      video.evaluate(
+        (element) => (element as HTMLVideoElement).textTracks.length,
+      ),
+    )
+    .toBeGreaterThan(0);
   await page.keyboard.press("c");
-  await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      video.evaluate((element) =>
+        Array.from((element as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
 
   await page.keyboard.press("t");
   await expect(
@@ -3544,18 +3690,25 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     /\/learn\/typescript-course\/the-beginning-of-a-design-journey\?from=courses$/,
   );
 
-  const commentInput = page.getByPlaceholder("Add a comment...");
+  await page.getByRole("button", { name: "Open discussion composer" }).click();
+  const commentInput = page.getByRole("textbox", { name: "Write a comment" });
   await commentInput.focus();
   await page.keyboard.type("mct 1");
-  await expect(commentInput).toHaveValue("mct 1");
+  await expect(commentInput).toContainText("mct 1");
   await expect
     .poll(() =>
       video.evaluate((element) => (element as HTMLVideoElement).muted),
     )
     .toBe(true);
-  await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      video.evaluate((element) =>
+        Array.from((element as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
   await expect(
     player.getByRole("button", { name: "Enter theater mode" }),
   ).toHaveAttribute("aria-pressed", "false");
@@ -3569,6 +3722,17 @@ test("player shortcuts work page-wide outside editors and mute persists across l
       page
         .locator("video")
         .evaluate((element) => (element as HTMLVideoElement).muted),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator("video")
+        .evaluate((element) =>
+          Array.from((element as HTMLVideoElement).textTracks).some(
+            (track) => track.mode === "showing",
+          ),
+        ),
     )
     .toBe(true);
 

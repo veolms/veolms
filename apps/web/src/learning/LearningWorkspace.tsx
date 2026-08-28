@@ -28,7 +28,7 @@ import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScr
 import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import { VideoPlayer as YouTubeVideoPlayer } from "../VideoPlayer";
+import { LessonVideoPlayer } from "./player";
 import {
   createCurriculumSections,
   createLessonsById,
@@ -1356,7 +1356,7 @@ export function LearningWorkspace({
                 />
               </span>
             </button>
-            <YouTubeVideoPlayer
+            <LessonVideoPlayer
               media={getCourseVideoForLesson(currentLesson[0])}
               lessonTitle={currentLesson[1]}
               theaterMode={theaterMode}

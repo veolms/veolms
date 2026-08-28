@@ -134,9 +134,15 @@ test("compiled learning route keeps the deployment-provided course-media URL con
   const player = page.getByRole("region", { name: /Lesson video player/ });
   await expect(player).toBeVisible();
   const video = player.locator("video");
-  const mediaSource = await video.getAttribute("src");
-  expect(mediaSource).not.toBeNull();
-  const mediaUrl = new URL(mediaSource!, page.url());
+  await expect
+    .poll(() =>
+      video.evaluate((element) => (element as HTMLVideoElement).currentSrc),
+    )
+    .not.toBe("");
+  const mediaSource = await video.evaluate(
+    (element) => (element as HTMLVideoElement).currentSrc,
+  );
+  const mediaUrl = new URL(mediaSource, page.url());
   expect(mediaUrl.pathname).toMatch(/\/course-videos\/.+\.mp4$/);
   expect(mediaUrl.pathname).toContain("%20");
 });
