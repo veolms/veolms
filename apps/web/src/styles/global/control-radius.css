@@ -14,6 +14,7 @@
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
         [type="color"]
       ),
+    textarea,
     select,
     [data-control-radius-surface],
     :where(label, div):has(> [data-search-shortcut-target]),
@@ -50,17 +51,40 @@
     .workspace-button,
     .settings-profile__primary-action,
     .course-wizard-link-btn-primary,
+    .delete-modal-confirm,
+    .delete-modal-cancel,
     button.is-primary
   ) {
   border-radius: var(--control-radius-action) !important;
 }
 
-/* Settings section navigation uses an underline, so rounded tab backgrounds
+/* Course Creation Wizard & Course Overview Panels */
+:root[data-control-radius]
+  .courses-app
+  :is(
+    [data-course-wizard] section,
+    [data-course-wizard] article,
+    [data-course-wizard] textarea,
+    [data-course-wizard] input,
+    [data-course-wizard] select,
+    [data-course-wizard] .course-wizard-tab-content > div,
+    [data-course-overview] > div,
+    [data-course-overview] section,
+    [data-course-overview] article,
+    [data-course-overview] textarea,
+    [data-course-overview] input,
+    [data-course-overview] select,
+    [data-course-overview] [role="listitem"],
+    .delete-modal-card
+  ):not([class~="rounded-full"]):not(.page-tabs__indicator) {
+  border-radius: var(--control-radius-structured) !important;
+}
+
+/* Settings & Wizard section navigation uses an underline, so rounded tab backgrounds
    add visual noise and can deform into capsules. */
 :root[data-control-radius]
   .courses-app
-  #courses-main-scrollport
-  .settings-tabs
+  :is(.settings-tabs, .course-wizard-steps-nav)
   button {
   border-radius: 0 !important;
 }

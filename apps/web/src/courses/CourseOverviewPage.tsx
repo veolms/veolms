@@ -1437,6 +1437,7 @@ function CourseOverviewContent({
 
   return (
     <div
+      data-course-overview
       className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${
         isReadOnlyPreview
           ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-4.5 max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"

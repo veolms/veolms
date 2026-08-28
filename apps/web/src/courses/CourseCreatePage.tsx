@@ -4667,7 +4667,10 @@ export function CourseCreatePage({
   }
 
   return (
-    <div className="relative flex w-full flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
+    <div
+      className="relative flex w-full flex-col p-0 text-[--text] box-border max-[768px]:pb-0"
+      data-course-wizard
+    >
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
