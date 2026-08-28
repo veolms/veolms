@@ -19,21 +19,21 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createCreatorGatewayController({ service });
 
-  // 1. POST /creator/payments/config - Connect / save creator's gateway keys (FR-PAY-002)
+  // 1. POST /payments/gateway-config - Connect / save payment gateway keys (FR-PAY-002)
   app.post(
-    "/creator/payments/config",
+    "/payments/gateway-config",
     {
-      preHandler: ctx.requireAdmin, // Creator/Admin role
+      preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "saveCreatorPaymentConfig",
-        tags: ["Commerce - Creator Gateways"],
-        summary: "Connect creator payment gateway",
+        operationId: "savePaymentGatewayConfig",
+        tags: ["Commerce - Payment Gateways"],
+        summary: "Connect payment gateway",
         description:
-          "Stores and encrypts creator-specific Razorpay API keys so direct course sales route funds into the creator account.",
+          "Stores and encrypts payment gateway API keys so course sales route funds into the merchant account.",
         body: saveCreatorPaymentConfigRequestSchema,
         response: {
           200: jsonResponse(
-            "Creator payment configuration saved",
+            "Payment configuration saved",
             creatorPaymentConfigSchema,
           ),
           400: errorResponse("Invalid gateway keys"),
@@ -45,19 +45,19 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
     controller.saveConfig,
   );
 
-  // 2. GET /creator/payments/config - Get active creator gateway status
+  // 2. GET /payments/gateway-config - Get active gateway status
   app.get(
-    "/creator/payments/config",
+    "/payments/gateway-config",
     {
       preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "getCreatorPaymentConfig",
-        tags: ["Commerce - Creator Gateways"],
-        summary: "Get creator payment gateway configuration",
+        operationId: "getPaymentGatewayConfig",
+        tags: ["Commerce - Payment Gateways"],
+        summary: "Get payment gateway configuration",
         description: "Returns active payment provider and masked key ID.",
         response: {
           200: jsonResponse(
-            "Creator payment config",
+            "Payment config",
             creatorPaymentConfigSchema.nullable(),
           ),
           401: errorResponse("Unauthorized"),

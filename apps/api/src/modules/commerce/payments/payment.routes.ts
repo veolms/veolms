@@ -99,13 +99,13 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
     manualController.listMyPayments,
   );
 
-  // 4. GET /creator/manual-payments - List all manual payments for review
+  // 4. GET /manual-payments - List all manual payments for review
   app.get(
-    "/creator/manual-payments",
+    "/manual-payments",
     {
       preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "listCreatorManualPayments",
+        operationId: "listManualPayments",
         tags: ["Commerce - Manual Payments"],
         summary: "List manual payments queue for review",
         querystring: z.object({
@@ -124,9 +124,9 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
     manualController.listAllPayments,
   );
 
-  // 5. POST /creator/manual-payments/:requestId/verify - Verify and grant audited access
+  // 5. POST /manual-payments/:requestId/verify - Verify and grant audited access
   app.post(
-    "/creator/manual-payments/:requestId/verify",
+    "/manual-payments/:requestId/verify",
     {
       preHandler: ctx.requireAdmin,
       schema: {

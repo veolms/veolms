@@ -54,16 +54,16 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
     controller.getBundleBySlug,
   );
 
-  // 3. GET /admin/bundles - Admin list of all bundles
+  // 3. GET /bundles/manage - List of all bundles for management
   app.get(
-    "/admin/bundles",
+    "/bundles/manage",
     {
       preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "listAllBundlesAdmin",
-        tags: ["Commerce - Bundles (Admin)"],
+        operationId: "listAllBundles",
+        tags: ["Commerce - Bundles"],
         summary: "List all bundles (draft, published, archived)",
-        description: "Returns all course bundles across all lifecycle states for admin management.",
+        description: "Returns all course bundles across all lifecycle states for management.",
         response: {
           200: jsonResponse("List of all course bundles", z.array(courseBundleSchema)),
           401: errorResponse("Unauthorized"),
@@ -74,14 +74,14 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
     controller.listAllBundles,
   );
 
-  // 4. GET /admin/bundles/:bundleId - Admin get bundle by ID
+  // 4. GET /bundles/manage/:bundleId - Get bundle by ID
   app.get(
-    "/admin/bundles/:bundleId",
+    "/bundles/manage/:bundleId",
     {
       preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "getBundleByIdAdmin",
-        tags: ["Commerce - Bundles (Admin)"],
+        operationId: "getBundleById",
+        tags: ["Commerce - Bundles"],
         summary: "Get bundle by ID",
         params: z.object({
           bundleId: z.uuid(),
@@ -97,14 +97,14 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
     controller.getBundleById,
   );
 
-  // 5. POST /bundles - Admin create bundle
+  // 5. POST /bundles - Create bundle
   app.post(
     "/bundles",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "createBundle",
-        tags: ["Commerce - Bundles (Admin)"],
+        tags: ["Commerce - Bundles"],
         summary: "Create a new course bundle",
         description: "Creates a package of multiple courses with unified bundle pricing.",
         body: createBundleRequestSchema,
@@ -120,14 +120,14 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
     controller.createBundle,
   );
 
-  // 6. PATCH /bundles/:bundleId - Admin update bundle
+  // 6. PATCH /bundles/:bundleId - Update bundle
   app.patch(
     "/bundles/:bundleId",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "updateBundle",
-        tags: ["Commerce - Bundles (Admin)"],
+        tags: ["Commerce - Bundles"],
         summary: "Update an existing course bundle",
         params: z.object({
           bundleId: z.uuid(),
@@ -146,14 +146,14 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
     controller.updateBundle,
   );
 
-  // 7. DELETE /bundles/:bundleId - Admin delete bundle
+  // 7. DELETE /bundles/:bundleId - Delete bundle
   app.delete(
     "/bundles/:bundleId",
     {
       preHandler: ctx.requireAdmin,
       schema: {
         operationId: "deleteBundle",
-        tags: ["Commerce - Bundles (Admin)"],
+        tags: ["Commerce - Bundles"],
         summary: "Delete a course bundle",
         params: z.object({
           bundleId: z.uuid(),

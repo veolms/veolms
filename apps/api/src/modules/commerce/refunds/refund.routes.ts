@@ -139,13 +139,13 @@ const refundRoutes: RoutePlugin = async (app, options) => {
     requestController.listMyRequests,
   );
 
-  // 6. GET /creator/refund-requests - List all refund requests for creator/admin review
+  // 6. GET /refund-requests - List all refund requests for review
   app.get(
-    "/creator/refund-requests",
+    "/refund-requests",
     {
       preHandler: ctx.requireAdmin,
       schema: {
-        operationId: "listCreatorRefundRequests",
+        operationId: "listRefundRequests",
         tags: ["Commerce - Refund Requests"],
         summary: "List all refund requests for review",
         querystring: z.object({
@@ -164,9 +164,9 @@ const refundRoutes: RoutePlugin = async (app, options) => {
     requestController.listAllRequests,
   );
 
-  // 7. POST /creator/refund-requests/:requestId/review - Review/approve/reject refund request
+  // 7. POST /refund-requests/:requestId/review - Review/approve/reject refund request
   app.post(
-    "/creator/refund-requests/:requestId/review",
+    "/refund-requests/:requestId/review",
     {
       preHandler: ctx.requireAdmin,
       schema: {
