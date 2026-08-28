@@ -853,7 +853,7 @@ function ThreadSurface({
         ))}
       </div>
 
-      <div className={`mt-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+      <div className={`mt-1 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}>
         {entries.map((entry) => (
           <CommentCard
             key={entry.id}

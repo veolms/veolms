@@ -60,6 +60,43 @@ describe("CommentCard", () => {
     expect(onLike).toHaveBeenLastCalledWith(7, false);
   });
 
+  it("uses the full comment row as a subtle discussion-thread trigger", () => {
+    const onOpenThread = vi.fn();
+    const { container } = render(
+      <CommentCard
+        comment={{
+          id: 71,
+          name: "Alex Morgan",
+          time: "Just now",
+          avatar: "/alex.jpg",
+          text: "Clear explanation.",
+          likes: 3,
+        }}
+        onLike={vi.fn()}
+        onOpenThread={onOpenThread}
+      />,
+    );
+
+    const entry = container.querySelector<HTMLElement>(
+      "[data-discussion-thread-trigger]",
+    );
+    if (!entry) throw new Error("Expected a discussion thread trigger");
+
+    expect(entry).toHaveAttribute("data-discussion-thread-trigger", "true");
+    expect(entry).toHaveClass(
+      "hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]",
+    );
+    expect(entry).toHaveClass(
+      "active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]",
+    );
+    expect(entry).not.toHaveClass("border-b");
+    expect(entry).toHaveClass("-mx-3", "px-3", "sm:-mx-4", "sm:px-4");
+    expect(entry).toHaveClass("py-3.5", "sm:py-4");
+
+    fireEvent.click(entry);
+    expect(onOpenThread).toHaveBeenCalledWith(71);
+  });
+
   it("keeps timestamps and overflow actions in comment and reply headers", () => {
     const { container } = render(
       <CommentCard
@@ -112,6 +149,17 @@ describe("CommentCard", () => {
       commentMeta.querySelector("[data-comment-time-separator]"),
     ).toHaveTextContent("·");
     expect(within(commentEngagement).queryByText("2 hours ago")).toBeNull();
+    expect(commentMeta).toHaveClass("pr-9");
+    expect(commentMeta).not.toHaveClass("min-h-9");
+    expect(commentMeta.querySelector("h2")).toHaveClass(
+      "text-sm",
+      "sm:text-[15px]",
+    );
+    expect(
+      within(commentMeta).getByRole("button", {
+        name: "More actions for Alex Morgan",
+      }).parentElement,
+    ).toHaveClass("absolute", "-right-1");
 
     expect(within(replyMeta).getByText("45 minutes ago")).toBeVisible();
     expect(
@@ -123,9 +171,11 @@ describe("CommentCard", () => {
       replyMeta.querySelector("[data-reply-time-separator]"),
     ).toHaveTextContent("·");
     expect(within(replyEngagement).queryByText("45 minutes ago")).toBeNull();
+    expect(replyMeta).toHaveClass("pr-9");
+    expect(replyMeta).not.toHaveClass("min-h-9");
   });
 
-  it("uses trailing icons for notes and Q&As without labeling comments", () => {
+  it("uses colored trailing icons for comments, notes, and Q&As", () => {
     const { container, rerender } = render(
       <CommentCard
         comment={{
@@ -187,7 +237,66 @@ describe("CommentCard", () => {
     meta = container.querySelector<HTMLElement>("[data-comment-meta]");
     if (!meta) throw new Error("Expected comment metadata row");
     expect(within(meta).queryByText("Comment")).toBeNull();
-    expect(within(meta).queryByRole("img")).toBeNull();
+    expect(within(meta).getByRole("img", { name: "Comment" })).toBeVisible();
+    expect(
+      within(meta).getByText("Just now").nextElementSibling,
+    ).toHaveAttribute("data-entry-kind-icon", "comment");
+    expect(within(meta).getByRole("img", { name: "Comment" })).toHaveClass(
+      "text-sky-700",
+      "[[data-theme=dark]_&]:text-sky-400",
+    );
+    expect(
+      within(meta)
+        .getByRole("img", { name: "Comment" })
+        .querySelector("[data-comment-entry-icon]"),
+    ).toBeInTheDocument();
+    expect(
+      within(meta)
+        .getByRole("img", { name: "Comment" })
+        .querySelector("[data-reply-icon]"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses icon-only curved reply actions with accessible labels", () => {
+    const { container } = render(
+      <CommentCard
+        comment={{
+          id: 14,
+          name: "Alex Morgan",
+          time: "2 hours ago",
+          avatar: "/alex.jpg",
+          text: "Clear explanation.",
+          likes: 3,
+          replies: 1,
+          repliesExpanded: true,
+          thread: [
+            {
+              id: 15,
+              name: "Sam Lee",
+              time: "45 minutes ago",
+              avatar: "/sam.jpg",
+              text: "Agreed.",
+              likes: 1,
+            },
+          ],
+        }}
+        onLike={vi.fn()}
+      />,
+    );
+
+    const replyActions = Array.from(
+      container.querySelectorAll<HTMLButtonElement>("[data-reply-action]"),
+    );
+    expect(replyActions).toHaveLength(2);
+    replyActions.forEach((action) => {
+      expect(action).toHaveAccessibleName("Reply");
+      expect(action).toHaveAttribute("title", "Reply");
+      expect(action).toHaveTextContent("");
+      const icon = action.querySelector("[data-reply-icon]");
+      expect(icon).toBeInTheDocument();
+      expect(icon).toHaveAttribute("width", "20");
+      expect(icon).toHaveClass("scale-x-[1.16]");
+    });
   });
 
   it("offers sharing for every entry while keeping owner actions scoped", async () => {
@@ -370,6 +479,157 @@ describe("Discussion", () => {
     expect(
       within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
     ).toBeVisible();
+    const activeThreadSlide = thread.querySelector<HTMLElement>(
+      ".swiper-slide-active",
+    );
+    if (!activeThreadSlide) throw new Error("Expected an active thread slide");
+    const threadReplyActions = Array.from(
+      activeThreadSlide.querySelectorAll<HTMLButtonElement>(
+        "[data-reply-action]",
+      ),
+    );
+    expect(threadReplyActions).toHaveLength(3);
+    expect(threadReplyActions[0]).toHaveTextContent("2 replies");
+    threadReplyActions.slice(1).forEach((action) => {
+      expect(action).toHaveAccessibleName("Reply");
+      expect(action).toHaveTextContent("");
+      const icon = action.querySelector("[data-reply-icon]");
+      expect(icon).toBeInTheDocument();
+      expect(icon).toHaveAttribute("width", "20");
+      expect(icon).toHaveClass("scale-x-[1.16]");
+    });
+    const rootEntry = within(thread)
+      .getByRole("document", { name: "Discussion entry by Rohit Sharma" })
+      .closest("article");
+    expect(rootEntry).toHaveClass("mb-1", "py-3.5", "sm:py-4");
+    const replyEntry = within(thread)
+      .getByRole("document", { name: "Reply by Ashi Singh" })
+      .closest("[data-thread-reply-entry]");
+    expect(replyEntry).not.toHaveClass("border-b");
+    expect(replyEntry).toHaveClass("py-2.5");
+
+    const replyComposer = within(thread)
+      .getByRole("textbox", { name: "Reply to Rohit Sharma" })
+      .closest("[data-thread-reply-composer]");
+    expect(replyComposer).toHaveClass(
+      "-mx-3",
+      "-mb-3",
+      "grid-rows-[auto_auto]",
+      "rounded-t-xl",
+      "sm:mx-0",
+      "sm:mb-0",
+      "sm:rounded-xl",
+    );
+    expect(replyComposer).not.toHaveClass("rounded-xl");
+    expect(replyComposer).not.toHaveClass("h-40", "sm:h-44");
+    const replyEditor = replyComposer?.querySelector<HTMLElement>(
+      "[data-discussion-atomic-editor]",
+    );
+    expect(replyEditor).toHaveAttribute("data-auto-grow", "true");
+
+    const replyToolbar = within(thread).getByRole("toolbar", {
+      name: "Comment formatting",
+    });
+    expect(replyToolbar).toHaveClass(
+      "swiper-no-swiping",
+      "touch-pan-x",
+      "overflow-x-auto",
+    );
+    expect(replyToolbar).toHaveAttribute("data-base-ui-swipe-ignore");
+    expect(replyToolbar).toHaveAttribute("data-learning-swipe-ignore");
+    expect(replyToolbar.parentElement).toHaveClass(
+      "min-w-0",
+      "flex-1",
+      "basis-0",
+      "overflow-hidden",
+    );
+    expect(
+      within(thread).getByRole("button", { name: "Post reply" }),
+    ).toHaveClass("shrink-0");
+    const expandThread = within(thread).getByRole("button", {
+      name: "Expand discussion thread",
+    });
+    expect(expandThread).toHaveAttribute("data-thread-panel-size-toggle");
+    expect(
+      expandThread.querySelector('[data-thread-panel-size-icon="expand"]'),
+    ).toBeInTheDocument();
+    expect(thread).toHaveAttribute("data-swipe-direction", "right");
+    expect(thread).toHaveClass(
+      "bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)]",
+      "backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))]",
+      "backdrop-saturate-[1.2]",
+    );
+    expect(thread.style.getPropertyValue("--closed-transform")).toBe("");
+    const drawerViewport = thread.closest<HTMLElement>(
+      '[data-slot="drawer-viewport"]',
+    );
+    expect(drawerViewport?.style.clipPath).toContain("inset(");
+    expect(drawerViewport?.style.overflow).toBe("hidden");
+    const threadScrollport = thread.querySelector<HTMLElement>(
+      ".learning-comment-formatting-scrollport",
+    );
+    expect(threadScrollport).toHaveClass("min-w-0", "overflow-x-hidden");
+    const rootActionMenu = within(thread)
+      .getByRole("button", { name: "More actions for Rohit Sharma" })
+      .closest("div");
+    expect(rootActionMenu).toHaveClass("right-0");
+    expect(rootActionMenu).not.toHaveClass("-right-1");
+    expect(
+      within(thread).getByRole("separator", {
+        name: "Resize discussion thread",
+      }),
+    ).toHaveAttribute("aria-orientation", "vertical");
+    const heightResizeHandle = within(thread).getByRole("separator", {
+      name: "Resize discussion thread height",
+    });
+    expect(heightResizeHandle).toHaveAttribute(
+      "aria-orientation",
+      "horizontal",
+    );
+    expect(heightResizeHandle.firstElementChild).toHaveClass(
+      "bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)]",
+      "opacity-0",
+      "group-hover/resize-top:opacity-100",
+    );
+    expect(heightResizeHandle.firstElementChild).not.toHaveClass(
+      "group-focus-visible/resize-top:opacity-100",
+    );
+    const widthResizeHandle = within(thread).getByRole("separator", {
+      name: "Resize discussion thread",
+    });
+    expect(widthResizeHandle.firstElementChild).toHaveClass(
+      "bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)]",
+      "opacity-0",
+      "group-hover/resize:opacity-100",
+    );
+    expect(widthResizeHandle.firstElementChild).not.toHaveClass(
+      "group-focus-visible/resize:opacity-100",
+    );
+    fireEvent.keyDown(heightResizeHandle, { key: "ArrowDown" });
+    expect(heightResizeHandle).toHaveAttribute("aria-valuenow");
+    expect(expandThread).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(expandThread);
+    expect(
+      within(thread).getByRole("button", {
+        name: "Restore discussion thread",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(thread)
+        .getByRole("button", { name: "Restore discussion thread" })
+        .querySelector('[data-thread-panel-size-icon="restore"]'),
+    ).toBeInTheDocument();
+    expect(thread).toHaveAttribute("data-panel-expanded", "true");
+    expect(
+      within(thread).getByRole("region", {
+        name: "Swipe between discussion threads",
+      }),
+    ).toHaveAttribute("data-base-ui-swipe-ignore");
+    expect(
+      within(thread).getByRole("region", {
+        name: "Swipe between discussion threads",
+      }),
+    ).toHaveAttribute("data-learning-swipe-ignore");
 
     fireEvent.click(
       within(thread).getByRole("button", {
@@ -404,6 +664,61 @@ describe("Discussion", () => {
     expect(
       within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
     ).toBeVisible();
+  });
+
+  it("uses a two-stage bottom drawer for discussion threads on phones", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 639px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      render(<Discussion persistenceKey="discussion-mobile-thread-test" />);
+      fireEvent.click(
+        screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+      );
+
+      const thread = await screen.findByRole("dialog", {
+        name: "Discussion thread",
+      });
+      expect(thread).toHaveAttribute("data-swipe-direction", "down");
+      expect(
+        within(thread).getByRole("heading", { name: "Discussion thread" }),
+      ).toHaveClass("mr-auto", "text-lg", "font-bold");
+      expect(
+        thread.closest<HTMLElement>('[data-slot="drawer-viewport"]')?.style
+          .clipPath,
+      ).toBe("");
+      expect(
+        within(thread).queryByRole("button", {
+          name: "Expand discussion thread",
+        }),
+      ).toBeNull();
+      expect(
+        within(thread).queryByRole("button", {
+          name: "Close discussion thread",
+        }),
+      ).toBeNull();
+      const swipeRegion = within(thread).getByRole("region", {
+        name: "Swipe between discussion threads",
+      });
+      expect(swipeRegion).not.toHaveAttribute("data-base-ui-swipe-ignore");
+      expect(swipeRegion).not.toHaveAttribute("data-learning-swipe-ignore");
+      expect(
+        thread.querySelector('[data-slot="drawer-swipe-handle"]'),
+      ).toBeInTheDocument();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("renders only the entry-type filters without a sort control", () => {

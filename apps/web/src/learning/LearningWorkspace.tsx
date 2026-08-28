@@ -58,8 +58,7 @@ const CURRICULUM_MIN_WIDTH = 300;
 const CURRICULUM_DEFAULT_WIDTH = 400;
 const CURRICULUM_MAX_WIDTH = 560;
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
-const FLOATING_LESSON_DRAWER_SNAP_WIDTH =
-  LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
+const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
 const LESSON_DRAWER_FALLBACK_SNAP_POINT = 0.72;
 const CURRICULUM_SWIPE_ACTIVATION_DISTANCE = 12;
 const CURRICULUM_SWIPE_DIRECTION_RATIO = 1.2;
@@ -970,12 +969,8 @@ export function LearningWorkspace({
     (event: CurriculumPointerEvent) => {
       const resize = floatingLessonDrawerResizeRef.current;
       if (!resize || resize.pointerId !== event.pointerId) return;
-      const requestedWidth =
-        resize.startWidth + resize.startX - event.clientX;
-      const nextWidth = previewFloatingLessonDrawerWidth(
-        requestedWidth,
-        true,
-      );
+      const requestedWidth = resize.startWidth + resize.startX - event.clientX;
+      const nextWidth = previewFloatingLessonDrawerWidth(requestedWidth, true);
       if (nextWidth !== null) {
         resize.previewWidth = nextWidth;
         resize.dismissOnEnd =
@@ -1369,6 +1364,7 @@ export function LearningWorkspace({
 
           <article
             className="learning-workspace__lesson-content"
+            data-discussion-panel-anchor=""
             aria-labelledby="learning-lesson-title"
           >
             <header>

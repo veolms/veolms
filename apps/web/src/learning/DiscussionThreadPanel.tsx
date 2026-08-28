@@ -1,5 +1,8 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { ArrowsInIcon as ArrowsIn } from "@phosphor-icons/react/ArrowsIn";
+import { ArrowsOutIcon as ArrowsOut } from "@phosphor-icons/react/ArrowsOut";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
@@ -46,7 +49,9 @@ const THREAD_PANEL_MIN_WIDTH = 440;
 const THREAD_PANEL_MAX_WIDTH = 1080;
 const THREAD_PANEL_DEFAULT_WIDTH = 860;
 const THREAD_PANEL_WIDTH_KEY = "veolms-discussion-thread-panel-width";
+const THREAD_PANEL_MIN_HEIGHT = 360;
 const THREAD_PANEL_PHONE_QUERY = "(max-width: 639px)";
+const THREAD_PANEL_MOBILE_SNAP_RATIO = 0.72;
 
 interface DiscussionThreadPanelProps {
   open: boolean;
@@ -85,9 +90,36 @@ export function DiscussionThreadPanel({
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
+  const surfaceBounds = useThreadPanelSurfaceBounds(open, viewport);
   const swiperRef = useRef<SwiperInstance | null>(null);
-  const resizeRef = useRef<PanelResize | null>(null);
+  const widthResizeRef = useRef<PanelWidthResize | null>(null);
+  const heightResizeRef = useRef<PanelHeightResize | null>(null);
   const [panelWidth, setPanelWidth] = useState(getInitialPanelWidth);
+  const [panelHeight, setPanelHeight] = useState<number | null>(null);
+  const [resizingAxis, setResizingAxis] = useState<"width" | "height" | null>(
+    null,
+  );
+  const [expanded, setExpanded] = useState(false);
+  const mobileCollapsedSnapPoint = Math.min(
+    viewport.height,
+    Math.max(320, Math.round(viewport.height * THREAD_PANEL_MOBILE_SNAP_RATIO)),
+  );
+  const [mobileSnapPoint, setMobileSnapPoint] = useState<number | null>(
+    mobileCollapsedSnapPoint,
+  );
+  const mobileSnapPoints = useMemo(
+    () => [mobileCollapsedSnapPoint, 1],
+    [mobileCollapsedSnapPoint],
+  );
+  const mobileVisibleHeight =
+    mobileSnapPoint === 1
+      ? viewport.height
+      : Math.min(
+          viewport.height,
+          typeof mobileSnapPoint === "number"
+            ? mobileSnapPoint
+            : mobileCollapsedSnapPoint,
+        );
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const activeIndex = Math.max(
     0,
@@ -95,12 +127,24 @@ export function DiscussionThreadPanel({
   );
 
   const clampPanelWidth = useCallback(
-    (width: number) =>
-      Math.min(
-        Math.max(THREAD_PANEL_MIN_WIDTH, viewport.width - 28),
-        Math.max(THREAD_PANEL_MIN_WIDTH, width),
-      ),
-    [viewport.width],
+    (width: number) => {
+      const availableWidth = Math.max(1, surfaceBounds.lesson.width);
+      const minimumWidth = Math.min(THREAD_PANEL_MIN_WIDTH, availableWidth);
+      return Math.min(
+        availableWidth,
+        THREAD_PANEL_MAX_WIDTH,
+        Math.max(minimumWidth, width),
+      );
+    },
+    [surfaceBounds.lesson.width],
+  );
+  const clampPanelHeight = useCallback(
+    (height: number) => {
+      const availableHeight = Math.max(1, surfaceBounds.app.height);
+      const minimumHeight = Math.min(THREAD_PANEL_MIN_HEIGHT, availableHeight);
+      return Math.min(availableHeight, Math.max(minimumHeight, height));
+    },
+    [surfaceBounds.app.height],
   );
 
   useEffect(() => {
@@ -114,7 +158,21 @@ export function DiscussionThreadPanel({
   useEffect(() => {
     if (isPhone) return;
     setPanelWidth((current) => clampPanelWidth(current));
-  }, [clampPanelWidth, isPhone]);
+    setPanelHeight((current) =>
+      current === null ? null : clampPanelHeight(current),
+    );
+  }, [clampPanelHeight, clampPanelWidth, isPhone]);
+
+  useEffect(() => {
+    if (!open) {
+      setExpanded(false);
+      return;
+    }
+    if (isPhone) {
+      setExpanded(false);
+      setMobileSnapPoint(mobileCollapsedSnapPoint);
+    }
+  }, [isPhone, mobileCollapsedSnapPoint, open]);
 
   const commitPanelWidth = useCallback((width: number) => {
     const nextWidth = Math.min(
@@ -129,19 +187,25 @@ export function DiscussionThreadPanel({
     }
   }, []);
 
-  const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (isPhone) return;
+  const commitPanelHeight = useCallback(
+    (height: number) => setPanelHeight(clampPanelHeight(height)),
+    [clampPanelHeight],
+  );
+
+  const beginWidthResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (isPhone || expanded) return;
     event.preventDefault();
-    resizeRef.current = {
+    widthResizeRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startWidth: panelWidth,
     };
+    setResizingAxis("width");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const moveResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const resize = resizeRef.current;
+  const moveWidthResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const resize = widthResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
     setPanelWidth(
       Math.min(
@@ -151,10 +215,11 @@ export function DiscussionThreadPanel({
     );
   };
 
-  const endResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const resize = resizeRef.current;
+  const endWidthResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const resize = widthResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
-    resizeRef.current = null;
+    widthResizeRef.current = null;
+    setResizingAxis(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -165,39 +230,131 @@ export function DiscussionThreadPanel({
     commitPanelWidth(clampPanelWidth(panelWidth));
   };
 
-  const panelInset = isPhone ? 0 : 14;
+  const beginHeightResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (isPhone || expanded) return;
+    event.preventDefault();
+    heightResizeRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: clampPanelHeight(panelHeight ?? surfaceBounds.lesson.height),
+    };
+    setResizingAxis("height");
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveHeightResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const resize = heightResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    setPanelHeight(
+      clampPanelHeight(resize.startHeight + (resize.startY - event.clientY)),
+    );
+  };
+
+  const endHeightResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const resize = heightResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    const nextHeight = clampPanelHeight(
+      resize.startHeight + (resize.startY - event.clientY),
+    );
+    heightResizeRef.current = null;
+    setResizingAxis(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    commitPanelHeight(nextHeight);
+  };
+
+  const activeSurface = expanded ? surfaceBounds.app : surfaceBounds.lesson;
   const resolvedPanelWidth = isPhone
     ? viewport.width
-    : Math.min(clampPanelWidth(panelWidth), viewport.width - panelInset * 2);
-  const panelHeight = Math.max(1, viewport.height - panelInset * 2);
-  const panelStyle = {
-    "--drawer-content-width": `${resolvedPanelWidth}px`,
-    "--drawer-content-height": `${panelHeight}px`,
-    "--drawer-content-max-height": `${panelHeight}px`,
-    top: `${viewport.top + panelInset}px`,
-    right: `${panelInset}px`,
-    bottom: "auto",
-  } as CSSProperties;
+    : expanded
+      ? activeSurface.width
+      : clampPanelWidth(panelWidth);
+  const resolvedPanelHeight = isPhone
+    ? viewport.height
+    : expanded
+      ? activeSurface.height
+      : clampPanelHeight(panelHeight ?? surfaceBounds.lesson.height);
+  const panelBottom = surfaceBounds.app.top + surfaceBounds.app.height;
+  const resolvedPanelTop = expanded
+    ? activeSurface.top
+    : panelBottom - resolvedPanelHeight;
+  const resolvedPanelLeft = activeSurface.right - resolvedPanelWidth;
+  const appLeft = surfaceBounds.app.right - surfaceBounds.app.width;
+  const clipRight = expanded
+    ? surfaceBounds.app.right
+    : surfaceBounds.lesson.right;
+  const clipBottom = surfaceBounds.app.top + surfaceBounds.app.height;
+  const panelViewportStyle = isPhone
+    ? undefined
+    : ({
+        clipPath: `inset(${Math.max(0, surfaceBounds.app.top)}px ${Math.max(0, viewport.width - clipRight)}px ${Math.max(0, viewport.height - clipBottom)}px ${Math.max(0, appLeft)}px)`,
+        overflow: "hidden",
+      } as CSSProperties);
+  const panelStyle = isPhone
+    ? ({
+        "--drawer-content-width": `${viewport.width}px`,
+        "--drawer-content-height": `${viewport.height}px`,
+        "--drawer-content-max-height": `${viewport.height}px`,
+        top: "auto",
+        left: "0px",
+        right: "auto",
+        bottom: "0px",
+      } as CSSProperties)
+    : ({
+        "--drawer-content-width": `${resolvedPanelWidth}px`,
+        "--drawer-content-height": `${resolvedPanelHeight}px`,
+        "--drawer-content-max-height": `${surfaceBounds.app.height}px`,
+        top: `${resolvedPanelTop}px`,
+        left: `${resolvedPanelLeft}px`,
+        right: "auto",
+        bottom: "auto",
+      } as ThreadPanelStyle);
 
   return (
     <Drawer
+      key={isPhone ? "phone-discussion-thread" : "desktop-discussion-thread"}
       open={open}
       onOpenChange={onOpenChange}
-      swipeDirection="right"
+      onOpenChangeComplete={(nextOpen) => {
+        if (!nextOpen) {
+          setExpanded(false);
+          setPanelHeight(null);
+          setMobileSnapPoint(mobileCollapsedSnapPoint);
+        }
+      }}
+      snapPoints={isPhone ? mobileSnapPoints : undefined}
+      snapPoint={isPhone ? mobileSnapPoint : undefined}
+      onSnapPointChange={
+        isPhone
+          ? (snapPoint) => {
+              if (typeof snapPoint === "number" || snapPoint === null) {
+                setMobileSnapPoint(snapPoint);
+              }
+            }
+          : undefined
+      }
+      snapToSequentialPoints={isPhone}
+      showSwipeHandle={isPhone}
+      swipeDirection={isPhone ? "down" : "right"}
+      swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_42%,transparent)] after:shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
       modal
     >
       <DrawerContent
         aria-label="Discussion thread"
         initialFocus
         style={panelStyle}
-        className="overflow-hidden border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--app-shell,var(--surface))_86%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] backdrop-blur-2xl backdrop-saturate-[1.18] data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:data-[swipe-direction=right]:rounded-xl!"
+        viewportStyle={panelViewportStyle}
+        data-panel-expanded={expanded || undefined}
+        data-panel-resizing={resizingAxis ? "true" : undefined}
+        className="m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] transition-[top,left,width,height,transform,opacity,filter]! duration-300! ease-[cubic-bezier(0.16,1,0.3,1)]! data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none!"
       >
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -top-28 -right-20 z-0 size-80 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--accent)_28%,transparent)_0%,color-mix(in_srgb,var(--accent)_9%,transparent)_38%,transparent_70%)] blur-3xl"
         />
 
-        {!isPhone && (
+        {!isPhone && !expanded && (
           <div
             data-base-ui-swipe-ignore=""
             data-learning-swipe-ignore=""
@@ -226,43 +383,136 @@ export function DiscussionThreadPanel({
                 ),
               );
             }}
-            onPointerDown={beginResize}
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
+            onPointerDown={beginWidthResize}
+            onPointerMove={moveWidthResize}
+            onPointerUp={endWidthResize}
+            onPointerCancel={endWidthResize}
           >
-            <span className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-55 transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100" />
+            <span className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-0 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)]" />
           </div>
         )}
 
-        <header className="relative z-10 flex h-16 shrink-0 items-center gap-3 px-4 sm:h-18 sm:px-6">
-          <button
-            type="button"
-            aria-label="Close discussion thread"
-            onClick={() => onOpenChange(false)}
-            className="grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        {!isPhone && !expanded && (
+          <div
+            data-base-ui-swipe-ignore=""
+            data-learning-swipe-ignore=""
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize discussion thread height"
+            aria-valuemin={Math.min(
+              THREAD_PANEL_MIN_HEIGHT,
+              surfaceBounds.app.height,
+            )}
+            aria-valuemax={Math.round(surfaceBounds.app.height)}
+            aria-valuenow={Math.round(resolvedPanelHeight)}
+            tabIndex={0}
+            title="Resize discussion thread height"
+            className="group/resize-top absolute inset-x-0 top-0 z-30 flex h-5 cursor-ns-resize touch-none items-start justify-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onOpenChange(false);
+                return;
+              }
+              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+                return;
+              }
+              event.preventDefault();
+              commitPanelHeight(
+                resolvedPanelHeight + (event.key === "ArrowUp" ? 24 : -24),
+              );
+            }}
+            onPointerDown={beginHeightResize}
+            onPointerMove={moveHeightResize}
+            onPointerUp={endHeightResize}
+            onPointerCancel={endHeightResize}
           >
-            <ArrowLeft size={22} weight="bold" aria-hidden="true" />
-          </button>
-          <span
-            aria-hidden="true"
-            className="h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-          />
-          <DrawerTitle className="text-base font-semibold sm:text-lg">
+            <span className="mt-0 h-0.5 w-[calc(100%-30px)] rounded-full bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-0 shadow-[0_0_0_transparent] transition-[height,opacity,box-shadow] duration-160 group-hover/resize-top:h-0.75 group-hover/resize-top:opacity-100 group-hover/resize-top:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)]" />
+          </div>
+        )}
+
+        <header className="relative z-10 flex h-14 shrink-0 items-center gap-3 px-4 pt-2 sm:h-18 sm:px-6 sm:pt-0">
+          {!isPhone && (
+            <>
+              <button
+                type="button"
+                autoFocus
+                aria-label="Close discussion thread"
+                onClick={() => onOpenChange(false)}
+                className="grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              >
+                <ArrowLeft size={22} weight="bold" aria-hidden="true" />
+              </button>
+              <span
+                aria-hidden="true"
+                className="h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+              />
+            </>
+          )}
+          <DrawerTitle className="mr-auto text-lg font-bold">
             Discussion thread
           </DrawerTitle>
           <DrawerDescription className="sr-only">
             Read the selected lesson discussion and write a reply.
           </DrawerDescription>
+          {!isPhone && (
+            <button
+              type="button"
+              data-thread-panel-size-toggle
+              aria-label={
+                expanded
+                  ? "Restore discussion thread"
+                  : "Expand discussion thread"
+              }
+              aria-pressed={expanded}
+              onClick={() => setExpanded((current) => !current)}
+              className="ml-auto grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-[background-color,color,transform] hover:bg-(--hover) hover:text-(--text) active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            >
+              {expanded ? (
+                <ArrowsIn
+                  data-thread-panel-size-icon="restore"
+                  size={22}
+                  weight="bold"
+                  aria-hidden="true"
+                />
+              ) : (
+                <ArrowsOut
+                  data-thread-panel-size-icon="expand"
+                  size={22}
+                  weight="bold"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          )}
         </header>
 
-        <div className="relative z-10 min-h-0 flex-1">
+        <div
+          data-base-ui-swipe-ignore={isPhone ? undefined : ""}
+          data-learning-swipe-ignore={isPhone ? undefined : ""}
+          role="region"
+          aria-label="Swipe between discussion threads"
+          style={
+            isPhone
+              ? {
+                  flex: "none",
+                  height: `${Math.max(1, mobileVisibleHeight - 56)}px`,
+                }
+              : undefined
+          }
+          className="relative z-10 min-h-0 flex-1 touch-pan-y"
+        >
           <Swiper
             className="h-full"
             slidesPerView={1}
             initialSlide={activeIndex}
             speed={320}
             resistanceRatio={0.72}
+            allowTouchMove
+            nested
+            threshold={6}
+            touchAngle={60}
+            touchStartPreventDefault={false}
             noSwiping
             noSwipingSelector="button,a,input,textarea,select,[contenteditable=true],[role=menu],[data-discussion-atomic-editor],.swiper-no-swiping"
             onSwiper={(swiper) => {
@@ -343,9 +593,9 @@ function ThreadSlide({
     <div
       aria-hidden={active ? undefined : true}
       inert={active ? undefined : true}
-      className="flex h-full min-h-0 flex-col px-3 pb-3 sm:px-6 sm:pb-5"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-3 pb-3 sm:px-6 sm:pb-5"
     >
-      <div className="learning-comment-formatting-scrollport min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <ThreadRootEntry
           entry={entry}
           onLike={onLike}
@@ -414,17 +664,17 @@ function ThreadRootEntry({
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
   return (
-    <article className="mx-auto mb-3 max-w-4xl rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] p-4 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent),0_16px_44px_rgba(0,0,0,0.12)] sm:mb-4 sm:p-5">
-      <div className="flex gap-3.5">
+    <article className="mx-auto mb-1 max-w-4xl px-1 py-3.5 sm:px-0 sm:py-4">
+      <div className="flex gap-3 sm:gap-3.5">
         <img
           src={entry.avatar}
           alt=""
           className="size-10 shrink-0 rounded-full object-cover sm:size-11"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex min-h-9 items-start gap-2">
+          <div className="relative flex items-start gap-2 pr-9">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 className="text-[15px] font-semibold text-(--text) sm:text-base">
+              <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                 {entry.name}
               </h2>
               <span aria-hidden="true" className="text-(--muted)">
@@ -446,13 +696,13 @@ function ThreadRootEntry({
               }
               onDelete={onDelete}
               onReport={onReport}
-              className="relative z-20 shrink-0"
+              className="absolute -top-1 right-0 z-20 shrink-0"
             />
           </div>
           <DiscussionMarkdown
             content={entry.content ?? createDiscussionDraft(entry.text)}
             label={`Discussion entry by ${entry.name}`}
-            className="mt-1.5 max-w-3xl"
+            className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
           {entry.attachment && (
             <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_36%,transparent)] px-3 py-2 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)]">
@@ -467,7 +717,7 @@ function ThreadRootEntry({
               </div>
             </div>
           )}
-          <div className="mt-2.5 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
+          <div className="mt-2 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
             <button
               type="button"
               aria-pressed={liked}
@@ -484,10 +734,17 @@ function ThreadRootEntry({
             </button>
             <button
               type="button"
+              data-reply-action
               onClick={onReply}
               className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
             >
-              <ChatCenteredDots size={18} />
+              <ArrowBendUpLeft
+                data-reply-icon
+                size={20}
+                weight="bold"
+                className="origin-center scale-x-[1.16]"
+                aria-hidden="true"
+              />
               {replyCount} {replyCount === 1 ? "reply" : "replies"}
             </button>
           </div>
@@ -519,7 +776,7 @@ function ThreadReplyEntry({
   );
 
   return (
-    <article className="border-b px-3 py-4 [border-color:color-mix(in_srgb,var(--text)_9%,transparent)] sm:px-8 sm:py-5">
+    <article data-thread-reply-entry className="px-3 py-2.5 sm:px-8">
       <div className="flex gap-3.5">
         <img
           src={reply.avatar}
@@ -527,7 +784,7 @@ function ThreadReplyEntry({
           className="size-9 shrink-0 rounded-full object-cover sm:size-10"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex min-h-9 items-start gap-2">
+          <div className="relative flex items-start gap-2 pr-9">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                 {reply.name}
@@ -549,7 +806,7 @@ function ThreadReplyEntry({
               }
               onDelete={() => onDelete(parentId, reply.id)}
               onReport={() => onReport(reply.id)}
-              className="relative z-20 shrink-0"
+              className="absolute -top-1 right-0 z-20 shrink-0"
             />
           </div>
           {editing ? (
@@ -574,10 +831,10 @@ function ThreadReplyEntry({
             <DiscussionMarkdown
               content={reply.content ?? createDiscussionDraft(reply.text)}
               label={`Reply by ${reply.name}`}
-              className="mt-1 max-w-3xl"
+              className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
             />
           )}
-          <div className="mt-2 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
+          <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
             <button
               type="button"
               aria-pressed={liked}
@@ -590,11 +847,19 @@ function ThreadReplyEntry({
             </button>
             <button
               type="button"
+              aria-label="Reply"
+              title="Reply"
+              data-reply-action
               onClick={onReply}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
             >
-              <ChatCenteredDots size={17} />
-              Reply
+              <ArrowBendUpLeft
+                data-reply-icon
+                size={20}
+                weight="bold"
+                className="origin-center scale-x-[1.16]"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
@@ -647,18 +912,21 @@ function ThreadReplyComposer({
   };
 
   return (
-    <div className="mt-3 grid h-40 shrink-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl bg-[color-mix(in_srgb,var(--surface)_86%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent),0_14px_36px_rgba(0,0,0,0.2)] focus-within:shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--accent)_52%,transparent),0_18px_42px_rgba(0,0,0,0.24)] sm:h-44">
+    <div
+      data-thread-reply-composer
+      className="-mx-3 -mb-3 mt-3 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
+    >
       <DiscussionEditor
         documentId={`thread-reply-${entry.id}`}
         value={draft}
         label={`Reply to ${entry.name}`}
         placeholderText="Write a reply…"
-        className="h-full min-h-0"
+        autoGrow
         onChange={setDraft}
         onControllerChange={setEditorController}
         onFormattingStateChange={setFormattingState}
       />
-      <div className="flex min-h-14 items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_76%,transparent)] px-2.5 py-2 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:gap-2 sm:px-3">
+      <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
         <img
           src="/assets/sofia-avatar-160.webp"
           alt=""
@@ -684,10 +952,142 @@ function ThreadReplyComposer({
   );
 }
 
-interface PanelResize {
+interface PanelWidthResize {
   pointerId: number;
   startX: number;
   startWidth: number;
+}
+
+interface PanelHeightResize {
+  pointerId: number;
+  startY: number;
+  startHeight: number;
+}
+
+type ThreadPanelStyle = CSSProperties & {
+  "--drawer-content-width": string;
+  "--drawer-content-height": string;
+  "--drawer-content-max-height": string;
+};
+
+interface ViewportBounds {
+  top: number;
+  height: number;
+  width: number;
+}
+
+interface PanelSurfaceRect {
+  top: number;
+  right: number;
+  width: number;
+  height: number;
+}
+
+interface ThreadPanelSurfaceBounds {
+  lesson: PanelSurfaceRect;
+  app: PanelSurfaceRect;
+}
+
+function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
+  const measure = useCallback(
+    (): ThreadPanelSurfaceBounds => getThreadPanelSurfaceBounds(viewport),
+    [viewport],
+  );
+  const [bounds, setBounds] = useState<ThreadPanelSurfaceBounds>(measure);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    let frame = 0;
+    const lesson = document.querySelector<HTMLElement>(
+      "[data-discussion-panel-anchor]",
+    );
+    const app = document.querySelector<HTMLElement>("#courses-main-scrollport");
+    const sync = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => setBounds(measure()));
+    };
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+
+    if (lesson) resizeObserver?.observe(lesson);
+    if (app) resizeObserver?.observe(app);
+    sync();
+    window.addEventListener("resize", sync);
+    window.visualViewport?.addEventListener("resize", sync);
+    document.addEventListener("scroll", sync, true);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener("resize", sync);
+      document.removeEventListener("scroll", sync, true);
+    };
+  }, [measure, open]);
+
+  return bounds;
+}
+
+function getThreadPanelSurfaceBounds(
+  viewport: ViewportBounds,
+): ThreadPanelSurfaceBounds {
+  const viewportBottom = viewport.top + viewport.height;
+  const fallbackInset = 14;
+  const fallback: PanelSurfaceRect = {
+    top: viewport.top + fallbackInset,
+    right: viewport.width - fallbackInset,
+    width: Math.max(1, viewport.width - fallbackInset * 2),
+    height: Math.max(1, viewport.height - fallbackInset * 2),
+  };
+  const appElement = document.querySelector<HTMLElement>(
+    "#courses-main-scrollport",
+  );
+  const lessonElement = document.querySelector<HTMLElement>(
+    "[data-discussion-panel-anchor]",
+  );
+  const appRect = appElement?.getBoundingClientRect();
+  const lessonRect = lessonElement?.getBoundingClientRect();
+  const hasAppRect = Boolean(
+    appRect && appRect.width > 1 && appRect.height > 1,
+  );
+  const hasLessonRect = Boolean(
+    lessonRect && lessonRect.width > 1 && lessonRect.height > 1,
+  );
+
+  if (!hasAppRect || !appRect) {
+    return { app: fallback, lesson: fallback };
+  }
+
+  const appTop = Math.max(viewport.top, appRect.top);
+  const appBottom = Math.min(viewportBottom, appRect.bottom);
+  const appLeft = Math.max(0, appRect.left);
+  const appRight = Math.min(viewport.width, appRect.right);
+  const app: PanelSurfaceRect = {
+    top: appTop,
+    right: appRight,
+    width: Math.max(1, appRight - appLeft),
+    height: Math.max(1, appBottom - appTop),
+  };
+
+  if (!hasLessonRect || !lessonRect) {
+    return { app, lesson: app };
+  }
+
+  const lessonTop = Math.max(appTop, viewport.top, lessonRect.top);
+  const lessonBottom = Math.min(appBottom, viewportBottom, lessonRect.bottom);
+  const lessonLeft = Math.max(appLeft, lessonRect.left);
+  const lessonRight = Math.min(appRight, lessonRect.right);
+
+  return {
+    app,
+    lesson: {
+      top: lessonTop,
+      right: lessonRight,
+      width: Math.max(1, lessonRight - lessonLeft),
+      height: Math.max(1, lessonBottom - lessonTop),
+    },
+  };
 }
 
 function getInitialPanelWidth() {
@@ -718,8 +1118,8 @@ function useVisualViewportBounds() {
   const getBounds = useCallback(() => {
     const visualViewport = window.visualViewport;
     const layoutWidth =
-      document.body.clientWidth ||
       document.documentElement.clientWidth ||
+      document.body.clientWidth ||
       window.innerWidth;
     return {
       top: Math.max(0, Math.round(visualViewport?.offsetTop ?? 0)),

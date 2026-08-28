@@ -96,7 +96,7 @@ export function CommentFormattingToolbar({
   return (
     <div
       data-comment-formatting-toolbar
-      className="relative -my-2.5 flex min-w-0 flex-1 self-stretch items-center"
+      className="relative -my-2.5 flex min-w-0 flex-1 basis-0 self-stretch items-center overflow-hidden"
     >
       {linkOpen && (
         <form
@@ -150,9 +150,11 @@ export function CommentFormattingToolbar({
 
       <div
         ref={scrollportRef}
+        data-base-ui-swipe-ignore=""
+        data-learning-swipe-ignore=""
         role="toolbar"
         aria-label="Comment formatting"
-        className="learning-comment-formatting-scrollport flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
+        className="learning-comment-formatting-scrollport swiper-no-swiping flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
       >
         <ToolbarButton
           label="Undo"

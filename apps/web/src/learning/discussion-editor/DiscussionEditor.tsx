@@ -35,6 +35,7 @@ interface DiscussionEditorProps {
   placeholderText: string;
   invalid?: boolean;
   autoFocus?: boolean;
+  autoGrow?: boolean;
   className?: string;
   onChange: (draft: DiscussionDraft) => void;
   onControllerChange?: (controller: DiscussionEditorController | null) => void;
@@ -49,6 +50,7 @@ export function DiscussionEditor({
   placeholderText,
   invalid = false,
   autoFocus = false,
+  autoGrow = false,
   className = "",
   onChange,
   onControllerChange,
@@ -160,6 +162,7 @@ export function DiscussionEditor({
   return (
     <div
       data-discussion-atomic-editor
+      data-auto-grow={autoGrow || undefined}
       className={`learning-discussion-atomic-editor min-h-0 w-full ${className}`}
     >
       <AtomicCodeMirrorEditor
