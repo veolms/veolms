@@ -9,6 +9,16 @@
   touch-action: pan-y pinch-zoom;
 }
 
+.swipeable-tab-panel__swiper.swiper-autoheight,
+.swipeable-tab-panel__swiper.swiper-autoheight .swiper-slide {
+  height: auto;
+}
+
+.swipeable-tab-panel__swiper.swiper-autoheight .swiper-wrapper {
+  align-items: flex-start;
+  transition-property: transform, height;
+}
+
 .swipeable-tab-panel__swiper .swiper-slide {
   min-width: 0;
   box-sizing: border-box;

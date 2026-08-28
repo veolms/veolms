@@ -65,6 +65,7 @@ import {
   getNumberShortcutIndex,
   isEditingShortcutTarget,
 } from "../keyboardShortcuts";
+import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
@@ -110,7 +111,12 @@ import type { CourseSection, Lesson } from "../learning/courseContent";
 const EMPTY_CATEGORIES: Category[] = [];
 
 export type CourseWizardStepId =
-  "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
+  | "basics"
+  | "curriculum"
+  | "access-rules"
+  | "pricing"
+  | "extras"
+  | "publish";
 
 type WizardStepIcon = ComponentType<{
   size?: number;
@@ -132,6 +138,10 @@ const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "extras", label: "Extras", Icon: Sparkle, tone: "orange" },
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
+
+const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
+  ({ id }) => id,
+);
 
 // Basics State Model & Normalization
 export interface BasicsFormState {
@@ -845,7 +855,7 @@ export function CourseWizardSkeleton({
 }) {
   return (
     <div
-      className="relative flex w-full flex-1 flex-col p-0 text-[--text] box-border animate-pulse"
+      className="relative flex w-full flex-col p-0 text-[--text] box-border animate-pulse"
       data-testid="course-wizard-skeleton"
     >
       {/* Wizard Header Skeleton */}
@@ -925,7 +935,7 @@ export function CourseWizardSkeleton({
       {/* Main step content skeleton matching activeStep */}
       <div className="flex-1 w-full min-w-0">
         {activeStep === "basics" ? (
-          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-1 max-[768px]:gap-4.5">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
             {/* Left Column: Basic Information Form */}
             <div className="flex flex-col gap-5">
               <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
@@ -969,7 +979,7 @@ export function CourseWizardSkeleton({
                 </div>
 
                 {/* 2-Column: Category & Difficulty */}
-                <div className="grid grid-cols-2 gap-4 mb-5 max-[640px]:grid-cols-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                   <div className="flex flex-col gap-2">
                     <div className="h-4 w-24 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
@@ -981,7 +991,7 @@ export function CourseWizardSkeleton({
                 </div>
 
                 {/* 2-Column: Language & Instructor Alias */}
-                <div className="grid grid-cols-2 gap-4 mb-5 max-[640px]:grid-cols-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                   <div className="flex flex-col gap-2">
                     <div className="h-4 w-20 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
@@ -993,7 +1003,7 @@ export function CourseWizardSkeleton({
                 </div>
 
                 {/* Media Uploaders */}
-                <div className="grid grid-cols-2 gap-4 pt-2 max-[640px]:grid-cols-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <div className="aspect-video w-full rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex flex-col items-center justify-center p-3">
                     <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] mb-2" />
                     <div className="h-7 w-20 rounded-md bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
@@ -1007,7 +1017,7 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Right Column: Live Course Preview */}
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-5 sticky top-0 self-start">
               <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                 <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
@@ -1151,7 +1161,7 @@ export function CourseWizardSkeleton({
         ) : activeStep === "access-rules" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top Grid: 1. Who can access & 2. Access duration */}
-            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Who can access this course? */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -1285,7 +1295,7 @@ export function CourseWizardSkeleton({
         ) : activeStep === "pricing" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Course pricing */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -1350,7 +1360,7 @@ export function CourseWizardSkeleton({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3.5 max-[640px]:grid-cols-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex flex-col gap-2">
                       <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                         Price (INR) <span className="text-[#ff5252] ml-0.5">*</span>
@@ -1454,7 +1464,7 @@ export function CourseWizardSkeleton({
           /* activeStep === 'publish' */
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Publish settings & 2. Pre-publish Checklist */}
-            <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Publish settings */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -4657,7 +4667,7 @@ export function CourseCreatePage({
   }
 
   return (
-    <div className="relative flex w-full flex-1 flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
+    <div className="relative flex w-full flex-col p-0 text-[--text] box-border max-[768px]:pb-0">
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-5 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-4.5 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-3">
@@ -4956,22 +4966,13 @@ export function CourseCreatePage({
                 aria-keyshortcuts={`Alt+${idx + 1}`}
                 tabIndex={isActive ? 0 : -1}
                 data-page-tab-tone={step.tone}
+                data-swipe-tab-id={step.id}
                 disabled={
-                  actionLoading !== null ||
-                  isBasicsSaving ||
-                  isAccessRulesSaving ||
-                  isPricingSaving ||
-                  isExtrasSaving
+                  isAnyApiInProgress
                 }
                 className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
                 onClick={() => {
-                  if (
-                    actionLoading !== null ||
-                    isBasicsSaving ||
-                    isAccessRulesSaving ||
-                    isPricingSaving ||
-                    isExtrasSaving
-                  ) {
+                  if (isAnyApiInProgress) {
                     return;
                   }
                   const currentIdx = WIZARD_STEPS.findIndex(
@@ -5000,13 +5001,29 @@ export function CourseCreatePage({
         </nav>
       </header>
 
-      {/* Step Content Region */}
-      <div
-        className={`w-full flex-1 flex flex-col min-h-0  will-change-[transform,opacity]  slide-from-${slideDirection}`}
-        key={activeStep}
+      {/* Wizard Step Panels using SwipeableTabPanel */}
+      <SwipeableTabPanel
+        tabs={WIZARD_STEP_IDS}
+        activeTab={activeStep}
+        onTabChange={(newStep) => {
+          if (isAnyApiInProgress) return;
+          const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
+          const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === newStep);
+          if (targetIdx > currentIdx) setSlideDirection("right");
+          else if (targetIdx < currentIdx) setSlideDirection("left");
+          setActiveStep(newStep);
+        }}
+        tabListRef={stepsNavRef}
+        id="course-wizard-tab-panel"
+        className="course-wizard-tab-content w-full min-h-0"
+        stateAttribute="data-wizard-step"
+        labelledBy={`course-wizard-tab-${activeStep}`}
+        disabled={isAnyApiInProgress}
+        spaceBetween={32}
       >
-        {activeStep === "basics" ? (
-          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-4.5">
+        {(panelStep) =>
+          panelStep === "basics" ? (
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
             {/* Left Column: Form Sections */}
             <div className="flex flex-col gap-5">
               {/* Basic Information Section */}
@@ -5148,7 +5165,7 @@ export function CourseCreatePage({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 max-[640px]:grid-cols-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Hidden Thumbnail File Input */}
                   <input
                     type="file"
@@ -5360,7 +5377,7 @@ export function CourseCreatePage({
             </div>
 
             {/* Right Column: Live Course Preview */}
-            <div className="">
+            <div className="flex flex-col gap-5 sticky top-0 self-start">
               <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                 <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
@@ -5452,7 +5469,7 @@ export function CourseCreatePage({
               </section>
             </div>
           </div>
-        ) : activeStep === "curriculum" ? (
+        ) : panelStep === "curriculum" ? (
           <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
             {/* Header row */}
             <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
@@ -6018,7 +6035,7 @@ export function CourseCreatePage({
                                     : "px-5 py-0 max-[768px]:p-0"
                                 }`}
                               >
-                                <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[1024px]:grid-cols-1 max-[768px]:gap-3.5">
+                                <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
                                   {/* Left column */}
                                   <div className="flex flex-col gap-4.5">
                                     {/* Lesson Title */}
@@ -6095,7 +6112,7 @@ export function CourseCreatePage({
                                           *
                                         </span>
                                       </label>
-                                      <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div
                                           className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                             les.isPendingCreation
@@ -6236,7 +6253,7 @@ export function CourseCreatePage({
                                       <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                         Publishing Status
                                       </label>
-                                      <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div
                                           className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                             les.isPendingCreation
@@ -6627,10 +6644,10 @@ export function CourseCreatePage({
               ))
             )}
           </div>
-        ) : activeStep === "access-rules" ? (
+        ) : panelStep === "access-rules" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top Grid: 1. Who can access & 2. Access duration */}
-            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Who can access this course? */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -6906,7 +6923,7 @@ export function CourseCreatePage({
               </div>
             </div>
           </div>
-        ) : activeStep === "pricing" ? (
+        ) : panelStep === "pricing" ? (
           <div className="flex w-full flex-col gap-5">
             {pricingValidationError && (
               <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
@@ -6916,7 +6933,7 @@ export function CourseCreatePage({
             )}
 
             {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-            <div className="grid grid-cols-2 gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Course pricing */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
                 <div className="mb-4.5">
@@ -7201,10 +7218,10 @@ export function CourseCreatePage({
               </button>
             </div>
           </div>
-        ) : activeStep === "extras" ? (
+        ) : panelStep === "extras" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
-            <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Certificates */}
               <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -7448,7 +7465,7 @@ export function CourseCreatePage({
                 </div>
 
                 {/* Derived Live Stats Summary Grid */}
-                <div className="grid grid-cols-3 gap-3 mb-6 max-[1024px]:grid-cols-1 max-[768px]:grid-cols-1 max-[768px]:gap-2.5">
+                <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
                   <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
                     <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
                       <BookOpen size={20} weight="fill" />
@@ -7692,10 +7709,10 @@ export function CourseCreatePage({
               </div>
             </div>
           </div>
-        ) : activeStep === "publish" ? (
+        ) : panelStep === "publish" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
-            <div className="grid grid-cols-2 items-start gap-5 max-[768px]:grid-cols-1 max-[768px]:gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Publish settings */}
               <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
@@ -8036,7 +8053,7 @@ export function CourseCreatePage({
                 3. What happens after publishing?
               </h3>
 
-              <div className="grid grid-cols-4 gap-4 max-[1024px]:grid-cols-2 max-[640px]:grid-cols-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 min-[1024px]:grid-cols-4 gap-4">
                 {/* Feature 1: Visible to students */}
                 <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
                   <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
@@ -8103,20 +8120,20 @@ export function CourseCreatePage({
             </div>
           </div>
         ) : (
-          <div className="relative z-10 grid grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[1024px]:grid-cols-[minmax(0,1fr)] max-[768px]:grid-cols-[minmax(0,1fr)] max-[768px]:gap-4.5">
+          <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
             <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
               <div className="mb-4.5">
                 <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                  {WIZARD_STEPS.find((s) => s.id === activeStep)?.label}
+                  {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
                 </h2>
                 <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                  This section will allow configuring course {activeStep}.
+                  This section will allow configuring course {panelStep}.
                 </p>
               </div>
             </section>
           </div>
         )}
-      </div>
+      </SwipeableTabPanel>
 
       {/* Mobile Sticky / Fixed Bottom Action Bar */}
       <div

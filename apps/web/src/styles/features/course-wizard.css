@@ -728,3 +728,46 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Swipeable Tab Content & Layout Constraints
+   ───────────────────────────────────────────────────────────────────────────── */
+.course-wizard-tab-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.course-wizard-tab-content .swipeable-tab-panel__swiper {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.course-wizard-tab-content .swiper-slide {
+  min-width: 0 !important;
+  box-sizing: border-box;
+  padding: 0 !important;
+}
+
+.course-wizard-tab-content .swiper-slide:not(.swiper-slide-active) {
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden;
+}
+
+.course-wizard-tab-content .swiper-slide.swiper-slide-active {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  visibility: visible;
+}
+
+.course-wizard-tab-content .swipeable-tab-panel__swiper.swiper-touch .swiper-slide {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  visibility: visible;
+}
+
