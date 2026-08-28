@@ -28,6 +28,18 @@ export {
   type PaymentReconciliationService,
 } from "./payments/payment-reconciliation.service.ts";
 export { createRefundService, type RefundService } from "./refunds/refund.service.ts";
+export {
+  createRefundRequestService,
+  type RefundRequestService,
+} from "./refunds/refund-request.service.ts";
+export {
+  createCreatorGatewayService,
+  type CreatorGatewayService,
+} from "./payments/gateways/creator-gateway.service.ts";
+export {
+  createManualPaymentService,
+  type ManualPaymentService,
+} from "./payments/manual-payment.service.ts";
 export { createWebhookService, type WebhookService } from "./webhooks/webhook.service.ts";
 export { createInvoiceService, type InvoiceService } from "./invoices/invoice.service.ts";
 

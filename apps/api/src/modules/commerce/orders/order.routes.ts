@@ -54,7 +54,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
     controller.getOrder,
   );
 
-  // 3. GET /orders/:orderId/invoice - Get order invoice receipt
+  // 3. GET /orders/:orderId/invoice - Get order invoice receipt data
   app.get(
     "/orders/:orderId/invoice",
     {
@@ -73,6 +73,26 @@ const orderRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getInvoice,
+  );
+
+  // 4. GET /orders/:orderId/invoice/download - Download formatted invoice HTML
+  app.get(
+    "/orders/:orderId/invoice/download",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "downloadOrderInvoice",
+        tags: ["Commerce - Orders"],
+        summary: "Download printable order invoice receipt",
+        description: "Returns downloadable HTML receipt file for printing or saving as PDF.",
+        params: z.object({ orderId: z.uuid() }),
+        response: {
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Order not found"),
+        },
+      },
+    },
+    controller.downloadInvoice,
   );
 };
 

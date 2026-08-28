@@ -36,6 +36,12 @@ export type {
   RefundTable,
   EnrollmentTable,
   WebhookEventTable,
+  CreatorPaymentConfigTable,
+  RefundRequestTable,
+  RefundRequestStatus,
+  ManualPaymentRequestTable,
+  ManualPaymentStatus,
+  CreditNoteTable,
 } from "./schema.ts";
 
 

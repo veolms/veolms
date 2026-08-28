@@ -34,9 +34,30 @@ export function createOrderController({
     );
   }
 
+  async function downloadInvoice(
+    request: FastifyRequest<{ Params: { orderId: string } }>,
+    reply: any,
+  ) {
+    const userId = request.user!.id;
+    const isAdmin = request.user?.roles?.includes(ADMIN_ROLE) ?? false;
+    const html = await invoiceService.generateInvoiceHtml(
+      userId,
+      request.params.orderId,
+      isAdmin,
+    );
+    reply
+      .header("Content-Type", "text/html; charset=utf-8")
+      .header(
+        "Content-Disposition",
+        `attachment; filename="invoice-${request.params.orderId}.html"`,
+      )
+      .send(html);
+  }
+
   return {
     getOrder,
     listOrders,
     getInvoice,
+    downloadInvoice,
   };
 }

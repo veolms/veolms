@@ -427,6 +427,10 @@ export interface OrderTable {
   idempotency_key: string | null;
   expires_at: Date;
   paid_at: Date | null;
+  gstin: string | null;
+  cgst_amount: Generated<number>;
+  sgst_amount: Generated<number>;
+  igst_amount: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -442,6 +446,11 @@ export interface OrderItemTable {
   discount_amount: Generated<number>;
   tax_amount: Generated<number>;
   final_amount: number;
+  hsn_sac_code: string | null;
+  tax_rate_percent: Generated<number>;
+  cgst_amount: Generated<number>;
+  sgst_amount: Generated<number>;
+  igst_amount: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -547,6 +556,60 @@ export interface OutboxEventTable {
   created_at: Generated<Date>;
 }
 
+export interface CreatorPaymentConfigTable {
+  id: string;
+  creator_id: string;
+  provider: string;
+  encrypted_key_id: string;
+  encrypted_key_secret: string;
+  encrypted_webhook_secret: string | null;
+  is_active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type RefundRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface RefundRequestTable {
+  id: string;
+  order_id: string;
+  user_id: string;
+  reason: string;
+  status: Generated<RefundRequestStatus>;
+  admin_notes: string | null;
+  resolved_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type ManualPaymentStatus = "pending" | "verified" | "rejected";
+
+export interface ManualPaymentRequestTable {
+  id: string;
+  order_id: string;
+  user_id: string;
+  payment_method: string;
+  transaction_reference: string;
+  proof_media_id: string | null;
+  status: Generated<ManualPaymentStatus>;
+  admin_notes: string | null;
+  verified_by: string | null;
+  verified_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CreditNoteTable {
+  id: string;
+  credit_note_number: string;
+  refund_id: string;
+  order_id: string;
+  user_id: string;
+  total_refund_amount: number;
+  tax_adjustment_amount: Generated<number>;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   courses: CourseTable;
   academy: AcademyTable;
@@ -589,6 +652,10 @@ export interface Database {
   webhook_events: WebhookEventTable;
   callback_inbox: CallbackInboxTable;
   outbox_events: OutboxEventTable;
+  creator_payment_configs: CreatorPaymentConfigTable;
+  refund_requests: RefundRequestTable;
+  manual_payment_requests: ManualPaymentRequestTable;
+  credit_notes: CreditNoteTable;
 }
 
 export type PurchaseTable = OrderTable;

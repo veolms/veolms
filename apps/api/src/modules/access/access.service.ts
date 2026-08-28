@@ -21,6 +21,25 @@ export interface AccessService {
     },
   ): Promise<AccessGrant>;
 
+  grantManualAccess(
+    database: Executor,
+    params: {
+      userId: string;
+      courseId: string;
+      validUntil?: Date | null;
+    },
+  ): Promise<AccessGrant>;
+
+  revokeAccessGrantById(
+    database: Executor,
+    grantId: string,
+  ): Promise<void>;
+
+  listUserGrants(
+    database: Executor,
+    userId: string,
+  ): Promise<AccessGrant[]>;
+
   hasActiveAccess(
     database: Executor,
     userId: string,
@@ -73,6 +92,97 @@ export function createAccessService(): AccessService {
     };
   }
 
+  async function grantManualAccess(
+    database: Executor,
+    params: {
+      userId: string;
+      courseId: string;
+      validUntil?: Date | null;
+    },
+  ): Promise<AccessGrant> {
+    const now = new Date();
+    const grant = await grantAccess(database, {
+      userId: params.userId,
+      courseId: params.courseId,
+      source: "admin_grant",
+      validFrom: now,
+      validUntil: params.validUntil,
+    });
+
+    // Also sync enrollment record with admin_grant source
+    await database
+      .insertInto("enrollments")
+      .values({
+        id: crypto.randomUUID(),
+        user_id: params.userId,
+        course_id: params.courseId,
+        order_id: null,
+        status: "active",
+        source: "admin_grant",
+        access_starts_at: now,
+        access_expires_at: params.validUntil ?? null,
+        created_at: now,
+        updated_at: now,
+      })
+      .onConflict((oc) =>
+        oc.columns(["user_id", "course_id"]).doUpdateSet({
+          order_id: null,
+          status: "active",
+          source: "admin_grant",
+          access_starts_at: now,
+          access_expires_at: params.validUntil ?? null,
+          updated_at: now,
+        }),
+      )
+      .executeTakeFirst();
+
+    return grant;
+  }
+
+  async function revokeAccessGrantById(
+    database: Executor,
+    grantId: string,
+  ): Promise<void> {
+    const grant = await database
+      .selectFrom("access_grants")
+      .selectAll()
+      .where("id", "=", grantId)
+      .executeTakeFirst();
+
+    if (!grant) return;
+
+    await accessRepo.updateAccessGrantStatus(database, grantId, "revoked");
+
+    await database
+      .updateTable("enrollments")
+      .set({
+        status: "revoked",
+        updated_at: new Date(),
+      })
+      .where("user_id", "=", grant.user_id)
+      .where("course_id", "=", grant.course_id)
+      .execute();
+  }
+
+  async function listUserGrants(
+    database: Executor,
+    userId: string,
+  ): Promise<AccessGrant[]> {
+    const rows = await accessRepo.listUserAccessGrants(database, userId);
+    return rows.map((g) => ({
+      id: g.id,
+      userId: g.user_id,
+      courseId: g.course_id,
+      purchaseId: g.order_id,
+      status: g.status as AccessGrantStatus,
+      source: g.source as AccessGrantSource,
+      validFrom: g.valid_from,
+      validUntil: g.valid_until,
+      createdAt: g.created_at,
+      updatedAt: g.updated_at,
+    }));
+  }
+
   async function hasActiveAccess(
     database: Executor,
     userId: string,
@@ -94,6 +204,9 @@ export function createAccessService(): AccessService {
 
   return {
     grantAccess,
+    grantManualAccess,
+    revokeAccessGrantById,
+    listUserGrants,
     hasActiveAccess,
     revokeAccessForOrder,
   };

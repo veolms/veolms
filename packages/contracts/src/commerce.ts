@@ -515,12 +515,22 @@ export const createRefundRequestSchema = z.strictObject({
   orderId: z.uuid(),
   amount: z.number().int().positive().optional(), // If omitted, full refund
   reason: z.string().max(500).optional(),
+  preserveAccess: z.boolean().default(false),
 });
 export type CreateRefundRequest = z.infer<typeof createRefundRequestSchema>;
 
 // ============================================================================
 // 10. ACCESS GRANTS & LEARNING ENROLLMENTS
 // ============================================================================
+
+export const createManualAccessGrantRequestSchema = z.strictObject({
+  userId: z.uuid(),
+  courseId: z.uuid(),
+  validUntil: z.string().or(z.date()).nullable().optional(),
+});
+export type CreateManualAccessGrantRequest = z.infer<
+  typeof createManualAccessGrantRequestSchema
+>;
 
 export const accessGrantStatusSchema = z.enum(["active", "suspended", "revoked", "expired"]);
 export type AccessGrantStatus = z.infer<typeof accessGrantStatusSchema>;
@@ -772,4 +782,127 @@ export interface PaymentGateway {
    */
   normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent;
 }
+
+// ============================================================================
+// 13. CREATOR PAYMENT CONFIGS (FR-PAY-002)
+// ============================================================================
+
+export const creatorPaymentConfigSchema = z.strictObject({
+  id: z.uuid(),
+  creatorId: z.uuid(),
+  provider: paymentProviderSchema,
+  keyId: z.string(),
+  hasWebhookSecret: z.boolean(),
+  isActive: z.boolean(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type CreatorPaymentConfig = z.infer<typeof creatorPaymentConfigSchema>;
+
+export const saveCreatorPaymentConfigRequestSchema = z.strictObject({
+  provider: paymentProviderSchema.default("razorpay"),
+  keyId: z.string().min(1),
+  keySecret: z.string().min(1),
+  webhookSecret: z.string().optional(),
+});
+export type SaveCreatorPaymentConfigRequest = z.infer<
+  typeof saveCreatorPaymentConfigRequestSchema
+>;
+
+// ============================================================================
+// 14. STUDENT REFUND REQUESTS (FR-PAY-010)
+// ============================================================================
+
+export const refundRequestStatusSchema = z.enum([
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+]);
+export type RefundRequestStatus = z.infer<typeof refundRequestStatusSchema>;
+
+export const refundRequestSchema = z.strictObject({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  userId: z.uuid(),
+  reason: z.string(),
+  status: refundRequestStatusSchema,
+  adminNotes: z.string().nullable().optional(),
+  resolvedAt: z.string().or(z.date()).nullable().optional(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type RefundRequest = z.infer<typeof refundRequestSchema>;
+
+export const createStudentRefundRequestSchema = z.strictObject({
+  reason: z.string().min(5).max(1000),
+});
+export type CreateStudentRefundRequest = z.infer<
+  typeof createStudentRefundRequestSchema
+>;
+
+export const reviewRefundRequestSchema = z.strictObject({
+  action: z.enum(["approve", "reject"]),
+  adminNotes: z.string().max(500).optional(),
+  preserveAccess: z.boolean().default(false),
+});
+export type ReviewRefundRequest = z.infer<typeof reviewRefundRequestSchema>;
+
+// ============================================================================
+// 15. MANUAL OFFLINE PAYMENTS (FR-PAY-011)
+// ============================================================================
+
+export const manualPaymentStatusSchema = z.enum(["pending", "verified", "rejected"]);
+export type ManualPaymentStatus = z.infer<typeof manualPaymentStatusSchema>;
+
+export const manualPaymentRequestSchema = z.strictObject({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  userId: z.uuid(),
+  paymentMethod: z.string(),
+  transactionReference: z.string(),
+  proofMediaId: z.uuid().nullable().optional(),
+  status: manualPaymentStatusSchema,
+  adminNotes: z.string().nullable().optional(),
+  verifiedBy: z.uuid().nullable().optional(),
+  verifiedAt: z.string().or(z.date()).nullable().optional(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type ManualPaymentRequest = z.infer<typeof manualPaymentRequestSchema>;
+
+export const submitManualPaymentRequestSchema = z.strictObject({
+  paymentMethod: z.enum(["upi", "bank_transfer"]).default("upi"),
+  transactionReference: z.string().min(4).max(100), // UTR / reference number
+  proofMediaId: z.uuid().optional(),
+});
+export type SubmitManualPaymentRequest = z.infer<
+  typeof submitManualPaymentRequestSchema
+>;
+
+export const verifyManualPaymentRequestSchema = z.strictObject({
+  action: z.enum(["verify", "reject"]),
+  adminNotes: z.string().max(500).optional(),
+});
+export type VerifyManualPaymentRequest = z.infer<
+  typeof verifyManualPaymentRequestSchema
+>;
+
+// ============================================================================
+// 16. CREDIT NOTES & GST (FR-PAY-009)
+// ============================================================================
+
+export const creditNoteSchema = z.strictObject({
+  id: z.uuid(),
+  creditNoteNumber: z.string(),
+  refundId: z.uuid(),
+  orderId: z.uuid(),
+  userId: z.uuid(),
+  totalRefundAmount: z.number().int().positive(),
+  taxAdjustmentAmount: z.number().int().nonnegative().default(0),
+  createdAt: z.string().or(z.date()),
+});
+export type CreditNote = z.infer<typeof creditNoteSchema>;
+
+
 

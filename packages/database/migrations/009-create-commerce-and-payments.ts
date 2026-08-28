@@ -156,6 +156,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("idempotency_key", "text", (col) => col.unique())
     .addColumn("expires_at", "timestamptz", (col) => col.notNull())
     .addColumn("paid_at", "timestamptz")
+    .addColumn("gstin", "text")
+    .addColumn("cgst_amount", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("sgst_amount", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("igst_amount", "integer", (col) => col.notNull().defaultTo(0))
     .addColumn("created_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -193,6 +197,11 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("discount_amount", "integer", (col) => col.notNull().defaultTo(0))
     .addColumn("tax_amount", "integer", (col) => col.notNull().defaultTo(0))
     .addColumn("final_amount", "integer", (col) => col.notNull())
+    .addColumn("hsn_sac_code", "text", (col) => col.defaultTo("999293"))
+    .addColumn("tax_rate_percent", "integer", (col) => col.notNull().defaultTo(18))
+    .addColumn("cgst_amount", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("sgst_amount", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("igst_amount", "integer", (col) => col.notNull().defaultTo(0))
     .addColumn("created_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -443,9 +452,148 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .execute();
 
   await sql`create index idx_outbox_events_unprocessed on outbox_events (created_at) where processed_at is null`.execute(database);
+
+  // 12. Creator Payment Configurations (FR-PAY-002)
+  await database.schema
+    .createTable("creator_payment_configs")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("creator_id", "uuid", (col) =>
+      col.notNull().references("users.id").onDelete("cascade"),
+    )
+    .addColumn("provider", "text", (col) => col.notNull())
+    .addColumn("encrypted_key_id", "text", (col) => col.notNull())
+    .addColumn("encrypted_key_secret", "text", (col) => col.notNull())
+    .addColumn("encrypted_webhook_secret", "text")
+    .addColumn("is_active", "boolean", (col) => col.notNull().defaultTo(true))
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addColumn("updated_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addUniqueConstraint("creator_payment_configs_creator_provider_unique", [
+      "creator_id",
+      "provider",
+    ])
+    .execute();
+
+  await sql`create index idx_creator_payment_configs_creator on creator_payment_configs (creator_id)`.execute(
+    database,
+  );
+
+  // 13. Student In-App Refund Requests (FR-PAY-010)
+  await database.schema
+    .createTable("refund_requests")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("order_id", "uuid", (col) =>
+      col.notNull().references("orders.id").onDelete("cascade"),
+    )
+    .addColumn("user_id", "uuid", (col) =>
+      col.notNull().references("users.id").onDelete("cascade"),
+    )
+    .addColumn("reason", "text", (col) => col.notNull())
+    .addColumn("status", "text", (col) => col.notNull().defaultTo("pending"))
+    .addColumn("admin_notes", "text")
+    .addColumn("resolved_at", "timestamptz")
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addColumn("updated_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addCheckConstraint(
+      "refund_requests_status_valid",
+      sql`status in ('pending', 'approved', 'rejected', 'cancelled')`,
+    )
+    .execute();
+
+  await sql`create index idx_refund_requests_order_id on refund_requests (order_id)`.execute(
+    database,
+  );
+  await sql`create index idx_refund_requests_user_id on refund_requests (user_id)`.execute(
+    database,
+  );
+  await sql`create index idx_refund_requests_status on refund_requests (status)`.execute(
+    database,
+  );
+
+  // 14. Manual Offline Payments (FR-PAY-011)
+  await database.schema
+    .createTable("manual_payment_requests")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("order_id", "uuid", (col) =>
+      col.notNull().references("orders.id").onDelete("cascade"),
+    )
+    .addColumn("user_id", "uuid", (col) =>
+      col.notNull().references("users.id").onDelete("cascade"),
+    )
+    .addColumn("payment_method", "text", (col) => col.notNull())
+    .addColumn("transaction_reference", "text", (col) => col.notNull())
+    .addColumn("proof_media_id", "uuid", (col) =>
+      col.references("media_assets.id").onDelete("set null"),
+    )
+    .addColumn("status", "text", (col) => col.notNull().defaultTo("pending"))
+    .addColumn("admin_notes", "text")
+    .addColumn("verified_by", "uuid", (col) =>
+      col.references("users.id").onDelete("set null"),
+    )
+    .addColumn("verified_at", "timestamptz")
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addColumn("updated_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .addCheckConstraint(
+      "manual_payment_requests_status_valid",
+      sql`status in ('pending', 'verified', 'rejected')`,
+    )
+    .execute();
+
+  await sql`create index idx_manual_payment_requests_order on manual_payment_requests (order_id)`.execute(
+    database,
+  );
+  await sql`create index idx_manual_payment_requests_user on manual_payment_requests (user_id)`.execute(
+    database,
+  );
+  await sql`create index idx_manual_payment_requests_status on manual_payment_requests (status)`.execute(
+    database,
+  );
+
+  // 15. Credit Notes (FR-PAY-009)
+  await database.schema
+    .createTable("credit_notes")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("credit_note_number", "text", (col) => col.notNull().unique())
+    .addColumn("refund_id", "uuid", (col) =>
+      col.notNull().references("refunds.id").onDelete("cascade"),
+    )
+    .addColumn("order_id", "uuid", (col) =>
+      col.notNull().references("orders.id").onDelete("cascade"),
+    )
+    .addColumn("user_id", "uuid", (col) =>
+      col.notNull().references("users.id").onDelete("cascade"),
+    )
+    .addColumn("total_refund_amount", "integer", (col) => col.notNull())
+    .addColumn("tax_adjustment_amount", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
+    )
+    .execute();
+
+  await sql`create index idx_credit_notes_order_id on credit_notes (order_id)`.execute(
+    database,
+  );
+  await sql`create index idx_credit_notes_refund_id on credit_notes (refund_id)`.execute(
+    database,
+  );
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
+  await database.schema.dropTable("credit_notes").ifExists().execute();
+  await database.schema.dropTable("manual_payment_requests").ifExists().execute();
+  await database.schema.dropTable("refund_requests").ifExists().execute();
+  await database.schema.dropTable("creator_payment_configs").ifExists().execute();
   await database.schema.dropTable("outbox_events").ifExists().execute();
   await database.schema.dropTable("callback_inbox").ifExists().execute();
   await database.schema.dropTable("webhook_events").ifExists().execute();

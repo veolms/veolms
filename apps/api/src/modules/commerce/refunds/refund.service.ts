@@ -152,14 +152,33 @@ export function createRefundService({
         );
       }
 
-      // Only update order status and revoke access if gateway settled the refund immediately
+      // Only update order status, issue credit note, and revoke access if gateway settled the refund immediately
       if (isProcessed) {
         await orderRepo.updateOrderStatus(trx, order.id, {
           status: isFullRefund ? "refunded" : "partially_refunded",
           updated_at: now,
         });
 
-        if (isFullRefund) {
+        // Generate immutable Credit Note (FR-PAY-009)
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+        const hex = crypto.randomBytes(3).toString("hex").toUpperCase();
+        const creditNoteNumber = `CN-${dateStr}-${hex}`;
+
+        await trx
+          .insertInto("credit_notes")
+          .values({
+            id: crypto.randomUUID(),
+            credit_note_number: creditNoteNumber,
+            refund_id: record.id,
+            order_id: order.id,
+            user_id: order.user_id,
+            total_refund_amount: requestedAmount,
+            tax_adjustment_amount: 0,
+            created_at: now,
+          })
+          .execute();
+
+        if (isFullRefund && !request.preserveAccess) {
           // Single shared owner of the access_grants + enrollments revoke
           // write — see course-access.service.ts.
           await courseAccessService.revokeAccessForOrder(trx, order);
