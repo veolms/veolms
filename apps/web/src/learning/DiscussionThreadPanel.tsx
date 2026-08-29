@@ -94,7 +94,11 @@ export function DiscussionThreadPanel({
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
-  const surfaceBounds = useThreadPanelSurfaceBounds(open, viewport);
+  const [surfaceBoundsFrozen, setSurfaceBoundsFrozen] = useState(open);
+  const surfaceBounds = useThreadPanelSurfaceBounds(
+    viewport,
+    surfaceBoundsFrozen,
+  );
   const swiperRef = useRef<SwiperInstance | null>(null);
   const widthResizeRef = useRef<PanelWidthResize | null>(null);
   const heightResizeRef = useRef<PanelHeightResize | null>(null);
@@ -130,6 +134,10 @@ export function DiscussionThreadPanel({
     0,
     entries.findIndex((entry) => entry.id === activeEntryId),
   );
+
+  useThreadPanelLayoutEffect(() => {
+    if (open) setSurfaceBoundsFrozen(true);
+  }, [open]);
 
   const clampPanelWidth = useCallback(
     (width: number) => {
@@ -180,14 +188,9 @@ export function DiscussionThreadPanel({
   }, [clampPanelHeight, clampPanelWidth, isPhone]);
 
   useEffect(() => {
-    if (!open) {
-      setExpanded(false);
-      return;
-    }
-    if (isPhone) {
-      setExpanded(false);
-      setMobileSnapPoint(mobileCollapsedSnapPoint);
-    }
+    if (!open || !isPhone) return;
+    setExpanded(false);
+    setMobileSnapPoint(mobileCollapsedSnapPoint);
   }, [isPhone, mobileCollapsedSnapPoint, open]);
 
   const commitPanelWidth = useCallback((width: number) => {
@@ -335,6 +338,7 @@ export function DiscussionThreadPanel({
       onOpenChange={onOpenChange}
       onOpenChangeComplete={(nextOpen) => {
         if (!nextOpen) {
+          setSurfaceBoundsFrozen(false);
           setExpanded(false);
           setPanelHeight(null);
           setMobileSnapPoint(mobileCollapsedSnapPoint);
@@ -365,8 +369,13 @@ export function DiscussionThreadPanel({
         viewportStyle={panelViewportStyle}
         data-base-ui-swipe-ignore={isPhone ? undefined : ""}
         data-panel-expanded={expanded || undefined}
+        data-panel-surface-frozen={surfaceBoundsFrozen || undefined}
         data-panel-resizing={resizingAxis ? "true" : undefined}
-        className="m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_84%,transparent)] [--stack-scale:1]! bg-[color-mix(in_srgb,var(--app-shell)_84%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] transition-transform! duration-300! ease-[cubic-bezier(0.16,1,0.3,1)]! data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none!"
+        className={`m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_92%,transparent)] [--stack-scale:1]! bg-[color-mix(in_srgb,var(--app-shell)_92%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none! ${
+          isPhone
+            ? ""
+            : "transform-none! translate-x-0! transition-[translate]! duration-300! ease-out! will-change-[translate] data-starting-style:translate-x-[calc(100%+2px)]! data-ending-style:translate-x-[calc(100%+2px)]! data-ending-style:duration-240! data-ending-style:ease-out!"
+        }`}
       >
         <div
           aria-hidden="true"
@@ -450,7 +459,7 @@ export function DiscussionThreadPanel({
           </div>
         )}
 
-        <header className="relative z-10 flex h-14 shrink-0 items-center gap-3 px-4 pt-2 sm:h-18 sm:px-6 sm:pt-0">
+        <header className="relative z-10 flex h-14 shrink-0 items-center gap-0 px-4">
           {!isPhone && (
             <>
               <button
@@ -464,7 +473,8 @@ export function DiscussionThreadPanel({
               </button>
               <span
                 aria-hidden="true"
-                className="h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                data-thread-panel-divider
+                className="ml-0.75 mr-3 h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
               />
             </>
           )}
@@ -612,7 +622,7 @@ function ThreadSlide({
     <div
       aria-hidden={active ? undefined : true}
       inert={active ? undefined : true}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-3 pb-3 sm:px-6 sm:pb-5"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-4 pb-4"
     >
       <div className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <ThreadRootEntry
@@ -683,7 +693,7 @@ function ThreadRootEntry({
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
   return (
-    <article className="mx-auto mb-1 max-w-4xl px-1 py-3.5 sm:px-0 sm:py-4">
+    <article className="mx-auto mb-1 max-w-4xl pt-3 pb-4">
       <div className="flex gap-3 sm:gap-3.5">
         <img
           src={entry.avatar}
@@ -933,7 +943,7 @@ function ThreadReplyComposer({
   return (
     <div
       data-thread-reply-composer
-      className="-mx-3 -mb-3 mt-3 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
+      className="-mx-4 -mb-4 mt-3 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
         documentId={`thread-reply-${entry.id}`}
@@ -1007,7 +1017,10 @@ interface ThreadPanelSurfaceBounds {
   app: PanelSurfaceRect;
 }
 
-function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
+function useThreadPanelSurfaceBounds(
+  viewport: ViewportBounds,
+  frozen: boolean,
+) {
   const measure = useCallback(
     (): ThreadPanelSurfaceBounds => getThreadPanelSurfaceBounds(viewport),
     [viewport],
@@ -1015,8 +1028,10 @@ function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
   const [bounds, setBounds] = useState<ThreadPanelSurfaceBounds>(measure);
 
   useThreadPanelLayoutEffect(() => {
-    if (!open) return undefined;
+    setBounds(measure());
+  }, [measure]);
 
+  useThreadPanelLayoutEffect(() => {
     let frame = 0;
     const lesson = document.querySelector<HTMLElement>(
       "[data-discussion-panel-anchor]",
@@ -1026,24 +1041,24 @@ function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => setBounds(measure()));
     };
+    const syncSurface = () => {
+      if (!frozen) sync();
+    };
     const resizeObserver =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(syncSurface);
 
     if (lesson) resizeObserver?.observe(lesson);
     if (app) resizeObserver?.observe(app);
-    setBounds(measure());
-    window.addEventListener("resize", sync);
-    window.visualViewport?.addEventListener("resize", sync);
-    document.addEventListener("scroll", sync, true);
+    document.addEventListener("scroll", syncSurface, true);
 
     return () => {
       window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
-      window.removeEventListener("resize", sync);
-      window.visualViewport?.removeEventListener("resize", sync);
-      document.removeEventListener("scroll", sync, true);
+      document.removeEventListener("scroll", syncSurface, true);
     };
-  }, [measure, open]);
+  }, [frozen, measure]);
 
   return bounds;
 }

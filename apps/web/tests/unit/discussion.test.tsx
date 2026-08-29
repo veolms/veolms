@@ -483,6 +483,11 @@ describe("Discussion", () => {
       ".swiper-slide-active",
     );
     if (!activeThreadSlide) throw new Error("Expected an active thread slide");
+    expect(activeThreadSlide.firstElementChild).toHaveClass("px-4", "pb-4");
+    expect(activeThreadSlide.firstElementChild).not.toHaveClass(
+      "px-3",
+      "sm:px-6",
+    );
     const threadReplyActions = Array.from(
       activeThreadSlide.querySelectorAll<HTMLButtonElement>(
         "[data-reply-action]",
@@ -501,7 +506,7 @@ describe("Discussion", () => {
     const rootEntry = within(thread)
       .getByRole("document", { name: "Discussion entry by Rohit Sharma" })
       .closest("article");
-    expect(rootEntry).toHaveClass("mb-1", "py-3.5", "sm:py-4");
+    expect(rootEntry).toHaveClass("mb-1", "pt-3", "pb-4");
     const replyEntry = within(thread)
       .getByRole("document", { name: "Reply by Ashi Singh" })
       .closest("[data-thread-reply-entry]");
@@ -512,8 +517,8 @@ describe("Discussion", () => {
       .getByRole("textbox", { name: "Reply to Rohit Sharma" })
       .closest("[data-thread-reply-composer]");
     expect(replyComposer).toHaveClass(
-      "-mx-3",
-      "-mb-3",
+      "-mx-4",
+      "-mb-4",
       "grid-rows-[auto_auto]",
       "rounded-t-xl",
       "sm:mx-0",
@@ -555,16 +560,29 @@ describe("Discussion", () => {
     ).toBeInTheDocument();
     expect(thread).toHaveAttribute("data-swipe-direction", "right");
     expect(thread).toHaveClass(
-      "bg-[color-mix(in_srgb,var(--app-shell)_84%,transparent)]",
-      "[--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_84%,transparent)]",
+      "bg-[color-mix(in_srgb,var(--app-shell)_92%,transparent)]",
+      "[--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_92%,transparent)]",
       "[--stack-scale:1]!",
       "backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))]",
       "backdrop-saturate-[1.2]",
-      "transition-transform!",
+      "transform-none!",
+      "translate-x-0!",
+      "transition-[translate]!",
+      "duration-300!",
+      "ease-out!",
+      "will-change-[translate]",
+      "data-starting-style:translate-x-[calc(100%+2px)]!",
+      "data-ending-style:translate-x-[calc(100%+2px)]!",
+      "data-ending-style:duration-240!",
+      "data-ending-style:ease-out!",
     );
     expect(thread).not.toHaveClass(
       "bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)]",
+      "bg-[color-mix(in_srgb,var(--app-shell)_84%,transparent)]",
       "bg-[color-mix(in_srgb,var(--app-shell)_98%,transparent)]",
+      "transition-transform!",
+      "ease-[cubic-bezier(0.16,1,0.3,1)]!",
+      "ease-[cubic-bezier(0.22,1,0.36,1)]!",
       "transition-[top,left,width,height,transform,opacity,filter]!",
     );
     expect(thread.style.position).toBe("absolute");
@@ -587,6 +605,21 @@ describe("Discussion", () => {
     expect(drawerViewport?.style.overflow).toBe("hidden");
     expect(document.querySelector('[data-slot="drawer-overlay"]')).toBeNull();
     expect(thread).toHaveAttribute("data-base-ui-swipe-ignore");
+    const closeThread = within(thread).getByRole("button", {
+      name: "Close discussion thread",
+    });
+    expect(closeThread.closest("header")).toHaveClass("h-14", "gap-0", "px-4");
+    expect(closeThread.closest("header")).not.toHaveClass(
+      "pt-2",
+      "sm:h-18",
+      "sm:px-6",
+    );
+    expect(thread).toHaveAttribute("data-panel-surface-frozen", "true");
+    expect(
+      closeThread
+        .closest("header")
+        ?.querySelector("[data-thread-panel-divider]"),
+    ).toHaveClass("ml-0.75", "mr-3");
     const threadScrollport = thread.querySelector<HTMLElement>(
       ".learning-comment-formatting-scrollport",
     );
@@ -658,6 +691,10 @@ describe("Discussion", () => {
         name: "Close discussion thread",
       }),
     );
+    expect(thread).toHaveAttribute("data-panel-expanded", "true");
+    expect(thread).toHaveAttribute("data-panel-surface-frozen", "true");
+    expect(thread.style.top).toBe("0px");
+    expect(thread.style.bottom).toBe("auto");
     await waitFor(() => {
       expect(
         screen.queryByRole("dialog", { name: "Discussion thread" }),
