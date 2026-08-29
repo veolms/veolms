@@ -3,6 +3,7 @@ import type { Course as ApiCourse, DeletedCourse } from "@veolms/contracts";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
+  formatCoursePricing,
 } from "../../src/courses/courseAdapter";
 import { courses as mockCourses, getVisibleCourses } from "../../src/courses/catalogue";
 import type { Course } from "../../src/courses/catalogue";
@@ -523,4 +524,82 @@ describe("Creator Courses Page API Integration", () => {
       expect(state.isMyCoursesQueryEnabled).toBe(false);
     });
   });
+
+  describe("10. Pricing formatting via formatCoursePricing", () => {
+    it("formats free courses properly", () => {
+      expect(
+        formatCoursePricing({
+          pricingType: "free",
+          price: 0,
+          currency: "INR",
+          salePrice: null,
+        }),
+      ).toEqual({
+        price: "Free",
+        originalPrice: "",
+        discount: "",
+      });
+    });
+
+    it("formats INR currency and sale price with Indian locale grouping and ₹ symbol", () => {
+      expect(
+        formatCoursePricing({
+          pricingType: "paid",
+          price: 100000,
+          currency: "INR",
+          salePrice: 49999,
+        }),
+      ).toEqual({
+        price: "₹49,999",
+        originalPrice: "₹1,00,000",
+        discount: "50% off",
+      });
+    });
+
+    it("formats USD currency and sale price with US locale grouping and $ symbol", () => {
+      expect(
+        formatCoursePricing({
+          pricingType: "paid",
+          price: 100000,
+          currency: "USD",
+          salePrice: 80000,
+        }),
+      ).toEqual({
+        price: "$80,000",
+        originalPrice: "$100,000",
+        discount: "20% off",
+      });
+    });
+
+    it("formats EUR currency with € symbol and matching locale grouping", () => {
+      expect(
+        formatCoursePricing({
+          pricingType: "paid",
+          price: 2500,
+          currency: "EUR",
+          salePrice: null,
+        }),
+      ).toEqual({
+        price: "€2,500",
+        originalPrice: "",
+        discount: "",
+      });
+    });
+
+    it("formats GBP currency with £ symbol and matching locale grouping", () => {
+      expect(
+        formatCoursePricing({
+          pricingType: "paid",
+          price: 5000,
+          currency: "GBP",
+          salePrice: 2500,
+        }),
+      ).toEqual({
+        price: "£2,500",
+        originalPrice: "£5,000",
+        discount: "50% off",
+      });
+    });
+  });
 });
+

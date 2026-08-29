@@ -60,7 +60,7 @@ export function useDeletedCourses(
   options?: { enabled?: boolean },
 ) {
   return useQuery<DeletedCoursesListResponse, ApiError>({
-    queryKey: courseKeys.bin(),
+    queryKey: [...courseKeys.bin(), params ?? null],
     queryFn: () => coursesService.listDeletedCourses(params),
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,

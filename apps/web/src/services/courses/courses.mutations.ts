@@ -60,6 +60,7 @@ export function useUpdateCourseBasics() {
       });
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
     },
   });
 }
@@ -75,7 +76,7 @@ export function useDeleteCourse() {
       queryClient.invalidateQueries({ queryKey: courseKeys.bin() });
       queryClient.removeQueries({ queryKey: courseKeys.editor(courseId) });
       queryClient.removeQueries({ queryKey: courseKeys.preview(courseId) });
-      queryClient.removeQueries({ queryKey: courseKeys.overview(courseId) });
+      queryClient.removeQueries({ queryKey: courseKeys.overviews() });
     },
   });
 }
@@ -491,6 +492,7 @@ export function usePublishCourse() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.validation(updatedCourse.id),
       });
+      queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
     },
   });
 }
@@ -512,6 +514,7 @@ export function useUnpublishCourse() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.validation(updatedCourse.id),
       });
+      queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
     },
   });
 }

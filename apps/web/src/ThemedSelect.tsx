@@ -88,6 +88,7 @@ export function ThemedSelect<Value extends string>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const actionButtonRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -232,6 +233,7 @@ export function ThemedSelect<Value extends string>({
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const isSearchFocused = document.activeElement === searchInputRef.current;
+    const isActionFocused = document.activeElement === actionButtonRef.current;
     const currentIndex = itemRefs.current.indexOf(
       document.activeElement as HTMLButtonElement,
     );
@@ -244,9 +246,22 @@ export function ThemedSelect<Value extends string>({
     }
 
     if (isSearchFocused) {
-      if (event.key === "ArrowDown" && filteredOptions.length > 0) {
-        event.preventDefault();
-        itemRefs.current[0]?.focus();
+      if (event.key === "ArrowDown") {
+        if (filteredOptions.length > 0) {
+          event.preventDefault();
+          itemRefs.current[0]?.focus();
+        } else if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          event.preventDefault();
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        }
       } else if (event.key === "Enter" && filteredOptions.length === 1) {
         const firstOption = filteredOptions[0];
         if (!firstOption) return;
@@ -257,21 +272,110 @@ export function ThemedSelect<Value extends string>({
       return;
     }
 
+    if (isActionFocused) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (filteredOptions.length > 0) {
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        } else if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        }
+      } else if (event.key === "End") {
+        event.preventDefault();
+        actionButtonRef.current?.focus();
+      }
+      return;
+    }
+
+    if (currentIndex === -1) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        } else if (action && actionButtonRef.current) {
+          actionButtonRef.current.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (action && actionButtonRef.current) {
+          actionButtonRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        } else if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+      return;
+    }
+
     let nextIndex: number | null = null;
     if (event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % filteredOptions.length;
+      if (currentIndex === filteredOptions.length - 1) {
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+          return;
+        }
+        if (searchable && searchInputRef.current) {
+          event.preventDefault();
+          searchInputRef.current.focus();
+          return;
+        }
+        nextIndex = 0;
+      } else {
+        nextIndex = (currentIndex + 1) % filteredOptions.length;
+      }
     }
     if (event.key === "ArrowUp") {
-      if (currentIndex === 0 && searchable) {
+      if (currentIndex === 0) {
+        if (searchable && searchInputRef.current) {
+          event.preventDefault();
+          searchInputRef.current.focus();
+          return;
+        }
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+          return;
+        }
+        nextIndex = filteredOptions.length - 1;
+      } else {
+        nextIndex =
+          (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
+      }
+    }
+    if (event.key === "Home") {
+      if (searchable && searchInputRef.current) {
         event.preventDefault();
-        searchInputRef.current?.focus();
+        searchInputRef.current.focus();
         return;
       }
-      nextIndex =
-        (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
+      nextIndex = 0;
     }
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = filteredOptions.length - 1;
+    if (event.key === "End") {
+      if (action && actionButtonRef.current) {
+        event.preventDefault();
+        actionButtonRef.current.focus();
+        return;
+      }
+      nextIndex = filteredOptions.length - 1;
+    }
     if (nextIndex === null) return;
     event.preventDefault();
     itemRefs.current[nextIndex]?.focus();
@@ -428,6 +532,7 @@ export function ThemedSelect<Value extends string>({
             {action && (
               <div className="themed-select__action-wrapper">
                 <button
+                  ref={actionButtonRef}
                   type="button"
                   className="themed-select__action-btn"
                   onClick={() => {

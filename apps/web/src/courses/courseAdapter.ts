@@ -35,15 +35,21 @@ export function formatCoursePricing(
     };
   }
   const currency = pricing.currency || "INR";
-  const symbol = currency === "INR" ? "₹" : "$";
-  const formattedPrice = `${symbol}${Number(pricing.price).toLocaleString("en-IN")}`;
+  const formatAmount = (amount: number) =>
+    new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+
+  const formattedPrice = formatAmount(Number(pricing.price));
 
   if (
     pricing.salePrice !== null &&
     pricing.salePrice !== undefined &&
     pricing.salePrice < pricing.price
   ) {
-    const formattedSalePrice = `${symbol}${Number(pricing.salePrice).toLocaleString("en-IN")}`;
+    const formattedSalePrice = formatAmount(Number(pricing.salePrice));
     const discountPercent = Math.round(
       ((pricing.price - pricing.salePrice) / pricing.price) * 100,
     );

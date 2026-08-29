@@ -65,7 +65,7 @@ export interface CourseCardProps {
   onManage?: (course: Course) => void;
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
-  onRestoreRequested?: (course: Course) => void;
+  onRestoreRequested?: (course: Course) => Promise<void> | void;
   onNavigatePage: (destination: string) => void;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
@@ -104,6 +104,15 @@ export function CourseCard({
   const closeThen = (action: () => void) => {
     setMenuOpen(null);
     action();
+  };
+
+  const handleRestore = async (courseToRestore: Course) => {
+    if (!onRestoreRequested) return;
+    try {
+      await onRestoreRequested(courseToRestore);
+    } catch {
+      // Error notifications are handled by onRestoreCourse in the page container
+    }
   };
 
   const copyCourseLink = async () => {
@@ -297,11 +306,13 @@ export function CourseCard({
           >
             {role === "creator" ? (
               isBin || course.deletedAt ? (
-                <MenuAction
-                  Icon={ArrowCounterClockwise}
-                  label="Restore Course"
-                  onClick={() => closeThen(() => onRestoreRequested?.(course))}
-                />
+                onRestoreRequested ? (
+                  <MenuAction
+                    Icon={ArrowCounterClockwise}
+                    label="Restore Course"
+                    onClick={() => closeThen(() => void handleRestore(course))}
+                  />
+                ) : null
               ) : (
                 <>
                   <MenuAction
@@ -514,77 +525,86 @@ export function CourseCard({
             </div>
           )}
 
-          <button
-            type="button"
-            className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
-              role === "creator"
-                ? "flex justify-center gap-2 hover:bg-(--accent-hover)"
-                : "flex justify-center gap-3 hover:bg-(--accent-hover)"
-            }`}
-            data-control-radius-action
-            onClick={() => {
-              if (role === "creator") {
-                if (isBin || course.deletedAt) {
-                  onRestoreRequested?.(course);
+          {role === "creator" && (isBin || course.deletedAt) && !onRestoreRequested ? null : (
+            <button
+              type="button"
+              disabled={
+                role === "creator" &&
+                Boolean(isBin || course.deletedAt) &&
+                !onRestoreRequested
+              }
+              className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
+                role === "creator"
+                  ? "flex justify-center gap-2 hover:bg-(--accent-hover)"
+                  : "flex justify-center gap-3 hover:bg-(--accent-hover)"
+              }`}
+              data-control-radius-action
+              onClick={() => {
+                if (role === "creator") {
+                  if (isBin || course.deletedAt) {
+                    if (onRestoreRequested) {
+                      void handleRestore(course);
+                    }
+                    return;
+                  }
+                  onEdit?.(course);
                   return;
                 }
-                onEdit?.(course);
-                return;
-              }
 
-              if (course.enrolled) {
-                onOpen(course);
-                return;
-              }
+                if (course.enrolled) {
+                  onOpen(course);
+                  return;
+                }
 
-              onNavigatePage(overviewPath);
-            }}
-          >
-            {role === "creator" ? (
-              isBin || course.deletedAt ? (
-                <>
-                  <ArrowCounterClockwise
-                    className="shrink-0"
-                    size={17}
-                    weight="bold"
-                    aria-hidden="true"
-                  />
-                  <span>Restore Course</span>
-                </>
-              ) : (
-                <>
-                  <PencilSimple
-                    className="shrink-0"
-                    size={17}
-                    weight="bold"
-                    aria-hidden="true"
-                  />
-                  <span>Edit Course</span>
-                </>
-              )
-            ) : (
-              <span className="flex min-w-0 items-center gap-3">
-                {course.enrolled ? (
-                  <Play
-                    className="shrink-0"
-                    size={17}
-                    weight="fill"
-                    aria-hidden="true"
-                  />
+                onNavigatePage(overviewPath);
+              }}
+            >
+              {role === "creator" ? (
+                isBin || course.deletedAt ? (
+                  <>
+                    <ArrowCounterClockwise
+                      className="shrink-0"
+                      size={17}
+                      weight="bold"
+                      aria-hidden="true"
+                    />
+                    <span>Restore Course</span>
+                  </>
                 ) : (
-                  <ListBullets
-                    className="shrink-0"
-                    size={17}
-                    weight="regular"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="truncate">
-                  {course.enrolled ? "Continue Learning" : "View Curriculum"}
+                  <>
+                    <PencilSimple
+                      className="shrink-0"
+                      size={17}
+                      weight="bold"
+                      aria-hidden="true"
+                    />
+                    <span>Edit Course</span>
+                  </>
+                )
+              ) : (
+                <span className="flex min-w-0 items-center gap-3">
+                  {course.enrolled ? (
+                    <Play
+                      className="shrink-0"
+                      size={17}
+                      weight="fill"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ListBullets
+                      className="shrink-0"
+                      size={17}
+                      weight="regular"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="truncate">
+                    {course.enrolled ? "Continue Learning" : "View Curriculum"}
+                  </span>
                 </span>
-              </span>
-            )}
-          </button>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </article>

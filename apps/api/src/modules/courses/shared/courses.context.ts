@@ -12,7 +12,7 @@ import {
 
 export interface CoursesContext {
   middleware: AuthMiddleware;
-  /** Course authoring is restricted to the creator and instructor roles. */
+  /** Course authoring is allowed for creators, instructors, and administrators. */
   requireCourseAuthor: AuthMiddleware["authenticate"][];
   /** Administrator-only access. */
   requireAdmin: AuthMiddleware["authenticate"][];

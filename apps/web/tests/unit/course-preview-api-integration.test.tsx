@@ -119,9 +119,12 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     },
   };
 
-  it("builds the correct React Query key for course preview", () => {
+  it("builds the correct React Query key for course preview and overviews", () => {
     const courseId = "test-course-id";
     expect(courseKeys.preview(courseId)).toEqual(["courses", "preview", "test-course-id"]);
+    expect(courseKeys.overviews()).toEqual(["courses", "overview"]);
+    expect(courseKeys.overview(courseId)).toEqual(["courses", "overview", "test-course-id"]);
+    expect(courseKeys.overview("fullstack-web-engineering")).toEqual(["courses", "overview", "fullstack-web-engineering"]);
   });
 
   it("does not render shortDescription in hero section to keep composition clean", () => {

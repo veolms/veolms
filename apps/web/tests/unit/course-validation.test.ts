@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { QueryClient } from "@tanstack/react-query";
+import { renderHook, waitFor } from "@testing-library/react";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { coursesService } from "../../src/services/courses/courses.service";
 import { courseKeys } from "../../src/services/courses/courses.keys";
+import { useCourseValidation } from "../../src/services/courses/courses.queries";
 import type { CourseValidationResponse } from "@veolms/contracts";
 
 describe("Course Validation Service & Checklist Validation Rules", () => {
@@ -380,7 +383,7 @@ describe("Course Validation Service & Checklist Validation Rules", () => {
   });
 
   it("respects enabled option to prevent validation calls when not on publish step", async () => {
-    const spy = vi.spyOn(coursesService, "getValidation").mockResolvedValue({
+    const mockValidation: CourseValidationResponse = {
       canPublish: true,
       valid: true,
       sections: {
@@ -396,15 +399,48 @@ describe("Course Validation Service & Checklist Validation Rules", () => {
       },
       errors: [],
       warnings: [],
+    };
+
+    const spy = vi
+      .spyOn(coursesService, "getValidation")
+      .mockResolvedValue(mockValidation);
+
+    // 1. When disabled (e.g. activeStep !== "publish")
+    const { result: disabledResult } = renderHook(
+      () => useCourseValidation(courseId, { enabled: false }),
+      {
+        wrapper: ({ children }) =>
+          React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            children,
+          ),
+      },
+    );
+
+    expect(disabledResult.current.fetchStatus).toBe("idle");
+    expect(disabledResult.current.data).toBeUndefined();
+    expect(spy).not.toHaveBeenCalled();
+
+    // 2. When enabled (activeStep === "publish")
+    const { result: enabledResult } = renderHook(
+      () => useCourseValidation(courseId, { enabled: true }),
+      {
+        wrapper: ({ children }) =>
+          React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            children,
+          ),
+      },
+    );
+
+    await waitFor(() => {
+      expect(enabledResult.current.isSuccess).toBe(true);
     });
 
-    // When disabled (e.g. activeStep !== "publish")
-    const enabledFalse = Boolean(courseId && false);
-    expect(enabledFalse).toBe(false);
-
-    // When enabled (activeStep === "publish")
-    const enabledTrue = Boolean(courseId && true);
-    expect(enabledTrue).toBe(true);
-    expect(spy).not.toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(courseId);
+    expect(enabledResult.current.data).toEqual(mockValidation);
   });
 });

@@ -64,7 +64,7 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Category not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.requireAdmin,
     },
     controller.deleteCategory,
   );

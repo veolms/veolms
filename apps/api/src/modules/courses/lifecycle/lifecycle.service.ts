@@ -286,7 +286,7 @@ export function createLifecycleService({
       if (pricing.pricing_type === "free") {
         pricingStatus = "Free";
       } else {
-        pricingStatus = `${pricing.currency || "USD"} ${pricing.price}`;
+        pricingStatus = `${pricing.currency || "INR"} ${(pricing.price / 100).toFixed(2)}`;
       }
     }
 
