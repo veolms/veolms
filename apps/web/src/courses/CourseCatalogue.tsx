@@ -35,6 +35,7 @@ export interface CourseCatalogueProps {
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
+  onRestoreCourse?: (course: Course) => Promise<void> | void;
 }
 
 export function CourseCatalogue({
@@ -58,6 +59,7 @@ export function CourseCatalogue({
   onNavigatePage,
   onResetCatalogue,
   onDeleteCourse,
+  onRestoreCourse,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -68,7 +70,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["published", "Published"],
           ["draft", "Draft"],
-          ["archived", "Archived"],
+          ["bin", "Bin"],
         ]
       : [
           ["all", "All"],
@@ -136,11 +138,13 @@ export function CourseCatalogue({
         )
       }
       onDeleteRequested={setPendingDelete}
+      onRestoreRequested={onRestoreCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
       setNotice={setNotice}
       imagePriority={index === 0}
+      isBin={enrollmentFilter === "bin"}
     />
   );
 
@@ -273,13 +277,13 @@ export function CourseCatalogue({
 
       <ConfirmDeleteModal
         isOpen={pendingDelete !== null}
-        title="Delete course?"
+        title="Move course to Bin?"
         message={
           pendingDelete
-            ? `Delete “${pendingDelete.title}” and its course content? This cannot be undone.`
+            ? `Move “${pendingDelete.title}” to the Bin? You can restore it later.`
             : undefined
         }
-        confirmLabel="Delete Course"
+        confirmLabel="Move to Bin"
         holdDurationMs={900}
         onConfirm={async () => {
           if (!pendingDelete) return;
@@ -288,7 +292,7 @@ export function CourseCatalogue({
             if (onDeleteCourse) {
               await onDeleteCourse(target);
             } else {
-              setNotice(`${target.title} was deleted.`);
+              setNotice(`${target.title} moved to Bin.`);
             }
           } catch {
             // Failure is handled by onDeleteCourse toast notification

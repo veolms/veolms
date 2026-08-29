@@ -2,6 +2,7 @@ import type {
   Course as ApiCourse,
   CourseSummary,
   CoursePricingSummary,
+  DeletedCourse,
 } from "@veolms/contracts";
 import type {
   Course,
@@ -142,6 +143,45 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
+    isApi: true,
+  };
+}
+
+/**
+ * Adapts a deleted course from GET /api/v1/bin/courses into the frontend Course model
+ * consumed by CourseCatalogue and CourseCard when viewing the Bin.
+ */
+export function adaptDeletedCourseToCatalogueCourse(
+  deletedCourse: DeletedCourse,
+): Course {
+  const fallbackThumbnail = deletedCourse.slug
+    ? getCourseThumbnail(deletedCourse.slug)
+    : typescriptThumbnail;
+
+  const validStatus: CourseLifecycleStatus =
+    deletedCourse.status === "published" ||
+    deletedCourse.status === "draft" ||
+    deletedCourse.status === "archived"
+      ? deletedCourse.status
+      : "draft";
+
+  return {
+    id: deletedCourse.id,
+    slug: deletedCourse.slug,
+    title: deletedCourse.title,
+    description: "",
+    level: "Beginner",
+    category: "Development",
+    sections: 0,
+    lectures: 0,
+    progress: null,
+    enrolled: false,
+    duration: "Self-paced",
+    students: 0,
+    thumbnail: fallbackThumbnail,
+    lifecycleStatus: validStatus,
+    deletedAt: deletedCourse.deletedAt,
+    purgeAt: deletedCourse.purgeAt,
     isApi: true,
   };
 }

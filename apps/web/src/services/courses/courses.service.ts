@@ -3,6 +3,7 @@ import type {
   Category,
   Course,
   CourseAccessRule,
+  CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
   CoursePricing,
@@ -16,11 +17,14 @@ import type {
   CreateCourseLessonRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
+  DeletedCoursesListResponse,
+  DeletedCoursesQuery,
   MyCoursesListResponse,
   PublicCourse,
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
+  RestoreCourseResponse,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseIncludeRequest,
@@ -47,6 +51,16 @@ export const coursesService = {
 
   listMyCourses: (): Promise<MyCoursesListResponse> => {
     return api.get<MyCoursesListResponse>("/courses/mine");
+  },
+
+  listDeletedCourses: (
+    params?: DeletedCoursesQuery,
+  ): Promise<DeletedCoursesListResponse> => {
+    return api.get<DeletedCoursesListResponse>("/bin/courses", { params });
+  },
+
+  restoreCourse: (id: string): Promise<RestoreCourseResponse> => {
+    return api.post<RestoreCourseResponse>(`/bin/courses/${id}/restore`);
   },
 
   getCourseEditor: (courseId: string): Promise<CourseEditorDataResponse> => {
@@ -80,8 +94,8 @@ export const coursesService = {
     return api.patch<Course>(`/courses/${id}/basics`, payload);
   },
 
-  deleteCourse: (id: string): Promise<{ success: boolean }> => {
-    return api.delete<{ success: boolean }>(`/courses/${id}`);
+  deleteCourse: (id: string): Promise<CourseDeleteResponse> => {
+    return api.delete<CourseDeleteResponse>(`/courses/${id}`);
   },
 
   listCategories: (): Promise<Category[]> => {

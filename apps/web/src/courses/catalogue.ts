@@ -9,7 +9,12 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "archived";
+  | "all"
+  | "enrolled"
+  | "not-enrolled"
+  | "published"
+  | "draft"
+  | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"
@@ -18,7 +23,7 @@ export type CourseStatusFilter =
   | "completed"
   | "published"
   | "draft"
-  | "archived";
+  | "bin";
 export type CourseLifecycleStatus = "published" | "draft" | "archived";
 
 export interface CourseOpenOptions {
@@ -50,6 +55,8 @@ export interface Course {
   slug?: string;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
+  purgeAt?: string;
   isApi?: boolean;
 }
 
@@ -220,6 +227,7 @@ export function getVisibleCourses(
     if (
       role === "creator" &&
       enrollmentFilter !== "all" &&
+      enrollmentFilter !== "bin" &&
       course.lifecycleStatus !== enrollmentFilter
     )
       return false;

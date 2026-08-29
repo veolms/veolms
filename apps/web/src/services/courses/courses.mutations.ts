@@ -3,6 +3,7 @@ import type {
   Category,
   Course,
   CourseAccessRule,
+  CourseDeleteResponse,
   CourseEditorDataResponse,
   CoursePricing,
   CourseSettings,
@@ -15,6 +16,7 @@ import type {
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
+  RestoreCourseResponse,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseIncludeRequest,
@@ -65,14 +67,28 @@ export function useUpdateCourseBasics() {
 export function useDeleteCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ success: boolean }, ApiError, string>({
+  return useMutation<CourseDeleteResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.deleteCourse(courseId),
     onSuccess: (_, courseId) => {
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.bin() });
       queryClient.removeQueries({ queryKey: courseKeys.editor(courseId) });
       queryClient.removeQueries({ queryKey: courseKeys.preview(courseId) });
       queryClient.removeQueries({ queryKey: courseKeys.overview(courseId) });
+    },
+  });
+}
+
+export function useRestoreCourse() {
+  const queryClient = useQueryClient();
+
+  return useMutation<RestoreCourseResponse, ApiError, string>({
+    mutationFn: (courseId) => coursesService.restoreCourse(courseId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: courseKeys.bin() });
     },
   });
 }

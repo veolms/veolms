@@ -5,6 +5,8 @@ import type {
   CourseOverviewResponse,
   CourseSummary,
   CourseValidationResponse,
+  DeletedCoursesListResponse,
+  DeletedCoursesQuery,
   MyCoursesListResponse,
   PublicCourse,
 } from "@veolms/contracts";
@@ -12,10 +14,11 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
-export function useCourses() {
+export function useCourses(options?: { enabled?: boolean }) {
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
     queryFn: () => coursesService.list(),
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -43,11 +46,24 @@ export function useCourseOverview(
   });
 }
 
-export function useMyCourses() {
+export function useMyCourses(options?: { enabled?: boolean }) {
   return useQuery<MyCoursesListResponse, ApiError>({
     queryKey: courseKeys.mine(),
     queryFn: () => coursesService.listMyCourses(),
+    enabled: options?.enabled ?? true,
     staleTime: 60 * 1000,
+  });
+}
+
+export function useDeletedCourses(
+  params?: DeletedCoursesQuery,
+  options?: { enabled?: boolean },
+) {
+  return useQuery<DeletedCoursesListResponse, ApiError>({
+    queryKey: courseKeys.bin(),
+    queryFn: () => coursesService.listDeletedCourses(params),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
   });
 }
 

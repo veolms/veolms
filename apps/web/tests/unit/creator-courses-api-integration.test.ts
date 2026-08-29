@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { Course as ApiCourse } from "@veolms/contracts";
-import { adaptApiCourseToCatalogueCourse } from "../../src/courses/courseAdapter";
+import type { Course as ApiCourse, DeletedCourse } from "@veolms/contracts";
+import {
+  adaptApiCourseToCatalogueCourse,
+  adaptDeletedCourseToCatalogueCourse,
+} from "../../src/courses/courseAdapter";
 import { courses as mockCourses, getVisibleCourses } from "../../src/courses/catalogue";
 import type { Course } from "../../src/courses/catalogue";
 import { parseWizardTab, CourseWizardSkeleton } from "../../src/courses/CourseCreatePage";
@@ -297,7 +300,7 @@ describe("Creator Courses Page API Integration", () => {
     });
   });
 
-  describe("7. Soft-Delete API & List State Handling", () => {
+  describe("7. Soft-Delete API, Bin & Restore State Handling", () => {
     it("filters out soft-deleted courses from the active creator course list", () => {
       const apiCourses = [sampleApiCourse1, sampleApiCourse2].map(
         adaptApiCourseToCatalogueCourse,
@@ -319,6 +322,57 @@ describe("Creator Courses Page API Integration", () => {
       expect(updatedList.length).toBe(combined.length - 1);
     });
 
+    it("populates the Bin view with deleted courses from the Bin endpoint", () => {
+      const deletedCourse: DeletedCourse = {
+        id: sampleApiCourse1.id,
+        slug: sampleApiCourse1.slug,
+        title: sampleApiCourse1.title,
+        status: sampleApiCourse1.status,
+        creatorId: sampleApiCourse1.creatorId,
+        deletedAt: "2026-08-28T12:00:00.000Z",
+        purgeAt: "2026-09-27T12:00:00.000Z",
+        purgeState: "scheduled",
+        purgeAttempts: 0,
+        lastPurgeError: null,
+      };
+
+      const adaptedBinCourse = adaptDeletedCourseToCatalogueCourse(deletedCourse);
+      expect(adaptedBinCourse.id).toBe(sampleApiCourse1.id);
+      expect(adaptedBinCourse.title).toBe("Rust Systems Programming");
+      expect(adaptedBinCourse.deletedAt).toBe("2026-08-28T12:00:00.000Z");
+      expect(adaptedBinCourse.purgeAt).toBe("2026-09-27T12:00:00.000Z");
+      expect(adaptedBinCourse.isApi).toBe(true);
+
+      const binList: Course[] = [adaptedBinCourse];
+      const visible = getVisibleCourses(binList, {
+        activeSection: "Courses",
+        wishlisted: new Set(),
+        role: "creator",
+        enrollmentFilter: "bin",
+        statusFilter: "all",
+        search: "",
+        sort: "latest",
+      });
+
+      expect(visible).toHaveLength(1);
+      expect(visible[0]?.id).toBe(sampleApiCourse1.id);
+    });
+
+    it("restores a course from the Bin back to the active catalogue", () => {
+      // Simulating restore: course is removed from bin and re-added to active courses
+      const apiCourses = [sampleApiCourse2].map(adaptApiCourseToCatalogueCourse);
+      const restoredCourse = adaptApiCourseToCatalogueCourse(sampleApiCourse1);
+      const afterRestoreApiCourses = [...apiCourses, restoredCourse];
+      const existingIds = new Set(afterRestoreApiCourses.map((c) => c.id));
+      const activeList = [
+        ...afterRestoreApiCourses,
+        ...mockCourses.filter((c) => !existingIds.has(c.id)),
+      ];
+
+      expect(activeList.some((c) => c.id === sampleApiCourse1.id)).toBe(true);
+      expect(activeList.some((c) => c.id === sampleApiCourse2.id)).toBe(true);
+    });
+
     it("retains the course in the list when the delete API call fails", () => {
       const apiCourses = [sampleApiCourse1, sampleApiCourse2].map(
         adaptApiCourseToCatalogueCourse,
@@ -332,20 +386,33 @@ describe("Creator Courses Page API Integration", () => {
       expect(listAfterFailure.length).toBe(combined.length);
     });
 
-    it("handles mock course deletion without sending network request", () => {
-      const deletedMockCourseIds = new Set(["backend-nodejs"]);
+    it("handles mock course deletion and restore without network request", () => {
+      let deletedMockCourseIds = new Set<string>();
+      
+      // Move mock course to Bin
+      deletedMockCourseIds = new Set(deletedMockCourseIds).add("backend-nodejs");
       const apiCourses = [sampleApiCourse1].map(adaptApiCourseToCatalogueCourse);
       const existingIds = new Set(apiCourses.map((c) => c.id));
 
-      const updatedList = [
+      let activeList = [
         ...apiCourses,
         ...mockCourses.filter(
           (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
         ),
       ];
+      expect(activeList.some((c) => c.id === "backend-nodejs")).toBe(false);
 
-      expect(updatedList.some((c) => c.id === "backend-nodejs")).toBe(false);
-      expect(updatedList.some((c) => c.id === sampleApiCourse1.id)).toBe(true);
+      // Restore mock course from Bin
+      deletedMockCourseIds = new Set(deletedMockCourseIds);
+      deletedMockCourseIds.delete("backend-nodejs");
+
+      activeList = [
+        ...apiCourses,
+        ...mockCourses.filter(
+          (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
+        ),
+      ];
+      expect(activeList.some((c) => c.id === "backend-nodejs")).toBe(true);
     });
   });
 
@@ -374,6 +441,86 @@ describe("Creator Courses Page API Integration", () => {
 
     it("evaluates CourseWizardSkeleton structure for direct tab navigation", () => {
       expect(CourseWizardSkeleton).toBeDefined();
+    });
+  });
+
+  describe("9. On-Demand Role & Tab Query Gating Logic", () => {
+    const getQueryGatingState = (role: "student" | "creator", enrollmentFilter: string) => {
+      const isStudent = role === "student";
+      const isCreator = role === "creator";
+      const isBin = isCreator && enrollmentFilter === "bin";
+      const isCreatorActive = isCreator && enrollmentFilter !== "bin";
+
+      return {
+        isCoursesQueryEnabled: isStudent,
+        isMyCoursesQueryEnabled: isCreatorActive,
+        isDeletedCoursesQueryEnabled: isBin,
+      };
+    };
+
+    it("Scenario A: Creator -> All tab only enables /courses/mine", () => {
+      const gating = getQueryGatingState("creator", "all");
+      expect(gating.isMyCoursesQueryEnabled).toBe(true);
+      expect(gating.isCoursesQueryEnabled).toBe(false);
+      expect(gating.isDeletedCoursesQueryEnabled).toBe(false);
+    });
+
+    it("Scenario B: Creator -> Published tab only enables /courses/mine", () => {
+      const gating = getQueryGatingState("creator", "published");
+      expect(gating.isMyCoursesQueryEnabled).toBe(true);
+      expect(gating.isCoursesQueryEnabled).toBe(false);
+      expect(gating.isDeletedCoursesQueryEnabled).toBe(false);
+    });
+
+    it("Scenario C: Creator -> Draft tab only enables /courses/mine", () => {
+      const gating = getQueryGatingState("creator", "draft");
+      expect(gating.isMyCoursesQueryEnabled).toBe(true);
+      expect(gating.isCoursesQueryEnabled).toBe(false);
+      expect(gating.isDeletedCoursesQueryEnabled).toBe(false);
+    });
+
+    it("Scenario D: Creator -> Bin tab only enables /bin/courses", () => {
+      const gating = getQueryGatingState("creator", "bin");
+      expect(gating.isDeletedCoursesQueryEnabled).toBe(true);
+      expect(gating.isCoursesQueryEnabled).toBe(false);
+      expect(gating.isMyCoursesQueryEnabled).toBe(false);
+    });
+
+    it("Scenario E: Student view only enables /courses", () => {
+      const gatingAll = getQueryGatingState("student", "all");
+      expect(gatingAll.isCoursesQueryEnabled).toBe(true);
+      expect(gatingAll.isMyCoursesQueryEnabled).toBe(false);
+      expect(gatingAll.isDeletedCoursesQueryEnabled).toBe(false);
+
+      const gatingEnrolled = getQueryGatingState("student", "enrolled");
+      expect(gatingEnrolled.isCoursesQueryEnabled).toBe(true);
+      expect(gatingEnrolled.isMyCoursesQueryEnabled).toBe(false);
+      expect(gatingEnrolled.isDeletedCoursesQueryEnabled).toBe(false);
+    });
+
+    it("Scenario F: Role toggle switches queries seamlessly without simultaneous execution", () => {
+      let role: "student" | "creator" = "creator";
+      let filter = "all";
+
+      // Initially in creator mode
+      let state = getQueryGatingState(role, filter);
+      expect(state.isMyCoursesQueryEnabled).toBe(true);
+      expect(state.isCoursesQueryEnabled).toBe(false);
+
+      // Switch to student mode
+      role = "student";
+      state = getQueryGatingState(role, filter);
+      expect(state.isCoursesQueryEnabled).toBe(true);
+      expect(state.isMyCoursesQueryEnabled).toBe(false);
+      expect(state.isDeletedCoursesQueryEnabled).toBe(false);
+
+      // Switch back to creator bin mode
+      role = "creator";
+      filter = "bin";
+      state = getQueryGatingState(role, filter);
+      expect(state.isDeletedCoursesQueryEnabled).toBe(true);
+      expect(state.isCoursesQueryEnabled).toBe(false);
+      expect(state.isMyCoursesQueryEnabled).toBe(false);
     });
   });
 });

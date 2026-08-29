@@ -9,4 +9,5 @@ export const courseKeys = {
   preview: (id: string) => [...courseKeys.all, "preview", id] as const,
   validation: (id: string) => [...courseKeys.all, "validation", id] as const,
   categories: () => [...courseKeys.all, "categories"] as const,
+  bin: () => [...courseKeys.all, "bin"] as const,
 };

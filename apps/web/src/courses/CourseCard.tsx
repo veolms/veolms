@@ -1,5 +1,4 @@
 import {
-  ArchiveIcon as Archive,
   ArrowCounterClockwiseIcon as ArrowCounterClockwise,
   CertificateIcon as Certificate,
   ChartBarIcon as ChartBar,
@@ -29,6 +28,7 @@ const creatorStatusStyles = {
   published: "border-emerald-400/25 bg-emerald-500/15 text-emerald-300",
   draft: "border-amber-400/25 bg-amber-500/15 text-amber-300",
   archived: "border-violet-400/25 bg-violet-500/15 text-violet-300",
+  bin: "border-rose-400/25 bg-rose-500/15 text-rose-300",
 } as const;
 
 const studentStatusStyles = {
@@ -65,11 +65,13 @@ export interface CourseCardProps {
   onManage?: (course: Course) => void;
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
+  onRestoreRequested?: (course: Course) => void;
   onNavigatePage: (destination: string) => void;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
   imagePriority?: boolean;
+  isBin?: boolean;
 }
 
 export function CourseCard({
@@ -83,11 +85,13 @@ export function CourseCard({
   onManage,
   onPublish,
   onDeleteRequested,
+  onRestoreRequested,
   onNavigatePage,
   menuOpen,
   setMenuOpen,
   setNotice,
   imagePriority = false,
+  isBin = false,
 }: CourseCardProps) {
   const studentStatus = getStudentStatus(course);
   const progress = course.progress ?? 0;
@@ -189,10 +193,10 @@ export function CourseCard({
         {role === "creator" ? (
           <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
             <span
-              className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold capitalize ${creatorStatusStyles[course.lifecycleStatus]}`}
+              className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold capitalize ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
               data-course-card-tag
             >
-              {course.lifecycleStatus}
+              {isBin || course.deletedAt ? "Deleted" : course.lifecycleStatus}
             </span>
             {course.isApi && (
               <span
@@ -292,102 +296,91 @@ export function CourseCard({
             dataMenu=""
           >
             {role === "creator" ? (
-              <>
+              isBin || course.deletedAt ? (
                 <MenuAction
-                  Icon={PencilSimple}
-                  label="Edit Course"
-                  onClick={() => closeThen(() => onEdit?.(course))}
+                  Icon={ArrowCounterClockwise}
+                  label="Restore Course"
+                  onClick={() => closeThen(() => onRestoreRequested?.(course))}
                 />
-                <MenuAction
-                  Icon={ListBullets}
-                  label="Manage Curriculum"
-                  onClick={() => closeThen(() => onManage?.(course))}
-                />
-                <MenuAction
-                  Icon={Eye}
-                  label="Course Preview"
-                  onClick={() => closeThen(() => onExplore(course))}
-                />
-                <MenuAction
-                  Icon={ChartBar}
-                  label="Analytics"
-                  onClick={() =>
-                    closeThen(() =>
-                      onNavigatePage(`/analytics?course=${course.id}`),
-                    )
-                  }
-                />
-                <MenuAction
-                  Icon={UsersThree}
-                  label="Manage Students"
-                  onClick={() =>
-                    closeThen(() =>
-                      onNavigatePage(`/students?course=${course.id}`),
-                    )
-                  }
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={CopySimple}
-                  label="Copy Course Link"
-                  onClick={() => closeThen(() => void copyCourseLink())}
-                />
-                <MenuAction
-                  Icon={PaperPlaneTilt}
-                  label="Duplicate Course"
-                  onClick={() =>
-                    closeThen(() =>
-                      setNotice(`${course.title} was duplicated as a draft.`),
-                    )
-                  }
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={
-                    course.lifecycleStatus === "archived"
-                      ? ArrowCounterClockwise
-                      : UploadSimple
-                  }
-                  label={
-                    course.lifecycleStatus === "published"
-                      ? "Unpublish Course"
-                      : course.lifecycleStatus === "draft"
-                        ? "Publish Course"
-                        : "Restore Course"
-                  }
-                  onClick={() =>
-                    closeThen(() => {
-                      if (course.lifecycleStatus === "archived") {
-                        lifecycleAction();
-                      } else if (onPublish) {
-                        onPublish(course);
-                      } else {
-                        onNavigatePage(
-                          `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
-                        );
-                      }
-                    })
-                  }
-                />
-                {course.lifecycleStatus !== "archived" && (
+              ) : (
+                <>
                   <MenuAction
-                    Icon={Archive}
-                    label="Archive Course"
+                    Icon={PencilSimple}
+                    label="Edit Course"
+                    onClick={() => closeThen(() => onEdit?.(course))}
+                  />
+                  <MenuAction
+                    Icon={ListBullets}
+                    label="Manage Curriculum"
+                    onClick={() => closeThen(() => onManage?.(course))}
+                  />
+                  <MenuAction
+                    Icon={Eye}
+                    label="Course Preview"
+                    onClick={() => closeThen(() => onExplore(course))}
+                  />
+                  <MenuAction
+                    Icon={ChartBar}
+                    label="Analytics"
                     onClick={() =>
                       closeThen(() =>
-                        setNotice(`${course.title} was archived.`),
+                        onNavigatePage(`/analytics?course=${course.id}`),
                       )
                     }
                   />
-                )}
-                <MenuDivider />
-                <MenuAction
-                  Icon={Trash}
-                  label="Delete Course"
-                  destructive
-                  onClick={() => closeThen(() => onDeleteRequested?.(course))}
-                />
-              </>
+                  <MenuAction
+                    Icon={UsersThree}
+                    label="Manage Students"
+                    onClick={() =>
+                      closeThen(() =>
+                        onNavigatePage(`/students?course=${course.id}`),
+                      )
+                    }
+                  />
+                  <MenuDivider />
+                  <MenuAction
+                    Icon={CopySimple}
+                    label="Copy Course Link"
+                    onClick={() => closeThen(() => void copyCourseLink())}
+                  />
+                  <MenuAction
+                    Icon={PaperPlaneTilt}
+                    label="Duplicate Course"
+                    onClick={() =>
+                      closeThen(() =>
+                        setNotice(`${course.title} was duplicated as a draft.`),
+                      )
+                    }
+                  />
+                  <MenuDivider />
+                  <MenuAction
+                    Icon={UploadSimple}
+                    label={
+                      course.lifecycleStatus === "published"
+                        ? "Unpublish Course"
+                        : "Publish Course"
+                    }
+                    onClick={() =>
+                      closeThen(() => {
+                        if (onPublish) {
+                          onPublish(course);
+                        } else {
+                          onNavigatePage(
+                            `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
+                          );
+                        }
+                      })
+                    }
+                  />
+                  <MenuDivider />
+                  <MenuAction
+                    Icon={Trash}
+                    label="Delete Course"
+                    destructive
+                    onClick={() => closeThen(() => onDeleteRequested?.(course))}
+                  />
+                </>
+              )
             ) : course.enrolled ? (
               <>
                 <MenuAction
@@ -423,7 +416,9 @@ export function CourseCard({
                     label="View Certificate"
                     onClick={() =>
                       closeThen(() =>
-                        setNotice(`Opening your ${course.title} certificate.`),
+                        setNotice(
+                          `Certificate for "${course.title}" is ready.`,
+                        ),
                       )
                     }
                   />
@@ -444,28 +439,6 @@ export function CourseCard({
                   Icon={Eye}
                   label="Course Preview"
                   onClick={() => closeThen(() => onExplore(course))}
-                />
-                <MenuDivider />
-                <MenuAction
-                  icon={
-                    <span
-                      className="relative inline-flex size-4.25 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <GraduationCap size={17} weight="regular" />
-                      <Plus
-                        className="absolute -right-1 -bottom-0.5 rounded-full bg-(--surface)"
-                        size={8}
-                        weight="bold"
-                      />
-                    </span>
-                  }
-                  label="Enroll Now"
-                  onClick={() =>
-                    closeThen(() =>
-                      onNavigatePage(`${overviewPath}?enroll=true`),
-                    )
-                  }
                 />
                 <MenuDivider />
                 <MenuAction
@@ -493,33 +466,37 @@ export function CourseCard({
           </CourseActionMenu>
         </div>
 
-        <div className="mt-auto flex flex-col">
-          {role === "student" && !course.enrolled && course.pricing && (
+        <div
+          className="relative z-10 mt-auto flex flex-col gap-3 pt-3"
+          data-course-card-actions
+        >
+          {role === "student" && Boolean(course.pricing) && (
             <div
-              className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+              className="flex items-baseline justify-between border-t border-[color-mix(in_srgb,var(--border)_45%,transparent)] pt-2.5 text-xs text-(--muted)"
               data-course-card-pricing
-              aria-label={`Course price ${course.pricing.price}`}
             >
-              <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
-                {course.pricing.price}
-              </strong>
-              {Boolean(course.pricing.originalPrice) && (
-                <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
-                  {course.pricing.originalPrice}
-                </span>
-              )}
-              {Boolean(course.pricing.discount) && (
-                <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                  {course.pricing.discount}
-                </span>
-              )}
+              <span className="font-semibold text-(--text)">
+                {course.pricing?.price}
+              </span>
+              <div className="flex items-center gap-1.5 text-[0.72rem]">
+                {Boolean(course.pricing?.originalPrice) && (
+                  <span className="line-through">
+                    {course.pricing?.originalPrice}
+                  </span>
+                )}
+                {Boolean(course.pricing?.discount) && (
+                  <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-emerald-400">
+                    {course.pricing?.discount}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
           {role === "student" && course.enrolled && (
             <div
-              className="mb-4 flex items-center gap-2.5 text-[0.72rem] text-(--muted)"
-              aria-label={`${progress}% complete`}
+              className="flex items-center justify-between gap-3 text-xs"
+              data-course-card-progress-container
             >
               <span
                 className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-(--track)"
@@ -547,6 +524,10 @@ export function CourseCard({
             data-control-radius-action
             onClick={() => {
               if (role === "creator") {
+                if (isBin || course.deletedAt) {
+                  onRestoreRequested?.(course);
+                  return;
+                }
                 onEdit?.(course);
                 return;
               }
@@ -560,15 +541,27 @@ export function CourseCard({
             }}
           >
             {role === "creator" ? (
-              <>
-                <PencilSimple
-                  className="shrink-0"
-                  size={17}
-                  weight="bold"
-                  aria-hidden="true"
-                />
-                <span>Edit Course</span>
-              </>
+              isBin || course.deletedAt ? (
+                <>
+                  <ArrowCounterClockwise
+                    className="shrink-0"
+                    size={17}
+                    weight="bold"
+                    aria-hidden="true"
+                  />
+                  <span>Restore Course</span>
+                </>
+              ) : (
+                <>
+                  <PencilSimple
+                    className="shrink-0"
+                    size={17}
+                    weight="bold"
+                    aria-hidden="true"
+                  />
+                  <span>Edit Course</span>
+                </>
+              )
             ) : (
               <span className="flex min-w-0 items-center gap-3">
                 {course.enrolled ? (

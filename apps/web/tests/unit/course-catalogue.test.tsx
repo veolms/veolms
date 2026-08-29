@@ -184,13 +184,13 @@ describe("CourseCatalogue", () => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Delete course?")).toBeVisible();
+    expect(screen.getByText("Move course to Bin?")).toBeVisible();
     expect(
-      screen.getByText(new RegExp(`Delete “${target.title}” and its course content`, "i")),
+      screen.getByText(new RegExp(`Move “${target.title}” to the Bin`, "i")),
     ).toBeVisible();
 
     // Trigger hold-to-confirm
-    const confirmBtn = screen.getByRole("button", { name: /Hold to Delete Course/i });
+    const confirmBtn = screen.getByRole("button", { name: /Hold to Move to Bin/i });
     fireEvent.keyDown(confirmBtn, { key: "Enter" });
   });
 });
