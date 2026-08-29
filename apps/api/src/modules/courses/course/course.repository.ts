@@ -48,6 +48,22 @@ export async function findCourseBySlug(
     .executeTakeFirst();
 }
 
+/**
+ * Looks up a slug reservation, including courses in the recovery bin. The
+ * database keeps slugs globally unique so a course can be restored with its
+ * original public URL during the retention window.
+ */
+export async function findCourseBySlugIncludingDeleted(
+  database: Kysely<Database>,
+  slug: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .select(["id"])
+    .where("slug", "=", slug)
+    .executeTakeFirst();
+}
+
 export async function listPublishedCourses(
   database: Kysely<Database>,
   filters?: { creatorId?: string },
@@ -263,10 +279,12 @@ export async function softDeleteCourse(
 ) {
   return await database
     .updateTable("courses")
-    .set({ deleted_at: now, updated_at: now })
+    .set({
+      deleted_at: now,
+      updated_at: now,
+      version: sql<number>`version + 1`,
+    })
     .where("id", "=", courseId)
     .where("deleted_at", "is", null)
     .executeTakeFirst();
 }
-
-

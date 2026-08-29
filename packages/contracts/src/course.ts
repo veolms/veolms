@@ -474,6 +474,43 @@ export const myCoursesListResponseSchema = z.object({
   courses: z.array(courseSchema),
 });
 
+export const courseDeleteResponseSchema = z.object({
+  purgeAt: z.string(),
+});
+
+export const courseDeletionPurgeStateSchema = z.enum([
+  "scheduled",
+  "processing",
+  "failed",
+]);
+
+export const deletedCourseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  status: z.enum(["draft", "published", "archived"]),
+  creatorId: z.uuid().nullable(),
+  deletedAt: z.string(),
+  purgeAt: z.string(),
+  purgeState: courseDeletionPurgeStateSchema,
+  purgeAttempts: z.number().int().nonnegative(),
+  lastPurgeError: z.string().nullable(),
+});
+
+export const deletedCoursesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(512).optional(),
+});
+
+export const deletedCoursesListResponseSchema = z.object({
+  courses: z.array(deletedCourseSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const restoreCourseResponseSchema = z.object({
+  course: courseSchema,
+});
+
 export type Course = z.infer<typeof courseSchema>;
 export type CreateCourseRequest = z.infer<typeof createCourseRequestSchema>;
 export type UpdateCourseBasicsRequest = z.infer<
@@ -483,6 +520,13 @@ export type CourseEditorDataResponse = z.infer<
   typeof courseEditorDataResponseSchema
 >;
 export type MyCoursesListResponse = z.infer<typeof myCoursesListResponseSchema>;
+export type CourseDeleteResponse = z.infer<typeof courseDeleteResponseSchema>;
+export type DeletedCourse = z.infer<typeof deletedCourseSchema>;
+export type DeletedCoursesQuery = z.infer<typeof deletedCoursesQuerySchema>;
+export type DeletedCoursesListResponse = z.infer<
+  typeof deletedCoursesListResponseSchema
+>;
+export type RestoreCourseResponse = z.infer<typeof restoreCourseResponseSchema>;
 
 // --- Validation & Publishing ---
 export const courseValidationAreaSchema = z.enum([
@@ -577,6 +621,16 @@ z.globalRegistry.add(courseEditorDataResponseSchema, {
 });
 z.globalRegistry.add(myCoursesListResponseSchema, {
   id: "MyCoursesListResponse",
+});
+z.globalRegistry.add(courseDeleteResponseSchema, {
+  id: "CourseDeleteResponse",
+});
+z.globalRegistry.add(deletedCourseSchema, { id: "DeletedCourse" });
+z.globalRegistry.add(deletedCoursesListResponseSchema, {
+  id: "DeletedCoursesListResponse",
+});
+z.globalRegistry.add(restoreCourseResponseSchema, {
+  id: "RestoreCourseResponse",
 });
 z.globalRegistry.add(courseOverviewSchema, {
   id: "CourseOverviewResponse",
