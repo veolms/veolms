@@ -600,7 +600,7 @@
 .reading-mode-quick-menu--mobile {
   position: fixed;
   right: 12px;
-  bottom: calc(68px + env(safe-area-inset-bottom));
+  bottom: calc(68px + var(--app-viewport-safe-area-bottom));
   left: 12px;
   z-index: 190;
   width: auto;

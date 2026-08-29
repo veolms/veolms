@@ -18,6 +18,7 @@ import type {
 import {
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
+  sessionResponseSchema,
 } from "@veolms/contracts";
 
 export interface TotpSetupResponse {
@@ -86,14 +87,12 @@ export const authService = {
   verifyPasskeyLogin: (payload: {
     response: unknown;
   }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>(
-      "/auth/passkey/login/verify",
-      payload,
-    );
+    return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
   },
 
-  getSessions: (): Promise<SessionResponse[]> => {
-    return api.get<SessionResponse[]>("/auth/sessions");
+  getSessions: async (): Promise<SessionResponse[]> => {
+    const response = await api.get<unknown>("/auth/sessions");
+    return sessionResponseSchema.array().parse(response);
   },
 
   revokeSession: (id: string): Promise<AuthMessageResponse> => {

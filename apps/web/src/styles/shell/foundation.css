@@ -65,7 +65,9 @@
   .courses-main {
     --application-page-block-start: 20px;
     --application-page-inline-gutter: 15px;
-    --application-page-block-end: calc(104px + env(safe-area-inset-bottom));
+    --application-page-block-end: calc(
+      104px + var(--app-viewport-safe-area-max-bottom)
+    );
   }
 
   .courses-main.courses-main--learning {

@@ -2,9 +2,8 @@ import type { Kysely } from "kysely";
 import type {
   Database,
   MediaAssetStatus,
-  VideoJobStatus,
-  VideoQualityLevel,
 } from "@veolms/database";
+import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
   database: Kysely<Database>,
@@ -27,6 +26,7 @@ export async function findMediaAssetsByIds(
   database: Kysely<Database>,
   mediaIds: string[],
   ownerId?: string,
+  lock = false,
 ) {
   if (mediaIds.length === 0) return [];
   let query = database
@@ -38,7 +38,25 @@ export async function findMediaAssetsByIds(
     query = query.where("owner_id", "=", ownerId);
   }
 
+  if (lock) {
+    query = query.forUpdate();
+  }
+
   return await query.execute();
+}
+
+export async function deleteMediaAssets(
+  database: Kysely<Database>,
+  mediaIds: string[],
+) {
+  if (mediaIds.length === 0) {
+    return;
+  }
+
+  await database
+    .deleteFrom("media_assets")
+    .where("id", "in", mediaIds)
+    .execute();
 }
 
 export async function insertMediaAsset(
@@ -125,6 +143,21 @@ export async function findVideoJobByVideoId(
     .where("video_id", "=", videoId)
     .orderBy("created_at", "desc")
     .executeTakeFirst();
+}
+
+export async function findVideoOutputsByVideoIds(
+  database: Kysely<Database>,
+  videoIds: string[],
+) {
+  if (videoIds.length === 0) {
+    return [];
+  }
+
+  return await database
+    .selectFrom("video_outputs")
+    .selectAll()
+    .where("video_id", "in", videoIds)
+    .execute();
 }
 
 export async function insertVideoOutput(

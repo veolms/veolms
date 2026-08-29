@@ -98,6 +98,19 @@ Notes:
 pnpm dev:api
 ```
 
+## Running course retention
+
+The course retention worker is a one-shot process intended to run from the
+deployment platform's scheduler (for example, every five minutes):
+
+```bash
+pnpm purge:course-deletions
+```
+
+It is safe for invocations to overlap. PostgreSQL leases and `SKIP LOCKED`
+ensure that concurrent workers do not process the same course or storage item
+at the same time. Failed work remains in the database for retry.
+
 Set `API_DOCS_ENABLED=false` to keep the API running without exposing Swagger UI.
 `/api/docs/json` goes away with it.
 

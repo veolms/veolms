@@ -404,6 +404,18 @@ export function getOpenCoursePlayerSessions(
   return readCoursePlayerSessionState(storage).sessions;
 }
 
+export function getMostRecentCoursePlayerSession(
+  sessions: readonly CoursePlayerSession[] = getOpenCoursePlayerSessions(),
+): CoursePlayerSession | null {
+  return sessions.reduce<CoursePlayerSession | null>(
+    (mostRecent, session) =>
+      !mostRecent || session.updatedAt > mostRecent.updatedAt
+        ? session
+        : mostRecent,
+    null,
+  );
+}
+
 export function getCoursePlayerSession(
   courseId: string,
   storage: CoursePlayerStorage | null = getBrowserStorage(),
@@ -481,26 +493,14 @@ export function closeCoursePlayerSession(
 ): CoursePlayerSession | null {
   const state = readCoursePlayerSessionState(storage);
   if (!state.sessions.some((session) => session.courseId === courseId)) {
-    return state.sessions.reduce<CoursePlayerSession | null>(
-      (mostRecent, session) =>
-        !mostRecent || session.updatedAt > mostRecent.updatedAt
-          ? session
-          : mostRecent,
-      null,
-    );
+    return getMostRecentCoursePlayerSession(state.sessions);
   }
 
   const remainingSessions = state.sessions.filter(
     (session) => session.courseId !== courseId,
   );
   persistCoursePlayerSessions(remainingSessions, storage);
-  return remainingSessions.reduce<CoursePlayerSession | null>(
-    (mostRecent, session) =>
-      !mostRecent || session.updatedAt > mostRecent.updatedAt
-        ? session
-        : mostRecent,
-    null,
-  );
+  return getMostRecentCoursePlayerSession(remainingSessions);
 }
 
 export function getCoursePlayerBackLabel(

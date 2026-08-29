@@ -174,8 +174,29 @@
 }
 
 @media (hover: none), (pointer: coarse) {
-  .learning-workspace__back,
-  .learning-workspace__curriculum-toggle {
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="true"]
+    )
+    .learning-workspace__back,
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="true"]
+    )
+    .learning-workspace__curriculum-toggle {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+  }
+
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="false"]
+    )
+    .learning-workspace__back,
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="false"]
+    )
+    .learning-workspace__curriculum-toggle,
+  .learning-workspace__back:focus-visible,
+  .learning-workspace__curriculum-toggle:focus-visible {
     opacity: 1;
     pointer-events: auto;
     transform: none;
@@ -931,17 +952,24 @@
 }
 
 .learning-discussion {
-  /* Let the swipe surface and comment feed reach the lesson-column edges while
-     the tabs, comment copy, and supplemental panels retain their text inset. */
-  --learning-panel-inline-start: var(--learning-lesson-content-inset);
-  --learning-panel-inline-end: var(--learning-lesson-content-inset);
   margin: 15px 0 0;
   padding: 0 0 28px;
 }
 
-.learning-discussion__tab-panel {
-  --swipeable-tab-panel-inline-start: var(--learning-panel-inline-start);
-  --swipeable-tab-panel-inline-end: var(--learning-panel-inline-end);
+.learning-discussion__filter-button {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.learning-discussion__composer-prompt {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media (min-width: 640px) {
+  .learning-discussion__composer-prompt {
+    font-size: 15px;
+  }
 }
 
 .learning-comments-surface {
@@ -1206,10 +1234,6 @@
     display: none;
   }
 
-  .learning-workspace__curriculum-toggle {
-    display: none;
-  }
-
   .learning-curriculum__resize-rail {
     display: none;
   }
@@ -1220,10 +1244,45 @@
 }
 
 @media (min-width: 641px) and (max-width: 1080px) {
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="true"]
+    )
+    .learning-workspace__back,
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="true"]
+    )
+    .learning-workspace__curriculum-toggle {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+  }
+
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="false"]
+    )
+    .learning-workspace__back,
+  .learning-workspace__player-wrap:has(
+      .youtube-player[data-playing="false"]
+    )
+    .learning-workspace__curriculum-toggle,
+  .learning-workspace__back:focus-visible,
+  .learning-workspace__curriculum-toggle:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
   .learning-workspace__player-wrap .youtube-player {
     border-right: 0;
     border-left: 0;
-    border-radius: 0;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1080px) {
+  :root:not([data-content-layout="edge-to-edge"])
+    .learning-workspace__player-wrap
+    .youtube-player {
+    border-radius: 18px 18px 0 0;
   }
 }
 
@@ -1236,23 +1295,16 @@
     box-shadow: 0 10px 24px color-mix(in srgb, var(--canvas) 48%, transparent);
   }
 
-  .learning-discussion__header {
-    position: sticky;
-    z-index: 35;
-    top: var(--learning-mobile-player-height, 0px);
-    margin-inline: 0;
-    padding-inline: 0;
-    background: color-mix(in srgb, var(--canvas) 94%, transparent);
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--canvas) 42%, transparent);
-    backdrop-filter: blur(10px);
-  }
-
   .learning-supplemental-panel {
     padding-top: 11px;
   }
 }
 
 @media (max-width: 640px) {
+  .learning-workspace__curriculum-toggle {
+    display: none;
+  }
+
   .learning-workspace__back {
     top: 13px;
     left: 13px;
@@ -1276,15 +1328,8 @@
   }
 
   .learning-discussion {
-    --learning-panel-inline-start: var(--learning-lesson-content-inset);
-    --learning-panel-inline-end: var(--learning-lesson-content-inset);
     margin-top: 0;
     padding: 0 0 22px;
-  }
-
-  .learning-discussion__header {
-    margin-inline: 0;
-    padding-inline: 0;
   }
 
   .learning-comment-card {
@@ -1330,4 +1375,30 @@
   .learning-curriculum__section-toggle {
     padding-inline: 16px;
   }
+}
+
+/* The formatting toolbar intentionally scrolls without exposing a track. */
+.learning-comment-formatting-scrollport {
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+
+.learning-comment-formatting-scrollport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.learning-comment-composer-drawer {
+  --learning-comment-drawer-visible-height: calc(
+    var(--drawer-content-height, 100dvh) -
+      var(--drawer-snap-point-offset, 0px) - var(--drawer-swipe-movement-y, 0px)
+  );
+}
+
+.learning-comment-composer-drawer > [data-slot="drawer-content"] {
+  max-height: calc(
+    var(--learning-comment-drawer-visible-height) -
+      max(13px, var(--app-safe-area-bottom))
+  );
 }

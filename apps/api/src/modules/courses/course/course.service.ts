@@ -18,7 +18,11 @@ import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
-import { ADMIN_ROLE, createAuthService, type AuthService } from "../../auth/index.ts";
+import {
+  ADMIN_ROLE,
+  createAuthService,
+  type AuthService,
+} from "../../auth/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
   createCategoryService,
@@ -36,10 +40,11 @@ import {
   createIncludesService,
   type IncludesService,
 } from "../includes/includes.service.ts";
+import { createMediaService, type MediaService } from "../../media/index.ts";
 import {
-  createMediaService,
-  type MediaService,
-} from "../../media/index.ts";
+  createCourseDeletionService,
+  type CourseDeletionService,
+} from "../lifecycle/course-deletion.service.ts";
 
 export interface CourseServiceOptions {
   database: Kysely<Database>;
@@ -50,6 +55,7 @@ export interface CourseServiceOptions {
   configurationService?: ConfigurationService;
   includesService?: IncludesService;
   mediaService?: MediaService;
+  deletionService?: CourseDeletionService;
 }
 
 export function createCourseService({
@@ -61,8 +67,11 @@ export function createCourseService({
   configurationService = createConfigurationService({ database }),
   includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
+  deletionService = createCourseDeletionService({
+    database,
+    storage: services.storage,
+  }),
 }: CourseServiceOptions) {
-
   /**
    * Verifies course existence and owner permissions.
    */
@@ -130,7 +139,7 @@ export function createCourseService({
     let attempts = 0;
 
     // Check slug collision and append salt if needed
-    while (await courseRepo.findCourseBySlug(database, slug)) {
+    while (await courseRepo.findCourseBySlugIncludingDeleted(database, slug)) {
       attempts++;
       slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
       if (attempts > 5) {
@@ -145,10 +154,7 @@ export function createCourseService({
     const description = data.description ?? null;
     const categoryId = data.categoryId ?? null;
     const difficulty = (data.difficulty ?? data.difficultyLevel ?? null) as
-      | "beginner"
-      | "intermediate"
-      | "advanced"
-      | null;
+      "beginner" | "intermediate" | "advanced" | null;
     const thumbnailMediaId = data.thumbnailMediaId ?? null;
     const trailerMediaId = data.trailerMediaId ?? null;
     const instructorAlias = data.instructorAlias ?? null;
@@ -304,11 +310,7 @@ export function createCourseService({
         description: updates.description,
         category_id: updates.categoryId ?? updates.category,
         difficulty: (updates.difficulty ?? updates.difficultyLevel) as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null
-          | undefined,
+          "beginner" | "intermediate" | "advanced" | null | undefined,
         thumbnail_media_id: updates.thumbnailMediaId,
         trailer_media_id: updates.trailerMediaId,
         instructor_alias: updates.instructorAlias,
@@ -354,17 +356,12 @@ export function createCourseService({
             ? updates.description
             : course.description,
         difficulty:
-          updates.difficulty !== undefined || updates.difficultyLevel !== undefined
+          updates.difficulty !== undefined ||
+          updates.difficultyLevel !== undefined
             ? ((updates.difficulty ?? updates.difficultyLevel) as
-                | "beginner"
-                | "intermediate"
-                | "advanced"
-                | null)
+                "beginner" | "intermediate" | "advanced" | null)
             : (course.difficulty as
-                | "beginner"
-                | "intermediate"
-                | "advanced"
-                | null),
+                "beginner" | "intermediate" | "advanced" | null),
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id as string,
         categoryId:
@@ -407,9 +404,8 @@ export function createCourseService({
         includesService.listCourseIncludes(courseId),
       ]);
     const lessonIds = lessons.map((l) => l.id);
-    const resources = await curriculumService.listResourcesForLessons(
-      lessonIds,
-    );
+    const resources =
+      await curriculumService.listResourcesForLessons(lessonIds);
 
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
@@ -548,9 +544,7 @@ export function createCourseService({
       settings,
       includes,
     ] = await Promise.all([
-      course.creator_id
-        ? authService.findUserById(course.creator_id)
-        : null,
+      course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
         ? categoryService.findCategoryById(course.category_id)
         : null,
@@ -720,12 +714,7 @@ export function createCourseService({
    * Soft deletes a course after verifying ownership.
    */
   async function deleteCourse(courseId: string, creatorId: string) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
-
-    const now = new Date();
-    await courseRepo.softDeleteCourse(database, courseId, now);
-
-    return { success: true };
+    return await deletionService.scheduleCourseDeletion(courseId, creatorId);
   }
 
   return {

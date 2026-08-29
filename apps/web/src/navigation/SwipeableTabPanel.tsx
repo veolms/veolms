@@ -80,6 +80,7 @@ interface SwipeableTabPanelProps<T extends string> {
   id: string;
   labelledBy: string;
   className?: string;
+  slideClassName?: string;
   stateAttribute?: `data-${string}`;
   children: (tab: T, preview: boolean) => ReactNode;
 }
@@ -191,6 +192,7 @@ export function SwipeableTabPanel<T extends string>({
   id,
   labelledBy,
   className = "",
+  slideClassName = "",
   stateAttribute,
   children,
 }: SwipeableTabPanelProps<T>) {
@@ -198,6 +200,7 @@ export function SwipeableTabPanel<T extends string>({
   const onTabChangeRef = useRef(onTabChange);
   const activeTabRef = useRef(activeTab);
   const headerClickIndexRef = useRef<number | null>(null);
+  const tabPointerTypeRef = useRef<string | null>(null);
   const touchActiveRef = useRef(false);
 
   onTabChangeRef.current = onTabChange;
@@ -290,7 +293,24 @@ export function SwipeableTabPanel<T extends string>({
     const tabList = tabListRef.current;
     if (!tabList) return undefined;
 
+    const handleTabPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        tabPointerTypeRef.current = null;
+        return;
+      }
+      const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
+      tabPointerTypeRef.current =
+        tabButton && tabList.contains(tabButton) ? event.pointerType : null;
+    };
+
+    const handleTabPointerCancel = () => {
+      tabPointerTypeRef.current = null;
+    };
+
     const handleTabClick = (event: MouseEvent) => {
+      const pointerType = tabPointerTypeRef.current;
+      tabPointerTypeRef.current = null;
       const target = event.target;
       if (!(target instanceof Element)) return;
       const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
@@ -302,11 +322,22 @@ export function SwipeableTabPanel<T extends string>({
 
       headerClickIndexRef.current = tabIndex;
       updateIndicatorForTab(tab!);
-      swiper.slideTo(tabIndex);
+      const animate = pointerType === "touch" || pointerType === "pen";
+      swiper.slideTo(tabIndex, animate ? swiper.params.speed : 0);
     };
 
+    tabList.addEventListener("pointerdown", handleTabPointerDown, true);
+    tabList.addEventListener("pointercancel", handleTabPointerCancel, true);
     tabList.addEventListener("click", handleTabClick, true);
-    return () => tabList.removeEventListener("click", handleTabClick, true);
+    return () => {
+      tabList.removeEventListener("pointerdown", handleTabPointerDown, true);
+      tabList.removeEventListener(
+        "pointercancel",
+        handleTabPointerCancel,
+        true,
+      );
+      tabList.removeEventListener("click", handleTabClick, true);
+    };
   }, [tabListRef, tabs, updateIndicatorForTab]);
 
   useEffect(() => {
@@ -355,6 +386,7 @@ export function SwipeableTabPanel<T extends string>({
         className="swipeable-tab-panel__swiper"
         slidesPerView={1}
         autoHeight
+        simulateTouch={false}
         longSwipesRatio={TAB_SWIPE_MAX_COMPLETION_RATIO}
         noSwiping
         noSwipingSelector={TAB_SWIPE_NO_SWIPING_SELECTOR}
@@ -369,6 +401,7 @@ export function SwipeableTabPanel<T extends string>({
         {tabs.map((tab) => (
           <SwiperSlide
             key={tab}
+            className={slideClassName}
             aria-hidden={tab === activeTab ? undefined : true}
             inert={tab === activeTab ? undefined : true}
           >
