@@ -1,20 +1,3 @@
 export { createDatabase } from "./client.ts";
-export type {
-  CourseStatus,
-  Database,
-  AcademyTable,
-  MediaAssetStatus,
-  AccessType,
-  AccessDurationType,
-  PricingType,
-  JobStatus,
-  CourseDeletionJobStatus,
-  CourseDeletionStorageItemStatus,
-  CourseDeletionStorageDeleteMode,
-  VideoJobStatus,
-  VideoJobStage,
-  VideoJobTable,
-  VideoOutputTable,
-  CourseDeletionJobTable,
-  CourseDeletionStorageItemTable,
-} from "./schema.ts";
+export * from "./schema/index.ts";
+
