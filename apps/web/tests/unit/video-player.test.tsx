@@ -90,6 +90,47 @@ describe("video playback consent", () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the reserved player frame free of layout-consuming borders", () => {
+    render(
+      <VideoPlayer
+        media={{ fileName: "lesson.mp4", duration: 90, src: "/lesson.mp4" }}
+        lessonTitle="Edge-to-edge lesson"
+        theaterMode={false}
+        onTheaterToggle={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByRole("region", {
+        name: "Lesson video player for Edge-to-edge lesson",
+      }),
+    ).toHaveClass("border-0");
+  });
+
+  it("exposes its live playback state for surrounding player controls", () => {
+    const { container } = render(
+      <VideoPlayer
+        media={{ fileName: "lesson.mp4", duration: 90, src: "/lesson.mp4" }}
+        lessonTitle="Playback-state lesson"
+        theaterMode={false}
+        onTheaterToggle={() => {}}
+      />,
+    );
+
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Playback-state lesson",
+    });
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(player).toHaveAttribute("data-playing", "false");
+
+    fireEvent.play(video!);
+    expect(player).toHaveAttribute("data-playing", "true");
+
+    fireEvent.pause(video!);
+    expect(player).toHaveAttribute("data-playing", "false");
+  });
+
   it("keeps shortcuts active on the player surface without stealing control navigation", () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, "play")

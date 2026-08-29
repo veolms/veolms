@@ -62,7 +62,15 @@ export default defineConfig(({ mode }) => {
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
-      include: ["react", "react-dom/client"],
+      include: [
+        "react",
+        "react-dom/client",
+        "emoji-picker-react",
+        "@tiptap/core",
+        "@tiptap/extension-link",
+        "@tiptap/markdown",
+        "@tiptap/starter-kit",
+      ],
     },
     define: {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
@@ -77,6 +85,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": webSourceRoot,
       },
+      dedupe: ["@tiptap/core", "@tiptap/pm"],
     },
     build: {
       rollupOptions: {
@@ -109,7 +118,10 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": {
           target: config.STATIC_BUILD_API_URL
-            ? new URL(config.STATIC_BUILD_API_URL).origin.replace("localhost", "127.0.0.1")
+            ? new URL(config.STATIC_BUILD_API_URL).origin.replace(
+                "localhost",
+                "127.0.0.1",
+              )
             : "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,

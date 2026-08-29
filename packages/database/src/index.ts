@@ -9,6 +9,9 @@ export type {
   AccessDurationType,
   PricingType,
   JobStatus,
+  CourseDeletionJobStatus,
+  CourseDeletionStorageItemStatus,
+  CourseDeletionStorageDeleteMode,
   VideoJobStatus,
   VideoJobStage,
   VideoJobTable,
@@ -42,7 +45,6 @@ export type {
   ManualPaymentRequestTable,
   ManualPaymentStatus,
   CreditNoteTable,
+  CourseDeletionJobTable,
+  CourseDeletionStorageItemTable,
 } from "./schema.ts";
-
-
-

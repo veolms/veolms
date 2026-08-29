@@ -180,10 +180,12 @@
   background: transparent;
   font-size: 0.82rem;
   font-weight: 600;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease;
+  transition: none;
+}
+
+.settings-tabs .page-tabs__indicator {
+  transition: none;
+  will-change: auto;
 }
 
 .settings-tabs button:hover {

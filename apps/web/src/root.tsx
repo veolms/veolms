@@ -44,7 +44,7 @@ export function Layout({ children }: LayoutProps) {
       data-sidebar-glow="theme"
       data-sidebar-glow-shape="circle"
       data-elevated-surfaces="true"
-      data-hide-scrollbars="false"
+      data-hide-scrollbars="true"
       data-scrollbar-style="theme"
       data-sidebar-menu-elevation="true"
       data-control-radius="balanced"
@@ -54,7 +54,7 @@ export function Layout({ children }: LayoutProps) {
         <meta charSet="UTF-8" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />

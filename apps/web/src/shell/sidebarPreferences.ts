@@ -86,6 +86,7 @@ export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
   showKeyboardShortcuts: true,
   showCollapsedLabels: true,
   showCollapsedLogo: true,
+  showSidebarOnMobile: false,
   glowPalette: SIDEBAR_GLOW_DEFAULT,
   glowShape: SIDEBAR_GLOW_SHAPE_DEFAULT,
   glowShapeSize: SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
@@ -141,6 +142,8 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
         : typeof storedPreferences.alwaysElevateMenus === "boolean"
           ? storedPreferences.alwaysElevateMenus
           : true;
+    preferences.showSidebarOnMobile =
+      storedPreferences.showSidebarOnMobile === true;
     delete preferences.alwaysElevateMenus;
     const legacyDockItems: SidebarDockItem[] =
       storedPreferences.dockItems === undefined &&
@@ -182,7 +185,8 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       Object.prototype.hasOwnProperty.call(
         storedPreferences,
         "alwaysElevateMenus",
-      );
+      ) ||
+      storedPreferences.showSidebarOnMobile !== preferences.showSidebarOnMobile;
     delete preferences.showThemeIcon;
     const hasCurrentMaxWidthDefault =
       localStorage.getItem("veolms-sidebar-max-width-default-version") ===
