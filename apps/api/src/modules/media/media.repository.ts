@@ -89,7 +89,7 @@ export async function insertVideoJob(
   await database
     .insertInto("video_jobs")
     .values({
-      status: "QUEUED",
+      status: "queued",
       ...values,
     })
     .execute();

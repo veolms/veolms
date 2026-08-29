@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
-import type { Database, MediaAssetStatus, VideoQualityLevel } from "@veolms/database";
+import type {
+  Database,
+  MediaAssetStatus,
+  VideoQualityLevel,
+} from "@veolms/database";
 import type { PresignMediaRequest } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
@@ -170,9 +174,9 @@ export function createMediaService({
     // If job already exists and is active or completed, don't trigger again
     if (existingJob) {
       if (
-        existingJob.status === "QUEUED" ||
-        existingJob.status === "PROVISIONING" ||
-        existingJob.status === "PROCESSING"
+        existingJob.status === "queued" ||
+        existingJob.status === "provisioning" ||
+        existingJob.status === "processing"
       ) {
         logger?.info(
           {
@@ -185,7 +189,7 @@ export function createMediaService({
         return { should202: true, jobId: existingJob.id };
       }
 
-      if (existingJob.status === "COMPLETED") {
+      if (existingJob.status === "completed") {
         logger?.info(
           { jobId: existingJob.id, videoId: media.id },
           "Video job already completed. Skipping duplicate trigger.",
@@ -206,7 +210,7 @@ export function createMediaService({
         output_prefix: outputPrefix,
         video_size: Number(media.size_bytes),
         qualities: VIDEO_QUALITIES,
-        status: "QUEUED",
+        status: "queued",
         created_at: now,
       });
     } catch (insertErr) {
@@ -229,7 +233,7 @@ export function createMediaService({
     // Dispatch the transcoding job (always queue, and trigger lambda if configured)
     try {
       await services.videoDispatch.dispatch({
-        action: "CLAIM",
+        action: "claim",
         jobId,
         videoId: media.id,
         videoKey: media.storage_key,
@@ -249,7 +253,7 @@ export function createMediaService({
         "Failed to dispatch video transcoding job; marking job as failed",
       );
       await mediaRepo.updateVideoJobStatus(database, jobId, {
-        status: "FAILED",
+        status: "failed",
         error_message: message,
         failed_at: new Date(),
       });
