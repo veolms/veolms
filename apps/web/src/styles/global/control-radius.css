@@ -302,11 +302,20 @@
   border-radius: 0 !important;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 820px) {
   :root[data-control-radius]
     .courses-app
     .learning-workspace__player-wrap
     .youtube-player {
     border-radius: 0 !important;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1080px) {
+  :root[data-control-radius]:not([data-content-layout="edge-to-edge"])
+    .courses-app
+    .learning-workspace__player-wrap
+    .youtube-player {
+    border-radius: 18px 18px 0 0 !important;
   }
 }

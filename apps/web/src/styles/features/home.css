@@ -123,22 +123,34 @@
   .student-surface-main {
     min-height: calc(100vh - 16px);
     min-height: calc(100dvh - 16px);
-    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+    padding-bottom: calc(
+      82px + var(--app-viewport-safe-area-max-bottom)
+    );
   }
 
   .mobile-bottom-nav {
+    --mobile-nav-inset: env(safe-area-inset-bottom, 0px);
+    --mobile-nav-max-inset: var(--app-viewport-safe-area-max-bottom);
+    --mobile-nav-offset: calc(
+      var(--mobile-nav-inset) - var(--mobile-nav-max-inset)
+    );
+
     position: fixed;
     right: 0;
-    bottom: 0;
+    /* Chrome's optimized edge-to-edge pattern: the surface grows once using
+       the maximum inset, then follows the dynamic chin using only `bottom`.
+       This avoids layout thrashing and removes the empty gesture-area band. */
+    bottom: var(--mobile-nav-offset);
     left: 0;
     z-index: 140;
     display: grid;
-    min-height: calc(58px + env(safe-area-inset-bottom));
+    min-height: calc(58px + var(--app-viewport-safe-area-max-bottom));
     grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: stretch;
     border: 0;
     border-radius: 0;
-    padding: 2px 2px calc(2px + env(safe-area-inset-bottom));
+    padding: 2px 2px
+      calc(2px + var(--app-viewport-safe-area-max-bottom));
     background: rgba(15, 15, 15, 0.7);
     -webkit-backdrop-filter: blur(24px);
     backdrop-filter: blur(24px);
@@ -239,7 +251,7 @@
 
   .mobile-menu-sheet {
     --mobile-menu-sheet-vertical-chrome: calc(
-      3px + max(14px, env(safe-area-inset-bottom))
+      3px + max(14px, var(--app-safe-area-bottom))
     );
     --mobile-menu-sheet-inline-inset: 0.75rem;
 

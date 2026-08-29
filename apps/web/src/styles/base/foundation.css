@@ -2,6 +2,29 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* Android Chrome already excludes the system gesture area from its layout
+     viewport. Some OEM builds still expose that same area through env(), so
+     applying it again creates a large empty strip. Keep the real inset on
+     WebKit devices whose viewport-fit=cover layout needs it. */
+  --app-safe-area-bottom: 0px;
+
+  /* Chrome 135+ can extend the viewport behind Android's gesture area. Keep
+     these raw values separate from the layout-safe value above so fixed
+     bottom surfaces can bleed into that area without duplicating spacing. */
+  --app-viewport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --app-viewport-safe-area-max-bottom: env(
+    safe-area-max-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+}
+
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --app-safe-area-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 html {
   background: var(--canvas);
   scroll-behavior: smooth;

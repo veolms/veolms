@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
-import { cn } from "@/lib/utils";
-import { useBackDismiss } from "@/navigation/useBackDismiss";
+import { cn } from "../../lib/utils";
+import { useBackDismiss } from "../../navigation/useBackDismiss";
 
 type DrawerContextProps = {
   hasSnapPoints: boolean;
@@ -160,11 +160,18 @@ function DrawerSwipeHandle({
   );
 }
 
+type DrawerContentProps = DrawerPrimitive.Popup.Props & {
+  viewportClassName?: string;
+  viewportStyle?: React.CSSProperties;
+};
+
 function DrawerContent({
   className,
   children,
+  viewportClassName,
+  viewportStyle,
   ...props
-}: DrawerPrimitive.Popup.Props) {
+}: DrawerContentProps) {
   const {
     hasSnapPoints,
     modal,
@@ -183,7 +190,11 @@ function DrawerContent({
       <DrawerPrimitive.Viewport
         data-slot="drawer-viewport"
         data-modal={modal}
-        className="pointer-events-none fixed inset-0 z-180 select-none data-[modal=true]:pointer-events-auto"
+        className={cn(
+          "pointer-events-none fixed inset-0 z-180 select-none data-[modal=true]:pointer-events-auto",
+          viewportClassName,
+        )}
+        style={viewportStyle}
       >
         <DrawerPrimitive.Popup
           data-slot="drawer-popup"

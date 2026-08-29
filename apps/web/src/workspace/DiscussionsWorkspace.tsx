@@ -379,6 +379,7 @@ export function DiscussionsWorkspace({
         tabListRef={tablistRef}
         id="discussion-panel"
         labelledBy={`discussion-tab-${activeTab}`}
+        slideClassName="pb-8"
         stateAttribute="data-discussion-tab"
       >
         {(panelTab, preview) => (

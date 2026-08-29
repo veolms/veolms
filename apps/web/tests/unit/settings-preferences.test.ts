@@ -4,6 +4,7 @@ import {
   CONTROL_RADIUS_DEFAULT,
   CONTROL_RADIUS_KEY,
   ELEVATED_SURFACES_KEY,
+  ELASTIC_SCROLL_APPEARANCE_DEFAULT,
   applySidebarGlowShapeSize,
   getControlRadiusBootstrapScript,
   getScrollbarBootstrapScript,
@@ -12,6 +13,7 @@ import {
   LEARNING_PREFERENCES_KEY,
   normalizeControlRadiusCustom,
   normalizeControlRadiusPreset,
+  normalizeElasticScrollAppearance,
   normalizePageTabColors,
   normalizeScrollbarStyle,
   normalizeSidebarDockItems,
@@ -24,6 +26,7 @@ import {
   readControlRadiusPreference,
   readLearningPreferences,
   readElevatedSurfaces,
+  readElasticScrollPreferences,
   readPageTabColors,
   readScrollbarStyle,
   SCROLLBAR_STYLE_DEFAULT,
@@ -70,6 +73,22 @@ describe("scrollbar style preference", () => {
     runScrollbarBootstrap();
 
     expect(document.documentElement.dataset.scrollbarStyle).toBe("theme");
+  });
+});
+
+describe("elastic scroller preference", () => {
+  it("defaults to the 2D appearance and normalizes unsupported values", () => {
+    expect(ELASTIC_SCROLL_APPEARANCE_DEFAULT).toBe("2d");
+    expect(readElasticScrollPreferences().appearance).toBe("2d");
+    expect(normalizeElasticScrollAppearance("unsupported")).toBe("2d");
+  });
+
+  it("hydrates the 2D default before React mounts", () => {
+    runScrollbarBootstrap();
+
+    expect(document.documentElement.dataset.elasticScrollAppearance).toBe(
+      "2d",
+    );
   });
 });
 
