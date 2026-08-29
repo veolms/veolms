@@ -242,7 +242,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().references("media_assets.id").onDelete("cascade"),
     )
     .addColumn("status", "text", (column) =>
-      column.notNull().defaultTo("QUEUED"),
+      column.notNull().defaultTo("queued"),
     )
     .addColumn("video_key", "text", (column) => column.notNull())
     .addColumn("output_prefix", "text", (column) => column.notNull())
@@ -274,7 +274,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addCheckConstraint(
       "video_jobs_status_valid",
-      sql`status in ('QUEUED', 'PROVISIONING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'queued', 'provisioning', 'processing', 'completed', 'failed')`,
+      sql`status in ('queued', 'provisioning', 'processing', 'completed', 'failed', 'cancelled')`,
     )
     .execute();
 
