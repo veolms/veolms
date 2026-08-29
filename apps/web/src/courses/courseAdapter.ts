@@ -42,14 +42,14 @@ export function formatCoursePricing(
       maximumFractionDigits: 0,
     }).format(amount);
 
-  const formattedPrice = formatAmount(Number(pricing.price));
+  const formattedPrice = formatAmount(Number(pricing.price) / 100);
 
   if (
     pricing.salePrice !== null &&
     pricing.salePrice !== undefined &&
     pricing.salePrice < pricing.price
   ) {
-    const formattedSalePrice = formatAmount(Number(pricing.salePrice));
+    const formattedSalePrice = formatAmount(Number(pricing.salePrice) / 100);
     const discountPercent = Math.round(
       ((pricing.price - pricing.salePrice) / pricing.price) * 100,
     );

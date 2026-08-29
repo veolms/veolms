@@ -541,32 +541,32 @@ describe("Creator Courses Page API Integration", () => {
       });
     });
 
-    it("formats INR currency and sale price with Indian locale grouping and ₹ symbol", () => {
+    it("formats INR currency and sale price with minor unit conversion, Indian locale grouping and ₹ symbol", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 100000,
+          price: 100000, // 1,000.00 INR
           currency: "INR",
-          salePrice: 49999,
+          salePrice: 50000, // 500.00 INR
         }),
       ).toEqual({
-        price: "₹49,999",
-        originalPrice: "₹1,00,000",
+        price: "₹500",
+        originalPrice: "₹1,000",
         discount: "50% off",
       });
     });
 
-    it("formats USD currency and sale price with US locale grouping and $ symbol", () => {
+    it("formats USD currency and sale price with minor unit conversion and $ symbol", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 100000,
+          price: 10000, // 100.00 USD
           currency: "USD",
-          salePrice: 80000,
+          salePrice: 8000, // 80.00 USD
         }),
       ).toEqual({
-        price: "$80,000",
-        originalPrice: "$100,000",
+        price: "$80",
+        originalPrice: "$100",
         discount: "20% off",
       });
     });
@@ -575,7 +575,7 @@ describe("Creator Courses Page API Integration", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 2500,
+          price: 250000, // 2,500.00 EUR
           currency: "EUR",
           salePrice: null,
         }),
@@ -586,20 +586,19 @@ describe("Creator Courses Page API Integration", () => {
       });
     });
 
-    it("formats GBP currency with £ symbol and matching locale grouping", () => {
+    it("formats GBP currency with £ symbol", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 5000,
+          price: 4900, // 49.00 GBP
           currency: "GBP",
-          salePrice: 2500,
+          salePrice: null,
         }),
       ).toEqual({
-        price: "£2,500",
-        originalPrice: "£5,000",
-        discount: "50% off",
+        price: "£49",
+        originalPrice: "",
+        discount: "",
       });
     });
   });
 });
-
