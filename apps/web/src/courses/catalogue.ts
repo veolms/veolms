@@ -50,6 +50,7 @@ export interface Course {
   slug?: string;
   createdAt?: string;
   updatedAt?: string;
+  isApi?: boolean;
 }
 
 export interface CourseCatalogueFilters {

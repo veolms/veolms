@@ -1,7 +1,109 @@
-import type { Course as ApiCourse } from "@veolms/contracts";
-import type { Course, CourseLifecycleStatus } from "./catalogue";
+import type {
+  Course as ApiCourse,
+  CourseSummary,
+  CoursePricingSummary,
+} from "@veolms/contracts";
+import type {
+  Course,
+  CourseCategory,
+  CourseLevel,
+  CourseLifecycleStatus,
+  CoursePricing,
+} from "./catalogue";
 import { getCourseThumbnail } from "../learning/courseMetadata";
 import typescriptThumbnail from "../assets/course-thumbnails/typescript-960.webp";
+
+export function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "Self-paced";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}m`;
+}
+
+export function formatCoursePricing(
+  pricing?: CoursePricingSummary,
+): CoursePricing | undefined {
+  if (!pricing) return undefined;
+  if (pricing.pricingType === "free") {
+    return {
+      price: "Free",
+      originalPrice: "",
+      discount: "",
+    };
+  }
+  const currency = pricing.currency || "INR";
+  const symbol = currency === "INR" ? "₹" : "$";
+  const formattedPrice = `${symbol}${Number(pricing.price).toLocaleString("en-IN")}`;
+
+  if (
+    pricing.salePrice !== null &&
+    pricing.salePrice !== undefined &&
+    pricing.salePrice < pricing.price
+  ) {
+    const formattedSalePrice = `${symbol}${Number(pricing.salePrice).toLocaleString("en-IN")}`;
+    const discountPercent = Math.round(
+      ((pricing.price - pricing.salePrice) / pricing.price) * 100,
+    );
+    return {
+      price: formattedSalePrice,
+      originalPrice: formattedPrice,
+      discount: `${discountPercent}% off`,
+    };
+  }
+
+  return {
+    price: formattedPrice,
+    originalPrice: "",
+    discount: "",
+  };
+}
+
+/**
+ * Adapts an enriched CourseSummary from GET /api/v1/courses into the frontend Course model
+ * consumed by CourseCatalogue and CourseCard for student exploration.
+ */
+export function adaptCourseSummaryToCatalogueCourse(
+  summary: CourseSummary,
+): Course {
+  const fallbackThumbnail = summary.slug
+    ? getCourseThumbnail(summary.slug)
+    : typescriptThumbnail;
+
+  const validLevel: CourseLevel =
+    summary.difficulty === "advanced" || summary.difficulty === "intermediate"
+      ? "Intermediate"
+      : "Beginner";
+
+  const validCategory: CourseCategory =
+    summary.categoryName === "Design" ||
+    summary.categoryName === "Development" ||
+    summary.categoryName === "Database" ||
+    summary.categoryName === "Cloud"
+      ? summary.categoryName
+      : "Development";
+
+  return {
+    id: summary.id,
+    slug: summary.slug,
+    title: summary.title,
+    description: summary.shortDescription || "",
+    level: validLevel,
+    category: validCategory,
+    sections: summary.totalSections,
+    lectures: summary.totalLessons,
+    progress: null,
+    enrolled: false,
+    duration: formatDuration(summary.totalDurationSeconds),
+    students: 0,
+    thumbnail: summary.thumbnailUrl || fallbackThumbnail,
+    lifecycleStatus: "published",
+    pricing: formatCoursePricing(summary.pricing),
+    certificateAvailable: summary.certificateEnabled,
+    isApi: true,
+  };
+}
 
 /**
  * Adapts an API course from GET /api/v1/courses/mine into the frontend Course model
@@ -30,15 +132,16 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
         ? "Intermediate"
         : "Beginner",
     category: "Development",
-    sections: 0,
-    lectures: 0,
+    sections: apiCourse.totalSections ?? 0,
+    lectures: apiCourse.totalLessons ?? 0,
     progress: null,
     enrolled: false,
-    duration: "Self-paced",
+    duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
     thumbnail: fallbackThumbnail,
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
+    isApi: true,
   };
 }

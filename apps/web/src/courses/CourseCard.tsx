@@ -187,20 +187,40 @@ export function CourseCard({
         </button>
 
         {role === "creator" ? (
-          <span
-            className={`absolute left-3.5 top-3.5 z-20 inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold capitalize ${creatorStatusStyles[course.lifecycleStatus]}`}
-            data-course-card-tag
-          >
-            {course.lifecycleStatus}
-          </span>
-        ) : (
-          <>
+          <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
             <span
-              className={`absolute left-3.5 top-3.5 z-20 inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold ${studentStatusStyles[studentStatus]}`}
+              className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold capitalize ${creatorStatusStyles[course.lifecycleStatus]}`}
               data-course-card-tag
             >
-              {getStudentStatusLabel(course)}
+              {course.lifecycleStatus}
             </span>
+            {course.isApi && (
+              <span
+                className="inline-flex min-h-7 items-center rounded-lg border border-sky-400/30 bg-sky-500/20 px-2 text-[0.68rem] font-semibold text-sky-200 shadow-sm backdrop-blur-md"
+                data-course-card-api-badge
+              >
+                API Response
+              </span>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold ${studentStatusStyles[studentStatus]}`}
+                data-course-card-tag
+              >
+                {getStudentStatusLabel(course)}
+              </span>
+              {course.isApi && (
+                <span
+                  className="inline-flex min-h-7 items-center rounded-lg border border-sky-400/30 bg-sky-500/20 px-2 text-[0.68rem] font-semibold text-sky-200 shadow-sm backdrop-blur-md"
+                  data-course-card-api-badge
+                >
+                  API Response
+                </span>
+              )}
+            </div>
             {!course.enrolled && (
               <button
                 type="button"
@@ -483,12 +503,16 @@ export function CourseCard({
               <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
                 {course.pricing.price}
               </strong>
-              <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
-                {course.pricing.originalPrice}
-              </span>
-              <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                {course.pricing.discount}
-              </span>
+              {Boolean(course.pricing.originalPrice) && (
+                <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
+                  {course.pricing.originalPrice}
+                </span>
+              )}
+              {Boolean(course.pricing.discount) && (
+                <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
+                  {course.pricing.discount}
+                </span>
+              )}
             </div>
           )}
 

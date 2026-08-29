@@ -59,8 +59,15 @@ import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
-import { useDeleteCourse, useMyCourses } from "./services/courses";
-import { adaptApiCourseToCatalogueCourse } from "./courses/courseAdapter";
+import {
+  useCourses,
+  useDeleteCourse,
+  useMyCourses,
+} from "./services/courses";
+import {
+  adaptApiCourseToCatalogueCourse,
+  adaptCourseSummaryToCatalogueCourse,
+} from "./courses/courseAdapter";
 import {
   getDefaultNavigationOrder,
   getInitialNavigationOrder,
@@ -696,6 +703,7 @@ export function CoursesPage({
   const storeUser = useAuthStore((s) => s.user);
   const activeUser = authUser || storeUser;
   const logoutMutation = useLogout();
+  const { data: publishedCoursesData } = useCourses();
   const { data: myCoursesData } = useMyCourses();
   const deleteCourseMutation = useDeleteCourse();
   const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
@@ -1475,7 +1483,14 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (role !== "creator") {
-      return courses;
+      const apiCourses = (publishedCoursesData?.courses || []).map(
+        adaptCourseSummaryToCatalogueCourse,
+      );
+      const existingIds = new Set(apiCourses.map((c) => c.id));
+      const nonConflictingMockCourses = courses.filter(
+        (c) => !existingIds.has(c.id),
+      );
+      return [...apiCourses, ...nonConflictingMockCourses];
     }
     const apiCourses = (myCoursesData?.courses || []).map(
       adaptApiCourseToCatalogueCourse,
@@ -1485,7 +1500,12 @@ export function CoursesPage({
       (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
     );
     return [...apiCourses, ...nonConflictingMockCourses];
-  }, [deletedMockCourseIds, myCoursesData?.courses, role]);
+  }, [
+    deletedMockCourseIds,
+    myCoursesData?.courses,
+    publishedCoursesData?.courses,
+    role,
+  ]);
 
   const handleDeleteCourse = async (course: Course) => {
     const isMock = !course.id.match(
