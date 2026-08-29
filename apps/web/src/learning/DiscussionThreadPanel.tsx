@@ -9,6 +9,7 @@ import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -52,6 +53,9 @@ const THREAD_PANEL_WIDTH_KEY = "veolms-discussion-thread-panel-width";
 const THREAD_PANEL_MIN_HEIGHT = 360;
 const THREAD_PANEL_PHONE_QUERY = "(max-width: 639px)";
 const THREAD_PANEL_MOBILE_SNAP_RATIO = 0.72;
+const THREAD_PANEL_SLIDE_DURATION = 320;
+const useThreadPanelLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface DiscussionThreadPanelProps {
   open: boolean;
@@ -94,6 +98,7 @@ export function DiscussionThreadPanel({
   const swiperRef = useRef<SwiperInstance | null>(null);
   const widthResizeRef = useRef<PanelWidthResize | null>(null);
   const heightResizeRef = useRef<PanelHeightResize | null>(null);
+  const wasOpenRef = useRef(false);
   const [panelWidth, setPanelWidth] = useState(getInitialPanelWidth);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
   const [resizingAxis, setResizingAxis] = useState<"width" | "height" | null>(
@@ -148,8 +153,19 @@ export function DiscussionThreadPanel({
   );
 
   useEffect(() => {
-    if (!open) return;
-    swiperRef.current?.slideTo(activeIndex, 0);
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    const animateBetweenThreads =
+      wasOpenRef.current &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    swiperRef.current?.slideTo(
+      activeIndex,
+      animateBetweenThreads ? THREAD_PANEL_SLIDE_DURATION : 0,
+    );
+    wasOpenRef.current = true;
     if (focusComposerOnOpen) {
       setComposerFocusRequest((current) => current + 1);
     }
@@ -223,10 +239,6 @@ export function DiscussionThreadPanel({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (panelWidth < THREAD_PANEL_MIN_WIDTH * 0.62) {
-      onOpenChange(false);
-      return;
-    }
     commitPanelWidth(clampPanelWidth(panelWidth));
   };
 
@@ -275,20 +287,24 @@ export function DiscussionThreadPanel({
     : expanded
       ? activeSurface.height
       : clampPanelHeight(panelHeight ?? surfaceBounds.lesson.height);
-  const panelBottom = surfaceBounds.app.top + surfaceBounds.app.height;
-  const resolvedPanelTop = expanded
-    ? activeSurface.top
-    : panelBottom - resolvedPanelHeight;
-  const resolvedPanelLeft = activeSurface.right - resolvedPanelWidth;
   const appLeft = surfaceBounds.app.right - surfaceBounds.app.width;
   const clipRight = expanded
     ? surfaceBounds.app.right
     : surfaceBounds.lesson.right;
   const clipBottom = surfaceBounds.app.top + surfaceBounds.app.height;
+  const viewportInsetTop = Math.max(0, surfaceBounds.app.top);
+  const viewportInsetRight = Math.max(0, viewport.width - clipRight);
+  const viewportInsetBottom = Math.max(0, viewport.height - clipBottom);
+  const viewportInsetLeft = Math.max(0, appLeft);
   const panelViewportStyle = isPhone
     ? undefined
     : ({
-        clipPath: `inset(${Math.max(0, surfaceBounds.app.top)}px ${Math.max(0, viewport.width - clipRight)}px ${Math.max(0, viewport.height - clipBottom)}px ${Math.max(0, appLeft)}px)`,
+        top: `${viewportInsetTop}px`,
+        right: "auto",
+        bottom: "auto",
+        left: `${viewportInsetLeft}px`,
+        width: `${Math.max(0, viewport.width - viewportInsetLeft - viewportInsetRight)}px`,
+        height: `${Math.max(0, viewport.height - viewportInsetTop - viewportInsetBottom)}px`,
         overflow: "hidden",
       } as CSSProperties);
   const panelStyle = isPhone
@@ -302,13 +318,14 @@ export function DiscussionThreadPanel({
         bottom: "0px",
       } as CSSProperties)
     : ({
+        position: "absolute",
         "--drawer-content-width": `${resolvedPanelWidth}px`,
         "--drawer-content-height": `${resolvedPanelHeight}px`,
         "--drawer-content-max-height": `${surfaceBounds.app.height}px`,
-        top: `${resolvedPanelTop}px`,
-        left: `${resolvedPanelLeft}px`,
-        right: "auto",
-        bottom: "auto",
+        top: expanded ? "0px" : "auto",
+        left: "auto",
+        right: "0px",
+        bottom: expanded ? "auto" : "0px",
       } as ThreadPanelStyle);
 
   return (
@@ -338,16 +355,18 @@ export function DiscussionThreadPanel({
       showSwipeHandle={isPhone}
       swipeDirection={isPhone ? "down" : "right"}
       swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_42%,transparent)] after:shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
-      modal
+      modal={false}
+      disablePointerDismissal
     >
       <DrawerContent
         aria-label="Discussion thread"
         initialFocus
         style={panelStyle}
         viewportStyle={panelViewportStyle}
+        data-base-ui-swipe-ignore={isPhone ? undefined : ""}
         data-panel-expanded={expanded || undefined}
         data-panel-resizing={resizingAxis ? "true" : undefined}
-        className="m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] transition-[top,left,width,height,transform,opacity,filter]! duration-300! ease-[cubic-bezier(0.16,1,0.3,1)]! data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none!"
+        className="m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_84%,transparent)] [--stack-scale:1]! bg-[color-mix(in_srgb,var(--app-shell)_84%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] transition-transform! duration-300! ease-[cubic-bezier(0.16,1,0.3,1)]! data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none!"
       >
         <div
           aria-hidden="true"
@@ -365,7 +384,7 @@ export function DiscussionThreadPanel({
             aria-valuemax={THREAD_PANEL_MAX_WIDTH}
             aria-valuenow={Math.round(resolvedPanelWidth)}
             tabIndex={0}
-            title="Resize or close discussion thread"
+            title="Resize discussion thread"
             className="group/resize absolute inset-y-0 left-0 z-30 flex w-5 cursor-ew-resize touch-none items-center justify-start focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
@@ -506,7 +525,7 @@ export function DiscussionThreadPanel({
             className="h-full"
             slidesPerView={1}
             initialSlide={activeIndex}
-            speed={320}
+            speed={THREAD_PANEL_SLIDE_DURATION}
             resistanceRatio={0.72}
             allowTouchMove
             nested
@@ -995,7 +1014,7 @@ function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
   );
   const [bounds, setBounds] = useState<ThreadPanelSurfaceBounds>(measure);
 
-  useEffect(() => {
+  useThreadPanelLayoutEffect(() => {
     if (!open) return undefined;
 
     let frame = 0;
@@ -1012,7 +1031,7 @@ function useThreadPanelSurfaceBounds(open: boolean, viewport: ViewportBounds) {
 
     if (lesson) resizeObserver?.observe(lesson);
     if (app) resizeObserver?.observe(app);
-    sync();
+    setBounds(measure());
     window.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("resize", sync);
     document.addEventListener("scroll", sync, true);

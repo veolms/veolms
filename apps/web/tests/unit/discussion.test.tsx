@@ -555,16 +555,38 @@ describe("Discussion", () => {
     ).toBeInTheDocument();
     expect(thread).toHaveAttribute("data-swipe-direction", "right");
     expect(thread).toHaveClass(
-      "bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)]",
+      "bg-[color-mix(in_srgb,var(--app-shell)_84%,transparent)]",
+      "[--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_84%,transparent)]",
+      "[--stack-scale:1]!",
       "backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))]",
       "backdrop-saturate-[1.2]",
+      "transition-transform!",
     );
+    expect(thread).not.toHaveClass(
+      "bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)]",
+      "bg-[color-mix(in_srgb,var(--app-shell)_98%,transparent)]",
+      "transition-[top,left,width,height,transform,opacity,filter]!",
+    );
+    expect(thread.style.position).toBe("absolute");
+    expect(thread.style.top).toBe("auto");
+    expect(thread.style.left).toBe("auto");
+    expect(thread.style.right).toBe("0px");
+    expect(thread.style.bottom).toBe("0px");
     expect(thread.style.getPropertyValue("--closed-transform")).toBe("");
     const drawerViewport = thread.closest<HTMLElement>(
       '[data-slot="drawer-viewport"]',
     );
-    expect(drawerViewport?.style.clipPath).toContain("inset(");
+    expect(drawerViewport).toHaveAttribute("data-modal", "false");
+    expect(drawerViewport?.style.clipPath).toBe("");
+    expect(drawerViewport?.style.top).not.toBe("");
+    expect(drawerViewport?.style.left).not.toBe("");
+    expect(drawerViewport?.style.width).not.toBe("");
+    expect(drawerViewport?.style.height).not.toBe("");
+    expect(drawerViewport?.style.right).toBe("auto");
+    expect(drawerViewport?.style.bottom).toBe("auto");
     expect(drawerViewport?.style.overflow).toBe("hidden");
+    expect(document.querySelector('[data-slot="drawer-overlay"]')).toBeNull();
+    expect(thread).toHaveAttribute("data-base-ui-swipe-ignore");
     const threadScrollport = thread.querySelector<HTMLElement>(
       ".learning-comment-formatting-scrollport",
     );
@@ -636,6 +658,33 @@ describe("Discussion", () => {
         name: "Close discussion thread",
       }),
     );
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Discussion thread" }),
+      ).toBeNull();
+    });
+  });
+
+  it("keeps the desktop thread open during page interaction and closes it with Escape", async () => {
+    render(<Discussion persistenceKey="discussion-thread-non-modal-test" />);
+
+    fireEvent.click(
+      screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+    );
+    const thread = await screen.findByRole("dialog", {
+      name: "Discussion thread",
+    });
+
+    const notesFilter = screen.getByRole("button", { name: "Notes" });
+    fireEvent.pointerDown(notesFilter);
+    fireEvent.click(notesFilter);
+
+    expect(notesFilter).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("dialog", { name: "Discussion thread" })).toBe(
+      thread,
+    );
+
+    fireEvent.keyDown(thread, { key: "Escape" });
     await waitFor(() => {
       expect(
         screen.queryByRole("dialog", { name: "Discussion thread" }),
