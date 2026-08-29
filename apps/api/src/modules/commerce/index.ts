@@ -1,7 +1,7 @@
 /**
  * Public Commerce module surface. Repositories, mappers, workers, and other
  * feature internals stay private; other modules may depend on the service
- * contracts exposed here — same convention as auth/index.ts.
+ * contracts exposed here
  *
  * Not yet consumed anywhere (every current cross-module reference reaches
  * commerce via a direct deep import instead, e.g.
