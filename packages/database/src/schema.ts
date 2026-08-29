@@ -284,6 +284,10 @@ export interface CourseIncludeTable {
 
 export type VideoJobStatus = "queued" | "processing" | "completed" | "failed";
 export type JobStatus = VideoJobStatus;
+export type CourseDeletionJobStatus = "scheduled" | "processing" | "failed";
+export type CourseDeletionStorageItemStatus =
+  "scheduled" | "processing" | "failed";
+export type CourseDeletionStorageDeleteMode = "object" | "prefix";
 export type VideoJobStage =
   | "queued"
   | "downloading"
@@ -316,6 +320,34 @@ export interface VideoOutputTable {
   created_at: Generated<Date>;
 }
 
+export interface CourseDeletionJobTable {
+  id: string;
+  course_id: string;
+  scheduled_for: Date;
+  status: CourseDeletionJobStatus;
+  attempt_count: Generated<number>;
+  next_attempt_at: Date | null;
+  lease_until: Date | null;
+  last_error: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CourseDeletionStorageItemTable {
+  id: string;
+  course_id: string;
+  deletion_job_id: string;
+  storage_key: string;
+  delete_mode: CourseDeletionStorageDeleteMode;
+  status: CourseDeletionStorageItemStatus;
+  attempt_count: Generated<number>;
+  next_attempt_at: Date | null;
+  lease_until: Date | null;
+  last_error: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   courses: CourseTable;
   academy: AcademyTable;
@@ -342,5 +374,6 @@ export interface Database {
   course_includes: CourseIncludeTable;
   video_jobs: VideoJobTable;
   video_outputs: VideoOutputTable;
+  course_deletion_jobs: CourseDeletionJobTable;
+  course_deletion_storage_items: CourseDeletionStorageItemTable;
 }
-

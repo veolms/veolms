@@ -8,11 +8,13 @@ export type {
   AccessDurationType,
   PricingType,
   JobStatus,
+  CourseDeletionJobStatus,
+  CourseDeletionStorageItemStatus,
+  CourseDeletionStorageDeleteMode,
   VideoJobStatus,
   VideoJobStage,
   VideoJobTable,
   VideoOutputTable,
+  CourseDeletionJobTable,
+  CourseDeletionStorageItemTable,
 } from "./schema.ts";
-
-
-

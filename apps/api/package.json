@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node --env-file-if-exists=../../.env src/index.ts",
+    "purge:course-deletions": "node --env-file-if-exists=../../.env src/jobs/course-retention.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
