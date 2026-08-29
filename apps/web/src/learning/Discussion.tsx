@@ -1,419 +1,1037 @@
-import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
-import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
-import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { ToolboxIcon as Toolbox } from "@phosphor-icons/react/Toolbox";
-import { XIcon as X } from "@phosphor-icons/react/X";
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "../searchShortcut";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "../components/ui/drawer";
 import { CommentCard } from "./CommentCard";
-import type { Comment } from "./CommentCard";
+import type { Comment, CommentReply } from "./CommentCard";
+import { CommentComposer } from "./CommentComposer";
+import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
 import {
-  isStoredBoolean,
-  isStoredString,
-  useSessionStorageState,
-} from "./useSessionStorageState";
+  createDiscussionDraft,
+  createEmptyDiscussionDraft,
+  getDiscussionAttachmentCount,
+  hasDiscussionDraftContent,
+  isDiscussionContent,
+  isStoredDiscussionDraft,
+  type DiscussionDraft,
+  type DiscussionEntryKind,
+  type DiscussionVisibility,
+} from "./discussion-editor/types";
+import { useSessionStorageState } from "./useSessionStorageState";
 
-const initialComments: Comment[] = [
+const CURRENT_USER = {
+  name: "Ashi Singh",
+  avatar: "/assets/sofia-avatar-160.webp",
+};
+
+const initialEntries: Comment[] = [
   {
-    id: 1,
-    name: "Ethan Park",
+    id: 4,
+    name: "Rohit Sharma",
     time: "2 hours ago",
     avatar: "/assets/ethan-avatar-160.webp",
-    text: "That dashboard animation breakdown was super helpful! Could you share the easing curve used for the chart transitions?",
-    likes: 12,
-    replies: 3,
-  },
-  {
-    id: 2,
-    name: "Sofia Chen",
-    time: "1 hour ago",
-    avatar: "/assets/sofia-avatar-160.webp",
-    text: "Love how you explained the spacing system. The 8pt grid approach really makes things consistent.",
-    likes: 8,
-    replies: 1,
+    text: "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
+    entryKind: "comment",
+    likes: 24,
+    replies: 2,
+    repliesExpanded: true,
+    thread: [
+      {
+        id: 401,
+        name: "Ashi Singh",
+        time: "1 hour ago",
+        avatar: "/assets/sofia-avatar-160.webp",
+        text: "Thank you so much, Rohit! Really glad it helped.",
+        likes: 12,
+      },
+      {
+        id: 402,
+        name: "Karan Mehta",
+        time: "45 minutes ago",
+        avatar: "/assets/ethan-avatar-160.webp",
+        text: "Totally agree! The empathy part clicked for me too.",
+        likes: 5,
+      },
+    ],
   },
   {
     id: 3,
-    name: "Maya Rodriguez",
-    time: "45 minutes ago",
+    name: "Neha Patel",
+    time: "3 hours ago",
     avatar: "/assets/sofia-avatar-160.webp",
-    text: "The pacing in this section made the research workflow much easier to follow. The examples were especially clear.",
-    likes: 5,
-    replies: 2,
-  },
-  {
-    id: 4,
-    name: "Noah Williams",
-    time: "28 minutes ago",
-    avatar: "/assets/ethan-avatar-160.webp",
-    text: "Could you revisit the part about choosing between qualitative and quantitative feedback in a future lesson?",
-    likes: 4,
+    text: "Can you share some real-world examples of this process?",
+    entryKind: "question",
+    likes: 18,
     replies: 1,
+    isQuestion: true,
+    thread: [
+      {
+        id: 301,
+        name: "Ashi Singh",
+        time: "2 hours ago",
+        avatar: "/assets/sofia-avatar-160.webp",
+        text: "Absolutely — I’ll add a few examples from product discovery and usability testing.",
+        likes: 7,
+      },
+    ],
   },
   {
-    id: 5,
-    name: "Ava Patel",
-    time: "12 minutes ago",
+    id: 2,
+    name: "Ashi Singh",
+    time: "1 day ago",
     avatar: "/assets/sofia-avatar-160.webp",
-    text: "I tried the exercise alongside the video and it helped me spot a few gaps in my own process.",
-    likes: 2,
-    replies: 0,
+    text: "Here’s a quick note on user empathy with examples and a worksheet that helped me connect the steps.",
+    entryKind: "note",
+    likes: 8,
+    attachment: {
+      name: "User empathy notes",
+      meta: "PDF · 412 KB",
+    },
+  },
+  {
+    id: 1,
+    name: "Vivek Nair",
+    time: "1 day ago",
+    avatar: "/assets/ethan-avatar-160.webp",
+    text: "How do you know when you have enough user interviews to start mapping patterns?",
+    entryKind: "question",
+    likes: 11,
+    replies: 1,
+    isQuestion: true,
+    thread: [
+      {
+        id: 101,
+        name: "Karan Mehta",
+        time: "21 hours ago",
+        avatar: "/assets/ethan-avatar-160.webp",
+        text: "When the same themes repeat and new interviews stop changing the shape of the problem.",
+        likes: 7,
+      },
+    ],
   },
 ];
 
-const tabs = [
-  ["Comments", ChatCenteredDots, "blue"],
-  ["Notes", Notepad, "cyan"],
-  ["Resources", Toolbox, "orange"],
-  ["Q&A", Question, "violet"],
-] as const;
+type EntryFilter = "all" | DiscussionEntryKind;
+type ComposerMode = "collapsed" | "desktop" | "mobile";
 
-type Tab = (typeof tabs)[number][0];
-type SupplementalTab = Exclude<Tab, "Comments">;
-const tabIds = tabs.map(([label]) => label);
-const getTabId = (tab: Tab) =>
-  `lesson-tool-tab-${tab.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
 
-const supplementalContent: Record<
-  SupplementalTab,
-  { title: string; body: string; action: string }
-> = {
-  Notes: {
-    title: "Your lesson notes",
-    body: "Capture the questions, principles, and examples you want to revisit.",
-    action: "Add a note",
-  },
-  Resources: {
-    title: "Lesson resources",
-    body: "Research-plan template, interview prompts, and the usability checklist are ready to download.",
-    action: "View 3 resources",
-  },
-  "Q&A": {
-    title: "Questions & answers",
-    body: "Ask the instructor or browse answers from other students in this lesson.",
-    action: "Ask a question",
-  },
+export const getDiscussionComposerCollapsedSnapPoint = (
+  viewportHeight: number,
+  playerBottom: number | undefined,
+) => {
+  if (
+    !Number.isFinite(viewportHeight) ||
+    viewportHeight <= 0 ||
+    playerBottom === undefined ||
+    !Number.isFinite(playerBottom)
+  ) {
+    return DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT;
+  }
+
+  return Math.max(2, Math.round(viewportHeight - playerBottom));
+};
+
+export const getDiscussionComposerViewportGeometry = (
+  layoutViewportHeight: number,
+  visualViewportHeight: number,
+  visualViewportOffsetTop: number,
+  playerBottom: number | undefined,
+) => {
+  const resolvedLayoutViewportHeight =
+    Number.isFinite(layoutViewportHeight) && layoutViewportHeight > 0
+      ? layoutViewportHeight
+      : visualViewportHeight;
+  const rawVisualViewportHeight =
+    Number.isFinite(visualViewportHeight) && visualViewportHeight > 0
+      ? visualViewportHeight
+      : resolvedLayoutViewportHeight;
+  const resolvedVisualViewportHeight = Math.min(
+    resolvedLayoutViewportHeight,
+    rawVisualViewportHeight,
+  );
+  const resolvedVisualViewportOffsetTop = Math.min(
+    Math.max(
+      0,
+      Number.isFinite(visualViewportOffsetTop) ? visualViewportOffsetTop : 0,
+    ),
+    Math.max(0, resolvedLayoutViewportHeight - resolvedVisualViewportHeight),
+  );
+  const visualViewportBottom =
+    resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
+
+  return {
+    collapsedSnapPoint: getDiscussionComposerCollapsedSnapPoint(
+      visualViewportBottom,
+      playerBottom,
+    ),
+    keyboardInset: Math.max(
+      0,
+      Math.round(resolvedLayoutViewportHeight - visualViewportBottom),
+    ),
+    visualViewportHeight: Math.max(2, Math.round(resolvedVisualViewportHeight)),
+  };
 };
 
 interface DiscussionProps {
   persistenceKey: string;
+  mobileBottomNavigation?: boolean;
+  mobileBottomNavigationHidden?: boolean;
 }
 
-const isStoredComments = (value: unknown): value is Comment[] =>
+export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
+const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
+const initialDraft = createEmptyDiscussionDraft();
+const countCharacters = (value: string) => Array.from(value).length;
+
+interface EditingEntry {
+  id: number;
+  draft: DiscussionDraft;
+  entryKind: DiscussionEntryKind;
+  visibility: DiscussionVisibility;
+}
+
+interface OpenDiscussionThread {
+  id: number;
+  focusComposer: boolean;
+}
+
+const entryFilters = [
+  ["all", "All"],
+  ["note", "Notes"],
+  ["comment", "Comments"],
+  ["question", "Q&As"],
+] as const satisfies readonly (readonly [EntryFilter, string])[];
+
+const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
+  value === "comment" || value === "question" || value === "note";
+
+const isDiscussionVisibility = (
+  value: unknown,
+): value is DiscussionVisibility =>
+  value === "public" || value === "private" || value === "unlisted";
+
+const getAllowedVisibility = (
+  entryKind: DiscussionEntryKind,
+  visibility: DiscussionVisibility,
+): DiscussionVisibility =>
+  entryKind === "note" || visibility !== "private" ? visibility : "public";
+
+const isStoredEntries = (value: unknown): value is Comment[] =>
   Array.isArray(value) &&
   value.every(
-    (comment) =>
-      Boolean(comment) &&
-      typeof comment === "object" &&
-      typeof (comment as Comment).id === "number" &&
-      typeof (comment as Comment).name === "string" &&
-      typeof (comment as Comment).time === "string" &&
-      typeof (comment as Comment).avatar === "string" &&
-      typeof (comment as Comment).text === "string" &&
-      typeof (comment as Comment).likes === "number",
+    (entry) =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      typeof (entry as Comment).id === "number" &&
+      typeof (entry as Comment).name === "string" &&
+      typeof (entry as Comment).time === "string" &&
+      typeof (entry as Comment).avatar === "string" &&
+      typeof (entry as Comment).text === "string" &&
+      typeof (entry as Comment).likes === "number" &&
+      (typeof (entry as Comment).entryKind === "undefined" ||
+        isDiscussionEntryKind((entry as Comment).entryKind)) &&
+      (typeof (entry as Comment).content === "undefined" ||
+        isDiscussionContent((entry as Comment).content)) &&
+      (typeof (entry as Comment).visibility === "undefined" ||
+        isDiscussionVisibility((entry as Comment).visibility)) &&
+      (typeof (entry as Comment).liked === "undefined" ||
+        typeof (entry as Comment).liked === "boolean") &&
+      (typeof (entry as Comment).isOwn === "undefined" ||
+        typeof (entry as Comment).isOwn === "boolean"),
   );
 
-export function Discussion({ persistenceKey }: DiscussionProps) {
+export function Discussion({
+  persistenceKey,
+  mobileBottomNavigation = false,
+  mobileBottomNavigationHidden = false,
+}: DiscussionProps) {
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
-  const [activeTab, setActiveTab] = useState<Tab>("Comments");
-  const [search, setSearch] = useSessionStorageState(
-    `${storageBase}-search`,
-    "",
-    isStoredString,
+  const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
+    `${storageBase}-markdown-draft-v1`,
+    initialDraft,
+    isStoredDiscussionDraft,
   );
-  const [searchOpen, setSearchOpen] = useSessionStorageState(
-    `${storageBase}-search-open`,
-    false,
-    isStoredBoolean,
-  );
-  const [searchFocused, setSearchFocused] = useState(false);
-  const tabListRef = useRef<HTMLDivElement>(null);
-  const composerSearchInputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useSessionStorageState(
-    `${storageBase}-comment-draft`,
-    "",
-    isStoredString,
-  );
-  const [postedComments, setPostedComments] = useSessionStorageState<Comment[]>(
-    `${storageBase}-posted-comments`,
+  const [postedEntries, setPostedEntries] = useSessionStorageState<Comment[]>(
+    `${storageBase}-markdown-entries-v1`,
     [],
-    isStoredComments,
+    isStoredEntries,
   );
-  const [comments, setComments] = useState(() => [
-    ...postedComments,
-    ...initialComments,
-  ]);
+  const [entries, setEntries] = useState(initialEntries);
+  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
+  const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
+  const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
+  const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
+  const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
+    null,
+  );
   const [notice, setNotice] = useState("");
+  const activeDraft = editingEntry?.draft ?? draft;
+  const activeEntryKind = editingEntry?.entryKind ?? entryKind;
+  const activeVisibility = editingEntry?.visibility ?? visibility;
+  const draftAttachmentCount = getDiscussionAttachmentCount(
+    activeDraft.markdown,
+  );
+  const draftHasContent = hasDiscussionDraftContent(activeDraft);
+  const draftIsTooLong =
+    countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
+  const canSubmitDraft = draftHasContent && !draftIsTooLong;
 
   useEffect(() => {
-    setComments((current) => {
-      const currentById = new Map(
-        current.map((comment) => [comment.id, comment]),
-      );
-      return [
-        ...postedComments.map(
-          (comment) => currentById.get(comment.id) ?? comment,
-        ),
-        ...initialComments.map(
-          (comment) => currentById.get(comment.id) ?? comment,
-        ),
-      ];
-    });
-  }, [postedComments]);
-
-  useEffect(() => {
-    if (!searchOpen) return undefined;
-    const frame = window.requestAnimationFrame(() =>
-      composerSearchInputRef.current?.focus({ preventScroll: true }),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [searchOpen]);
-
-  const visibleComments = useMemo(
-    () =>
-      comments.filter((comment) =>
-        `${comment.name} ${comment.text}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
+    if (postedEntries.length === 0) return;
+    setEntries((current) => [
+      ...postedEntries.map((entry) => ({ ...entry, isOwn: true })),
+      ...current.filter(
+        (entry) =>
+          !postedEntries.some((persisted) => persisted.id === entry.id),
       ),
-    [comments, search],
+    ]);
+  }, [postedEntries]);
+
+  const filteredEntries = useMemo(() => {
+    const visibleEntries =
+      entryFilter === "all"
+        ? entries
+        : entries.filter(
+            (entry) =>
+              (entry.entryKind ??
+                (entry.isQuestion ? "question" : "comment")) === entryFilter,
+          );
+    return Array.from(
+      new Map(visibleEntries.map((entry) => [entry.id, entry])).values(),
+    );
+  }, [entries, entryFilter]);
+  const threadEntries = useMemo(
+    () =>
+      Array.from(new Map(entries.map((entry) => [entry.id, entry])).values()),
+    [entries],
   );
 
-  const addComment = () => {
-    const text = draft.trim();
-    if (!text) {
-      setNotice("Write a comment before sending.");
+  const submitEntry = () => {
+    if (draftIsTooLong) {
+      setNotice(COMMENT_LENGTH_NOTICE);
       return;
     }
-    const comment: Comment = {
+
+    if (!draftHasContent) return;
+
+    const text = activeDraft.plainText.trim();
+    const submittedVisibility = getAllowedVisibility(
+      activeEntryKind,
+      activeVisibility,
+    );
+
+    if (editingEntry) {
+      const originalEntry = entries.find(
+        (entry) => entry.id === editingEntry.id,
+      );
+      if (!originalEntry) {
+        setEditingEntry(null);
+        return;
+      }
+
+      const updatedEntry: Comment = {
+        ...originalEntry,
+        text,
+        content: activeDraft,
+        visibility: submittedVisibility,
+        entryKind: activeEntryKind,
+        isQuestion: activeEntryKind === "question",
+        time: "Just now (edited)",
+      };
+      const update = (current: Comment[]) =>
+        current.map((entry) =>
+          entry.id === updatedEntry.id ? updatedEntry : entry,
+        );
+
+      setEntries(update);
+      setPostedEntries((current) =>
+        current.some((entry) => entry.id === updatedEntry.id)
+          ? update(current)
+          : [updatedEntry, ...current],
+      );
+      setEditingEntry(null);
+      setEntryFilter("all");
+      setNotice("");
+      return;
+    }
+
+    const entry: Comment = {
       id: Date.now(),
-      name: "Sofia Chen",
+      name: CURRENT_USER.name,
       time: "Just now",
-      avatar: "/assets/sofia-avatar-160.webp",
+      avatar: CURRENT_USER.avatar,
       text,
+      content: activeDraft,
+      visibility: submittedVisibility,
+      entryKind: activeEntryKind,
       likes: 0,
+      replies: 0,
+      isQuestion: activeEntryKind === "question",
+      isOwn: true,
     };
-    setPostedComments((current) => [comment, ...current]);
-    setComments((current) => [comment, ...current]);
-    setDraft("");
-    setNotice("Comment posted.");
+
+    setPostedEntries((current) => [entry, ...current]);
+    setEntries((current) => [entry, ...current]);
+    setDraft(createEmptyDiscussionDraft());
+    setEntryFilter("all");
+
+    setNotice("");
   };
 
   const onLike = (id: number, liked: boolean) => {
-    setComments((current) =>
-      current.map((comment) =>
-        comment.id === id
-          ? { ...comment, likes: Math.max(0, comment.likes + (liked ? 1 : -1)) }
-          : comment,
-      ),
-    );
+    const update = (current: Comment[]) =>
+      current.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              likes: Math.max(0, entry.likes + (liked ? 1 : -1)),
+              liked,
+            }
+          : entry,
+      );
+    setEntries(update);
+    setPostedEntries(update);
   };
 
-  const navigateTab = (tab: Tab) => {
-    setActiveTab(tab);
-    setSearch("");
-    setSearchOpen(false);
+  const beginEditingEntry = (entry: Comment) => {
+    const entryKind =
+      entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
+    setEditingEntry({
+      id: entry.id,
+      draft: entry.content ?? createDiscussionDraft(entry.text),
+      entryKind,
+      visibility: getAllowedVisibility(entryKind, entry.visibility ?? "public"),
+    });
+    setNotice("");
+  };
+
+  const deleteEntry = (id: number) => {
+    const remove = (current: Comment[]) =>
+      current.filter((entry) => entry.id !== id);
+    setEntries(remove);
+    setPostedEntries(remove);
+    setEditingEntry((current) => (current?.id === id ? null : current));
+    setNotice("");
+  };
+
+  const addReply = (entryId: number, reply: CommentReply) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const thread = [...(entry.thread ?? []), reply];
+        return {
+          ...entry,
+          thread,
+          replies: Math.max(entry.replies ?? 0, thread.length),
+        };
+      });
+    setEntries(update);
+    setPostedEntries(update);
+  };
+
+  const editReply = (
+    entryId: number,
+    replyId: number,
+    replyDraft: DiscussionDraft,
+  ) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              thread: entry.thread?.map((reply) =>
+                reply.id === replyId
+                  ? {
+                      ...reply,
+                      text: replyDraft.plainText.trim(),
+                      content: replyDraft,
+                      time: "Just now (edited)",
+                    }
+                  : reply,
+              ),
+            }
+          : entry,
+      );
+    setEntries(update);
+    setPostedEntries(update);
+  };
+
+  const deleteReply = (entryId: number, replyId: number) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const thread = (entry.thread ?? []).filter(
+          (reply) => reply.id !== replyId,
+        );
+        return {
+          ...entry,
+          thread,
+          replies: Math.max(0, (entry.replies ?? thread.length) - 1),
+        };
+      });
+    setEntries(update);
+    setPostedEntries(update);
   };
 
   return (
-    <section className="learning-discussion">
-      <div className="learning-discussion__header min-w-0 border-b border-(--border)">
-        <div
-          ref={tabListRef}
-          className="page-tabs flex min-w-0 gap-1 overflow-x-auto"
-          role="tablist"
-          aria-label="Lesson tools"
-          data-sidebar-swipe-ignore
-          data-learning-swipe-ignore
-        >
-          {tabs.map(([label, Icon, tone]) => (
-            <button
-              type="button"
-              id={getTabId(label)}
-              role="tab"
-              aria-selected={activeTab === label}
-              aria-controls="learning-discussion-tab-panel"
-              data-page-tab-tone={tone}
-              data-swipe-tab-id={label}
-              tabIndex={activeTab === label ? 0 : -1}
-              key={label}
-              onClick={() => navigateTab(label)}
-              onKeyDown={handleRovingTabKeyDown}
-              className={`lesson-tool-tab relative inline-flex h-12 shrink-0 items-center gap-2 px-3 text-[15px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${activeTab === label ? "is-active font-semibold" : "text-(--muted) hover:text-(--text)"}`}
-            >
-              <Icon
-                size={20}
-                weight={activeTab === label ? "fill" : "regular"}
-              />{" "}
-              {label}
-            </button>
-          ))}
-          <span className="page-tabs__indicator" aria-hidden="true" />
-        </div>
-      </div>
-
-      <SwipeableTabPanel
-        tabs={tabIds}
-        activeTab={activeTab}
-        onTabChange={navigateTab}
-        tabListRef={tabListRef}
-        id="learning-discussion-tab-panel"
-        labelledBy={getTabId(activeTab)}
-        className="learning-discussion__tab-panel"
-      >
-        {(panelTab) =>
-          panelTab === "Comments" ? (
-            <div className="learning-comments-surface">
-              <div
-                className={`learning-comment-composer ${searchOpen ? "is-search-open" : ""}`}
-              >
-                <img
-                  src="/assets/sofia-avatar-160.webp"
-                  alt=""
-                  className="learning-comment-composer__avatar"
-                />
-                <div className="learning-comment-composer__field">
-                  <label className="learning-comment-composer__comment min-w-0 flex-1">
-                    <span className="sr-only">Add a comment</span>
-                    <input
-                      value={draft}
-                      onChange={(event) => {
-                        setDraft(event.target.value);
-                        setNotice("");
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") addComment();
-                      }}
-                      placeholder="Add a comment..."
-                      className="learning-comment-composer__input h-11 w-full bg-transparent px-1 outline-none placeholder:text-(--muted)"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    data-fixed-radius
-                    onClick={addComment}
-                    aria-label="Post comment"
-                    className="learning-comment-composer__send"
-                  >
-                    <PaperPlaneTilt size={22} weight="fill" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  data-fixed-radius
-                  aria-label={
-                    searchOpen ? "Close comment search" : "Search comments"
+    <section className="learning-discussion" aria-label="Lesson discussion">
+      <ThreadSurface
+        draft={activeDraft}
+        entryKind={activeEntryKind}
+        visibility={activeVisibility}
+        editingEntryId={editingEntry?.id ?? null}
+        notice={notice}
+        entryFilter={entryFilter}
+        entries={filteredEntries}
+        draftIsTooLong={draftIsTooLong}
+        draftAttachmentCount={draftAttachmentCount}
+        canSubmitDraft={canSubmitDraft}
+        mobileBottomNavigation={mobileBottomNavigation}
+        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+        onDraftChange={(value) => {
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current ? { ...current, draft: value } : current,
+            );
+          } else {
+            setDraft(value);
+          }
+          setNotice(
+            countCharacters(value.plainText) >
+              DISCUSSION_COMMENT_CHARACTER_LIMIT
+              ? COMMENT_LENGTH_NOTICE
+              : "",
+          );
+        }}
+        onEntryKindChange={(value) => {
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current
+                ? {
+                    ...current,
+                    entryKind: value,
+                    visibility: getAllowedVisibility(value, current.visibility),
                   }
-                  aria-pressed={searchOpen}
-                  aria-controls="learning-comment-search-input"
-                  onClick={() => {
-                    setSearchOpen((open) => {
-                      const nextOpen = !open;
-                      setSearchFocused(nextOpen);
-                      return nextOpen;
-                    });
-                  }}
-                  className="learning-comment-composer__search-toggle"
-                >
-                  {searchOpen ? <X size={18} /> : <MagnifyingGlass size={20} />}
-                </button>
-                <label
-                  className="learning-comment-composer__search"
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                >
-                  <MagnifyingGlass size={18} aria-hidden="true" />
-                  <span className="sr-only">
-                    Search {activeTab.toLowerCase()}
-                  </span>
-                  <input
-                    id="learning-comment-search-input"
-                    ref={composerSearchInputRef}
-                    type="search"
-                    tabIndex={searchOpen ? 0 : -1}
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={
-                      searchFocused
-                        ? (activeTab as Tab) === "Q&A"
-                          ? "Search Q&A"
-                          : `Search ${activeTab.toLowerCase()}`
-                        : "Search"
-                    }
-                    className="rounded-none"
-                    data-fixed-radius
-                    data-search-shortcut-target
-                    aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
-                  />
-                  <SearchShortcutHint />
-                </label>
-              </div>
-              {notice && (
-                <p
-                  role="status"
-                  className={`learning-comment-notice text-xs ${notice.includes("posted") ? "text-(--success)" : "text-(--danger)"}`}
-                >
-                  {notice}
-                </p>
-              )}
-
-              <div className="learning-comment-feed">
-                {visibleComments.map((comment) => (
-                  <CommentCard
-                    key={comment.id}
-                    comment={comment}
-                    onLike={onLike}
-                  />
-                ))}
-                {visibleComments.length === 0 && (
-                  <div className="learning-comment-empty px-5 py-10 text-center">
-                    <p className="font-semibold">
-                      No comments match that search
-                    </p>
-                    <p className="mt-1 text-sm text-(--muted)">
-                      Try a name, topic, or phrase from the discussion.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div
-              className="learning-supplemental-panel rounded-xl border border-(--border) bg-(--surface) px-6 text-center"
-              data-learning-radius-surface
-            >
-              <h3 className="text-base font-semibold">
-                {supplementalContent[panelTab].title}
-              </h3>
-              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-(--muted)">
-                {supplementalContent[panelTab].body}
-              </p>
-              <button
-                type="button"
-                data-control-radius-action
-                onClick={() =>
-                  setNotice(`${supplementalContent[panelTab].action} selected.`)
-                }
-                className="mt-5 rounded-[9px] bg-(--accent) px-4 py-2.5 text-sm font-semibold text-(--on-accent) transition hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-              >
-                {supplementalContent[panelTab].action}
-              </button>
-            </div>
+                : current,
+            );
+          } else {
+            setEntryKind(value);
+            setVisibility((current) => getAllowedVisibility(value, current));
+          }
+        }}
+        onVisibilityChange={(value) => {
+          const allowedVisibility = getAllowedVisibility(
+            activeEntryKind,
+            value,
+          );
+          if (editingEntry) {
+            setEditingEntry((current) =>
+              current ? { ...current, visibility: allowedVisibility } : current,
+            );
+          } else {
+            setVisibility(allowedVisibility);
+          }
+        }}
+        onSubmit={submitEntry}
+        onCancelEdit={() => setEditingEntry(null)}
+        onEntryFilterChange={setEntryFilter}
+        onLike={onLike}
+        onEdit={beginEditingEntry}
+        onDelete={deleteEntry}
+        onReport={() =>
+          setNotice("Report received. Our moderation team will review it.")
+        }
+        onOpenThread={(id, focusComposer = false) =>
+          setOpenThread({ id, focusComposer })
+        }
+      />
+      <DiscussionThreadPanel
+        open={openThread !== null}
+        activeEntryId={openThread?.id ?? null}
+        entries={threadEntries}
+        focusComposerOnOpen={Boolean(openThread?.focusComposer)}
+        onOpenChange={(open) => {
+          if (!open) setOpenThread(null);
+        }}
+        onActiveEntryChange={(id) =>
+          setOpenThread((current) =>
+            current ? { id, focusComposer: false } : current,
           )
         }
-      </SwipeableTabPanel>
+        onLike={onLike}
+        onAddReply={addReply}
+        onEditEntry={beginEditingEntry}
+        onDeleteEntry={deleteEntry}
+        onEditReply={editReply}
+        onDeleteReply={deleteReply}
+        onReport={() =>
+          setNotice("Report received. Our moderation team will review it.")
+        }
+      />
     </section>
   );
 }
+
+interface ThreadSurfaceProps {
+  draft: DiscussionDraft;
+  entryKind: DiscussionEntryKind;
+  visibility: DiscussionVisibility;
+  editingEntryId: number | null;
+  notice: string;
+  entryFilter: EntryFilter;
+  entries: Comment[];
+  draftIsTooLong: boolean;
+  draftAttachmentCount: number;
+  canSubmitDraft: boolean;
+  mobileBottomNavigation: boolean;
+  mobileBottomNavigationHidden: boolean;
+  onDraftChange: (value: DiscussionDraft) => void;
+  onEntryKindChange: (value: DiscussionEntryKind) => void;
+  onVisibilityChange: (value: DiscussionVisibility) => void;
+  onSubmit: () => void;
+  onCancelEdit: () => void;
+  onEntryFilterChange: (filter: EntryFilter) => void;
+  onLike: (id: number, liked: boolean) => void;
+  onEdit: (comment: Comment) => void;
+  onDelete: (id: number) => void;
+  onReport: (id: number) => void;
+  onOpenThread: (id: number, focusComposer?: boolean) => void;
+}
+
+function ThreadSurface({
+  draft,
+  entryKind,
+  visibility,
+  editingEntryId,
+  notice,
+  entryFilter,
+  entries,
+  draftIsTooLong,
+  draftAttachmentCount,
+  canSubmitDraft,
+  mobileBottomNavigation,
+  mobileBottomNavigationHidden,
+  onDraftChange,
+  onEntryKindChange,
+  onVisibilityChange,
+  onSubmit,
+  onCancelEdit,
+  onEntryFilterChange,
+  onLike,
+  onEdit,
+  onDelete,
+  onReport,
+  onOpenThread,
+}: ThreadSurfaceProps) {
+  const isPhone = usePhoneComposerLayout();
+  const composerHostRef = useRef<HTMLDivElement>(null);
+  const compactComposerScrollHidden =
+    mobileBottomNavigation && mobileBottomNavigationHidden;
+  const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
+  const [
+    mobileComposerCollapsedSnapPoint,
+    setMobileComposerCollapsedSnapPoint,
+  ] = useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
+    number | null
+  >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
+  const [mobileComposerKeyboardInset, setMobileComposerKeyboardInset] =
+    useState(0);
+  const [mobileComposerViewportHeight, setMobileComposerViewportHeight] =
+    useState<number | null>(null);
+  const mobileComposerSnapPoints = useMemo(
+    () => [mobileComposerCollapsedSnapPoint, 1],
+    [mobileComposerCollapsedSnapPoint],
+  );
+
+  const getMobileComposerViewportGeometry = useCallback(() => {
+    const playerBottom = document
+      .querySelector<HTMLElement>(".learning-workspace__player-wrap")
+      ?.getBoundingClientRect().bottom;
+    const visualViewport = window.visualViewport;
+    return getDiscussionComposerViewportGeometry(
+      document.documentElement.clientHeight || window.innerHeight,
+      visualViewport?.height ?? window.innerHeight,
+      visualViewport?.offsetTop ?? 0,
+      playerBottom,
+    );
+  }, []);
+
+  const openMobileComposer = useCallback(() => {
+    const geometry = getMobileComposerViewportGeometry();
+    setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
+    setMobileComposerSnapPoint(geometry.collapsedSnapPoint);
+    setMobileComposerKeyboardInset(geometry.keyboardInset);
+    setMobileComposerViewportHeight(geometry.visualViewportHeight);
+    setComposerMode("mobile");
+  }, [getMobileComposerViewportGeometry]);
+
+  const closeComposer = useCallback(() => {
+    setComposerMode("collapsed");
+    if (editingEntryId !== null) onCancelEdit();
+  }, [editingEntryId, onCancelEdit]);
+
+  useEffect(() => {
+    setComposerMode((current) => {
+      if (isPhone && current === "desktop") return "collapsed";
+      if (!isPhone && current === "mobile") return "collapsed";
+      return current;
+    });
+  }, [isPhone]);
+
+  useEffect(() => {
+    if (editingEntryId === null) return undefined;
+    if (isPhone) {
+      openMobileComposer();
+      return undefined;
+    }
+
+    setComposerMode("desktop");
+    const frame = window.requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      composerHostRef.current?.scrollIntoView?.({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingEntryId, isPhone, openMobileComposer]);
+
+  useEffect(() => {
+    if (!isPhone || composerMode !== "mobile") return undefined;
+
+    const player = document.querySelector<HTMLElement>(
+      ".learning-workspace__player-wrap",
+    );
+    let frame: number | null = null;
+    let settleTimer: number | null = null;
+    const syncSnapPoint = () => {
+      frame = null;
+      const geometry = getMobileComposerViewportGeometry();
+      setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
+      setMobileComposerSnapPoint((current) =>
+        current === 1 ? 1 : geometry.collapsedSnapPoint,
+      );
+      setMobileComposerKeyboardInset(geometry.keyboardInset);
+      setMobileComposerViewportHeight(geometry.visualViewportHeight);
+    };
+    const scheduleSnapPointSync = () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(syncSnapPoint);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(syncSnapPoint, 180);
+    };
+    const playerResizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleSnapPointSync);
+
+    if (player) playerResizeObserver?.observe(player);
+    window.addEventListener("resize", scheduleSnapPointSync);
+    window.addEventListener("orientationchange", scheduleSnapPointSync);
+    document.addEventListener("fullscreenchange", scheduleSnapPointSync);
+    document.addEventListener("webkitfullscreenchange", scheduleSnapPointSync);
+    window.visualViewport?.addEventListener("resize", scheduleSnapPointSync);
+    window.visualViewport?.addEventListener("scroll", scheduleSnapPointSync);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      playerResizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleSnapPointSync);
+      window.removeEventListener("orientationchange", scheduleSnapPointSync);
+      document.removeEventListener("fullscreenchange", scheduleSnapPointSync);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        scheduleSnapPointSync,
+      );
+      window.visualViewport?.removeEventListener(
+        "resize",
+        scheduleSnapPointSync,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        scheduleSnapPointSync,
+      );
+    };
+  }, [composerMode, getMobileComposerViewportGeometry, isPhone]);
+
+  useEffect(() => {
+    if (composerMode === "collapsed") return undefined;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("[data-comment-composer-container]")
+      ) {
+        return;
+      }
+      if (document.querySelector('[role="listbox"]')) return;
+      closeComposer();
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+  }, [closeComposer, composerMode]);
+
+  const submitAndCollapse = () => {
+    if (!canSubmitDraft) return;
+    onSubmit();
+    setComposerMode("collapsed");
+  };
+
+  return (
+    <div>
+      {!isPhone && (
+        <div
+          ref={composerHostRef}
+          data-comment-composer-container
+          className="mt-4 scroll-mt-4"
+        >
+          {composerMode === "desktop" ? (
+            <CommentComposer
+              draft={draft}
+              documentId={
+                editingEntryId === null
+                  ? "discussion-new"
+                  : `discussion-edit-${editingEntryId}`
+              }
+              entryKind={entryKind}
+              visibility={visibility}
+              invalid={draftIsTooLong}
+              canSubmit={canSubmitDraft}
+              editing={editingEntryId !== null}
+              autoFocus
+              onDraftChange={onDraftChange}
+              onEntryKindChange={onEntryKindChange}
+              onVisibilityChange={onVisibilityChange}
+              onSubmit={submitAndCollapse}
+              onClose={closeComposer}
+            />
+          ) : (
+            <CompactComposer
+              draft={draft}
+              attachmentCount={draftAttachmentCount}
+              onOpen={() => setComposerMode("desktop")}
+            />
+          )}
+        </div>
+      )}
+
+      <p role="status" className="sr-only">
+        {notice}
+      </p>
+
+      <div
+        role="group"
+        aria-label="Filter discussion entries"
+        className={`learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isPhone ? "mt-2" : "mt-5"}`}
+      >
+        {entryFilters.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={entryFilter === value}
+            onClick={() => onEntryFilterChange(value)}
+            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`mt-1 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+        {entries.map((entry) => (
+          <CommentCard
+            key={entry.id}
+            comment={entry}
+            onLike={onLike}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onReport={onReport}
+            onOpenThread={onOpenThread}
+          />
+        ))}
+        {entries.length === 0 && (
+          <div className="py-12 text-center">
+            <p className="font-semibold text-(--text)">
+              No{" "}
+              {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
+              yet
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
+              Choose All to return to the full lesson discussion.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {isPhone && composerMode !== "mobile" && (
+        <div
+          data-testid="mobile-discussion-composer"
+          data-scroll-hidden={compactComposerScrollHidden}
+          aria-hidden={compactComposerScrollHidden}
+          className={`fixed inset-x-0 z-130 bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${mobileBottomNavigation ? "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]" : "bottom-0"} ${compactComposerScrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+        >
+          <CompactComposer
+            draft={draft}
+            attachmentCount={draftAttachmentCount}
+            mobile
+            onOpen={openMobileComposer}
+          />
+        </div>
+      )}
+
+      {isPhone && (
+        <Drawer
+          open={composerMode === "mobile"}
+          onOpenChange={(open) => {
+            if (open) openMobileComposer();
+            else closeComposer();
+          }}
+          modal={false}
+          snapPoints={mobileComposerSnapPoints}
+          snapPoint={mobileComposerSnapPoint}
+          onSnapPointChange={(snapPoint) => {
+            if (typeof snapPoint === "number" || snapPoint === null) {
+              setMobileComposerSnapPoint(snapPoint);
+            }
+          }}
+          snapToSequentialPoints
+          showSwipeHandle
+          swipeDirection="down"
+          swipeHandleClassName="pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_34%,transparent)]"
+        >
+          <DrawerContent
+            data-comment-composer-container
+            style={
+              {
+                "--drawer-content-height": mobileComposerViewportHeight
+                  ? `${mobileComposerViewportHeight}px`
+                  : "100dvh",
+                "--drawer-content-max-height": mobileComposerViewportHeight
+                  ? `${mobileComposerViewportHeight}px`
+                  : "100dvh",
+                bottom: `${mobileComposerKeyboardInset}px`,
+                paddingBottom:
+                  mobileComposerKeyboardInset > 0
+                    ? "0px"
+                    : "var(--app-safe-area-bottom)",
+              } as React.CSSProperties
+            }
+            aria-label={
+              editingEntryId === null
+                ? "Create a discussion entry"
+                : "Edit a discussion entry"
+            }
+            className="learning-comment-composer-drawer overflow-hidden rounded-t-[22px]! bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] px-0 pt-0 shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-expanded:rounded-none!"
+          >
+            <DrawerTitle className="sr-only">
+              {editingEntryId === null
+                ? "Create a discussion entry"
+                : "Edit a discussion entry"}
+            </DrawerTitle>
+            <DrawerDescription className="sr-only">
+              Write a comment, Q&A, or note for this lesson.
+            </DrawerDescription>
+            <CommentComposer
+              draft={draft}
+              documentId={
+                editingEntryId === null
+                  ? "discussion-new"
+                  : `discussion-edit-${editingEntryId}`
+              }
+              entryKind={entryKind}
+              visibility={visibility}
+              invalid={draftIsTooLong}
+              canSubmit={canSubmitDraft}
+              editing={editingEntryId !== null}
+              autoFocus
+              presentation="drawer"
+              onDraftChange={onDraftChange}
+              onEntryKindChange={onEntryKindChange}
+              onVisibilityChange={onVisibilityChange}
+              onSubmit={submitAndCollapse}
+              onClose={closeComposer}
+            />
+          </DrawerContent>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+interface CompactComposerProps {
+  draft: DiscussionDraft;
+  attachmentCount: number;
+  mobile?: boolean;
+  onOpen: () => void;
+}
+
+function CompactComposer({
+  draft,
+  attachmentCount,
+  mobile = false,
+  onOpen,
+}: CompactComposerProps) {
+  const preview =
+    draft.plainText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+  const attachmentPreview = `${attachmentCount} ${attachmentCount === 1 ? "attachment" : "attachments"}`;
+
+  return (
+    <button
+      type="button"
+      data-compact-comment-composer
+      aria-label="Open discussion composer"
+      onClick={onOpen}
+      className={`flex w-full items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] text-left shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_94%,var(--hover))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
+    >
+      <img
+        src={CURRENT_USER.avatar}
+        alt=""
+        className="pointer-events-none size-9 shrink-0 rounded-full object-cover"
+      />
+      <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
+        {preview ||
+          (attachmentCount > 0 ? attachmentPreview : "Write something…")}
+      </span>
+    </button>
+  );
+}
+
+function usePhoneComposerLayout() {
+  const [isPhone, setIsPhone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsPhone(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return isPhone;
+}
+
+const getFilterName = (filter: Exclude<EntryFilter, "all">) => {
+  if (filter === "question") return "Q&As";
+  if (filter === "note") return "notes";
+  return "comments";
+};

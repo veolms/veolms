@@ -25,6 +25,7 @@ import type {
 } from "./profilePreferences";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { CircularCheckbox } from "../components/CircularCheckbox";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -105,22 +106,17 @@ function PublicVisibilityCheckbox({
   label,
 }: PublicVisibilityCheckboxProps) {
   return (
-    <label className="settings-profile__visibility-checkbox" htmlFor={id}>
-      <span>Show publicly</span>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        aria-label={label}
-      />
-      <span
-        className="settings-profile__visibility-checkbox-mark"
-        aria-hidden="true"
-      >
-        <Check size={10} weight="bold" />
-      </span>
-    </label>
+    <CircularCheckbox
+      id={id}
+      checked={checked}
+      onCheckedChange={onChange}
+      label="Show publicly"
+      ariaLabel={label}
+      labelPosition="before"
+      className="settings-profile__visibility-checkbox"
+      indicatorClassName="settings-profile__visibility-checkbox-mark"
+      unstyled
+    />
   );
 }
 

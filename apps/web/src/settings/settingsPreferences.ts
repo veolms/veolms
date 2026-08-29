@@ -70,6 +70,7 @@ export const PAGE_TAB_COLORS_KEY = "veolms-page-tab-colors";
 export const PAGE_TAB_COLORS_DEFAULT: PageTabColors = "follow-sidebar";
 export const ELEVATED_SURFACES_KEY = "veolms-elevated-surfaces";
 export const HIDE_SCROLLBARS_KEY = "veolms-hide-scrollbars";
+export const HIDE_SCROLLBARS_DEFAULT = true;
 export const SCROLLBAR_STYLE_KEY = "veolms-scrollbar-style";
 export const SCROLLBAR_STYLE_VALUES = [
   "default",
@@ -79,6 +80,52 @@ export const SCROLLBAR_STYLE_VALUES = [
 ] as const;
 export type ScrollbarStyle = (typeof SCROLLBAR_STYLE_VALUES)[number];
 export const SCROLLBAR_STYLE_DEFAULT: ScrollbarStyle = "theme";
+export const ELASTIC_SCROLL_APPEARANCE_KEY = "veolms-elastic-scroll-appearance";
+export const ELASTIC_SCROLL_APPEARANCE_VALUES = ["2d", "3d"] as const;
+export type ElasticScrollAppearance =
+  (typeof ELASTIC_SCROLL_APPEARANCE_VALUES)[number];
+export const ELASTIC_SCROLL_APPEARANCE_DEFAULT: ElasticScrollAppearance = "2d";
+export const ELASTIC_SCROLL_ICON_KEY = "veolms-elastic-scroll-icon";
+export const ELASTIC_SCROLL_ICON_VALUES = [
+  "arrow",
+  "caret",
+  "double-caret",
+  "bold-arrow",
+  "edge",
+] as const;
+export type ElasticScrollIcon = (typeof ELASTIC_SCROLL_ICON_VALUES)[number];
+export const ELASTIC_SCROLL_ICON_DEFAULT: ElasticScrollIcon = "arrow";
+export const ELASTIC_SCROLL_ICON_ANIMATION_KEY =
+  "veolms-elastic-scroll-icon-animation";
+export const ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT = false;
+export const ELASTIC_SCROLL_GESTURE_SIDE_VALUES = ["left", "right"] as const;
+export type ElasticScrollGestureSide =
+  (typeof ELASTIC_SCROLL_GESTURE_SIDE_VALUES)[number];
+export const ELASTIC_SCROLL_LOCK_SIDE_KEY = "veolms-elastic-scroll-lock-side";
+export const ELASTIC_SCROLL_LOCK_SIDE_DEFAULT: ElasticScrollGestureSide =
+  "right";
+export const ELASTIC_SCROLL_UNLOCK_SIDE_KEY =
+  "veolms-elastic-scroll-unlock-side";
+export const ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT: ElasticScrollGestureSide =
+  "left";
+export const ELASTIC_SCROLL_PREFERENCES_EVENT =
+  "veolms:elastic-scroll-preferences";
+
+export interface ElasticScrollPreferences {
+  appearance: ElasticScrollAppearance;
+  icon: ElasticScrollIcon;
+  animateIcon: boolean;
+  lockSide: ElasticScrollGestureSide;
+  unlockSide: ElasticScrollGestureSide;
+}
+
+export const ELASTIC_SCROLL_PREFERENCES_DEFAULT: ElasticScrollPreferences = {
+  appearance: ELASTIC_SCROLL_APPEARANCE_DEFAULT,
+  icon: ELASTIC_SCROLL_ICON_DEFAULT,
+  animateIcon: ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
+  lockSide: ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
+  unlockSide: ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+};
 export const CONTROL_RADIUS_KEY = "veolms-control-radius";
 export const CONTROL_RADIUS_CUSTOM_KEY = "veolms-control-radius-custom";
 export const SIDEBAR_HEADER_DEFAULT_VERSION = "inline-v1";
@@ -257,6 +304,7 @@ export interface SidebarPreferences {
   showKeyboardShortcuts?: boolean;
   showCollapsedLabels?: boolean;
   showCollapsedLogo?: boolean;
+  showSidebarOnMobile?: boolean;
   glowPalette?: SidebarGlow;
   glowShape?: SidebarGlowShape;
   glowShapeSize?: number;
@@ -363,15 +411,166 @@ export const readScrollbarStyle = (): ScrollbarStyle =>
     readStored(SCROLLBAR_STYLE_KEY, SCROLLBAR_STYLE_DEFAULT),
   );
 
+export const normalizeElasticScrollAppearance = (
+  value: unknown,
+): ElasticScrollAppearance =>
+  ELASTIC_SCROLL_APPEARANCE_VALUES.includes(value as ElasticScrollAppearance)
+    ? (value as ElasticScrollAppearance)
+    : ELASTIC_SCROLL_APPEARANCE_DEFAULT;
+
+export const normalizeElasticScrollIcon = (
+  value: unknown,
+): ElasticScrollIcon =>
+  ELASTIC_SCROLL_ICON_VALUES.includes(value as ElasticScrollIcon)
+    ? (value as ElasticScrollIcon)
+    : ELASTIC_SCROLL_ICON_DEFAULT;
+
+export const normalizeElasticScrollGestureSide = (
+  value: unknown,
+  fallback: ElasticScrollGestureSide,
+): ElasticScrollGestureSide =>
+  ELASTIC_SCROLL_GESTURE_SIDE_VALUES.includes(value as ElasticScrollGestureSide)
+    ? (value as ElasticScrollGestureSide)
+    : fallback;
+
+export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
+  appearance: normalizeElasticScrollAppearance(
+    readStored(
+      ELASTIC_SCROLL_APPEARANCE_KEY,
+      ELASTIC_SCROLL_APPEARANCE_DEFAULT,
+    ),
+  ),
+  icon: normalizeElasticScrollIcon(
+    readStored(ELASTIC_SCROLL_ICON_KEY, ELASTIC_SCROLL_ICON_DEFAULT),
+  ),
+  animateIcon: readStoredBoolean(
+    ELASTIC_SCROLL_ICON_ANIMATION_KEY,
+    ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
+  ),
+  lockSide: normalizeElasticScrollGestureSide(
+    readStored(ELASTIC_SCROLL_LOCK_SIDE_KEY, ELASTIC_SCROLL_LOCK_SIDE_DEFAULT),
+    ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
+  ),
+  unlockSide: normalizeElasticScrollGestureSide(
+    readStored(
+      ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
+      ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+    ),
+    ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+  ),
+});
+
+export const applyElasticScrollPreferences = (
+  preferences: Partial<ElasticScrollPreferences>,
+): ElasticScrollPreferences => {
+  const normalizedPreferences = {
+    appearance: normalizeElasticScrollAppearance(preferences.appearance),
+    icon: normalizeElasticScrollIcon(preferences.icon),
+    animateIcon:
+      typeof preferences.animateIcon === "boolean"
+        ? preferences.animateIcon
+        : ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
+    lockSide: normalizeElasticScrollGestureSide(
+      preferences.lockSide,
+      ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
+    ),
+    unlockSide: normalizeElasticScrollGestureSide(
+      preferences.unlockSide,
+      ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+    ),
+  };
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.elasticScrollAppearance =
+      normalizedPreferences.appearance;
+    document.documentElement.dataset.elasticScrollIcon =
+      normalizedPreferences.icon;
+    document.documentElement.dataset.elasticScrollIconAnimation = String(
+      normalizedPreferences.animateIcon,
+    );
+    document.documentElement.dataset.elasticScrollLockSide =
+      normalizedPreferences.lockSide;
+    document.documentElement.dataset.elasticScrollUnlockSide =
+      normalizedPreferences.unlockSide;
+  }
+  return normalizedPreferences;
+};
+
+export const persistElasticScrollPreferences = (
+  preferences: Partial<ElasticScrollPreferences>,
+): ElasticScrollPreferences => {
+  const normalizedPreferences = applyElasticScrollPreferences(preferences);
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_APPEARANCE_KEY,
+        normalizedPreferences.appearance,
+      );
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_ICON_KEY,
+        normalizedPreferences.icon,
+      );
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_ICON_ANIMATION_KEY,
+        String(normalizedPreferences.animateIcon),
+      );
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_LOCK_SIDE_KEY,
+        normalizedPreferences.lockSide,
+      );
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
+        normalizedPreferences.unlockSide,
+      );
+    } catch {
+      // Keep the preference active for this session when storage is blocked.
+    }
+    window.dispatchEvent(
+      new CustomEvent<ElasticScrollPreferences>(
+        ELASTIC_SCROLL_PREFERENCES_EVENT,
+        { detail: normalizedPreferences },
+      ),
+    );
+  }
+  return normalizedPreferences;
+};
+
 export const getScrollbarBootstrapScript = (): string =>
-  `(()=>{const root=document.documentElement;try{root.dataset.hideScrollbars=String(localStorage.getItem(${JSON.stringify(
+  `(()=>{const root=document.documentElement;try{const stored=localStorage.getItem(${JSON.stringify(
     HIDE_SCROLLBARS_KEY,
-  )})==="true")}catch{root.dataset.hideScrollbars="false"}try{const styles=${JSON.stringify(SCROLLBAR_STYLE_VALUES)},stored=localStorage.getItem(${JSON.stringify(
+  )});root.dataset.hideScrollbars=String(stored===null?${HIDE_SCROLLBARS_DEFAULT}:stored==="true")}catch{root.dataset.hideScrollbars=${JSON.stringify(String(HIDE_SCROLLBARS_DEFAULT))}}try{const styles=${JSON.stringify(SCROLLBAR_STYLE_VALUES)},stored=localStorage.getItem(${JSON.stringify(
     SCROLLBAR_STYLE_KEY,
   )});root.dataset.scrollbarStyle=styles.includes(stored)?stored:${JSON.stringify(
     SCROLLBAR_STYLE_DEFAULT,
   )}}catch{root.dataset.scrollbarStyle=${JSON.stringify(
     SCROLLBAR_STYLE_DEFAULT,
+  )}}try{const appearances=${JSON.stringify(ELASTIC_SCROLL_APPEARANCE_VALUES)},icons=${JSON.stringify(ELASTIC_SCROLL_ICON_VALUES)},appearance=localStorage.getItem(${JSON.stringify(
+    ELASTIC_SCROLL_APPEARANCE_KEY,
+  )}),icon=localStorage.getItem(${JSON.stringify(
+    ELASTIC_SCROLL_ICON_KEY,
+  )}),animate=localStorage.getItem(${JSON.stringify(
+    ELASTIC_SCROLL_ICON_ANIMATION_KEY,
+  )}),sides=${JSON.stringify(ELASTIC_SCROLL_GESTURE_SIDE_VALUES)},lockSide=localStorage.getItem(${JSON.stringify(
+    ELASTIC_SCROLL_LOCK_SIDE_KEY,
+  )}),unlockSide=localStorage.getItem(${JSON.stringify(
+    ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
+  )});root.dataset.elasticScrollAppearance=appearances.includes(appearance)?appearance:${JSON.stringify(
+    ELASTIC_SCROLL_APPEARANCE_DEFAULT,
+  )};root.dataset.elasticScrollIcon=icons.includes(icon)?icon:${JSON.stringify(
+    ELASTIC_SCROLL_ICON_DEFAULT,
+  )};root.dataset.elasticScrollIconAnimation=String(animate==="true");root.dataset.elasticScrollLockSide=sides.includes(lockSide)?lockSide:${JSON.stringify(
+    ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
+  )};root.dataset.elasticScrollUnlockSide=sides.includes(unlockSide)?unlockSide:${JSON.stringify(
+    ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+  )}}catch{root.dataset.elasticScrollAppearance=${JSON.stringify(
+    ELASTIC_SCROLL_APPEARANCE_DEFAULT,
+  )};root.dataset.elasticScrollIcon=${JSON.stringify(
+    ELASTIC_SCROLL_ICON_DEFAULT,
+  )};root.dataset.elasticScrollIconAnimation=${JSON.stringify(
+    String(ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT),
+  )};root.dataset.elasticScrollLockSide=${JSON.stringify(
+    ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
+  )};root.dataset.elasticScrollUnlockSide=${JSON.stringify(
+    ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
   )}}try{const learning=JSON.parse(localStorage.getItem(${JSON.stringify(
     LEARNING_PREFERENCES_KEY,
   )})||"{}");root.dataset.lessonPageScrollbar=learning.showLessonPageScrollbar===false?"hidden":"visible";root.dataset.curriculumScrollbar=learning.showCurriculumScrollbar===false?"hidden":"visible"}catch{root.dataset.lessonPageScrollbar="visible";root.dataset.curriculumScrollbar="visible"}})();`;

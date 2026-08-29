@@ -64,6 +64,7 @@ const navigationTones: Record<string, string> = {
   Reviews: "#f1be4b",
   "My Quiz": "#47d4d0",
   Discussions: "#58a8ff",
+  "Learning Space": "#329ca6",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
   "Order History": "#d68eea",
@@ -177,6 +178,30 @@ export function getVisibleOrderedNavigation(
   return getOrderedNavigation(role, order).filter(([label]) =>
     visible.has(label),
   );
+}
+
+export function getMobilePrimaryNavigation(
+  role: string,
+  navigation: readonly NavigationItem[],
+): NavigationItem[] {
+  const capacity = role === "student" ? 3 : 4;
+  const primary = navigation.slice(0, capacity);
+  if (role !== "student" || primary.some(([label]) => label === "Courses"))
+    return primary;
+
+  const courses =
+    navigation.find(([label]) => label === "Courses") ??
+    getNavigationItems(role).find(([label]) => label === "Courses");
+  if (!courses) return primary;
+  return [...primary.slice(0, capacity - 1), courses];
+}
+
+export function getMobileOverflowNavigation(
+  navigation: readonly NavigationItem[],
+  primaryNavigation: readonly NavigationItem[],
+): NavigationItem[] {
+  const primaryLabels = new Set(primaryNavigation.map(([label]) => label));
+  return navigation.filter(([label]) => !primaryLabels.has(label));
 }
 
 export function getNavigationDestination(label: string): string {

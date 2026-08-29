@@ -21,7 +21,9 @@ export {
 
 export type CurriculumTestPreferences = CurriculumSize;
 
-export const CURRICULUM_SECTION_COUNT_PRESETS = [7, 16, 23, 32, 50] as const;
+export const CURRICULUM_SECTION_COUNT_PRESETS = [
+  7, 10, 16, 23, 32, 50,
+] as const;
 export const CURRICULUM_LECTURE_COUNT_PRESETS = [
   50, 100, 300, 600, 1000,
 ] as const;

@@ -7,6 +7,7 @@ import {
   discardPendingCourseCommentDraft,
   getCoursePlayerBackLabel,
   getCoursePlayerLaunchPath,
+  getMostRecentCoursePlayerSession,
   getCoursePlayerOrigin,
   getCoursePlayerOriginFromPathname,
   getCoursePlayerParentPath,
@@ -226,6 +227,38 @@ describe("course player navigation", () => {
     });
     expect(closeCoursePlayerSession("course-three")).toBeNull();
     expect(getOpenCoursePlayerSessions()).toEqual([]);
+  });
+
+  it("selects the most recently active session independent of collection order", () => {
+    const sessions = [
+      {
+        courseId: "course-one",
+        lessonId: 1,
+        origin: "courses" as const,
+        path: getCoursePlayerPath("course-one", "courses", 1),
+        returnPath: "/courses",
+        updatedAt: 10,
+      },
+      {
+        courseId: "course-two",
+        lessonId: 2,
+        origin: "home" as const,
+        path: getCoursePlayerPath("course-two", "home", 2),
+        returnPath: "/",
+        updatedAt: 40,
+      },
+      {
+        courseId: "course-three",
+        lessonId: 3,
+        origin: "wishlist" as const,
+        path: getCoursePlayerPath("course-three", "wishlist", 3),
+        returnPath: "/wishlist",
+        updatedAt: 20,
+      },
+    ];
+
+    expect(getMostRecentCoursePlayerSession(sessions)).toBe(sessions[1]);
+    expect(getMostRecentCoursePlayerSession([])).toBeNull();
   });
 
   it("uses only the course-scoped last lesson key", () => {

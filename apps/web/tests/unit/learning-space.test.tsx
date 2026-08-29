@@ -187,6 +187,17 @@ describe("LearningSpace", () => {
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 
+  it("always exposes a close control, including for an unpinned panel", () => {
+    const onExpandedChange = vi.fn();
+    renderLearningSpace({ onExpandedChange });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close Learning Space panel" }),
+    );
+
+    expect(onExpandedChange).toHaveBeenCalledWith(false);
+  });
+
   it("uses the collapsed rail control to request the full sidebar", () => {
     const onRequestSidebarExpand = vi.fn();
     renderLearningSpace({
