@@ -371,6 +371,9 @@ importers:
       '@aws-sdk/client-sts':
         specifier: ^3.1112.0
         version: 3.1116.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1113.0
+        version: 3.1116.0
       '@veolms/config':
         specifier: workspace:*
         version: link:../config
