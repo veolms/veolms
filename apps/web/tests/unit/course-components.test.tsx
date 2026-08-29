@@ -82,8 +82,8 @@ describe("CourseCard", () => {
 
   it("opens the course overview from the full card details surface", () => {
     const { onNavigatePage, onOpen } = renderCard();
-    const curriculum = screen.getByRole("link", {
-      name: `View curriculum for ${enrolledCourse.title}`,
+    const overview = screen.getByRole("link", {
+      name: `View course overview for ${enrolledCourse.title}`,
     });
     const metadata = screen.getByText(/24 Sections/);
     const card = screen.getByRole("article");
@@ -101,17 +101,17 @@ describe("CourseCard", () => {
       "hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]",
       "focus-within:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]",
     );
-    expect(curriculum).toHaveClass("absolute", "inset-0", "cursor-pointer");
+    expect(overview).toHaveClass("absolute", "inset-0", "cursor-pointer");
     expect(screen.getByRole("heading")).toHaveClass(
       "truncate",
       "text-[0.92rem]",
       "lg:text-[0.98rem]",
     );
-    expect(details).toContainElement(curriculum);
+    expect(details).toContainElement(overview);
     expect(details).toContainElement(metadata);
-    expect(curriculum).toHaveAttribute("title", "View Curriculum");
+    expect(overview).toHaveAttribute("title", "View Course Overview");
 
-    fireEvent.click(curriculum);
+    fireEvent.click(overview);
 
     expect(onNavigatePage).toHaveBeenCalledWith(
       "/courses/typescript-course/overview",
@@ -132,7 +132,7 @@ describe("CourseCard", () => {
     expect(onNavigatePage).not.toHaveBeenCalled();
   });
 
-  it("plays a free preview from a non-enrolled thumbnail and opens curriculum elsewhere", () => {
+  it("plays a free preview from a non-enrolled thumbnail and opens its overview elsewhere", () => {
     const { onExplore, onNavigatePage, onOpen } = renderCard({
       course: nonEnrolledCourse,
     });
@@ -154,7 +154,7 @@ describe("CourseCard", () => {
     fireEvent.click(preview);
     fireEvent.click(
       screen.getByRole("link", {
-        name: `View curriculum for ${nonEnrolledCourse.title}`,
+        name: `View course overview for ${nonEnrolledCourse.title}`,
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "View Curriculum" }));
@@ -162,7 +162,7 @@ describe("CourseCard", () => {
     expect(onOpen).toHaveBeenCalledWith(nonEnrolledCourse);
     expect(onNavigatePage).toHaveBeenCalledTimes(2);
     expect(onNavigatePage).toHaveBeenLastCalledWith(
-      "/courses/figma-ui-essentials/overview#cov-curriculum-heading",
+      "/courses/figma-ui-essentials/overview",
     );
     expect(onExplore).not.toHaveBeenCalled();
   });
@@ -193,7 +193,7 @@ describe("CourseCard", () => {
     fireEvent.click(play);
     fireEvent.click(
       screen.getByRole("link", {
-        name: `View curriculum for ${enrolledCourse.title}`,
+        name: `View course overview for ${enrolledCourse.title}`,
       }),
     );
 

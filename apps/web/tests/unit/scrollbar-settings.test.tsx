@@ -1,12 +1,24 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ScrollbarSettings } from "../../src/settings/scrollbars/ScrollbarSettings.tsx";
 
 describe("scrollbar appearance settings", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("veolms-hide-scrollbars", "false");
+    delete document.documentElement.dataset.hideScrollbars;
+    delete document.documentElement.dataset.scrollbarStyle;
+  });
+
   it("persists a selected style and applies it to the document", async () => {
     render(<ScrollbarSettings />);
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole("switch", { name: "Show scrollbars" }),
+      ).toHaveAttribute("aria-checked", "true"),
+    );
     fireEvent.click(screen.getByRole("radio", { name: /Thick/i }));
 
     await waitFor(() => {
@@ -18,6 +30,11 @@ describe("scrollbar appearance settings", () => {
   it("hides every style control when scrollbars are turned off", async () => {
     render(<ScrollbarSettings />);
 
+    await waitFor(() =>
+      expect(
+        screen.getByRole("switch", { name: "Show scrollbars" }),
+      ).toHaveAttribute("aria-checked", "true"),
+    );
     fireEvent.click(screen.getByRole("switch", { name: "Show scrollbars" }));
 
     await waitFor(() => {
