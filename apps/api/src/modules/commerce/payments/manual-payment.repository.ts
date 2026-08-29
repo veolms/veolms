@@ -82,14 +82,19 @@ export async function updateManualPaymentRequestStatus(
     verified_at?: Date | null;
     updated_at?: Date;
   },
+  expectedStatus?: ManualPaymentStatus,
 ) {
-  return await database
+  let query = database
     .updateTable("manual_payment_requests")
     .set({
       ...values,
       updated_at: values.updated_at ?? new Date(),
     })
-    .where("id", "=", requestId)
-    .returningAll()
-    .executeTakeFirst();
+    .where("id", "=", requestId);
+
+  if (expectedStatus) {
+    query = query.where("status", "=", expectedStatus);
+  }
+
+  return await query.returningAll().executeTakeFirst();
 }

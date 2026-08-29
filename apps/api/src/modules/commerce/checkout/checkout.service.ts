@@ -88,12 +88,32 @@ export function createCheckoutService({
     // 1. Idempotency Check: return existing order if same idempotency key was submitted
     if (idempotencyKey) {
       const existingOrder = await orderRepo.findOrderByIdempotencyKey(database, idempotencyKey);
-      if (existingOrder && existingOrder.user_id === user.id) {
+      if (existingOrder) {
+        if (existingOrder.user_id !== user.id) {
+          throw CommerceErrors.IDEMPOTENCY_KEY_CONFLICT();
+        }
+
         const payment = await paymentRepo.findPaymentByOrderId(database, existingOrder.id);
         const orderItems = await orderRepo.listOrderItems(database, existingOrder.id);
 
         if (payment) {
           const isFreeOrder = payment.gateway_provider === "free" || payment.amount === 0;
+
+          if (isFreeOrder && payment.status !== "captured") {
+            await reconciliationService.finalizeSuccessfulPayment({
+              paymentId: payment.id,
+              gatewayPaymentId: payment.gateway_payment_id ?? `free_pay_${existingOrder.id}`,
+              paymentMethod: { method: "free" },
+            });
+            return {
+              order: toOrderContract(existingOrder, orderItems, {
+                status: "paid",
+                paidAt: new Date(),
+              }),
+              gateway: null,
+            };
+          }
+
           return {
             order: toOrderContract(existingOrder, orderItems),
             gateway: isFreeOrder

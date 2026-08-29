@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { orderStatusSchema, purchaseSchema } from "./order.ts";
+import type {
+  CreateGatewayRefundInput,
+  GatewayRefundOutput,
+  GatewayRefundDetails,
+} from "./refund.ts";
 
 export const paymentStatusSchema = z.enum([
   "initiated",
@@ -23,6 +28,7 @@ export const paymentProviderSchema = z.enum([
   "stripe",
   "mock",
   "free",
+  "manual",
 ]);
 export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
 
@@ -241,8 +247,8 @@ export interface PaymentGateway {
   fetchOrderPayments(gatewayOrderId: string): Promise<GatewayPaymentDetails[]>;
   verifyPaymentSignature(input: VerifyGatewayPaymentInput): boolean;
   getPayment(gatewayPaymentId: string): Promise<GatewayPaymentDetails>;
-  refundPayment(input: any): Promise<any>;
-  fetchRefund(gatewayRefundId: string): Promise<any>;
+  refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput>;
+  fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails>;
   verifyWebhookSignature(rawBody: string | Uint8Array, signature: string): boolean;
   normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent;
 }
@@ -257,7 +263,7 @@ export type WebhookEventStatus = z.infer<typeof webhookEventStatusSchema>;
 
 export const webhookEventRecordSchema = z.strictObject({
   id: z.uuid(),
-  provider: z.enum(["razorpay", "stripe", "mock", "free"]),
+  provider: z.enum(["razorpay", "stripe", "mock", "free", "manual"]),
   eventId: z.string(),
   eventType: z.string(),
   payload: z.unknown(),

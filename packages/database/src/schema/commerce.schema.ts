@@ -1,4 +1,5 @@
 import type { Generated } from "kysely";
+import type { Json } from "./json.schema.ts";
 
 export type BundleStatus = "draft" | "published" | "archived";
 export type CartItemType = "course" | "bundle";
@@ -148,7 +149,7 @@ export interface PaymentTable {
   amount: number;
   currency: string;
   status: PaymentStatus;
-  payment_method: unknown | null;
+  payment_method: Json | null;
   error_code: string | null;
   error_description: string | null;
   created_at: Generated<Date>;
@@ -163,7 +164,7 @@ export interface PaymentAttemptTable {
   status: PaymentAttemptStatus;
   error_code: string | null;
   error_description: string | null;
-  raw_payload: unknown | null;
+  raw_payload: Json | null;
   created_at: Generated<Date>;
 }
 

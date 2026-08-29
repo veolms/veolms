@@ -176,7 +176,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addCheckConstraint("orders_total_non_negative", sql`total_amount >= 0`)
     .execute();
 
-  await sql`create index idx_orders_user_id on orders (user_id)`.execute(database);
   await sql`create index idx_orders_user_status on orders (user_id, status)`.execute(database);
 
   await database.schema
@@ -359,9 +358,16 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addUniqueConstraint("access_grants_user_course_unique", ["user_id", "course_id"])
+    .addCheckConstraint(
+      "access_grants_status_valid",
+      sql`status in ('active', 'suspended', 'revoked', 'expired')`,
+    )
+    .addCheckConstraint(
+      "access_grants_source_valid",
+      sql`source in ('purchase', 'bundle_purchase', 'free_grant', 'admin_grant')`,
+    )
     .execute();
 
-  await sql`create index idx_access_grants_user_course on access_grants (user_id, course_id)`.execute(database);
   await sql`create index idx_access_grants_order_id on access_grants (order_id)`.execute(database);
 
   // 9. Enrollments
@@ -400,7 +406,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .execute();
 
-  await sql`create index idx_enrollments_user_id on enrollments (user_id)`.execute(database);
   await sql`create index idx_enrollments_course_id on enrollments (course_id)`.execute(database);
   await sql`create index idx_enrollments_user_status on enrollments (user_id, status)`.execute(database);
 
@@ -420,8 +425,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addUniqueConstraint("webhook_events_provider_event_unique", ["provider", "event_id"])
     .execute();
 
-  await sql`create index idx_webhook_events_provider_event on webhook_events (provider, event_id)`.execute(database);
-
   await database.schema
     .createTable("callback_inbox")
     .addColumn("id", "uuid", (col) => col.primaryKey())
@@ -436,8 +439,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addUniqueConstraint("callback_inbox_provider_event_unique", ["provider", "event_id"])
     .execute();
-
-  await sql`create index idx_callback_inbox_provider_event on callback_inbox (provider, event_id)`.execute(database);
 
   // 11. Outbox Events
   await database.schema
@@ -479,10 +480,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       "provider",
     ])
     .execute();
-
-  await sql`create index idx_creator_payment_configs_creator on creator_payment_configs (creator_id)`.execute(
-    database,
-  );
 
   // 13. Student In-App Refund Requests (FR-PAY-010)
   await database.schema

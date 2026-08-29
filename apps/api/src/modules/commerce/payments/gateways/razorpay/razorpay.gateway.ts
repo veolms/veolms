@@ -58,9 +58,9 @@ export class RazorpayPaymentGateway implements PaymentGateway {
     });
 
     if (!response.ok) {
-      let errorBody: any;
+      let errorBody: { error?: { description?: string }; description?: string } | undefined;
       try {
-        errorBody = await response.json();
+        errorBody = (await response.json()) as { error?: { description?: string }; description?: string };
       } catch {
         errorBody = { description: response.statusText };
       }
@@ -351,10 +351,45 @@ export class RazorpayPaymentGateway implements PaymentGateway {
    * flow through the normal store-and-enqueue path and land in
    * PaymentWorker's fallback branch (ack + mark processed, no fulfillment).
    */
-  normalizeWebhookEvent(rawPayload: any, eventId?: string): NormalizedPaymentEvent {
-    const event = rawPayload?.event as string;
-    const paymentEntity = rawPayload?.payload?.payment?.entity;
-    const refundEntity = rawPayload?.payload?.refund?.entity;
+  normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent {
+    const payloadObj = rawPayload as
+      | {
+          id?: string;
+          event?: string;
+          created_at?: number;
+          payload?: {
+            payment?: {
+              entity?: {
+                id?: string;
+                order_id?: string;
+                amount?: number;
+                currency?: string;
+                method?: string;
+                bank?: string;
+                wallet?: string;
+                vpa?: string;
+                card?: { last4?: string; network?: string };
+                error_code?: string;
+                error_description?: string;
+              };
+            };
+            order?: { entity?: { id?: string } };
+            refund?: {
+              entity?: {
+                id?: string;
+                payment_id?: string;
+                amount?: number;
+                currency?: string;
+              };
+            };
+          };
+        }
+      | null
+      | undefined;
+
+    const event = payloadObj?.event;
+    const paymentEntity = payloadObj?.payload?.payment?.entity;
+    const refundEntity = payloadObj?.payload?.refund?.entity;
 
     let eventType: NormalizedPaymentEvent["eventType"];
 
@@ -387,13 +422,18 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         break;
     }
 
-    const resolvedEventId = eventId || rawPayload?.id || paymentEntity?.id || refundEntity?.id || crypto.randomUUID();
+    const resolvedEventId =
+      eventId ||
+      payloadObj?.id ||
+      paymentEntity?.id ||
+      refundEntity?.id ||
+      crypto.randomUUID();
 
     return {
       eventId: resolvedEventId,
       eventType,
       provider: this.providerName,
-      gatewayOrderId: paymentEntity?.order_id ?? rawPayload?.payload?.order?.entity?.id,
+      gatewayOrderId: paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
       amount: paymentEntity?.amount ?? refundEntity?.amount,
@@ -411,7 +451,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       errorCode: paymentEntity?.error_code,
       errorDescription: paymentEntity?.error_description,
       rawPayload,
-      occurredAt: new Date(rawPayload?.created_at ? rawPayload.created_at * 1000 : Date.now()),
+      occurredAt: new Date(payloadObj?.created_at ? payloadObj.created_at * 1000 : Date.now()),
     };
   }
 }

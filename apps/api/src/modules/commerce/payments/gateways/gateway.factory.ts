@@ -22,6 +22,7 @@ export function createPaymentGateway(config: ServerConfig): PaymentGateway {
         "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production.",
       );
     }
+    // eslint-disable-next-line no-console
     console.warn(
       "[commerce] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set — the payment " +
         "gateway is unconfigured. Checkout and payment endpoints will fail until they are set.",
@@ -29,6 +30,7 @@ export function createPaymentGateway(config: ServerConfig): PaymentGateway {
   }
 
   if (!config.RAZORPAY_WEBHOOK_SECRET && config.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
     console.warn(
       "[commerce] RAZORPAY_WEBHOOK_SECRET is not set — all incoming Razorpay " +
         "webhooks will be rejected as invalid until it is set.",

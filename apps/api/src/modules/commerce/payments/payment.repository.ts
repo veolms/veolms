@@ -1,4 +1,5 @@
-import type { PaymentStatus, PaymentAttemptStatus } from "@veolms/database";
+import { sql } from "kysely";
+import type { PaymentStatus, PaymentAttemptStatus, Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
 export async function findPaymentById(database: Executor, paymentId: string) {
@@ -14,6 +15,11 @@ export async function findPaymentByOrderId(database: Executor, orderId: string) 
     .selectFrom("payments")
     .selectAll()
     .where("order_id", "=", orderId)
+    .orderBy(
+      sql`CASE WHEN status = 'captured' THEN 0 WHEN status = 'authorized' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'initiated' THEN 3 ELSE 4 END`,
+      "asc",
+    )
+    .orderBy("created_at", "desc")
     .executeTakeFirst();
 }
 
@@ -51,7 +57,7 @@ export async function insertPayment(
     amount: number;
     currency: string;
     status: PaymentStatus;
-    payment_method?: unknown | null;
+    payment_method?: Json | null;
     error_code?: string | null;
     error_description?: string | null;
     created_at?: Date;
@@ -75,7 +81,7 @@ export async function claimPaymentForFinalization(
   database: Executor,
   paymentId: string,
   gatewayPaymentId: string,
-  paymentMethod: unknown | null,
+  paymentMethod: Json | null,
   now: Date,
 ) {
   return await database
@@ -138,7 +144,7 @@ export async function updatePayment(
     gateway_payment_id?: string | null;
     gateway_key_id?: string | null;
     status?: PaymentStatus;
-    payment_method?: unknown | null;
+    payment_method?: Json | null;
     error_code?: string | null;
     error_description?: string | null;
     updated_at?: Date;
@@ -174,7 +180,7 @@ export async function insertPaymentAttempt(
     status: PaymentAttemptStatus;
     error_code?: string | null;
     error_description?: string | null;
-    raw_payload?: unknown | null;
+    raw_payload?: Json | null;
     created_at?: Date;
   },
 ) {

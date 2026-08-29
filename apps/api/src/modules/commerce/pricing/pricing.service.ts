@@ -115,7 +115,7 @@ export function createPricingService({
 
           unitPrice = isSaleActive && pricing.sale_price !== null ? pricing.sale_price : pricing.price;
 
-          const itemCurrency = (pricing as any).currency ?? "INR";
+          const itemCurrency = pricing.currency ?? "INR";
           if (!currencyInitialized) {
             detectedCurrency = itemCurrency;
             currencyInitialized = true;

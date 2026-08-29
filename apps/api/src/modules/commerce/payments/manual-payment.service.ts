@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import type { DatabaseExecutor as Executor } from "@veolms/database";
+import type {
+  DatabaseExecutor as Executor,
+  ManualPaymentStatus,
+} from "@veolms/database";
 import type {
   ManualPaymentRequest,
   SubmitManualPaymentRequest,
@@ -19,7 +22,7 @@ export interface ManualPaymentService {
     request: SubmitManualPaymentRequest,
   ): Promise<ManualPaymentRequest>;
   listUserManualPayments(userId: string): Promise<ManualPaymentRequest[]>;
-  listAllManualPayments(status?: string): Promise<ManualPaymentRequest[]>;
+  listAllManualPayments(status?: ManualPaymentStatus): Promise<ManualPaymentRequest[]>;
   verifyManualPayment(
     adminUserId: string,
     requestId: string,
@@ -84,7 +87,7 @@ export function createManualPaymentService({
       paymentMethod: row.payment_method,
       transactionReference: row.transaction_reference,
       proofMediaId: row.proof_media_id,
-      status: row.status as any,
+      status: row.status as ManualPaymentRequest["status"],
       adminNotes: row.admin_notes,
       verifiedBy: row.verified_by,
       verifiedAt: row.verified_at,
@@ -107,7 +110,7 @@ export function createManualPaymentService({
       paymentMethod: r.payment_method,
       transactionReference: r.transaction_reference,
       proofMediaId: r.proof_media_id,
-      status: r.status as any,
+      status: r.status as ManualPaymentRequest["status"],
       adminNotes: r.admin_notes,
       verifiedBy: r.verified_by,
       verifiedAt: r.verified_at,
@@ -117,11 +120,11 @@ export function createManualPaymentService({
   }
 
   async function listAllManualPayments(
-    status?: string,
+    status?: ManualPaymentStatus,
   ): Promise<ManualPaymentRequest[]> {
     const rows = await manualPaymentRepo.listAllManualPaymentRequests(
       database,
-      status as any,
+      status,
     );
     return rows.map((r) => ({
       id: r.id,
@@ -130,7 +133,7 @@ export function createManualPaymentService({
       paymentMethod: r.payment_method,
       transactionReference: r.transaction_reference,
       proofMediaId: r.proof_media_id,
-      status: r.status as any,
+      status: r.status as ManualPaymentRequest["status"],
       adminNotes: r.admin_notes,
       verifiedBy: r.verified_by,
       verifiedAt: r.verified_at,
@@ -169,15 +172,42 @@ export function createManualPaymentService({
     if (request.action === "verify") {
       // Execute verified approval inside transaction
       await database.transaction().execute(async (trx) => {
+        // 1. Update manual payment request to verified atomically (must be pending)
+        const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
+          trx,
+          requestId,
+          {
+            status: "verified",
+            admin_notes: request.adminNotes ?? null,
+            verified_by: adminUserId,
+            verified_at: now,
+          },
+          "pending",
+        );
+        if (!updatedReq) {
+          throw new AppError(
+            400,
+            "MANUAL_PAYMENT_ALREADY_RESOLVED",
+            "Manual payment request has already been resolved.",
+          );
+        }
+
         const order = await orderRepo.findOrderById(trx, req.order_id);
         if (!order) {
           throw CommerceErrors.ORDER_NOT_FOUND(req.order_id);
         }
 
-        // 1. Mark order as paid
-        await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+        // 2. Mark order as paid
+        const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+        if (!markedPaid) {
+          throw new AppError(
+            400,
+            "ORDER_CANNOT_BE_PAID",
+            `Order ${order.id} is not in a payable status.`,
+          );
+        }
 
-        // 2. Insert manual payment record
+        // 3. Insert manual payment record
         await paymentRepo.insertPayment(trx, {
           id: crypto.randomUUID(),
           order_id: order.id,
@@ -196,24 +226,12 @@ export function createManualPaymentService({
           updated_at: now,
         });
 
-        // 3. Grant course access & active enrollment with admin_grant source (audited manual grant)
+        // 4. Grant course access & active enrollment with admin_grant source (audited manual grant)
         const orderItems = await orderRepo.listOrderItems(trx, order.id);
         await courseAccessService.grantAccessForOrder(trx, order, orderItems, now);
-
-        // 4. Update manual payment request to verified
-        await manualPaymentRepo.updateManualPaymentRequestStatus(
-          trx,
-          requestId,
-          {
-            status: "verified",
-            admin_notes: request.adminNotes ?? null,
-            verified_by: adminUserId,
-            verified_at: now,
-          },
-        );
       });
     } else {
-      await manualPaymentRepo.updateManualPaymentRequestStatus(
+      const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
         database,
         requestId,
         {
@@ -222,7 +240,15 @@ export function createManualPaymentService({
           verified_by: adminUserId,
           verified_at: now,
         },
+        "pending",
       );
+      if (!updatedReq) {
+        throw new AppError(
+          400,
+          "MANUAL_PAYMENT_ALREADY_RESOLVED",
+          "Manual payment request has already been resolved.",
+        );
+      }
     }
 
     const updated = await manualPaymentRepo.findManualPaymentRequestById(
@@ -237,7 +263,7 @@ export function createManualPaymentService({
       paymentMethod: updated!.payment_method,
       transactionReference: updated!.transaction_reference,
       proofMediaId: updated!.proof_media_id,
-      status: updated!.status as any,
+      status: updated!.status as ManualPaymentRequest["status"],
       adminNotes: updated!.admin_notes,
       verifiedBy: updated!.verified_by,
       verifiedAt: updated!.verified_at,

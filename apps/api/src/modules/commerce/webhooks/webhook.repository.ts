@@ -1,3 +1,4 @@
+import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
 export async function findWebhookEvent(
@@ -20,7 +21,7 @@ export async function insertWebhookEvent(
     provider: string;
     event_id: string;
     event_type: string;
-    payload: unknown;
+    payload: Json;
     processed_at?: Date | null;
     error?: string | null;
     created_at?: Date;

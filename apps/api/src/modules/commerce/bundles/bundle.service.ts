@@ -28,7 +28,7 @@ export function createBundleService({
   database: Kysely<Database>;
 }): BundleService {
   async function hydrateBundle(
-    bundle: any,
+    bundle: NonNullable<Awaited<ReturnType<typeof bundleRepo.findBundleById>>>,
   ): Promise<CourseBundle> {
     const courseItems = await bundleRepo.listBundleCourses(database, bundle.id);
     const items: BundleItem[] = courseItems.map((c) => ({
@@ -83,7 +83,8 @@ export function createBundleService({
   }
 
   async function createBundle(request: CreateBundleRequest): Promise<CourseBundle> {
-    const existing = await bundleRepo.findBundleBySlug(database, request.slug);
+    const normalizedSlug = request.slug.toLowerCase().trim();
+    const existing = await bundleRepo.findBundleBySlug(database, normalizedSlug);
     if (existing) {
       throw new AppError(409, "BUNDLE_SLUG_EXISTS", `A bundle with slug "${request.slug}" already exists.`);
     }
@@ -102,7 +103,7 @@ export function createBundleService({
     const created = await database.transaction().execute(async (trx) => {
       const bundle = await bundleRepo.insertBundle(trx, {
         id: bundleId,
-        slug: request.slug.toLowerCase().trim(),
+        slug: normalizedSlug,
         title: request.title.trim(),
         description: request.description ?? null,
         thumbnail_media_id: request.thumbnailMediaId ?? null,
@@ -137,10 +138,13 @@ export function createBundleService({
       throw CommerceErrors.BUNDLE_NOT_FOUND(id);
     }
 
-    if (request.slug && request.slug !== existing.slug) {
-      const slugMatch = await bundleRepo.findBundleBySlug(database, request.slug);
-      if (slugMatch && slugMatch.id !== id) {
-        throw new AppError(409, "BUNDLE_SLUG_EXISTS", `A bundle with slug "${request.slug}" already exists.`);
+    if (request.slug) {
+      const normalizedSlug = request.slug.toLowerCase().trim();
+      if (normalizedSlug !== existing.slug) {
+        const slugMatch = await bundleRepo.findBundleBySlug(database, normalizedSlug);
+        if (slugMatch && slugMatch.id !== id) {
+          throw new AppError(409, "BUNDLE_SLUG_EXISTS", `A bundle with slug "${request.slug}" already exists.`);
+        }
       }
     }
 
@@ -181,6 +185,10 @@ export function createBundleService({
 
       return bundle;
     });
+
+    if (!updated) {
+      throw CommerceErrors.BUNDLE_NOT_FOUND(id);
+    }
 
     return await hydrateBundle(updated);
   }

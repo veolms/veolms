@@ -127,18 +127,18 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
           // Mark event as processed
           await webhookRepo.markWebhookEventProcessed(this.database, eventRow.id);
           log?.info("Durable webhook event processed successfully");
-        } catch (err: any) {
+        } catch (err: unknown) {
           log?.error({ err }, "Error processing durable webhook event");
           // Do NOT mark processed — leave processed_at NULL so the next poll
           // picks this event back up. See markWebhookEventFailed.
           await webhookRepo.markWebhookEventFailed(
             this.database,
             eventRow.id,
-            err?.message || "Worker error",
+            (err as Error)?.message || "Worker error",
           );
         }
       }
-    } catch (pollErr: any) {
+    } catch (pollErr: unknown) {
       this.logger?.error({ err: pollErr }, "Failed during payment queue event polling loop");
     } finally {
       this.isProcessing = false;

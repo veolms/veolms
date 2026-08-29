@@ -4,6 +4,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
 import type { EmailService } from "../../../services/email/index.ts";
+import { escapeHtml } from "../../../services/email/email.templates.ts";
 import { createAccessService, type AccessService } from "../../access/access.service.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
@@ -67,14 +68,14 @@ export function createPaymentWorker({
 
       await webhookRepo.markWebhookEventProcessed(database, event.eventId);
       return { status: "processed" as const };
-    } catch (err: any) {
+    } catch (err: unknown) {
       log?.error({ err }, `Payment worker job execution failed`);
       // Do NOT mark processed — leave processed_at NULL so the queue's
       // poller retries this event instead of burying it silently.
       await webhookRepo.markWebhookEventFailed(
         database,
         event.eventId,
-        err?.message || "Worker error",
+        (err as Error)?.message || "Worker error",
       );
       throw err;
     }
@@ -138,7 +139,7 @@ export function createPaymentWorker({
           const itemsHtmlList = orderItems
             .map(
               (it) =>
-                `<li><strong>${it.title_snapshot}</strong>: ₹${(it.final_amount / 100).toFixed(2)}</li>`,
+                `<li><strong>${escapeHtml(it.title_snapshot)}</strong>: ₹${(it.final_amount / 100).toFixed(2)}</li>`,
             )
             .join("");
 
@@ -161,9 +162,23 @@ export function createPaymentWorker({
 
           const academy = await setupRepo.findAcademy(database);
           const academyName = academy?.name || "Academy";
-          const academyLogoHtml = academy?.logo_url
-            ? `<div style="margin-bottom: 16px;"><img src="${academy.logo_url}" alt="${academyName}" style="max-height: 48px; object-fit: contain;" /></div>`
-            : "";
+          const displayName = user?.display_name || user?.username || "Student";
+          const escapedAcademyName = escapeHtml(academyName);
+          const escapedDisplayName = escapeHtml(displayName);
+          const escapedOrderNumber = escapeHtml(order.order_number);
+          const escapedPaymentRef = escapeHtml(paymentRef);
+
+          let academyLogoHtml = "";
+          if (academy?.logo_url) {
+            try {
+              const parsedLogoUrl = new URL(academy.logo_url);
+              if (parsedLogoUrl.protocol === "http:" || parsedLogoUrl.protocol === "https:") {
+                academyLogoHtml = `<div style="margin-bottom: 16px;"><img src="${escapeHtml(academy.logo_url)}" alt="${escapedAcademyName}" style="max-height: 48px; object-fit: contain;" /></div>`;
+              }
+            } catch {
+              // Ignore invalid logo URL format
+            }
+          }
 
           if (emailService && user?.email) {
             await emailService.send(user.email, {
@@ -173,11 +188,11 @@ export function createPaymentWorker({
                 <div style="font-family: sans-serif; line-height: 1.5; color: #333;">
                   ${academyLogoHtml}
                   <h2>Thank You for Your Order!</h2>
-                  <p>Hi <strong>${user.display_name}</strong>, your payment to <strong>${academyName}</strong> was successful.</p>
+                  <p>Hi <strong>${escapedDisplayName}</strong>, your payment to <strong>${escapedAcademyName}</strong> was successful.</p>
                   <table style="width: 100%; max-width: 500px; border-collapse: collapse; margin: 16px 0;">
-                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Seller / Academy:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${academyName}</td></tr>
-                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Order Number:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${order.order_number}</td></tr>
-                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Payment Reference:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${paymentRef}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Seller / Academy:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${escapedAcademyName}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Order Number:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${escapedOrderNumber}</td></tr>
+                    <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Payment Reference:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${escapedPaymentRef}</td></tr>
                     <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Subtotal:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">${subtotalFormatted}</td></tr>
                     <tr><td style="padding: 6px 0; border-bottom: 1px solid #eee;"><strong>Discount Applied:</strong></td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">-${discountFormatted}</td></tr>
                     <tr><td style="padding: 8px 0; font-size: 16px;"><strong>Total Paid:</strong></td><td style="text-align: right; padding: 8px 0; font-size: 16px;"><strong>${totalFormatted}</strong></td></tr>
@@ -187,7 +202,7 @@ export function createPaymentWorker({
                     ${itemsHtmlList}
                   </ul>
                   <p>You can now start learning immediately from your courses dashboard.</p>
-                  <p style="margin-top: 24px; font-size: 13px; color: #777;">&mdash; ${academyName} Team</p>
+                  <p style="margin-top: 24px; font-size: 13px; color: #777;">&mdash; ${escapedAcademyName} Team</p>
                 </div>
               `,
             });

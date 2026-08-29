@@ -95,8 +95,8 @@ export interface OauthAccountTable {
 export interface OtpCodeTable {
   id: string;
   identifier: string;
-  identifier_type: OtpIdentifierType | string;
-  purpose: OtpPurpose | string;
+  identifier_type: string;
+  purpose: string;
   code_hash: string;
   attempts: Generated<number>;
   expires_at: Date;

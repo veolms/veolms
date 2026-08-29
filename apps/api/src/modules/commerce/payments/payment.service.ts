@@ -134,11 +134,12 @@ export function createPaymentService({
     }
 
     // Record initial payment attempt
+    const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
     await paymentRepo.insertPaymentAttempt(database, {
       id: crypto.randomUUID(),
       payment_id: payment.id,
       gateway_payment_id: null,
-      attempt_number: 1,
+      attempt_number: existingAttempts.length + 1,
       status: "initiated",
     });
 
@@ -169,7 +170,7 @@ export function createPaymentService({
     }
 
     const payment = await paymentRepo.findPaymentByGatewayOrderId(database, gatewayOrderId);
-    if (!payment) {
+    if (!payment || payment.order_id !== order.id) {
       throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
     }
 

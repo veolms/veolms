@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Database } from "@veolms/database";
+import type { Database, Json } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
@@ -15,7 +15,7 @@ export interface FinalizePaymentParams {
   /** The gateway-issued payment identifier (e.g. Razorpay pay_xxx) */
   gatewayPaymentId: string;
   /** Structured payment method information from the gateway */
-  paymentMethod?: unknown | null;
+  paymentMethod?: Json | null;
 }
 
 export interface FinalizePaymentResult {
@@ -87,8 +87,9 @@ export function createPaymentReconciliationService({
 
       if (!claimed) {
         // Another concurrent path already captured this payment.
-        // Roll back (nothing was changed) and signal the caller.
-        return; // transaction body returns — Kysely rolls back an empty transaction cleanly
+        // Returning normally commits an empty transaction (no rows changed);
+        // rollback would require throwing an error if earlier writes needed to be undone.
+        return;
       }
 
       // ── From here only one caller ever executes ──────────────────────────

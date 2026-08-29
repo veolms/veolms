@@ -40,6 +40,12 @@ export async function listUserEnrolledCourseIds(
     .select("course_id")
     .where("user_id", "=", userId)
     .where("status", "=", "active")
+    .where((eb) =>
+      eb.or([
+        eb("access_expires_at", "is", null),
+        eb("access_expires_at", ">", new Date()),
+      ]),
+    )
     .execute();
 
   return rows.map((r) => r.course_id);

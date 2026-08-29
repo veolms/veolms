@@ -5,6 +5,12 @@ import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createWebhookService } from "./webhook.service.ts";
 import { createWebhookController } from "./webhook.controller.ts";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    rawBody?: Buffer;
+  }
+}
+
 const webhookRoutes: RoutePlugin = async (app, options) => {
   // Retain the raw byte buffer for HMAC signature verification (Razorpay
   // webhooks). Registered here rather than app-wide: Fastify scopes content
@@ -16,7 +22,7 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
     "application/json",
     { parseAs: "buffer" },
     (req, body: Buffer, done) => {
-      (req as any).rawBody = body;
+      req.rawBody = body;
       if (body.length === 0) {
         done(null, null);
         return;
@@ -24,9 +30,12 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
       try {
         const json = JSON.parse(body.toString("utf-8"));
         done(null, json);
-      } catch (err: any) {
-        err.statusCode = 400;
-        done(err, undefined);
+      } catch (err: unknown) {
+        const parseErr = (err instanceof Error ? err : new Error("Invalid JSON")) as Error & {
+          statusCode?: number;
+        };
+        parseErr.statusCode = 400;
+        done(parseErr, undefined);
       }
     },
   );

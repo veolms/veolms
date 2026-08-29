@@ -146,7 +146,7 @@ export function createPaymentRecoveryWorker({
           // 'attempted' — payment was tried but not yet captured; still in-flight
           skipped++;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         log?.error({ err, paymentId: payment.id }, "Error recovering stale payment");
         errors++;
       }

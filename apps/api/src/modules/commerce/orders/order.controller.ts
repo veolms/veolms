@@ -1,4 +1,4 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { ADMIN_ROLE } from "../../auth/index.ts";
 import type { OrderService } from "./order.service.ts";
 import type { InvoiceService } from "../invoices/invoice.service.ts";
@@ -36,7 +36,7 @@ export function createOrderController({
 
   async function downloadInvoice(
     request: FastifyRequest<{ Params: { orderId: string } }>,
-    reply: any,
+    reply: FastifyReply,
   ) {
     const userId = request.user!.id;
     const isAdmin = request.user?.roles?.includes(ADMIN_ROLE) ?? false;

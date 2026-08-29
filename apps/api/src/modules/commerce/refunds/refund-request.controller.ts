@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type {
   CreateStudentRefundRequest,
   ReviewRefundRequest,
+  RefundRequestStatus,
 } from "@veolms/contracts";
 import type { RefundRequestService } from "./refund-request.service.ts";
 
@@ -15,7 +16,7 @@ export interface RefundRequestController {
   ): Promise<void>;
   listMyRequests(request: FastifyRequest, reply: FastifyReply): Promise<void>;
   listAllRequests(
-    request: FastifyRequest<{ Querystring: { status?: string } }>,
+    request: FastifyRequest<{ Querystring: { status?: RefundRequestStatus } }>,
     reply: FastifyReply,
   ): Promise<void>;
   reviewRequest(
@@ -56,7 +57,7 @@ export function createRefundRequestController({
   }
 
   async function listAllRequests(
-    request: FastifyRequest<{ Querystring: { status?: string } }>,
+    request: FastifyRequest<{ Querystring: { status?: RefundRequestStatus } }>,
     reply: FastifyReply,
   ) {
     const { status } = request.query;

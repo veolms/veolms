@@ -3,6 +3,7 @@ import type {
   SubmitManualPaymentRequest,
   VerifyManualPaymentRequest,
 } from "@veolms/contracts";
+import type { ManualPaymentStatus } from "@veolms/database";
 import type { ManualPaymentService } from "./manual-payment.service.ts";
 
 export interface ManualPaymentController {
@@ -15,7 +16,7 @@ export interface ManualPaymentController {
   ): Promise<void>;
   listMyPayments(request: FastifyRequest, reply: FastifyReply): Promise<void>;
   listAllPayments(
-    request: FastifyRequest<{ Querystring: { status?: string } }>,
+    request: FastifyRequest<{ Querystring: { status?: ManualPaymentStatus } }>,
     reply: FastifyReply,
   ): Promise<void>;
   verifyPayment(
@@ -56,7 +57,7 @@ export function createManualPaymentController({
   }
 
   async function listAllPayments(
-    request: FastifyRequest<{ Querystring: { status?: string } }>,
+    request: FastifyRequest<{ Querystring: { status?: ManualPaymentStatus } }>,
     reply: FastifyReply,
   ) {
     const { status } = request.query;

@@ -1,6 +1,8 @@
 import type { Invoice } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
+import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { escapeHtml } from "../../../services/email/email.templates.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
@@ -32,6 +34,10 @@ export function createInvoiceService({
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || (!isAdmin && order.user_id !== userId)) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
+    }
+
+    if (!["paid", "partially_refunded", "refunded"].includes(order.status)) {
+      throw new AppError(400, "ORDER_NOT_PAID", "Invoices are only available for paid orders.");
     }
 
     const items = await orderRepo.listOrderItems(database, orderId);
@@ -94,7 +100,7 @@ export function createInvoiceService({
       .map(
         (it) => `
         <tr>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0;">${it.title}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0;">${escapeHtml(it.title)}</td>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">₹${(it.unitPrice / 100).toFixed(2)}</td>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">-₹${(it.discountAmount / 100).toFixed(2)}</td>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 600;">₹${(it.finalAmount / 100).toFixed(2)}</td>
@@ -106,7 +112,8 @@ export function createInvoiceService({
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Invoice - ${inv.invoiceNumber}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+  <title>Invoice - ${escapeHtml(inv.invoiceNumber)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #0f172a; margin: 0; padding: 40px; background: #fff; }
     .container { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 40px; }
@@ -126,13 +133,13 @@ export function createInvoiceService({
   <div class="container">
     <div class="header">
       <div>
-        <div class="title">${inv.seller.name}</div>
-        <div style="color: #64748b; font-size: 14px;">${inv.seller.customDomain || ""}</div>
+        <div class="title">${escapeHtml(inv.seller.name)}</div>
+        <div style="color: #64748b; font-size: 14px;">${escapeHtml(inv.seller.customDomain || "")}</div>
       </div>
       <div style="text-align: right;">
         <div style="font-size: 20px; font-weight: 700; color: #0284c7;">INVOICE</div>
-        <div style="font-size: 14px; font-weight: 600;">#${inv.invoiceNumber}</div>
-        <div style="font-size: 12px; color: #64748b;">Date: ${dateStr}</div>
+        <div style="font-size: 14px; font-weight: 600;">#${escapeHtml(inv.invoiceNumber)}</div>
+        <div style="font-size: 12px; color: #64748b;">Date: ${escapeHtml(dateStr)}</div>
       </div>
     </div>
 
@@ -140,13 +147,13 @@ export function createInvoiceService({
       <tr>
         <td style="width: 50%;">
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Billed To</div>
-          <div style="font-weight: 600; font-size: 15px;">${inv.buyer.name}</div>
-          <div style="color: #64748b; font-size: 13px;">${inv.buyer.email || ""}</div>
+          <div style="font-weight: 600; font-size: 15px;">${escapeHtml(inv.buyer.name)}</div>
+          <div style="color: #64748b; font-size: 13px;">${escapeHtml(inv.buyer.email || "")}</div>
         </td>
         <td style="width: 50%; text-align: right;">
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Payment Details</div>
-          <div style="font-size: 13px;">Order: <strong>${inv.orderNumber}</strong></div>
-          <div style="font-size: 13px; color: #64748b;">Ref: ${inv.paymentReference}</div>
+          <div style="font-size: 13px;">Order: <strong>${escapeHtml(inv.orderNumber)}</strong></div>
+          <div style="font-size: 13px; color: #64748b;">Ref: ${escapeHtml(inv.paymentReference)}</div>
         </td>
       </tr>
     </table>
@@ -185,7 +192,7 @@ export function createInvoiceService({
     </div>
 
     <div class="footer">
-      <p>Thank you for learning with ${inv.seller.name}. This is a computer-generated receipt.</p>
+      <p>Thank you for learning with ${escapeHtml(inv.seller.name)}. This is a computer-generated receipt.</p>
     </div>
   </div>
 </body>

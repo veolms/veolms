@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { PaymentGateway } from "@veolms/contracts";
+import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as webhookRepo from "./webhook.repository.ts";
@@ -17,7 +18,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 export interface WebhookService {
   processGatewayWebhook(
-    rawBody: string | Uint8Array,
+    rawBody: string | Uint8Array | undefined,
     signature: string | undefined,
     parsedPayload: unknown,
     eventId?: string,
@@ -34,7 +35,7 @@ export function createWebhookService({
   eventQueue: PaymentEventQueue;
 }): WebhookService {
   async function processGatewayWebhook(
-    rawBody: string | Uint8Array,
+    rawBody: string | Uint8Array | undefined,
     signature: string | undefined,
     parsedPayload: unknown,
     eventId?: string,
@@ -74,7 +75,7 @@ export function createWebhookService({
         provider: paymentGateway.providerName,
         event_id: normalizedEvent.eventId,
         event_type: normalizedEvent.eventType,
-        payload: parsedPayload,
+        payload: parsedPayload as Json,
         processed_at: null,
       });
     } catch (err: unknown) {

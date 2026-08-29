@@ -67,4 +67,6 @@ export const CommerceErrors = {
     new AppError(400, "WEBHOOK_SIGNATURE_INVALID", "Webhook signature verification failed."),
   PRICE_CALCULATION_FAILED: (reason: string) =>
     new AppError(400, "PRICE_CALCULATION_FAILED", reason),
+  IDEMPOTENCY_KEY_CONFLICT: () =>
+    new AppError(409, "IDEMPOTENCY_KEY_CONFLICT", "Idempotency key has already been used by another account."),
 };

@@ -4,6 +4,7 @@ import type {
   CreatorPaymentConfig,
   SaveCreatorPaymentConfigRequest,
   PaymentGateway,
+  PaymentProvider,
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
 import * as creatorGatewayRepo from "./creator-gateway.repository.ts";
@@ -17,7 +18,7 @@ export interface CreatorGatewayService {
   ): Promise<CreatorPaymentConfig>;
   getCreatorConfig(
     creatorId: string,
-    provider?: string,
+    provider?: PaymentProvider,
   ): Promise<CreatorPaymentConfig | null>;
   resolveGatewayForCreator(
     creatorId?: string | null,
@@ -56,7 +57,7 @@ export function createCreatorGatewayService({
     return {
       id: row.id,
       creatorId: row.creator_id,
-      provider: row.provider as any,
+      provider: row.provider as PaymentProvider,
       keyId: request.keyId,
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,
@@ -67,12 +68,12 @@ export function createCreatorGatewayService({
 
   async function getCreatorConfig(
     creatorId: string,
-    provider = "razorpay",
+    provider: PaymentProvider = "razorpay",
   ): Promise<CreatorPaymentConfig | null> {
     const row = await creatorGatewayRepo.findCreatorPaymentConfig(
       database,
       creatorId,
-      provider as any,
+      provider,
     );
     if (!row) return null;
 
@@ -86,7 +87,7 @@ export function createCreatorGatewayService({
     return {
       id: row.id,
       creatorId: row.creator_id,
-      provider: row.provider as any,
+      provider: row.provider as PaymentProvider,
       keyId: decryptedKeyId,
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,

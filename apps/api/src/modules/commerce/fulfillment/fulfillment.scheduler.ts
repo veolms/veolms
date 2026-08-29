@@ -25,6 +25,7 @@ export class CommerceFulfillmentScheduler {
   private readonly refundReconciliationWorker: ReturnType<typeof createRefundReconciliationWorker>;
   private readonly intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
+  private initialTimer: NodeJS.Timeout | null = null;
   private isRunning = false;
 
   constructor(options: FulfillmentSchedulerOptions) {
@@ -52,10 +53,10 @@ export class CommerceFulfillmentScheduler {
     this.logger?.info("Starting Commerce Fulfillment Scheduler (Order Expiration, Payment Recovery, Refund Reconciliation)");
 
     // Run first cycle 10 seconds after server startup to avoid startup congestion
-    const initialTimer = setTimeout(() => {
+    this.initialTimer = setTimeout(() => {
       void this.runCycle();
     }, 10_000);
-    initialTimer.unref();
+    this.initialTimer.unref();
 
     this.timer = setInterval(() => {
       void this.runCycle();
@@ -64,6 +65,10 @@ export class CommerceFulfillmentScheduler {
   }
 
   stop(): void {
+    if (this.initialTimer) {
+      clearTimeout(this.initialTimer);
+      this.initialTimer = null;
+    }
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;

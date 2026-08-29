@@ -158,7 +158,7 @@ export function createRefundReconciliationWorker({
           // Still pending at gateway — skip
           skipped++;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         log?.error({ err, refundId: refund.id }, "Error reconciling stale refund");
         errors++;
       }

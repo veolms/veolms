@@ -22,7 +22,9 @@ export function createCouponService({
 }: {
   database: Executor;
 }): CouponService {
-  function mapToCoupon(row: any): Coupon {
+  function mapToCoupon(
+    row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
+  ): Coupon {
     return {
       id: row.id,
       code: row.code,
@@ -65,6 +67,10 @@ export function createCouponService({
   }
 
   async function createCoupon(request: CreateCouponRequest): Promise<Coupon> {
+    if (request.discountType === "percentage" && request.discountValue > 100) {
+      throw new AppError(400, "INVALID_COUPON_DISCOUNT", "Percentage discount cannot exceed 100%.");
+    }
+
     const existing = await couponRepo.findCouponByCode(database, request.code);
     if (existing) {
       throw new AppError(409, "COUPON_CODE_ALREADY_EXISTS", `Coupon code "${request.code}" already exists.`);
@@ -99,6 +105,12 @@ export function createCouponService({
       throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
     }
 
+    const effectiveDiscountType = request.discountType ?? existing.discount_type;
+    const effectiveDiscountValue = request.discountValue ?? existing.discount_value;
+    if (effectiveDiscountType === "percentage" && effectiveDiscountValue > 100) {
+      throw new AppError(400, "INVALID_COUPON_DISCOUNT", "Percentage discount cannot exceed 100%.");
+    }
+
     const updated = await couponRepo.updateCoupon(database, id, {
       description: request.description,
       discount_type: request.discountType,
@@ -113,6 +125,10 @@ export function createCouponService({
       restricted_course_ids: request.restrictedCourseIds,
       restricted_bundle_ids: request.restrictedBundleIds,
     });
+
+    if (!updated) {
+      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
+    }
 
     return mapToCoupon(updated);
   }

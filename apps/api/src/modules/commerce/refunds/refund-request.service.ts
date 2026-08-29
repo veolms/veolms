@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type {
   RefundRequest,
+  RefundRequestStatus,
   CreateStudentRefundRequest,
   ReviewRefundRequest,
   Refund,
@@ -19,7 +20,7 @@ export interface RefundRequestService {
     request: CreateStudentRefundRequest,
   ): Promise<RefundRequest>;
   listStudentRefundRequests(userId: string): Promise<RefundRequest[]>;
-  listAllRefundRequests(status?: string): Promise<RefundRequest[]>;
+  listAllRefundRequests(status?: RefundRequestStatus): Promise<RefundRequest[]>;
   reviewRefundRequest(
     adminUserId: string,
     requestId: string,
@@ -80,7 +81,7 @@ export function createRefundRequestService({
       orderId: row.order_id,
       userId: row.user_id,
       reason: row.reason,
-      status: row.status as any,
+      status: row.status as RefundRequest["status"],
       adminNotes: row.admin_notes,
       resolvedAt: row.resolved_at,
       createdAt: row.created_at,
@@ -100,7 +101,7 @@ export function createRefundRequestService({
       orderId: r.order_id,
       userId: r.user_id,
       reason: r.reason,
-      status: r.status as any,
+      status: r.status as RefundRequest["status"],
       adminNotes: r.admin_notes,
       resolvedAt: r.resolved_at,
       createdAt: r.created_at,
@@ -109,18 +110,18 @@ export function createRefundRequestService({
   }
 
   async function listAllRefundRequests(
-    status?: string,
+    status?: RefundRequestStatus,
   ): Promise<RefundRequest[]> {
     const rows = await refundRequestRepo.listAllRefundRequests(
       database,
-      status as any,
+      status,
     );
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
       userId: r.user_id,
       reason: r.reason,
-      status: r.status as any,
+      status: r.status as RefundRequest["status"],
       adminNotes: r.admin_notes,
       resolvedAt: r.resolved_at,
       createdAt: r.created_at,
@@ -176,7 +177,7 @@ export function createRefundRequestService({
           orderId: updated!.order_id,
           userId: updated!.user_id,
           reason: updated!.reason,
-          status: updated!.status as any,
+          status: updated!.status as RefundRequest["status"],
           adminNotes: updated!.admin_notes,
           resolvedAt: updated!.resolved_at,
           createdAt: updated!.created_at,
@@ -201,7 +202,7 @@ export function createRefundRequestService({
           orderId: updated!.order_id,
           userId: updated!.user_id,
           reason: updated!.reason,
-          status: updated!.status as any,
+          status: updated!.status as RefundRequest["status"],
           adminNotes: updated!.admin_notes,
           resolvedAt: updated!.resolved_at,
           createdAt: updated!.created_at,
