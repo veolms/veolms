@@ -1,6 +1,7 @@
 import { type Kysely } from "kysely";
 import type {
   Database,
+  DatabaseExecutor,
   AccessType,
   AccessDurationType,
   PricingType,
@@ -82,7 +83,9 @@ export async function updateAccessRule(
 // --- Pricing ---
 
 export async function findPricingByCourseId(
-  database: Kysely<Database>,
+  // Accepts a transaction too — see the comment on course.repository.ts's
+  // findCourseById for why (same cross-module Executor mismatch).
+  database: DatabaseExecutor,
   courseId: string,
 ) {
   return await database
@@ -90,6 +93,21 @@ export async function findPricingByCourseId(
     .selectAll()
     .where("course_id", "=", courseId)
     .executeTakeFirst();
+}
+
+/**
+ * Batched sibling of findPricingByCourseId — one `WHERE course_id IN (...)`
+ * query instead of N sequential ones. Used by pricing.service.ts's
+ * calculatePricing, which runs on every GET /cart, checkout preview, and
+ * order-creation call.
+ */
+export async function findPricingByCourseIds(database: DatabaseExecutor, courseIds: string[]) {
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("course_pricing")
+    .selectAll()
+    .where("course_id", "in", courseIds)
+    .execute();
 }
 
 export async function insertPricing(

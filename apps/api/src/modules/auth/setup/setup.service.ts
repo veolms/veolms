@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
+import { secureCompare } from "../../../lib/secure-compare.ts";
 import type { CreateUserInput } from "../authentication/authentication.types.ts";
 import * as academyRepository from "./setup.repository.ts";
 import type { AuthService } from "../authentication/authentication.service.ts";
@@ -26,14 +27,7 @@ export function createSetupService({
   sessionService,
 }: SetupServiceOptions) {
   function isValidSetupToken(submitted: string): boolean {
-    const submittedBytes = Buffer.from(submitted, "utf8");
-    const expectedBytes = Buffer.from(config.SETUP_TOKEN, "utf8");
-
-    if (submittedBytes.length !== expectedBytes.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(submittedBytes, expectedBytes);
+    return secureCompare(submitted, config.SETUP_TOKEN);
   }
 
   async function assertSetupOpen(): Promise<void> {
