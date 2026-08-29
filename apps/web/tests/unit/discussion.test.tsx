@@ -476,9 +476,11 @@ describe("Discussion", () => {
     expect(
       within(thread).getByRole("document", { name: "Reply by Ashi Singh" }),
     ).toBeVisible();
-    expect(
-      within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
-    ).toBeVisible();
+    const replyTextbox = within(thread).getByRole("textbox", {
+      name: "Reply to Rohit Sharma",
+    });
+    expect(replyTextbox).toBeVisible();
+    await waitFor(() => expect(replyTextbox).toHaveFocus());
     const activeThreadSlide = thread.querySelector<HTMLElement>(
       ".swiper-slide-active",
     );
@@ -513,18 +515,18 @@ describe("Discussion", () => {
     expect(replyEntry).not.toHaveClass("border-b");
     expect(replyEntry).toHaveClass("py-2.5");
 
-    const replyComposer = within(thread)
-      .getByRole("textbox", { name: "Reply to Rohit Sharma" })
-      .closest("[data-thread-reply-composer]");
+    const replyComposer = replyTextbox.closest("[data-thread-reply-composer]");
     expect(replyComposer).toHaveClass(
       "-mx-4",
       "-mb-4",
+      "mt-0",
       "grid-rows-[auto_auto]",
       "rounded-t-xl",
       "sm:mx-0",
       "sm:mb-0",
       "sm:rounded-xl",
     );
+    expect(replyComposer).not.toHaveClass("mt-3");
     expect(replyComposer).not.toHaveClass("rounded-xl");
     expect(replyComposer).not.toHaveClass("h-40", "sm:h-44");
     const replyEditor = replyComposer?.querySelector<HTMLElement>(
@@ -608,7 +610,15 @@ describe("Discussion", () => {
     const closeThread = within(thread).getByRole("button", {
       name: "Close discussion thread",
     });
-    expect(closeThread.closest("header")).toHaveClass("h-14", "gap-0", "px-4");
+    expect(closeThread.closest("header")).toHaveClass(
+      "h-auto",
+      "gap-0",
+      "px-4",
+      "pt-3.5",
+      "pb-1.75",
+      "sm:h-14",
+      "sm:py-0",
+    );
     expect(closeThread.closest("header")).not.toHaveClass(
       "pt-2",
       "sm:h-18",
@@ -685,6 +695,20 @@ describe("Discussion", () => {
         name: "Swipe between discussion threads",
       }),
     ).toHaveAttribute("data-learning-swipe-ignore");
+
+    const desktopSwiperElement = within(thread)
+      .getByRole("region", { name: "Swipe between discussion threads" })
+      .querySelector<
+        HTMLElement & {
+          swiper?: { slideNext: (speed?: number) => void };
+        }
+      >(".swiper");
+    expect(desktopSwiperElement?.swiper).toBeDefined();
+    React.act(() => desktopSwiperElement?.swiper?.slideNext(0));
+    const desktopNextReply = await within(thread).findByRole("textbox", {
+      name: "Reply to Neha Patel",
+    });
+    await waitFor(() => expect(desktopNextReply).toHaveFocus());
 
     fireEvent.click(
       within(thread).getByRole("button", {
@@ -781,6 +805,11 @@ describe("Discussion", () => {
         within(thread).getByRole("heading", { name: "Discussion thread" }),
       ).toHaveClass("mr-auto", "text-lg", "font-bold");
       expect(
+        within(thread)
+          .getByRole("heading", { name: "Discussion thread" })
+          .closest("header"),
+      ).toHaveClass("h-auto", "pt-3.5", "pb-1.75", "sm:h-14", "sm:py-0");
+      expect(
         thread.closest<HTMLElement>('[data-slot="drawer-viewport"]')?.style
           .clipPath,
       ).toBe("");
@@ -797,8 +826,25 @@ describe("Discussion", () => {
       const swipeRegion = within(thread).getByRole("region", {
         name: "Swipe between discussion threads",
       });
-      expect(swipeRegion).not.toHaveAttribute("data-base-ui-swipe-ignore");
-      expect(swipeRegion).not.toHaveAttribute("data-learning-swipe-ignore");
+      expect(swipeRegion).toHaveAttribute("data-base-ui-swipe-ignore");
+      expect(swipeRegion).toHaveAttribute("data-learning-swipe-ignore");
+      expect(swipeRegion).toHaveClass("touch-pan-y");
+      const initialReply = within(thread).getByRole("textbox", {
+        name: "Reply to Rohit Sharma",
+      });
+      await waitFor(() => expect(initialReply).toHaveFocus());
+
+      const mobileSwiperElement = swipeRegion.querySelector<
+        HTMLElement & {
+          swiper?: { slideNext: (speed?: number) => void };
+        }
+      >(".swiper");
+      expect(mobileSwiperElement?.swiper).toBeDefined();
+      React.act(() => mobileSwiperElement?.swiper?.slideNext(0));
+      const mobileNextReply = await within(thread).findByRole("textbox", {
+        name: "Reply to Neha Patel",
+      });
+      expect(mobileNextReply).not.toHaveFocus();
       expect(
         thread.querySelector('[data-slot="drawer-swipe-handle"]'),
       ).toBeInTheDocument();

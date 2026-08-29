@@ -129,10 +129,29 @@ export function DiscussionThreadPanel({
             ? mobileSnapPoint
             : mobileCollapsedSnapPoint,
         );
-  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
+  const [composerFocusRequest, setComposerFocusRequest] = useState<{
+    id: number;
+    entryId: number | null;
+  }>({ id: 0, entryId: null });
   const activeIndex = Math.max(
     0,
     entries.findIndex((entry) => entry.id === activeEntryId),
+  );
+  const requestComposerFocus = useCallback((entryId: number) => {
+    setComposerFocusRequest((current) => ({
+      id: current.id + 1,
+      entryId,
+    }));
+  }, []);
+  const handleComposerFocusHandled = useCallback(
+    (entryId: number, requestId: number) => {
+      setComposerFocusRequest((current) =>
+        current.id === requestId && current.entryId === entryId
+          ? { ...current, entryId: null }
+          : current,
+      );
+    },
+    [],
   );
 
   useThreadPanelLayoutEffect(() => {
@@ -166,18 +185,29 @@ export function DiscussionThreadPanel({
       return;
     }
 
+    const isOpening = !wasOpenRef.current;
     const animateBetweenThreads =
-      wasOpenRef.current &&
+      !isOpening &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     swiperRef.current?.slideTo(
       activeIndex,
       animateBetweenThreads ? THREAD_PANEL_SLIDE_DURATION : 0,
     );
     wasOpenRef.current = true;
-    if (focusComposerOnOpen) {
-      setComposerFocusRequest((current) => current + 1);
+    if (
+      activeEntryId !== null &&
+      (isOpening || focusComposerOnOpen || !isPhone)
+    ) {
+      requestComposerFocus(activeEntryId);
     }
-  }, [activeIndex, focusComposerOnOpen, open]);
+  }, [
+    activeEntryId,
+    activeIndex,
+    focusComposerOnOpen,
+    isPhone,
+    open,
+    requestComposerFocus,
+  ]);
 
   useEffect(() => {
     if (isPhone) return;
@@ -364,7 +394,7 @@ export function DiscussionThreadPanel({
     >
       <DrawerContent
         aria-label="Discussion thread"
-        initialFocus
+        initialFocus={false}
         style={panelStyle}
         viewportStyle={panelViewportStyle}
         data-base-ui-swipe-ignore={isPhone ? undefined : ""}
@@ -459,12 +489,11 @@ export function DiscussionThreadPanel({
           </div>
         )}
 
-        <header className="relative z-10 flex h-14 shrink-0 items-center gap-0 px-4">
+        <header className="relative z-10 flex h-auto shrink-0 items-center gap-0 px-4 pt-3.5 pb-1.75 sm:h-14 sm:py-0">
           {!isPhone && (
             <>
               <button
                 type="button"
-                autoFocus
                 aria-label="Close discussion thread"
                 onClick={() => onOpenChange(false)}
                 className="grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
@@ -517,8 +546,8 @@ export function DiscussionThreadPanel({
         </header>
 
         <div
-          data-base-ui-swipe-ignore={isPhone ? undefined : ""}
-          data-learning-swipe-ignore={isPhone ? undefined : ""}
+          data-base-ui-swipe-ignore=""
+          data-learning-swipe-ignore=""
           role="region"
           aria-label="Swipe between discussion threads"
           style={
@@ -539,9 +568,10 @@ export function DiscussionThreadPanel({
             resistanceRatio={0.72}
             allowTouchMove
             nested
-            threshold={6}
-            touchAngle={60}
+            threshold={12}
+            touchAngle={35}
             touchStartPreventDefault={false}
+            touchMoveStopPropagation
             noSwiping
             noSwipingSelector="button,a,input,textarea,select,[contenteditable=true],[role=menu],[data-discussion-atomic-editor],.swiper-no-swiping"
             onSwiper={(swiper) => {
@@ -558,10 +588,13 @@ export function DiscussionThreadPanel({
                 <ThreadSlide
                   entry={entry}
                   active={entry.id === activeEntryId}
-                  focusRequest={composerFocusRequest}
-                  onFocusComposer={() =>
-                    setComposerFocusRequest((current) => current + 1)
+                  focusRequest={
+                    composerFocusRequest.entryId === entry.id
+                      ? composerFocusRequest.id
+                      : 0
                   }
+                  onFocusComposer={requestComposerFocus}
+                  onComposerFocusHandled={handleComposerFocusHandled}
                   onLike={onLike}
                   onAddReply={onAddReply}
                   onEditEntry={(comment) => {
@@ -589,7 +622,8 @@ interface ThreadSlideProps {
   entry: Comment;
   active: boolean;
   focusRequest: number;
-  onFocusComposer: () => void;
+  onFocusComposer: (entryId: number) => void;
+  onComposerFocusHandled: (entryId: number, requestId: number) => void;
   onLike: (id: number, liked: boolean) => void;
   onAddReply: (entryId: number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
@@ -608,6 +642,7 @@ function ThreadSlide({
   active,
   focusRequest,
   onFocusComposer,
+  onComposerFocusHandled,
   onLike,
   onAddReply,
   onEditEntry,
@@ -617,6 +652,7 @@ function ThreadSlide({
   onReport,
 }: ThreadSlideProps) {
   const replies = entry.thread ?? [];
+  const focusComposer = () => onFocusComposer(entry.id);
 
   return (
     <div
@@ -628,7 +664,7 @@ function ThreadSlide({
         <ThreadRootEntry
           entry={entry}
           onLike={onLike}
-          onReply={onFocusComposer}
+          onReply={focusComposer}
           onEdit={() => onEditEntry(entry)}
           onDelete={() => onDeleteEntry(entry.id)}
           onReport={() => onReport(entry.id)}
@@ -641,7 +677,7 @@ function ThreadSlide({
                 key={reply.id}
                 parentId={entry.id}
                 reply={reply}
-                onReply={onFocusComposer}
+                onReply={focusComposer}
                 onEdit={onEditReply}
                 onDelete={onDeleteReply}
                 onReport={onReport}
@@ -667,6 +703,7 @@ function ThreadSlide({
         <ThreadReplyComposer
           entry={entry}
           focusRequest={focusRequest}
+          onFocusHandled={onComposerFocusHandled}
           onSubmit={(reply) => onAddReply(entry.id, reply)}
         />
       )}
@@ -900,10 +937,12 @@ function ThreadReplyEntry({
 function ThreadReplyComposer({
   entry,
   focusRequest,
+  onFocusHandled,
   onSubmit,
 }: {
   entry: Comment;
   focusRequest: number;
+  onFocusHandled: (entryId: number, requestId: number) => void;
   onSubmit: (reply: CommentReply) => void;
 }) {
   const [draft, setDraft] = useState<DiscussionDraft>(
@@ -919,9 +958,10 @@ function ThreadReplyComposer({
   }, [entry.id]);
 
   useEffect(() => {
-    if (focusRequest <= 0) return;
-    editorController?.focus();
-  }, [editorController, focusRequest]);
+    if (!editorController || focusRequest <= 0) return;
+    editorController.focus();
+    onFocusHandled(entry.id, focusRequest);
+  }, [editorController, entry.id, focusRequest, onFocusHandled]);
 
   const canSubmit = hasDiscussionDraftContent(draft);
   const submit = () => {
@@ -943,7 +983,7 @@ function ThreadReplyComposer({
   return (
     <div
       data-thread-reply-composer
-      className="-mx-4 -mb-4 mt-3 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
+      className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
         documentId={`thread-reply-${entry.id}`}
