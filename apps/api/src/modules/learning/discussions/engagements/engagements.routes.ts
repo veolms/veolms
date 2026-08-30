@@ -9,10 +9,10 @@ import {
   toggleLikeRequestSchema,
   toggleLikeResponseSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createRepliesRepository } from "../replies/replies.repository.ts";
 import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createEngagementsController } from "./engagements.controller.ts";
@@ -20,7 +20,7 @@ import { createEngagementsRepository } from "./engagements.repository.ts";
 import { createEngagementsService } from "./engagements.service.ts";
 
 const engagementsRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
   const engagementsRepo = createEngagementsRepository();
@@ -38,7 +38,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/interactions/likes",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "toggleLearningLike",
         tags: ["Learning Engagements"],
@@ -57,7 +57,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/threads/:threadId/bookmark",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "toggleLearningBookmark",
         tags: ["Learning Engagements"],
@@ -79,7 +79,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/threads/:threadId/follow",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "toggleLearningFollow",
         tags: ["Learning Engagements"],
@@ -98,7 +98,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/threads/:threadId/lock",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "lockLearningThread",
         tags: ["Learning Engagements"],
@@ -120,7 +120,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/interactions/users/autocomplete",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "autocompleteUsersForMention",
         tags: ["Learning Engagements"],

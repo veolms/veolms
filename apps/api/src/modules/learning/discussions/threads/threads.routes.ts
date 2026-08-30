@@ -6,16 +6,16 @@ import {
   listLearningThreadsQuerySchema,
   updateLearningThreadRequestSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createThreadsController } from "./threads.controller.ts";
 import { createThreadsRepository } from "./threads.repository.ts";
 import { createThreadsService } from "./threads.service.ts";
 
 const threadsRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const repository = createThreadsRepository();
   const service = createThreadsService(repository);
   const controller = createThreadsController({
@@ -27,7 +27,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/lessons/:lessonId/threads",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "listLessonThreads",
         tags: ["Learning Discussions"],
@@ -53,7 +53,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/lessons/:lessonId/threads",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "createLessonThread",
         tags: ["Learning Discussions"],
@@ -78,7 +78,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/assignments/:assignmentId/threads",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "listAssignmentThreads",
         tags: ["Learning Discussions"],
@@ -104,7 +104,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/assignments/:assignmentId/threads",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "createAssignmentThread",
         tags: ["Learning Discussions"],
@@ -129,7 +129,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "listHubThreads",
         tags: ["Learning Discussions"],
@@ -150,7 +150,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "getLearningThread",
         tags: ["Learning Discussions"],
@@ -169,7 +169,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.patch(
     "/threads/:threadId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "updateLearningThread",
         tags: ["Learning Discussions"],
@@ -192,7 +192,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/threads/:threadId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "deleteLearningThread",
         tags: ["Learning Discussions"],

@@ -6,16 +6,16 @@ import {
   listLearningNotesQuerySchema,
   updateLearningNoteRequestSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createNotesController } from "./notes.controller.ts";
 import { createNotesRepository } from "./notes.repository.ts";
 import { createNotesService } from "./notes.service.ts";
 
 const notesRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const repo = createNotesRepository();
   const service = createNotesService(repo);
   const controller = createNotesController({
@@ -27,7 +27,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/notes",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listLearningNotes",
         tags: ["Learning Notes"],
@@ -49,7 +49,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/notes",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "createLearningNote",
         tags: ["Learning Notes"],
@@ -69,7 +69,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/notes/:noteId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "getLearningNote",
         tags: ["Learning Notes"],
@@ -90,7 +90,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
   app.patch(
     "/notes/:noteId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "updateLearningNote",
         tags: ["Learning Notes"],
@@ -112,7 +112,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/notes/:noteId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "deleteLearningNote",
         tags: ["Learning Notes"],

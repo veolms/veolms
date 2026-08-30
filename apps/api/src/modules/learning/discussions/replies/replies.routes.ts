@@ -8,17 +8,17 @@ import {
   listLearningRepliesQuerySchema,
   updateLearningReplyRequestSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createRepliesController } from "./replies.controller.ts";
 import { createRepliesRepository } from "./replies.repository.ts";
 import { createRepliesService } from "./replies.service.ts";
 
 const repliesRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
   const service = createRepliesService({ threadsRepo, repliesRepo });
@@ -31,7 +31,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId/replies",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "listLearningReplies",
         tags: ["Learning Discussions"],
@@ -54,7 +54,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/threads/:threadId/replies",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "createLearningReply",
         tags: ["Learning Discussions"],
@@ -77,7 +77,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.patch(
     "/replies/:replyId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "updateLearningReply",
         tags: ["Learning Discussions"],
@@ -99,7 +99,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/replies/:replyId",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "deleteLearningReply",
         tags: ["Learning Discussions"],
@@ -120,7 +120,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/replies/:replyId/accept",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "acceptLearningReply",
         tags: ["Learning Discussions"],

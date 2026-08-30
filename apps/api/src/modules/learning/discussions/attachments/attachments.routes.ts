@@ -9,10 +9,10 @@ import {
   learningUploadResponseSchema,
   linkPreviewResponseSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createAttachmentsController } from "./attachments.controller.ts";
 import { createAttachmentsRepository } from "./attachments.repository.ts";
 import { createAttachmentsService } from "./attachments.service.ts";
@@ -22,7 +22,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
     limits: { files: 1, fileSize: 50_000_000 },
   });
 
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const repo = createAttachmentsRepository();
   const service = createAttachmentsService(repo);
   const controller = createAttachmentsController({
@@ -34,7 +34,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/initiate",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "initiateAttachmentUpload",
         tags: ["Learning Attachments"],
@@ -54,7 +54,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/:attachmentId/upload",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "uploadAttachmentBinary",
         tags: ["Learning Attachments"],
@@ -76,7 +76,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/complete",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "completeAttachmentUpload",
         tags: ["Learning Attachments"],
@@ -96,7 +96,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/upload",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "uploadLearningAttachment",
         tags: ["Learning Attachments"],
@@ -117,7 +117,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/link-preview",
     {
-      preHandler: ctx.authenticate,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "getLearningLinkPreview",
         tags: ["Learning Attachments"],

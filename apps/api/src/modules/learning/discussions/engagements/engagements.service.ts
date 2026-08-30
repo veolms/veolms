@@ -6,7 +6,7 @@ import type {
   ToggleLikeResponse,
   UserMention,
 } from "@veolms/contracts";
-import { httpError } from "../../../lib/errors.ts";
+import { httpError } from "../../../../lib/errors.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { EngagementsRepository } from "./engagements.repository.ts";

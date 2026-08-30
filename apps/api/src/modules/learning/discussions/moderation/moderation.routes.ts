@@ -11,10 +11,10 @@ import {
   unsuspendUserRequestSchema,
   userSuspensionSchema,
 } from "@veolms/contracts";
-import { errorResponse } from "../../../lib/errors.ts";
-import { jsonResponse } from "../../../lib/responses.ts";
-import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { createLearningInteractionsContext } from "../shared/learning-interactions.context.ts";
+import { errorResponse } from "../../../../lib/errors.ts";
+import { jsonResponse } from "../../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createRepliesRepository } from "../replies/replies.repository.ts";
 import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createModerationController } from "./moderation.controller.ts";
@@ -22,7 +22,7 @@ import { createModerationRepository } from "./moderation.repository.ts";
 import { createModerationService } from "./moderation.service.ts";
 
 const moderationRoutes: RoutePlugin = async (app, options) => {
-  const ctx = createLearningInteractionsContext(options);
+  const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
   const moderationRepo = createModerationRepository();
@@ -42,7 +42,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/reports",
     {
-      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "createLearningReport",
         tags: ["Learning Moderation"],
@@ -68,7 +68,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/moderation/reports",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "listCourseModerationReports",
         tags: ["Course Moderation"],
@@ -92,7 +92,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/threads/:threadId",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "moderateCourseThread",
         tags: ["Course Moderation"],
@@ -120,7 +120,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/replies/:replyId",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "moderateCourseReply",
         tags: ["Course Moderation"],
@@ -148,7 +148,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/users/:userId/suspend",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "suspendCourseParticipant",
         tags: ["Course Moderation"],
@@ -172,7 +172,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/users/:userId/unsuspend",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "unsuspendCourseParticipant",
         tags: ["Course Moderation"],
@@ -199,7 +199,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/moderation/audit-logs",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "listCourseModerationAuditLogs",
         tags: ["Course Moderation"],
@@ -224,7 +224,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/reports",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "listPlatformModerationReports",
         tags: ["Platform Moderation"],
@@ -247,7 +247,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/threads/:threadId",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "moderatePlatformThread",
         tags: ["Platform Moderation"],
@@ -272,7 +272,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/replies/:replyId",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "moderatePlatformReply",
         tags: ["Platform Moderation"],
@@ -297,7 +297,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/users/:userId/suspend",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "suspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -318,7 +318,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/users/:userId/unsuspend",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "unsuspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -342,7 +342,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/audit-logs",
     {
-      preHandler: ctx.requireModerator,
+      preHandler: permissions.requireModerator,
       schema: {
         operationId: "listPlatformAuditLogs",
         tags: ["Platform Moderation"],

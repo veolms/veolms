@@ -1,0 +1,25 @@
+export const DISCUSSION_CONSTANTS = {
+  MAX_CONTENT_LENGTH: 20000,
+  MAX_NOTE_CONTENT_LENGTH: 50000,
+  MAX_TITLE_LENGTH: 255,
+  MAX_ATTACHMENT_SIZE_BYTES: 50 * 1024 * 1024, // 50MB
+  DEFAULT_PAGE_SIZE: 20,
+  MAX_PAGE_SIZE: 100,
+  SUPPORTED_CODE_EXTENSIONS: [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".py",
+    ".rs",
+    ".go",
+    ".java",
+    ".cpp",
+    ".c",
+    ".html",
+    ".css",
+    ".json",
+    ".sql",
+    ".sh",
+  ],
+} as const;

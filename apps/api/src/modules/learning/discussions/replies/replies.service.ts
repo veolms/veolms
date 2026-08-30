@@ -8,8 +8,8 @@ import type {
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
-import { httpError } from "../../../lib/errors.ts";
-import { extractPlainText } from "../shared/text-sanitizer.ts";
+import { httpError } from "../../../../lib/errors.ts";
+import { extractPlainText } from "../shared/discussion.utils.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { RepliesRepository } from "./replies.repository.ts";
 
@@ -277,7 +277,6 @@ export function createRepliesService({
         throw httpError(400, "NOT_A_QUESTION", "Only Q&A questions can have accepted answers");
       }
 
-      // Enforce: reply belongs to this exact thread
       if (reply.threadId !== thread.id) {
         throw httpError(400, "INVALID_REPLY", "The answer does not belong to this question thread");
       }

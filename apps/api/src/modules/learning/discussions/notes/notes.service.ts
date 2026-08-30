@@ -7,8 +7,8 @@ import type {
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
-import { httpError } from "../../../lib/errors.ts";
-import { extractPlainText } from "../shared/text-sanitizer.ts";
+import { httpError } from "../../../../lib/errors.ts";
+import { extractPlainText } from "../shared/discussion.utils.ts";
 import type { NotesRepository } from "./notes.repository.ts";
 
 export interface NotesService {

@@ -1,5 +1,8 @@
 import type { DatabaseExecutor } from "@veolms/database";
-import type { EngagementTargetType, UserMention } from "@veolms/contracts";
+import type {
+  EngagementTargetType,
+  UserMention,
+} from "@veolms/contracts";
 import { sql } from "kysely";
 
 export interface EngagementsRepository {
@@ -8,7 +11,7 @@ export interface EngagementsRepository {
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<boolean>;
+  ): Promise<any | null>;
 
   addLike(
     db: DatabaseExecutor,
@@ -28,7 +31,7 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     userId: string,
     threadId: string,
-  ): Promise<boolean>;
+  ): Promise<any | null>;
 
   addBookmark(
     db: DatabaseExecutor,
@@ -46,7 +49,7 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     userId: string,
     threadId: string,
-  ): Promise<boolean>;
+  ): Promise<any | null>;
 
   addFollow(
     db: DatabaseExecutor,
@@ -65,27 +68,18 @@ export interface EngagementsRepository {
     query: string,
     limit: number,
   ): Promise<UserMention[]>;
-
-  addMention(
-    db: DatabaseExecutor,
-    sourceType: EngagementTargetType,
-    sourceId: string,
-    mentionedUserId: string,
-  ): Promise<void>;
 }
 
 export function createEngagementsRepository(): EngagementsRepository {
   return {
     async findLike(db, userId, targetType, targetId) {
-      const row = await db
+      return db
         .selectFrom("learning_likes")
-        .select("id")
+        .selectAll()
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
         .executeTakeFirst();
-
-      return Boolean(row);
     },
 
     async addLike(db, userId, targetType, targetId) {
@@ -111,14 +105,12 @@ export function createEngagementsRepository(): EngagementsRepository {
     },
 
     async findBookmark(db, userId, threadId) {
-      const row = await db
+      return db
         .selectFrom("learning_bookmarks")
-        .select("id")
+        .selectAll()
         .where("user_id", "=", userId)
         .where("thread_id", "=", threadId)
         .executeTakeFirst();
-
-      return Boolean(row);
     },
 
     async addBookmark(db, userId, threadId) {
@@ -142,14 +134,12 @@ export function createEngagementsRepository(): EngagementsRepository {
     },
 
     async findFollow(db, userId, threadId) {
-      const row = await db
+      return db
         .selectFrom("learning_follows")
-        .select("id")
+        .selectAll()
         .where("user_id", "=", userId)
         .where("thread_id", "=", threadId)
         .executeTakeFirst();
-
-      return Boolean(row);
     },
 
     async addFollow(db, userId, threadId) {
@@ -172,38 +162,27 @@ export function createEngagementsRepository(): EngagementsRepository {
         .execute();
     },
 
-    async searchUsersForMention(db, searchPattern, limit) {
-      const rows = await db
+    async searchUsersForMention(db, query, limit) {
+      const searchPattern = `%${query.toLowerCase()}%`;
+      const users = await db
         .selectFrom("users")
-        .select(["id", "username", "display_name", "email"])
+        .select(["id", "display_name", "username", "email"])
         .where((eb) =>
           eb.or([
-            eb(sql`lower(username)`, "like", `%${searchPattern.toLowerCase()}%`),
-            eb(sql`lower(display_name)`, "like", `%${searchPattern.toLowerCase()}%`),
-            eb(sql`lower(email)`, "like", `%${searchPattern.toLowerCase()}%`),
+            eb(sql`lower(display_name)`, "like", searchPattern),
+            eb(sql`lower(username)`, "like", searchPattern),
+            eb(sql`lower(email)`, "like", searchPattern),
           ]),
         )
         .limit(limit)
         .execute();
 
-      return rows.map((u) => ({
+      return users.map((u) => ({
         id: u.id,
-        username: u.username || (u.email ? u.email.split("@")[0]! : "user"),
-        displayName: u.display_name || "User",
-        avatarUrl: `/assets/${u.id.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
+        displayName: u.display_name,
+        username: u.username ?? (u.email ? u.email.split("@")[0]! : "user"),
+        avatarUrl: null,
       }));
-    },
-
-    async addMention(db, sourceType, sourceId, mentionedUserId) {
-      await db
-        .insertInto("learning_mentions")
-        .values({
-          id: sql`gen_random_uuid()`,
-          source_type: sourceType,
-          source_id: sourceId,
-          mentioned_user_id: mentionedUserId,
-        })
-        .execute();
     },
   };
 }

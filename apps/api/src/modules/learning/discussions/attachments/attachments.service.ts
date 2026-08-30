@@ -10,7 +10,8 @@ import type {
   LearningUploadResponse,
   LinkPreviewResponse,
 } from "@veolms/contracts";
-import { httpError } from "../../../lib/errors.ts";
+import { httpError } from "../../../../lib/errors.ts";
+import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 
 export interface AttachmentsService {
@@ -58,25 +59,8 @@ export function createAttachmentsService(
       if (filename.toLowerCase().includes("screenshot")) return "screenshot";
       return "image";
     }
-    const codeExtensions = [
-      ".ts",
-      ".tsx",
-      ".js",
-      ".jsx",
-      ".py",
-      ".rs",
-      ".go",
-      ".java",
-      ".cpp",
-      ".c",
-      ".html",
-      ".css",
-      ".json",
-      ".sql",
-      ".sh",
-    ];
     const ext = path.extname(filename).toLowerCase();
-    if (codeExtensions.includes(ext)) {
+    if ((DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]).includes(ext)) {
       return "code";
     }
     return "document";
@@ -115,7 +99,7 @@ export function createAttachmentsService(
         storageKey,
         fileName: input.fileName,
         kind,
-        maxSize: 50_000_000,
+        maxSize: DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES,
       };
     },
 

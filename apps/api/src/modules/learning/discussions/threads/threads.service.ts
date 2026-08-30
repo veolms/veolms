@@ -7,8 +7,8 @@ import type {
   ListLearningThreadsQuery,
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
-import { httpError } from "../../../lib/errors.ts";
-import { extractPlainText } from "../shared/text-sanitizer.ts";
+import { httpError } from "../../../../lib/errors.ts";
+import { extractPlainText } from "../shared/discussion.utils.ts";
 import type { ThreadsRepository } from "./threads.repository.ts";
 
 export interface ThreadsService {
