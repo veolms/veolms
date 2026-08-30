@@ -7,10 +7,10 @@ export const ROLES = {
     name: "admin",
     description: "System administrator with full platform access",
   },
-  creator: {
+  instructor: {
     id: "00000000-0000-4000-8000-000000000001",
-    name: "creator",
-    description: "Platform owner and creator",
+    name: "instructor",
+    description: "Course instructor and author",
   },
   student: {
     id: "00000000-0000-4000-8000-000000000002",
@@ -39,7 +39,7 @@ export interface RolePermissionRule {
 }
 
 export const MENUS = {
-  // Creator / Shared Menus
+  // Instructor / Shared Menus
   dashboard: {
     id: "00000000-0000-4000-9000-000000000001",
     parentId: null,
@@ -187,47 +187,47 @@ export const MENUS = {
 } as const satisfies Record<string, SeedMenuDefinition>;
 
 export const PERMISSION_ASSIGNMENTS: Record<string, readonly RolePermissionRule[]> = {
-  // 1. Dashboard -> Admin & Creator
+  // 1. Dashboard -> Admin & Instructor
   [MENUS.dashboard.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { roleId: ROLES.instructor.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
   ],
 
-  // 2. Creator Courses -> Admin & Creator
+  // 2. Instructor Courses -> Admin & Instructor
   [MENUS.creatorCourses.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { roleId: ROLES.instructor.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
   ],
 
-  // 3. Students -> Admin & Creator
+  // 3. Students -> Admin & Instructor
   [MENUS.students.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { roleId: ROLES.instructor.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
   ],
 
-  // 4. Discussions -> Admin, Creator, Student
+  // 4. Discussions -> Admin, Instructor, Student
   [MENUS.discussions.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { roleId: ROLES.instructor.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     { roleId: ROLES.student.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
   ],
 
-  // 5. Analytics -> Admin & Creator
+  // 5. Analytics -> Admin & Instructor
   [MENUS.analytics.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { roleId: ROLES.instructor.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
   ],
 
-  // 6. Orders -> Admin & Creator
+  // 6. Orders -> Admin & Instructor
   [MENUS.orders.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { roleId: ROLES.instructor.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
   ],
 
-  // 7. Settings -> Admin, Creator, Student
+  // 7. Settings -> Admin, Instructor, Student
   [MENUS.settings.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.creator.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { roleId: ROLES.instructor.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     { roleId: ROLES.student.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
   ],
 
@@ -275,7 +275,7 @@ export const PERMISSION_ASSIGNMENTS: Record<string, readonly RolePermissionRule[
 };
 
 export async function seedRolesAndPermissions(database: Kysely<Database>): Promise<void> {
-  // 1. Seed Roles (Admin, Creator, Student)
+  // 1. Seed Roles (Admin, Instructor, Student)
   const roleList = Object.values(ROLES);
   for (const role of roleList) {
     await database

@@ -5,7 +5,7 @@ import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
 import {
-  CREATOR_ROLE,
+  ADMIN_ROLE,
   STUDENT_ROLE,
   USERNAME_SUFFIX_ATTEMPTS,
 } from "../shared/auth.constants.ts";
@@ -246,7 +246,7 @@ export function createAuthService({
   }
 
   /**
-   * Creates an account, granting the creator role to the very first user.
+   * Creates an account, granting the administrator role to the very first user.
    *
    * The whole thing runs in one transaction behind a transaction-scoped
    * advisory lock. Counting users outside the transaction (or even inside it
@@ -261,7 +261,7 @@ export function createAuthService({
         trx,
       );
 
-      const isCreator = (await userRepository.countUsers(trx)) === 0;
+      const isFirstUser = (await userRepository.countUsers(trx)) === 0;
 
       await userRepository.insertUser(trx, {
         id: userId,
@@ -270,7 +270,7 @@ export function createAuthService({
         username: input.username,
         displayName: input.displayName,
         emailVerifiedAt: input.emailVerified ? new Date() : null,
-        mfaMandatory: isCreator,
+        mfaMandatory: isFirstUser,
       });
 
       if (input.oauth) {
@@ -282,7 +282,7 @@ export function createAuthService({
         });
       }
 
-      const roleName = isCreator ? CREATOR_ROLE : STUDENT_ROLE;
+      const roleName = isFirstUser ? ADMIN_ROLE : STUDENT_ROLE;
       const roleId = await userRepository.findRoleIdByName(trx, roleName);
 
       if (!roleId) {

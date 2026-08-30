@@ -103,13 +103,13 @@ export function createSetupService({
     if (await authService.countUsers()) {
       throw new AppError(
         403,
-        "CREATOR_EXISTS",
-        "LMS platform has already been initialized. Creator account exists.",
+        "ADMIN_EXISTS",
+        "LMS platform has already been initialized. Administrator account exists.",
       );
     }
 
     const username = await authService.generateUniqueUsername(
-      input.email.split("@")[0] || "creator",
+      input.email.split("@")[0] || "admin",
     );
 
     const createInput: CreateUserInput = {
@@ -165,8 +165,8 @@ export function createSetupService({
     if (!(await authService.countUsers())) {
       throw new AppError(
         400,
-        "CREATOR_NOT_REGISTERED",
-        "Register the creator account before finalizing setup.",
+        "ADMIN_NOT_REGISTERED",
+        "Register the administrator account before finalizing setup.",
       );
     }
 

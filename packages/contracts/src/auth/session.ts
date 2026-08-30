@@ -90,7 +90,7 @@ export const loginResponseSchema = z.object({
   mfaRequired: z.boolean(),
   mfaMandatory: z.boolean().meta({
     description:
-      "True if the account is required to have MFA enrolled (e.g. creator accounts). " +
+      "True if the account is required to have MFA enrolled (e.g. administrator accounts). " +
       "When mfaRequired is true but neither totpEnabled nor passkeyEnabled is true, " +
       "the client must prompt for MFA enrollment rather than step-up verification.",
   }),

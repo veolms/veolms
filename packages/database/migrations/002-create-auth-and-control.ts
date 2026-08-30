@@ -41,7 +41,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
   await (database as Kysely<any>)
     .insertInto("roles")
     .values([
-      { id: "00000000-0000-4000-8000-000000000001", name: "creator", description: "Platform owner and creator" },
+      { id: "00000000-0000-4000-8000-000000000000", name: "admin", description: "System administrator with full platform access" },
+      { id: "00000000-0000-4000-8000-000000000001", name: "instructor", description: "Course instructor and author" },
       { id: "00000000-0000-4000-8000-000000000002", name: "student", description: "Enrolled student" },
     ])
     .execute();
