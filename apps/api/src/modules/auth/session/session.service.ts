@@ -4,6 +4,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { SESSION_TTL_MS } from "../shared/auth.constants.ts";
+import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
 import type {
   AuthenticatedRequestContext,
   EstablishedSession,
@@ -51,7 +52,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
     user: SessionUser,
     request: { ip: string; userAgent: string | null },
   ): Promise<EstablishedSession> {
-    const mfa = await resolveMfaState(user.id, Boolean(user.mfa_mandatory));
+    const roles = await userRepository.listUserRoleNames(database, user.id);
+    const mfa = await resolveMfaState(
+      user.id,
+      isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
+    );
 
     const token = generateRandomToken();
     const sessionId = crypto.randomUUID();
@@ -137,10 +142,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const [totpEnabled, roles, permissions, passkeyCount] = await Promise.all([
+    const [totpEnabled, roles, permissions, menus, passkeyCount] = await Promise.all([
       mfaRepository.isTotpEnabled(database, user.id),
       userRepository.listUserRoleNames(database, user.id),
       userRepository.listUserPermissions(database, user.id),
+      userRepository.listUserMenus(database, user.id),
       mfaRepository.countUserPasskeys(database, user.id),
     ]);
 
@@ -159,9 +165,13 @@ export function createSessionService({ database }: SessionServiceOptions) {
         phoneNo: user.phone_no,
         roles,
         permissions,
+        menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
-        mfaMandatory: Boolean(user.mfa_mandatory),
+        mfaMandatory: isMfaMandatoryAccount(
+          Boolean(user.mfa_mandatory),
+          roles,
+        ),
       },
       session: {
         id: session.id,

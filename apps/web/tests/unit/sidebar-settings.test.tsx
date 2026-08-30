@@ -1,8 +1,18 @@
+import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SidebarSettings } from "../../src/settings/SidebarSettings";
-import type { SidebarPreferences } from "../../src/settings/settingsPreferences";
+import {
+  SIDEBAR_GLOW_INTENSITY_DEFAULT,
+  type SidebarPreferences,
+} from "../../src/settings/settingsPreferences";
+import type { NavigationItemWithMetadata } from "../../src/shell/navigation";
+
+const navigationFromLabels = (
+  labels: readonly string[],
+): NavigationItemWithMetadata[] =>
+  labels.map((label) => [label, SquaresFour]);
 
 const preferences: SidebarPreferences = {
   iconStyle: "monochrome",
@@ -63,17 +73,32 @@ function StatefulGlowSettings() {
   );
 }
 
+const creatorMenuLabels = [
+  "Dashboard",
+  "Courses",
+  "Students",
+  "Reviews",
+  "Wishlist",
+  "Discussions",
+  "Analytics",
+  "Orders",
+  "Settings",
+] as const;
+
+const studentMenuLabels = [
+  "Home",
+  "Courses",
+  "Wishlist",
+  "Discussions",
+  "Order History",
+  "Notifications",
+  "Settings",
+] as const;
+
 function StatefulCreatorSidebarSettings() {
-  const [visibleItems, setVisibleItems] = useState([
-    "Dashboard",
-    "Courses",
-    "Students",
-    "Reviews",
-    "Wishlist",
-    "Discussions",
-    "Analytics",
-    "Orders",
-    "Settings",
+  const navigationItems = navigationFromLabels(creatorMenuLabels);
+  const [visibleItems, setVisibleItems] = useState<string[]>([
+    ...creatorMenuLabels,
   ]);
   return (
     <SidebarSettings
@@ -82,6 +107,7 @@ function StatefulCreatorSidebarSettings() {
       academyTheme="veo-onyx"
       sidebarMode="expanded"
       role="creator"
+      navigationItems={navigationItems}
       navigationVisibleItems={visibleItems}
       onNavigationVisibilityChange={setVisibleItems}
     />
@@ -89,14 +115,9 @@ function StatefulCreatorSidebarSettings() {
 }
 
 function StatefulStudentSidebarSettings() {
-  const [visibleItems, setVisibleItems] = useState([
-    "Home",
-    "Courses",
-    "Wishlist",
-    "Discussions",
-    "Order History",
-    "Notifications",
-    "Settings",
+  const navigationItems = navigationFromLabels(studentMenuLabels);
+  const [visibleItems, setVisibleItems] = useState<string[]>([
+    ...studentMenuLabels,
   ]);
   return (
     <SidebarSettings
@@ -105,6 +126,7 @@ function StatefulStudentSidebarSettings() {
       academyTheme="veo-onyx"
       sidebarMode="expanded"
       role="student"
+      navigationItems={navigationItems}
       navigationVisibleItems={visibleItems}
       onNavigationVisibilityChange={setVisibleItems}
     />
@@ -130,8 +152,11 @@ describe("sidebar settings draft inputs", () => {
       name: "Sidebar glow intensity",
     });
 
-    expect(slider).toHaveValue("50");
-    expect(slider).toHaveAttribute("aria-valuetext", "50 percent");
+    expect(slider).toHaveValue(String(SIDEBAR_GLOW_INTENSITY_DEFAULT));
+    expect(slider).toHaveAttribute(
+      "aria-valuetext",
+      `${SIDEBAR_GLOW_INTENSITY_DEFAULT} percent`,
+    );
 
     fireEvent.change(slider, { target: { value: "42" } });
     expect(onChange).toHaveBeenLastCalledWith({
@@ -235,7 +260,7 @@ describe("sidebar settings draft inputs", () => {
       glowShape: "circle",
       glowShapeSize: 100,
       glowBlur: 8,
-      glowIntensity: 50,
+      glowIntensity: SIDEBAR_GLOW_INTENSITY_DEFAULT,
     });
   });
 

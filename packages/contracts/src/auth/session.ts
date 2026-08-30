@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authUserSchema } from "./user.ts";
 
 export const loginRequestSchema = z
   .object({
@@ -85,17 +86,11 @@ export const authMessageResponseSchema = z.object({
 });
 
 export const loginResponseSchema = z.object({
-  user: z.object({
-    id: z.uuid(),
-    username: z.string().max(30),
-    displayName: z.string().max(100),
-    email: z.email().max(255).nullable(),
-    phoneNo: z.string().max(15).nullable(),
-  }),
+  user: authUserSchema,
   mfaRequired: z.boolean(),
   mfaMandatory: z.boolean().meta({
     description:
-      "True if the account is required to have MFA enrolled (e.g. creator accounts). " +
+      "True if the account is required to have MFA enrolled (e.g. administrator accounts). " +
       "When mfaRequired is true but neither totpEnabled nor passkeyEnabled is true, " +
       "the client must prompt for MFA enrollment rather than step-up verification.",
   }),
@@ -161,13 +156,7 @@ export const totpEnableResponseSchema = z.object({
 });
 
 export type PasskeyAuthenticatorTransport =
-  | "ble"
-  | "cable"
-  | "hybrid"
-  | "internal"
-  | "nfc"
-  | "smart-card"
-  | "usb";
+  "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
 
 export interface PasskeyCredentialDescriptorResponse {
   id: string;
@@ -210,8 +199,7 @@ const passkeyCredentialDescriptorSchema = z
       )
       .optional(),
   })
-  .passthrough()
-  .transform((value): PasskeyCredentialDescriptorResponse => value);
+  .passthrough();
 
 export const passkeyRegistrationOptionsResponseSchema = z
   .object({
@@ -241,7 +229,6 @@ export const passkeyRegistrationOptionsResponseSchema = z
     excludeCredentials: z.array(passkeyCredentialDescriptorSchema).optional(),
   })
   .passthrough()
-  .transform((value): PasskeyRegistrationOptionsResponse => value)
   .meta({ description: "Serialized WebAuthn registration options" });
 
 export const passkeyAuthenticationOptionsResponseSchema = z
@@ -255,7 +242,6 @@ export const passkeyAuthenticationOptionsResponseSchema = z
       .optional(),
   })
   .passthrough()
-  .transform((value): PasskeyAuthenticationOptionsResponse => value)
   .meta({ description: "Serialized WebAuthn authentication options" });
 
 export const passkeyOptionsResponseSchema = z.union([

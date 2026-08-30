@@ -66,7 +66,12 @@ export async function createApp({
 
     // Already-enveloped payloads (notably error responses) pass through
     // untouched, so they are not wrapped a second time.
-    if (payload && typeof payload === "object" && "success" in payload) {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "success" in payload &&
+      "statusCode" in payload
+    ) {
       return payload;
     }
 

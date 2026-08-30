@@ -3,10 +3,9 @@ import type { MfaState, SessionUser } from "./auth.types.ts";
 /**
  * Shapes the login/registration payload.
  *
- * The MFA flags are part of the response because `/auth/me` is itself gated
- * behind MFA step-up: without them a client that has just been told
- * `mfaRequired` has no way to discover *which* factor to prompt for, and no way
- * to tell "verify your existing factor" apart from "you must enrol one".
+ * The MFA flags tell the client whether to prompt for an existing factor or
+ * enrol one. `/auth/me` also returns those flags without requiring MFA
+ * step-up, so a half-finished sign-in can keep the same verify/enrol UI.
  */
 export function presentLogin(user: SessionUser, mfa: MfaState) {
   return {
@@ -16,6 +15,9 @@ export function presentLogin(user: SessionUser, mfa: MfaState) {
       displayName: user.display_name,
       email: user.email,
       phoneNo: user.phone_no,
+      roles: user.roles ?? [],
+      permissions: user.permissions ?? [],
+      menus: user.menus ?? [],
     },
     mfaRequired: mfa.mfaRequired,
     mfaMandatory: mfa.mfaMandatory,
