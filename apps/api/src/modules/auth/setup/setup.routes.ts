@@ -44,19 +44,19 @@ const setupRoutes: RoutePlugin = async (app, options) => {
     "/auth/creator/register",
     {
       schema: {
-        operationId: "registerCreator",
+        operationId: "registerInitialAdmin",
         tags: ["Auth"],
-        summary: "Specialized Creator onboarding",
+        summary: "Initial administrator onboarding",
         description:
-          "Registers the first user on the platform as Creator. Disallowed if accounts exist.",
+          "Registers the first user on the platform as an administrator. Disallowed if accounts exist.",
         body: creatorRegisterRequestSchema,
         response: {
           201: jsonResponse(
-            "Creator initialized successfully.",
+            "Administrator initialized successfully.",
             loginResponseSchema,
           ),
           401: errorResponse("Setup session missing or expired."),
-          403: errorResponse("Creator already initialized."),
+          403: errorResponse("Administrator already initialized."),
         },
       },
     },
@@ -99,7 +99,7 @@ const setupRoutes: RoutePlugin = async (app, options) => {
             "Setup finalized successfully.",
             authMessageResponseSchema,
           ),
-          400: errorResponse("Academy configuration or creator missing."),
+          400: errorResponse("Academy configuration or administrator missing."),
           401: errorResponse("Setup session missing or expired."),
           403: errorResponse("Setup already completed."),
         },

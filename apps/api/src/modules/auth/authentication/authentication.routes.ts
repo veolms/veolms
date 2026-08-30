@@ -45,7 +45,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Register a new user",
         description:
-          "Registers a user and assigns role creator (if first user) or student.",
+          "Registers a user and assigns the administrator role (if first user) or student role.",
         body: registerRequestSchema,
         response: {
           201: jsonResponse("Registration successful.", loginResponseSchema),

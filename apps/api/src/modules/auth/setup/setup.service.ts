@@ -103,13 +103,13 @@ export function createSetupService({
     if (await authService.countUsers()) {
       throw new AppError(
         403,
-        "CREATOR_EXISTS",
-        "LMS platform has already been initialized. Creator account exists.",
+        "ADMIN_EXISTS",
+        "LMS platform has already been initialized. Administrator account exists.",
       );
     }
 
     const username = await authService.generateUniqueUsername(
-      input.email.split("@")[0] || "creator",
+      input.email.split("@")[0] || "admin",
     );
 
     const createInput: CreateUserInput = {
@@ -122,8 +122,9 @@ export function createSetupService({
     const userId = await authService.createUser(createInput);
     const user = await authService.requireUser(userId);
     const session = await sessionService.establishSession(user, request);
+    const rbac = await authService.getUserRbac(user.id);
 
-    return { user, session };
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function configureAcademy(input: AcademyRequest) {
@@ -164,8 +165,8 @@ export function createSetupService({
     if (!(await authService.countUsers())) {
       throw new AppError(
         400,
-        "CREATOR_NOT_REGISTERED",
-        "Register the creator account before finalizing setup.",
+        "ADMIN_NOT_REGISTERED",
+        "Register the administrator account before finalizing setup.",
       );
     }
 
