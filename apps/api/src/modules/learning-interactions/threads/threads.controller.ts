@@ -8,9 +8,17 @@ import type {
 import type { ThreadsService } from "./threads.service.ts";
 
 export interface ThreadsController {
-  createThread(
+  createLessonThread(
     request: FastifyRequest<{
       Params: { courseId: string; lessonId: string };
+      Body: CreateLearningThreadRequest;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  createAssignmentThread(
+    request: FastifyRequest<{
+      Params: { courseId: string; assignmentId: string };
       Body: CreateLearningThreadRequest;
     }>,
     reply: FastifyReply,
@@ -19,6 +27,14 @@ export interface ThreadsController {
   listLessonThreads(
     request: FastifyRequest<{
       Params: { courseId: string; lessonId: string };
+      Querystring: ListLearningThreadsQuery;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  listAssignmentThreads(
+    request: FastifyRequest<{
+      Params: { courseId: string; assignmentId: string };
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
@@ -62,7 +78,7 @@ export function createThreadsController({
   service: ThreadsService;
 }): ThreadsController {
   return {
-    async createThread(request, reply) {
+    async createLessonThread(request, reply) {
       const user = request.user!;
       const { courseId, lessonId } = request.params;
       const body = request.body;
@@ -71,12 +87,34 @@ export function createThreadsController({
         userId: user.id,
         courseId,
         lessonId,
+        assignmentId: null,
         kind: body.kind,
         title: body.title,
         content: body.content,
-        plainText: body.plainText,
         timestampSeconds: body.timestampSeconds,
         visibility: body.visibility,
+        attachmentIds: body.attachmentIds,
+      });
+
+      reply.status(201).send(thread);
+    },
+
+    async createAssignmentThread(request, reply) {
+      const user = request.user!;
+      const { courseId, assignmentId } = request.params;
+      const body = request.body;
+
+      const thread = await service.createThread(database, {
+        userId: user.id,
+        courseId,
+        lessonId: null,
+        assignmentId,
+        kind: body.kind,
+        title: body.title,
+        content: body.content,
+        timestampSeconds: body.timestampSeconds,
+        visibility: body.visibility,
+        attachmentIds: body.attachmentIds,
       });
 
       reply.status(201).send(thread);
@@ -91,6 +129,21 @@ export function createThreadsController({
         ...query,
         courseId,
         lessonId,
+        currentUserId: user?.id,
+      });
+
+      reply.status(200).send(result);
+    },
+
+    async listAssignmentThreads(request, reply) {
+      const user = request.user;
+      const { courseId, assignmentId } = request.params;
+      const query = request.query;
+
+      const result = await service.listThreads(database, {
+        ...query,
+        courseId,
+        assignmentId,
         currentUserId: user?.id,
       });
 

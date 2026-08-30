@@ -20,9 +20,40 @@ export const reportStatusSchema = z.enum([
 ]);
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
 
+export const moderationActionTypeSchema = z.enum([
+  "hide_thread",
+  "unhide_thread",
+  "lock_thread",
+  "unlock_thread",
+  "delete_thread",
+  "hide_reply",
+  "unhide_reply",
+  "delete_reply",
+  "suspend_user",
+  "unsuspend_user",
+  "dismiss_report",
+  "resolve_report",
+]);
+export type ModerationActionType = z.infer<typeof moderationActionTypeSchema>;
+
+export const suspensionScopeSchema = z.enum(["commenting", "qa", "all"]);
+export type SuspensionScope = z.infer<typeof suspensionScopeSchema>;
+
+export const suspensionDurationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("temporary"),
+    durationHours: z.number().int().positive().max(8760), // up to 1 year
+  }),
+  z.object({
+    type: z.literal("permanent"),
+  }),
+]);
+export type SuspensionDuration = z.infer<typeof suspensionDurationSchema>;
+
 export const createReportRequestSchema = z.object({
   targetType: engagementTargetTypeSchema,
   targetId: z.uuid(),
+  courseId: z.uuid().optional(),
   reason: reportReasonSchema,
   details: z.string().max(1000).optional(),
 });
@@ -34,6 +65,7 @@ export const learningReportSchema = z.object({
   reporter: learningAuthorSchema,
   targetType: engagementTargetTypeSchema,
   targetId: z.uuid(),
+  courseId: z.uuid().nullable().optional(),
   targetContent: z.string().optional(),
   reason: reportReasonSchema,
   details: z.string().nullable().optional(),
@@ -46,6 +78,7 @@ export const learningReportSchema = z.object({
 export type LearningReport = z.infer<typeof learningReportSchema>;
 
 export const listReportsQuerySchema = z.object({
+  courseId: z.uuid().optional(),
   status: reportStatusSchema.optional(),
   targetType: engagementTargetTypeSchema.optional(),
   cursor: z.string().max(512).optional(),
@@ -74,17 +107,27 @@ export type ModerateReplyRequest = z.infer<typeof moderateReplyRequestSchema>;
 
 export const suspendUserRequestSchema = z.object({
   userId: z.uuid(),
+  courseId: z.uuid().nullable().optional(),
+  scope: suspensionScopeSchema.default("all"),
+  duration: suspensionDurationSchema.default({ type: "temporary", durationHours: 24 }),
   reason: z.string().min(1).max(500),
-  durationHours: z.number().int().positive().optional(),
-  permanent: z.boolean().default(false),
 });
 export type SuspendUserRequest = z.infer<typeof suspendUserRequestSchema>;
+
+export const unsuspendUserRequestSchema = z.object({
+  userId: z.uuid(),
+  courseId: z.uuid().nullable().optional(),
+  reason: z.string().max(500).optional(),
+});
+export type UnsuspendUserRequest = z.infer<typeof unsuspendUserRequestSchema>;
 
 export const userSuspensionSchema = z.object({
   id: z.uuid(),
   academyId: z.uuid(),
+  courseId: z.uuid().nullable().optional(),
   userId: z.uuid(),
-  suspendedByUserId: z.uuid(),
+  suspendedByUserId: z.uuid().nullable().optional(),
+  scope: suspensionScopeSchema,
   reason: z.string(),
   expiresAt: z.string().nullable().optional(),
   isActive: z.boolean(),
@@ -94,6 +137,8 @@ export type UserSuspension = z.infer<typeof userSuspensionSchema>;
 
 export const suspensionStatusResponseSchema = z.object({
   isSuspended: z.boolean(),
+  scope: suspensionScopeSchema.nullable().optional(),
+  courseId: z.uuid().nullable().optional(),
   reason: z.string().nullable().optional(),
   expiresAt: z.string().nullable().optional(),
 });
@@ -104,7 +149,8 @@ export type SuspensionStatusResponse = z.infer<
 export const learningAuditLogSchema = z.object({
   id: z.uuid(),
   academyId: z.uuid(),
-  actorUserId: z.uuid(),
+  courseId: z.uuid().nullable().optional(),
+  actorUserId: z.uuid().nullable().optional(),
   actor: learningAuthorSchema.optional(),
   action: z.string(),
   targetType: z.string(),
@@ -116,6 +162,7 @@ export const learningAuditLogSchema = z.object({
 export type LearningAuditLog = z.infer<typeof learningAuditLogSchema>;
 
 export const listAuditLogsQuerySchema = z.object({
+  courseId: z.uuid().optional(),
   actorUserId: z.uuid().optional(),
   targetId: z.uuid().optional(),
   action: z.string().optional(),

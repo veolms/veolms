@@ -5,6 +5,7 @@ import type {
   ListReportsQuery,
   ReportReason,
   ReportStatus,
+  SuspensionScope,
 } from "@veolms/contracts";
 
 export interface ModerationRepository {
@@ -15,10 +16,18 @@ export interface ModerationRepository {
       reporterId: string;
       targetType: EngagementTargetType;
       targetId: string;
+      courseId?: string | null;
       reason: ReportReason;
       details?: string;
     },
   ): Promise<void>;
+
+  findPendingReport(
+    db: DatabaseExecutor,
+    reporterId: string,
+    targetType: EngagementTargetType,
+    targetId: string,
+  ): Promise<any | null>;
 
   listReports(
     db: DatabaseExecutor,
@@ -38,16 +47,25 @@ export interface ModerationRepository {
     suspension: {
       id: string;
       academyId: string;
+      courseId?: string | null;
       userId: string;
-      suspendedByUserId: string;
+      suspendedByUserId?: string | null;
+      scope: SuspensionScope;
       reason: string;
       expiresAt: Date | null;
     },
   ): Promise<void>;
 
+  deactivateSuspension(
+    db: DatabaseExecutor,
+    userId: string,
+    courseId?: string | null,
+  ): Promise<void>;
+
   getActiveSuspension(
     db: DatabaseExecutor,
     userId: string,
+    courseId?: string | null,
   ): Promise<any | null>;
 
   createAuditLog(
@@ -55,7 +73,8 @@ export interface ModerationRepository {
     log: {
       id: string;
       academyId: string;
-      actorUserId: string;
+      courseId?: string | null;
+      actorUserId?: string | null;
       action: string;
       targetType: string;
       targetId: string;
@@ -81,11 +100,23 @@ export function createModerationRepository(): ModerationRepository {
           reporter_id: report.reporterId,
           target_type: report.targetType,
           target_id: report.targetId,
+          course_id: report.courseId || null,
           reason: report.reason,
           details: report.details || null,
           status: "pending",
         })
         .execute();
+    },
+
+    async findPendingReport(db, reporterId, targetType, targetId) {
+      return db
+        .selectFrom("learning_reports")
+        .selectAll()
+        .where("reporter_id", "=", reporterId)
+        .where("target_type", "=", targetType)
+        .where("target_id", "=", targetId)
+        .where("status", "=", "pending")
+        .executeTakeFirst();
     },
 
     async listReports(db, options) {
@@ -97,6 +128,7 @@ export function createModerationRepository(): ModerationRepository {
           "rep.reporter_id as reporterId",
           "rep.target_type as targetType",
           "rep.target_id as targetId",
+          "rep.course_id as courseId",
           "rep.reason as reason",
           "rep.details as details",
           "rep.status as status",
@@ -105,8 +137,13 @@ export function createModerationRepository(): ModerationRepository {
           "rep.created_at as createdAt",
           "rep.updated_at as updatedAt",
           "u.display_name as reporterName",
+          "u.username as reporterUsername",
           "u.email as reporterEmail",
         ]);
+
+      if (options.courseId) {
+        query = query.where("rep.course_id", "=", options.courseId);
+      }
 
       if (options.status) {
         query = query.where("rep.status", "=", options.status);
@@ -141,8 +178,10 @@ export function createModerationRepository(): ModerationRepository {
         .values({
           id: suspension.id,
           academy_id: suspension.academyId,
+          course_id: suspension.courseId || null,
           user_id: suspension.userId,
-          suspended_by_user_id: suspension.suspendedByUserId,
+          suspended_by_user_id: suspension.suspendedByUserId || null,
+          scope: suspension.scope,
           reason: suspension.reason,
           expires_at: suspension.expiresAt,
           is_active: true,
@@ -150,8 +189,25 @@ export function createModerationRepository(): ModerationRepository {
         .execute();
     },
 
-    async getActiveSuspension(db, userId) {
-      return db
+    async deactivateSuspension(db, userId, courseId) {
+      let query = db
+        .updateTable("learning_suspensions")
+        .set({
+          is_active: false,
+          updated_at: new Date(),
+        })
+        .where("user_id", "=", userId)
+        .where("is_active", "=", true);
+
+      if (courseId) {
+        query = query.where("course_id", "=", courseId);
+      }
+
+      await query.execute();
+    },
+
+    async getActiveSuspension(db, userId, courseId) {
+      let query = db
         .selectFrom("learning_suspensions")
         .selectAll()
         .where("user_id", "=", userId)
@@ -161,8 +217,18 @@ export function createModerationRepository(): ModerationRepository {
             eb("expires_at", "is", null),
             eb("expires_at", ">", new Date()),
           ]),
-        )
-        .executeTakeFirst();
+        );
+
+      if (courseId) {
+        query = query.where((eb) =>
+          eb.or([
+            eb("course_id", "is", null),
+            eb("course_id", "=", courseId),
+          ]),
+        );
+      }
+
+      return query.executeTakeFirst();
     },
 
     async createAuditLog(db, log) {
@@ -171,7 +237,8 @@ export function createModerationRepository(): ModerationRepository {
         .values({
           id: log.id,
           academy_id: log.academyId,
-          actor_user_id: log.actorUserId,
+          course_id: log.courseId || null,
+          actor_user_id: log.actorUserId || null,
           action: log.action,
           target_type: log.targetType,
           target_id: log.targetId,
@@ -184,10 +251,11 @@ export function createModerationRepository(): ModerationRepository {
     async listAuditLogs(db, academyId, options) {
       let query = db
         .selectFrom("learning_audit_logs as a")
-        .innerJoin("users as u", "u.id", "a.actor_user_id")
+        .leftJoin("users as u", "u.id", "a.actor_user_id")
         .select([
           "a.id as id",
           "a.academy_id as academyId",
+          "a.course_id as courseId",
           "a.actor_user_id as actorUserId",
           "a.action as action",
           "a.target_type as targetType",
@@ -196,9 +264,14 @@ export function createModerationRepository(): ModerationRepository {
           "a.ip_address as ipAddress",
           "a.created_at as createdAt",
           "u.display_name as actorName",
+          "u.username as actorUsername",
           "u.email as actorEmail",
         ])
         .where("a.academy_id", "=", academyId);
+
+      if (options.courseId) {
+        query = query.where("a.course_id", "=", options.courseId);
+      }
 
       if (options.actorUserId) {
         query = query.where("a.actor_user_id", "=", options.actorUserId);

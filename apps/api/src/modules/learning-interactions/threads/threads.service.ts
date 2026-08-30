@@ -8,6 +8,7 @@ import type {
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
+import { extractPlainText } from "../shared/text-sanitizer.ts";
 import type { ThreadsRepository } from "./threads.repository.ts";
 
 export interface ThreadsService {
@@ -16,13 +17,14 @@ export interface ThreadsService {
     input: {
       userId: string;
       courseId: string;
-      lessonId: string;
+      lessonId?: string | null;
+      assignmentId?: string | null;
       kind: CreateLearningThreadRequest["kind"];
       title?: string;
       content: string;
-      plainText?: string;
       timestampSeconds?: number | null;
       visibility?: CreateLearningThreadRequest["visibility"];
+      attachmentIds?: string[];
     },
   ): Promise<LearningThread>;
 
@@ -62,14 +64,15 @@ export function createThreadsService(
     return academy?.id || "00000000-0000-0000-0000-000000000000";
   }
 
-  function mapThreadRow(row: any, currentUserId?: string): LearningThread {
+  function mapThreadRow(row: any, currentUserId?: string, attachments: any[] = []): LearningThread {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
 
     return {
       id: row.id,
       academyId: row.academyId,
       courseId: row.courseId,
-      lessonId: row.lessonId,
+      lessonId: row.lessonId ?? null,
+      assignmentId: row.assignmentId ?? null,
       userId: row.userId,
       author: {
         id: row.userId,
@@ -89,6 +92,15 @@ export function createThreadsService(
       acceptedAnswerId: row.acceptedAnswerId ?? null,
       likesCount: Number(row.likesCount || 0),
       repliesCount: Number(row.repliesCount || 0),
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        fileName: a.file_name,
+        fileUrl: a.file_url,
+        mimeType: a.mime_type,
+        fileSize: Number(a.file_size || 0),
+        metadata: a.metadata ? JSON.parse(a.metadata) : null,
+      })),
       isLiked: false,
       isBookmarked: false,
       isFollowing: false,
@@ -106,35 +118,76 @@ export function createThreadsService(
 
   return {
     async createThread(db, input) {
-      // Check if user is suspended
+      const academyId = await resolveAcademyId(db);
+
+      // Validate course exists
+      const course = await db
+        .selectFrom("courses")
+        .selectAll()
+        .where("id", "=", input.courseId)
+        .executeTakeFirst();
+
+      if (!course) {
+        throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
+      }
+
+      // Validate lesson or assignment hierarchy
+      if (input.lessonId) {
+        const lesson = await db
+          .selectFrom("course_lessons")
+          .selectAll()
+          .where("id", "=", input.lessonId)
+          .executeTakeFirst();
+
+        if (!lesson || lesson.course_id !== input.courseId) {
+          throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
+        }
+      }
+
+      // Check suspension with scope
+      const threadKind = input.kind || "comment";
+      const requiredScopes: ("commenting" | "qa" | "all")[] =
+        threadKind === "comment" ? ["commenting", "all"] : ["qa", "all"];
+
       const activeSuspension = await db
         .selectFrom("learning_suspensions")
         .selectAll()
         .where("user_id", "=", input.userId)
         .where("is_active", "=", true)
+        .where("scope", "in", requiredScopes)
+        .where((eb) =>
+          eb.or([
+            eb("course_id", "is", null),
+            eb("course_id", "=", input.courseId),
+          ]),
+        )
+        .where((eb) =>
+          eb.or([
+            eb("expires_at", "is", null),
+            eb("expires_at", ">", new Date()),
+          ]),
+        )
         .executeTakeFirst();
 
       if (activeSuspension) {
-        if (!activeSuspension.expires_at || activeSuspension.expires_at > new Date()) {
-          throw httpError(
-            403,
-            "PARTICIPATION_SUSPENDED",
-            `Your participation in discussions is suspended. Reason: ${activeSuspension.reason}`,
-          );
-        }
+        throw httpError(
+          403,
+          "PARTICIPATION_SUSPENDED",
+          `Your participation for ${activeSuspension.scope} is suspended. Reason: ${activeSuspension.reason}`,
+        );
       }
 
-      const academyId = await resolveAcademyId(db);
       const id = crypto.randomUUID();
-      const plainText = input.plainText || input.content.replace(/<[^>]+>/g, "").trim();
+      const plainText = extractPlainText(input.content);
 
       await threadsRepo.createThread(db, {
         id,
         academyId,
         courseId: input.courseId,
-        lessonId: input.lessonId,
+        lessonId: input.lessonId || null,
+        assignmentId: input.assignmentId || null,
         userId: input.userId,
-        kind: input.kind || "comment",
+        kind: threadKind,
         title: input.title || null,
         content: input.content,
         plainText,
@@ -142,12 +195,41 @@ export function createThreadsService(
         visibility: input.visibility || "public",
       });
 
+      // Attach any verified attachments owned by the caller
+      if (input.attachmentIds && input.attachmentIds.length > 0) {
+        for (const attachmentId of input.attachmentIds) {
+          const attachment = await db
+            .selectFrom("learning_attachments")
+            .selectAll()
+            .where("id", "=", attachmentId)
+            .executeTakeFirst();
+
+          if (attachment && attachment.owner_id === input.userId && attachment.status === "ready") {
+            await db
+              .updateTable("learning_attachments")
+              .set({
+                target_type: "thread",
+                target_id: id,
+              })
+              .where("id", "=", attachmentId)
+              .execute();
+          }
+        }
+      }
+
       const created = await threadsRepo.findThreadById(db, id);
       if (!created) {
         throw httpError(500, "CREATE_FAILED", "Failed to load created thread");
       }
 
-      return mapThreadRow(created, input.userId);
+      const attachments = await db
+        .selectFrom("learning_attachments")
+        .selectAll()
+        .where("target_type", "=", "thread")
+        .where("target_id", "=", id)
+        .execute();
+
+      return mapThreadRow(created, input.userId, attachments);
     },
 
     async getThread(db, threadId, currentUserId) {
@@ -155,7 +237,15 @@ export function createThreadsService(
       if (!row) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
-      return mapThreadRow(row, currentUserId);
+
+      const attachments = await db
+        .selectFrom("learning_attachments")
+        .selectAll()
+        .where("target_type", "=", "thread")
+        .where("target_id", "=", threadId)
+        .execute();
+
+      return mapThreadRow(row, currentUserId, attachments);
     },
 
     async listThreads(db, query) {
@@ -192,7 +282,12 @@ export function createThreadsService(
         );
       }
 
-      await threadsRepo.updateThread(db, threadId, updates);
+      const plainText = updates.content ? extractPlainText(updates.content) : undefined;
+      await threadsRepo.updateThread(db, threadId, {
+        ...updates,
+        ...(plainText ? { plainText } : {}),
+      });
+
       const updated = await threadsRepo.findThreadById(db, threadId);
       return mapThreadRow(updated, userId);
     },

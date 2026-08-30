@@ -1,6 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
-  DiscussionVisibility,
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
@@ -20,7 +19,6 @@ export interface NotesRepository {
       content: string;
       plainText: string;
       tags: string[];
-      visibility: DiscussionVisibility;
     },
   ): Promise<void>;
 
@@ -38,7 +36,7 @@ export interface NotesRepository {
   updateNote(
     db: DatabaseExecutor,
     noteId: string,
-    updates: UpdateLearningNoteRequest,
+    updates: UpdateLearningNoteRequest & { plainText?: string },
   ): Promise<void>;
 
   softDeleteNote(
@@ -63,7 +61,6 @@ export function createNotesRepository(): NotesRepository {
           content: note.content,
           plain_text: note.plainText,
           tags: note.tags,
-          visibility: note.visibility,
         })
         .execute();
     },
@@ -85,7 +82,6 @@ export function createNotesRepository(): NotesRepository {
           "n.content",
           "n.plain_text as plainText",
           "n.tags",
-          "n.visibility",
           "n.created_at as createdAt",
           "n.updated_at as updatedAt",
         ])
@@ -113,7 +109,6 @@ export function createNotesRepository(): NotesRepository {
           "n.content",
           "n.plain_text as plainText",
           "n.tags",
-          "n.visibility",
           "n.created_at as createdAt",
           "n.updated_at as updatedAt",
         ])
@@ -155,7 +150,6 @@ export function createNotesRepository(): NotesRepository {
       if (updates.timestampSeconds !== undefined)
         updateData.timestamp_seconds = updates.timestampSeconds;
       if (updates.tags !== undefined) updateData.tags = updates.tags;
-      if (updates.visibility !== undefined) updateData.visibility = updates.visibility;
 
       await db
         .updateTable("learning_notes")

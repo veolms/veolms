@@ -16,14 +16,14 @@ import { createThreadsService } from "./threads.service.ts";
 
 const threadsRoutes: RoutePlugin = async (app, options) => {
   const ctx = createLearningInteractionsContext(options);
-  const repo = createThreadsRepository();
-  const service = createThreadsService(repo);
+  const repository = createThreadsRepository();
+  const service = createThreadsService(repository);
   const controller = createThreadsController({
     database: options.database,
     service,
   });
 
-  // 1. GET /courses/:courseId/lessons/:lessonId/threads
+  // 1. GET /courses/:courseId/lessons/:lessonId/threads - List threads for lesson
   app.get(
     "/courses/:courseId/lessons/:lessonId/threads",
     {
@@ -31,7 +31,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "listLessonThreads",
         tags: ["Learning Discussions"],
-        summary: "List discussions, questions, and notes for a course lesson",
+        summary: "List comments or Q&A questions for a lesson",
         params: z.object({
           courseId: z.uuid(),
           lessonId: z.uuid(),
@@ -39,16 +39,17 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
         querystring: listLearningThreadsQuerySchema,
         response: {
           200: jsonResponse(
-            "List of discussion threads",
+            "List of discussion threads for lesson",
             learningThreadsListResponseSchema,
           ),
+          404: errorResponse("Lesson or course not found"),
         },
       },
     },
     controller.listLessonThreads,
   );
 
-  // 2. POST /courses/:courseId/lessons/:lessonId/threads
+  // 2. POST /courses/:courseId/lessons/:lessonId/threads - Create thread for lesson
   app.post(
     "/courses/:courseId/lessons/:lessonId/threads",
     {
@@ -56,36 +57,87 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "createLessonThread",
         tags: ["Learning Discussions"],
-        summary: "Create a comment, question, or note in a course lesson",
+        summary: "Start a comment or Q&A question on a lesson",
         params: z.object({
           courseId: z.uuid(),
           lessonId: z.uuid(),
         }),
         body: createLearningThreadRequestSchema,
         response: {
-          201: jsonResponse("Discussion thread created", learningThreadSchema),
-          400: errorResponse("Invalid input or thread locked"),
+          201: jsonResponse("Thread created", learningThreadSchema),
+          400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - User participation suspended"),
         },
       },
     },
-    controller.createThread,
+    controller.createLessonThread,
   );
 
-  // 3. GET /learning-threads - List threads across hub
+  // 3. GET /courses/:courseId/assignments/:assignmentId/threads - List threads for assignment
   app.get(
-    "/learning-threads",
+    "/courses/:courseId/assignments/:assignmentId/threads",
+    {
+      preHandler: ctx.authenticate,
+      schema: {
+        operationId: "listAssignmentThreads",
+        tags: ["Learning Discussions"],
+        summary: "List comments or Q&A questions for an assignment",
+        params: z.object({
+          courseId: z.uuid(),
+          assignmentId: z.uuid(),
+        }),
+        querystring: listLearningThreadsQuerySchema,
+        response: {
+          200: jsonResponse(
+            "List of discussion threads for assignment",
+            learningThreadsListResponseSchema,
+          ),
+          404: errorResponse("Assignment or course not found"),
+        },
+      },
+    },
+    controller.listAssignmentThreads,
+  );
+
+  // 4. POST /courses/:courseId/assignments/:assignmentId/threads - Create thread for assignment
+  app.post(
+    "/courses/:courseId/assignments/:assignmentId/threads",
+    {
+      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      schema: {
+        operationId: "createAssignmentThread",
+        tags: ["Learning Discussions"],
+        summary: "Start a comment or Q&A question on an assignment",
+        params: z.object({
+          courseId: z.uuid(),
+          assignmentId: z.uuid(),
+        }),
+        body: createLearningThreadRequestSchema,
+        response: {
+          201: jsonResponse("Thread created", learningThreadSchema),
+          400: errorResponse("Invalid input"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - User participation suspended"),
+        },
+      },
+    },
+    controller.createAssignmentThread,
+  );
+
+  // 5. GET /threads - Hub search across discussions and Q&A
+  app.get(
+    "/threads",
     {
       preHandler: ctx.authenticate,
       schema: {
         operationId: "listHubThreads",
         tags: ["Learning Discussions"],
-        summary: "List discussions across courses for hub view",
+        summary: "Global/course search across discussion threads",
         querystring: listLearningThreadsQuerySchema,
         response: {
           200: jsonResponse(
-            "List of hub threads",
+            "List of filtered threads",
             learningThreadsListResponseSchema,
           ),
         },
@@ -94,63 +146,66 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
     controller.listHubThreads,
   );
 
-  // 4. GET /learning-threads/:threadId
+  // 6. GET /threads/:threadId - Get thread details
   app.get(
-    "/learning-threads/:threadId",
+    "/threads/:threadId",
     {
       preHandler: ctx.authenticate,
       schema: {
         operationId: "getLearningThread",
         tags: ["Learning Discussions"],
-        summary: "Get a discussion thread by ID",
+        summary: "Get a specific discussion thread with details",
         params: z.object({ threadId: z.uuid() }),
         response: {
-          200: jsonResponse("Discussion thread details", learningThreadSchema),
-          404: errorResponse("Discussion thread not found"),
+          200: jsonResponse("Thread details", learningThreadSchema),
+          404: errorResponse("Thread not found"),
         },
       },
     },
     controller.getThread,
   );
 
-  // 5. PATCH /learning-threads/:threadId
+  // 7. PATCH /threads/:threadId - Update thread
   app.patch(
-    "/learning-threads/:threadId",
+    "/threads/:threadId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
         operationId: "updateLearningThread",
         tags: ["Learning Discussions"],
-        summary: "Update a discussion thread (Author only)",
+        summary: "Update thread content (Author only)",
         params: z.object({ threadId: z.uuid() }),
         body: updateLearningThreadRequestSchema,
         response: {
-          200: jsonResponse("Discussion thread updated", learningThreadSchema),
-          400: errorResponse("Invalid input or locked thread"),
+          200: jsonResponse("Thread updated", learningThreadSchema),
+          400: errorResponse("Cannot edit locked thread"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Author only"),
-          404: errorResponse("Discussion thread not found"),
+          404: errorResponse("Thread not found"),
         },
       },
     },
     controller.updateThread,
   );
 
-  // 6. DELETE /learning-threads/:threadId
+  // 8. DELETE /threads/:threadId - Soft delete thread
   app.delete(
-    "/learning-threads/:threadId",
+    "/threads/:threadId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
         operationId: "deleteLearningThread",
         tags: ["Learning Discussions"],
-        summary: "Delete a discussion thread (Author or Moderator)",
+        summary: "Soft delete a thread (Author or Moderator)",
         params: z.object({ threadId: z.uuid() }),
         response: {
-          200: jsonResponse("Thread deleted", z.object({ message: z.string() })),
+          200: jsonResponse(
+            "Thread deleted",
+            z.object({ message: z.string() }),
+          ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
-          404: errorResponse("Discussion thread not found"),
+          404: errorResponse("Thread not found"),
         },
       },
     },

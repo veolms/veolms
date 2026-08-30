@@ -23,9 +23,9 @@ const notesRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. GET /learning-notes - List user's notes
+  // 1. GET /notes - List user's notes
   app.get(
-    "/learning-notes",
+    "/notes",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -45,9 +45,9 @@ const notesRoutes: RoutePlugin = async (app, options) => {
     controller.listNotes,
   );
 
-  // 2. POST /learning-notes - Create a new note
+  // 2. POST /notes - Create a new note
   app.post(
-    "/learning-notes",
+    "/notes",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -65,9 +65,9 @@ const notesRoutes: RoutePlugin = async (app, options) => {
     controller.createNote,
   );
 
-  // 3. GET /learning-notes/:noteId - Get note
+  // 3. GET /notes/:noteId - Get note
   app.get(
-    "/learning-notes/:noteId",
+    "/notes/:noteId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -86,9 +86,9 @@ const notesRoutes: RoutePlugin = async (app, options) => {
     controller.getNote,
   );
 
-  // 4. PATCH /learning-notes/:noteId - Update note
+  // 4. PATCH /notes/:noteId - Update note
   app.patch(
-    "/learning-notes/:noteId",
+    "/notes/:noteId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -108,9 +108,9 @@ const notesRoutes: RoutePlugin = async (app, options) => {
     controller.updateNote,
   );
 
-  // 5. DELETE /learning-notes/:noteId - Delete note
+  // 5. DELETE /notes/:noteId - Delete note
   app.delete(
-    "/learning-notes/:noteId",
+    "/notes/:noteId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {

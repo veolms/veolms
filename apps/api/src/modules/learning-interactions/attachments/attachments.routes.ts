@@ -1,6 +1,11 @@
+import { z } from "zod";
 import fastifyMultipart from "@fastify/multipart";
 import {
+  completeAttachmentUploadRequestSchema,
   createLinkPreviewRequestSchema,
+  initiateAttachmentUploadRequestSchema,
+  initiateAttachmentUploadResponseSchema,
+  learningAttachmentSchema,
   learningUploadResponseSchema,
   linkPreviewResponseSchema,
 } from "@veolms/contracts";
@@ -25,15 +30,77 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. POST /learning-attachments/upload
+  // 1. POST /attachments/initiate - Prepare upload slot
   app.post(
-    "/learning-attachments/upload",
+    "/attachments/initiate",
+    {
+      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      schema: {
+        operationId: "initiateAttachmentUpload",
+        tags: ["Learning Attachments"],
+        summary: "Initiate upload session for media or code file",
+        body: initiateAttachmentUploadRequestSchema,
+        response: {
+          201: jsonResponse("Upload slot initiated", initiateAttachmentUploadResponseSchema),
+          400: errorResponse("Invalid input"),
+          401: errorResponse("Unauthorized"),
+        },
+      },
+    },
+    controller.initiateUpload,
+  );
+
+  // 2. POST /attachments/:attachmentId/upload - Upload file binary
+  app.post(
+    "/attachments/:attachmentId/upload",
+    {
+      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      schema: {
+        operationId: "uploadAttachmentBinary",
+        tags: ["Learning Attachments"],
+        summary: "Upload file payload to prepared attachment slot",
+        params: z.object({ attachmentId: z.uuid() }),
+        consumes: ["multipart/form-data"],
+        response: {
+          200: jsonResponse("File uploaded", learningAttachmentSchema),
+          400: errorResponse("File is required"),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Attachment slot not found"),
+        },
+      },
+    },
+    controller.uploadFile,
+  );
+
+  // 3. POST /attachments/complete - Finalize and verify upload
+  app.post(
+    "/attachments/complete",
+    {
+      preHandler: [ctx.authenticate, ctx.requireAuthenticated],
+      schema: {
+        operationId: "completeAttachmentUpload",
+        tags: ["Learning Attachments"],
+        summary: "Complete attachment upload verification",
+        body: completeAttachmentUploadRequestSchema,
+        response: {
+          200: jsonResponse("Attachment completed", learningAttachmentSchema),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Attachment not found"),
+        },
+      },
+    },
+    controller.completeUpload,
+  );
+
+  // 4. POST /attachments/upload - Direct single-step multipart upload
+  app.post(
+    "/attachments/upload",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
         operationId: "uploadLearningAttachment",
         tags: ["Learning Attachments"],
-        summary: "Upload image, screenshot, code file, or document attachment",
+        summary: "Direct single-step file upload",
         consumes: ["multipart/form-data"],
         response: {
           201: jsonResponse("Attachment uploaded", learningUploadResponseSchema),
@@ -46,9 +113,9 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
     controller.uploadAttachment,
   );
 
-  // 2. POST /learning-attachments/link-preview
+  // 5. POST /attachments/link-preview - External link preview
   app.post(
-    "/learning-attachments/link-preview",
+    "/attachments/link-preview",
     {
       preHandler: ctx.authenticate,
       schema: {

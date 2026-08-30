@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
-  acceptAnswerRequestSchema,
-  acceptAnswerResponseSchema,
+  acceptReplyRequestSchema,
+  acceptReplyResponseSchema,
   createLearningReplyRequestSchema,
   learningRepliesListResponseSchema,
   learningReplySchema,
@@ -27,9 +27,9 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. GET /learning-threads/:threadId/replies
+  // 1. GET /threads/:threadId/replies
   app.get(
-    "/learning-threads/:threadId/replies",
+    "/threads/:threadId/replies",
     {
       preHandler: ctx.authenticate,
       schema: {
@@ -50,9 +50,9 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
     controller.listReplies,
   );
 
-  // 2. POST /learning-threads/:threadId/replies
+  // 2. POST /threads/:threadId/replies
   app.post(
-    "/learning-threads/:threadId/replies",
+    "/threads/:threadId/replies",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -73,9 +73,9 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
     controller.createReply,
   );
 
-  // 3. PATCH /learning-replies/:replyId
+  // 3. PATCH /replies/:replyId
   app.patch(
-    "/learning-replies/:replyId",
+    "/replies/:replyId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -95,9 +95,9 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
     controller.updateReply,
   );
 
-  // 4. DELETE /learning-replies/:replyId
+  // 4. DELETE /replies/:replyId
   app.delete(
-    "/learning-replies/:replyId",
+    "/replies/:replyId",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -116,27 +116,27 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
     controller.deleteReply,
   );
 
-  // 5. POST /learning-threads/:threadId/accept-answer
+  // 5. POST /replies/:replyId/accept - Mark or unmark this reply as accepted answer
   app.post(
-    "/learning-threads/:threadId/accept-answer",
+    "/replies/:replyId/accept",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
-        operationId: "acceptLearningAnswer",
+        operationId: "acceptLearningReply",
         tags: ["Learning Discussions"],
-        summary: "Mark or unmark an answer as accepted for a Q&A question",
-        params: z.object({ threadId: z.uuid() }),
-        body: acceptAnswerRequestSchema,
+        summary: "Mark or unmark a reply as the accepted answer for a Q&A question",
+        params: z.object({ replyId: z.uuid() }),
+        body: acceptReplyRequestSchema,
         response: {
-          200: jsonResponse("Accepted answer updated", acceptAnswerResponseSchema),
+          200: jsonResponse("Accepted reply status updated", acceptReplyResponseSchema),
           400: errorResponse("Not a question or invalid reply"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Question author or moderator only"),
-          404: errorResponse("Thread or reply not found"),
+          404: errorResponse("Reply or thread not found"),
         },
       },
     },
-    controller.acceptAnswer,
+    controller.acceptReply,
   );
 };
 

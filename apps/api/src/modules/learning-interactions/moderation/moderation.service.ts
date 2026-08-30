@@ -11,6 +11,7 @@ import type {
   ModerateThreadRequest,
   ReportsListResponse,
   SuspendUserRequest,
+  UnsuspendUserRequest,
   UserSuspension,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
@@ -35,6 +36,7 @@ export interface ModerationService {
     threadId: string,
     moderatorId: string,
     input: ModerateThreadRequest,
+    courseId?: string,
     ipAddress?: string,
   ): Promise<void>;
 
@@ -43,6 +45,7 @@ export interface ModerationService {
     replyId: string,
     moderatorId: string,
     input: ModerateReplyRequest,
+    courseId?: string,
     ipAddress?: string,
   ): Promise<void>;
 
@@ -52,6 +55,13 @@ export interface ModerationService {
     input: SuspendUserRequest,
     ipAddress?: string,
   ): Promise<UserSuspension>;
+
+  unsuspendUser(
+    db: DatabaseExecutor,
+    moderatorId: string,
+    input: UnsuspendUserRequest,
+    ipAddress?: string,
+  ): Promise<{ message: string }>;
 
   listAuditLogs(
     db: DatabaseExecutor,
@@ -75,12 +85,41 @@ export function createModerationService({
 
   return {
     async createReport(db, reporterId, input) {
+      // 1. Verify target item exists
+      if (input.targetType === "thread") {
+        const thread = await threadsRepo.findThreadById(db, input.targetId);
+        if (!thread) {
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported discussion thread not found");
+        }
+      } else if (input.targetType === "reply") {
+        const reply = await repliesRepo.findReplyById(db, input.targetId);
+        if (!reply) {
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
+        }
+      }
+
+      // 2. Prevent spam / duplicate pending reports by the same reporter
+      const existing = await moderationRepo.findPendingReport(
+        db,
+        reporterId,
+        input.targetType,
+        input.targetId,
+      );
+      if (existing) {
+        throw httpError(
+          400,
+          "DUPLICATE_REPORT",
+          "You already have a pending report for this item. Our moderation team is reviewing it.",
+        );
+      }
+
       const id = crypto.randomUUID();
       await moderationRepo.createReport(db, {
         id,
         reporterId,
         targetType: input.targetType,
         targetId: input.targetId,
+        courseId: input.courseId || null,
         reason: input.reason,
         details: input.details,
       });
@@ -96,12 +135,13 @@ export function createModerationService({
         reporter: {
           id: r.reporterId,
           displayName: r.reporterName || "Learner",
-          username: (r.reporterEmail || "user").split("@")[0],
+          username: r.reporterUsername || (r.reporterEmail || "user").split("@")[0],
           avatarUrl: null,
           role: "Student",
         },
         targetType: r.targetType,
         targetId: r.targetId,
+        courseId: r.courseId ?? null,
         reason: r.reason,
         details: r.details,
         status: r.status,
@@ -124,10 +164,14 @@ export function createModerationService({
       };
     },
 
-    async moderateThread(db, threadId, moderatorId, input, ipAddress) {
+    async moderateThread(db, threadId, moderatorId, input, courseId, ipAddress) {
       const thread = await threadsRepo.findThreadById(db, threadId);
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+      }
+
+      if (courseId && thread.courseId !== courseId) {
+        throw httpError(403, "FORBIDDEN", "Discussion thread does not belong to this course");
       }
 
       if (input.action === "hide") {
@@ -146,19 +190,25 @@ export function createModerationService({
       await moderationRepo.createAuditLog(db, {
         id: crypto.randomUUID(),
         academyId,
+        courseId: thread.courseId,
         actorUserId: moderatorId,
-        action: `thread_${input.action}`,
+        action: `${input.action}_thread`,
         targetType: "thread",
         targetId: threadId,
-        details: { reason: input.reason },
+        details: { reason: input.reason || null },
         ipAddress,
       });
     },
 
-    async moderateReply(db, replyId, moderatorId, input, ipAddress) {
+    async moderateReply(db, replyId, moderatorId, input, courseId, ipAddress) {
       const reply = await repliesRepo.findReplyById(db, replyId);
       if (!reply) {
         throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+      }
+
+      const thread = await threadsRepo.findThreadById(db, reply.threadId);
+      if (courseId && thread && thread.courseId !== courseId) {
+        throw httpError(403, "FORBIDDEN", "Reply does not belong to this course");
       }
 
       if (input.action === "hide") {
@@ -182,11 +232,12 @@ export function createModerationService({
       await moderationRepo.createAuditLog(db, {
         id: crypto.randomUUID(),
         academyId,
+        courseId: thread?.courseId || courseId || null,
         actorUserId: moderatorId,
-        action: `reply_${input.action}`,
+        action: `${input.action}_reply`,
         targetType: "reply",
         targetId: replyId,
-        details: { reason: input.reason },
+        details: { reason: input.reason || null },
         ipAddress,
       });
     },
@@ -194,17 +245,18 @@ export function createModerationService({
     async suspendUser(db, moderatorId, input, ipAddress) {
       const academyId = await resolveAcademyId(db);
       const id = crypto.randomUUID();
-      const expiresAt = input.permanent
-        ? null
-        : input.durationHours
-          ? new Date(Date.now() + input.durationHours * 3600 * 1000)
-          : new Date(Date.now() + 24 * 3600 * 1000); // default 24h
+      const expiresAt =
+        input.duration.type === "permanent"
+          ? null
+          : new Date(Date.now() + input.duration.durationHours * 3600 * 1000);
 
       await moderationRepo.createSuspension(db, {
         id,
         academyId,
+        courseId: input.courseId || null,
         userId: input.userId,
         suspendedByUserId: moderatorId,
+        scope: input.scope || "all",
         reason: input.reason,
         expiresAt,
       });
@@ -212,24 +264,54 @@ export function createModerationService({
       await moderationRepo.createAuditLog(db, {
         id: crypto.randomUUID(),
         academyId,
+        courseId: input.courseId || null,
         actorUserId: moderatorId,
-        action: "user_suspend",
+        action: "suspend_user",
         targetType: "user",
         targetId: input.userId,
-        details: { reason: input.reason, expiresAt },
+        details: {
+          reason: input.reason,
+          scope: input.scope || "all",
+          courseId: input.courseId || null,
+          expiresAt: expiresAt ? expiresAt.toISOString() : null,
+        },
         ipAddress,
       });
 
       return {
         id,
         academyId,
+        courseId: input.courseId || null,
         userId: input.userId,
         suspendedByUserId: moderatorId,
+        scope: input.scope || "all",
         reason: input.reason,
         expiresAt: expiresAt ? expiresAt.toISOString() : null,
         isActive: true,
         createdAt: new Date().toISOString(),
       };
+    },
+
+    async unsuspendUser(db, moderatorId, input, ipAddress) {
+      const academyId = await resolveAcademyId(db);
+      await moderationRepo.deactivateSuspension(db, input.userId, input.courseId);
+
+      await moderationRepo.createAuditLog(db, {
+        id: crypto.randomUUID(),
+        academyId,
+        courseId: input.courseId || null,
+        actorUserId: moderatorId,
+        action: "unsuspend_user",
+        targetType: "user",
+        targetId: input.userId,
+        details: {
+          reason: input.reason || null,
+          courseId: input.courseId || null,
+        },
+        ipAddress,
+      });
+
+      return { message: "User participation suspension has been lifted." };
     },
 
     async listAuditLogs(db, query) {
@@ -238,14 +320,17 @@ export function createModerationService({
       const logs: LearningAuditLog[] = rows.map((r) => ({
         id: r.id,
         academyId: r.academyId,
-        actorUserId: r.actorUserId,
-        actor: {
-          id: r.actorUserId,
-          displayName: r.actorName || "Staff Member",
-          username: (r.actorEmail || "staff").split("@")[0],
-          avatarUrl: null,
-          role: "Admin",
-        },
+        courseId: r.courseId ?? null,
+        actorUserId: r.actorUserId ?? null,
+        actor: r.actorUserId
+          ? {
+              id: r.actorUserId,
+              displayName: r.actorName || "Staff Member",
+              username: r.actorUsername || (r.actorEmail || "staff").split("@")[0],
+              avatarUrl: null,
+              role: "Admin",
+            }
+          : undefined,
         action: r.action,
         targetType: r.targetType,
         targetId: r.targetId,

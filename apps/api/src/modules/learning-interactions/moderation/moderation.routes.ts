@@ -8,6 +8,7 @@ import {
   moderateThreadRequestSchema,
   reportsListResponseSchema,
   suspendUserRequestSchema,
+  unsuspendUserRequestSchema,
   userSuspensionSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../lib/errors.ts";
@@ -35,9 +36,11 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. POST /learning-interactions/reports - Submit a report
+  // ==========================================
+  // 1. LEARNER REPORTING
+  // ==========================================
   app.post(
-    "/learning-interactions/reports",
+    "/reports",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -57,19 +60,179 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
     controller.createReport,
   );
 
-  // 2. GET /admin/moderation/reports - View report queue (Moderator)
+  // ==========================================
+  // 2. COURSE-OWNER / INSTRUCTOR MODERATION
+  // ==========================================
+
+  // GET /courses/:courseId/moderation/reports
   app.get(
-    "/admin/moderation/reports",
+    "/courses/:courseId/moderation/reports",
     {
       preHandler: ctx.requireModerator,
       schema: {
-        operationId: "listModerationReports",
-        tags: ["Learning Moderation"],
-        summary: "List reported items in the moderation queue (Moderator)",
+        operationId: "listCourseModerationReports",
+        tags: ["Course Moderation"],
+        summary: "List reports for a specific course",
+        params: z.object({ courseId: z.uuid() }),
         querystring: listReportsQuerySchema,
         response: {
           200: jsonResponse(
-            "List of moderation reports",
+            "Course moderation reports",
+            reportsListResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Instructor/Moderator required"),
+        },
+      },
+    },
+    controller.listCourseReports,
+  );
+
+  // POST /courses/:courseId/moderation/threads/:threadId
+  app.post(
+    "/courses/:courseId/moderation/threads/:threadId",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "moderateCourseThread",
+        tags: ["Course Moderation"],
+        summary: "Moderate a discussion thread within a course (Hide, Lock, Delete)",
+        params: z.object({
+          courseId: z.uuid(),
+          threadId: z.uuid(),
+        }),
+        body: moderateThreadRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Thread not found"),
+        },
+      },
+    },
+    controller.moderateCourseThread,
+  );
+
+  // POST /courses/:courseId/moderation/replies/:replyId
+  app.post(
+    "/courses/:courseId/moderation/replies/:replyId",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "moderateCourseReply",
+        tags: ["Course Moderation"],
+        summary: "Moderate a reply within a course (Hide, Delete)",
+        params: z.object({
+          courseId: z.uuid(),
+          replyId: z.uuid(),
+        }),
+        body: moderateReplyRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Reply not found"),
+        },
+      },
+    },
+    controller.moderateCourseReply,
+  );
+
+  // POST /courses/:courseId/moderation/users/:userId/suspend
+  app.post(
+    "/courses/:courseId/moderation/users/:userId/suspend",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "suspendCourseParticipant",
+        tags: ["Course Moderation"],
+        summary: "Suspend user participation from this course's discussions",
+        params: z.object({
+          courseId: z.uuid(),
+          userId: z.uuid(),
+        }),
+        body: suspendUserRequestSchema.omit({ userId: true, courseId: true }),
+        response: {
+          201: jsonResponse("User suspended from course", userSuspensionSchema),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Instructor required"),
+        },
+      },
+    },
+    controller.suspendCourseParticipant,
+  );
+
+  // POST /courses/:courseId/moderation/users/:userId/unsuspend
+  app.post(
+    "/courses/:courseId/moderation/users/:userId/unsuspend",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "unsuspendCourseParticipant",
+        tags: ["Course Moderation"],
+        summary: "Unsuspend user participation in this course's discussions",
+        params: z.object({
+          courseId: z.uuid(),
+          userId: z.uuid(),
+        }),
+        body: unsuspendUserRequestSchema.omit({ userId: true, courseId: true }).optional(),
+        response: {
+          200: jsonResponse(
+            "Suspension lifted",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Instructor required"),
+        },
+      },
+    },
+    controller.unsuspendCourseParticipant,
+  );
+
+  // GET /courses/:courseId/moderation/audit-logs
+  app.get(
+    "/courses/:courseId/moderation/audit-logs",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "listCourseModerationAuditLogs",
+        tags: ["Course Moderation"],
+        summary: "List moderation audit trail for this course",
+        params: z.object({ courseId: z.uuid() }),
+        querystring: listAuditLogsQuerySchema,
+        response: {
+          200: jsonResponse("Course audit logs", auditLogsListResponseSchema),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+        },
+      },
+    },
+    controller.listCourseAuditLogs,
+  );
+
+  // ==========================================
+  // 3. PLATFORM-WIDE ADMIN MODERATION
+  // ==========================================
+
+  // GET /moderation/reports
+  app.get(
+    "/moderation/reports",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "listPlatformModerationReports",
+        tags: ["Platform Moderation"],
+        summary: "List global reported items across all courses",
+        querystring: listReportsQuerySchema,
+        response: {
+          200: jsonResponse(
+            "Global moderation reports",
             reportsListResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
@@ -77,18 +240,18 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.listReports,
+    controller.listPlatformReports,
   );
 
-  // 3. POST /admin/moderation/threads/:threadId - Hide, lock, or delete thread
+  // POST /moderation/threads/:threadId
   app.post(
-    "/admin/moderation/threads/:threadId",
+    "/moderation/threads/:threadId",
     {
       preHandler: ctx.requireModerator,
       schema: {
-        operationId: "moderateLearningThread",
-        tags: ["Learning Moderation"],
-        summary: "Moderate a discussion thread (Hide, Lock, Delete)",
+        operationId: "moderatePlatformThread",
+        tags: ["Platform Moderation"],
+        summary: "Moderate a discussion thread globally (Hide, Lock, Delete)",
         params: z.object({ threadId: z.uuid() }),
         body: moderateThreadRequestSchema,
         response: {
@@ -102,18 +265,18 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.moderateThread,
+    controller.moderatePlatformThread,
   );
 
-  // 4. POST /admin/moderation/replies/:replyId - Hide or delete reply
+  // POST /moderation/replies/:replyId
   app.post(
-    "/admin/moderation/replies/:replyId",
+    "/moderation/replies/:replyId",
     {
       preHandler: ctx.requireModerator,
       schema: {
-        operationId: "moderateLearningReply",
-        tags: ["Learning Moderation"],
-        summary: "Moderate a reply (Hide, Delete)",
+        operationId: "moderatePlatformReply",
+        tags: ["Platform Moderation"],
+        summary: "Moderate a reply globally (Hide, Delete)",
         params: z.object({ replyId: z.uuid() }),
         body: moderateReplyRequestSchema,
         response: {
@@ -127,38 +290,63 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.moderateReply,
+    controller.moderatePlatformReply,
   );
 
-  // 5. POST /admin/moderation/users/suspend - Suspend user participation
+  // POST /moderation/users/:userId/suspend
   app.post(
-    "/admin/moderation/users/suspend",
+    "/moderation/users/:userId/suspend",
     {
       preHandler: ctx.requireModerator,
       schema: {
-        operationId: "suspendUserParticipation",
-        tags: ["Learning Moderation"],
-        summary: "Suspend a user's participation in discussions (Mute/Ban)",
-        body: suspendUserRequestSchema,
+        operationId: "suspendPlatformUser",
+        tags: ["Platform Moderation"],
+        summary: "Suspend a user globally from all platform discussions",
+        params: z.object({ userId: z.uuid() }),
+        body: suspendUserRequestSchema.omit({ userId: true }),
         response: {
-          201: jsonResponse("User suspended", userSuspensionSchema),
+          201: jsonResponse("User suspended globally", userSuspensionSchema),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Moderator required"),
+          403: errorResponse("Forbidden - Admin required"),
         },
       },
     },
-    controller.suspendUser,
+    controller.suspendPlatformUser,
   );
 
-  // 6. GET /admin/moderation/audit-logs - Audit trail
-  app.get(
-    "/admin/moderation/audit-logs",
+  // POST /moderation/users/:userId/unsuspend
+  app.post(
+    "/moderation/users/:userId/unsuspend",
     {
       preHandler: ctx.requireModerator,
       schema: {
-        operationId: "listModerationAuditLogs",
-        tags: ["Learning Moderation"],
-        summary: "List moderation actions audit trail",
+        operationId: "unsuspendPlatformUser",
+        tags: ["Platform Moderation"],
+        summary: "Lift global discussion suspension for a user",
+        params: z.object({ userId: z.uuid() }),
+        body: unsuspendUserRequestSchema.omit({ userId: true }).optional(),
+        response: {
+          200: jsonResponse(
+            "Global suspension lifted",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+        },
+      },
+    },
+    controller.unsuspendPlatformUser,
+  );
+
+  // GET /moderation/audit-logs
+  app.get(
+    "/moderation/audit-logs",
+    {
+      preHandler: ctx.requireModerator,
+      schema: {
+        operationId: "listPlatformAuditLogs",
+        tags: ["Platform Moderation"],
+        summary: "List platform-wide moderation actions audit trail",
         querystring: listAuditLogsQuerySchema,
         response: {
           200: jsonResponse("Audit logs list", auditLogsListResponseSchema),
@@ -167,7 +355,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.listAuditLogs,
+    controller.listPlatformAuditLogs,
   );
 };
 

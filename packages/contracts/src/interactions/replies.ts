@@ -27,7 +27,6 @@ export type LearningReply = z.infer<typeof learningReplySchema>;
 
 export const createLearningReplyRequestSchema = z.object({
   content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000).optional(),
   parentReplyId: z.uuid().nullable().optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   attachmentIds: z.array(z.uuid()).optional(),
@@ -38,7 +37,6 @@ export type CreateLearningReplyRequest = z.infer<
 
 export const updateLearningReplyRequestSchema = z.object({
   content: z.string().min(1).max(20000).optional(),
-  plainText: z.string().max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
 });
 export type UpdateLearningReplyRequest = z.infer<
@@ -61,3 +59,16 @@ export const learningRepliesListResponseSchema = z.object({
 export type LearningRepliesListResponse = z.infer<
   typeof learningRepliesListResponseSchema
 >;
+
+export const acceptReplyRequestSchema = z.object({
+  accepted: z.boolean().default(true),
+});
+export type AcceptReplyRequest = z.infer<typeof acceptReplyRequestSchema>;
+
+export const acceptReplyResponseSchema = z.object({
+  replyId: z.uuid(),
+  threadId: z.uuid(),
+  isAccepted: z.boolean(),
+  acceptedAnswerId: z.uuid().nullable(),
+});
+export type AcceptReplyResponse = z.infer<typeof acceptReplyResponseSchema>;

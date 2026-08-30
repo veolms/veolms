@@ -31,17 +31,6 @@ export const toggleFollowResponseSchema = z.object({
 });
 export type ToggleFollowResponse = z.infer<typeof toggleFollowResponseSchema>;
 
-export const acceptAnswerRequestSchema = z.object({
-  replyId: z.uuid().nullable(),
-});
-export type AcceptAnswerRequest = z.infer<typeof acceptAnswerRequestSchema>;
-
-export const acceptAnswerResponseSchema = z.object({
-  threadId: z.uuid(),
-  acceptedAnswerId: z.uuid().nullable(),
-});
-export type AcceptAnswerResponse = z.infer<typeof acceptAnswerResponseSchema>;
-
 export const lockThreadRequestSchema = z.object({
   isLocked: z.boolean(),
   reason: z.string().max(500).optional(),
@@ -54,24 +43,32 @@ export const lockThreadResponseSchema = z.object({
 });
 export type LockThreadResponse = z.infer<typeof lockThreadResponseSchema>;
 
-export const userMentionSchema = z.object({
+export const userAutocompleteItemSchema = z.object({
   id: z.uuid(),
   username: z.string().min(1).max(80),
   displayName: z.string().min(1).max(120),
   avatarUrl: z.string().nullable().optional(),
 });
-export type UserMention = z.infer<typeof userMentionSchema>;
+export type UserAutocompleteItem = z.infer<typeof userAutocompleteItemSchema>;
 
-export const searchMentionsQuerySchema = z.object({
+export const userAutocompleteQuerySchema = z.object({
   query: z.string().max(80).default(""),
   courseId: z.uuid().optional(),
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
-export type SearchMentionsQuery = z.infer<typeof searchMentionsQuerySchema>;
+export type UserAutocompleteQuery = z.infer<typeof userAutocompleteQuerySchema>;
 
-export const searchMentionsResponseSchema = z.object({
-  users: z.array(userMentionSchema),
+export const userAutocompleteResponseSchema = z.object({
+  users: z.array(userAutocompleteItemSchema),
 });
-export type SearchMentionsResponse = z.infer<
-  typeof searchMentionsResponseSchema
+export type UserAutocompleteResponse = z.infer<
+  typeof userAutocompleteResponseSchema
 >;
+
+// Backward compatibility alias for contracts
+export const userMentionSchema = userAutocompleteItemSchema;
+export type UserMention = UserAutocompleteItem;
+export const searchMentionsQuerySchema = userAutocompleteQuerySchema;
+export type SearchMentionsQuery = UserAutocompleteQuery;
+export const searchMentionsResponseSchema = userAutocompleteResponseSchema;
+export type SearchMentionsResponse = UserAutocompleteResponse;

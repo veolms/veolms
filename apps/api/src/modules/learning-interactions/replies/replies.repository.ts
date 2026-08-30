@@ -1,6 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
-  CreateLearningReplyRequest,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
@@ -33,7 +32,7 @@ export interface RepliesRepository {
   updateReply(
     db: DatabaseExecutor,
     replyId: string,
-    updates: UpdateLearningReplyRequest,
+    updates: UpdateLearningReplyRequest & { plainText?: string },
   ): Promise<void>;
 
   softDeleteReply(

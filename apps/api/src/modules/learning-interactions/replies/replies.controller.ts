@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
-  AcceptAnswerRequest,
+  AcceptReplyRequest,
   CreateLearningReplyRequest,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
@@ -40,10 +40,10 @@ export interface RepliesController {
     reply: FastifyReply,
   ): Promise<void>;
 
-  acceptAnswer(
+  acceptReply(
     request: FastifyRequest<{
-      Params: { threadId: string };
-      Body: AcceptAnswerRequest;
+      Params: { replyId: string };
+      Body: AcceptReplyRequest;
     }>,
     reply: FastifyReply,
   ): Promise<void>;
@@ -66,9 +66,9 @@ export function createRepliesController({
         threadId,
         userId: user.id,
         content: body.content,
-        plainText: body.plainText,
         parentReplyId: body.parentReplyId,
         timestampSeconds: body.timestampSeconds,
+        attachmentIds: body.attachmentIds,
       });
 
       reply.status(201).send(created);
@@ -114,19 +114,19 @@ export function createRepliesController({
       reply.status(200).send({ message: "Reply deleted successfully." });
     },
 
-    async acceptAnswer(request, reply) {
+    async acceptReply(request, reply) {
       const user = request.user!;
-      const { threadId } = request.params;
-      const { replyId } = request.body;
+      const { replyId } = request.params;
+      const accepted = request.body?.accepted !== undefined ? request.body.accepted : true;
       const isModerator =
         user.roles.includes("admin") ||
         user.roles.includes("instructor") ||
         user.roles.includes("creator");
 
-      const result = await service.acceptAnswer(
+      const result = await service.acceptReply(
         database,
-        threadId,
         replyId,
+        accepted,
         user.id,
         isModerator,
       );

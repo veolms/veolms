@@ -57,6 +57,18 @@ export function createEngagementsService({
 }): EngagementsService {
   return {
     async toggleLike(db, userId, targetType, targetId) {
+      if (targetType === "thread") {
+        const thread = await threadsRepo.findThreadById(db, targetId);
+        if (!thread) {
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+        }
+      } else {
+        const reply = await repliesRepo.findReplyById(db, targetId);
+        if (!reply) {
+          throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+        }
+      }
+
       const alreadyLiked = await engagementsRepo.findLike(
         db,
         userId,

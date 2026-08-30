@@ -1,16 +1,16 @@
 import type { Generated } from "kysely";
 
-export type DiscussionEntryKind = "comment" | "question" | "note";
-export type DiscussionVisibility = "public" | "private" | "unlisted";
+export type DiscussionEntryKind = "comment" | "question";
+export type DiscussionVisibility = "public" | "unlisted";
 export type InteractionStatus = "active" | "hidden" | "deleted";
 export type EngagementTargetType = "thread" | "reply";
 export type AttachmentKind =
   | "image"
   | "screenshot"
   | "code"
-  | "link"
   | "document";
-export type AttachmentTargetType = "thread" | "reply" | "note";
+export type AttachmentTargetType = "thread" | "reply";
+export type AttachmentStatus = "uploading" | "ready" | "rejected" | "deleted";
 export type ReportReason =
   | "spam"
   | "harassment"
@@ -23,12 +23,14 @@ export type ReportStatus =
   | "reviewed"
   | "dismissed"
   | "actioned";
+export type SuspensionScope = "commenting" | "qa" | "all";
 
 export interface LearningThreadTable {
   id: string;
   academy_id: string;
   course_id: string;
-  lesson_id: string;
+  lesson_id: string | null;
+  assignment_id: string | null;
   user_id: string;
   kind: DiscussionEntryKind;
   title: string | null;
@@ -103,7 +105,6 @@ export interface LearningNoteTable {
   content: string;
   plain_text: string;
   tags: Generated<string[]>;
-  visibility: Generated<DiscussionVisibility>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
@@ -111,19 +112,23 @@ export interface LearningNoteTable {
 
 export interface LearningAttachmentTable {
   id: string;
+  owner_id: string;
   target_type: AttachmentTargetType | null;
   target_id: string | null;
   kind: AttachmentKind;
+  storage_key: string;
   file_name: string;
   file_url: string;
   mime_type: string;
   file_size: number;
+  status: Generated<AttachmentStatus>;
   metadata: unknown | null;
   created_at: Generated<Date>;
 }
 
 export interface LearningReportTable {
   id: string;
+  course_id: string | null;
   reporter_id: string;
   target_type: EngagementTargetType;
   target_id: string;
@@ -139,8 +144,10 @@ export interface LearningReportTable {
 export interface LearningSuspensionTable {
   id: string;
   academy_id: string;
+  course_id: string | null;
   user_id: string;
-  suspended_by_user_id: string;
+  suspended_by_user_id: string | null;
+  scope: Generated<SuspensionScope>;
   reason: string;
   expires_at: Date | null;
   is_active: Generated<boolean>;
@@ -151,7 +158,8 @@ export interface LearningSuspensionTable {
 export interface LearningAuditLogTable {
   id: string;
   academy_id: string;
-  actor_user_id: string;
+  course_id: string | null;
+  actor_user_id: string | null;
   action: string;
   target_type: string;
   target_id: string;

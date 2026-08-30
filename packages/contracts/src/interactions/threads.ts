@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-export const discussionEntryKindSchema = z.enum(["comment", "question", "note"]);
+export const discussionEntryKindSchema = z.enum(["comment", "question"]);
 export type DiscussionEntryKind = z.infer<typeof discussionEntryKindSchema>;
 
-export const discussionVisibilitySchema = z.enum(["public", "private", "unlisted"]);
+export const discussionVisibilitySchema = z.enum(["public", "unlisted"]);
 export type DiscussionVisibility = z.infer<typeof discussionVisibilitySchema>;
 
 export const interactionStatusSchema = z.enum(["active", "hidden", "deleted"]);
@@ -26,7 +26,7 @@ export type LearningAuthor = z.infer<typeof learningAuthorSchema>;
 
 export const learningThreadAttachmentSummarySchema = z.object({
   id: z.uuid(),
-  kind: z.enum(["image", "screenshot", "code", "link", "document"]),
+  kind: z.enum(["image", "screenshot", "code", "document"]),
   fileName: z.string().min(1),
   fileUrl: z.string().min(1),
   mimeType: z.string().min(1),
@@ -41,7 +41,8 @@ export const learningThreadSchema = z.object({
   id: z.uuid(),
   academyId: z.uuid(),
   courseId: z.uuid(),
-  lessonId: z.uuid(),
+  lessonId: z.uuid().nullable().optional(),
+  assignmentId: z.uuid().nullable().optional(),
   userId: z.uuid(),
   author: learningAuthorSchema,
   kind: discussionEntryKindSchema,
@@ -67,15 +68,18 @@ export type LearningThread = z.infer<typeof learningThreadSchema>;
 
 export const createLearningThreadRequestSchema = z.object({
   courseId: z.uuid(),
-  lessonId: z.uuid(),
+  lessonId: z.uuid().optional(),
+  assignmentId: z.uuid().optional(),
   kind: discussionEntryKindSchema.default("comment"),
   title: z.string().max(255).optional(),
   content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.default("public"),
   attachmentIds: z.array(z.uuid()).optional(),
-});
+}).refine(
+  (data) => (data.lessonId && !data.assignmentId) || (!data.lessonId && data.assignmentId) || (!data.lessonId && !data.assignmentId),
+  { message: "Specify either lessonId or assignmentId, not both." },
+);
 export type CreateLearningThreadRequest = z.infer<
   typeof createLearningThreadRequestSchema
 >;
@@ -83,7 +87,6 @@ export type CreateLearningThreadRequest = z.infer<
 export const updateLearningThreadRequestSchema = z.object({
   title: z.string().max(255).nullable().optional(),
   content: z.string().min(1).max(20000).optional(),
-  plainText: z.string().max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.optional(),
 });
@@ -92,9 +95,10 @@ export type UpdateLearningThreadRequest = z.infer<
 >;
 
 export const listLearningThreadsQuerySchema = z.object({
-  kind: z.enum(["all", "comment", "question", "note"]).default("all"),
+  kind: z.enum(["all", "comment", "question"]).default("all"),
   courseId: z.uuid().optional(),
   lessonId: z.uuid().optional(),
+  assignmentId: z.uuid().optional(),
   search: z.string().max(200).optional(),
   status: questionFilterStatusSchema.default("all"),
   visibility: discussionVisibilitySchema.optional(),

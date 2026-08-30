@@ -1,10 +1,14 @@
 import type {
-  AcceptAnswerRequest,
-  AcceptAnswerResponse,
+  AcceptReplyRequest,
+  AcceptReplyResponse,
+  CompleteAttachmentUploadRequest,
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
   CreateReportRequest,
+  InitiateAttachmentUploadRequest,
+  InitiateAttachmentUploadResponse,
+  LearningAttachment,
   LearningNote,
   LearningNotesListResponse,
   LearningRepliesListResponse,
@@ -22,21 +26,23 @@ import type {
   ModerateReplyRequest,
   ModerateThreadRequest,
   ReportsListResponse,
-  SearchMentionsResponse,
   SuspendUserRequest,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
   ToggleLikeRequest,
   ToggleLikeResponse,
+  UnsuspendUserRequest,
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
+  UserAutocompleteQuery,
+  UserAutocompleteResponse,
   UserSuspension,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
 
 export const learningInteractionsService = {
-  // Threads
+  // Threads (Lessons & Assignments)
   listLessonThreads(
     courseId: string,
     lessonId: string,
@@ -48,7 +54,7 @@ export const learningInteractionsService = {
     );
   },
 
-  createThread(
+  createLessonThread(
     courseId: string,
     lessonId: string,
     payload: CreateLearningThreadRequest,
@@ -59,27 +65,49 @@ export const learningInteractionsService = {
     );
   },
 
+  listAssignmentThreads(
+    courseId: string,
+    assignmentId: string,
+    query?: ListLearningThreadsQuery,
+  ): Promise<LearningThreadsListResponse> {
+    return api.get<LearningThreadsListResponse>(
+      `/courses/${courseId}/assignments/${assignmentId}/threads`,
+      { params: query },
+    );
+  },
+
+  createAssignmentThread(
+    courseId: string,
+    assignmentId: string,
+    payload: CreateLearningThreadRequest,
+  ): Promise<LearningThread> {
+    return api.post<LearningThread>(
+      `/courses/${courseId}/assignments/${assignmentId}/threads`,
+      payload,
+    );
+  },
+
   listHubThreads(
     query?: ListLearningThreadsQuery,
   ): Promise<LearningThreadsListResponse> {
-    return api.get<LearningThreadsListResponse>("/learning-threads", {
+    return api.get<LearningThreadsListResponse>("/threads", {
       params: query,
     });
   },
 
   getThread(threadId: string): Promise<LearningThread> {
-    return api.get<LearningThread>(`/learning-threads/${threadId}`);
+    return api.get<LearningThread>(`/threads/${threadId}`);
   },
 
   updateThread(
     threadId: string,
     payload: UpdateLearningThreadRequest,
   ): Promise<LearningThread> {
-    return api.patch<LearningThread>(`/learning-threads/${threadId}`, payload);
+    return api.patch<LearningThread>(`/threads/${threadId}`, payload);
   },
 
   deleteThread(threadId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/learning-threads/${threadId}`);
+    return api.delete<{ message: string }>(`/threads/${threadId}`);
   },
 
   // Replies
@@ -88,7 +116,7 @@ export const learningInteractionsService = {
     query?: ListLearningRepliesQuery,
   ): Promise<LearningRepliesListResponse> {
     return api.get<LearningRepliesListResponse>(
-      `/learning-threads/${threadId}/replies`,
+      `/threads/${threadId}/replies`,
       { params: query },
     );
   },
@@ -98,7 +126,7 @@ export const learningInteractionsService = {
     payload: CreateLearningReplyRequest,
   ): Promise<LearningReply> {
     return api.post<LearningReply>(
-      `/learning-threads/${threadId}/replies`,
+      `/threads/${threadId}/replies`,
       payload,
     );
   },
@@ -107,19 +135,19 @@ export const learningInteractionsService = {
     replyId: string,
     payload: UpdateLearningReplyRequest,
   ): Promise<LearningReply> {
-    return api.patch<LearningReply>(`/learning-replies/${replyId}`, payload);
+    return api.patch<LearningReply>(`/replies/${replyId}`, payload);
   },
 
   deleteReply(replyId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/learning-replies/${replyId}`);
+    return api.delete<{ message: string }>(`/replies/${replyId}`);
   },
 
-  acceptAnswer(
-    threadId: string,
-    payload: AcceptAnswerRequest,
-  ): Promise<AcceptAnswerResponse> {
-    return api.post<AcceptAnswerResponse>(
-      `/learning-threads/${threadId}/accept-answer`,
+  acceptReply(
+    replyId: string,
+    payload?: AcceptReplyRequest,
+  ): Promise<AcceptReplyResponse> {
+    return api.post<AcceptReplyResponse>(
+      `/replies/${replyId}/accept`,
       payload,
     );
   },
@@ -127,20 +155,20 @@ export const learningInteractionsService = {
   // Engagements
   toggleLike(payload: ToggleLikeRequest): Promise<ToggleLikeResponse> {
     return api.post<ToggleLikeResponse>(
-      "/learning-interactions/likes",
+      "/interactions/likes",
       payload,
     );
   },
 
   toggleBookmark(threadId: string): Promise<ToggleBookmarkResponse> {
     return api.post<ToggleBookmarkResponse>(
-      `/learning-threads/${threadId}/bookmark`,
+      `/threads/${threadId}/bookmark`,
     );
   },
 
   toggleFollow(threadId: string): Promise<ToggleFollowResponse> {
     return api.post<ToggleFollowResponse>(
-      `/learning-threads/${threadId}/follow`,
+      `/threads/${threadId}/follow`,
     );
   },
 
@@ -149,90 +177,185 @@ export const learningInteractionsService = {
     payload: LockThreadRequest,
   ): Promise<LockThreadResponse> {
     return api.post<LockThreadResponse>(
-      `/learning-threads/${threadId}/lock`,
+      `/threads/${threadId}/lock`,
       payload,
     );
   },
 
-  searchMentions(query: string): Promise<SearchMentionsResponse> {
-    return api.get<SearchMentionsResponse>("/learning-interactions/mentions", {
-      params: { query },
+  autocompleteUsers(query: UserAutocompleteQuery): Promise<UserAutocompleteResponse> {
+    return api.get<UserAutocompleteResponse>("/interactions/users/autocomplete", {
+      params: query,
     });
   },
 
   // Notes
   listNotes(query?: ListLearningNotesQuery): Promise<LearningNotesListResponse> {
-    return api.get<LearningNotesListResponse>("/learning-notes", {
+    return api.get<LearningNotesListResponse>("/notes", {
       params: query,
     });
   },
 
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
-    return api.post<LearningNote>("/learning-notes", payload);
+    return api.post<LearningNote>("/notes", payload);
   },
 
   getNote(noteId: string): Promise<LearningNote> {
-    return api.get<LearningNote>(`/learning-notes/${noteId}`);
+    return api.get<LearningNote>(`/notes/${noteId}`);
   },
 
   updateNote(
     noteId: string,
     payload: UpdateLearningNoteRequest,
   ): Promise<LearningNote> {
-    return api.patch<LearningNote>(`/learning-notes/${noteId}`, payload);
+    return api.patch<LearningNote>(`/notes/${noteId}`, payload);
   },
 
   deleteNote(noteId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/learning-notes/${noteId}`);
+    return api.delete<{ message: string }>(`/notes/${noteId}`);
   },
 
   // Attachments
-  uploadAttachment(file: File): Promise<LearningUploadResponse> {
+  initiateUpload(
+    payload: InitiateAttachmentUploadRequest,
+  ): Promise<InitiateAttachmentUploadResponse> {
+    return api.post<InitiateAttachmentUploadResponse>(
+      "/attachments/initiate",
+      payload,
+    );
+  },
+
+  uploadAttachmentFile(
+    attachmentId: string,
+    file: File,
+  ): Promise<LearningAttachment> {
     const formData = new FormData();
     formData.append("file", file, file.name);
-    return api.post<LearningUploadResponse>(
-      "/learning-attachments/upload",
+    return api.post<LearningAttachment>(
+      `/attachments/${attachmentId}/upload`,
       formData,
     );
   },
 
-  // Moderation
-  createReport(payload: CreateReportRequest): Promise<{ message: string }> {
-    return api.post<{ message: string }>(
-      "/learning-interactions/reports",
+  completeUpload(
+    payload: CompleteAttachmentUploadRequest,
+  ): Promise<LearningAttachment> {
+    return api.post<LearningAttachment>(
+      "/attachments/complete",
       payload,
     );
   },
 
-  listReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>("/admin/moderation/reports", {
+  uploadAttachmentDirect(file: File): Promise<LearningUploadResponse> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return api.post<LearningUploadResponse>(
+      "/attachments/upload",
+      formData,
+    );
+  },
+
+  // Reporting
+  createReport(payload: CreateReportRequest): Promise<{ message: string }> {
+    return api.post<{ message: string }>(
+      "/reports",
+      payload,
+    );
+  },
+
+  // Course Moderation
+  listCourseReports(courseId: string, query?: ListReportsQuery): Promise<ReportsListResponse> {
+    return api.get<ReportsListResponse>(`/courses/${courseId}/moderation/reports`, {
       params: query,
     });
   },
 
-  moderateThread(
+  moderateCourseThread(
+    courseId: string,
     threadId: string,
     payload: ModerateThreadRequest,
   ): Promise<{ message: string }> {
     return api.post<{ message: string }>(
-      `/admin/moderation/threads/${threadId}`,
+      `/courses/${courseId}/moderation/threads/${threadId}`,
       payload,
     );
   },
 
-  moderateReply(
+  moderateCourseReply(
+    courseId: string,
     replyId: string,
     payload: ModerateReplyRequest,
   ): Promise<{ message: string }> {
     return api.post<{ message: string }>(
-      `/admin/moderation/replies/${replyId}`,
+      `/courses/${courseId}/moderation/replies/${replyId}`,
       payload,
     );
   },
 
-  suspendUser(payload: SuspendUserRequest): Promise<UserSuspension> {
+  suspendCourseParticipant(
+    courseId: string,
+    userId: string,
+    payload: Omit<SuspendUserRequest, "userId" | "courseId">,
+  ): Promise<UserSuspension> {
     return api.post<UserSuspension>(
-      "/admin/moderation/users/suspend",
+      `/courses/${courseId}/moderation/users/${userId}/suspend`,
+      payload,
+    );
+  },
+
+  unsuspendCourseParticipant(
+    courseId: string,
+    userId: string,
+    payload?: Omit<UnsuspendUserRequest, "userId" | "courseId">,
+  ): Promise<{ message: string }> {
+    return api.post<{ message: string }>(
+      `/courses/${courseId}/moderation/users/${userId}/unsuspend`,
+      payload,
+    );
+  },
+
+  // Platform Moderation
+  listPlatformReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
+    return api.get<ReportsListResponse>("/moderation/reports", {
+      params: query,
+    });
+  },
+
+  moderatePlatformThread(
+    threadId: string,
+    payload: ModerateThreadRequest,
+  ): Promise<{ message: string }> {
+    return api.post<{ message: string }>(
+      `/moderation/threads/${threadId}`,
+      payload,
+    );
+  },
+
+  moderatePlatformReply(
+    replyId: string,
+    payload: ModerateReplyRequest,
+  ): Promise<{ message: string }> {
+    return api.post<{ message: string }>(
+      `/moderation/replies/${replyId}`,
+      payload,
+    );
+  },
+
+  suspendPlatformUser(
+    userId: string,
+    payload: Omit<SuspendUserRequest, "userId">,
+  ): Promise<UserSuspension> {
+    return api.post<UserSuspension>(
+      `/moderation/users/${userId}/suspend`,
+      payload,
+    );
+  },
+
+  unsuspendPlatformUser(
+    userId: string,
+    payload?: Omit<UnsuspendUserRequest, "userId">,
+  ): Promise<{ message: string }> {
+    return api.post<{ message: string }>(
+      `/moderation/users/${userId}/unsuspend`,
       payload,
     );
   },

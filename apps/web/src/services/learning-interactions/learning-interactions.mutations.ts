@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
-  AcceptAnswerRequest,
+  AcceptReplyRequest,
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
@@ -10,6 +10,7 @@ import type {
   ModerateThreadRequest,
   SuspendUserRequest,
   ToggleLikeRequest,
+  UnsuspendUserRequest,
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
@@ -139,11 +140,11 @@ export function useToggleFollow() {
   });
 }
 
-export function useAcceptAnswer(threadId: string) {
+export function useAcceptReply(threadId: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, AcceptAnswerRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.acceptAnswer(threadId, payload),
+  return useMutation<any, ApiError, { replyId: string; payload?: AcceptReplyRequest }>({
+    mutationFn: ({ replyId, payload }) =>
+      learningInteractionsService.acceptReply(replyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadDetails(threadId),
@@ -221,7 +222,7 @@ export function useModerateThread(threadId: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, ModerateThreadRequest>({
     mutationFn: (payload) =>
-      learningInteractionsService.moderateThread(threadId, payload),
+      learningInteractionsService.moderatePlatformThread(threadId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -234,7 +235,7 @@ export function useModerateReply(replyId: string, threadId: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, ModerateReplyRequest>({
     mutationFn: (payload) =>
-      learningInteractionsService.moderateReply(replyId, payload),
+      learningInteractionsService.moderatePlatformReply(replyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadReplies(threadId),
@@ -245,6 +246,14 @@ export function useModerateReply(replyId: string, threadId: string) {
 
 export function useSuspendUser() {
   return useMutation<any, ApiError, SuspendUserRequest>({
-    mutationFn: (payload) => learningInteractionsService.suspendUser(payload),
+    mutationFn: (payload) =>
+      learningInteractionsService.suspendPlatformUser(payload.userId, payload),
+  });
+}
+
+export function useUnsuspendUser() {
+  return useMutation<any, ApiError, UnsuspendUserRequest>({
+    mutationFn: (payload) =>
+      learningInteractionsService.unsuspendPlatformUser(payload.userId, payload),
   });
 }

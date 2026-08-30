@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  AcceptReplyResponse,
   CreateLearningReplyRequest,
   LearningRepliesListResponse,
   LearningReply,
@@ -8,6 +9,7 @@ import type {
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
+import { extractPlainText } from "../shared/text-sanitizer.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { RepliesRepository } from "./replies.repository.ts";
 
@@ -18,9 +20,9 @@ export interface RepliesService {
       threadId: string;
       userId: string;
       content: string;
-      plainText?: string;
       parentReplyId?: string | null;
       timestampSeconds?: number | null;
+      attachmentIds?: string[];
     },
   ): Promise<LearningReply>;
 
@@ -45,13 +47,13 @@ export interface RepliesService {
     isModerator?: boolean,
   ): Promise<void>;
 
-  acceptAnswer(
+  acceptReply(
     db: DatabaseExecutor,
-    threadId: string,
-    replyId: string | null,
+    replyId: string,
+    accepted: boolean,
     userId: string,
     isModerator?: boolean,
-  ): Promise<{ acceptedAnswerId: string | null }>;
+  ): Promise<AcceptReplyResponse>;
 }
 
 export function createRepliesService({
@@ -61,14 +63,8 @@ export function createRepliesService({
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
 }): RepliesService {
-  function mapReplyRow(row: any, currentUserId?: string): LearningReply {
+  function mapReplyRow(row: any, currentUserId?: string, attachments: any[] = []): LearningReply {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
-    const authorRole =
-      row.authorRole === "admin"
-        ? "Admin"
-        : row.authorRole === "instructor" || row.authorRole === "creator"
-          ? "Instructor"
-          : "Student";
 
     return {
       id: row.id,
@@ -80,7 +76,7 @@ export function createRepliesService({
         displayName: row.authorName || "Anonymous Learner",
         username: (row.authorEmail || "user").split("@")[0],
         avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
-        role: authorRole,
+        role: "Student",
       },
       content: row.content,
       plainText: row.plainText,
@@ -88,6 +84,15 @@ export function createRepliesService({
       isAccepted: Boolean(row.isAccepted),
       status: row.status,
       likesCount: Number(row.likesCount || 0),
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        fileName: a.file_name,
+        fileUrl: a.file_url,
+        mimeType: a.mime_type,
+        fileSize: Number(a.file_size || 0),
+        metadata: a.metadata ? JSON.parse(a.metadata) : null,
+      })),
       isLiked: false,
       isOwn,
       createdAt:
@@ -103,7 +108,7 @@ export function createRepliesService({
 
   return {
     async createReply(db, input) {
-      // Check if thread exists and is not locked
+      // 1. Check thread existence & lock status
       const thread = await threadsRepo.findThreadById(db, input.threadId);
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
@@ -117,27 +122,55 @@ export function createRepliesService({
         );
       }
 
-      // Check user suspension
+      // 2. Enforce 1-level reply nesting
+      if (input.parentReplyId) {
+        const parent = await repliesRepo.findReplyById(db, input.parentReplyId);
+        if (!parent || parent.threadId !== input.threadId) {
+          throw httpError(400, "INVALID_PARENT_REPLY", "Parent reply does not belong to this thread");
+        }
+
+        if (parent.parentReplyId !== null) {
+          throw httpError(
+            400,
+            "MAX_NESTING_EXCEEDED",
+            "Nested replies are limited to 1 level. Reply directly to the root comment or answer.",
+          );
+        }
+      }
+
+      // 3. Check suspension with scope
+      const requiredScopes: ("commenting" | "qa" | "all")[] =
+        thread.kind === "comment" ? ["commenting", "all"] : ["qa", "all"];
       const activeSuspension = await db
         .selectFrom("learning_suspensions")
         .selectAll()
         .where("user_id", "=", input.userId)
         .where("is_active", "=", true)
+        .where("scope", "in", requiredScopes)
+        .where((eb) =>
+          eb.or([
+            eb("course_id", "is", null),
+            eb("course_id", "=", thread.courseId),
+          ]),
+        )
+        .where((eb) =>
+          eb.or([
+            eb("expires_at", "is", null),
+            eb("expires_at", ">", new Date()),
+          ]),
+        )
         .executeTakeFirst();
 
       if (activeSuspension) {
-        if (!activeSuspension.expires_at || activeSuspension.expires_at > new Date()) {
-          throw httpError(
-            403,
-            "PARTICIPATION_SUSPENDED",
-            `Your participation is suspended. Reason: ${activeSuspension.reason}`,
-          );
-        }
+        throw httpError(
+          403,
+          "PARTICIPATION_SUSPENDED",
+          `Your participation is suspended. Reason: ${activeSuspension.reason}`,
+        );
       }
 
       const id = crypto.randomUUID();
-      const plainText =
-        input.plainText || input.content.replace(/<[^>]+>/g, "").trim();
+      const plainText = extractPlainText(input.content);
 
       await repliesRepo.createReply(db, {
         id,
@@ -151,8 +184,37 @@ export function createRepliesService({
 
       await threadsRepo.incrementRepliesCount(db, input.threadId, 1);
 
+      // Attach any verified attachments owned by the caller
+      if (input.attachmentIds && input.attachmentIds.length > 0) {
+        for (const attachmentId of input.attachmentIds) {
+          const attachment = await db
+            .selectFrom("learning_attachments")
+            .selectAll()
+            .where("id", "=", attachmentId)
+            .executeTakeFirst();
+
+          if (attachment && attachment.owner_id === input.userId && attachment.status === "ready") {
+            await db
+              .updateTable("learning_attachments")
+              .set({
+                target_type: "reply",
+                target_id: id,
+              })
+              .where("id", "=", attachmentId)
+              .execute();
+          }
+        }
+      }
+
       const created = await repliesRepo.findReplyById(db, id);
-      return mapReplyRow(created, input.userId);
+      const attachments = await db
+        .selectFrom("learning_attachments")
+        .selectAll()
+        .where("target_type", "=", "reply")
+        .where("target_id", "=", id)
+        .execute();
+
+      return mapReplyRow(created, input.userId, attachments);
     },
 
     async listReplies(db, threadId, query, currentUserId) {
@@ -176,7 +238,12 @@ export function createRepliesService({
         throw httpError(403, "FORBIDDEN", "You are not allowed to update this reply");
       }
 
-      await repliesRepo.updateReply(db, replyId, updates);
+      const plainText = updates.content ? extractPlainText(updates.content) : undefined;
+      await repliesRepo.updateReply(db, replyId, {
+        ...updates,
+        ...(plainText ? { plainText } : {}),
+      });
+
       const updated = await repliesRepo.findReplyById(db, replyId);
       return mapReplyRow(updated, userId);
     },
@@ -195,14 +262,24 @@ export function createRepliesService({
       await threadsRepo.incrementRepliesCount(db, reply.threadId, -1);
     },
 
-    async acceptAnswer(db, threadId, replyId, userId, isModerator = false) {
-      const thread = await threadsRepo.findThreadById(db, threadId);
+    async acceptReply(db, replyId, accepted, userId, isModerator = false) {
+      const reply = await repliesRepo.findReplyById(db, replyId);
+      if (!reply) {
+        throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+      }
+
+      const thread = await threadsRepo.findThreadById(db, reply.threadId);
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
       if (thread.kind !== "question") {
         throw httpError(400, "NOT_A_QUESTION", "Only Q&A questions can have accepted answers");
+      }
+
+      // Enforce: reply belongs to this exact thread
+      if (reply.threadId !== thread.id) {
+        throw httpError(400, "INVALID_REPLY", "The answer does not belong to this question thread");
       }
 
       if (thread.userId !== userId && !isModerator) {
@@ -213,27 +290,32 @@ export function createRepliesService({
         );
       }
 
-      if (replyId) {
-        const reply = await repliesRepo.findReplyById(db, replyId);
-        if (!reply || reply.threadId !== threadId) {
-          throw httpError(400, "INVALID_REPLY", "The specified reply does not belong to this question");
-        }
-
-        // Unaccept previous answer if any
+      if (accepted) {
         if (thread.acceptedAnswerId && thread.acceptedAnswerId !== replyId) {
           await repliesRepo.setAcceptedStatus(db, thread.acceptedAnswerId, false);
         }
 
         await repliesRepo.setAcceptedStatus(db, replyId, true);
-        await threadsRepo.setAcceptedAnswer(db, threadId, replyId);
-        return { acceptedAnswerId: replyId };
+        await threadsRepo.setAcceptedAnswer(db, thread.id, replyId);
+
+        return {
+          replyId,
+          threadId: thread.id,
+          isAccepted: true,
+          acceptedAnswerId: replyId,
+        };
       } else {
-        // Clear accepted answer
-        if (thread.acceptedAnswerId) {
-          await repliesRepo.setAcceptedStatus(db, thread.acceptedAnswerId, false);
+        await repliesRepo.setAcceptedStatus(db, replyId, false);
+        if (thread.acceptedAnswerId === replyId) {
+          await threadsRepo.setAcceptedAnswer(db, thread.id, null);
         }
-        await threadsRepo.setAcceptedAnswer(db, threadId, null);
-        return { acceptedAnswerId: null };
+
+        return {
+          replyId,
+          threadId: thread.id,
+          isAccepted: false,
+          acceptedAnswerId: null,
+        };
       }
     },
   };

@@ -8,13 +8,20 @@ import type {
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
+import { extractPlainText } from "../shared/text-sanitizer.ts";
 import type { NotesRepository } from "./notes.repository.ts";
 
 export interface NotesService {
   createNote(
     db: DatabaseExecutor,
-    input: CreateLearningNoteRequest & {
+    input: {
       userId: string;
+      courseId: string;
+      lessonId: string;
+      title?: string;
+      content: string;
+      timestampSeconds?: number | null;
+      tags?: string[];
     },
   ): Promise<LearningNote>;
 
@@ -44,7 +51,9 @@ export interface NotesService {
   ): Promise<void>;
 }
 
-export function createNotesService(notesRepo: NotesRepository): NotesService {
+export function createNotesService(
+  notesRepo: NotesRepository,
+): NotesService {
   async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
     const academy = await db.selectFrom("academy").select("id").executeTakeFirst();
     return academy?.id || "00000000-0000-0000-0000-000000000000";
@@ -62,8 +71,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       title: row.title ?? null,
       content: row.content,
       plainText: row.plainText,
-      tags: Array.isArray(row.tags) ? row.tags : [],
-      visibility: row.visibility,
+      tags: row.tags || [],
       createdAt:
         row.createdAt instanceof Date
           ? row.createdAt.toISOString()
@@ -78,9 +86,30 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
   return {
     async createNote(db, input) {
       const academyId = await resolveAcademyId(db);
+
+      // Validate course and lesson hierarchy
+      const course = await db
+        .selectFrom("courses")
+        .selectAll()
+        .where("id", "=", input.courseId)
+        .executeTakeFirst();
+
+      if (!course) {
+        throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
+      }
+
+      const lesson = await db
+        .selectFrom("course_lessons")
+        .selectAll()
+        .where("id", "=", input.lessonId)
+        .executeTakeFirst();
+
+      if (!lesson || lesson.course_id !== input.courseId) {
+        throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
+      }
+
       const id = crypto.randomUUID();
-      const plainText =
-        input.plainText || input.content.replace(/<[^>]+>/g, "").trim();
+      const plainText = extractPlainText(input.content);
 
       await notesRepo.createNote(db, {
         id,
@@ -93,17 +122,20 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         content: input.content,
         plainText,
         tags: input.tags || [],
-        visibility: input.visibility || "private",
       });
 
-      const note = await notesRepo.findNoteById(db, id);
-      return mapNoteRow(note);
+      const created = await notesRepo.findNoteById(db, id);
+      if (!created) {
+        throw httpError(500, "CREATE_FAILED", "Failed to retrieve created note");
+      }
+
+      return mapNoteRow(created);
     },
 
     async getNote(db, noteId, userId) {
       const note = await notesRepo.findNoteById(db, noteId);
       if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Note not found");
+        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
       }
 
       if (note.userId !== userId) {
@@ -127,14 +159,19 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async updateNote(db, noteId, userId, updates) {
       const note = await notesRepo.findNoteById(db, noteId);
       if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Note not found");
+        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
       }
 
       if (note.userId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You cannot edit this note");
+        throw httpError(403, "FORBIDDEN", "You do not have access to this note");
       }
 
-      await notesRepo.updateNote(db, noteId, updates);
+      const plainText = updates.content ? extractPlainText(updates.content) : undefined;
+      await notesRepo.updateNote(db, noteId, {
+        ...updates,
+        ...(plainText ? { plainText } : {}),
+      });
+
       const updated = await notesRepo.findNoteById(db, noteId);
       return mapNoteRow(updated);
     },
@@ -142,11 +179,11 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async deleteNote(db, noteId, userId) {
       const note = await notesRepo.findNoteById(db, noteId);
       if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Note not found");
+        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
       }
 
       if (note.userId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You cannot delete this note");
+        throw httpError(403, "FORBIDDEN", "You do not have access to this note");
       }
 
       await notesRepo.softDeleteNote(db, noteId);

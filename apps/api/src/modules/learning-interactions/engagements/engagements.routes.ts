@@ -34,9 +34,9 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. POST /learning-interactions/likes - Toggle like on thread or reply
+  // 1. POST /interactions/likes - Toggle like on thread or reply
   app.post(
-    "/learning-interactions/likes",
+    "/interactions/likes",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -53,9 +53,9 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     controller.toggleLike,
   );
 
-  // 2. POST /learning-threads/:threadId/bookmark - Toggle bookmark/saved
+  // 2. POST /threads/:threadId/bookmark - Toggle bookmark/saved
   app.post(
-    "/learning-threads/:threadId/bookmark",
+    "/threads/:threadId/bookmark",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -75,9 +75,9 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     controller.toggleBookmark,
   );
 
-  // 3. POST /learning-threads/:threadId/follow - Toggle follow
+  // 3. POST /threads/:threadId/follow - Toggle follow
   app.post(
-    "/learning-threads/:threadId/follow",
+    "/threads/:threadId/follow",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -94,9 +94,9 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     controller.toggleFollow,
   );
 
-  // 4. POST /learning-threads/:threadId/lock - Lock/unlock thread
+  // 4. POST /threads/:threadId/lock - Lock/unlock thread
   app.post(
-    "/learning-threads/:threadId/lock",
+    "/threads/:threadId/lock",
     {
       preHandler: [ctx.authenticate, ctx.requireAuthenticated],
       schema: {
@@ -116,15 +116,15 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     controller.lockThread,
   );
 
-  // 5. GET /learning-interactions/mentions - Search users to mention
+  // 5. GET /interactions/users/autocomplete - Autocomplete users for @mentions
   app.get(
-    "/learning-interactions/mentions",
+    "/interactions/users/autocomplete",
     {
       preHandler: ctx.authenticate,
       schema: {
-        operationId: "searchLearningMentions",
+        operationId: "autocompleteUsersForMention",
         tags: ["Learning Engagements"],
-        summary: "Search users in academy for @mentions",
+        summary: "Search and autocomplete users in academy for @mentions",
         querystring: searchMentionsQuerySchema,
         response: {
           200: jsonResponse("List of matching users", searchMentionsResponseSchema),

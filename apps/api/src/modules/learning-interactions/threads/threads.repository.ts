@@ -14,7 +14,8 @@ export interface ThreadsRepository {
       id: string;
       academyId: string;
       courseId: string;
-      lessonId: string;
+      lessonId?: string | null;
+      assignmentId?: string | null;
       userId: string;
       kind: DiscussionEntryKind;
       title: string | null;
@@ -38,7 +39,7 @@ export interface ThreadsRepository {
   updateThread(
     db: DatabaseExecutor,
     threadId: string,
-    updates: UpdateLearningThreadRequest,
+    updates: UpdateLearningThreadRequest & { plainText?: string },
   ): Promise<void>;
 
   softDeleteThread(
@@ -86,7 +87,8 @@ export function createThreadsRepository(): ThreadsRepository {
           id: thread.id,
           academy_id: thread.academyId,
           course_id: thread.courseId,
-          lesson_id: thread.lessonId,
+          lesson_id: thread.lessonId || null,
+          assignment_id: thread.assignmentId || null,
           user_id: thread.userId,
           kind: thread.kind,
           title: thread.title,
@@ -111,6 +113,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.academy_id as academyId",
           "t.course_id as courseId",
           "t.lesson_id as lessonId",
+          "t.assignment_id as assignmentId",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -145,6 +148,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.academy_id as academyId",
           "t.course_id as courseId",
           "t.lesson_id as lessonId",
+          "t.assignment_id as assignmentId",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -172,6 +176,10 @@ export function createThreadsRepository(): ThreadsRepository {
 
       if (options.lessonId) {
         query = query.where("t.lesson_id", "=", options.lessonId);
+      }
+
+      if (options.assignmentId) {
+        query = query.where("t.assignment_id", "=", options.assignmentId);
       }
 
       if (options.kind && options.kind !== "all") {
