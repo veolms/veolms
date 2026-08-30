@@ -1,7 +1,6 @@
-import { Subtitles } from "@phosphor-icons/react";
-
 import { usePlayerController } from "../../react/context";
 import { useTracks } from "../../react/usePlayerState";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { MenuTriggerContent } from "./MenuTriggerContent";
 import { PlayerMenuItem } from "./PlayerMenuItem";
 import { PopoverMenu } from "./PopoverMenu";
@@ -25,6 +24,7 @@ export function CaptionsMenu({
   triggerClassName,
 }: CaptionsMenuProps) {
   const controller = usePlayerController();
+  const CaptionsIcon = usePlayerTheme().icons.captions;
   const { selectedTextTrackId, textTracks } = useTracks();
   const activeTrack =
     textTracks.find((track) => track.id === selectedTextTrackId) ??
@@ -38,7 +38,9 @@ export function CaptionsMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={<Subtitles className="size-4" />}
+            icon={
+              <CaptionsIcon className="size-4" active={Boolean(activeTrack)} />
+            }
             value={currentLabel}
           />
         )

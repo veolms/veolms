@@ -1,3 +1,8 @@
+import {
+  isBuiltInPlayerThemeId,
+  type BuiltInPlayerThemeId,
+} from "@veolms/video-player";
+
 export const SIDEBAR_MAX_WIDTH_MIN = 220;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
 export const SIDEBAR_MAX_WIDTH_LIMIT = 520;
@@ -320,6 +325,7 @@ export interface SidebarPreferences {
 
 export interface LearningPreferences {
   videoQuality: string;
+  videoPlayerTheme: BuiltInPlayerThemeId;
   playbackSpeed: string;
   seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
@@ -342,6 +348,7 @@ export interface LearningPreferences {
 }
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
+export const LEARNING_PREFERENCES_EVENT = "veolms:learning-preferences";
 export const LEARNING_SEEK_INTERVAL_MIN = 5;
 export const LEARNING_SEEK_INTERVAL_MAX = 60;
 export const LEARNING_SEEK_INTERVAL_DEFAULT = 10;
@@ -356,8 +363,13 @@ export const normalizeLearningSeekInterval = (value: unknown): number => {
   );
 };
 
+export const normalizeVideoPlayerTheme = (
+  value: unknown,
+): BuiltInPlayerThemeId => (isBuiltInPlayerThemeId(value) ? value : "youtube");
+
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
+  videoPlayerTheme: "youtube",
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
@@ -706,6 +718,9 @@ export const readLearningPreferences = (): LearningPreferences => {
       ...storedPreferences,
       seekIntervalSeconds: normalizeLearningSeekInterval(
         storedPreferences.seekIntervalSeconds,
+      ),
+      videoPlayerTheme: normalizeVideoPlayerTheme(
+        storedPreferences.videoPlayerTheme,
       ),
       reminderDays: Array.isArray(storedPreferences.reminderDays)
         ? storedPreferences.reminderDays

@@ -30,7 +30,7 @@ export function TimeDisplay({
     ? `-${remainingLabel} / ${durationLabel}`
     : `${currentLabel} / ${durationLabel}`;
   const displayClassName = classNames(
-    "select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-white sm:text-sm",
+    "select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-(--video-player-control-text) focus-visible:outline-(--video-player-control-text) sm:text-sm",
     className,
   );
 

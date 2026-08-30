@@ -79,7 +79,7 @@ export function VolumeControl({
         aria-label="Volume"
         aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)} percent`}
         className={classNames(
-          "player-volume-slider h-9 cursor-pointer accent-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+          "player-volume-slider h-9 cursor-pointer accent-(--video-player-control-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)",
           collapsible
             ? "m-0 w-0 p-0 opacity-0 transition-[width,margin,opacity] duration-200 ease-out group-hover/volume:ml-1 group-hover/volume:mr-2 group-hover/volume:w-18 group-hover/volume:opacity-100 group-focus-within/volume:ml-1 group-focus-within/volume:mr-2 group-focus-within/volume:w-18 group-focus-within/volume:opacity-100"
             : "w-18",

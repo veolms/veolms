@@ -1,6 +1,6 @@
-import { ArrowsInSimple, ArrowsOutSimple } from "@phosphor-icons/react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { PlayerIconButton } from "./PlayerIconButton";
 
 export interface FullscreenButtonProps {
@@ -14,6 +14,8 @@ export function FullscreenButton({
 }: FullscreenButtonProps = {}) {
   const controller = usePlayerController();
   const fullscreen = usePlayerState(({ ui }) => ui.fullscreen);
+  const { icons } = usePlayerTheme();
+  const Icon = fullscreen ? icons.fullscreenExit : icons.fullscreenEnter;
   return (
     <PlayerIconButton
       label="Toggle fullscreen"
@@ -21,19 +23,11 @@ export function FullscreenButton({
       title={fullscreen ? "Exit fullscreen (F)" : "Enter fullscreen (F)"}
       pressed={fullscreen}
       icon={
-        fullscreen ? (
-          <ArrowsInSimple
-            size={iconSize}
-            weight="bold"
-            style={{ transform: "rotate(90deg)" }}
-          />
-        ) : (
-          <ArrowsOutSimple
-            size={iconSize}
-            weight="bold"
-            style={{ transform: "rotate(90deg)" }}
-          />
-        )
+        <Icon
+          size={iconSize}
+          active={fullscreen}
+          style={{ transform: "rotate(90deg)" }}
+        />
       }
       onClick={() => void controller.toggleFullscreen()}
     />

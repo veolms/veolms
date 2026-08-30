@@ -6,6 +6,7 @@ import {
   CURRICULUM_LECTURE_COUNT_DEFAULT,
   CURRICULUM_SECTION_COUNT_DEFAULT,
 } from "../../src/learning/curriculumSize.js";
+import { LEARNING_PREFERENCES_KEY } from "../../src/settings/settingsPreferences.js";
 
 describe("LearningSettings curriculum test controls", () => {
   afterEach(() => {
@@ -69,5 +70,27 @@ describe("LearningSettings curriculum test controls", () => {
       ).toBe(47),
     );
     expect(screen.getByText("47s")).toBeVisible();
+  });
+
+  it("saves a player-only theme without changing the application theme", async () => {
+    render(<LearningSettings />);
+
+    const aurora = await screen.findByRole("radio", {
+      name: "Aurora video player theme",
+    });
+    expect(
+      screen.getByRole("radio", { name: "YouTube video player theme" }),
+    ).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(aurora);
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem(LEARNING_PREFERENCES_KEY) || "{}")
+          .videoPlayerTheme,
+      ).toBe("aurora"),
+    );
+    expect(aurora).toHaveAttribute("aria-checked", "true");
+    expect(document.documentElement).not.toHaveAttribute("data-player-theme");
   });
 });

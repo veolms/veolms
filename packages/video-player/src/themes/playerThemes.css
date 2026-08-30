@@ -1,0 +1,182 @@
+/* Theme tokens cross portals, range pseudo-elements, and application-owned
+   control composition; those selectors cannot be expressed reliably with
+   component-local Tailwind utilities. */
+[data-video-player-root] {
+  color: var(--video-player-control-text, #fff);
+  --text: var(--video-player-menu-text, #fff);
+  --text-secondary: var(
+    --video-player-menu-text-muted,
+    rgb(255 255 255 / 0.68)
+  );
+  --accent: var(--video-player-accent, #ff7a1a);
+}
+
+[data-video-player-root] .player-control {
+  border-radius: var(--video-player-control-radius, 999px);
+  color: var(--video-player-control-text, #fff);
+}
+
+[data-video-player-root] .player-control:hover,
+[data-video-player-root] .player-control:focus-visible {
+  background: var(--video-player-control-surface-hover) !important;
+}
+
+[data-video-player-root] .player-control:active,
+[data-video-player-root] .player-control[aria-pressed="true"] {
+  background: var(--video-player-control-surface-active) !important;
+}
+
+[data-video-player-root] .player-menu-trigger {
+  border-color: var(--video-player-control-border, transparent);
+  background: var(--video-player-control-surface);
+  color: var(--video-player-control-text);
+  box-shadow: var(--video-player-control-shadow, none);
+}
+
+[data-video-player-root] .player-menu-trigger:hover,
+[data-video-player-root] .player-menu-trigger:focus-visible {
+  border-color: color-mix(
+    in srgb,
+    var(--video-player-control-text) 22%,
+    var(--video-player-control-border, transparent)
+  );
+  background: var(--video-player-control-surface-hover);
+}
+
+[data-video-player-root] [data-player-control-cluster] {
+  border: 1px solid var(--video-player-control-border, transparent);
+  border-radius: var(--video-player-control-radius, 999px);
+  background: var(
+    --video-player-control-surface,
+    rgb(5 7 11 / 0.72)
+  ) !important;
+  color: var(--video-player-control-text, #fff) !important;
+  box-shadow: var(--video-player-control-shadow, none) !important;
+}
+
+[data-video-player-root] [data-timeline-track] {
+  background: var(
+    --video-player-timeline-track,
+    rgb(255 255 255 / 0.3)
+  ) !important;
+}
+
+[data-video-player-root] [data-timeline-buffered-range] {
+  background: var(
+    --video-player-timeline-buffered,
+    rgb(255 255 255 / 0.46)
+  ) !important;
+}
+
+[data-video-player-root] [data-video-player-controls] {
+  background: linear-gradient(
+    to top,
+    rgb(var(--video-player-vignette-rgb, 5 7 11) / 0.9),
+    rgb(var(--video-player-vignette-rgb, 5 7 11) / 0.52),
+    transparent
+  ) !important;
+}
+
+[data-video-player-root] [data-mobile-player-vignette="top"] {
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--video-player-vignette-rgb, 5 7 11) / 0.55),
+    transparent
+  ) !important;
+}
+
+[data-video-player-root] [data-mobile-player-vignette="bottom"] {
+  background: linear-gradient(
+    to top,
+    rgb(var(--video-player-vignette-rgb, 5 7 11) / 0.58),
+    transparent
+  ) !important;
+}
+
+[data-video-player-root] [data-autoplay-track] {
+  background: color-mix(
+    in srgb,
+    var(--video-player-control-text) 28%,
+    transparent
+  ) !important;
+}
+
+[data-video-player-root]
+  [role="switch"][aria-checked="true"]
+  [data-autoplay-track] {
+  background: color-mix(
+    in srgb,
+    var(--video-player-accent) 58%,
+    var(--video-player-control-surface)
+  ) !important;
+}
+
+[data-video-player-root] [data-autoplay-knob] {
+  background: var(--video-player-control-text) !important;
+  color: var(--video-player-accent-contrast) !important;
+}
+
+[data-video-player-menu-panel] {
+  border-color: var(
+    --video-player-menu-border,
+    rgb(255 255 255 / 0.14)
+  ) !important;
+  border-radius: var(--video-player-menu-radius, 14px) !important;
+  background: var(--video-player-menu-surface, rgb(11 11 13 / 0.88)) !important;
+  color: var(--video-player-menu-text, #fff) !important;
+  box-shadow: var(--video-player-menu-shadow, none) !important;
+}
+
+[data-video-player-menu-panel] .player-menu-row,
+[data-video-player-menu-panel] [role^="menuitem"] {
+  border-radius: calc(var(--video-player-menu-radius, 14px) - 5px);
+}
+
+[data-player-theme="aurora"] [data-player-control-cluster] {
+  column-gap: 0.125rem;
+}
+
+[data-player-theme="aurora"] [data-player-control-cluster="player-actions"] {
+  padding-inline: 0.25rem;
+}
+
+[data-player-theme="aurora"] [data-timeline-progress],
+[data-player-theme="aurora"] [data-timeline-thumb] {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.3),
+    0 2px 8px rgb(103 232 249 / 0.4);
+}
+
+[data-player-theme="minimal"] [data-player-control-cluster] {
+  backdrop-filter: none;
+}
+
+[data-player-theme="minimal"] [data-autoplay-knob] {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+[data-player-theme="minimal"]
+  [data-player-control-cluster="lesson-navigation"] {
+  column-gap: 0.125rem;
+}
+
+[data-player-theme="minimal"] [data-timeline-progress],
+[data-player-theme="minimal"] [data-timeline-thumb] {
+  box-shadow:
+    0 0 0 1px rgb(15 23 42 / 0.55),
+    0 2px 5px rgb(0 0 0 / 0.28);
+}
+
+@media (max-width: 40rem) {
+  [data-video-player-root] [data-player-control-cluster="player-actions"] {
+    border-color: transparent;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  [data-player-theme="minimal"] [data-player-control-cluster="player-actions"] {
+    border-color: var(--video-player-control-border) !important;
+    background: var(--video-player-control-surface) !important;
+  }
+}

@@ -1,11 +1,6 @@
-import {
-  SpeakerHigh,
-  SpeakerLow,
-  SpeakerNone,
-  SpeakerX,
-} from "@phosphor-icons/react";
 import { usePlayerController } from "../react/context";
 import { useVolume } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { PlayerIconButton } from "./PlayerIconButton";
 
 export interface MuteButtonProps {
@@ -24,22 +19,21 @@ export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
       : volume < 0.67
         ? "medium"
         : "high";
-  const icon = silent ? (
-    <SpeakerX size={iconSize} weight="fill" />
-  ) : volumeLevel === "quiet" ? (
-    <SpeakerNone size={iconSize} weight="fill" />
-  ) : volumeLevel === "medium" ? (
-    <SpeakerLow size={iconSize} weight="fill" />
-  ) : (
-    <SpeakerHigh size={iconSize} weight="fill" />
-  );
+  const { icons } = usePlayerTheme();
+  const Icon = silent
+    ? icons.volumeMuted
+    : volumeLevel === "quiet"
+      ? icons.volumeQuiet
+      : volumeLevel === "medium"
+        ? icons.volumeMedium
+        : icons.volumeHigh;
 
   return (
     <PlayerIconButton
       className={className}
       data-volume-level={volumeLevel}
       label={silent ? "Unmute" : "Mute"}
-      icon={icon}
+      icon={<Icon size={iconSize} active={silent} />}
       pressed={silent}
       onClick={() => controller.toggleMuted()}
     />

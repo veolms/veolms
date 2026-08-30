@@ -7,9 +7,11 @@ import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
 import { CurriculumTestControls } from "./CurriculumTestControls";
+import { PlayerThemePicker } from "./PlayerThemePicker";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import {
   LEARNING_PREFERENCES_KEY,
+  LEARNING_PREFERENCES_EVENT,
   LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_REMINDER_DAYS,
   LEARNING_SEEK_INTERVAL_MAX,
@@ -70,6 +72,9 @@ export function LearningSettings() {
     } catch {
       // Preferences remain available for this session when storage is blocked.
     }
+    window.dispatchEvent(
+      new CustomEvent(LEARNING_PREFERENCES_EVENT, { detail: preferences }),
+    );
     document.documentElement.dataset.lessonPageScrollbar =
       preferences.showLessonPageScrollbar ? "visible" : "hidden";
     document.documentElement.dataset.curriculumScrollbar =
@@ -105,6 +110,10 @@ export function LearningSettings() {
             <h3 id="playback-preferences-heading">Playback preferences</h3>
           </header>
           <div className="settings-learning-card__rows">
+            <PlayerThemePicker
+              value={preferences.videoPlayerTheme}
+              onChange={(videoPlayerTheme) => update({ videoPlayerTheme })}
+            />
             <LearningSelectRow
               id="learning-video-quality"
               label="Default video quality"

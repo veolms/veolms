@@ -16,6 +16,7 @@ import {
   normalizeControlRadiusPreset,
   normalizeElasticScrollAppearance,
   normalizeLearningSeekInterval,
+  normalizeVideoPlayerTheme,
   normalizePageTabColors,
   normalizeScrollbarStyle,
   normalizeSidebarDockItems,
@@ -328,6 +329,12 @@ describe("learning preference persistence", () => {
     expect(normalizeLearningSeekInterval("invalid")).toBe(
       LEARNING_SEEK_INTERVAL_DEFAULT,
     );
+  });
+
+  it("defaults unsupported player themes to YouTube", () => {
+    expect(normalizeVideoPlayerTheme("aurora")).toBe("aurora");
+    expect(normalizeVideoPlayerTheme("minimal")).toBe("minimal");
+    expect(normalizeVideoPlayerTheme("unsupported")).toBe("youtube");
   });
 
   it("returns the existing default object for invalid JSON", () => {

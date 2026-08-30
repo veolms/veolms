@@ -1,13 +1,3 @@
-import {
-  ArrowLeft,
-  CaretRight,
-  GearSix,
-  ListBullets,
-  PictureInPicture,
-  SlidersHorizontal,
-  SpeakerHigh,
-  Speedometer,
-} from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { formatMediaTime } from "../accessibility/formatMediaTime";
 import {
@@ -17,6 +7,7 @@ import {
 } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import {
   PlayerMenuItem,
   PopoverMenu,
@@ -39,6 +30,17 @@ export function SettingsMenu({
   triggerClassName,
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
+  const theme = usePlayerTheme();
+  const {
+    audio: AudioIcon,
+    back: BackIcon,
+    chapters: ChaptersIcon,
+    disclosure: DisclosureIcon,
+    pictureInPicture: PictureInPictureIcon,
+    playbackRate: PlaybackRateIcon,
+    quality: QualityIcon,
+    settings: SettingsIcon,
+  } = theme.icons;
   const {
     activeChapterId,
     chapters,
@@ -90,12 +92,19 @@ export function SettingsMenu({
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
       trigger={
-        <GearSix
-          data-settings-icon="gear-six"
+        <SettingsIcon
+          data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
           data-settings-icon-state={settingsOpen ? "open" : "closed"}
           size={22}
           className="origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none"
-          style={{ transform: `rotate(${settingsOpen ? 90 : 30}deg)` }}
+          style={{
+            transform: `rotate(${
+              settingsOpen
+                ? theme.motion.settingsOpenRotation
+                : theme.motion.settingsClosedRotation
+            }deg)`,
+          }}
+          active={settingsOpen}
         />
       }
     >
@@ -109,7 +118,7 @@ export function SettingsMenu({
               className="mb-1 flex min-h-10 w-full items-center gap-2 border-b border-[color-mix(in_srgb,var(--text,#fff)_10%,transparent)] px-3 pb-2 text-left text-sm font-semibold text-(--text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--text)"
               onClick={() => openView("main")}
             >
-              <ArrowLeft size={18} />
+              <BackIcon size={18} />
               {view === "playback-rate"
                 ? "Playback speed"
                 : view === "quality"
@@ -126,16 +135,16 @@ export function SettingsMenu({
                 data-menu-keep-open=""
                 label="Quality"
                 description={qualityLabel}
-                leading={<SlidersHorizontal size={19} />}
-                trailing={<CaretRight size={17} />}
+                leading={<QualityIcon size={19} />}
+                trailing={<DisclosureIcon size={17} />}
                 onClick={() => openView("quality")}
               />
               <PlayerMenuItem
                 data-menu-keep-open=""
                 label="Playback speed"
                 description={formatPlaybackRate(media.playbackRate)}
-                leading={<Speedometer size={19} />}
-                trailing={<CaretRight size={17} />}
+                leading={<PlaybackRateIcon size={19} />}
+                trailing={<DisclosureIcon size={17} />}
                 onClick={() => openView("playback-rate")}
               />
               {media.audioTracks.length > 1 ? (
@@ -143,8 +152,8 @@ export function SettingsMenu({
                   data-menu-keep-open=""
                   label="Audio"
                   description={audioLabel}
-                  leading={<SpeakerHigh size={19} />}
-                  trailing={<CaretRight size={17} />}
+                  leading={<AudioIcon size={19} />}
+                  trailing={<DisclosureIcon size={17} />}
                   onClick={() => openView("audio")}
                 />
               ) : null}
@@ -155,8 +164,8 @@ export function SettingsMenu({
                   description={
                     chapters.find((item) => item.id === activeChapterId)?.title
                   }
-                  leading={<ListBullets size={19} />}
-                  trailing={<CaretRight size={17} />}
+                  leading={<ChaptersIcon size={19} />}
+                  trailing={<DisclosureIcon size={17} />}
                   onClick={() => openView("chapters")}
                 />
               ) : null}
@@ -172,7 +181,12 @@ export function SettingsMenu({
                       ? "Playing above other apps"
                       : "Play above other apps"
                   }
-                  leading={<PictureInPicture size={19} />}
+                  leading={
+                    <PictureInPictureIcon
+                      size={19}
+                      active={pictureInPictureActive}
+                    />
+                  }
                   onClick={() => {
                     void controller.togglePictureInPicture();
                     close();

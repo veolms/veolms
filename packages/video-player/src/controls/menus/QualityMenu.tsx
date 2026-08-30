@@ -1,7 +1,6 @@
-import { HighDefinition } from "@phosphor-icons/react";
-
 import { usePlayerController } from "../../react/context";
 import { useQuality } from "../../react/usePlayerState";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { MenuTriggerContent } from "./MenuTriggerContent";
 import { PlayerMenuItem } from "./PlayerMenuItem";
 import { PopoverMenu } from "./PopoverMenu";
@@ -25,6 +24,7 @@ export function QualityMenu({
   triggerClassName,
 }: QualityMenuProps) {
   const controller = usePlayerController();
+  const QualityIcon = usePlayerTheme().icons.quality;
   const { auto, qualities, selectedId } = useQuality();
   const activeQuality =
     qualities.find((quality) => quality.id === selectedId) ??
@@ -38,7 +38,7 @@ export function QualityMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={<HighDefinition className="size-4" />}
+            icon={<QualityIcon className="size-4" />}
             value={currentLabel}
           />
         )

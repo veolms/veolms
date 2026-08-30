@@ -1,3 +1,5 @@
+@import "../themes/playerThemes.css";
+
 @keyframes video-player-hud {
   0% {
     opacity: 0;
@@ -32,8 +34,10 @@
   border-radius: 0;
   background: linear-gradient(
     to right,
-    rgb(255 255 255 / 0.95) var(--video-player-volume, 100%),
-    rgb(255 255 255 / 0.3) var(--video-player-volume, 100%)
+    var(--video-player-control-text, rgb(255 255 255 / 0.95))
+      var(--video-player-volume, 100%),
+    var(--video-player-timeline-track, rgb(255 255 255 / 0.3))
+      var(--video-player-volume, 100%)
   );
 }
 
@@ -42,8 +46,10 @@
   border-radius: 0;
   background: linear-gradient(
     to right,
-    rgb(255 255 255 / 0.95) var(--video-player-volume, 100%),
-    rgb(255 255 255 / 0.3) var(--video-player-volume, 100%)
+    var(--video-player-control-text, rgb(255 255 255 / 0.95))
+      var(--video-player-volume, 100%),
+    var(--video-player-timeline-track, rgb(255 255 255 / 0.3))
+      var(--video-player-volume, 100%)
   );
 }
 
@@ -54,7 +60,7 @@
   margin-top: -0.375rem;
   border: 0;
   border-radius: 9999px;
-  background: white;
+  background: var(--video-player-control-text, white);
   box-shadow: 0 1px 5px rgb(0 0 0 / 0.4);
 }
 
@@ -63,7 +69,7 @@
   height: 0.875rem;
   border: 0;
   border-radius: 9999px;
-  background: white;
+  background: var(--video-player-control-text, white);
   box-shadow: 0 1px 5px rgb(0 0 0 / 0.4);
 }
 

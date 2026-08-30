@@ -34,6 +34,7 @@ import {
   writeMutedPreference,
   writeResumePosition,
 } from "./lessonPlayerPersistence";
+import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
 const LESSON_PLAYER_SHORTCUTS = {
@@ -99,6 +100,7 @@ export function LessonVideoPlayer({
   );
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const playerTheme = useLearningPlayerTheme();
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
@@ -389,7 +391,8 @@ export function LessonVideoPlayer({
       key={mediaKey}
       ref={playerRef}
       source={source}
-      accentColor="var(--accent)"
+      accentColor={playerTheme === "youtube" ? "var(--accent)" : undefined}
+      theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
       autoPlay={autoPlayOnMediaChange || restoreAutoplayRef.current}

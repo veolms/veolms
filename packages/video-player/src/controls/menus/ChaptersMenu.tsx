@@ -1,8 +1,7 @@
-import { ListBullets } from "@phosphor-icons/react";
-
 import { formatMediaTime } from "../../accessibility/formatMediaTime";
 import { usePlayerController } from "../../react/context";
 import { useChapters } from "../../react/usePlayerState";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { MenuTriggerContent } from "./MenuTriggerContent";
 import { PlayerMenuItem } from "./PlayerMenuItem";
 import { PopoverMenu } from "./PopoverMenu";
@@ -26,6 +25,7 @@ export function ChaptersMenu({
   triggerClassName,
 }: ChaptersMenuProps) {
   const controller = usePlayerController();
+  const ChaptersIcon = usePlayerTheme().icons.chapters;
   const { activeChapterId, chapters } = useChapters();
   const activeChapter = chapters.find(
     (chapter) => chapter.id === activeChapterId,
@@ -39,7 +39,7 @@ export function ChaptersMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={<ListBullets className="size-4" />}
+            icon={<ChaptersIcon className="size-4" />}
             value={currentLabel}
           />
         )

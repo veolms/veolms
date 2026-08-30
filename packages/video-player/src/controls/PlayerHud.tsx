@@ -20,7 +20,7 @@ export function PlayerHud() {
       role="status"
       aria-live="polite"
     >
-      <span className="animate-[video-player-hud_850ms_ease-out_forwards] rounded-full bg-black/65 px-4 py-2 text-sm font-semibold text-white shadow-xl backdrop-blur-md motion-reduce:animate-none">
+      <span className="animate-[video-player-hud_850ms_ease-out_forwards] rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2 text-sm font-semibold text-(--video-player-control-text) shadow-(--video-player-control-shadow) motion-reduce:animate-none">
         {hud.text}
       </span>
     </div>

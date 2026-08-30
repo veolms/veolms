@@ -1,6 +1,6 @@
-import { Pause, Play } from "@phosphor-icons/react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 
 export function CentralPlayButton() {
   const controller = usePlayerController();
@@ -13,6 +13,8 @@ export function CentralPlayButton() {
       left.controlsVisible === right.controlsVisible &&
       left.paused === right.paused,
   );
+  const { icons } = usePlayerTheme();
+  const Icon = paused ? icons.play : icons.pause;
 
   return (
     <button
@@ -26,11 +28,7 @@ export function CentralPlayButton() {
       }`}
       onClick={() => void controller.togglePlayback().catch(() => undefined)}
     >
-      {paused ? (
-        <Play size={31} weight="fill" />
-      ) : (
-        <Pause size={31} weight="fill" />
-      )}
+      <Icon size={31} active />
     </button>
   );
 }

@@ -1,6 +1,6 @@
-import { PictureInPicture } from "@phosphor-icons/react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { PlayerIconButton } from "./PlayerIconButton";
 
 export function PictureInPictureButton() {
@@ -13,6 +13,8 @@ export function PictureInPictureButton() {
     (left, right) =>
       left.active === right.active && left.available === right.available,
   );
+  const { icons } = usePlayerTheme();
+  const Icon = icons.pictureInPicture;
   if (!available) return null;
   return (
     <PlayerIconButton
@@ -20,7 +22,7 @@ export function PictureInPictureButton() {
       label="Toggle picture in picture"
       title={active ? "Exit picture in picture (I)" : "Picture in picture (I)"}
       pressed={active}
-      icon={<PictureInPicture size={22} />}
+      icon={<Icon size={22} active={active} />}
       onClick={() => void controller.togglePictureInPicture()}
     />
   );

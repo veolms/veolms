@@ -145,26 +145,79 @@ Important high-level props include:
 - `theaterMode` and `onTheaterModeChange`: controlled theater presentation.
 - `lockLandscapeOnFullscreen`: optionally request landscape orientation while
   fullscreen; browser refusal is non-fatal.
+- `theme`: a built-in theme id (`youtube`, `aurora`, or `minimal`) or a custom
+  `PlayerThemeDefinition` that replaces player-only tokens and semantic icons.
 
 The forwarded player ref implements `VideoPlayerHandle` and exposes playback,
 seeking, volume, quality/track selection, fullscreen, picture-in-picture,
 focus, reload, and `getSnapshot()` operations.
 
+## Player-only themes and icon packs
+
+Themes belong to the video-player package, not to the consuming application's
+site theme. The current pill-based experience is the default `youtube` theme;
+`aurora` uses expressive duotone controls and violet/cyan surfaces, while
+`minimal` uses compact monochrome geometry. All three keep identical playback,
+keyboard, accessibility, and menu behavior:
+
+```tsx
+<VideoPlayer source={source} theme="aurora" />
+```
+
+Headless compositions use the same API on `PlayerRoot`. Controls rendered
+inside the root read the selected definition through `usePlayerTheme()`.
+
+Create a product-specific theme by extending a built-in definition. Tokens are
+CSS custom properties on the player root, and icon overrides are semantic, so
+consumers never need to fork control components:
+
+```tsx
+import {
+  createPlayerTheme,
+  type PlayerThemeIconProps,
+} from "@veolms/video-player";
+
+function BrandPlayIcon({ active: _active, ...props }: PlayerThemeIconProps) {
+  return (
+    <svg {...props} viewBox="0 0 24 24">
+      {/* brand artwork */}
+    </svg>
+  );
+}
+
+const brandTheme = createPlayerTheme({
+  id: "brand",
+  label: "Brand",
+  base: "minimal",
+  tokens: {
+    accent: "#22c55e",
+    controlRadius: "12px",
+  },
+  icons: { play: BrandPlayIcon },
+});
+
+<VideoPlayer source={source} theme={brandTheme} />;
+```
+
+`createPlayerTheme` fills omitted tokens, icons, and motion values from its
+base. `PLAYER_THEME_OPTIONS` exposes built-in labels/descriptions for settings
+UIs, while `getPlayerThemeStyle` is available for compact visual previews.
+
 ## Public API
 
 The root export groups the supported surface as follows:
 
-| Area | Main exports |
-| --- | --- |
-| High-level React | `VideoPlayer`, `VideoPlayerProps`, `VideoPlayerHandle` |
-| Headless composition | `PlayerRoot`, `PlayerMedia`, `usePlayerController`, `usePlayerState` and focused selector hooks |
-| Engines | `VideoEngine`, `NativeVideoEngine`, `ShakaVideoEngine`, normalized source/snapshot/event/error types |
-| Controls | play, seek, mute, volume, time, settings, PiP, theater, fullscreen, menus, overlays, and `DefaultControls` |
-| Timeline | `Timeline`, `TimelinePreview`, marker/range types, and pure positioning helpers |
-| Chapters | normalization, description parsing, precedence resolution, and active-chapter lookup |
-| Storyboards | VTT parsing, thumbnail lookup, frame and track types |
-| Keyboard | default bindings, arbiter/controller helpers, and override types |
-| Accessibility | `formatMediaTime` |
+| Area                 | Main exports                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| High-level React     | `VideoPlayer`, `VideoPlayerProps`, `VideoPlayerHandle`                                                     |
+| Headless composition | `PlayerRoot`, `PlayerMedia`, `usePlayerController`, `usePlayerState` and focused selector hooks            |
+| Engines              | `VideoEngine`, `NativeVideoEngine`, `ShakaVideoEngine`, normalized source/snapshot/event/error types       |
+| Controls             | play, seek, mute, volume, time, settings, PiP, theater, fullscreen, menus, overlays, and `DefaultControls` |
+| Timeline             | `Timeline`, `TimelinePreview`, marker/range types, and pure positioning helpers                            |
+| Chapters             | normalization, description parsing, precedence resolution, and active-chapter lookup                       |
+| Storyboards          | VTT parsing, thumbnail lookup, frame and track types                                                       |
+| Keyboard             | default bindings, arbiter/controller helpers, and override types                                           |
+| Accessibility        | `formatMediaTime`                                                                                          |
 
 `@veolms/video-player/shaka` exposes the Shaka adapter directly, and
 `@veolms/video-player/testing` is reserved for package testing helpers.
@@ -451,7 +504,7 @@ Inject the engine without changing player UI:
 <VideoPlayer
   source={source}
   engineFactory={() => new CompanyCdnVideoEngine()}
-/>;
+/>
 ```
 
 Keep provider SDK types and behavior inside the adapter. Do not leak them into
@@ -462,19 +515,19 @@ controls, application adapters, or `VideoSource` consumers.
 Only the active player handles document-level shortcuts, so multiple mounted
 players do not respond together. Editable elements are ignored. Defaults are:
 
-| Action | Shortcut |
-| --- | --- |
-| Play/pause | `Space`, `K` |
-| Seek 5 seconds | `Left`, `Right` |
-| Seek 10 seconds | `J`, `L` |
-| Mute | `M` |
-| Captions | `C` |
-| Fullscreen | `F` |
-| Theater | `T` |
-| Picture-in-picture | `I` |
-| Start/end | `Home`, `End` |
-| Percentage | `Alt+0` through `Alt+9` |
-| Playback speed | `Shift+,`, `Shift+.`, or shifted arrows |
+| Action             | Shortcut                                |
+| ------------------ | --------------------------------------- |
+| Play/pause         | `Space`, `K`                            |
+| Seek 5 seconds     | `Left`, `Right`                         |
+| Seek 10 seconds    | `J`, `L`                                |
+| Mute               | `M`                                     |
+| Captions           | `C`                                     |
+| Fullscreen         | `F`                                     |
+| Theater            | `T`                                     |
+| Picture-in-picture | `I`                                     |
+| Start/end          | `Home`, `End`                           |
+| Percentage         | `Alt+0` through `Alt+9`                 |
+| Playback speed     | `Shift+,`, `Shift+.`, or shifted arrows |
 
 Override one action with bindings or disable it with `false`:
 
@@ -485,7 +538,7 @@ Override one action with bindings or disable it with `false`:
     toggleTheaterMode: false,
     seekForward: ["ArrowRight", "Ctrl+ArrowRight"],
   }}
-/>;
+/>
 ```
 
 Controls use native buttons, visible focus styles, names/titles, pressed state

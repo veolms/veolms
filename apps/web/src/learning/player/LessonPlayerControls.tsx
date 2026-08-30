@@ -1,12 +1,4 @@
 import {
-  CaretDown,
-  ClosedCaptioning,
-  Pause,
-  Play,
-  SkipBack,
-  SkipForward,
-} from "@phosphor-icons/react";
-import {
   FullscreenButton,
   PlayerIconButton,
   PlayerMenuItem,
@@ -17,17 +9,18 @@ import {
   VolumeControl,
   usePlayerController,
   usePlayerState,
+  usePlayerTheme,
 } from "@veolms/video-player";
 import type { ReactNode } from "react";
 
 const PLAYER_SURFACE_CLASS =
-  "bg-[color-mix(in_srgb,#05070b_70%,var(--accent)_6%)] text-white shadow-[0_5px_16px_rgba(0,0,0,0.28)]";
+  "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
 const PLAYER_INNER_CONTROL_CLASS =
-  "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-white/10 active:!bg-[color-mix(in_srgb,white_10%,var(--accent)_6%)] focus-visible:!bg-white/16 focus-visible:!outline-none";
+  "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-(--video-player-control-surface-hover) active:!bg-(--video-player-control-surface-active) focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 const PLAYER_ICON_PILL_CLASS =
-  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-white/14 focus-visible:!bg-transparent focus-visible:!outline-none sm:!h-9 sm:!bg-white/6 sm:!px-3 sm:hover:!bg-white/16 sm:active:!bg-[color-mix(in_srgb,white_12%,var(--accent)_6%)] sm:focus-visible:!bg-white/16";
+  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_6%,transparent)] sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
 const PLAYER_VOLUME_ICON_CLASS =
-  "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-transparent focus-visible:!bg-white/16 focus-visible:!outline-none";
+  "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-transparent focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 
 function PlayerControlSurface({
   children,
@@ -67,6 +60,8 @@ function AutoplayToggle({
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
 }) {
+  const { icons } = usePlayerTheme();
+  const Icon = enabled ? icons.play : icons.pause;
   return (
     <button
       type="button"
@@ -91,11 +86,7 @@ function AutoplayToggle({
           }`}
           data-autoplay-knob=""
         >
-          {enabled ? (
-            <Play size={11} weight="fill" className="sm:size-3" />
-          ) : (
-            <Pause size={11} weight="fill" className="sm:size-3" />
-          )}
+          <Icon size={11} active={enabled} className="sm:size-3" />
         </span>
       </span>
     </button>
@@ -114,6 +105,7 @@ function CaptionsButton() {
       left.textTracks === right.textTracks,
   );
   const enabled = selectedTextTrackId !== null;
+  const CaptionsIcon = usePlayerTheme().icons.captions;
 
   return (
     <PlayerIconButton
@@ -122,10 +114,10 @@ function CaptionsButton() {
       disabled={textTracks.length === 0}
       className={PLAYER_ICON_PILL_CLASS}
       icon={
-        <ClosedCaptioning
+        <CaptionsIcon
           data-caption-icon-state={enabled ? "filled" : "outline"}
           size={26}
-          weight={enabled ? "fill" : "bold"}
+          active={enabled}
           className="max-sm:size-5.5"
         />
       }
@@ -149,7 +141,8 @@ function LessonNavigationButton({
   iconSize?: number;
   onClick: () => void;
 }) {
-  const Icon = direction === "previous" ? SkipBack : SkipForward;
+  const { icons } = usePlayerTheme();
+  const Icon = direction === "previous" ? icons.previous : icons.next;
   const shortcut = direction === "previous" ? "Shift+P" : "Shift+N";
   const label = `${direction === "previous" ? "Previous" : "Next"} lesson`;
   return (
@@ -159,7 +152,7 @@ function LessonNavigationButton({
       title={`${label} (${shortcut})`}
       disabled={disabled}
       className={className}
-      icon={<Icon size={iconSize} weight="fill" />}
+      icon={<Icon size={iconSize} active />}
       onClick={onClick}
     />
   );
@@ -205,28 +198,19 @@ function AmbientSettingsItem({
 }
 
 function AmbientModeIcon({ enabled }: { enabled: boolean }) {
+  const AmbientIcon = usePlayerTheme().icons.ambient;
   return (
-    <svg
-      viewBox="0 0 24 20"
-      className="size-5 overflow-visible"
+    <AmbientIcon
+      size={20}
+      active={enabled}
+      className="overflow-visible"
       data-ambient-mode-icon=""
+      style={{
+        filter:
+          "drop-shadow(0 0 2px var(--video-player-accent)) drop-shadow(0 2px 5px rgb(0 0 0 / 0.28))",
+      }}
       aria-hidden="true"
-    >
-      <rect
-        x="3"
-        y="4"
-        width="18"
-        height="12"
-        rx="2.5"
-        fill={enabled ? "rgba(96, 165, 250, 0.2)" : "none"}
-        stroke={enabled ? "#dbeafe" : "#eff6ff"}
-        strokeWidth="1.75"
-        style={{
-          filter:
-            "drop-shadow(0 0 2px #60a5fa) drop-shadow(0 0 5px color-mix(in srgb, #3b82f6 72%, var(--accent)))",
-        }}
-      />
-    </svg>
+    />
   );
 }
 
@@ -262,6 +246,7 @@ export function LessonPlayerControls({
   onGoPrevious,
   onMinimize,
 }: LessonPlayerControlsProps) {
+  const MinimizeIcon = usePlayerTheme().icons.minimize;
   const { controlsVisible, scrubbing, settingsOpen } = usePlayerState(
     ({ ui }) => ({
       controlsVisible: ui.controlsVisible,
@@ -303,7 +288,7 @@ export function LessonPlayerControls({
           <PlayerIconButton
             label="Minimize video"
             className="!size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none"
-            icon={<CaretDown size={22} weight="bold" />}
+            icon={<MinimizeIcon size={22} />}
             onClick={onMinimize}
           />
         </div>
@@ -374,7 +359,7 @@ export function LessonPlayerControls({
           </PlayerControlSurface>
           <VolumeControl
             collapsible
-            className={`${PLAYER_SURFACE_CLASS} h-10.5 !w-11 shrink-0 rounded-full p-[3px] hover:!w-32 hover:bg-[color-mix(in_srgb,#05070b_76%,var(--accent)_8%)] focus-within:!w-32 focus-within:bg-[color-mix(in_srgb,#05070b_76%,var(--accent)_8%)]`}
+            className={`${PLAYER_SURFACE_CLASS} h-10.5 !w-11 shrink-0 rounded-full p-[3px] hover:!w-32 hover:bg-(--video-player-control-surface-hover) focus-within:!w-32 focus-within:bg-(--video-player-control-surface-hover)`}
             muteButtonClassName={PLAYER_VOLUME_ICON_CLASS}
           />
           <LessonTimeControl />

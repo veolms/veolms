@@ -1,7 +1,6 @@
-import { SpeakerHigh } from "@phosphor-icons/react";
-
 import { usePlayerController } from "../../react/context";
 import { useTracks } from "../../react/usePlayerState";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { MenuTriggerContent } from "./MenuTriggerContent";
 import { PlayerMenuItem } from "./PlayerMenuItem";
 import { PopoverMenu } from "./PopoverMenu";
@@ -25,6 +24,7 @@ export function AudioTrackMenu({
   triggerClassName,
 }: AudioTrackMenuProps) {
   const controller = usePlayerController();
+  const AudioIcon = usePlayerTheme().icons.audio;
   const { audioTracks, selectedAudioTrackId } = useTracks();
   const activeTrack =
     audioTracks.find((track) => track.id === selectedAudioTrackId) ??
@@ -38,7 +38,7 @@ export function AudioTrackMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={<SpeakerHigh className="size-4" />}
+            icon={<AudioIcon className="size-4" />}
             value={currentLabel}
           />
         )

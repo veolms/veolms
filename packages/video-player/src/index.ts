@@ -62,9 +62,7 @@ export {
   useTracks,
   useVolume,
 } from "./react/usePlayerState";
-export type {
-  PlayerStateSelector,
-} from "./react/usePlayerState";
+export type { PlayerStateSelector } from "./react/usePlayerState";
 export type {
   PlayerSnapshot,
   PlayerUiState,
@@ -162,3 +160,30 @@ export type {
   ShortcutBinding,
 } from "./keyboard";
 export { formatMediaTime } from "./accessibility/formatMediaTime";
+
+export {
+  BUILT_IN_PLAYER_THEMES,
+  BUILT_IN_PLAYER_THEME_IDS,
+  PLAYER_THEME_OPTIONS,
+  createPlayerTheme,
+  getPlayerThemeStyle,
+  isBuiltInPlayerThemeId,
+  resolvePlayerTheme,
+} from "./themes/playerThemes";
+export type {
+  BuiltInPlayerThemeId,
+  CreatePlayerThemeOptions,
+  PlayerTheme,
+  PlayerThemeDefinition,
+  PlayerThemeIcon,
+  PlayerThemeIconProps,
+  PlayerThemeIcons,
+  PlayerThemeMotion,
+  PlayerThemeStyle,
+  PlayerThemeTokens,
+} from "./themes/playerThemes";
+export {
+  PlayerThemeProvider,
+  usePlayerTheme,
+} from "./themes/PlayerThemeContext";
+export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";

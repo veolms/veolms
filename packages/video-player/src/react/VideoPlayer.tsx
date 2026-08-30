@@ -35,6 +35,7 @@ import type {
 } from "./playerEvents";
 import { classNames } from "../utils/classNames";
 import type { TimelineMarker } from "../timeline/timelineMath";
+import type { PlayerTheme } from "../themes/playerThemes";
 
 export interface VideoPlayerProgress {
   currentTime: number;
@@ -82,6 +83,8 @@ export interface VideoPlayerProps extends Omit<
   onEvent?: VideoPlayerEventListener;
   onStoryboardError?: (error: unknown) => void;
   accentColor?: string;
+  /** Built-in theme id or a custom package-level theme definition. */
+  theme?: PlayerTheme;
   playerClassName?: string;
   mediaClassName?: string;
   ariaLabel?: string;
@@ -150,6 +153,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       storyboardLoader,
       style,
       theaterMode = false,
+      theme = "youtube",
       ...outerProps
     },
     ref,
@@ -252,6 +256,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ...style,
       ...(accentColor ? { "--video-player-accent": accentColor } : undefined),
     } as CSSProperties;
+    const playerThemeStyle = accentColor
+      ? ({ "--video-player-accent": accentColor } as CSSProperties)
+      : undefined;
     const resolvedPoster = poster ?? source.metadata?.poster;
 
     return (
@@ -275,6 +282,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           markers={markers}
           theaterMode={theaterMode}
           onEvent={handleEvent}
+          theme={theme}
+          style={playerThemeStyle}
           role="region"
           aria-label={ariaLabel}
           tabIndex={0}

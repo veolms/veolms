@@ -1,5 +1,5 @@
-import { Rectangle, RectangleDashed } from "@phosphor-icons/react";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { PlayerIconButton } from "./PlayerIconButton";
 
 export interface TheaterButtonProps {
@@ -8,15 +8,15 @@ export interface TheaterButtonProps {
 
 export function TheaterButton({ onToggle }: TheaterButtonProps) {
   const active = usePlayerState(({ ui }) => ui.theater);
+  const { icons } = usePlayerTheme();
+  const Icon = active ? icons.theaterExit : icons.theaterEnter;
   return (
     <PlayerIconButton
       className="player-secondary-control"
       label={active ? "Exit theater mode" : "Enter theater mode"}
       title={active ? "Exit theater mode (T)" : "Enter theater mode (T)"}
       pressed={active}
-      icon={
-        active ? <RectangleDashed size={22} /> : <Rectangle size={22} />
-      }
+      icon={<Icon size={22} active={active} />}
       onClick={onToggle}
     />
   );

@@ -1,4 +1,3 @@
-import { X } from "@phosphor-icons/react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -14,6 +13,8 @@ import {
 import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
+import { getPlayerThemeStyle } from "../../themes/playerThemes";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 
 export type PopoverMenuSide = "top" | "bottom";
 export type PopoverMenuAlign = "start" | "end";
@@ -50,7 +51,7 @@ const menuItemSelector = [
 ].join(",");
 
 const triggerClass =
-  "inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-black/32 px-2.5 text-xs font-medium text-white shadow-sm shadow-black/20 transition-[background-color,border-color,color] duration-150 hover:border-white/20 hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm";
+  "player-menu-trigger inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-[background-color,border-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm";
 
 const panelClass =
   "absolute z-70 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border border-[color-mix(in_srgb,var(--text,#fff)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface,#0b0b0b)_78%,transparent)] p-1.5 text-(--text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] backdrop-blur-md focus:outline-none";
@@ -90,6 +91,8 @@ export function PopoverMenu({
   trigger,
   triggerClassName,
 }: PopoverMenuProps) {
+  const theme = usePlayerTheme();
+  const CloseIcon = theme.icons.close;
   const generatedId = useId();
   const menuId = `video-player-menu-${generatedId.replaceAll(":", "")}`;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -257,6 +260,9 @@ export function PopoverMenu({
       aria-labelledby={isMobileSheet ? `${menuId}-title` : undefined}
       aria-modal={isMobileSheet || undefined}
       data-video-player-mobile-sheet={isMobileSheet ? "" : undefined}
+      data-video-player-menu-panel=""
+      data-player-theme={theme.id}
+      style={getPlayerThemeStyle(theme)}
       className={classNames(
         isMobileSheet
           ? mobileSheetPanelClass
@@ -280,7 +286,7 @@ export function PopoverMenu({
             aria-label={`Close ${resolvedMenuLabel.toLowerCase()}`}
             onClick={closeAndRestoreFocus}
           >
-            <X size={20} weight="bold" />
+            <CloseIcon size={20} />
           </button>
         </div>
       ) : null}

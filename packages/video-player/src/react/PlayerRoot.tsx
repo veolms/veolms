@@ -15,6 +15,13 @@ import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoLoadOptions, VideoSource } from "../core/types";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
+import {
+  getPlayerThemeStyle,
+  resolvePlayerTheme,
+  type PlayerTheme,
+} from "../themes/playerThemes";
+import { PlayerThemeProvider } from "../themes/PlayerThemeContext";
+import { classNames } from "../utils/classNames";
 import { PlayerControllerContext } from "./context";
 import {
   areVideoLoadOptionsEquivalent,
@@ -71,9 +78,14 @@ export interface PlayerRootProps extends Omit<
    * back to the inner root for backwards compatibility.
    */
   presentationContainerRef?: RefObject<HTMLElement | null>;
+  /** Visual theme for package controls. Custom definitions can replace tokens and icons. */
+  theme?: PlayerTheme;
 }
 
-function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | null): void {
+function assignRef<Value>(
+  ref: Ref<Value> | undefined,
+  value: Value | null,
+): void {
   if (typeof ref === "function") ref(value);
   else if (ref) ref.current = value;
 }
@@ -93,6 +105,9 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       source,
       storyboard = [],
       theaterMode = false,
+      theme = "youtube",
+      className,
+      style,
       ...containerProps
     },
     ref,
@@ -109,10 +124,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     }
     const stableLoadOptionsRef = useRef(loadOptions);
     if (
-      !areVideoLoadOptionsEquivalent(
-        stableLoadOptionsRef.current,
-        loadOptions,
-      )
+      !areVideoLoadOptionsEquivalent(stableLoadOptionsRef.current, loadOptions)
     ) {
       stableLoadOptionsRef.current = loadOptions;
     }
@@ -216,16 +228,27 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
         .catch(() => undefined);
     }, [autoPlay, controller, stableLoadOptions, stableSource]);
 
+    const resolvedTheme = resolvePlayerTheme(theme);
+    const themeStyle = {
+      ...getPlayerThemeStyle(resolvedTheme),
+      ...style,
+    };
+
     return (
-      <PlayerControllerContext.Provider value={controller}>
-        <div
-          {...containerProps}
-          ref={setContainer}
-          data-video-player-root=""
-        >
-          {children}
-        </div>
-      </PlayerControllerContext.Provider>
+      <PlayerThemeProvider theme={resolvedTheme}>
+        <PlayerControllerContext.Provider value={controller}>
+          <div
+            {...containerProps}
+            ref={setContainer}
+            className={classNames(resolvedTheme.className, className)}
+            style={themeStyle}
+            data-video-player-root=""
+            data-player-theme={resolvedTheme.id}
+          >
+            {children}
+          </div>
+        </PlayerControllerContext.Provider>
+      </PlayerThemeProvider>
     );
   },
 );

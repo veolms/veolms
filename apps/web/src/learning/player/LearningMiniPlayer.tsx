@@ -1,10 +1,10 @@
-import { X } from "@phosphor-icons/react";
 import {
   PlayButton,
   PlayerIconButton,
   VideoPlayer,
   type VideoPlayerEvent,
   type VideoPlayerHandle,
+  usePlayerTheme,
 } from "@veolms/video-player";
 import { useCallback, useEffect, useRef } from "react";
 import type { LearningMiniPlayerSession } from "./learningMiniPlayerTypes";
@@ -12,6 +12,7 @@ import {
   writeMiniPlayerRestore,
   writeResumePosition,
 } from "./lessonPlayerPersistence";
+import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 
 interface MiniPlayerControlsProps {
   lessonTitle: string;
@@ -24,6 +25,7 @@ function MiniPlayerControls({
   onClose,
   onRestore,
 }: MiniPlayerControlsProps) {
+  const CloseIcon = usePlayerTheme().icons.close;
   return (
     <div className="absolute inset-0 z-30 bg-linear-to-t from-black/34 via-transparent to-black/30">
       <button
@@ -42,7 +44,7 @@ function MiniPlayerControls({
         <PlayerIconButton
           label="Close mini player"
           className="!size-10 !rounded-full !bg-black/54 backdrop-blur-md"
-          icon={<X size={22} weight="bold" />}
+          icon={<CloseIcon size={22} />}
           onClick={onClose}
         />
       </div>
@@ -62,6 +64,7 @@ export function LearningMiniPlayer({
   onRestore,
 }: LearningMiniPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
+  const playerTheme = useLearningPlayerTheme();
   const currentTimeRef = useRef(session.currentTime);
 
   const persistCurrentTime = useCallback(() => {
@@ -111,6 +114,7 @@ export function LearningMiniPlayer({
       <VideoPlayer
         ref={playerRef}
         source={{ ...session.source, startTime: session.currentTime }}
+        theme={playerTheme}
         engine="shaka"
         autoPlay={session.playing}
         keyboardEnabled={false}

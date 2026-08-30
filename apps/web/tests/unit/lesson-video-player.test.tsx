@@ -19,7 +19,10 @@ import { LessonVideoPlayer } from "../../src/learning/player/LessonVideoPlayer.j
 import { lessonPlayerStorageKeys } from "../../src/learning/player/lessonPlayerPersistence.js";
 import { LEARNING_PREFERENCES_KEY } from "../../src/settings/settingsPreferences.js";
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  localStorage.clear();
+});
 
 const englishCaptions: VideoTextTrack = {
   id: "captions-en",
@@ -102,6 +105,26 @@ function playerProps(media: CourseVideo, engine: RecordingFakeVideoEngine) {
 }
 
 describe("LessonVideoPlayer adapter", () => {
+  it("applies the saved video-player theme to the package root", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    localStorage.setItem(
+      LEARNING_PREFERENCES_KEY,
+      JSON.stringify({ videoPlayerTheme: "minimal" }),
+    );
+
+    render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
+
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Designing for real users",
+    });
+    await waitFor(() =>
+      expect(player).toHaveAttribute("data-player-theme", "minimal"),
+    );
+    expect(player.style.getPropertyValue("--video-player-accent")).toBe(
+      "#f8fafc",
+    );
+  });
+
   it("toggles every lesson control overlay when empty video space is tapped", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const play = vi.spyOn(engine, "play");
@@ -468,8 +491,11 @@ describe("LessonVideoPlayer adapter", () => {
       "focus-within:!w-32",
     );
     expect(volumeGroup?.className).toContain(
-      "hover:bg-[color-mix(in_srgb,#05070b_76%,var(--accent)_8%)]",
+      "hover:bg-(--video-player-control-surface-hover)",
     );
+    expect(
+      within(volumeGroup!).getByRole("slider", { name: "Volume" }),
+    ).toHaveClass("focus-visible:outline-(--video-player-control-text)");
     expect(
       within(volumeGroup!).getByRole("button", { name: "Mute" }),
     ).toHaveClass("hover:!bg-transparent");
@@ -527,11 +553,12 @@ describe("LessonVideoPlayer adapter", () => {
         "!shadow-none",
         "drop-shadow-none",
         "hover:!bg-transparent",
-        "active:!bg-white/14",
+        "active:!bg-(--video-player-control-surface-active)",
+        "focus-visible:outline-(--video-player-control-text)",
         "sm:!h-9",
-        "sm:!bg-white/6",
+        "sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_6%,transparent)]",
         "sm:!px-3",
-        "sm:hover:!bg-white/16",
+        "sm:hover:!bg-(--video-player-control-surface-hover)",
       );
     }
     const timeline = screen.getByRole("slider", {

@@ -1,5 +1,3 @@
-import { Gauge } from "@phosphor-icons/react";
-
 import {
   DEFAULT_PLAYBACK_RATES,
   formatPlaybackRate,
@@ -7,6 +5,7 @@ import {
 } from "../../playback/playbackRates";
 import { usePlayerController } from "../../react/context";
 import { usePlayerState } from "../../react/usePlayerState";
+import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { PlaybackRateSlider } from "../PlaybackRateSlider";
 import { MenuTriggerContent } from "./MenuTriggerContent";
 import { PlayerMenuItem } from "./PlayerMenuItem";
@@ -33,6 +32,7 @@ export function PlaybackRateMenu({
   triggerClassName,
 }: PlaybackRateMenuProps) {
   const controller = usePlayerController();
+  const PlaybackRateIcon = usePlayerTheme().icons.playbackRate;
   const playbackRate = usePlayerState(({ media }) => media.playbackRate);
   const normalizedRates = Array.from(
     new Set(rates.filter((rate) => Number.isFinite(rate) && rate > 0)),
@@ -46,7 +46,7 @@ export function PlaybackRateMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={<Gauge className="size-4" />}
+            icon={<PlaybackRateIcon className="size-4" />}
             value={currentLabel}
           />
         )
