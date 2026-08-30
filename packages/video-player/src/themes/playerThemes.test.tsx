@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { FakeVideoEngine } from "../testing/FakeVideoEngine";
 import { VideoPlayer } from "../react/VideoPlayer";
 import {
@@ -17,6 +17,8 @@ const source = {
   kind: "file" as const,
 };
 
+afterEach(cleanup);
+
 describe("player themes", () => {
   it("ships three complete built-in themes with YouTube as the default", () => {
     expect(BUILT_IN_PLAYER_THEME_IDS).toEqual(["youtube", "aurora", "minimal"]);
@@ -27,7 +29,40 @@ describe("player themes", () => {
       expect(theme.tokens.controlRadius).toBeTruthy();
       expect(theme.icons.play).toBeTypeOf("function");
       expect(theme.icons.settings).toBeTypeOf("function");
+      expect(theme.icons.speedDecrease).toBeTypeOf("function");
+      expect(theme.icons.speedIncrease).toBeTypeOf("function");
     }
+  });
+
+  it("keeps filled control surfaces thirty percent more transparent", () => {
+    expect(
+      Object.fromEntries(
+        BUILT_IN_PLAYER_THEME_IDS.map((id) => [
+          id,
+          {
+            resting: BUILT_IN_PLAYER_THEMES[id].tokens.controlSurface,
+            hover: BUILT_IN_PLAYER_THEMES[id].tokens.controlSurfaceHover,
+            active: BUILT_IN_PLAYER_THEMES[id].tokens.controlSurfaceActive,
+          },
+        ]),
+      ),
+    ).toEqual({
+      youtube: {
+        resting: "rgb(5 7 11 / 0.5)",
+        hover: "rgb(255 255 255 / 0.11)",
+        active: "rgb(255 255 255 / 0.14)",
+      },
+      aurora: {
+        resting: "rgb(29 20 52 / 0.6)",
+        hover: "rgb(139 92 246 / 0.21)",
+        active: "rgb(34 211 238 / 0.18)",
+      },
+      minimal: {
+        resting: "rgb(248 250 252 / 0.64)",
+        hover: "rgb(226 232 240 / 0.67)",
+        active: "rgb(203 213 225 / 0.67)",
+      },
+    });
   });
 
   it("merges custom tokens and semantic icons over a built-in base", () => {
@@ -72,4 +107,46 @@ describe("player themes", () => {
       screen.getByRole("button", { name: "Settings" }).querySelector("svg"),
     ).toHaveAttribute("data-settings-icon", "aurora");
   });
+
+  it.each(BUILT_IN_PLAYER_THEME_IDS)(
+    "keeps the same 60-degree settings interaction in the %s theme",
+    (themeId) => {
+      const engine = new FakeVideoEngine();
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          keyboardEnabled={false}
+          theme={themeId}
+        />,
+      );
+
+      const trigger = screen.getByRole("button", { name: "Settings" });
+      const icon = trigger.querySelector<SVGElement>("svg")!;
+      const restingRotation =
+        BUILT_IN_PLAYER_THEMES[themeId].motion.settingsClosedRotation;
+
+      expect(icon).toHaveStyle({
+        transform: `rotate(${restingRotation}deg)`,
+      });
+
+      fireEvent.click(trigger);
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(
+        screen.getByRole("menu", { name: "Video settings" }),
+      ).toBeVisible();
+      expect(icon).toHaveStyle({
+        transform: `rotate(${restingRotation + 60}deg)`,
+      });
+
+      fireEvent.click(trigger);
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+      expect(
+        screen.queryByRole("menu", { name: "Video settings" }),
+      ).not.toBeInTheDocument();
+      expect(icon).toHaveStyle({
+        transform: `rotate(${restingRotation}deg)`,
+      });
+    },
+  );
 });

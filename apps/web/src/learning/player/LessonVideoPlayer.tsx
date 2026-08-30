@@ -391,7 +391,6 @@ export function LessonVideoPlayer({
       key={mediaKey}
       ref={playerRef}
       source={source}
-      accentColor={playerTheme === "youtube" ? "var(--accent)" : undefined}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
@@ -401,7 +400,8 @@ export function LessonVideoPlayer({
       onTheaterModeChange={handleTheaterModeChange}
       shortcuts={LESSON_PLAYER_SHORTCUTS}
       seekIntervalSeconds={seekIntervalSeconds}
-      emptyTapBehavior="toggle-controls"
+      emptyTapBehavior="responsive"
+      controlsIdleDelay={5_000}
       onEvent={handleEvent}
       lockLandscapeOnFullscreen
       mediaProps={{ muted }}

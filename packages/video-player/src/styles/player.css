@@ -19,6 +19,38 @@
   }
 }
 
+@keyframes video-player-playback-feedback {
+  0% {
+    opacity: 0;
+    filter: blur(2px);
+    transform: scale(0.86);
+  }
+  16% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  66% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(1px);
+    transform: scale(1.06);
+  }
+}
+
+[data-playback-feedback-surface] {
+  animation-name: video-player-playback-feedback;
+  animation-duration: var(--video-player-playback-feedback-duration, 850ms);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: forwards;
+  transform-origin: center;
+  will-change: filter, opacity, transform;
+}
+
 [data-video-player-root] video::-webkit-media-controls {
   display: none !important;
 }
@@ -97,5 +129,12 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  [data-playback-feedback-surface] {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

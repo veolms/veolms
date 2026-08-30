@@ -1,0 +1,1 @@
+export const PLAYER_FEEDBACK_DURATION_MS = 850;

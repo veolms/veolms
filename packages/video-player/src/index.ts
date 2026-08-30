@@ -90,6 +90,8 @@ export { FullscreenButton } from "./controls/FullscreenButton";
 export { PictureInPictureButton } from "./controls/PictureInPictureButton";
 export { TheaterButton } from "./controls/TheaterButton";
 export { PlayerIconButton } from "./controls/PlayerIconButton";
+export { PlaybackFeedback } from "./controls/PlaybackFeedback";
+export type { PlaybackFeedbackProps } from "./controls/PlaybackFeedback";
 export { DefaultControls } from "./controls/DefaultControls";
 export { BufferingIndicator } from "./controls/BufferingIndicator";
 export { ErrorOverlay } from "./controls/ErrorOverlay";

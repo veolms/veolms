@@ -119,12 +119,48 @@ describe("Timeline", () => {
       "w-max",
       "max-w-[calc(100vw-1rem)]",
       "rounded-full",
+      "mb-2.5",
     );
     expect(preview?.className).toContain(
       "bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]",
     );
     expect(preview?.firstElementChild).toHaveClass("px-2.5", "py-1.5");
     expect(preview).toHaveTextContent("00:45");
+  });
+
+  it("clears the preview when a touch seek ends", () => {
+    const { actions } = renderTimeline();
+    const slider = screen.getByRole("slider", { name: "Video timeline" });
+    vi.spyOn(slider, "getBoundingClientRect").mockReturnValue({
+      bottom: 24,
+      height: 24,
+      left: 0,
+      right: 200,
+      top: 0,
+      width: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    Object.assign(slider, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+
+    fireEvent.pointerDown(slider, {
+      clientX: 100,
+      pointerId: 8,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(slider, {
+      clientX: 100,
+      pointerId: 8,
+      pointerType: "touch",
+    });
+
+    expect(actions.setPreviewTime).toHaveBeenLastCalledWith(null);
+    expect(actions.setScrubbing).toHaveBeenLastCalledWith(false);
   });
 });
 

@@ -18,6 +18,7 @@ import {
 } from "./playerEvents";
 import {
   createInitialPlayerUiState,
+  type PlayerHudOptions,
   type PlayerSettingsView,
   type PlayerSnapshot,
 } from "./playerState";
@@ -59,7 +60,9 @@ interface PictureInPictureVideo {
 const getFullscreenElement = () => {
   if (typeof document === "undefined") return null;
   const webkitDocument = document as WebkitFullscreenDocument;
-  return document.fullscreenElement ?? webkitDocument.webkitFullscreenElement ?? null;
+  return (
+    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement ?? null
+  );
 };
 
 export interface PlayerLoadRequest {
@@ -166,7 +169,8 @@ export class PlayerController {
   deactivate(): void {
     if (!this.#activated) return;
     this.#activated = false;
-    for (const unsubscribe of this.#engineUnsubscribers.splice(0)) unsubscribe();
+    for (const unsubscribe of this.#engineUnsubscribers.splice(0))
+      unsubscribe();
     if (typeof document !== "undefined") {
       document.removeEventListener(
         "fullscreenchange",
@@ -252,7 +256,8 @@ export class PlayerController {
     await this.waitForMedia();
     if (generation !== this.#loadGeneration || this.#destroyed) return;
     await this.engine.load(source, options);
-    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay) return;
+    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay)
+      return;
     await this.engine.play();
   }
 
@@ -423,9 +428,9 @@ export class PlayerController {
     this.emit({ type: "theaterchange", detail: { active } });
   }
 
-  showHud(text: string): void {
+  showHud(text: string, options: PlayerHudOptions = {}): void {
     this.#hudId += 1;
-    this.updateUi({ hud: { id: this.#hudId, text } });
+    this.updateUi({ hud: { ...options, id: this.#hudId, text } });
   }
 
   clearHud(id?: number): void {
@@ -434,7 +439,8 @@ export class PlayerController {
   }
 
   async enterFullscreen(): Promise<void> {
-    const container = this.getPresentationContainer() as WebkitFullscreenElement | null;
+    const container =
+      this.getPresentationContainer() as WebkitFullscreenElement | null;
     if (!container) return;
     if (container.requestFullscreen) await container.requestFullscreen();
     else await container.webkitRequestFullscreen?.();
@@ -587,9 +593,9 @@ export class PlayerController {
       ...engineCapabilities,
       pictureInPicture: Boolean(
         engineCapabilities.pictureInPicture &&
-          pipDocument?.pictureInPictureEnabled &&
-          media?.requestPictureInPicture &&
-          !media.disablePictureInPicture,
+        pipDocument?.pictureInPictureEnabled &&
+        media?.requestPictureInPicture &&
+        !media.disablePictureInPicture,
       ),
     };
   }
@@ -611,10 +617,14 @@ export class PlayerController {
   }
 
   private getPresentationContainer(): HTMLElement | null {
-    return this.#presentationContainerResolver?.() ?? this.#presentationContainer;
+    return (
+      this.#presentationContainerResolver?.() ?? this.#presentationContainer
+    );
   }
 
-  private enqueueMediaTransition(operation: () => Promise<void>): Promise<void> {
+  private enqueueMediaTransition(
+    operation: () => Promise<void>,
+  ): Promise<void> {
     const transition = this.#mediaTransition.then(operation);
     this.#mediaTransition = transition.catch(() => undefined);
     return transition;
@@ -642,7 +652,8 @@ export class PlayerController {
 
     if (this.#media) {
       await this.detachAttachedMedia();
-      if (this.#destroyed || generation !== this.#mediaRequestGeneration) return;
+      if (this.#destroyed || generation !== this.#mediaRequestGeneration)
+        return;
     }
 
     try {
@@ -721,9 +732,9 @@ export class PlayerController {
   private isMediaReady(media = this.#requestedMedia): boolean {
     return Boolean(
       media &&
-        this.#media === media &&
-        this.#mediaAttached &&
-        this.#settledMediaGeneration === this.#mediaRequestGeneration,
+      this.#media === media &&
+      this.#mediaAttached &&
+      this.#settledMediaGeneration === this.#mediaRequestGeneration,
     );
   }
 

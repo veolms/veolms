@@ -5,7 +5,11 @@ import {
   type PlayerKeyboardRegistrationHandle,
   type PlayerShortcutOverrides,
 } from "../keyboard";
-import { DEFAULT_PLAYBACK_RATES } from "../playback/playbackRates";
+import {
+  formatPlaybackRate,
+  getKeyboardPlaybackRate,
+  playbackRatesMatch,
+} from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
 
 interface SharedKeyboardScope {
@@ -102,19 +106,13 @@ export function usePlayerKeyboard({
         togglePictureInPicture: () => controller.togglePictureInPicture(),
         adjustPlaybackRate: (direction) => {
           const current = controller.getSnapshot().media.playbackRate;
-          const currentIndex = DEFAULT_PLAYBACK_RATES.reduce(
-            (best, rate, index) =>
-              Math.abs(rate - current) <
-              Math.abs(DEFAULT_PLAYBACK_RATES[best]! - current)
-                ? index
-                : best,
-            0,
-          );
-          const nextIndex = Math.min(
-            DEFAULT_PLAYBACK_RATES.length - 1,
-            Math.max(0, currentIndex + direction),
-          );
-          controller.setPlaybackRate(DEFAULT_PLAYBACK_RATES[nextIndex]!);
+          const next = getKeyboardPlaybackRate(current, direction);
+          if (playbackRatesMatch(current, next)) return;
+          controller.setPlaybackRate(next);
+          controller.showHud(formatPlaybackRate(next), {
+            direction,
+            variant: "playback-rate",
+          });
         },
         beginTemporarySpeedBoost: () => {
           const media = controller.getSnapshot().media;

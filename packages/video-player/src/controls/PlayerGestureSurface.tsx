@@ -3,11 +3,12 @@ import { usePlayerController } from "../react/context";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
 const LONG_PRESS_DELAY_MS = 500;
+const DESKTOP_VIEW_QUERY = "(min-width: 40rem)";
 
 type SeekDirection = -1 | 1;
 
 export interface PlayerGestureSurfaceProps {
-  emptyTapBehavior?: "toggle-controls" | "toggle-playback";
+  emptyTapBehavior?: "responsive" | "toggle-controls" | "toggle-playback";
   seekIntervalSeconds?: number;
 }
 
@@ -20,6 +21,7 @@ export function PlayerGestureSurface({
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<{
     direction: SeekDirection;
+    pointerType: string;
     timestamp: number;
   } | null>(null);
   const pressDirectionRef = useRef<SeekDirection>(1);
@@ -78,12 +80,15 @@ export function PlayerGestureSurface({
   };
 
   const scheduleSingleTap = useCallback(
-    (direction: SeekDirection, timestamp: number) => {
-      lastTapRef.current = { direction, timestamp };
+    (direction: SeekDirection, timestamp: number, pointerType: string) => {
+      lastTapRef.current = { direction, pointerType, timestamp };
       singleTapTimerRef.current = setTimeout(() => {
         singleTapTimerRef.current = null;
         lastTapRef.current = null;
-        if (emptyTapBehavior === "toggle-controls") {
+        const shouldToggleControls =
+          emptyTapBehavior === "toggle-controls" ||
+          (emptyTapBehavior === "responsive" && pointerType !== "mouse");
+        if (shouldToggleControls) {
           const shouldShowControls = !controlsVisibleBeforePressRef.current;
           if (!shouldShowControls) controller.setSettingsView("closed");
           controller.setControlsVisible(shouldShowControls);
@@ -99,6 +104,12 @@ export function PlayerGestureSurface({
     controlsVisibleBeforePressRef.current =
       controller.getSnapshot().ui.controlsVisible;
   };
+
+  const isDesktopGesture = (pointerType: string) =>
+    pointerType === "mouse" ||
+    (typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia(DESKTOP_VIEW_QUERY).matches);
 
   const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     pressDirectionRef.current = getSeekDirection(event);
@@ -120,12 +131,25 @@ export function PlayerGestureSurface({
     const direction = pressDirectionRef.current;
     const timestamp = Date.now();
     const lastTap = lastTapRef.current;
-    const isDoubleTap =
+    const isDoubleTapWindow =
       lastTap !== null &&
-      lastTap.direction === direction &&
+      lastTap.pointerType === event.pointerType &&
       timestamp - lastTap.timestamp <= DOUBLE_TAP_WINDOW_MS;
+    const desktopDoubleTap =
+      isDoubleTapWindow && isDesktopGesture(event.pointerType);
+    const mobileSeekDoubleTap =
+      isDoubleTapWindow &&
+      !desktopDoubleTap &&
+      lastTap?.direction === direction;
 
-    if (isDoubleTap) {
+    if (desktopDoubleTap) {
+      clearSingleTapTimer();
+      lastTapRef.current = null;
+      void controller.toggleFullscreen().catch(() => undefined);
+      return;
+    }
+
+    if (mobileSeekDoubleTap) {
       clearSingleTapTimer();
       lastTapRef.current = null;
       const seconds = Math.max(1, Math.round(seekIntervalSeconds));
@@ -138,19 +162,23 @@ export function PlayerGestureSurface({
       clearSingleTapTimer();
       void controller.togglePlayback().catch(() => undefined);
     }
-    scheduleSingleTap(direction, timestamp);
+    scheduleSingleTap(direction, timestamp, event.pointerType);
   };
+
+  const surfaceLabel =
+    emptyTapBehavior === "toggle-controls"
+      ? "Show or hide video controls"
+      : emptyTapBehavior === "responsive"
+        ? "Play or pause video; tap to show controls"
+        : "Play or pause video";
 
   return (
     <button
       type="button"
       data-player-shortcut-surface=""
       className="absolute inset-0 z-0 touch-manipulation cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
-      aria-label={
-        emptyTapBehavior === "toggle-controls"
-          ? "Show or hide video controls"
-          : "Play or pause video"
-      }
+      aria-label={surfaceLabel}
+      title="Double-click for fullscreen"
       onPointerDownCapture={captureControlsVisibility}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}

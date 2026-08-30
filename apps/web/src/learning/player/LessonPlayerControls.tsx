@@ -18,7 +18,7 @@ const PLAYER_SURFACE_CLASS =
 const PLAYER_INNER_CONTROL_CLASS =
   "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-(--video-player-control-surface-hover) active:!bg-(--video-player-control-surface-active) focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 const PLAYER_ICON_PILL_CLASS =
-  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_6%,transparent)] sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
+  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)] sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
 const PLAYER_VOLUME_ICON_CLASS =
   "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-transparent focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 
@@ -75,8 +75,9 @@ function AutoplayToggle({
     >
       <span
         aria-hidden="true"
-        className="relative block h-3.5 w-8 rounded-full bg-white/28 transition-colors sm:h-4 sm:w-9"
+        className="relative block h-3.5 w-8 rounded-full border border-white/35 bg-black/40 transition-[background-color,border-color] duration-150 sm:h-4 sm:w-9"
         data-autoplay-track=""
+        data-autoplay-track-state={enabled ? "on" : "off"}
       >
         <span
           className={`absolute top-1/2 grid size-4.5 -translate-y-1/2 place-items-center rounded-full shadow-[0_1px_5px_rgba(0,0,0,0.38)] transition-[left,background-color,color] sm:size-5 ${
@@ -247,17 +248,20 @@ export function LessonPlayerControls({
   onMinimize,
 }: LessonPlayerControlsProps) {
   const MinimizeIcon = usePlayerTheme().icons.minimize;
-  const { controlsVisible, scrubbing, settingsOpen } = usePlayerState(
-    ({ ui }) => ({
-      controlsVisible: ui.controlsVisible,
-      scrubbing: ui.scrubbing,
-      settingsOpen: ui.settingsView !== "closed",
-    }),
-    (left, right) =>
-      left.controlsVisible === right.controlsVisible &&
-      left.scrubbing === right.scrubbing &&
-      left.settingsOpen === right.settingsOpen,
-  );
+  const { controlsVisible, previewTime, scrubbing, settingsOpen } =
+    usePlayerState(
+      ({ ui }) => ({
+        controlsVisible: ui.controlsVisible,
+        previewTime: ui.previewTime,
+        scrubbing: ui.scrubbing,
+        settingsOpen: ui.settingsView !== "closed",
+      }),
+      (left, right) =>
+        left.controlsVisible === right.controlsVisible &&
+        left.previewTime === right.previewTime &&
+        left.scrubbing === right.scrubbing &&
+        left.settingsOpen === right.settingsOpen,
+    );
   const visible = controlsVisible || settingsOpen;
   const mobileTimelineGeometry = scrubbing
     ? "max-sm:[&_[data-timeline-track]]:!h-0.75 max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]"
@@ -324,13 +328,18 @@ export function LessonPlayerControls({
         className="pointer-events-auto absolute inset-x-0 bottom-0 z-50 sm:inset-x-3 sm:bottom-13"
       >
         <Timeline
-          className={`max-sm:[&_[role=slider]]:h-5 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry}`}
+          className={`max-sm:[&_[role=slider]]:h-5 max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry}`}
         />
       </div>
 
       <div
         data-mobile-player-corner="time"
-        className="pointer-events-auto absolute bottom-2.5 left-2 flex items-center sm:bottom-2.5 sm:left-3 sm:right-58"
+        data-preview-obscured={previewTime !== null ? "true" : "false"}
+        className={`pointer-events-auto absolute bottom-2.5 left-2 flex items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 ${
+          previewTime !== null
+            ? "max-sm:pointer-events-none max-sm:opacity-0"
+            : "max-sm:opacity-100"
+        }`}
       >
         <div className="sm:hidden">
           <LessonTimeControl mobile />
@@ -368,17 +377,23 @@ export function LessonPlayerControls({
 
       <div
         data-mobile-player-corner="fullscreen"
-        className="pointer-events-auto absolute bottom-2.5 right-2 sm:hidden"
+        data-preview-obscured={previewTime !== null ? "true" : "false"}
+        className={`pointer-events-auto absolute bottom-2.5 right-2 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${
+          previewTime !== null
+            ? "max-sm:pointer-events-none max-sm:opacity-0"
+            : "max-sm:opacity-100"
+        }`}
       >
-        <PlayerControlSurface
-          cluster="fullscreen"
-          className="inline-flex size-10.5 items-center justify-center rounded-full p-0.5"
+        <div
+          className="inline-flex size-10 items-center justify-center"
+          data-player-control-cluster="fullscreen"
         >
           <FullscreenButton
-            className={`${PLAYER_ICON_PILL_CLASS} !size-10 !px-0`}
+            className={`${PLAYER_ICON_PILL_CLASS} !size-10 !bg-transparent !px-0`}
+            iconContainerClassName="pointer-events-none grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow)"
             iconSize={22}
           />
-        </PlayerControlSurface>
+        </div>
       </div>
     </div>
   );
@@ -427,6 +442,7 @@ export function LessonCentralControls({
         >
           <PlayButton
             className={`${PLAYER_INNER_CONTROL_CLASS} !size-13`}
+            hideControlsOnPlay
             iconSize={26}
           />
         </PlayerControlSurface>

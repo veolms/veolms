@@ -99,6 +99,11 @@
     var(--video-player-control-text) 28%,
     transparent
   ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--video-player-control-text) 45%,
+    transparent
+  ) !important;
 }
 
 [data-video-player-root]
@@ -106,8 +111,13 @@
   [data-autoplay-track] {
   background: color-mix(
     in srgb,
-    var(--video-player-accent) 58%,
+    var(--video-player-accent) 72%,
     var(--video-player-control-surface)
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--video-player-accent) 72%,
+    var(--video-player-control-text)
   ) !important;
 }
 

@@ -32,8 +32,8 @@ export const DEFAULT_PLAYER_SHORTCUTS = {
     "Alt+Digit8",
     "Alt+Digit9",
   ],
-  decreasePlaybackRate: ["Shift+Comma", "Shift+ArrowLeft"],
-  increasePlaybackRate: ["Shift+Period", "Shift+ArrowRight"],
+  decreasePlaybackRate: ["Shift+Comma"],
+  increasePlaybackRate: ["Shift+Period"],
 } as const satisfies ResolvedPlayerShortcutBindings;
 
 interface ParsedShortcutBinding {

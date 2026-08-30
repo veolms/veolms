@@ -7,6 +7,8 @@ import {
   ArrowsOut,
   ArrowsOutSimple,
   CaretDown,
+  CaretDoubleLeft,
+  CaretDoubleRight,
   CaretRight,
   CircleNotch,
   ClosedCaptioning,
@@ -83,6 +85,8 @@ export interface PlayerThemeIcons {
   minimize: PlayerThemeIcon;
   quality: PlayerThemeIcon;
   playbackRate: PlayerThemeIcon;
+  speedDecrease: PlayerThemeIcon;
+  speedIncrease: PlayerThemeIcon;
   audio: PlayerThemeIcon;
   chapters: PlayerThemeIcon;
   ambient: PlayerThemeIcon;
@@ -118,7 +122,8 @@ export interface PlayerThemeTokens {
 
 export interface PlayerThemeMotion {
   settingsClosedRotation: number;
-  settingsOpenRotation: number;
+  /** @deprecated Settings menus use the shared 60-degree interaction turn. */
+  settingsOpenRotation?: number;
 }
 
 export interface PlayerThemeDefinition {
@@ -178,6 +183,8 @@ const youtubeIcons: PlayerThemeIcons = {
   minimize: themedIcon(CaretDown, "bold"),
   quality: themedIcon(SlidersHorizontal, "regular"),
   playbackRate: themedIcon(Speedometer, "regular"),
+  speedDecrease: themedIcon(Rewind, "fill"),
+  speedIncrease: themedIcon(FastForward, "fill"),
   audio: themedIcon(SpeakerHigh, "regular"),
   chapters: themedIcon(ListBullets, "regular"),
   ambient: themedIcon(MonitorPlay, "regular", "duotone"),
@@ -208,6 +215,8 @@ const auroraIcons: PlayerThemeIcons = {
   minimize: themedIcon(CaretDown, "bold"),
   quality: themedIcon(SlidersHorizontal, "duotone"),
   playbackRate: themedIcon(Speedometer, "duotone"),
+  speedDecrease: themedIcon(Rewind, "duotone", "fill"),
+  speedIncrease: themedIcon(FastForward, "duotone", "fill"),
   audio: themedIcon(SpeakerSimpleHigh, "duotone"),
   chapters: themedIcon(ListBullets, "duotone"),
   ambient: themedIcon(MonitorPlay, "duotone", "fill"),
@@ -238,6 +247,8 @@ const minimalIcons: PlayerThemeIcons = {
   minimize: themedIcon(CaretDown, "regular"),
   quality: themedIcon(SlidersHorizontal, "regular"),
   playbackRate: themedIcon(Speedometer, "regular"),
+  speedDecrease: themedIcon(CaretDoubleLeft, "regular", "bold"),
+  speedIncrease: themedIcon(CaretDoubleRight, "regular", "bold"),
   audio: themedIcon(SpeakerSimpleHigh, "regular"),
   chapters: themedIcon(ListBullets, "regular"),
   ambient: themedIcon(MonitorPlay, "regular", "fill"),
@@ -260,9 +271,9 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     tokens: {
       accent: "#ff7a1a",
       accentContrast: "#0b0b0b",
-      controlSurface: "rgb(5 7 11 / 0.72)",
-      controlSurfaceHover: "rgb(255 255 255 / 0.16)",
-      controlSurfaceActive: "rgb(255 255 255 / 0.2)",
+      controlSurface: "rgb(5 7 11 / 0.5)",
+      controlSurfaceHover: "rgb(255 255 255 / 0.11)",
+      controlSurfaceActive: "rgb(255 255 255 / 0.14)",
       controlText: "#ffffff",
       controlTextMuted: "rgb(255 255 255 / 0.7)",
       controlBorder: "transparent",
@@ -279,7 +290,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       vignetteColor: "5 7 11",
     },
     icons: youtubeIcons,
-    motion: { settingsClosedRotation: 30, settingsOpenRotation: 90 },
+    motion: { settingsClosedRotation: 30 },
   },
   aurora: {
     id: "aurora",
@@ -289,9 +300,9 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     tokens: {
       accent: "#a78bfa",
       accentContrast: "#160c2e",
-      controlSurface: "rgb(29 20 52 / 0.86)",
-      controlSurfaceHover: "rgb(139 92 246 / 0.3)",
-      controlSurfaceActive: "rgb(34 211 238 / 0.26)",
+      controlSurface: "rgb(29 20 52 / 0.6)",
+      controlSurfaceHover: "rgb(139 92 246 / 0.21)",
+      controlSurfaceActive: "rgb(34 211 238 / 0.18)",
       controlText: "#f5f3ff",
       controlTextMuted: "rgb(237 233 254 / 0.72)",
       controlBorder: "rgb(196 181 253 / 0.3)",
@@ -308,7 +319,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       vignetteColor: "22 12 46",
     },
     icons: auroraIcons,
-    motion: { settingsClosedRotation: 0, settingsOpenRotation: 60 },
+    motion: { settingsClosedRotation: 0 },
   },
   minimal: {
     id: "minimal",
@@ -317,9 +328,9 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     tokens: {
       accent: "#f8fafc",
       accentContrast: "#0f172a",
-      controlSurface: "rgb(248 250 252 / 0.92)",
-      controlSurfaceHover: "rgb(226 232 240 / 0.96)",
-      controlSurfaceActive: "rgb(203 213 225 / 0.96)",
+      controlSurface: "rgb(248 250 252 / 0.64)",
+      controlSurfaceHover: "rgb(226 232 240 / 0.67)",
+      controlSurfaceActive: "rgb(203 213 225 / 0.67)",
       controlText: "#0f172a",
       controlTextMuted: "rgb(15 23 42 / 0.66)",
       controlBorder: "rgb(255 255 255 / 0.42)",
@@ -336,7 +347,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       vignetteColor: "2 6 23",
     },
     icons: minimalIcons,
-    motion: { settingsClosedRotation: 0, settingsOpenRotation: 90 },
+    motion: { settingsClosedRotation: 0 },
   },
 };
 

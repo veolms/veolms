@@ -99,6 +99,7 @@ export function Timeline({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     controller.setScrubbing(false);
+    if (event.pointerType !== "mouse") controller.setPreviewTime(null);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

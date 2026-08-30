@@ -15,6 +15,8 @@ import {
 } from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
 
+const SETTINGS_OPEN_TURN_DEGREES = 60;
+
 export interface SettingsMenuProps {
   includePictureInPicture?: boolean;
   mobilePresentation?: PopoverMenuMobilePresentation;
@@ -98,11 +100,7 @@ export function SettingsMenu({
           size={22}
           className="origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none"
           style={{
-            transform: `rotate(${
-              settingsOpen
-                ? theme.motion.settingsOpenRotation
-                : theme.motion.settingsClosedRotation
-            }deg)`,
+            transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
           }}
           active={settingsOpen}
         />

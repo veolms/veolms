@@ -76,11 +76,19 @@ describe("default player keyboard shortcuts", () => {
       keyEvent("keydown", "Comma", { key: "<", shiftKey: true }),
     );
     controller.handleKeyDown(
-      keyEvent("keydown", "ArrowRight", {
-        key: "ArrowRight",
+      keyEvent("keydown", "Period", {
+        key: ">",
         shiftKey: true,
       }),
     );
+    expect(
+      controller.handleKeyDown(
+        keyEvent("keydown", "ArrowRight", {
+          key: "ArrowRight",
+          shiftKey: true,
+        }),
+      ),
+    ).toBe(false);
 
     expect(actions.togglePlayPause).toHaveBeenCalledOnce();
     expect(actions.seekBy.mock.calls).toEqual([[-5], [5], [-10], [10]]);

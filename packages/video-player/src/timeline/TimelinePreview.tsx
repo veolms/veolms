@@ -99,7 +99,7 @@ export function TimelinePreview({
 
   return (
     <div
-      className={`pointer-events-none absolute bottom-full z-30 mb-3 overflow-hidden text-white shadow-[0_8px_24px_rgba(0,0,0,0.32)] ${
+      className={`pointer-events-none absolute bottom-full z-30 mb-2.5 overflow-hidden text-white shadow-[0_8px_24px_rgba(0,0,0,0.32)] ${
         hasRichPreview
           ? "w-44 max-w-[min(11rem,70vw)] rounded-xl border border-white/15 bg-[color-mix(in_srgb,#05070b_82%,var(--video-player-accent,#ff7a1a)_4%)]"
           : "w-max max-w-[calc(100vw-1rem)] rounded-full bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]"

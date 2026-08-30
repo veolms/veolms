@@ -13,7 +13,12 @@ export type PlayerSettingsView =
   | "audio"
   | "chapters";
 
-export interface PlayerHudMessage {
+export interface PlayerHudOptions {
+  direction?: -1 | 1;
+  variant?: "default" | "playback-rate";
+}
+
+export interface PlayerHudMessage extends PlayerHudOptions {
   id: number;
   text: string;
 }

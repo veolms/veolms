@@ -20,6 +20,36 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+function installFinePointerMatchMedia() {
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(
+    window,
+    "matchMedia",
+  );
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query === "(hover: hover) and (pointer: fine)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }),
+  });
+
+  return () => {
+    if (previousMatchMedia) {
+      Object.defineProperty(window, "matchMedia", previousMatchMedia);
+    } else {
+      Reflect.deleteProperty(window, "matchMedia");
+    }
+  };
+}
+
 const source = {
   id: "lesson-1",
   src: "/lesson.mp4",
@@ -28,6 +58,81 @@ const source = {
 };
 
 describe("VideoPlayer integration", () => {
+  it("briefly shows themed desktop feedback for play and pause state changes", async () => {
+    const engine = new FakeVideoEngine();
+    const { container } = render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        keyboardEnabled={false}
+        theme="aurora"
+      />,
+    );
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+    expect(
+      container.querySelector("[data-video-player-playback-feedback]"),
+    ).not.toBeInTheDocument();
+
+    vi.useFakeTimers();
+    await act(async () => engine.play());
+
+    const playFeedback = container.querySelector(
+      '[data-video-player-playback-feedback="play"]',
+    );
+    const playSurface = playFeedback?.querySelector(
+      "[data-playback-feedback-surface]",
+    );
+    expect(playFeedback).toHaveClass("hidden", "sm:grid");
+    expect(playFeedback).toHaveAttribute("aria-hidden", "true");
+    expect(playSurface).toHaveClass(
+      "size-20",
+      "lg:size-22",
+      "bg-(--video-player-control-surface)",
+      "backdrop-blur-sm",
+    );
+    expect(playSurface).toHaveAttribute(
+      "data-playback-feedback-duration",
+      "850",
+    );
+    expect(
+      playSurface?.querySelector('[data-playback-feedback-icon="play"]'),
+    ).toHaveClass("size-10", "lg:size-11", "translate-x-0.5");
+
+    act(() => vi.advanceTimersByTime(849));
+    expect(
+      container.querySelector('[data-video-player-playback-feedback="play"]'),
+    ).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      container.querySelector("[data-video-player-playback-feedback]"),
+    ).not.toBeInTheDocument();
+
+    act(() => engine.pause());
+    expect(
+      container.querySelector(
+        '[data-video-player-playback-feedback="pause"] [data-playback-feedback-icon="pause"]',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("allows the default playback feedback to be disabled", async () => {
+    const engine = new FakeVideoEngine();
+    const { container } = render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        keyboardEnabled={false}
+        playbackFeedback={false}
+      />,
+    );
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+    await act(async () => engine.play());
+    expect(
+      container.querySelector("[data-video-player-playback-feedback]"),
+    ).not.toBeInTheDocument();
+  });
+
   it("maps pointer presses across the full-height volume hit target", async () => {
     const engine = new FakeVideoEngine();
     const setVolume = vi.spyOn(engine, "setVolume");
@@ -452,7 +557,58 @@ describe("VideoPlayer integration", () => {
     expect(seek).toHaveBeenNthCalledWith(2, 50);
   });
 
-  it("double taps either side using the configured seek interval", async () => {
+  it("changes playback speed by 0.25× and shows themed shortcut feedback", async () => {
+    const engine = new FakeVideoEngine();
+    const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
+    const { container } = render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        theme="aurora"
+      />,
+    );
+
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+    const player = screen.getByRole("region", { name: "Video player" });
+    fireEvent.focusIn(player);
+    vi.useFakeTimers();
+
+    fireEvent.keyDown(window, {
+      code: "Comma",
+      key: "<",
+      shiftKey: true,
+    });
+
+    expect(setPlaybackRate).toHaveBeenLastCalledWith(0.75);
+    const speedStatus = screen.getByRole("status");
+    expect(speedStatus).toHaveAttribute(
+      "data-player-hud-variant",
+      "playback-rate",
+    );
+    expect(screen.getByText("0.75×")).toHaveAttribute(
+      "data-playback-feedback-duration",
+      "850",
+    );
+    expect(
+      container.querySelector('[data-player-playback-rate-icon="decrease"]'),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(window, {
+      code: "Period",
+      key: ">",
+      shiftKey: true,
+    });
+    expect(setPlaybackRate).toHaveBeenLastCalledWith(1);
+    expect(screen.getByText("1×")).toBeVisible();
+    expect(
+      container.querySelector('[data-player-playback-rate-icon="increase"]'),
+    ).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(850));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("touch double taps either side using the configured seek interval", async () => {
     const engine = new FakeVideoEngine();
     const seek = vi.spyOn(engine, "seek");
     render(
@@ -508,6 +664,130 @@ describe("VideoPlayer integration", () => {
     });
     expect(seek).toHaveBeenLastCalledWith(30);
     expect(screen.getByText("−20 seconds")).toBeVisible();
+  });
+
+  it("double-clicks anywhere on desktop to toggle fullscreen without seeking", async () => {
+    const engine = new FakeVideoEngine();
+    const seek = vi.spyOn(engine, "seek");
+    const play = vi.spyOn(engine, "play");
+    const { container } = render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        keyboardEnabled={false}
+      />,
+    );
+
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+    const shell = container.querySelector<HTMLElement>(".video-shell");
+    const requestFullscreen = vi.fn(async () => undefined);
+    Object.assign(shell!, { requestFullscreen });
+    const surface = screen.getByRole("button", {
+      name: "Play or pause video",
+    });
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+      bottom: 60,
+      height: 60,
+      left: 0,
+      right: 100,
+      top: 0,
+      width: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => undefined,
+    });
+    vi.useFakeTimers();
+
+    const click = (clientX: number) => {
+      fireEvent.pointerDown(surface, {
+        clientX,
+        pointerId: 2,
+        pointerType: "mouse",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX,
+        pointerId: 2,
+        pointerType: "mouse",
+      });
+    };
+
+    await act(async () => {
+      click(75);
+      vi.advanceTimersByTime(100);
+      click(75);
+      await Promise.resolve();
+    });
+    expect(requestFullscreen).toHaveBeenCalledOnce();
+    expect(seek).not.toHaveBeenCalled();
+    expect(screen.queryByText(/seconds/)).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(350));
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("uses desktop hover for controls and mouse clicks for playback", async () => {
+    const restoreMatchMedia = installFinePointerMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+          controlsIdleDelay={5_000}
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      await waitFor(() =>
+        expect(player).toHaveAttribute("data-controls-visible", "false"),
+      );
+
+      fireEvent.pointerEnter(player, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+
+      vi.useFakeTimers();
+      fireEvent.pointerDown(surface, {
+        clientX: 50,
+        pointerId: 1,
+        pointerType: "mouse",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 50,
+        pointerId: 1,
+        pointerType: "mouse",
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(301);
+        await Promise.resolve();
+      });
+      expect(play).toHaveBeenCalledOnce();
+
+      act(() => vi.advanceTimersByTime(4_999));
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      act(() => vi.advanceTimersByTime(1));
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+
+      fireEvent.pointerMove(player, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      fireEvent.pointerLeave(player, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+
+      act(() => engine.pause());
+      fireEvent.pointerEnter(player, { pointerType: "mouse" });
+      act(() => vi.advanceTimersByTime(5_100));
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      fireEvent.pointerLeave(player, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+    } finally {
+      restoreMatchMedia();
+    }
   });
 
   it("keeps controls visible while focus remains inside the player", async () => {

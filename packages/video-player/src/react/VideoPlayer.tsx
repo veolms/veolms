@@ -16,6 +16,7 @@ import { DefaultControls } from "../controls/DefaultControls";
 import { ErrorOverlay } from "../controls/ErrorOverlay";
 import { PlayerGestureSurface } from "../controls/PlayerGestureSurface";
 import { PlayerHud } from "../controls/PlayerHud";
+import { PlaybackFeedback } from "../controls/PlaybackFeedback";
 import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoSource } from "../core/types";
 import { NativeVideoEngine } from "../engines/native/NativeVideoEngine";
@@ -44,7 +45,8 @@ export interface VideoPlayerProgress {
 }
 
 export type VideoPlayerEngine = "shaka" | "native";
-export type VideoPlayerEmptyTapBehavior = "toggle-controls" | "toggle-playback";
+export type VideoPlayerEmptyTapBehavior =
+  "responsive" | "toggle-controls" | "toggle-playback";
 
 export interface VideoPlayerProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -65,10 +67,12 @@ export interface VideoPlayerProps extends Omit<
   controls?: ReactNode | false;
   /** Replaces the default central play affordance. Pass false to omit it. */
   centralControl?: ReactNode | false;
+  /** Replaces the desktop transient play/pause feedback. Pass false to omit it. */
+  playbackFeedback?: ReactNode | false;
   overlays?: ReactNode;
   keyboardEnabled?: boolean;
   shortcuts?: PlayerShortcutOverrides;
-  /** Seconds used by Left/Right arrow keys and double-tap seeking. */
+  /** Seconds used by Left/Right arrow keys and mobile double-tap seeking. */
   seekIntervalSeconds?: number;
   /** Action performed by a single pointer tap on empty video space. */
   emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
@@ -144,6 +148,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onStoryboardError,
       onTheaterModeChange,
       overlays,
+      playbackFeedback,
       playerClassName,
       poster,
       seekIntervalSeconds = 10,
@@ -330,6 +335,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           {centralControl === false
             ? null
             : (centralControl ?? <CentralPlayButton />)}
+          {playbackFeedback === false
+            ? null
+            : (playbackFeedback ?? <PlaybackFeedback />)}
           <BufferingIndicator />
           <PlayerHud />
           <ErrorOverlay />

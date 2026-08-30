@@ -6,6 +6,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import {
+  BUILT_IN_PLAYER_THEME_IDS,
+  BUILT_IN_PLAYER_THEMES,
+} from "@veolms/video-player";
 import type {
   VideoEngineEventMap,
   VideoLoadOptions,
@@ -125,6 +129,45 @@ describe("LessonVideoPlayer adapter", () => {
     );
   });
 
+  it.each(BUILT_IN_PLAYER_THEME_IDS)(
+    "keeps autoplay visible and functional in the %s theme",
+    async (themeId) => {
+      const engine = new RecordingFakeVideoEngine(90);
+      const onAutoplayEnabledChange = vi.fn();
+      localStorage.setItem(
+        LEARNING_PREFERENCES_KEY,
+        JSON.stringify({ videoPlayerTheme: themeId }),
+      );
+
+      render(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          autoplayEnabled
+          onAutoplayEnabledChange={onAutoplayEnabledChange}
+        />,
+      );
+
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      const autoplaySwitch = screen.getByRole("switch", {
+        name: "Autoplay next lesson",
+      });
+      const track = autoplaySwitch.querySelector("[data-autoplay-track]");
+
+      await waitFor(() =>
+        expect(player).toHaveAttribute("data-player-theme", themeId),
+      );
+      expect(track).toHaveAttribute("data-autoplay-track-state", "on");
+      expect(player.style.getPropertyValue("--video-player-accent")).toBe(
+        BUILT_IN_PLAYER_THEMES[themeId].tokens.accent,
+      );
+
+      fireEvent.click(autoplaySwitch);
+      expect(onAutoplayEnabledChange).toHaveBeenCalledWith(false);
+    },
+  );
+
   it("toggles every lesson control overlay when empty video space is tapped", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const play = vi.spyOn(engine, "play");
@@ -136,7 +179,7 @@ describe("LessonVideoPlayer adapter", () => {
       name: "Lesson video player for Designing for real users",
     });
     const gestureSurface = screen.getByRole("button", {
-      name: "Show or hide video controls",
+      name: "Play or pause video; tap to show controls",
     });
     const controls = document.querySelector<HTMLElement>(
       '[data-lesson-player-controls=""]',
@@ -173,6 +216,75 @@ describe("LessonVideoPlayer adapter", () => {
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it("hides touch controls after center play and reveals them before pause", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const play = vi.spyOn(engine, "play");
+    const pause = vi.spyOn(engine, "pause");
+    render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+    vi.useFakeTimers();
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Designing for real users",
+    });
+    const gestureSurface = screen.getByRole("button", {
+      name: "Play or pause video; tap to show controls",
+    });
+    const centralControls = document.querySelector<HTMLElement>(
+      '[data-lesson-central-controls=""]',
+    )!;
+    const tapEmptySpace = () => {
+      fireEvent.pointerDown(gestureSurface, {
+        clientX: 100,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(gestureSurface, {
+        clientX: 100,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(301));
+    };
+
+    await act(async () => {
+      fireEvent.click(
+        within(centralControls).getByRole("button", { name: "Play" }),
+      );
+      await Promise.resolve();
+    });
+    expect(play).toHaveBeenCalledOnce();
+    expect(player).toHaveAttribute("data-controls-visible", "false");
+
+    tapEmptySpace();
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+
+    await act(async () => {
+      fireEvent.click(
+        within(centralControls).getByRole("button", { name: "Pause" }),
+      );
+      await Promise.resolve();
+    });
+    expect(pause).toHaveBeenCalledOnce();
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+
+    act(() => vi.advanceTimersByTime(5_100));
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+
+    await act(async () => {
+      fireEvent.click(
+        within(centralControls).getByRole("button", { name: "Play" }),
+      );
+      await Promise.resolve();
+    });
+    tapEmptySpace();
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+    act(() => vi.advanceTimersByTime(4_698));
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+    act(() => vi.advanceTimersByTime(1));
+    expect(player).toHaveAttribute("data-controls-visible", "false");
   });
 
   it("fills the caption badge when captions are enabled", async () => {
@@ -227,7 +339,15 @@ describe("LessonVideoPlayer adapter", () => {
     );
     expect(autoplaySwitch).toHaveClass("h-8", "px-2", "sm:h-9", "sm:px-3");
     expect(autoplaySwitch).toHaveClass("!shadow-none", "drop-shadow-none");
-    expect(autoplayTrack).toHaveClass("h-3.5", "w-8", "sm:h-4", "sm:w-9");
+    expect(autoplayTrack).toHaveClass(
+      "h-3.5",
+      "w-8",
+      "sm:h-4",
+      "sm:w-9",
+      "border-white/35",
+      "bg-black/40",
+    );
+    expect(autoplayTrack).toHaveAttribute("data-autoplay-track-state", "on");
     expect(autoplayKnob).toHaveClass(
       "size-4.5",
       "left-3.5",
@@ -455,9 +575,9 @@ describe("LessonVideoPlayer adapter", () => {
     const player = screen.getByRole("region", {
       name: "Lesson video player for Designing for real users",
     });
-    expect(
-      player.parentElement?.style.getPropertyValue("--video-player-accent"),
-    ).toBe("var(--accent)");
+    expect(player.style.getPropertyValue("--video-player-accent")).toBe(
+      BUILT_IN_PLAYER_THEMES.youtube.tokens.accent,
+    );
 
     const navigationCluster = container.querySelector<HTMLElement>(
       '[data-player-control-cluster="lesson-navigation"]',
@@ -556,7 +676,7 @@ describe("LessonVideoPlayer adapter", () => {
         "active:!bg-(--video-player-control-surface-active)",
         "focus-visible:outline-(--video-player-control-text)",
         "sm:!h-9",
-        "sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_6%,transparent)]",
+        "sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)]",
         "sm:!px-3",
         "sm:hover:!bg-(--video-player-control-surface-hover)",
       );
@@ -598,11 +718,37 @@ describe("LessonVideoPlayer adapter", () => {
       "max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]",
       "max-sm:[&_[data-timeline-track]]:!h-0.75",
     );
+    expect(timeline.parentElement).toHaveClass(
+      "max-sm:[&_[data-video-player-preview]]:!bottom-3.5",
+      "max-sm:[&_[data-video-player-preview]]:!mb-0",
+    );
+    expect(
+      container.querySelector('[data-video-player-preview=""]'),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-mobile-player-corner="time"]'),
+    ).toHaveClass(
+      "transition-opacity",
+      "duration-150",
+      "max-sm:pointer-events-none",
+      "max-sm:opacity-0",
+    );
+    expect(
+      container.querySelector('[data-mobile-player-corner="fullscreen"]'),
+    ).toHaveClass(
+      "transition-opacity",
+      "duration-150",
+      "max-sm:pointer-events-none",
+      "max-sm:opacity-0",
+    );
     fireEvent.pointerUp(timeline, {
       clientX: 0,
       pointerId: 9,
       pointerType: "touch",
     });
+    expect(
+      container.querySelector('[data-video-player-preview=""]'),
+    ).not.toBeInTheDocument();
     expect(
       container.querySelector('[data-player-timeline-wrap=""]'),
     ).toHaveClass(
@@ -614,10 +760,36 @@ describe("LessonVideoPlayer adapter", () => {
     );
     expect(
       container.querySelector('[data-mobile-player-corner="time"]'),
-    ).toHaveClass("bottom-2.5", "left-2");
-    expect(
-      container.querySelector('[data-mobile-player-corner="fullscreen"]'),
-    ).toHaveClass("bottom-2.5", "right-2");
+    ).toHaveClass("bottom-2.5", "left-2", "max-sm:opacity-100");
+    const mobileFullscreenCorner = container.querySelector(
+      '[data-mobile-player-corner="fullscreen"]',
+    );
+    expect(mobileFullscreenCorner).toHaveClass(
+      "bottom-2.5",
+      "right-2",
+      "max-sm:opacity-100",
+    );
+    const mobileFullscreenButton = within(
+      mobileFullscreenCorner as HTMLElement,
+    ).getByRole("button", { name: "Toggle fullscreen" });
+    expect(mobileFullscreenButton).toHaveClass(
+      "!size-10",
+      "!bg-transparent",
+      "!px-0",
+    );
+    const mobileFullscreenSurface = mobileFullscreenButton.querySelector(
+      '[data-fullscreen-visual-surface=""]',
+    );
+    expect(mobileFullscreenSurface).toHaveClass(
+      "size-7",
+      "place-items-center",
+      "rounded-full",
+      "bg-(--video-player-control-surface)",
+    );
+    expect(mobileFullscreenSurface?.querySelector("svg")).toHaveAttribute(
+      "width",
+      "22",
+    );
     expect(
       container.querySelector('[data-player-control-cluster="mobile-play"]'),
     ).toHaveClass("size-14", "p-0.5");
