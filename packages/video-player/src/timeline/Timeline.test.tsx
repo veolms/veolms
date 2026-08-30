@@ -26,10 +26,29 @@ describe("Timeline", () => {
     fireEvent.click(marker);
     expect(actions.seekTo).toHaveBeenCalledWith(90);
 
-    expect(
-      container.querySelectorAll("span[aria-hidden='true']"),
-    ).toHaveLength(2);
+    expect(container.querySelectorAll("span[aria-hidden='true']")).toHaveLength(
+      2,
+    );
     expect(container.querySelector("span[style*='width: 25%']")).toBeTruthy();
+    expect(container.querySelector("[data-timeline-track]")).toBeTruthy();
+    expect(
+      container.querySelector("[data-timeline-buffered-range]"),
+    ).toBeTruthy();
+    expect(container.querySelector("[data-timeline-progress]")).toHaveClass(
+      "bg-[var(--video-player-accent,#ff7a1a)]",
+    );
+    const thumb = container.querySelector("[data-timeline-thumb]");
+    expect(thumb).toHaveClass(
+      "bg-[var(--video-player-accent,#ff7a1a)]",
+      "scale-100",
+      "group-data-[controls-visible=true]/timeline:opacity-100",
+      "group-hover/timeline:scale-[1.6]",
+      "group-focus-within/timeline:scale-[1.6]",
+      "group-data-[scrubbing=true]/timeline:scale-[1.6]",
+      "transition-[scale,opacity]",
+      "duration-200",
+    );
+    expect(thumb?.className).not.toContain("rgb(255_255_255");
   });
 
   it("seeks with timeline-owned keyboard controls", () => {
@@ -85,9 +104,42 @@ describe("Timeline", () => {
     expect(actions.seekTo).toHaveBeenCalledWith(90);
     expect(actions.setScrubbing).toHaveBeenLastCalledWith(false);
   });
+
+  it("keeps a time-only preview compact and translucent", () => {
+    const { container } = renderTimeline({
+      chapters: [],
+      previewTime: 45,
+      showPreview: true,
+    });
+
+    const preview = container.querySelector<HTMLElement>(
+      '[data-video-player-preview-mode="time"]',
+    );
+    expect(preview).toHaveClass(
+      "w-max",
+      "max-w-[calc(100vw-1rem)]",
+      "rounded-full",
+    );
+    expect(preview?.className).toContain(
+      "bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]",
+    );
+    expect(preview?.firstElementChild).toHaveClass("px-2.5", "py-1.5");
+    expect(preview).toHaveTextContent("00:45");
+  });
 });
 
-function renderTimeline() {
+function renderTimeline({
+  chapters = [
+    { id: "intro", title: "Introduction", startTime: 0, endTime: 60 },
+    { id: "details", title: "Details", startTime: 60, endTime: 120 },
+  ],
+  previewTime = null,
+  showPreview = false,
+}: {
+  chapters?: PlayerSnapshot["chapters"];
+  previewTime?: number | null;
+  showPreview?: boolean;
+} = {}) {
   const snapshot: PlayerSnapshot = {
     media: {
       ...createInitialVideoEngineSnapshot(),
@@ -103,16 +155,11 @@ function renderTimeline() {
       nativeHls: false,
       pictureInPicture: false,
     },
-    ui: createInitialPlayerUiState(),
-    chapters: [
-      { id: "intro", title: "Introduction", startTime: 0, endTime: 60 },
-      { id: "details", title: "Details", startTime: 60, endTime: 120 },
-    ],
+    ui: { ...createInitialPlayerUiState(), previewTime },
+    chapters,
     activeChapterId: "intro",
     storyboard: [],
-    markers: [
-      { id: "quiz", type: "quiz", label: "Quiz checkpoint", time: 90 },
-    ],
+    markers: [{ id: "quiz", type: "quiz", label: "Quiz checkpoint", time: 90 }],
   };
   const actions = {
     seekTo: vi.fn<(time: number) => void>(),
@@ -129,7 +176,7 @@ function renderTimeline() {
   return {
     ...render(
       <PlayerControllerContext.Provider value={controller}>
-        <Timeline showPreview={false} />
+        <Timeline showPreview={showPreview} />
       </PlayerControllerContext.Provider>,
     ),
     actions,

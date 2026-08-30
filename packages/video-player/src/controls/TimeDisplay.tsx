@@ -1,7 +1,18 @@
+import { useState } from "react";
 import { formatMediaTime } from "../accessibility/formatMediaTime";
 import { usePlayerState } from "../react/usePlayerState";
+import { classNames } from "../utils/classNames";
 
-export function TimeDisplay() {
+export interface TimeDisplayProps {
+  className?: string;
+  interactive?: boolean;
+}
+
+export function TimeDisplay({
+  className,
+  interactive = false,
+}: TimeDisplayProps = {}) {
+  const [showRemaining, setShowRemaining] = useState(false);
   const { currentTime, duration } = usePlayerState(
     ({ media }) => ({
       currentTime: media.currentTime,
@@ -11,13 +22,45 @@ export function TimeDisplay() {
       Math.floor(left.currentTime) === Math.floor(right.currentTime) &&
       Math.floor(left.duration) === Math.floor(right.duration),
   );
+  const remainingTime = Math.max(0, duration - currentTime);
+  const currentLabel = formatMediaTime(currentTime);
+  const durationLabel = formatMediaTime(duration);
+  const remainingLabel = formatMediaTime(remainingTime);
+  const displayValue = showRemaining
+    ? `-${remainingLabel} / ${durationLabel}`
+    : `${currentLabel} / ${durationLabel}`;
+  const displayClassName = classNames(
+    "select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-white sm:text-sm",
+    className,
+  );
+
+  if (!interactive) {
+    return (
+      <span
+        className={displayClassName}
+        aria-label={`${currentLabel} elapsed of ${durationLabel}`}
+      >
+        {displayValue}
+      </span>
+    );
+  }
 
   return (
-    <span
-      className="select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-white sm:text-sm"
-      aria-label={`${formatMediaTime(currentTime)} elapsed of ${formatMediaTime(duration)}`}
+    <button
+      type="button"
+      className={displayClassName}
+      aria-label={
+        showRemaining
+          ? `${remainingLabel} remaining of ${durationLabel}. Show elapsed time`
+          : `${currentLabel} elapsed of ${durationLabel}. Show remaining time`
+      }
+      aria-pressed={showRemaining}
+      data-player-control=""
+      disabled={!Number.isFinite(duration) || duration <= 0}
+      title={showRemaining ? "Show elapsed time" : "Show remaining time"}
+      onClick={() => setShowRemaining((remaining) => !remaining)}
     >
-      {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
-    </span>
+      <span>{displayValue}</span>
+    </button>
   );
 }

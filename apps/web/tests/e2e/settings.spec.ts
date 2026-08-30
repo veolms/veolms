@@ -500,9 +500,7 @@ test("appearance and sidebar preferences persist through their direct settings r
 
   await expectAppearanceSettingsReady(page);
   const appearanceHeadings = await page
-    .locator(
-      ".settings-content--appearance:visible > .settings-section > h2",
-    )
+    .locator(".settings-content--appearance:visible > .settings-section > h2")
     .allTextContents();
   expect(appearanceHeadings.indexOf("Theme rotation")).toBe(
     appearanceHeadings.indexOf("Color theme") + 1,
@@ -955,6 +953,11 @@ test("learning settings save a coherent preference object", async ({
   const curriculumScrollbar = page.getByRole("switch", {
     name: "Show course content scrollbar",
   });
+  const skipInterval = page.getByRole("button", {
+    name: "Skip interval: 10 seconds (Default)",
+  });
+  await skipInterval.click();
+  await page.getByRole("option", { name: "30 seconds" }).click();
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "true");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "true");
   await lessonPageScrollbar.click();
@@ -986,6 +989,7 @@ test("learning settings save a coherent preference object", async ({
   expect(stored.reminderDays).toContain("sat");
   expect(stored.showLessonPageScrollbar).toBe(false);
   expect(stored.showCurriculumScrollbar).toBe(false);
+  expect(stored.seekIntervalSeconds).toBe(30);
 
   await page.reload();
   await expect(
@@ -993,4 +997,7 @@ test("learning settings save a coherent preference object", async ({
   ).toHaveAttribute("aria-pressed", "true");
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "false");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "false");
+  await expect(
+    page.getByRole("button", { name: "Skip interval: 30 seconds" }),
+  ).toBeVisible();
 });

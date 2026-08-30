@@ -112,6 +112,59 @@ describe("PopoverMenu", () => {
     );
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
+
+  it("presents the menu as a bottom sheet on phone viewports", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 640px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      render(
+        <PopoverMenu
+          label="Settings"
+          menuLabel="Video settings"
+          mobilePresentation="sheet"
+          trigger="Settings"
+        >
+          <PlayerMenuItem label="Quality" />
+        </PopoverMenu>,
+      );
+
+      const trigger = screen.getByRole("button", { name: "Settings" });
+      fireEvent.click(trigger);
+
+      const sheet = screen.getByRole("dialog", { name: "Video settings" });
+      expect(sheet).toHaveAttribute("data-video-player-mobile-sheet");
+      expect(sheet.parentElement).toBe(document.body);
+      expect(
+        screen.getByRole("menu", { name: "Video settings" }),
+      ).toBeVisible();
+      expect(document.body.style.overflow).toBe("hidden");
+
+      fireEvent.pointerDown(
+        document.querySelector("[data-video-player-mobile-sheet-backdrop]")!,
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(document.body.style.overflow).toBe("");
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });
 
 describe("controller-backed player menus", () => {

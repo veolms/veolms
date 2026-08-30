@@ -321,6 +321,7 @@ export interface SidebarPreferences {
 export interface LearningPreferences {
   videoQuality: string;
   playbackSpeed: string;
+  seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
   startInTheaterMode: boolean;
   showLessonPageScrollbar: boolean;
@@ -341,9 +342,24 @@ export interface LearningPreferences {
 }
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
+export const LEARNING_SEEK_INTERVAL_MIN = 5;
+export const LEARNING_SEEK_INTERVAL_MAX = 60;
+export const LEARNING_SEEK_INTERVAL_DEFAULT = 10;
+export const LEARNING_SEEK_INTERVAL_PRESETS = [5, 10, 15, 30, 60] as const;
+
+export const normalizeLearningSeekInterval = (value: unknown): number => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return LEARNING_SEEK_INTERVAL_DEFAULT;
+  return Math.min(
+    LEARNING_SEEK_INTERVAL_MAX,
+    Math.max(LEARNING_SEEK_INTERVAL_MIN, Math.round(numericValue)),
+  );
+};
+
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
   playbackSpeed: "1",
+  seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
   startInTheaterMode: false,
   showLessonPageScrollbar: true,
@@ -688,6 +704,9 @@ export const readLearningPreferences = (): LearningPreferences => {
     const preferences = {
       ...LEARNING_PREFERENCE_DEFAULTS,
       ...storedPreferences,
+      seekIntervalSeconds: normalizeLearningSeekInterval(
+        storedPreferences.seekIntervalSeconds,
+      ),
       reminderDays: Array.isArray(storedPreferences.reminderDays)
         ? storedPreferences.reminderDays
         : LEARNING_PREFERENCE_DEFAULTS.reminderDays,

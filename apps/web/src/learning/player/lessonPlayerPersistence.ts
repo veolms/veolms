@@ -1,5 +1,7 @@
 const PLAYER_MUTED_STORAGE_KEY = "veolms-player-muted";
 const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
+const PLAYER_AUTOPLAY_STORAGE_KEY = "veolms-player-autoplay";
+const PLAYER_MINI_RESTORE_STORAGE_KEY = "veolms-player-mini-restore";
 
 interface StorageReader {
   getItem(key: string): string | null;
@@ -7,6 +9,10 @@ interface StorageReader {
 
 interface StorageWriter {
   setItem(key: string, value: string): void;
+}
+
+interface StorageMutator extends StorageReader, StorageWriter {
+  removeItem(key: string): void;
 }
 
 const getBrowserStorage = (): Storage | null => {
@@ -18,11 +24,33 @@ const getBrowserStorage = (): Storage | null => {
   }
 };
 
+const getSessionStorage = (): Storage | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
 export const lessonPlayerStorageKeys = {
   ambient: PLAYER_AMBIENT_STORAGE_KEY,
+  autoplay: PLAYER_AUTOPLAY_STORAGE_KEY,
   muted: PLAYER_MUTED_STORAGE_KEY,
   resume: (mediaKey: string) => `veolms-watch-${mediaKey}`,
 } as const;
+
+export function readAutoplayPreference(
+  storage: StorageReader | null = getBrowserStorage(),
+): boolean {
+  if (!storage) return true;
+  try {
+    const value = storage.getItem(PLAYER_AUTOPLAY_STORAGE_KEY);
+    return value === null ? true : value === "on" || value === "true";
+  } catch {
+    return true;
+  }
+}
 
 export function readMutedPreference(
   storage: StorageReader | null = getBrowserStorage(),
@@ -93,6 +121,53 @@ export function writeAmbientPreference(
     storage?.setItem(PLAYER_AMBIENT_STORAGE_KEY, enabled ? "on" : "off");
   } catch {
     // Ambient mode remains usable for the current session.
+  }
+}
+
+export function writeAutoplayPreference(
+  enabled: boolean,
+  storage: StorageWriter | null = getBrowserStorage(),
+): void {
+  try {
+    storage?.setItem(PLAYER_AUTOPLAY_STORAGE_KEY, enabled ? "on" : "off");
+  } catch {
+    // Autoplay remains usable for the current session.
+  }
+}
+
+export function writeMiniPlayerRestore(
+  mediaKey: string,
+  autoplay: boolean,
+  storage: StorageWriter | null = getSessionStorage(),
+): void {
+  try {
+    storage?.setItem(
+      PLAYER_MINI_RESTORE_STORAGE_KEY,
+      JSON.stringify({ autoplay, mediaKey }),
+    );
+  } catch {
+    // Restoring the lesson still works even if playback cannot resume itself.
+  }
+}
+
+export function consumeMiniPlayerRestore(
+  mediaKey: string,
+  storage: StorageMutator | null = getSessionStorage(),
+): boolean {
+  if (!storage) return false;
+  try {
+    const value = storage.getItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
+    if (!value) return false;
+    const restore = JSON.parse(value) as {
+      autoplay?: unknown;
+      mediaKey?: unknown;
+    };
+    if (restore.mediaKey !== mediaKey) return false;
+    storage.removeItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
+    return restore.autoplay === true;
+  } catch {
+    storage.removeItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
+    return false;
   }
 }
 

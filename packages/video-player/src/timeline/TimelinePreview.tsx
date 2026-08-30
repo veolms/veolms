@@ -42,7 +42,10 @@ function SpriteFrame({ frame }: { frame: StoryboardFrame }) {
     const image = new Image();
     image.onload = () => {
       if (active && image.naturalWidth > 0 && image.naturalHeight > 0) {
-        setSheetSize({ width: image.naturalWidth, height: image.naturalHeight });
+        setSheetSize({
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+        });
       }
     };
     image.src = frame.imageUrl;
@@ -83,33 +86,54 @@ export interface TimelinePreviewProps {
   previewTime: number;
 }
 
-export function TimelinePreview({ duration, previewTime }: TimelinePreviewProps) {
+export function TimelinePreview({
+  duration,
+  previewTime,
+}: TimelinePreviewProps) {
   const controllerData = useTimelinePreviewData(previewTime);
   const position = timeToPositionPercent(previewTime, duration);
   const translate = position < 14 ? 0 : position > 86 ? -100 : -50;
+  const hasRichPreview = Boolean(
+    controllerData.frame || controllerData.chapterTitle,
+  );
 
   return (
     <div
-      className="pointer-events-none absolute bottom-full z-30 mb-3 w-44 max-w-[min(11rem,70vw)] overflow-hidden rounded-xl border border-white/15 bg-neutral-950/95 text-white shadow-2xl backdrop-blur-xl"
-      style={{
-        left: `${position}%`,
-        transform: `translateX(${translate}%)`,
-        "--video-player-preview-position": `${position}%`,
-      } as CSSProperties}
+      className={`pointer-events-none absolute bottom-full z-30 mb-3 overflow-hidden text-white shadow-[0_8px_24px_rgba(0,0,0,0.32)] ${
+        hasRichPreview
+          ? "w-44 max-w-[min(11rem,70vw)] rounded-xl border border-white/15 bg-[color-mix(in_srgb,#05070b_82%,var(--video-player-accent,#ff7a1a)_4%)]"
+          : "w-max max-w-[calc(100vw-1rem)] rounded-full bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]"
+      }`}
+      style={
+        {
+          left: `${position}%`,
+          transform: `translateX(${translate}%)`,
+          "--video-player-preview-position": `${position}%`,
+        } as CSSProperties
+      }
       data-video-player-preview=""
+      data-video-player-preview-mode={hasRichPreview ? "rich" : "time"}
     >
       {controllerData.frame ? (
         <div className="overflow-hidden bg-black">
           <StoryboardImage frame={controllerData.frame} />
         </div>
       ) : null}
-      <div className="space-y-0.5 px-3 py-2 text-center">
+      <div
+        className={
+          hasRichPreview
+            ? "space-y-0.5 px-3 py-2 text-center"
+            : "px-2.5 py-1.5 text-center"
+        }
+      >
         {controllerData.chapterTitle ? (
           <p className="truncate text-xs font-medium text-white/75">
             {controllerData.chapterTitle}
           </p>
         ) : null}
-        <p className="text-sm font-semibold tabular-nums">
+        <p
+          className={`${hasRichPreview ? "text-sm" : "text-xs"} font-semibold tabular-nums`}
+        >
           {formatMediaTime(previewTime)}
         </p>
       </div>

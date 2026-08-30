@@ -44,4 +44,30 @@ describe("LearningSettings curriculum test controls", () => {
       CURRICULUM_LECTURE_COUNT_DEFAULT,
     );
   });
+
+  it("saves a custom video skip interval up to one minute", async () => {
+    render(<LearningSettings />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Skip interval: 10 seconds (Default)",
+      }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Custom…" }));
+
+    const slider = screen.getByRole("slider", {
+      name: "Custom skip interval in seconds",
+    });
+    expect(slider).toHaveAttribute("min", "5");
+    expect(slider).toHaveAttribute("max", "60");
+    fireEvent.change(slider, { target: { value: "47" } });
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem("veolms-learning-preferences") || "{}")
+          .seekIntervalSeconds,
+      ).toBe(47),
+    );
+    expect(screen.getByText("47s")).toBeVisible();
+  });
 });

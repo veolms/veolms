@@ -1,6 +1,7 @@
 export {
   PopoverMenu,
   type PopoverMenuAlign,
+  type PopoverMenuMobilePresentation,
   type PopoverMenuProps,
   type PopoverMenuRenderContext,
   type PopoverMenuSide,

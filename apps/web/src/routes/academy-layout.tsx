@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import {
   Outlet,
   useLocation,
@@ -12,6 +18,15 @@ import { useLogout } from "../services/auth";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
 import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
+import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
+import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
+import {
+  closeLearningMiniPlayerSession,
+  getLearningMiniPlayerServerSnapshot,
+  getLearningMiniPlayerSnapshot,
+  openLearningMiniPlayerSession,
+  subscribeToLearningMiniPlayer,
+} from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo } from "../routing/navigation";
 import {
   getInitialNavigationOrder,
@@ -39,6 +54,7 @@ export interface AcademyOutletContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
   navigateTo: NavigateTo;
+  openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
 }
 
 const isSettingsPath = (path: string) => {
@@ -100,6 +116,11 @@ export default function AcademyLayout() {
     top: 0,
   });
   const numberNavigationTimerRef = useRef<number | null>(null);
+  const learningMiniPlayer = useSyncExternalStore(
+    subscribeToLearningMiniPlayer,
+    getLearningMiniPlayerSnapshot,
+    getLearningMiniPlayerServerSnapshot,
+  );
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
 
@@ -248,6 +269,23 @@ export default function AcademyLayout() {
     [navigateTo],
   );
 
+  const openLearningMiniPlayer = useCallback(
+    (session: LearningMiniPlayerSession) =>
+      openLearningMiniPlayerSession(session),
+    [],
+  );
+
+  const closeLearningMiniPlayer = useCallback(() => {
+    closeLearningMiniPlayerSession();
+  }, []);
+
+  const restoreLearningMiniPlayer = useCallback(() => {
+    if (!learningMiniPlayer) return;
+    const lessonPath = learningMiniPlayer.lessonPath;
+    closeLearningMiniPlayer();
+    navigateTo(lessonPath, { exact: true });
+  }, [closeLearningMiniPlayer, learningMiniPlayer, navigateTo]);
+
   return (
     <>
       <CoursesPage
@@ -261,16 +299,14 @@ export default function AcademyLayout() {
         onOpenCourse={openCourse}
         renderMain={
           route.kind === "learning"
-            ? ({
-                mobileBottomNavigation,
-                mobileBottomNavigationHidden,
-              }) => (
+            ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
                 <Outlet
                   context={
                     {
                       mobileBottomNavigation,
                       mobileBottomNavigationHidden,
                       navigateTo,
+                      openLearningMiniPlayer,
                     } satisfies AcademyOutletContext
                   }
                 />
@@ -278,6 +314,13 @@ export default function AcademyLayout() {
             : null
         }
       />
+      {learningMiniPlayer ? (
+        <LearningMiniPlayer
+          session={learningMiniPlayer}
+          onClose={closeLearningMiniPlayer}
+          onRestore={restoreLearningMiniPlayer}
+        />
+      ) : null}
     </>
   );
 }

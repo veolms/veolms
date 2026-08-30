@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   lessonPlayerStorageKeys,
   readAmbientPreference,
+  readAutoplayPreference,
   readMutedPreference,
   readResumePosition,
   writeAmbientPreference,
+  writeAutoplayPreference,
   writeMutedPreference,
   writeResumePosition,
 } from "../../src/learning/player/lessonPlayerPersistence.js";
@@ -34,6 +36,15 @@ describe("lesson player persistence", () => {
     expect(readAmbientPreference(emptyStorage, true)).toBe(false);
   });
 
+  it("defaults autoplay on and restores an explicit preference", () => {
+    expect(readAutoplayPreference(storageWith({}))).toBe(true);
+    expect(
+      readAutoplayPreference(
+        storageWith({ [lessonPlayerStorageKeys.autoplay]: "off" }),
+      ),
+    ).toBe(false);
+  });
+
   it("isolates and clamps resume positions by caller-provided media key", () => {
     const mediaKey = "course-a-lesson-7";
     const storage = storageWith({
@@ -57,9 +68,11 @@ describe("lesson player persistence", () => {
 
     expect(readMutedPreference(blockedStorage)).toBe(false);
     expect(readAmbientPreference(blockedStorage, true)).toBe(false);
+    expect(readAutoplayPreference(blockedStorage)).toBe(true);
     expect(readResumePosition("lesson", 90, blockedStorage)).toBe(0);
     expect(() => writeMutedPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAmbientPreference(true, blockedStorage)).not.toThrow();
+    expect(() => writeAutoplayPreference(true, blockedStorage)).not.toThrow();
     expect(() =>
       writeResumePosition("lesson", 12, blockedStorage),
     ).not.toThrow();
@@ -71,6 +84,7 @@ describe("lesson player persistence", () => {
 
     writeMutedPreference(true, storage);
     writeAmbientPreference(false, storage);
+    writeAutoplayPreference(true, storage);
     writeResumePosition("course-a-lesson-7", 42, storage);
 
     expect(setItem).toHaveBeenNthCalledWith(
@@ -85,6 +99,11 @@ describe("lesson player persistence", () => {
     );
     expect(setItem).toHaveBeenNthCalledWith(
       3,
+      lessonPlayerStorageKeys.autoplay,
+      "on",
+    );
+    expect(setItem).toHaveBeenNthCalledWith(
+      4,
       "veolms-watch-course-a-lesson-7",
       "42",
     );

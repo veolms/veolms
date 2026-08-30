@@ -36,6 +36,7 @@ export default function LearningRoute() {
     mobileBottomNavigation,
     mobileBottomNavigationHidden,
     navigateTo,
+    openLearningMiniPlayer,
   } = useOutletContext<AcademyOutletContext>();
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
@@ -92,6 +93,17 @@ export default function LearningRoute() {
             routeReturnPath,
           { exact: true },
         );
+      }}
+      onMinimizePlayer={(request) => {
+        const returnPath =
+          (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+          routeReturnPath;
+        openLearningMiniPlayer({
+          ...request,
+          lessonPath: `${location.pathname}${location.search}`,
+          returnPath,
+        });
+        navigateTo(returnPath, { exact: true });
       }}
     />
   );

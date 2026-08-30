@@ -36,6 +36,7 @@ export function Timeline({
   const {
     buffered,
     chapters,
+    controlsVisible,
     currentTime,
     duration,
     markers,
@@ -45,6 +46,7 @@ export function Timeline({
     (snapshot) => ({
       buffered: snapshot.media.buffered,
       chapters: snapshot.chapters,
+      controlsVisible: snapshot.ui.controlsVisible,
       currentTime: snapshot.media.currentTime,
       duration: snapshot.media.duration,
       markers: snapshot.markers,
@@ -54,6 +56,7 @@ export function Timeline({
     (left, right) =>
       left.buffered === right.buffered &&
       left.chapters === right.chapters &&
+      left.controlsVisible === right.controlsVisible &&
       left.currentTime === right.currentTime &&
       left.duration === right.duration &&
       left.markers === right.markers &&
@@ -138,6 +141,7 @@ export function Timeline({
   return (
     <div
       className={`group/timeline relative w-full touch-none ${className}`}
+      data-controls-visible={controlsVisible ? "true" : "false"}
       data-scrubbing={scrubbing ? "true" : "false"}
     >
       {showPreview && previewTime !== null ? (
@@ -155,7 +159,7 @@ export function Timeline({
         aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
         data-player-control=""
         data-scrubbing={scrubbing ? "true" : "false"}
-        className="relative flex h-6 cursor-pointer items-center focus-visible:outline-none focus-visible:after:absolute focus-visible:after:inset-x-0 focus-visible:after:top-1/2 focus-visible:after:h-3 focus-visible:after:-translate-y-1/2 focus-visible:after:rounded-full focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-white aria-disabled:cursor-not-allowed aria-disabled:opacity-55"
+        className="relative flex h-6 cursor-pointer items-center focus-visible:outline-none focus-visible:after:absolute focus-visible:after:inset-x-0 focus-visible:after:top-1/2 focus-visible:after:h-3 focus-visible:after:-translate-y-1/2 focus-visible:after:rounded-full focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--video-player-accent,#ff7a1a)] aria-disabled:cursor-not-allowed aria-disabled:opacity-55"
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -171,10 +175,14 @@ export function Timeline({
           if (pointerIdRef.current === null) controller.setPreviewTime(null);
         }}
       >
-        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5">
+        <div
+          data-timeline-track=""
+          className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
+        >
           {bufferedRanges.map((range) => (
             <span
               key={`${range.start}-${range.end}`}
+              data-timeline-buffered-range=""
               className="absolute inset-y-0 rounded-full bg-white/45"
               style={{
                 left: `${timeToPositionPercent(range.start, duration)}%`,
@@ -183,6 +191,7 @@ export function Timeline({
             />
           ))}
           <span
+            data-timeline-progress=""
             className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
             style={{ width: `${progress}%` }}
           />
@@ -193,13 +202,16 @@ export function Timeline({
             key={chapter.id}
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 z-10 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950/90"
-            style={{ left: `${timeToPositionPercent(chapter.startTime, duration)}%` }}
+            style={{
+              left: `${timeToPositionPercent(chapter.startTime, duration)}%`,
+            }}
           />
         ))}
 
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 z-20 size-3 -translate-x-1/2 -translate-y-1/2 scale-75 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_0_0_3px_rgb(255_255_255_/_0.9)] transition-[transform,opacity] duration-150 group-hover/timeline:scale-100 group-hover/timeline:opacity-100 group-focus-within/timeline:scale-100 group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-110 group-data-[scrubbing=true]/timeline:opacity-100"
+          data-timeline-thumb=""
+          className="pointer-events-none absolute top-1/2 z-20 size-3 -translate-x-1/2 -translate-y-1/2 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
           style={{ left: `${progress}%` }}
         />
       </div>

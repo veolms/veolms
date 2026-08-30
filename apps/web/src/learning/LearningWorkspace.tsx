@@ -29,6 +29,11 @@ import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { LessonVideoPlayer } from "./player";
+import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
+import {
+  readAutoplayPreference,
+  writeAutoplayPreference,
+} from "./player/lessonPlayerPersistence";
 import {
   createCurriculumSections,
   createLessonsById,
@@ -169,6 +174,7 @@ interface LearningWorkspaceProps {
   onSelectLesson: (lessonId: number) => void;
   onOpenCourseOverview: () => void;
   onNavigateBack: () => void;
+  onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
 }
 
 interface CurriculumResize {
@@ -229,6 +235,7 @@ export function LearningWorkspace({
   onSelectLesson,
   onOpenCourseOverview,
   onNavigateBack,
+  onMinimizePlayer,
 }: LearningWorkspaceProps) {
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
@@ -238,6 +245,7 @@ export function LearningWorkspace({
     {},
   );
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
+  const [autoplayEnabled, setAutoplayEnabled] = useState(true);
   const courseTitle = getCourseTitle(courseSlug);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
@@ -346,6 +354,18 @@ export function LearningWorkspace({
     : undefined;
   const currentLesson =
     curriculumLessonsById.get(selectedLesson) || firstCurriculumLesson!;
+  const lessonSequence = useMemo(
+    () =>
+      curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
+    [curriculumSections],
+  );
+  const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
+  const previousLessonId =
+    currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
+  const nextLessonId =
+    currentLessonIndex >= 0 && currentLessonIndex < lessonSequence.length - 1
+      ? lessonSequence[currentLessonIndex + 1]
+      : undefined;
   const courseThumbnail = getCourseThumbnail(courseSlug);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
@@ -453,13 +473,35 @@ export function LearningWorkspace({
     [phoneLessonDrawer],
   );
 
-  const selectLesson = (lessonNumber: number) => {
-    if (lessonNumber === selectedLesson) return;
-    pendingLessonSelectionRef.current = lessonNumber;
-    setAutoPlayOnLessonChange(true);
-    setSelectedLesson(lessonNumber);
-    onSelectLesson(lessonNumber);
-  };
+  const selectLesson = useCallback(
+    (lessonNumber: number) => {
+      if (lessonNumber === selectedLesson) return;
+      pendingLessonSelectionRef.current = lessonNumber;
+      setAutoPlayOnLessonChange(true);
+      setSelectedLesson(lessonNumber);
+      onSelectLesson(lessonNumber);
+    },
+    [onSelectLesson, selectedLesson],
+  );
+
+  const updateAutoplayEnabled = useCallback((enabled: boolean) => {
+    setAutoplayEnabled(enabled);
+    writeAutoplayPreference(enabled);
+  }, []);
+
+  const goToPreviousLesson = useCallback(() => {
+    if (previousLessonId !== undefined) selectLesson(previousLessonId);
+  }, [previousLessonId, selectLesson]);
+
+  const goToNextLesson = useCallback(() => {
+    if (nextLessonId !== undefined) selectLesson(nextLessonId);
+  }, [nextLessonId, selectLesson]);
+
+  const handleLessonEnded = useCallback(() => {
+    if (autoplayEnabled && nextLessonId !== undefined) {
+      selectLesson(nextLessonId);
+    }
+  }, [autoplayEnabled, nextLessonId, selectLesson]);
 
   const updateSelectedLessonProgress = useCallback(
     (progress: number) => {
@@ -1266,9 +1308,12 @@ export function LearningWorkspace({
   }, [lessonStorageKey, selectedLesson]);
 
   useEffect(() => {
+    setAutoplayEnabled(readAutoplayPreference());
+  }, []);
+
+  useEffect(() => {
     try {
       sessionStorage.removeItem("veolms-course-autostart");
-      localStorage.removeItem("veolms-player-autoplay");
     } catch {
       // Retired preferences are cleaned up on a best-effort basis.
     }
@@ -1319,7 +1364,7 @@ export function LearningWorkspace({
           <div ref={playerWrapRef} className="learning-workspace__player-wrap">
             <button
               type="button"
-              className="learning-workspace__back"
+              className="learning-workspace__back max-sm:hidden"
               aria-label={backLabel}
               onClick={onNavigateBack}
             >
@@ -1357,6 +1402,14 @@ export function LearningWorkspace({
               theaterMode={theaterMode}
               onTheaterToggle={toggleTheaterMode}
               autoPlayOnMediaChange={autoPlayOnLessonChange}
+              autoplayEnabled={autoplayEnabled}
+              canGoNext={nextLessonId !== undefined}
+              canGoPrevious={previousLessonId !== undefined}
+              onAutoplayEnabledChange={updateAutoplayEnabled}
+              onGoNext={goToNextLesson}
+              onGoPrevious={goToPreviousLesson}
+              onLessonEnded={handleLessonEnded}
+              onMinimize={onMinimizePlayer}
               onProgressChange={updateSelectedLessonProgress}
               resumePersistenceKey={`${coursePersistenceKey}-lesson-${selectedLesson}`}
             />

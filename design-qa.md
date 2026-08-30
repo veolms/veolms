@@ -41,3 +41,59 @@ The reference uses a wider source viewport and includes one additional sample re
 ## Final result
 
 passed
+
+---
+
+# Lesson player design QA
+
+## Source references
+
+- Mobile player and surrounding page: `C:\Users\anura\AppData\Local\Temp\codex-clipboard-62e41b15-2943-45f2-9224-30f1c2666d43.png`
+- Mobile focused controls: `C:\Users\anura\AppData\Local\Temp\codex-clipboard-15cc705b-8922-4626-8ebd-795b040ce54c.png`
+- Desktop player controls: `C:\Users\anura\AppData\Local\Temp\codex-clipboard-2414f901-fd4d-4d54-9aac-e325ab431a93.png`
+- Mobile mini-player: `C:\Users\anura\AppData\Local\Temp\codex-clipboard-6e46ee60-ccdc-4606-bac0-d68a177e2d6b.jpg`
+- Ambient artwork: `C:\Users\anura\Downloads\ambient-mode-glow.svg`
+
+## Implementation captures
+
+- Desktop: `C:\Users\anura\projects\veolms\design-qa-desktop.png`
+- Mobile controls: `C:\Users\anura\projects\veolms\design-qa-mobile.png`
+- Mobile settings drawer: `C:\Users\anura\projects\veolms\design-qa-settings.png`
+- Mobile mini-player: `C:\Users\anura\projects\veolms\design-qa-mini-player.png`
+
+## Capture conditions
+
+- Desktop implementation: 1336 × 768 CSS pixels, device scale 1, dark/reading theme, lesson paused with controls visible and media loaded.
+- Mobile implementation: 363 × 800 CSS pixels, device scale 1. The 726 × 1600 source is treated as the equivalent 363 × 800 viewport at 2× density. Lesson paused with controls visible and media loaded.
+- Mini-player implementation: 363 × 800 CSS pixels, device scale 1, returned to the Courses page with the mini-player visible above bottom navigation.
+- Settings implementation: 390 × 844 CSS pixels, device scale 1, settings open as a bottom drawer.
+
+## Comparison
+
+### Full-frame
+
+- Mobile preserves the source hierarchy: top minimize/autoplay/captions/settings, centered previous/play/next, bottom time/progress, and a single fullscreen affordance in the lower-right corner.
+- Desktop keeps transport/time on the left and autoplay/captions/settings/fullscreen on the right. Theater and visible 10-second controls are absent.
+- The mini-player follows the source behavior and placement while respecting VeoLMS bottom navigation and card content.
+
+### Focused controls
+
+- Phosphor `CornersOut`/`CornersIn` matches the opposing-arrow expand/minimize reference and reverses in fullscreen.
+- Ambient mode uses the supplied SVG asset in Settings; it is no longer a toolbar control.
+- Settings uses the existing popover on desktop and the existing accessible bottom-sheet primitive on phone viewports.
+- All visible player actions have semantic button/switch roles, labels, keyboard focus styles, and practical mobile tap targets.
+
+## QA history
+
+| Pass | Finding                                                                                               | Severity | Resolution                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| 1    | Desktop toolbar still needed separate transport and utility grouping.                                 | P2       | Rebuilt the lesson controls around responsive left/right clusters.                                  |
+| 1    | Desktop-only fullscreen control remained visible in the mobile top cluster.                           | P1       | Wrapped the desktop control in an explicit `sm`-only container.                                     |
+| 1    | Ambient mode rendered two `Off` labels in Settings.                                                   | P2       | Kept a single trailing state label and enlarged the supplied icon optically.                        |
+| 2    | The legacy mobile back button sat above the minimize control and bypassed mini-player handoff.        | P1       | Removed the legacy back button at the phone breakpoint and retained the dedicated minimize control. |
+| 2    | Initial captures were taken before the video source completed loading.                                | P2       | Re-captured loaded desktop and mobile states at the reference viewports.                            |
+| 3    | No remaining P0, P1, or P2 fidelity, interaction, accessibility, or responsive defects were observed. | —        | Passed focused and full-frame comparison.                                                           |
+
+## Final result
+
+passed

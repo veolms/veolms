@@ -174,26 +174,18 @@
 }
 
 @media (hover: none), (pointer: coarse) {
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="true"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__back,
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="true"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__curriculum-toggle {
     opacity: 0;
     pointer-events: none;
     transform: translateY(-4px);
   }
 
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="false"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__back,
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="false"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__curriculum-toggle,
   .learning-workspace__back:focus-visible,
   .learning-workspace__curriculum-toggle:focus-visible {
@@ -1244,26 +1236,18 @@
 }
 
 @media (min-width: 641px) and (max-width: 1080px) {
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="true"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__back,
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="true"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__curriculum-toggle {
     opacity: 0;
     pointer-events: none;
     transform: translateY(-4px);
   }
 
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="false"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__back,
-  .learning-workspace__player-wrap:has(
-      .youtube-player[data-playing="false"]
-    )
+  .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__curriculum-toggle,
   .learning-workspace__back:focus-visible,
   .learning-workspace__curriculum-toggle:focus-visible {
@@ -1306,11 +1290,7 @@
   }
 
   .learning-workspace__back {
-    top: 13px;
-    left: 13px;
-    width: 42px;
-    height: 42px;
-    border-radius: 11px;
+    display: none;
   }
 
   .learning-workspace__player-wrap .youtube-player {

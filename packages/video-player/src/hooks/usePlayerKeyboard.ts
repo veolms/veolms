@@ -47,6 +47,7 @@ export interface UsePlayerKeyboardOptions {
   rootRef: RefObject<HTMLElement | null>;
   shortcuts?: PlayerShortcutOverrides;
   onToggleTheater?: () => void;
+  seekIntervalSeconds?: number;
   enabled?: boolean;
 }
 
@@ -55,6 +56,7 @@ export function usePlayerKeyboard({
   enabled = true,
   onToggleTheater,
   rootRef,
+  seekIntervalSeconds = 10,
   shortcuts,
 }: UsePlayerKeyboardOptions): void {
   const controller = usePlayerController();
@@ -71,7 +73,12 @@ export function usePlayerKeyboard({
       getPlayerRoot: () => rootRef.current,
       actions: {
         togglePlayPause: () => controller.togglePlayback(),
-        seekBy: (seconds) => controller.seekBy(seconds),
+        seekBy: (seconds) =>
+          controller.seekBy(
+            Math.abs(seconds) === 5
+              ? Math.sign(seconds) * seekIntervalSeconds
+              : seconds,
+          ),
         seekToPercentage: (percentage) => {
           const duration = controller.getSnapshot().media.duration;
           controller.seekTo(duration * (percentage / 100));
@@ -146,5 +153,13 @@ export function usePlayerKeyboard({
       registrationRef.current = null;
       releaseKeyboardScope(window, scope);
     };
-  }, [controller, enabled, id, onToggleTheater, rootRef, shortcuts]);
+  }, [
+    controller,
+    enabled,
+    id,
+    onToggleTheater,
+    rootRef,
+    seekIntervalSeconds,
+    shortcuts,
+  ]);
 }

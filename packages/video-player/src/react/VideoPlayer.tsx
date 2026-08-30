@@ -43,6 +43,7 @@ export interface VideoPlayerProgress {
 }
 
 export type VideoPlayerEngine = "shaka" | "native";
+export type VideoPlayerEmptyTapBehavior = "toggle-controls" | "toggle-playback";
 
 export interface VideoPlayerProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -61,9 +62,15 @@ export interface VideoPlayerProps extends Omit<
   storyboardLoader?: StoryboardLoader;
   markers?: readonly TimelineMarker[];
   controls?: ReactNode | false;
+  /** Replaces the default central play affordance. Pass false to omit it. */
+  centralControl?: ReactNode | false;
   overlays?: ReactNode;
   keyboardEnabled?: boolean;
   shortcuts?: PlayerShortcutOverrides;
+  /** Seconds used by Left/Right arrow keys and double-tap seeking. */
+  seekIntervalSeconds?: number;
+  /** Action performed by a single pointer tap on empty video space. */
+  emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
   controlsIdleDelay?: number;
   theaterMode?: boolean;
   onTheaterModeChange?: (active: boolean) => void;
@@ -112,12 +119,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ariaLabel = "Video player",
       autoPlay = false,
       chapters,
+      centralControl,
       className,
       controls,
       controlsIdleDelay,
       description,
       engine = "shaka",
       engineFactory,
+      emptyTapBehavior = "toggle-playback",
       keyboardEnabled = true,
       lockLandscapeOnFullscreen = false,
       manualChapters,
@@ -134,6 +143,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       overlays,
       playerClassName,
       poster,
+      seekIntervalSeconds = 10,
       shortcuts,
       source,
       storyboard,
@@ -176,7 +186,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         const orientation =
           screen.orientation as unknown as ScreenOrientationWithLock;
         const portraitViewport =
-          typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+          typeof window !== "undefined" &&
+          window.innerHeight > window.innerWidth;
         if (!portraitViewport || !orientation.lock) return;
 
         const generation = orientationLockGenerationRef.current + 1;
@@ -239,9 +250,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
     const rootStyle = {
       ...style,
-      ...(accentColor
-        ? { "--video-player-accent": accentColor }
-        : undefined),
+      ...(accentColor ? { "--video-player-accent": accentColor } : undefined),
     } as CSSProperties;
     const resolvedPoster = poster ?? source.metadata?.poster;
 
@@ -271,7 +280,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           tabIndex={0}
           className={classNames(
             "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
-            theaterMode && "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
+            theaterMode &&
+              "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
             playerClassName,
           )}
         >
@@ -280,6 +290,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             shortcuts={shortcuts}
             keyboardEnabled={keyboardEnabled}
             controlsIdleDelay={controlsIdleDelay}
+            seekIntervalSeconds={seekIntervalSeconds}
             onToggleTheater={
               onTheaterModeChange ? handleToggleTheater : undefined
             }
@@ -302,21 +313,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
               mediaClassName,
             )}
           />
-          <PlayerGestureSurface />
+          <PlayerGestureSurface
+            emptyTapBehavior={emptyTapBehavior}
+            seekIntervalSeconds={seekIntervalSeconds}
+          />
           {overlays}
-          <CentralPlayButton />
+          {centralControl === false
+            ? null
+            : (centralControl ?? <CentralPlayButton />)}
           <BufferingIndicator />
           <PlayerHud />
           <ErrorOverlay />
           {controls === false
             ? null
-            : controls ?? (
+            : (controls ?? (
                 <DefaultControls
                   onToggleTheater={
                     onTheaterModeChange ? handleToggleTheater : undefined
                   }
                 />
-              )}
+              ))}
         </PlayerRoot>
       </div>
     );

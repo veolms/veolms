@@ -28,6 +28,52 @@ const source = {
 };
 
 describe("VideoPlayer integration", () => {
+  it("maps pointer presses across the full-height volume hit target", async () => {
+    const engine = new FakeVideoEngine();
+    const setVolume = vi.spyOn(engine, "setVolume");
+    const handle = createRef<VideoPlayerHandle>();
+
+    render(
+      <VideoPlayer ref={handle} source={source} engineFactory={() => engine} />,
+    );
+    await waitFor(() => expect(engine.getSnapshot().source).toEqual(source));
+
+    const volumeSlider = screen.getByRole("slider", { name: "Volume" });
+    const muteButton = screen.getByRole("button", { name: "Mute" });
+    expect(volumeSlider).toHaveClass("h-9");
+    expect(muteButton).toHaveAttribute("data-volume-level", "high");
+    vi.spyOn(volumeSlider, "getBoundingClientRect").mockReturnValue({
+      bottom: 40,
+      height: 36,
+      left: 10,
+      right: 110,
+      top: 4,
+      width: 100,
+      x: 10,
+      y: 4,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(volumeSlider, { clientX: 85, clientY: 6 });
+    expect(setVolume).toHaveBeenCalledWith(0.75);
+
+    act(() => handle.current?.setVolume(0.5));
+    await waitFor(() =>
+      expect(muteButton).toHaveAttribute("data-volume-level", "medium"),
+    );
+    act(() => handle.current?.setVolume(0.2));
+    await waitFor(() =>
+      expect(muteButton).toHaveAttribute("data-volume-level", "quiet"),
+    );
+    fireEvent.click(muteButton);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Unmute" })).toHaveAttribute(
+        "data-volume-level",
+        "muted",
+      ),
+    );
+  });
+
   it("keeps the Space shortcut active while the gesture surface is focused", async () => {
     const engine = new FakeVideoEngine();
     const play = vi.spyOn(engine, "play");
@@ -360,11 +406,10 @@ describe("VideoPlayer integration", () => {
     await waitFor(() => expect(play).toHaveBeenCalledOnce());
   });
 
-  it("loads through an injected engine and drives play, mute, and seek controls", async () => {
+  it("loads through an injected engine without exposing skip controls", async () => {
     const engine = new FakeVideoEngine();
     const play = vi.spyOn(engine, "play");
     const setMuted = vi.spyOn(engine, "setMuted");
-    const seek = vi.spyOn(engine, "seek");
 
     render(
       <VideoPlayer
@@ -386,10 +431,9 @@ describe("VideoPlayer integration", () => {
       "true",
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Seek forward 10 seconds" }),
-    );
-    expect(seek).toHaveBeenLastCalledWith(10);
+    expect(
+      screen.queryByRole("button", { name: /Seek (?:backward|forward)/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("routes active-player keyboard seeking to the engine", async () => {
@@ -404,8 +448,66 @@ describe("VideoPlayer integration", () => {
     fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
     fireEvent.keyDown(window, { key: "l", code: "KeyL" });
 
-    expect(seek).toHaveBeenNthCalledWith(1, 35);
-    expect(seek).toHaveBeenNthCalledWith(2, 45);
+    expect(seek).toHaveBeenNthCalledWith(1, 40);
+    expect(seek).toHaveBeenNthCalledWith(2, 50);
+  });
+
+  it("double taps either side using the configured seek interval", async () => {
+    const engine = new FakeVideoEngine();
+    const seek = vi.spyOn(engine, "seek");
+    render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        seekIntervalSeconds={20}
+      />,
+    );
+
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+    engine.setSnapshot({ currentTime: 30 });
+    const surface = screen.getByRole("button", { name: "Play or pause video" });
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+      bottom: 60,
+      height: 60,
+      left: 0,
+      right: 100,
+      top: 0,
+      width: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => undefined,
+    });
+    vi.useFakeTimers();
+
+    const tap = (clientX: number) => {
+      fireEvent.pointerDown(surface, {
+        clientX,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+    };
+
+    act(() => {
+      tap(75);
+      vi.advanceTimersByTime(100);
+      tap(75);
+    });
+    expect(seek).toHaveBeenLastCalledWith(50);
+    expect(screen.getByText("+20 seconds")).toBeVisible();
+
+    act(() => {
+      vi.advanceTimersByTime(350);
+      tap(25);
+      vi.advanceTimersByTime(100);
+      tap(25);
+    });
+    expect(seek).toHaveBeenLastCalledWith(30);
+    expect(screen.getByText("−20 seconds")).toBeVisible();
   });
 
   it("keeps controls visible while focus remains inside the player", async () => {
@@ -456,7 +558,14 @@ describe("VideoPlayer integration", () => {
     const requestFullscreen = vi.fn(async () => undefined);
     Object.assign(shell!, { requestFullscreen });
 
-    fireEvent.click(screen.getByRole("button", { name: "Toggle fullscreen" }));
+    const fullscreenButton = screen.getByRole("button", {
+      name: "Toggle fullscreen",
+    });
+    expect(fullscreenButton.querySelector("svg")).toHaveStyle({
+      transform: "rotate(90deg)",
+    });
+
+    fireEvent.click(fullscreenButton);
     await waitFor(() => expect(requestFullscreen).toHaveBeenCalledOnce());
 
     act(() => handle.current?.focus());

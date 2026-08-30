@@ -369,6 +369,50 @@ test("desktop learning page scrollbar hugs the curriculum edge", async ({
   expect(geometry.scrollbarBoxShadow).toBe("none");
 });
 
+test("player control icons stay fixed while pressed", async ({ page }) => {
+  await page.setViewportSize(LEARNING_DESKTOP_VIEWPORT);
+  await openApp(page, "/learn/typescript-course/the-design-mindset?from=home");
+
+  const player = page.getByRole("region", {
+    name: /Lesson video player for The Design Mindset/,
+  });
+  await player.hover();
+
+  const visibleControls = player.locator("button.player-control:visible");
+  await expect(visibleControls.first()).toBeVisible();
+  const transitionProperties = await visibleControls.evaluateAll((controls) =>
+    controls.map((control) => getComputedStyle(control).transitionProperty),
+  );
+  expect(
+    transitionProperties.every(
+      (transitionProperty) => !transitionProperty.includes("transform"),
+    ),
+  ).toBe(true);
+
+  const settings = player.getByRole("button", { name: "Settings" });
+  const settingsIcon = settings.locator("svg");
+  const buttonBox = await settings.boundingBox();
+  const iconBoxBeforePress = await settingsIcon.boundingBox();
+  if (!buttonBox || !iconBoxBeforePress) {
+    throw new Error("Settings control geometry is unavailable");
+  }
+
+  await page.mouse.move(
+    buttonBox.x + buttonBox.width / 2,
+    buttonBox.y + buttonBox.height / 2,
+  );
+  await page.mouse.down();
+  const [pressedTransform, iconBoxWhilePressed] = await Promise.all([
+    settings.evaluate((control) => getComputedStyle(control).transform),
+    settingsIcon.boundingBox(),
+  ]);
+  await page.mouse.up();
+
+  expect(pressedTransform).toBe("none");
+  expect(iconBoxWhilePressed?.width).toBeCloseTo(iconBoxBeforePress.width, 2);
+  expect(iconBoxWhilePressed?.height).toBeCloseTo(iconBoxBeforePress.height, 2);
+});
+
 test("lesson choice, curriculum width, and player preferences persist", async ({
   page,
 }) => {
@@ -424,8 +468,17 @@ test("lesson choice, curriculum width, and player preferences persist", async ({
   await player.hover();
   await player.getByRole("button", { name: "Settings" }).click();
   const settingsMenu = page.getByRole("menu", { name: "Video settings" });
-  await settingsMenu.getByRole("menuitem", { name: /^Captions\b/ }).click();
-  await settingsMenu.getByRole("menuitemradio", { name: /^English\b/ }).click();
+  await expect(
+    player.getByRole("button", { name: "Toggle picture in picture" }),
+  ).toHaveCount(0);
+  await expect(
+    settingsMenu.getByRole("menuitem", { name: /^Picture in picture/ }),
+  ).toBeVisible();
+  await expect(
+    settingsMenu.getByRole("menuitem", { name: /^Captions\b/ }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await player.getByRole("button", { name: "Turn captions on" }).click();
   await expect
     .poll(() =>
       lessonVideo.evaluate((video) =>
@@ -472,10 +525,9 @@ test("lesson choice, curriculum width, and player preferences persist", async ({
   await customSpeed.fill("1");
   await page.keyboard.press("Escape");
 
-  await player.getByRole("button", { name: "Enter theater mode" }).click();
   await expect(
-    player.getByRole("button", { name: "Exit theater mode" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    player.getByRole("button", { name: /theater mode/i }),
+  ).toHaveCount(0);
 
   await page.reload();
   await expect(
@@ -3505,14 +3557,14 @@ test("custom player controls, timeline preview and seek, fullscreen shell, and a
     .poll(() =>
       video.evaluate((element) => (element as HTMLVideoElement).currentTime),
     )
-    .toBeGreaterThanOrEqual(15);
+    .toBeGreaterThanOrEqual(20);
   await video.evaluate((element) => {
     element.dispatchEvent(new Event("pause"));
   });
   await expectStoredValue(
     page,
     "veolms-watch-typescript-course-lesson-1",
-    "15",
+    "20",
   );
 
   const shell = page.locator(".video-shell").filter({ has: player });
@@ -3652,14 +3704,12 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     )
     .toBe(true);
 
-  await page.keyboard.press("t");
+  const workspace = page.locator(".learning-workspace");
   await expect(
-    player.getByRole("button", { name: "Exit theater mode" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    player.getByRole("button", { name: /theater mode/i }),
+  ).toHaveCount(0);
   await page.keyboard.press("t");
-  await expect(
-    player.getByRole("button", { name: "Enter theater mode" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(workspace).not.toHaveClass(/is-theater/);
 
   const shell = page.locator(".video-shell");
   await shell.evaluate((element) => {
@@ -3709,9 +3759,7 @@ test("player shortcuts work page-wide outside editors and mute persists across l
       ),
     )
     .toBe(true);
-  await expect(
-    player.getByRole("button", { name: "Enter theater mode" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(workspace).not.toHaveClass(/is-theater/);
 
   const curriculum = page.getByRole("complementary", {
     name: "Course curriculum",

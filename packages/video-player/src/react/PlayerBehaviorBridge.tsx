@@ -10,6 +10,7 @@ export interface PlayerBehaviorBridgeProps {
   keyboardEnabled?: boolean;
   controlsIdleDelay?: number;
   onToggleTheater?: () => void;
+  seekIntervalSeconds?: number;
 }
 
 export function PlayerBehaviorBridge({
@@ -17,6 +18,7 @@ export function PlayerBehaviorBridge({
   keyboardEnabled,
   onToggleTheater,
   rootRef,
+  seekIntervalSeconds,
   shortcuts,
 }: PlayerBehaviorBridgeProps) {
   const { controlsVisible, playing } = usePlayerState(
@@ -32,6 +34,7 @@ export function PlayerBehaviorBridge({
     enabled: keyboardEnabled,
     onToggleTheater,
     rootRef,
+    seekIntervalSeconds,
     shortcuts,
   });
   useControlsVisibility({ idleDelay: controlsIdleDelay, rootRef });

@@ -1,13 +1,14 @@
 import {
   ArrowLeft,
   CaretRight,
-  Gear,
+  GearSix,
   ListBullets,
+  PictureInPicture,
   SlidersHorizontal,
   SpeakerHigh,
   Speedometer,
-  Subtitles,
 } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { formatMediaTime } from "../accessibility/formatMediaTime";
 import {
   DEFAULT_PLAYBACK_RATES,
@@ -16,22 +17,50 @@ import {
 } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
-import { PlayerMenuItem, PopoverMenu } from "./menus";
+import {
+  PlayerMenuItem,
+  PopoverMenu,
+  type PopoverMenuMobilePresentation,
+} from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
 
-export function SettingsMenu() {
+export interface SettingsMenuProps {
+  includePictureInPicture?: boolean;
+  mobilePresentation?: PopoverMenuMobilePresentation;
+  /** Application-specific settings appended to the main settings view. */
+  extraMainItems?: ReactNode;
+  triggerClassName?: string;
+}
+
+export function SettingsMenu({
+  extraMainItems,
+  includePictureInPicture = false,
+  mobilePresentation = "popover",
+  triggerClassName,
+}: SettingsMenuProps = {}) {
   const controller = usePlayerController();
-  const { activeChapterId, chapters, media, view } = usePlayerState(
+  const {
+    activeChapterId,
+    chapters,
+    media,
+    pictureInPictureActive,
+    pictureInPictureAvailable,
+    view,
+  } = usePlayerState(
     (snapshot) => ({
       activeChapterId: snapshot.activeChapterId,
       chapters: snapshot.chapters,
       media: snapshot.media,
+      pictureInPictureActive: snapshot.ui.pictureInPicture,
+      pictureInPictureAvailable: snapshot.capabilities.pictureInPicture,
       view: snapshot.ui.settingsView,
     }),
     (left, right) =>
       left.activeChapterId === right.activeChapterId &&
       left.chapters === right.chapters &&
       left.media === right.media &&
+      left.pictureInPictureActive === right.pictureInPictureActive &&
+      left.pictureInPictureAvailable === right.pictureInPictureAvailable &&
       left.view === right.view,
   );
 
@@ -39,9 +68,6 @@ export function SettingsMenu() {
     ? "Auto"
     : (media.qualities.find((item) => item.id === media.selectedQualityId)
         ?.label ?? "Auto");
-  const captionLabel =
-    media.textTracks.find((item) => item.id === media.selectedTextTrackId)
-      ?.label ?? "Off";
   const audioLabel =
     media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
       ?.label ??
@@ -49,26 +75,38 @@ export function SettingsMenu() {
     "Default";
 
   const openView = (next: typeof view) => controller.setSettingsView(next);
+  const settingsOpen = view !== "closed";
+  const triggerAppearanceClass =
+    triggerClassName ?? "!h-9 !bg-transparent !px-3 hover:!bg-white/12";
 
   return (
     <PopoverMenu
       label="Settings"
       menuLabel="Video settings"
+      mobilePresentation={mobilePresentation}
       align="end"
       side="top"
-      triggerClassName="player-control !size-9 !min-h-0 !border-0 !bg-transparent !p-0 hover:!bg-white/12"
-      open={view !== "closed"}
+      triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
+      open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
-      trigger={<Gear size={22} />}
+      trigger={
+        <GearSix
+          data-settings-icon="gear-six"
+          data-settings-icon-state={settingsOpen ? "open" : "closed"}
+          size={22}
+          className="origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none"
+          style={{ transform: `rotate(${settingsOpen ? 90 : 30}deg)` }}
+        />
+      }
     >
       {({ close }) => (
-        <div className="min-w-60">
+        <div className="min-w-60 [&_button]:min-h-11 sm:[&_button]:min-h-10">
           {view !== "main" ? (
             <button
               type="button"
               role="menuitem"
               tabIndex={-1}
-              className="mb-1 flex min-h-10 w-full items-center gap-2 border-b border-white/10 px-3 pb-2 text-left text-sm font-semibold text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+              className="mb-1 flex min-h-10 w-full items-center gap-2 border-b border-[color-mix(in_srgb,var(--text,#fff)_10%,transparent)] px-3 pb-2 text-left text-sm font-semibold text-(--text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--text)"
               onClick={() => openView("main")}
             >
               <ArrowLeft size={18} />
@@ -76,11 +114,9 @@ export function SettingsMenu() {
                 ? "Playback speed"
                 : view === "quality"
                   ? "Quality"
-                  : view === "captions"
-                    ? "Captions"
-                    : view === "audio"
-                      ? "Audio"
-                      : "Chapters"}
+                  : view === "audio"
+                    ? "Audio"
+                    : "Chapters"}
             </button>
           ) : null}
 
@@ -101,14 +137,6 @@ export function SettingsMenu() {
                 leading={<Speedometer size={19} />}
                 trailing={<CaretRight size={17} />}
                 onClick={() => openView("playback-rate")}
-              />
-              <PlayerMenuItem
-                data-menu-keep-open=""
-                label="Captions"
-                description={captionLabel}
-                leading={<Subtitles size={19} />}
-                trailing={<CaretRight size={17} />}
-                onClick={() => openView("captions")}
               />
               {media.audioTracks.length > 1 ? (
                 <PlayerMenuItem
@@ -132,6 +160,26 @@ export function SettingsMenu() {
                   onClick={() => openView("chapters")}
                 />
               ) : null}
+              {includePictureInPicture && pictureInPictureAvailable ? (
+                <PlayerMenuItem
+                  label={
+                    pictureInPictureActive
+                      ? "Exit picture in picture"
+                      : "Picture in picture"
+                  }
+                  description={
+                    pictureInPictureActive
+                      ? "Playing above other apps"
+                      : "Play above other apps"
+                  }
+                  leading={<PictureInPicture size={19} />}
+                  onClick={() => {
+                    void controller.togglePictureInPicture();
+                    close();
+                  }}
+                />
+              ) : null}
+              {extraMainItems}
             </>
           ) : null}
 
@@ -189,31 +237,6 @@ export function SettingsMenu() {
                 playbackRate={media.playbackRate}
                 onRateChange={(rate) => controller.setPlaybackRate(rate)}
               />
-            </>
-          ) : null}
-
-          {view === "captions" ? (
-            <>
-              <PlayerMenuItem
-                label="Off"
-                selected={media.selectedTextTrackId === null}
-                onClick={() => {
-                  controller.selectTextTrack(null);
-                  close();
-                }}
-              />
-              {media.textTracks.map((track) => (
-                <PlayerMenuItem
-                  key={track.id}
-                  label={track.label || track.language}
-                  description={track.language}
-                  selected={track.id === media.selectedTextTrackId}
-                  onClick={() => {
-                    controller.selectTextTrack(track.id);
-                    close();
-                  }}
-                />
-              ))}
             </>
           ) : null}
 

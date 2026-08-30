@@ -4,6 +4,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
 import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
+import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
 import { CurriculumTestControls } from "./CurriculumTestControls";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
@@ -11,6 +12,10 @@ import {
   LEARNING_PREFERENCES_KEY,
   LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_REMINDER_DAYS,
+  LEARNING_SEEK_INTERVAL_MAX,
+  LEARNING_SEEK_INTERVAL_MIN,
+  LEARNING_SEEK_INTERVAL_PRESETS,
+  normalizeLearningSeekInterval,
   readLearningPreferences,
 } from "./settingsPreferences";
 import type { LearningPreferences } from "./settingsPreferences";
@@ -21,6 +26,7 @@ export function LearningSettings() {
     reminderDays: [...LEARNING_PREFERENCE_DEFAULTS.reminderDays],
   });
   const [storageReady, setStorageReady] = useState(false);
+  const [customSeekInterval, setCustomSeekInterval] = useState(false);
   const update = (next: Partial<LearningPreferences>) =>
     setPreferences((current) => ({ ...current, ...next }));
   const toggleReminderDay = (day: string) =>
@@ -29,9 +35,28 @@ export function LearningSettings() {
         ? preferences.reminderDays.filter((item) => item !== day)
         : [...preferences.reminderDays, day],
     });
+  const updateSeekInterval = (value: string) => {
+    const isCustom = value === "custom";
+    setCustomSeekInterval(isCustom);
+    update({
+      seekIntervalSeconds: isCustom
+        ? LEARNING_SEEK_INTERVAL_PRESETS.includes(
+            preferences.seekIntervalSeconds as (typeof LEARNING_SEEK_INTERVAL_PRESETS)[number],
+          )
+          ? 20
+          : preferences.seekIntervalSeconds
+        : normalizeLearningSeekInterval(value),
+    });
+  };
 
   useEffect(() => {
-    setPreferences(readLearningPreferences());
+    const storedPreferences = readLearningPreferences();
+    setPreferences(storedPreferences);
+    setCustomSeekInterval(
+      !LEARNING_SEEK_INTERVAL_PRESETS.includes(
+        storedPreferences.seekIntervalSeconds as (typeof LEARNING_SEEK_INTERVAL_PRESETS)[number],
+      ),
+    );
     setStorageReady(true);
   }, []);
 
@@ -107,6 +132,54 @@ export function LearningSettings() {
                 ["2", "2×"],
               ]}
             />
+            <LearningSelectRow
+              id="learning-seek-interval"
+              label="Skip interval"
+              note="Used by Left/Right arrows and double-tap seeking."
+              value={
+                customSeekInterval
+                  ? "custom"
+                  : String(preferences.seekIntervalSeconds)
+              }
+              onChange={updateSeekInterval}
+              options={[
+                ["5", "5 seconds"],
+                ["10", "10 seconds (Default)"],
+                ["15", "15 seconds"],
+                ["30", "30 seconds"],
+                ["60", "60 seconds"],
+                ["custom", "Custom…"],
+              ]}
+            />
+            {customSeekInterval ? (
+              <div className="settings-learning-custom-range">
+                <span className="settings-learning-custom-range__copy">
+                  <strong>Custom skip interval</strong>
+                  <small>Choose any value from 5 seconds to 1 minute.</small>
+                </span>
+                <div className="settings-learning-custom-range__control">
+                  <AppSlider
+                    id="learning-custom-seek-interval"
+                    min={LEARNING_SEEK_INTERVAL_MIN}
+                    max={LEARNING_SEEK_INTERVAL_MAX}
+                    step={1}
+                    value={preferences.seekIntervalSeconds}
+                    aria-label="Custom skip interval in seconds"
+                    aria-valuetext={`${preferences.seekIntervalSeconds} seconds`}
+                    onChange={(event) =>
+                      update({
+                        seekIntervalSeconds: normalizeLearningSeekInterval(
+                          event.currentTarget.value,
+                        ),
+                      })
+                    }
+                  />
+                  <output htmlFor="learning-custom-seek-interval">
+                    {preferences.seekIntervalSeconds}s
+                  </output>
+                </div>
+              </div>
+            ) : null}
             <LearningToggleRow
               label="Resume from last position"
               note="Continue videos from where you stopped."
