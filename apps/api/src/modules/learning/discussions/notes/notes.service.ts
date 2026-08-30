@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  CourseNotesOverviewResponse,
   CreateLearningNoteRequest,
   LearningNote,
   LearningNotesListResponse,
@@ -21,6 +22,7 @@ export interface NotesService {
       title?: string;
       content: string;
       timestampSeconds?: number | null;
+      visibility?: "public" | "unlisted" | "private";
       tags?: string[];
     },
   ): Promise<LearningNote>;
@@ -36,6 +38,12 @@ export interface NotesService {
     userId: string,
     query: ListLearningNotesQuery,
   ): Promise<LearningNotesListResponse>;
+
+  getCourseNotesOverview(
+    db: DatabaseExecutor,
+    courseId: string,
+    userId: string,
+  ): Promise<CourseNotesOverviewResponse>;
 
   updateNote(
     db: DatabaseExecutor,
@@ -65,13 +73,20 @@ export function createNotesService(
       userId: row.userId,
       courseId: row.courseId,
       courseTitle: row.courseTitle,
+      sectionId: row.sectionId,
+      sectionTitle: row.sectionTitle,
+      sectionPosition: row.sectionPosition !== undefined ? Number(row.sectionPosition) : undefined,
       lessonId: row.lessonId,
       lessonTitle: row.lessonTitle,
+      lessonPosition: row.lessonPosition !== undefined ? Number(row.lessonPosition) : undefined,
       timestampSeconds: row.timestampSeconds ?? null,
       title: row.title ?? null,
       content: row.content,
       plainText: row.plainText,
+      visibility: row.visibility || "private",
       tags: row.tags || [],
+      likesCount: Number(row.likesCount || 0),
+      repliesCount: Number(row.repliesCount || 0),
       createdAt:
         row.createdAt instanceof Date
           ? row.createdAt.toISOString()
@@ -153,6 +168,75 @@ export function createNotesService(
         notes,
         nextCursor: null,
         totalCount: notes.length,
+      };
+    },
+
+    async getCourseNotesOverview(db, courseId, userId) {
+      const overview = await notesRepo.getCourseNotesOverview(db, courseId, userId);
+      if (!overview.course) {
+        throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
+      }
+
+      const allNotes = overview.notes.map(mapNoteRow);
+      const notesByLessonId = new Map<string, LearningNote[]>();
+
+      for (const note of allNotes) {
+        const list = notesByLessonId.get(note.lessonId) || [];
+        list.push(note);
+        notesByLessonId.set(note.lessonId, list);
+      }
+
+      const lessonsBySectionId = new Map<string, any[]>();
+      const unassignedLessons: any[] = [];
+
+      for (const lesson of overview.lessons) {
+        const lessonNotes = notesByLessonId.get(lesson.id) || [];
+        const lessonItem = {
+          lessonId: lesson.id,
+          lessonTitle: lesson.title,
+          lessonPosition: Number(lesson.position || 0),
+          notesCount: lessonNotes.length,
+          notes: lessonNotes,
+        };
+
+        if (lesson.sectionId) {
+          const list = lessonsBySectionId.get(lesson.sectionId) || [];
+          list.push(lessonItem);
+          lessonsBySectionId.set(lesson.sectionId, list);
+        } else {
+          unassignedLessons.push(lessonItem);
+        }
+      }
+
+      const sections = overview.sections.map((sec) => {
+        const lessons = lessonsBySectionId.get(sec.id) || [];
+        const sectionNotesCount = lessons.reduce((sum, l) => sum + l.notesCount, 0);
+
+        return {
+          sectionId: sec.id,
+          sectionTitle: sec.title,
+          sectionPosition: Number(sec.position || 0),
+          notesCount: sectionNotesCount,
+          lessons,
+        };
+      });
+
+      if (unassignedLessons.length > 0) {
+        const unassignedNotesCount = unassignedLessons.reduce((sum, l) => sum + l.notesCount, 0);
+        sections.push({
+          sectionId: "00000000-0000-0000-0000-000000000000",
+          sectionTitle: "General Lessons",
+          sectionPosition: sections.length + 1,
+          notesCount: unassignedNotesCount,
+          lessons: unassignedLessons,
+        });
+      }
+
+      return {
+        courseId: overview.course.id,
+        courseTitle: overview.course.title,
+        totalNotesCount: allNotes.length,
+        sections,
       };
     },
 

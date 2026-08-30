@@ -64,8 +64,20 @@ export function createThreadsService(
     return academy?.id || "00000000-0000-0000-0000-000000000000";
   }
 
-  function mapThreadRow(row: any, currentUserId?: string, attachments: any[] = []): LearningThread {
+  function mapThreadRow(
+    row: any,
+    currentUserId?: string,
+    attachments: any[] = [],
+    engagements?: {
+      likedThreadIds?: Set<string>;
+      bookmarkedThreadIds?: Set<string>;
+      followedThreadIds?: Set<string>;
+    },
+  ): LearningThread {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
+    const isLiked = engagements?.likedThreadIds ? engagements.likedThreadIds.has(row.id) : false;
+    const isBookmarked = engagements?.bookmarkedThreadIds ? engagements.bookmarkedThreadIds.has(row.id) : false;
+    const isFollowing = engagements?.followedThreadIds ? engagements.followedThreadIds.has(row.id) : false;
 
     return {
       id: row.id,
@@ -77,7 +89,7 @@ export function createThreadsService(
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username: (row.authorEmail || "user").split("@")[0],
+        username: (row.authorUsername || row.authorEmail || "user").split("@")[0],
         avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
         role: "Student",
       },
@@ -99,11 +111,11 @@ export function createThreadsService(
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
-        metadata: a.metadata ? JSON.parse(a.metadata) : null,
+        metadata: a.metadata ? (typeof a.metadata === "string" ? JSON.parse(a.metadata) : a.metadata) : null,
       })),
-      isLiked: false,
-      isBookmarked: false,
-      isFollowing: false,
+      isLiked,
+      isBookmarked,
+      isFollowing,
       isOwn,
       createdAt:
         row.createdAt instanceof Date
@@ -145,35 +157,47 @@ export function createThreadsService(
       }
 
       // Check suspension with scope
-      const threadKind = input.kind || "comment";
+      const threadKind = input.kind === "qna" ? "question" : (input.kind || "comment");
       const requiredScopes: ("commenting" | "qa" | "all")[] =
         threadKind === "comment" ? ["commenting", "all"] : ["qa", "all"];
 
-      const activeSuspension = await db
-        .selectFrom("learning_suspensions")
-        .selectAll()
-        .where("user_id", "=", input.userId)
-        .where("is_active", "=", true)
-        .where("scope", "in", requiredScopes)
-        .where((eb) =>
-          eb.or([
-            eb("course_id", "is", null),
-            eb("course_id", "=", input.courseId),
-          ]),
-        )
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        )
-        .executeTakeFirst();
+      if (threadKind !== "note") {
+        const activeSuspension = await db
+          .selectFrom("learning_suspensions")
+          .selectAll()
+          .where("user_id", "=", input.userId)
+          .where("is_active", "=", true)
+          .where("scope", "in", requiredScopes)
+          .where((eb) =>
+            eb.or([
+              eb("course_id", "is", null),
+              eb("course_id", "=", input.courseId),
+            ]),
+          )
+          .where((eb) =>
+            eb.or([
+              eb("expires_at", "is", null),
+              eb("expires_at", ">", new Date()),
+            ]),
+          )
+          .executeTakeFirst();
 
-      if (activeSuspension) {
+        if (activeSuspension) {
+          throw httpError(
+            403,
+            "PARTICIPATION_SUSPENDED",
+            `Your participation for ${activeSuspension.scope} is suspended. Reason: ${activeSuspension.reason}`,
+          );
+        }
+      }
+
+      // Validate visibility rules: comments & questions cannot be private
+      const visibility = input.visibility || "public";
+      if ((threadKind === "comment" || threadKind === "question") && visibility === "private") {
         throw httpError(
-          403,
-          "PARTICIPATION_SUSPENDED",
-          `Your participation for ${activeSuspension.scope} is suspended. Reason: ${activeSuspension.reason}`,
+          400,
+          "INVALID_VISIBILITY",
+          "Comments and Q&A questions can only be 'public' or 'unlisted'.",
         );
       }
 
@@ -192,7 +216,7 @@ export function createThreadsService(
         content: input.content,
         plainText,
         timestampSeconds: input.timestampSeconds ?? null,
-        visibility: input.visibility || "public",
+        visibility,
       });
 
       // Attach any verified attachments owned by the caller
@@ -238,6 +262,11 @@ export function createThreadsService(
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
+      // Check private visibility permissions
+      if (row.visibility === "private" && row.userId !== currentUserId) {
+        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+      }
+
       const attachments = await db
         .selectFrom("learning_attachments")
         .selectAll()
@@ -245,13 +274,90 @@ export function createThreadsService(
         .where("target_id", "=", threadId)
         .execute();
 
-      return mapThreadRow(row, currentUserId, attachments);
+      let isLiked = false;
+      let isBookmarked = false;
+      let isFollowing = false;
+
+      if (currentUserId) {
+        const [like, bookmark, follow] = await Promise.all([
+          db
+            .selectFrom("learning_likes")
+            .select("id")
+            .where("user_id", "=", currentUserId)
+            .where("target_type", "=", "thread")
+            .where("target_id", "=", threadId)
+            .executeTakeFirst(),
+          db
+            .selectFrom("learning_bookmarks")
+            .select("id")
+            .where("user_id", "=", currentUserId)
+            .where("thread_id", "=", threadId)
+            .executeTakeFirst(),
+          db
+            .selectFrom("learning_follows")
+            .select("id")
+            .where("user_id", "=", currentUserId)
+            .where("thread_id", "=", threadId)
+            .executeTakeFirst(),
+        ]);
+
+        isLiked = Boolean(like);
+        isBookmarked = Boolean(bookmark);
+        isFollowing = Boolean(follow);
+      }
+
+      const mapped = mapThreadRow(row, currentUserId, attachments);
+      mapped.isLiked = isLiked;
+      mapped.isBookmarked = isBookmarked;
+      mapped.isFollowing = isFollowing;
+
+      return mapped;
     },
 
     async listThreads(db, query) {
       const academyId = await resolveAcademyId(db);
       const rows = await threadsRepo.listThreads(db, { ...query, academyId });
-      const threads = rows.map((row) => mapThreadRow(row, query.currentUserId));
+
+      let likedThreadIds = new Set<string>();
+      let bookmarkedThreadIds = new Set<string>();
+      let followedThreadIds = new Set<string>();
+
+      if (query.currentUserId && rows.length > 0) {
+        const threadIds = rows.map((r) => r.id);
+        const [likes, bookmarks, follows] = await Promise.all([
+          db
+            .selectFrom("learning_likes")
+            .select("target_id")
+            .where("user_id", "=", query.currentUserId)
+            .where("target_type", "=", "thread")
+            .where("target_id", "in", threadIds)
+            .execute(),
+          db
+            .selectFrom("learning_bookmarks")
+            .select("thread_id")
+            .where("user_id", "=", query.currentUserId)
+            .where("thread_id", "in", threadIds)
+            .execute(),
+          db
+            .selectFrom("learning_follows")
+            .select("thread_id")
+            .where("user_id", "=", query.currentUserId)
+            .where("thread_id", "in", threadIds)
+            .execute(),
+        ]);
+
+        likedThreadIds = new Set(likes.map((l) => l.target_id));
+        bookmarkedThreadIds = new Set(bookmarks.map((b) => b.thread_id));
+        followedThreadIds = new Set(follows.map((f) => f.thread_id));
+      }
+
+      const threads = rows.map((row) =>
+        mapThreadRow(row, query.currentUserId, [], {
+          likedThreadIds,
+          bookmarkedThreadIds,
+          followedThreadIds,
+        }),
+      );
 
       return {
         threads,

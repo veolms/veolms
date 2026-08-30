@@ -23,6 +23,7 @@ export interface ThreadsRepository {
       plainText: string;
       timestampSeconds: number | null;
       visibility: DiscussionVisibility;
+      tags?: string[];
     },
   ): Promise<void>;
 
@@ -90,7 +91,7 @@ export function createThreadsRepository(): ThreadsRepository {
           lesson_id: thread.lessonId || null,
           assignment_id: thread.assignmentId || null,
           user_id: thread.userId,
-          kind: thread.kind,
+          kind: thread.kind === "qna" ? "question" : thread.kind,
           title: thread.title,
           content: thread.content,
           plain_text: thread.plainText,
@@ -183,12 +184,38 @@ export function createThreadsRepository(): ThreadsRepository {
       }
 
       if (options.kind && options.kind !== "all") {
-        query = query.where("t.kind", "=", options.kind);
+        const normalizedKind = options.kind === "qna" ? "question" : options.kind;
+        query = query.where("t.kind", "=", normalizedKind);
       }
 
-      if (options.visibility) {
-        query = query.where("t.visibility", "=", options.visibility);
-      } else if (!options.currentUserId) {
+      // Visibility and ownership rules
+      if (options.mine || options.sort === "me") {
+        if (options.currentUserId) {
+          query = query.where("t.user_id", "=", options.currentUserId);
+        } else {
+          // Unauthenticated caller filtering by mine returns empty set
+          query = query.where(sql<boolean>`1 = 0`);
+        }
+      } else if (options.currentUserId) {
+        if (options.visibility === "private") {
+          query = query.where("t.visibility", "=", "private").where("t.user_id", "=", options.currentUserId);
+        } else if (options.visibility === "unlisted") {
+          query = query.where("t.visibility", "=", "unlisted");
+        } else if (options.visibility === "public") {
+          query = query.where("t.visibility", "=", "public");
+        } else {
+          // Return public items, or user's own items (including unlisted and private)
+          query = query.where((eb) =>
+            eb.or([
+              eb("t.visibility", "=", "public"),
+              eb.and([
+                eb("t.visibility", "in", ["private", "unlisted"]),
+                eb("t.user_id", "=", options.currentUserId!),
+              ]),
+            ]),
+          );
+        }
+      } else {
         query = query.where("t.visibility", "=", "public");
       }
 
@@ -212,13 +239,16 @@ export function createThreadsRepository(): ThreadsRepository {
           .where("t.accepted_answer_id", "is", null);
       }
 
-      if (options.sort === "replies") {
+      if (options.sort === "highest_engagement" || options.sort === "popular") {
+        query = query
+          .orderBy(sql`(${sql.ref("t.likes_count")} + ${sql.ref("t.replies_count")})`, "desc")
+          .orderBy("t.created_at", "desc");
+      } else if (options.sort === "replies") {
         query = query.orderBy("t.replies_count", "desc").orderBy("t.created_at", "desc");
-      } else if (options.sort === "popular") {
-        query = query.orderBy("t.likes_count", "desc").orderBy("t.created_at", "desc");
       } else if (options.sort === "activity") {
         query = query.orderBy("t.updated_at", "desc");
       } else {
+        // "latest", "recent", "me", default
         query = query.orderBy("t.created_at", "desc");
       }
 

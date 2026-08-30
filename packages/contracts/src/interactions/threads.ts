@@ -1,15 +1,32 @@
 import { z } from "zod";
 
-export const discussionEntryKindSchema = z.enum(["comment", "question"]);
+export const discussionEntryKindSchema = z.enum([
+  "comment",
+  "question",
+  "note",
+  "qna",
+]);
 export type DiscussionEntryKind = z.infer<typeof discussionEntryKindSchema>;
 
-export const discussionVisibilitySchema = z.enum(["public", "unlisted"]);
+export const discussionVisibilitySchema = z.enum([
+  "public",
+  "unlisted",
+  "private",
+]);
 export type DiscussionVisibility = z.infer<typeof discussionVisibilitySchema>;
 
 export const interactionStatusSchema = z.enum(["active", "hidden", "deleted"]);
 export type InteractionStatus = z.infer<typeof interactionStatusSchema>;
 
-export const threadSortSchema = z.enum(["latest", "activity", "replies", "popular"]);
+export const threadSortSchema = z.enum([
+  "latest",
+  "recent",
+  "activity",
+  "replies",
+  "popular",
+  "highest_engagement",
+  "me",
+]);
 export type ThreadSort = z.infer<typeof threadSortSchema>;
 
 export const questionFilterStatusSchema = z.enum(["all", "answered", "mentioned", "solved", "open"]);
@@ -56,6 +73,7 @@ export const learningThreadSchema = z.object({
   acceptedAnswerId: z.uuid().nullable().optional(),
   likesCount: z.number().int().nonnegative().default(0),
   repliesCount: z.number().int().nonnegative().default(0),
+  tags: z.array(z.string()).optional(),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
   isBookmarked: z.boolean().optional(),
@@ -66,20 +84,39 @@ export const learningThreadSchema = z.object({
 });
 export type LearningThread = z.infer<typeof learningThreadSchema>;
 
-export const createLearningThreadRequestSchema = z.object({
-  courseId: z.uuid(),
-  lessonId: z.uuid().optional(),
-  assignmentId: z.uuid().optional(),
-  kind: discussionEntryKindSchema.default("comment"),
-  title: z.string().max(255).optional(),
-  content: z.string().min(1).max(20000),
-  timestampSeconds: z.number().int().nonnegative().nullable().optional(),
-  visibility: discussionVisibilitySchema.default("public"),
-  attachmentIds: z.array(z.uuid()).optional(),
-}).refine(
-  (data) => (data.lessonId && !data.assignmentId) || (!data.lessonId && data.assignmentId) || (!data.lessonId && !data.assignmentId),
-  { message: "Specify either lessonId or assignmentId, not both." },
-);
+export const createLearningThreadRequestSchema = z
+  .object({
+    courseId: z.uuid(),
+    lessonId: z.uuid().optional(),
+    assignmentId: z.uuid().optional(),
+    kind: discussionEntryKindSchema.default("comment"),
+    title: z.string().max(255).optional(),
+    content: z.string().min(1).max(20000),
+    timestampSeconds: z.number().int().nonnegative().nullable().optional(),
+    visibility: discussionVisibilitySchema.default("public"),
+    attachmentIds: z.array(z.uuid()).optional(),
+    tags: z.array(z.string().min(1).max(50)).optional(),
+  })
+  .refine(
+    (data) =>
+      (data.lessonId && !data.assignmentId) ||
+      (!data.lessonId && data.assignmentId) ||
+      (!data.lessonId && !data.assignmentId),
+    { message: "Specify either lessonId or assignmentId, not both." },
+  )
+  .refine(
+    (data) => {
+      const normalized = data.kind === "qna" ? "question" : data.kind;
+      if (normalized === "comment" || normalized === "question") {
+        return data.visibility === "public" || data.visibility === "unlisted";
+      }
+      return true;
+    },
+    {
+      message:
+        "Comments and Q&A can only be 'public' or 'unlisted'. Notes can be 'public', 'unlisted', or 'private'.",
+    },
+  );
 export type CreateLearningThreadRequest = z.infer<
   typeof createLearningThreadRequestSchema
 >;
@@ -89,13 +126,14 @@ export const updateLearningThreadRequestSchema = z.object({
   content: z.string().min(1).max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.optional(),
+  tags: z.array(z.string().min(1).max(50)).optional(),
 });
 export type UpdateLearningThreadRequest = z.infer<
   typeof updateLearningThreadRequestSchema
 >;
 
 export const listLearningThreadsQuerySchema = z.object({
-  kind: z.enum(["all", "comment", "question"]).default("all"),
+  kind: z.enum(["all", "comment", "question", "note", "qna"]).default("all"),
   courseId: z.uuid().optional(),
   lessonId: z.uuid().optional(),
   assignmentId: z.uuid().optional(),
@@ -103,6 +141,7 @@ export const listLearningThreadsQuerySchema = z.object({
   status: questionFilterStatusSchema.default("all"),
   visibility: discussionVisibilitySchema.optional(),
   sort: threadSortSchema.default("latest"),
+  mine: z.coerce.boolean().optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

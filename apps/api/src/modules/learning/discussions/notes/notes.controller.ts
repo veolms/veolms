@@ -23,6 +23,11 @@ export interface NotesController {
     reply: FastifyReply,
   ): Promise<void>;
 
+  getCourseNotesOverview(
+    request: FastifyRequest<{ Params: { courseId: string } }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
   updateNote(
     request: FastifyRequest<{
       Params: { noteId: string };
@@ -70,6 +75,18 @@ export function createNotesController({
       const query = request.query;
 
       const result = await service.listNotes(database, user.id, query);
+      reply.status(200).send(result);
+    },
+
+    async getCourseNotesOverview(request, reply) {
+      const user = request.user!;
+      const { courseId } = request.params;
+
+      const result = await service.getCourseNotesOverview(
+        database,
+        courseId,
+        user.id,
+      );
       reply.status(200).send(result);
     },
 

@@ -21,6 +21,8 @@ export interface RepliesService {
       userId: string;
       content: string;
       parentReplyId?: string | null;
+      replyToReplyId?: string | null;
+      replyToUserId?: string | null;
       timestampSeconds?: number | null;
       attachmentIds?: string[];
     },
@@ -63,18 +65,38 @@ export function createRepliesService({
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
 }): RepliesService {
-  function mapReplyRow(row: any, currentUserId?: string, attachments: any[] = []): LearningReply {
+  function mapReplyRow(
+    row: any,
+    currentUserId?: string,
+    attachments: any[] = [],
+    likedReplyIds?: Set<string>,
+  ): LearningReply {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
+    const isLiked = likedReplyIds ? likedReplyIds.has(row.id) : false;
+
+    const repliedTo =
+      row.replyToReplyId || row.replyToUserId
+        ? {
+            id: row.replyToReplyId || row.parentReplyId || row.id,
+            userId: row.replyToUserId || row.userId,
+            username: (row.replyToUsername || "user").split("@")[0],
+            displayName: row.replyToDisplayName || "Learner",
+            textSnippet: row.replyToContent ? row.replyToContent.slice(0, 120) : undefined,
+          }
+        : null;
 
     return {
       id: row.id,
       threadId: row.threadId,
       parentReplyId: row.parentReplyId ?? null,
+      replyToReplyId: row.replyToReplyId ?? null,
+      replyToUserId: row.replyToUserId ?? null,
+      repliedTo,
       userId: row.userId,
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username: (row.authorEmail || "user").split("@")[0],
+        username: (row.authorUsername || row.authorEmail || "user").split("@")[0],
         avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
         role: "Student",
       },
@@ -91,9 +113,9 @@ export function createRepliesService({
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
-        metadata: a.metadata ? JSON.parse(a.metadata) : null,
+        metadata: a.metadata ? (typeof a.metadata === "string" ? JSON.parse(a.metadata) : a.metadata) : null,
       })),
-      isLiked: false,
+      isLiked,
       isOwn,
       createdAt:
         row.createdAt instanceof Date
@@ -122,51 +144,51 @@ export function createRepliesService({
         );
       }
 
-      // 2. Enforce 1-level reply nesting
-      if (input.parentReplyId) {
-        const parent = await repliesRepo.findReplyById(db, input.parentReplyId);
-        if (!parent || parent.threadId !== input.threadId) {
-          throw httpError(400, "INVALID_PARENT_REPLY", "Parent reply does not belong to this thread");
-        }
+      // 2. Resolve replyTo target for quoting / flat hierarchy
+      let targetReplyId = input.replyToReplyId || input.parentReplyId || null;
+      let targetUserId = input.replyToUserId || null;
 
-        if (parent.parentReplyId !== null) {
-          throw httpError(
-            400,
-            "MAX_NESTING_EXCEEDED",
-            "Nested replies are limited to 1 level. Reply directly to the root comment or answer.",
-          );
+      if (targetReplyId) {
+        const targetReply = await repliesRepo.findReplyById(db, targetReplyId);
+        if (!targetReply || targetReply.threadId !== input.threadId) {
+          throw httpError(400, "INVALID_PARENT_REPLY", "Referenced reply does not belong to this thread");
+        }
+        if (!targetUserId) {
+          targetUserId = targetReply.userId;
         }
       }
 
-      // 3. Check suspension with scope
-      const requiredScopes: ("commenting" | "qa" | "all")[] =
-        thread.kind === "comment" ? ["commenting", "all"] : ["qa", "all"];
-      const activeSuspension = await db
-        .selectFrom("learning_suspensions")
-        .selectAll()
-        .where("user_id", "=", input.userId)
-        .where("is_active", "=", true)
-        .where("scope", "in", requiredScopes)
-        .where((eb) =>
-          eb.or([
-            eb("course_id", "is", null),
-            eb("course_id", "=", thread.courseId),
-          ]),
-        )
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        )
-        .executeTakeFirst();
+      // 3. Check suspension with scope (skip for notes)
+      if (thread.kind !== "note") {
+        const requiredScopes: ("commenting" | "qa" | "all")[] =
+          thread.kind === "comment" ? ["commenting", "all"] : ["qa", "all"];
+        const activeSuspension = await db
+          .selectFrom("learning_suspensions")
+          .selectAll()
+          .where("user_id", "=", input.userId)
+          .where("is_active", "=", true)
+          .where("scope", "in", requiredScopes)
+          .where((eb) =>
+            eb.or([
+              eb("course_id", "is", null),
+              eb("course_id", "=", thread.courseId),
+            ]),
+          )
+          .where((eb) =>
+            eb.or([
+              eb("expires_at", "is", null),
+              eb("expires_at", ">", new Date()),
+            ]),
+          )
+          .executeTakeFirst();
 
-      if (activeSuspension) {
-        throw httpError(
-          403,
-          "PARTICIPATION_SUSPENDED",
-          `Your participation is suspended. Reason: ${activeSuspension.reason}`,
-        );
+        if (activeSuspension) {
+          throw httpError(
+            403,
+            "PARTICIPATION_SUSPENDED",
+            `Your participation is suspended. Reason: ${activeSuspension.reason}`,
+          );
+        }
       }
 
       const id = crypto.randomUUID();
@@ -176,6 +198,8 @@ export function createRepliesService({
         id,
         threadId: input.threadId,
         parentReplyId: input.parentReplyId || null,
+        replyToReplyId: targetReplyId,
+        replyToUserId: targetUserId,
         userId: input.userId,
         content: input.content,
         plainText,
@@ -183,6 +207,46 @@ export function createRepliesService({
       });
 
       await threadsRepo.incrementRepliesCount(db, input.threadId, 1);
+
+      // Extract @mentions from content and save to learning_mentions
+      const mentionMatches = input.content.match(/@([a-zA-Z0-9_-]+)/g);
+      if (mentionMatches && mentionMatches.length > 0) {
+        const usernames = [...new Set(mentionMatches.map((m) => m.slice(1).toLowerCase()))];
+        for (const u of usernames) {
+          const user = await db
+            .selectFrom("users")
+            .select("id")
+            .where(db.fn("lower", ["username"]), "=", u)
+            .executeTakeFirst();
+
+          if (user && user.id !== input.userId) {
+            await db
+              .insertInto("learning_mentions")
+              .values({
+                id: crypto.randomUUID(),
+                source_type: "reply",
+                source_id: id,
+                mentioned_user_id: user.id,
+              })
+              .onConflict((oc) => oc.columns(["source_type", "source_id", "mentioned_user_id"]).doNothing())
+              .execute();
+          }
+        }
+      }
+
+      // If replying to someone specifically, ensure they are also recorded in mentions if not already
+      if (targetUserId && targetUserId !== input.userId) {
+        await db
+          .insertInto("learning_mentions")
+          .values({
+            id: crypto.randomUUID(),
+            source_type: "reply",
+            source_id: id,
+            mentioned_user_id: targetUserId,
+          })
+          .onConflict((oc) => oc.columns(["source_type", "source_id", "mentioned_user_id"]).doNothing())
+          .execute();
+      }
 
       // Attach any verified attachments owned by the caller
       if (input.attachmentIds && input.attachmentIds.length > 0) {
@@ -219,7 +283,22 @@ export function createRepliesService({
 
     async listReplies(db, threadId, query, currentUserId) {
       const rows = await repliesRepo.listRepliesByThreadId(db, threadId, query);
-      const replies = rows.map((r) => mapReplyRow(r, currentUserId));
+
+      let likedReplyIds = new Set<string>();
+      if (currentUserId && rows.length > 0) {
+        const replyIds = rows.map((r) => r.id);
+        const likes = await db
+          .selectFrom("learning_likes")
+          .select("target_id")
+          .where("user_id", "=", currentUserId)
+          .where("target_type", "=", "reply")
+          .where("target_id", "in", replyIds)
+          .execute();
+
+        likedReplyIds = new Set(likes.map((l) => l.target_id));
+      }
+
+      const replies = rows.map((r) => mapReplyRow(r, currentUserId, [], likedReplyIds));
 
       return {
         replies,

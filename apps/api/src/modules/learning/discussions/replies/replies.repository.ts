@@ -11,6 +11,8 @@ export interface RepliesRepository {
       id: string;
       threadId: string;
       parentReplyId: string | null;
+      replyToReplyId?: string | null;
+      replyToUserId?: string | null;
       userId: string;
       content: string;
       plainText: string;
@@ -56,6 +58,8 @@ export function createRepliesRepository(): RepliesRepository {
           id: reply.id,
           thread_id: reply.threadId,
           parent_reply_id: reply.parentReplyId,
+          reply_to_reply_id: reply.replyToReplyId || null,
+          reply_to_user_id: reply.replyToUserId || null,
           user_id: reply.userId,
           content: reply.content,
           plain_text: reply.plainText,
@@ -71,10 +75,14 @@ export function createRepliesRepository(): RepliesRepository {
       const row = await db
         .selectFrom("learning_replies as r")
         .innerJoin("users as u", "u.id", "r.user_id")
+        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
+        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
         .select([
           "r.id as id",
           "r.thread_id as threadId",
           "r.parent_reply_id as parentReplyId",
+          "r.reply_to_reply_id as replyToReplyId",
+          "r.reply_to_user_id as replyToUserId",
           "r.user_id as userId",
           "r.content as content",
           "r.plain_text as plainText",
@@ -87,6 +95,9 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
+          "ru.username as replyToUsername",
+          "ru.display_name as replyToDisplayName",
+          "rr.plain_text as replyToContent",
         ])
         .where("r.id", "=", replyId)
         .where("r.deleted_at", "is", null)
@@ -99,10 +110,14 @@ export function createRepliesRepository(): RepliesRepository {
       return db
         .selectFrom("learning_replies as r")
         .innerJoin("users as u", "u.id", "r.user_id")
+        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
+        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
         .select([
           "r.id as id",
           "r.thread_id as threadId",
           "r.parent_reply_id as parentReplyId",
+          "r.reply_to_reply_id as replyToReplyId",
+          "r.reply_to_user_id as replyToUserId",
           "r.user_id as userId",
           "r.content as content",
           "r.plain_text as plainText",
@@ -115,6 +130,9 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
+          "ru.username as replyToUsername",
+          "ru.display_name as replyToDisplayName",
+          "rr.plain_text as replyToContent",
         ])
         .where("r.thread_id", "=", threadId)
         .where("r.deleted_at", "is", null)

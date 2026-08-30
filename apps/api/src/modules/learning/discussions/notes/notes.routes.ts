@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  courseNotesOverviewResponseSchema,
   createLearningNoteRequestSchema,
   learningNoteSchema,
   learningNotesListResponseSchema,
@@ -43,6 +44,31 @@ const notesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listNotes,
+  );
+
+  // 1b. GET /courses/:courseId/notes-overview - Get structured notes overview for course navigation
+  app.get(
+    "/courses/:courseId/notes-overview",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "getCourseNotesOverview",
+        tags: ["Learning Notes"],
+        summary: "Get hierarchical course notes organized by section and lesson",
+        params: z.object({
+          courseId: z.uuid(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Hierarchical course notes overview",
+            courseNotesOverviewResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Course not found"),
+        },
+      },
+    },
+    controller.getCourseNotesOverview,
   );
 
   // 2. POST /notes - Create a new note

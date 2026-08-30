@@ -67,6 +67,8 @@ export function createRepliesController({
         userId: user.id,
         content: body.content,
         parentReplyId: body.parentReplyId,
+        replyToReplyId: body.replyToReplyId,
+        replyToUserId: body.replyToUserId,
         timestampSeconds: body.timestampSeconds,
         attachmentIds: body.attachmentIds,
       });

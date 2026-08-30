@@ -22,7 +22,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column
         .notNull()
         .defaultTo("comment")
-        .check(sql`kind IN ('comment', 'question')`),
+        .check(sql`kind IN ('comment', 'question', 'note')`),
     )
     .addColumn("title", "text")
     .addColumn("content", "text", (column) => column.notNull())
@@ -34,7 +34,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column
         .notNull()
         .defaultTo("public")
-        .check(sql`visibility IN ('public', 'unlisted')`),
+        .check(sql`visibility IN ('public', 'unlisted', 'private')`),
     )
     .addColumn("status", "text", (column) =>
       column
@@ -93,6 +93,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("parent_reply_id", "uuid", (column) =>
       column.references("learning_replies.id").onDelete("cascade"),
     )
+    .addColumn("reply_to_reply_id", "uuid", (column) =>
+      column.references("learning_replies.id").onDelete("set null"),
+    )
+    .addColumn("reply_to_user_id", "uuid", (column) =>
+      column.references("users.id").onDelete("set null"),
+    )
     .addColumn("user_id", "uuid", (column) =>
       column.notNull().references("users.id").onDelete("cascade"),
     )
@@ -124,6 +130,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .createIndex("idx_learning_replies_thread_status")
     .on("learning_replies")
     .columns(["thread_id", "status", "created_at"])
+    .execute();
+
+  await database.schema
+    .createIndex("idx_learning_replies_reply_to")
+    .on("learning_replies")
+    .columns(["reply_to_reply_id"])
     .execute();
 
   // Foreign key for accepted_answer_id on learning_threads

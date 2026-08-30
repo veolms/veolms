@@ -1,7 +1,7 @@
 import type { Generated } from "kysely";
 
-export type DiscussionEntryKind = "comment" | "question";
-export type DiscussionVisibility = "public" | "unlisted";
+export type DiscussionEntryKind = "comment" | "question" | "note";
+export type DiscussionVisibility = "public" | "unlisted" | "private";
 export type InteractionStatus = "active" | "hidden" | "deleted";
 export type EngagementTargetType = "thread" | "reply";
 export type AttachmentKind =
@@ -52,6 +52,8 @@ export interface LearningReplyTable {
   id: string;
   thread_id: string;
   parent_reply_id: string | null;
+  reply_to_reply_id: string | null;
+  reply_to_user_id: string | null;
   user_id: string;
   content: string;
   plain_text: string;

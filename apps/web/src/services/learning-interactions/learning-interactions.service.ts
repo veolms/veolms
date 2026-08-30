@@ -65,6 +65,17 @@ export const learningInteractionsService = {
     );
   },
 
+  createThread(
+    courseId: string,
+    lessonId: string,
+    payload: CreateLearningThreadRequest,
+  ): Promise<LearningThread> {
+    return api.post<LearningThread>(
+      `/courses/${courseId}/lessons/${lessonId}/threads`,
+      payload,
+    );
+  },
+
   listAssignmentThreads(
     courseId: string,
     assignmentId: string,
@@ -188,11 +199,23 @@ export const learningInteractionsService = {
     });
   },
 
+  searchMentions(query: string): Promise<UserAutocompleteResponse> {
+    return api.get<UserAutocompleteResponse>("/interactions/users/autocomplete", {
+      params: { q: query },
+    });
+  },
+
   // Notes
   listNotes(query?: ListLearningNotesQuery): Promise<LearningNotesListResponse> {
     return api.get<LearningNotesListResponse>("/notes", {
       params: query,
     });
+  },
+
+  getCourseNotesOverview(
+    courseId: string,
+  ): Promise<any> {
+    return api.get<any>(`/courses/${courseId}/notes-overview`);
   },
 
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
@@ -315,6 +338,12 @@ export const learningInteractionsService = {
 
   // Platform Moderation
   listPlatformReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
+    return api.get<ReportsListResponse>("/moderation/reports", {
+      params: query,
+    });
+  },
+
+  listReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
     return api.get<ReportsListResponse>("/moderation/reports", {
       params: query,
     });

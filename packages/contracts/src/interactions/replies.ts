@@ -5,10 +5,24 @@ import {
   learningThreadAttachmentSummarySchema,
 } from "./threads.ts";
 
+export const learningRepliedToSummarySchema = z.object({
+  id: z.uuid(),
+  userId: z.uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  textSnippet: z.string().optional(),
+});
+export type LearningRepliedToSummary = z.infer<
+  typeof learningRepliedToSummarySchema
+>;
+
 export const learningReplySchema = z.object({
   id: z.uuid(),
   threadId: z.uuid(),
   parentReplyId: z.uuid().nullable().optional(),
+  replyToReplyId: z.uuid().nullable().optional(),
+  replyToUserId: z.uuid().nullable().optional(),
+  repliedTo: learningRepliedToSummarySchema.nullable().optional(),
   userId: z.uuid(),
   author: learningAuthorSchema,
   content: z.string().min(1).max(20000),
@@ -28,6 +42,8 @@ export type LearningReply = z.infer<typeof learningReplySchema>;
 export const createLearningReplyRequestSchema = z.object({
   content: z.string().min(1).max(20000),
   parentReplyId: z.uuid().nullable().optional(),
+  replyToReplyId: z.uuid().nullable().optional(),
+  replyToUserId: z.uuid().nullable().optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   attachmentIds: z.array(z.uuid()).optional(),
 });

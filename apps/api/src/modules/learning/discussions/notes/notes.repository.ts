@@ -33,6 +33,17 @@ export interface NotesRepository {
     options: ListLearningNotesQuery,
   ): Promise<any[]>;
 
+  getCourseNotesOverview(
+    db: DatabaseExecutor,
+    courseId: string,
+    userId: string,
+  ): Promise<{
+    course: { id: string; title: string } | null;
+    sections: any[];
+    lessons: any[];
+    notes: any[];
+  }>;
+
   updateNote(
     db: DatabaseExecutor,
     noteId: string,
@@ -70,13 +81,18 @@ export function createNotesRepository(): NotesRepository {
         .selectFrom("learning_notes as n")
         .innerJoin("courses as c", "c.id", "n.course_id")
         .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
+        .leftJoin("course_sections as s", "s.id", "l.section_id")
         .select([
           "n.id",
           "n.user_id as userId",
           "n.course_id as courseId",
           "c.title as courseTitle",
+          "s.id as sectionId",
+          "s.title as sectionTitle",
+          "s.position as sectionPosition",
           "n.lesson_id as lessonId",
           "l.title as lessonTitle",
+          "l.position as lessonPosition",
           "n.timestamp_seconds as timestampSeconds",
           "n.title",
           "n.content",
@@ -97,13 +113,18 @@ export function createNotesRepository(): NotesRepository {
         .selectFrom("learning_notes as n")
         .innerJoin("courses as c", "c.id", "n.course_id")
         .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
+        .leftJoin("course_sections as s", "s.id", "l.section_id")
         .select([
           "n.id",
           "n.user_id as userId",
           "n.course_id as courseId",
           "c.title as courseTitle",
+          "s.id as sectionId",
+          "s.title as sectionTitle",
+          "s.position as sectionPosition",
           "n.lesson_id as lessonId",
           "l.title as lessonTitle",
+          "l.position as lessonPosition",
           "n.timestamp_seconds as timestampSeconds",
           "n.title",
           "n.content",
@@ -138,6 +159,71 @@ export function createNotesRepository(): NotesRepository {
       }
 
       return query.orderBy("n.created_at", "desc").limit(options.limit).execute();
+    },
+
+    async getCourseNotesOverview(db, courseId, userId) {
+      const course = await db
+        .selectFrom("courses")
+        .select(["id", "title"])
+        .where("id", "=", courseId)
+        .where("deleted_at", "is", null)
+        .executeTakeFirst();
+
+      if (!course) {
+        return { course: null, sections: [], lessons: [], notes: [] };
+      }
+
+      const [sections, lessons, notes] = await Promise.all([
+        db
+          .selectFrom("course_sections")
+          .select(["id", "title", "position"])
+          .where("course_id", "=", courseId)
+          .where("deleted_at", "is", null)
+          .orderBy("position", "asc")
+          .execute(),
+        db
+          .selectFrom("course_lessons")
+          .select(["id", "section_id as sectionId", "title", "position"])
+          .where("course_id", "=", courseId)
+          .where("deleted_at", "is", null)
+          .orderBy("position", "asc")
+          .execute(),
+        db
+          .selectFrom("learning_notes as n")
+          .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
+          .leftJoin("course_sections as s", "s.id", "l.section_id")
+          .select([
+            "n.id",
+            "n.user_id as userId",
+            "n.course_id as courseId",
+            "s.id as sectionId",
+            "s.title as sectionTitle",
+            "s.position as sectionPosition",
+            "n.lesson_id as lessonId",
+            "l.title as lessonTitle",
+            "l.position as lessonPosition",
+            "n.timestamp_seconds as timestampSeconds",
+            "n.title",
+            "n.content",
+            "n.plain_text as plainText",
+            "n.tags",
+            "n.created_at as createdAt",
+            "n.updated_at as updatedAt",
+          ])
+          .where("n.course_id", "=", courseId)
+          .where("n.user_id", "=", userId)
+          .where("n.deleted_at", "is", null)
+          .orderBy("n.timestamp_seconds", "asc")
+          .orderBy("n.created_at", "asc")
+          .execute(),
+      ]);
+
+      return {
+        course,
+        sections,
+        lessons,
+        notes,
+      };
     },
 
     async updateNote(db, noteId, updates) {
