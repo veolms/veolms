@@ -127,7 +127,7 @@ export function SettingsToggle({
   return (
     <button
       type="button"
-      className={`settings-toggle ${checked ? "is-on" : ""}`}
+      className={`settings-toggle shrink-0 ${checked ? "is-on" : ""}`}
       role="switch"
       aria-checked={checked}
       aria-label={label}

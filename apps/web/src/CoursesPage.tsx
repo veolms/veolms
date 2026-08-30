@@ -29,6 +29,7 @@ import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
+import { ToastNotification } from "./ToastNotification";
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
@@ -61,6 +62,18 @@ import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
+import {
+  useCourses,
+  useDeleteCourse,
+  useDeletedCourses,
+  useMyCourses,
+  useRestoreCourse,
+} from "./services/courses";
+import {
+  adaptApiCourseToCatalogueCourse,
+  adaptCourseSummaryToCatalogueCourse,
+  adaptDeletedCourseToCatalogueCourse,
+} from "./courses/courseAdapter";
 import {
   getDefaultNavigationOrder,
   getInitialNavigationOrder,
@@ -724,6 +737,20 @@ export function CoursesPage({
   const storeUser = useAuthStore((s) => s.user);
   const activeUser = authUser || storeUser;
   const logoutMutation = useLogout();
+  const { data: publishedCoursesData } = useCourses({
+    enabled: role === "student",
+  });
+  const { data: myCoursesData } = useMyCourses({
+    enabled: role === "creator" && enrollmentFilter !== "bin",
+  });
+  const { data: deletedCoursesData } = useDeletedCourses(undefined, {
+    enabled: role === "creator" && enrollmentFilter === "bin",
+  });
+  const deleteCourseMutation = useDeleteCourse();
+  const restoreCourseMutation = useRestoreCourse();
+  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
@@ -1481,11 +1508,6 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
-  useEffect(() => {
-    if (!notice) return undefined;
-    const timer = window.setTimeout(() => setNotice(""), 3200);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   const navigation = getVisibleOrderedNavigation(
     role,
@@ -1521,9 +1543,98 @@ export function CoursesPage({
     };
   }, [compactNavigation, navigation, role, sidebarMode]);
 
+  const allCourses = useMemo(() => {
+    if (role !== "creator") {
+      const apiCourses = (publishedCoursesData?.courses || []).map(
+        adaptCourseSummaryToCatalogueCourse,
+      );
+      const existingIds = new Set(apiCourses.map((c) => c.id));
+      const nonConflictingMockCourses = courses.filter(
+        (c) => !existingIds.has(c.id),
+      );
+      return [...apiCourses, ...nonConflictingMockCourses];
+    }
+    if (enrollmentFilter === "bin") {
+      const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
+        adaptDeletedCourseToCatalogueCourse,
+      );
+      const mockDeletedCourses = courses.filter((c) =>
+        deletedMockCourseIds.has(c.id),
+      );
+      return [...apiDeletedCourses, ...mockDeletedCourses];
+    }
+    const apiCourses = (myCoursesData?.courses || []).map(
+      adaptApiCourseToCatalogueCourse,
+    );
+    const existingIds = new Set(apiCourses.map((c) => c.id));
+    const nonConflictingMockCourses = courses.filter(
+      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
+    );
+    return [...apiCourses, ...nonConflictingMockCourses];
+  }, [
+    deletedCoursesData?.courses,
+    deletedMockCourseIds,
+    enrollmentFilter,
+    myCoursesData?.courses,
+    publishedCoursesData?.courses,
+    role,
+  ]);
+
+  const handleDeleteCourse = async (course: Course) => {
+    const isMock = !course.id.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+
+    if (isMock) {
+      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
+      setNotice(`${course.title} moved to Bin.`);
+      return;
+    }
+
+    try {
+      await deleteCourseMutation.mutateAsync(course.id);
+      setNotice(`${course.title} moved to Bin.`);
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      setNotice(
+        apiError?.message ||
+          `Failed to move "${course.title}" to Bin. Please try again.`,
+      );
+      throw err;
+    }
+  };
+
+  const handleRestoreCourse = async (course: Course) => {
+    const isMock = !course.id.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+
+    if (isMock) {
+      setDeletedMockCourseIds((prev) => {
+        const next = new Set(prev);
+        next.delete(course.id);
+        return next;
+      });
+      setNotice(`${course.title} was restored.`);
+      return;
+    }
+
+    try {
+      await restoreCourseMutation.mutateAsync(course.id);
+      setNotice(`${course.title} was restored.`);
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      setNotice(
+        apiError?.message ||
+          `Failed to restore "${course.title}". Please try again.`,
+      );
+      throw err;
+    }
+  };
+
   const visibleCourses = useMemo(
     () =>
-      getVisibleCourses(courses, {
+      getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
         role,
@@ -1534,6 +1645,7 @@ export function CoursesPage({
       }),
     [
       activeSection,
+      allCourses,
       enrollmentFilter,
       role,
       search,
@@ -3656,6 +3768,8 @@ export function CoursesPage({
               setNotice={setNotice}
               onNavigatePage={onNavigatePage}
               onResetCatalogue={resetCatalogue}
+              onDeleteCourse={handleDeleteCourse}
+              onRestoreCourse={handleRestoreCourse}
             />
           )}
         </>
@@ -4116,9 +4230,11 @@ export function CoursesPage({
       </Drawer>
 
       {notice && (
-        <div className="courses-toast" role="status">
-          <Question size={18} /> {notice}
-        </div>
+        <ToastNotification
+          message={notice}
+          type="info"
+          onDismiss={() => setNotice("")}
+        />
       )}
     </div>
   );

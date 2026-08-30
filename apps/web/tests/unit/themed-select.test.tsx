@@ -145,4 +145,88 @@ describe("ThemedSelect with search and flags", () => {
     const { container } = render(<CountryFlag code="IN" />);
     expect(container.querySelector("img, svg")).not.toBeNull();
   });
+
+  it("allows navigating to and activating the action button via keyboard", () => {
+    const onActionSelect = vi.fn();
+    render(
+      <ThemedSelect
+        ariaLabel="Country code"
+        options={sampleOptions}
+        value="IN"
+        onValueChange={vi.fn()}
+        searchable={true}
+        action={{
+          label: "Add New Country",
+          onSelect: onActionSelect,
+        }}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Country code: \+91/i });
+    fireEvent.click(trigger);
+
+    const searchInput = screen.getByRole("textbox");
+    const actionBtn = screen.getByRole("button", { name: "Add New Country" });
+
+    expect(actionBtn).toBeInTheDocument();
+    searchInput.focus();
+    expect(document.activeElement).toBe(searchInput);
+
+    // From search input, ArrowUp moves focus to action button
+    fireEvent.keyDown(searchInput, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(actionBtn);
+
+    // From action button, ArrowDown moves focus back to search input
+    fireEvent.keyDown(actionBtn, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(searchInput);
+
+    // Navigate to first option with ArrowDown
+    fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    const options = screen.getAllByRole("option");
+    expect(document.activeElement).toBe(options[0]);
+
+    // End from option moves focus to action button
+    fireEvent.keyDown(options[0]!, { key: "End" });
+    expect(document.activeElement).toBe(actionBtn);
+
+    // Clicking action button activates onSelect and closes menu
+    fireEvent.click(actionBtn);
+    expect(onActionSelect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("navigates to action button when search returns no results", () => {
+    const onActionSelect = vi.fn();
+    render(
+      <ThemedSelect
+        ariaLabel="Country code"
+        options={sampleOptions}
+        value="IN"
+        onValueChange={vi.fn()}
+        searchable={true}
+        searchPlaceholder="Search country..."
+        action={{
+          label: "Create Custom Option",
+          onSelect: onActionSelect,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Country code: \+91/i }));
+
+    const searchInput = screen.getByPlaceholderText("Search country...");
+    fireEvent.change(searchInput, { target: { value: "nonexistent" } });
+    searchInput.focus();
+
+    const actionBtn = screen.getByRole("button", { name: "Create Custom Option" });
+
+    // With 0 filtered options, ArrowDown moves focus directly to action button
+    fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(actionBtn);
+
+    // ArrowUp from action button moves back to search input
+    fireEvent.keyDown(actionBtn, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(searchInput);
+  });
 });
+
