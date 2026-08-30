@@ -6,6 +6,7 @@
     "dev": "node --watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node --env-file-if-exists=../../.env src/index.ts",
     "purge:course-deletions": "node --env-file-if-exists=../../.env src/jobs/course-retention.ts",
+    "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },

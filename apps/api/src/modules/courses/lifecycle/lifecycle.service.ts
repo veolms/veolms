@@ -24,6 +24,7 @@ import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface LifecycleServiceOptions {
   database: Kysely<Database>;
@@ -42,6 +43,7 @@ export function createLifecycleService({
   configurationService = createConfigurationService({ database }),
   mediaService = createMediaService({ database, services }),
 }: LifecycleServiceOptions) {
+  const outbox = createOutboxService();
   function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
     return verifyCourseOwner(database, courseId, creatorId);
   }
@@ -375,18 +377,33 @@ export function createLifecycleService({
     }
 
     const now = new Date();
-    const updateResult = await courseRepo.updateCourse(
-      database,
-      courseId,
-      course.version,
-      {
-        status: "published",
-        published_at: now,
-        version: course.version + 1,
-        updated_at: now,
-      },
-    );
-    assertOptimisticUpdate(updateResult);
+    await database.transaction().execute(async (trx) => {
+      const result = await courseRepo.updateCourse(
+        trx,
+        courseId,
+        course.version,
+        {
+          status: "published",
+          published_at: now,
+          version: course.version + 1,
+          updated_at: now,
+        },
+      );
+      assertOptimisticUpdate(result);
+      await outbox.publish(trx, {
+        type: "course.published",
+        version: 1,
+        dedupeKey: `course.published:${course.id}:v${course.version + 1}`,
+        occurredAt: now,
+        payload: {
+          courseId: course.id,
+          courseSlug: course.slug,
+          courseTitle: course.title,
+          creatorUserId: creatorId,
+        },
+      });
+      return result;
+    });
 
     return {
       id: course.id,

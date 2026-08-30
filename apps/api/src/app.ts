@@ -44,8 +44,7 @@ export async function createApp({
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
   });
 
-  const appServices =
-    services ?? createServices({ config, logger: app.log });
+  const appServices = services ?? createServices({ config, logger: app.log });
 
   // Await this: it installs the Zod compilers and the route-discovery hook that
   // everything registered below depends on.
@@ -95,7 +94,7 @@ export async function createApp({
         ? config.WEB_URL
         : "http://localhost:3000",
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
   // Centralized bootstrap for every commerce background poller (fulfillment

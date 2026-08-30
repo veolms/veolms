@@ -15,12 +15,14 @@ import * as mfaRepository from "../mfa/mfa.repository.ts";
 import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
 import { generateRandomToken, hashToken } from "../shared/auth.utils.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
 }
 
 export function createSessionService({ database }: SessionServiceOptions) {
+  const outbox = createOutboxService();
   /** Resolves which factors an account actually has enrolled. */
   async function resolveMfaState(
     userId: string,
@@ -96,7 +98,21 @@ export function createSessionService({ database }: SessionServiceOptions) {
     userId: string,
     sessionId: string,
   ): Promise<void> {
-    await sessionRepository.deleteUserSession(database, userId, sessionId);
+    await database.transaction().execute(async (trx) => {
+      const revoked = await sessionRepository.deleteUserSession(
+        trx,
+        userId,
+        sessionId,
+      );
+      if (!revoked) return;
+      await outbox.publish(trx, {
+        type: "auth.session_revoked",
+        version: 1,
+        dedupeKey: `auth.session_revoked:${sessionId}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId, sessionId },
+      });
+    });
   }
 
   async function revokeOtherSessions(
