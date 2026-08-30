@@ -16,25 +16,9 @@ export interface ThreadsController {
     reply: FastifyReply,
   ): Promise<void>;
 
-  createAssignmentThread(
-    request: FastifyRequest<{
-      Params: { courseId: string; assignmentId: string };
-      Body: CreateLearningThreadRequest;
-    }>,
-    reply: FastifyReply,
-  ): Promise<void>;
-
   listLessonThreads(
     request: FastifyRequest<{
       Params: { courseId: string; lessonId: string };
-      Querystring: ListLearningThreadsQuery;
-    }>,
-    reply: FastifyReply,
-  ): Promise<void>;
-
-  listAssignmentThreads(
-    request: FastifyRequest<{
-      Params: { courseId: string; assignmentId: string };
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
@@ -87,28 +71,6 @@ export function createThreadsController({
         userId: user.id,
         courseId,
         lessonId,
-        assignmentId: null,
-        kind: body.kind,
-        title: body.title,
-        content: body.content,
-        timestampSeconds: body.timestampSeconds,
-        visibility: body.visibility,
-        attachmentIds: body.attachmentIds,
-      });
-
-      reply.status(201).send(thread);
-    },
-
-    async createAssignmentThread(request, reply) {
-      const user = request.user!;
-      const { courseId, assignmentId } = request.params;
-      const body = request.body;
-
-      const thread = await service.createThread(database, {
-        userId: user.id,
-        courseId,
-        lessonId: null,
-        assignmentId,
         kind: body.kind,
         title: body.title,
         content: body.content,
@@ -129,21 +91,6 @@ export function createThreadsController({
         ...query,
         courseId,
         lessonId,
-        currentUserId: user?.id,
-      });
-
-      reply.status(200).send(result);
-    },
-
-    async listAssignmentThreads(request, reply) {
-      const user = request.user;
-      const { courseId, assignmentId } = request.params;
-      const query = request.query;
-
-      const result = await service.listThreads(database, {
-        ...query,
-        courseId,
-        assignmentId,
         currentUserId: user?.id,
       });
 

@@ -270,7 +270,7 @@ export function createNotesService(
         throw httpError(403, "FORBIDDEN", "You do not have access to this note");
       }
 
-      await notesRepo.softDeleteNote(db, noteId);
+      await notesRepo.deleteNote(db, noteId);
     },
   };
 }

@@ -14,7 +14,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("lesson_id", "uuid", (column) =>
       column.references("course_lessons.id").onDelete("cascade"),
     )
-    .addColumn("assignment_id", "uuid")
     .addColumn("user_id", "uuid", (column) =>
       column.notNull().references("users.id").onDelete("cascade"),
     )
@@ -56,19 +55,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addColumn("deleted_at", "timestamptz")
     .execute();
 
   await database.schema
     .createIndex("idx_learning_threads_lesson_status")
     .on("learning_threads")
     .columns(["lesson_id", "status", "created_at"])
-    .execute();
-
-  await database.schema
-    .createIndex("idx_learning_threads_assignment_status")
-    .on("learning_threads")
-    .columns(["assignment_id", "status", "created_at"])
     .execute();
 
   await database.schema
@@ -123,7 +115,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addColumn("deleted_at", "timestamptz")
     .execute();
 
   await database.schema
@@ -271,7 +262,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addColumn("deleted_at", "timestamptz")
     .execute();
 
   await database.schema

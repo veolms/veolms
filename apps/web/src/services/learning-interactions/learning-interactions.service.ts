@@ -76,28 +76,6 @@ export const learningInteractionsService = {
     );
   },
 
-  listAssignmentThreads(
-    courseId: string,
-    assignmentId: string,
-    query?: ListLearningThreadsQuery,
-  ): Promise<LearningThreadsListResponse> {
-    return api.get<LearningThreadsListResponse>(
-      `/courses/${courseId}/assignments/${assignmentId}/threads`,
-      { params: query },
-    );
-  },
-
-  createAssignmentThread(
-    courseId: string,
-    assignmentId: string,
-    payload: CreateLearningThreadRequest,
-  ): Promise<LearningThread> {
-    return api.post<LearningThread>(
-      `/courses/${courseId}/assignments/${assignmentId}/threads`,
-      payload,
-    );
-  },
-
   listHubThreads(
     query?: ListLearningThreadsQuery,
   ): Promise<LearningThreadsListResponse> {

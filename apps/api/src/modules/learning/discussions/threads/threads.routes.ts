@@ -74,58 +74,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
     controller.createLessonThread,
   );
 
-  // 3. GET /courses/:courseId/assignments/:assignmentId/threads - List threads for assignment
-  app.get(
-    "/courses/:courseId/assignments/:assignmentId/threads",
-    {
-      preHandler: permissions.authenticate,
-      schema: {
-        operationId: "listAssignmentThreads",
-        tags: ["Learning Discussions"],
-        summary: "List comments or Q&A questions for an assignment",
-        params: z.object({
-          courseId: z.uuid(),
-          assignmentId: z.uuid(),
-        }),
-        querystring: listLearningThreadsQuerySchema,
-        response: {
-          200: jsonResponse(
-            "List of discussion threads for assignment",
-            learningThreadsListResponseSchema,
-          ),
-          404: errorResponse("Assignment or course not found"),
-        },
-      },
-    },
-    controller.listAssignmentThreads,
-  );
-
-  // 4. POST /courses/:courseId/assignments/:assignmentId/threads - Create thread for assignment
-  app.post(
-    "/courses/:courseId/assignments/:assignmentId/threads",
-    {
-      preHandler: permissions.requireAuthenticated,
-      schema: {
-        operationId: "createAssignmentThread",
-        tags: ["Learning Discussions"],
-        summary: "Start a comment or Q&A question on an assignment",
-        params: z.object({
-          courseId: z.uuid(),
-          assignmentId: z.uuid(),
-        }),
-        body: createLearningThreadRequestSchema,
-        response: {
-          201: jsonResponse("Thread created", learningThreadSchema),
-          400: errorResponse("Invalid input"),
-          401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - User participation suspended"),
-        },
-      },
-    },
-    controller.createAssignmentThread,
-  );
-
-  // 5. GET /threads - Hub search across discussions and Q&A
+  // 3. GET /threads - Hub search across discussions and Q&A
   app.get(
     "/threads",
     {

@@ -18,7 +18,6 @@ export interface ThreadsService {
       userId: string;
       courseId: string;
       lessonId?: string | null;
-      assignmentId?: string | null;
       kind: CreateLearningThreadRequest["kind"];
       title?: string;
       content: string;
@@ -84,7 +83,6 @@ export function createThreadsService(
       academyId: row.academyId,
       courseId: row.courseId,
       lessonId: row.lessonId ?? null,
-      assignmentId: row.assignmentId ?? null,
       userId: row.userId,
       author: {
         id: row.userId,
@@ -143,7 +141,7 @@ export function createThreadsService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
-      // Validate lesson or assignment hierarchy
+      // Validate lesson hierarchy
       if (input.lessonId) {
         const lesson = await db
           .selectFrom("course_lessons")
@@ -209,7 +207,6 @@ export function createThreadsService(
         academyId,
         courseId: input.courseId,
         lessonId: input.lessonId || null,
-        assignmentId: input.assignmentId || null,
         userId: input.userId,
         kind: threadKind,
         title: input.title || null,
@@ -412,7 +409,7 @@ export function createThreadsService(
         );
       }
 
-      await threadsRepo.softDeleteThread(db, threadId);
+      await threadsRepo.deleteThread(db, threadId);
     },
   };
 }

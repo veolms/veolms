@@ -337,7 +337,7 @@ export function createRepliesService({
         throw httpError(403, "FORBIDDEN", "You are not allowed to delete this reply");
       }
 
-      await repliesRepo.softDeleteReply(db, replyId);
+      await repliesRepo.deleteReply(db, replyId);
       await threadsRepo.incrementRepliesCount(db, reply.threadId, -1);
     },
 

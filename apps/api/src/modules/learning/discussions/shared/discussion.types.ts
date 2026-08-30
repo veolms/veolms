@@ -16,7 +16,6 @@ export interface ThreadEntity {
   academyId: string;
   courseId: string;
   lessonId: string | null;
-  assignmentId: string | null;
   userId: string;
   kind: DiscussionEntryKind;
   title: string | null;
@@ -31,7 +30,6 @@ export interface ThreadEntity {
   repliesCount: number;
   createdAt: Date | string;
   updatedAt: Date | string;
-  deletedAt: Date | string | null;
 }
 
 export interface ReplyEntity {
@@ -47,7 +45,6 @@ export interface ReplyEntity {
   likesCount: number;
   createdAt: Date | string;
   updatedAt: Date | string;
-  deletedAt: Date | string | null;
 }
 
 export interface NoteEntity {
@@ -63,7 +60,6 @@ export interface NoteEntity {
   tags: string[];
   createdAt: Date | string;
   updatedAt: Date | string;
-  deletedAt: Date | string | null;
 }
 
 export interface AttachmentEntity {

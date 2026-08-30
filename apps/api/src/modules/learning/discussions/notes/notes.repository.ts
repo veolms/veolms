@@ -50,7 +50,7 @@ export interface NotesRepository {
     updates: UpdateLearningNoteRequest & { plainText?: string },
   ): Promise<void>;
 
-  softDeleteNote(
+  deleteNote(
     db: DatabaseExecutor,
     noteId: string,
   ): Promise<void>;
@@ -102,7 +102,6 @@ export function createNotesRepository(): NotesRepository {
           "n.updated_at as updatedAt",
         ])
         .where("n.id", "=", noteId)
-        .where("n.deleted_at", "is", null)
         .executeTakeFirst();
 
       return row ?? null;
@@ -133,8 +132,7 @@ export function createNotesRepository(): NotesRepository {
           "n.created_at as createdAt",
           "n.updated_at as updatedAt",
         ])
-        .where("n.user_id", "=", userId)
-        .where("n.deleted_at", "is", null);
+        .where("n.user_id", "=", userId);
 
       if (options.courseId) {
         query = query.where("n.course_id", "=", options.courseId);
@@ -212,7 +210,6 @@ export function createNotesRepository(): NotesRepository {
           ])
           .where("n.course_id", "=", courseId)
           .where("n.user_id", "=", userId)
-          .where("n.deleted_at", "is", null)
           .orderBy("n.timestamp_seconds", "asc")
           .orderBy("n.created_at", "asc")
           .execute(),
@@ -244,13 +241,9 @@ export function createNotesRepository(): NotesRepository {
         .execute();
     },
 
-    async softDeleteNote(db, noteId) {
+    async deleteNote(db, noteId) {
       await db
-        .updateTable("learning_notes")
-        .set({
-          deleted_at: new Date(),
-          updated_at: new Date(),
-        })
+        .deleteFrom("learning_notes")
         .where("id", "=", noteId)
         .execute();
     },

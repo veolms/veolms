@@ -15,7 +15,6 @@ export interface ThreadsRepository {
       academyId: string;
       courseId: string;
       lessonId?: string | null;
-      assignmentId?: string | null;
       userId: string;
       kind: DiscussionEntryKind;
       title: string | null;
@@ -43,7 +42,7 @@ export interface ThreadsRepository {
     updates: UpdateLearningThreadRequest & { plainText?: string },
   ): Promise<void>;
 
-  softDeleteThread(
+  deleteThread(
     db: DatabaseExecutor,
     threadId: string,
   ): Promise<void>;
@@ -89,7 +88,6 @@ export function createThreadsRepository(): ThreadsRepository {
           academy_id: thread.academyId,
           course_id: thread.courseId,
           lesson_id: thread.lessonId || null,
-          assignment_id: thread.assignmentId || null,
           user_id: thread.userId,
           kind: thread.kind === "qna" ? "question" : thread.kind,
           title: thread.title,
@@ -114,7 +112,6 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.academy_id as academyId",
           "t.course_id as courseId",
           "t.lesson_id as lessonId",
-          "t.assignment_id as assignmentId",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -134,7 +131,6 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.email as authorEmail",
         ])
         .where("t.id", "=", threadId)
-        .where("t.deleted_at", "is", null)
         .executeTakeFirst();
 
       return row ?? null;
@@ -149,7 +145,6 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.academy_id as academyId",
           "t.course_id as courseId",
           "t.lesson_id as lessonId",
-          "t.assignment_id as assignmentId",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -168,7 +163,6 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.username as authorUsername",
           "u.email as authorEmail",
         ])
-        .where("t.deleted_at", "is", null)
         .where("t.status", "=", "active");
 
       if (options.courseId) {
@@ -177,10 +171,6 @@ export function createThreadsRepository(): ThreadsRepository {
 
       if (options.lessonId) {
         query = query.where("t.lesson_id", "=", options.lessonId);
-      }
-
-      if (options.assignmentId) {
-        query = query.where("t.assignment_id", "=", options.assignmentId);
       }
 
       if (options.kind && options.kind !== "all") {
@@ -200,7 +190,7 @@ export function createThreadsRepository(): ThreadsRepository {
         if (options.visibility === "private") {
           query = query.where("t.visibility", "=", "private").where("t.user_id", "=", options.currentUserId);
         } else if (options.visibility === "unlisted") {
-          query = query.where("t.visibility", "=", "unlisted");
+          query = query.where("t.visibility", "=", "unlisted").where("t.user_id", "=", options.currentUserId);
         } else if (options.visibility === "public") {
           query = query.where("t.visibility", "=", "public");
         } else {
@@ -274,14 +264,9 @@ export function createThreadsRepository(): ThreadsRepository {
         .execute();
     },
 
-    async softDeleteThread(db, threadId) {
+    async deleteThread(db, threadId) {
       await db
-        .updateTable("learning_threads")
-        .set({
-          status: "deleted",
-          deleted_at: new Date(),
-          updated_at: new Date(),
-        })
+        .deleteFrom("learning_threads")
         .where("id", "=", threadId)
         .execute();
     },

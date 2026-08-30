@@ -183,7 +183,7 @@ export function createModerationService({
       } else if (input.action === "unlock") {
         await threadsRepo.setLocked(db, threadId, false);
       } else if (input.action === "delete") {
-        await threadsRepo.softDeleteThread(db, threadId);
+        await threadsRepo.deleteThread(db, threadId);
       }
 
       const academyId = await resolveAcademyId(db);
@@ -224,7 +224,7 @@ export function createModerationService({
           .where("id", "=", replyId)
           .execute();
       } else if (input.action === "delete") {
-        await repliesRepo.softDeleteReply(db, replyId);
+        await repliesRepo.deleteReply(db, replyId);
         await threadsRepo.incrementRepliesCount(db, reply.threadId, -1);
       }
 

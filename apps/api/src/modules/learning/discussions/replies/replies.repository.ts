@@ -37,7 +37,7 @@ export interface RepliesRepository {
     updates: UpdateLearningReplyRequest & { plainText?: string },
   ): Promise<void>;
 
-  softDeleteReply(
+  deleteReply(
     db: DatabaseExecutor,
     replyId: string,
   ): Promise<void>;
@@ -100,7 +100,6 @@ export function createRepliesRepository(): RepliesRepository {
           "rr.plain_text as replyToContent",
         ])
         .where("r.id", "=", replyId)
-        .where("r.deleted_at", "is", null)
         .executeTakeFirst();
 
       return row ?? null;
@@ -135,7 +134,6 @@ export function createRepliesRepository(): RepliesRepository {
           "rr.plain_text as replyToContent",
         ])
         .where("r.thread_id", "=", threadId)
-        .where("r.deleted_at", "is", null)
         .where("r.status", "=", "active")
         .orderBy("r.is_accepted", "desc")
         .orderBy("r.created_at", "asc")
@@ -159,14 +157,9 @@ export function createRepliesRepository(): RepliesRepository {
         .execute();
     },
 
-    async softDeleteReply(db, replyId) {
+    async deleteReply(db, replyId) {
       await db
-        .updateTable("learning_replies")
-        .set({
-          status: "deleted",
-          deleted_at: new Date(),
-          updated_at: new Date(),
-        })
+        .deleteFrom("learning_replies")
         .where("id", "=", replyId)
         .execute();
     },

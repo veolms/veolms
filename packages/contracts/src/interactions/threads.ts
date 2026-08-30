@@ -59,7 +59,6 @@ export const learningThreadSchema = z.object({
   academyId: z.uuid(),
   courseId: z.uuid(),
   lessonId: z.uuid().nullable().optional(),
-  assignmentId: z.uuid().nullable().optional(),
   userId: z.uuid(),
   author: learningAuthorSchema,
   kind: discussionEntryKindSchema,
@@ -88,7 +87,6 @@ export const createLearningThreadRequestSchema = z
   .object({
     courseId: z.uuid(),
     lessonId: z.uuid().optional(),
-    assignmentId: z.uuid().optional(),
     kind: discussionEntryKindSchema.default("comment"),
     title: z.string().max(255).optional(),
     content: z.string().min(1).max(20000),
@@ -97,13 +95,6 @@ export const createLearningThreadRequestSchema = z
     attachmentIds: z.array(z.uuid()).optional(),
     tags: z.array(z.string().min(1).max(50)).optional(),
   })
-  .refine(
-    (data) =>
-      (data.lessonId && !data.assignmentId) ||
-      (!data.lessonId && data.assignmentId) ||
-      (!data.lessonId && !data.assignmentId),
-    { message: "Specify either lessonId or assignmentId, not both." },
-  )
   .refine(
     (data) => {
       const normalized = data.kind === "qna" ? "question" : data.kind;
@@ -136,7 +127,6 @@ export const listLearningThreadsQuerySchema = z.object({
   kind: z.enum(["all", "comment", "question", "note", "qna"]).default("all"),
   courseId: z.uuid().optional(),
   lessonId: z.uuid().optional(),
-  assignmentId: z.uuid().optional(),
   search: z.string().max(200).optional(),
   status: questionFilterStatusSchema.default("all"),
   visibility: discussionVisibilitySchema.optional(),

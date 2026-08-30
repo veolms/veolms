@@ -30,7 +30,6 @@ export interface LearningThreadTable {
   academy_id: string;
   course_id: string;
   lesson_id: string | null;
-  assignment_id: string | null;
   user_id: string;
   kind: DiscussionEntryKind;
   title: string | null;
@@ -45,7 +44,6 @@ export interface LearningThreadTable {
   replies_count: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
-  deleted_at: Date | null;
 }
 
 export interface LearningReplyTable {
@@ -63,7 +61,6 @@ export interface LearningReplyTable {
   likes_count: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
-  deleted_at: Date | null;
 }
 
 export interface LearningLikeTable {
@@ -109,7 +106,6 @@ export interface LearningNoteTable {
   tags: Generated<string[]>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
-  deleted_at: Date | null;
 }
 
 export interface LearningAttachmentTable {
