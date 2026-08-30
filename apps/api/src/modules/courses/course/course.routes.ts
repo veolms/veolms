@@ -9,6 +9,7 @@ import {
   courseEditorDataResponseSchema,
   myCoursesListResponseSchema,
   courseOverviewSchema,
+  courseDeleteResponseSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -219,6 +220,25 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       preHandler: ctx.requireCourseAuthor,
     },
     controller.updateCourseBasics,
+  );
+
+  app.delete(
+    "/courses/:id",
+    {
+      schema: {
+        operationId: "deleteCourse",
+        tags: ["Course Authoring"],
+        summary: "Soft delete a course",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse("Course deleted", courseDeleteResponseSchema),
+          403: errorResponse("Forbidden - not course owner"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.requireCourseAuthor,
+    },
+    controller.deleteCourse,
   );
 };
 

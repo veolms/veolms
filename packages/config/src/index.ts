@@ -88,6 +88,11 @@ const serverConfigSchema = z.object({
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
   FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
+
+  // Razorpay Gateway
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const webConfigSchema = z.object({
@@ -116,6 +121,24 @@ function findInsecureDefaults(parsed: ParsedServerConfig): string[] {
 }
 
 /**
+ * Config keys with no safe default that must be explicitly set once
+ * deployed. Unlike INSECURE_DEFAULTS these have no fallback value at all
+ * (`.optional()` in the schema) — left unset, callers have historically
+ * papered over the gap with an ad-hoc placeholder instead of failing loudly.
+ * Payment credentials belong here: a missing key must never silently
+ * degrade into fake credentials that fail confusingly at the gateway.
+ */
+const REQUIRED_IN_PRODUCTION: Array<keyof ParsedServerConfig> = [
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_WEBHOOK_SECRET",
+];
+
+function findMissingRequiredInProduction(parsed: ParsedServerConfig): string[] {
+  return REQUIRED_IN_PRODUCTION.filter((key) => !parsed[key]);
+}
+
+/**
  * Falls back to `console` only when nothing is listening for mail anyway: a
  * non-production process still pointing at the default localhost SMTP host.
  * Any explicitly configured host means the operator wants real delivery, so a
@@ -141,12 +164,19 @@ export function loadServerConfig(
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
   const offenders = findInsecureDefaults(parsed);
+  const missingRequired = findMissingRequiredInProduction(parsed);
 
   if (parsed.NODE_ENV === "production") {
     if (offenders.length > 0) {
       throw new Error(
         `Refusing to start in production with default value(s) for: ${offenders.join(", ")}. ` +
           `Set real secrets via environment variables.`,
+      );
+    }
+    if (missingRequired.length > 0) {
+      throw new Error(
+        `Refusing to start in production without required value(s) for: ${missingRequired.join(", ")}. ` +
+          `Set these via environment variables — a payment gateway must never boot with missing credentials.`,
       );
     }
   } else if (offenders.length > 0) {
@@ -163,3 +193,18 @@ export function loadServerConfig(
 export function loadWebConfig(environment: Record<string, string | undefined>) {
   return webConfigSchema.parse(environment);
 }
+
+export {
+  resolveProviderName,
+  fleetManagerConfigSchema,
+  loadFleetManagerConfig,
+  type FleetManagerConfig,
+} from "./fleet-manager.ts";
+
+export {
+  resolveDefaultUploadConcurrency,
+  mediaWorkerConfigSchema,
+  loadMediaWorkerConfig,
+  type DefaultUploadConcurrency,
+  type MediaWorkerConfig,
+} from "./media-worker.ts";

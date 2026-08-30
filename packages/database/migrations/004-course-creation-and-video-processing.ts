@@ -89,7 +89,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().references("courses.id").onDelete("cascade"),
     )
     .addColumn("title", "text", (column) => column.notNull())
-    .addColumn("description", "text")
     .addColumn("position", "integer", (column) => column.notNull())
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -165,8 +164,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("access_type", "text", (column) => column.notNull())
     .addColumn("duration_type", "text", (column) => column.notNull())
     .addColumn("duration_days", "integer")
-    .addColumn("starts_at", "timestamptz")
-    .addColumn("expires_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -192,10 +189,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addColumn("pricing_type", "text", (column) => column.notNull())
     .addColumn("price", "integer", (column) => column.notNull())
-    .addColumn("currency", "text", (column) => column.notNull())
+    .addColumn("currency", "text", (column) =>
+      column.notNull().defaultTo("INR"),
+    )
     .addColumn("sale_price", "integer")
-    .addColumn("sale_starts_at", "timestamptz")
-    .addColumn("sale_ends_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -221,9 +218,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("allow_comments", "boolean", (column) =>
       column.notNull().defaultTo(true),
     )
-    .addColumn("allow_reviews", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
     .addColumn("allow_downloads", "boolean", (column) =>
       column.notNull().defaultTo(false),
     )
@@ -247,30 +241,40 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("video_id", "uuid", (column) =>
       column.notNull().references("media_assets.id").onDelete("cascade"),
     )
-    .addColumn("input_path", "text", (column) => column.notNull())
-    .addColumn("status", "text", (column) => column.notNull())
+    .addColumn("status", "text", (column) =>
+      column.notNull().defaultTo("queued"),
+    )
+    .addColumn("video_key", "text", (column) => column.notNull())
+    .addColumn("output_prefix", "text", (column) => column.notNull())
+    .addColumn("video_size", "bigint", (column) =>
+      column.notNull().defaultTo(0),
+    )
+    .addColumn("qualities", sql`text[]`, (column) =>
+      column
+        .notNull()
+        .defaultTo(sql`ARRAY['1080p', '720p', '480p', '360p']::text[]`),
+    )
+    .addColumn("worker_id", "text")
     .addColumn("progress_percent", "integer", (column) =>
       column.notNull().defaultTo(0),
     )
-    .addColumn("current_stage", "text", (column) => column.notNull())
-    .addColumn("worker_id", "text")
-    .addColumn("quality", sql`integer[]`, (column) =>
-      column.notNull().defaultTo(sql`ARRAY[720]::integer[]`),
+    .addColumn("attempts", "integer", (column) => column.notNull().defaultTo(0))
+    .addColumn("max_attempts", "integer", (column) =>
+      column.notNull().defaultTo(3),
     )
+    .addColumn("error_message", "text")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addColumn("started_at", "timestamptz")
     .addColumn("completed_at", "timestamptz")
     .addColumn("failed_at", "timestamptz")
-    .addColumn("error", "text")
-    .addCheckConstraint(
-      "video_jobs_status_valid",
-      sql`status in ('queued', 'processing', 'completed', 'failed')`,
+    .addColumn("updated_at", "timestamptz", (column) =>
+      column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addCheckConstraint(
-      "video_jobs_stage_valid",
-      sql`current_stage in ('queued', 'downloading', 'transcoding', 'uploading', 'finalizing', 'completed', 'failed')`,
+      "video_jobs_status_valid",
+      sql`status in ('queued', 'provisioning', 'processing', 'completed', 'failed', 'cancelled')`,
     )
     .execute();
 
@@ -340,6 +344,18 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .createIndex("idx_video_jobs_video_id")
     .on("video_jobs")
     .column("video_id")
+    .execute();
+
+  await database.schema
+    .createIndex("idx_video_jobs_status_created")
+    .on("video_jobs")
+    .columns(["status", "created_at"])
+    .execute();
+
+  await database.schema
+    .createIndex("idx_video_jobs_video_key")
+    .on("video_jobs")
+    .column("video_key")
     .execute();
 
   await database.schema

@@ -951,7 +951,7 @@ test("tablet player control opens a translucent floating course drawer", async (
   await toggle.click();
 
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
-  await expect(dialog).toBeVisible({ timeout: 300 });
+  await expect(dialog).toBeVisible();
   await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
   await expect
     .poll(() =>

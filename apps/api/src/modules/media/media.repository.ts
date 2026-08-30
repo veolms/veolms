@@ -1,10 +1,9 @@
-import { type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import type {
   Database,
   MediaAssetStatus,
-  VideoJobStatus,
-  VideoJobStage,
 } from "@veolms/database";
+import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
   database: Kysely<Database>,
@@ -27,6 +26,7 @@ export async function findMediaAssetsByIds(
   database: Kysely<Database>,
   mediaIds: string[],
   ownerId?: string,
+  lock = false,
 ) {
   if (mediaIds.length === 0) return [];
   let query = database
@@ -38,7 +38,25 @@ export async function findMediaAssetsByIds(
     query = query.where("owner_id", "=", ownerId);
   }
 
+  if (lock) {
+    query = query.forUpdate();
+  }
+
   return await query.execute();
+}
+
+export async function deleteMediaAssets(
+  database: Kysely<Database>,
+  mediaIds: string[],
+) {
+  if (mediaIds.length === 0) {
+    return;
+  }
+
+  await database
+    .deleteFrom("media_assets")
+    .where("id", "in", mediaIds)
+    .execute();
 }
 
 export async function insertMediaAsset(
@@ -75,15 +93,24 @@ export async function insertVideoJob(
   values: {
     id: string;
     video_id: string;
-    input_path: string;
-    status: "queued";
-    current_stage: "queued";
+    video_key: string;
+    output_prefix: string;
+    video_size: number;
+    qualities: VideoQualityLevel[];
+    status?: VideoJobStatus;
+    worker_id?: string | null;
     progress_percent?: number;
-    quality: number[];
-    created_at: Date;
+    error_message?: string | null;
+    created_at?: Date;
   },
 ) {
-  await database.insertInto("video_jobs").values(values).execute();
+  await database
+    .insertInto("video_jobs")
+    .values({
+      status: "queued",
+      ...values,
+    })
+    .execute();
 }
 
 export async function updateVideoJobStatus(
@@ -91,15 +118,17 @@ export async function updateVideoJobStatus(
   jobId: string,
   values: {
     status: VideoJobStatus;
-    current_stage?: VideoJobStage;
     progress_percent?: number;
-    error?: string | null;
+    error_message?: string | null;
     failed_at?: Date;
   },
 ) {
   await database
     .updateTable("video_jobs")
-    .set(values)
+    .set({
+      ...values,
+      updated_at: new Date(),
+    })
     .where("id", "=", jobId)
     .execute();
 }
@@ -114,6 +143,21 @@ export async function findVideoJobByVideoId(
     .where("video_id", "=", videoId)
     .orderBy("created_at", "desc")
     .executeTakeFirst();
+}
+
+export async function findVideoOutputsByVideoIds(
+  database: Kysely<Database>,
+  videoIds: string[],
+) {
+  if (videoIds.length === 0) {
+    return [];
+  }
+
+  return await database
+    .selectFrom("video_outputs")
+    .selectAll()
+    .where("video_id", "in", videoIds)
+    .execute();
 }
 
 export async function insertVideoOutput(

@@ -1,9 +1,12 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
@@ -60,6 +63,7 @@ export interface Comment {
 interface CommentCardProps {
   comment: Comment;
   onLike: (id: number, liked: boolean) => void;
+  onOpenThread?: (id: number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: number) => void;
   onReport?: (id: number) => void;
@@ -68,6 +72,7 @@ interface CommentCardProps {
 export function CommentCard({
   comment,
   onLike,
+  onOpenThread,
   onEdit = () => undefined,
   onDelete = () => undefined,
   onReport = () => undefined,
@@ -89,6 +94,10 @@ export function CommentCard({
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
   );
   const replyCount = unloadedReplyCount + localReplies.length;
+
+  useEffect(() => {
+    setLocalReplies(comment.thread ?? []);
+  }, [comment.thread]);
 
   const addReply = () => {
     const text = replyDraft.plainText.trim();
@@ -135,8 +144,22 @@ export function CommentCard({
     <article
       id={`discussion-entry-${comment.id}`}
       data-discussion-entry={entryKind}
+      data-discussion-thread-trigger={onOpenThread ? "true" : undefined}
       data-deletion-pending={deletion.pending || undefined}
-      className={`relative border-b py-5 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] sm:py-5 ${deletion.pending ? "min-h-19" : ""}`}
+      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${onOpenThread ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.pending ? "min-h-19" : ""}`}
+      onClick={(event) => {
+        if (!onOpenThread) return;
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest(
+            "button,a,input,textarea,select,[contenteditable=true],[role=menu],[role=menuitem],[data-discussion-atomic-editor]",
+          )
+        ) {
+          return;
+        }
+        onOpenThread(comment.id);
+      }}
     >
       <div
         inert={deletion.pending ? true : undefined}
@@ -151,14 +174,14 @@ export function CommentCard({
             />
 
             <div className="min-w-0 flex-1">
-              <div data-comment-meta className="flex min-h-9 items-start gap-2">
+              <div
+                data-comment-meta
+                className="relative flex items-start gap-2 pr-9"
+              >
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                  <h2 className="text-[15px] font-semibold text-(--text) sm:text-base">
+                  <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {comment.name}
                   </h2>
-                  <span className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-(--accent-ink,var(--accent)) sm:text-xs">
-                    {entryLabel}
-                  </span>
                   {comment.visibility && comment.visibility !== "public" && (
                     <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
                       {comment.visibility}
@@ -173,6 +196,32 @@ export function CommentCard({
                   </span>
                   <span className="text-xs text-(--muted) sm:text-sm">
                     {comment.time}
+                  </span>
+                  <span
+                    role="img"
+                    aria-label={entryLabel}
+                    title={entryLabel}
+                    data-entry-kind-icon={entryKind}
+                    className={`inline-flex size-5 items-center justify-center ${
+                      entryKind === "note"
+                        ? "text-amber-700 [[data-theme=dark]_&]:text-amber-300"
+                        : entryKind === "question"
+                          ? "text-violet-700 [[data-theme=dark]_&]:text-violet-400"
+                          : "text-sky-700 [[data-theme=dark]_&]:text-sky-400"
+                    }`}
+                  >
+                    {entryKind === "note" ? (
+                      <Notepad size={17} weight="bold" aria-hidden="true" />
+                    ) : entryKind === "question" ? (
+                      <Question size={17} weight="bold" aria-hidden="true" />
+                    ) : (
+                      <ChatCenteredDots
+                        data-comment-entry-icon
+                        size={17}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
+                    )}
                   </span>
                 </div>
                 <CommentActionMenu
@@ -189,14 +238,14 @@ export function CommentCard({
                   }
                   onDelete={deletion.begin}
                   onReport={() => onReport(comment.id)}
-                  className="relative z-20 shrink-0"
+                  className="absolute -top-1 -right-1 z-20 shrink-0"
                 />
               </div>
 
               <DiscussionMarkdown
                 content={comment.content ?? createDiscussionDraft(comment.text)}
                 label={`${entryLabel} by ${comment.name}`}
-                className="mt-1.5"
+                className="mt-0.5 pr-9 sm:pr-10"
               />
 
               {comment.attachment && (
@@ -220,7 +269,7 @@ export function CommentCard({
 
               <div
                 data-comment-engagement
-                className="mt-2.5 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
+                className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
               >
                 <button
                   type="button"
@@ -253,16 +302,27 @@ export function CommentCard({
 
                 <button
                   type="button"
-                  onClick={() => setReplyComposerOpen((open) => !open)}
+                  aria-label="Reply"
+                  title="Reply"
+                  data-reply-action
+                  onClick={() => {
+                    if (onOpenThread) onOpenThread(comment.id, true);
+                    else setReplyComposerOpen((open) => !open);
+                  }}
                   aria-expanded={replyComposerOpen}
-                  className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
                 >
-                  <ChatCenteredDots size={18} />
-                  <span>Reply</span>
+                  <ArrowBendUpLeft
+                    data-reply-icon
+                    size={20}
+                    weight="bold"
+                    className="origin-center scale-x-[1.16]"
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
 
-              {replyComposerOpen && (
+              {replyComposerOpen && !onOpenThread && (
                 <div className="mt-3 flex max-w-2xl items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
@@ -291,12 +351,15 @@ export function CommentCard({
           </div>
 
           {repliesOpen && localReplies.length > 0 && (
-            <div className="mt-4 space-y-4">
+            <div className="mt-2.5 space-y-2.5">
               {localReplies.map((reply) => (
                 <ReplyCard
                   key={reply.id}
                   reply={reply}
-                  onReply={() => setReplyComposerOpen(true)}
+                  onReply={() => {
+                    if (onOpenThread) onOpenThread(comment.id, true);
+                    else setReplyComposerOpen(true);
+                  }}
                   onEdit={(text) => updateReply(reply.id, text)}
                   onDelete={() =>
                     setLocalReplies((current) =>
@@ -369,7 +432,10 @@ function ReplyCard({
             />
 
             <div className="min-w-0 flex-1">
-              <div data-reply-meta className="flex min-h-9 items-start gap-2">
+              <div
+                data-reply-meta
+                className="relative flex items-start gap-2 pr-9"
+              >
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {reply.name}
@@ -400,7 +466,7 @@ function ReplyCard({
                   }
                   onDelete={deletion.begin}
                   onReport={onReport}
-                  className="relative z-20 shrink-0"
+                  className="absolute -top-1 -right-1 z-20 shrink-0"
                 />
               </div>
 
@@ -422,13 +488,13 @@ function ReplyCard({
                 <DiscussionMarkdown
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
-                  className="mt-1"
+                  className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}
 
               <div
                 data-reply-engagement
-                className="mt-2 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
+                className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
               >
                 <button
                   type="button"
@@ -442,11 +508,19 @@ function ReplyCard({
                 </button>
                 <button
                   type="button"
+                  aria-label="Reply"
+                  title="Reply"
+                  data-reply-action
                   onClick={onReply}
-                  className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
                 >
-                  <ChatCenteredDots size={17} />
-                  <span>Reply</span>
+                  <ArrowBendUpLeft
+                    data-reply-icon
+                    size={20}
+                    weight="bold"
+                    className="origin-center scale-x-[1.16]"
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
             </div>
@@ -474,7 +548,7 @@ interface InlineEditFormProps {
   onSave: () => void;
 }
 
-function InlineEditForm({
+export function InlineEditForm({
   documentId,
   label,
   value,
@@ -535,7 +609,7 @@ interface CommentActionMenuProps {
   className: string;
 }
 
-function CommentActionMenu({
+export function CommentActionMenu({
   name,
   kind,
   isOwn,
@@ -680,7 +754,7 @@ function UndoDeleteButton({
   );
 }
 
-async function shareDiscussionEntry(
+export async function shareDiscussionEntry(
   entryId: number,
   name: string,
   text: string,

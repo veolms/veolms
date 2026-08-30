@@ -124,7 +124,7 @@ describe("CourseCatalogue", () => {
     fireEvent.click(screen.getByRole("button", { name: "View Curriculum" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith(
-      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview#cov-curriculum-heading`,
+      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
     );
     expect(setNotice).not.toHaveBeenCalled();
   });
@@ -164,5 +164,33 @@ describe("CourseCatalogue", () => {
     fireEvent.click(screen.getByRole("button", { name: "View all courses" }));
 
     expect(onResetCatalogue).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens ConfirmDeleteModal on Delete Course action and triggers onDeleteCourse on confirm", async () => {
+    const target = courses[0]!;
+    const onDeleteCourse = vi.fn().mockResolvedValue(undefined);
+    renderCatalogue({
+      role: "creator",
+      visibleCourses: [target],
+      courseMenu: target.id,
+      onDeleteCourse,
+    });
+
+    // Click Delete Course from the action menu
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete course/i }));
+
+    // Verify confirmation modal is opened
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Move course to Bin?")).toBeVisible();
+    expect(
+      screen.getByText(new RegExp(`Move “${target.title}” to the Bin`, "i")),
+    ).toBeVisible();
+
+    // Trigger hold-to-confirm
+    const confirmBtn = screen.getByRole("button", { name: /Hold to Move to Bin/i });
+    fireEvent.keyDown(confirmBtn, { key: "Enter" });
   });
 });

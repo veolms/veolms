@@ -29,18 +29,11 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const durationType =
-      updates.accessType === "everyone" ? "lifetime" : updates.durationType;
+    const durationType = updates.durationType;
     const durationDays =
-      updates.accessType === "everyone" ? null : updates.durationDays ?? null;
-    const startsAt =
-      updates.accessType === "everyone" || !updates.startsAt
-        ? null
-        : new Date(updates.startsAt);
-    const expiresAt =
-      updates.accessType === "everyone" || !updates.expiresAt
-        ? null
-        : new Date(updates.expiresAt);
+      updates.durationType === "fixed_duration"
+        ? updates.durationDays ?? null
+        : null;
 
     const id = await configRepo.upsertAccessRule(database, {
       id: crypto.randomUUID(),
@@ -48,8 +41,6 @@ export function createConfigurationService({
       access_type: updates.accessType,
       duration_type: durationType,
       duration_days: durationDays,
-      starts_at: startsAt,
-      expires_at: expiresAt,
       created_at: now,
       updated_at: now,
     });
@@ -60,8 +51,6 @@ export function createConfigurationService({
       accessType: updates.accessType,
       durationType,
       durationDays,
-      startsAt: startsAt ? startsAt.toISOString() : null,
-      expiresAt: expiresAt ? expiresAt.toISOString() : null,
     };
   }
 
@@ -75,26 +64,17 @@ export function createConfigurationService({
     const now = new Date();
 
     const price = updates.pricingType === "free" ? 0 : updates.price;
+    const currency = updates.currency ?? "INR";
     const salePrice =
       updates.pricingType === "free" ? null : updates.salePrice ?? null;
-    const saleStartsAt =
-      updates.pricingType === "free" || !updates.saleStartsAt
-        ? null
-        : new Date(updates.saleStartsAt);
-    const saleEndsAt =
-      updates.pricingType === "free" || !updates.saleEndsAt
-        ? null
-        : new Date(updates.saleEndsAt);
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
       course_id: courseId,
       pricing_type: updates.pricingType,
       price,
-      currency: updates.currency,
+      currency,
       sale_price: salePrice,
-      sale_starts_at: saleStartsAt,
-      sale_ends_at: saleEndsAt,
       created_at: now,
       updated_at: now,
     });
@@ -104,10 +84,8 @@ export function createConfigurationService({
       courseId,
       pricingType: updates.pricingType,
       price,
-      currency: updates.currency,
+      currency,
       salePrice,
-      saleStartsAt: saleStartsAt ? saleStartsAt.toISOString() : null,
-      saleEndsAt: saleEndsAt ? saleEndsAt.toISOString() : null,
     };
   }
 
@@ -122,9 +100,9 @@ export function createConfigurationService({
 
     const allowQa = updates.allowQa ?? true;
     const allowComments = updates.allowComments ?? true;
-    const allowReviews = updates.allowReviews ?? true;
     const allowDownloads = updates.allowDownloads ?? false;
     const certificateEnabled = updates.certificateEnabled ?? false;
+    const showInstructorName = updates.showInstructorName ?? true;
     const language = updates.language ?? "en";
     const estimatedDuration = updates.estimatedDuration ?? null;
 
@@ -133,9 +111,9 @@ export function createConfigurationService({
       course_id: courseId,
       allow_qa: allowQa,
       allow_comments: allowComments,
-      allow_reviews: allowReviews,
       allow_downloads: allowDownloads,
       certificate_enabled: certificateEnabled,
+      show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
       created_at: now,
@@ -147,9 +125,9 @@ export function createConfigurationService({
       courseId,
       allowQa,
       allowComments,
-      allowReviews,
       allowDownloads,
       certificateEnabled,
+      showInstructorName,
       language,
       estimatedDuration,
     };

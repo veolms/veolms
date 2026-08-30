@@ -21,7 +21,6 @@ export async function insertSection(
     id: string;
     course_id: string;
     title: string;
-    description: string | null;
     position: number;
     created_at: Date;
     updated_at: Date;
@@ -48,7 +47,7 @@ export async function updateSection(
   database: Kysely<Database>,
   sectionId: string,
   courseId: string,
-  values: { title?: string; description?: string | null; updated_at: Date },
+  values: { title?: string; updated_at: Date },
 ) {
   await database
     .updateTable("course_sections")

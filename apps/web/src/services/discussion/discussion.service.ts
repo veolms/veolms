@@ -8,7 +8,6 @@ export const discussionService = {
     return api.post<DiscussionUploadResponse>(
       "/dev/discussion-uploads",
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
   },
 };

@@ -11,3 +11,4 @@
 @import "./styles/features/course-wizard.css";
 @import "./styles/components/confirm-delete-modal.css";
 @source "../../../packages/video-player/src";
+@import "./styles/components/toast-notification.css";

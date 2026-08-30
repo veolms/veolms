@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CommentComposer } from "../../src/learning/CommentComposer.tsx";
+import { CommentFormattingToolbar } from "../../src/learning/CommentFormattingToolbar.tsx";
 import { DiscussionMarkdown } from "../../src/learning/discussion-editor/DiscussionMarkdown.tsx";
 import { insertDiscussionAttachment } from "../../src/learning/discussion-editor/attachments.ts";
 import { htmlToDiscussionMarkdown } from "../../src/learning/discussion-editor/clipboard.ts";
@@ -85,6 +86,92 @@ describe("discussion Markdown editor commands", () => {
       "```\n[first](https://example.com)\nsecond\n```",
     );
     view.destroy();
+  });
+
+  it("keeps bold delimiters distinct when toggling italics", () => {
+    const { view, commands } = createCommandHarness("**hello**");
+    view.dispatch({ selection: { anchor: 2, head: 7 } });
+
+    expect(commands.getFormattingState()).toMatchObject({
+      bold: true,
+      italic: false,
+    });
+
+    commands.toggleItalic();
+    expect(view.state.doc.toString()).toBe("***hello***");
+    expect(commands.getFormattingState()).toMatchObject({
+      bold: true,
+      italic: true,
+    });
+
+    commands.toggleItalic();
+    expect(view.state.doc.toString()).toBe("**hello**");
+    view.destroy();
+  });
+});
+
+describe("comment formatting toolbar", () => {
+  const formattingState = {
+    bold: false,
+    italic: false,
+    highlight: false,
+    link: false,
+    code: false,
+    codeBlock: false,
+    canUndo: false,
+    canRedo: false,
+    linkUrl: "",
+  };
+
+  it("returns focus to the editor after applying or removing a link", () => {
+    const editor = createEditorControllerStub();
+    const { rerender } = render(
+      <CommentFormattingToolbar
+        editor={editor}
+        formattingState={formattingState}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add or edit link" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Link URL" }), {
+      target: { value: "example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(editor.applyLink).toHaveBeenCalledWith("https://example.com");
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CommentFormattingToolbar
+        editor={editor}
+        formattingState={{
+          ...formattingState,
+          link: true,
+          linkUrl: "https://example.com",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add or edit link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(editor.removeLink).toHaveBeenCalledTimes(1);
+    expect(editor.focus).toHaveBeenCalledTimes(2);
+  });
+
+  it("delegates attachment notices to the composer", async () => {
+    const editor = createEditorControllerStub();
+    const file = new File(["image"], "diagram.png", { type: "image/png" });
+    render(
+      <CommentFormattingToolbar
+        editor={editor}
+        formattingState={formattingState}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Choose image or video"), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => expect(editor.attach).toHaveBeenCalledWith(file));
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });
 
@@ -262,5 +349,16 @@ function createCommandStub(insertMarkdown: (markdown: string) => void) {
       canRedo: false,
       linkUrl: "",
     })),
+  };
+}
+
+function createEditorControllerStub() {
+  return {
+    ...createCommandStub(vi.fn()),
+    attach: vi.fn(async () => ({
+      inserted: true,
+      message: "Attachment uploaded.",
+    })),
+    getMarkdown: vi.fn(() => ""),
   };
 }

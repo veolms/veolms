@@ -12,8 +12,9 @@ import {
   DrawerTitle,
 } from "../components/ui/drawer";
 import { CommentCard } from "./CommentCard";
-import type { Comment } from "./CommentCard";
+import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
+import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
@@ -199,6 +200,11 @@ interface EditingEntry {
   visibility: DiscussionVisibility;
 }
 
+interface OpenDiscussionThread {
+  id: number;
+  focusComposer: boolean;
+}
+
 const entryFilters = [
   ["all", "All"],
   ["note", "Notes"],
@@ -265,6 +271,9 @@ export function Discussion({
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
   const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
+  const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
+    null,
+  );
   const [notice, setNotice] = useState("");
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
@@ -301,6 +310,11 @@ export function Discussion({
       new Map(visibleEntries.map((entry) => [entry.id, entry])).values(),
     );
   }, [entries, entryFilter]);
+  const threadEntries = useMemo(
+    () =>
+      Array.from(new Map(entries.map((entry) => [entry.id, entry])).values()),
+    [entries],
+  );
 
   const submitEntry = () => {
     if (draftIsTooLong) {
@@ -410,6 +424,65 @@ export function Discussion({
     setNotice("");
   };
 
+  const addReply = (entryId: number, reply: CommentReply) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const thread = [...(entry.thread ?? []), reply];
+        return {
+          ...entry,
+          thread,
+          replies: Math.max(entry.replies ?? 0, thread.length),
+        };
+      });
+    setEntries(update);
+    setPostedEntries(update);
+  };
+
+  const editReply = (
+    entryId: number,
+    replyId: number,
+    replyDraft: DiscussionDraft,
+  ) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              thread: entry.thread?.map((reply) =>
+                reply.id === replyId
+                  ? {
+                      ...reply,
+                      text: replyDraft.plainText.trim(),
+                      content: replyDraft,
+                      time: "Just now (edited)",
+                    }
+                  : reply,
+              ),
+            }
+          : entry,
+      );
+    setEntries(update);
+    setPostedEntries(update);
+  };
+
+  const deleteReply = (entryId: number, replyId: number) => {
+    const update = (current: Comment[]) =>
+      current.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const thread = (entry.thread ?? []).filter(
+          (reply) => reply.id !== replyId,
+        );
+        return {
+          ...entry,
+          thread,
+          replies: Math.max(0, (entry.replies ?? thread.length) - 1),
+        };
+      });
+    setEntries(update);
+    setPostedEntries(update);
+  };
+
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
       <ThreadSurface
@@ -478,6 +551,32 @@ export function Discussion({
         onReport={() =>
           setNotice("Report received. Our moderation team will review it.")
         }
+        onOpenThread={(id, focusComposer = false) =>
+          setOpenThread({ id, focusComposer })
+        }
+      />
+      <DiscussionThreadPanel
+        open={openThread !== null}
+        activeEntryId={openThread?.id ?? null}
+        entries={threadEntries}
+        focusComposerOnOpen={Boolean(openThread?.focusComposer)}
+        onOpenChange={(open) => {
+          if (!open) setOpenThread(null);
+        }}
+        onActiveEntryChange={(id) =>
+          setOpenThread((current) =>
+            current ? { id, focusComposer: false } : current,
+          )
+        }
+        onLike={onLike}
+        onAddReply={addReply}
+        onEditEntry={beginEditingEntry}
+        onDeleteEntry={deleteEntry}
+        onEditReply={editReply}
+        onDeleteReply={deleteReply}
+        onReport={() =>
+          setNotice("Report received. Our moderation team will review it.")
+        }
       />
     </section>
   );
@@ -506,6 +605,7 @@ interface ThreadSurfaceProps {
   onEdit: (comment: Comment) => void;
   onDelete: (id: number) => void;
   onReport: (id: number) => void;
+  onOpenThread: (id: number, focusComposer?: boolean) => void;
 }
 
 function ThreadSurface({
@@ -531,6 +631,7 @@ function ThreadSurface({
   onEdit,
   onDelete,
   onReport,
+  onOpenThread,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -752,7 +853,7 @@ function ThreadSurface({
         ))}
       </div>
 
-      <div className={`mt-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+      <div className={`mt-1 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}>
         {entries.map((entry) => (
           <CommentCard
             key={entry.id}
@@ -761,6 +862,7 @@ function ThreadSurface({
             onEdit={onEdit}
             onDelete={onDelete}
             onReport={onReport}
+            onOpenThread={onOpenThread}
           />
         ))}
         {entries.length === 0 && (

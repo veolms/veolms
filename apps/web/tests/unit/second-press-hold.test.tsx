@@ -101,4 +101,30 @@ describe("useSecondPressHold", () => {
     fireEvent.click(toggle, { detail: 0 });
     expect(screen.getByLabelText("presses")).toHaveTextContent("1");
   });
+
+  it("cancels the hold when pointer capture is unavailable", () => {
+    vi.useFakeTimers();
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    render(<GestureHarness />);
+    const toggle = screen.getByRole("button", { name: "Toggle" });
+    Object.defineProperty(toggle, "setPointerCapture", {
+      configurable: true,
+      value: vi.fn(() => {
+        throw new Error("Pointer capture unavailable");
+      }),
+    });
+
+    fireEvent.click(toggle, { detail: 1 });
+    now = 100;
+    fireEvent.pointerDown(toggle, secondPointer);
+    expect(toggle).not.toHaveAttribute("data-second-press-holding");
+
+    act(() => vi.advanceTimersByTime(480));
+    expect(screen.getByLabelText("holds")).toHaveTextContent("0");
+
+    fireEvent.pointerUp(toggle, secondPointer);
+    fireEvent.click(toggle, { detail: 2 });
+    expect(screen.getByLabelText("presses")).toHaveTextContent("2");
+  });
 });

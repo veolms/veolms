@@ -16,6 +16,7 @@ import {
 } from "react";
 import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
+import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storage";
 
 interface CommentFormattingToolbarProps {
   editor: DiscussionEditorController;
@@ -37,11 +38,9 @@ export function CommentFormattingToolbar({
   const scrollportRef = useRef<HTMLDivElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
 
   const openLinkEditor = () => {
-    setNotice(null);
     setLinkUrl(formattingState.linkUrl);
     setLinkOpen(true);
   };
@@ -51,19 +50,20 @@ export function CommentFormattingToolbar({
     if (!href) editor.removeLink();
     else editor.applyLink(href);
     setLinkOpen(false);
+    editor.focus();
   };
 
   const removeLink = () => {
     editor.removeLink();
     setLinkOpen(false);
+    editor.focus();
   };
 
   const handleAttachment = async (event: ChangeEvent<HTMLInputElement>) => {
     const [file] = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!file) return;
-    const result = await editor.attach(file);
-    setNotice(result.message);
+    await editor.attach(file);
   };
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export function CommentFormattingToolbar({
   return (
     <div
       data-comment-formatting-toolbar
-      className="relative -my-2.5 flex min-w-0 flex-1 self-stretch items-center"
+      className="relative -my-2.5 flex min-w-0 flex-1 basis-0 self-stretch items-center overflow-hidden"
     >
       {linkOpen && (
         <form
@@ -142,15 +142,6 @@ export function CommentFormattingToolbar({
         </form>
       )}
 
-      {notice && (
-        <div
-          role="status"
-          className="absolute bottom-[calc(100%+0.75rem)] left-0 z-20 max-w-64 rounded-lg bg-(--surface-elevated,var(--surface)) px-3 py-2 text-xs text-(--text-secondary) shadow-[0_12px_34px_rgba(0,0,0,0.3),0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)]"
-        >
-          {notice}
-        </div>
-      )}
-
       <span
         data-comment-toolbar-separator="leading"
         aria-hidden="true"
@@ -159,9 +150,11 @@ export function CommentFormattingToolbar({
 
       <div
         ref={scrollportRef}
+        data-base-ui-swipe-ignore=""
+        data-learning-swipe-ignore=""
         role="toolbar"
         aria-label="Comment formatting"
-        className="learning-comment-formatting-scrollport flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
+        className="learning-comment-formatting-scrollport swiper-no-swiping flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
       >
         <ToolbarButton
           label="Undo"
@@ -193,12 +186,14 @@ export function CommentFormattingToolbar({
         >
           <LinkSimple size={17} />
         </ToolbarButton>
-        <ToolbarButton
-          label="Attach image or video"
-          onClick={() => attachmentInputRef.current?.click()}
-        >
-          <Paperclip size={17} />
-        </ToolbarButton>
+        {DISCUSSION_ATTACHMENTS_ENABLED && (
+          <ToolbarButton
+            label="Attach image or video"
+            onClick={() => attachmentInputRef.current?.click()}
+          >
+            <Paperclip size={17} />
+          </ToolbarButton>
+        )}
         <ToolbarButton
           label="Bold"
           active={formattingState.bold}
@@ -237,14 +232,16 @@ export function CommentFormattingToolbar({
         />
       )}
 
-      <input
-        ref={attachmentInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
-        aria-label="Choose image or video"
-        className="sr-only"
-        onChange={handleAttachment}
-      />
+      {DISCUSSION_ATTACHMENTS_ENABLED && (
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+          aria-label="Choose image or video"
+          className="sr-only"
+          onChange={handleAttachment}
+        />
+      )}
     </div>
   );
 }
