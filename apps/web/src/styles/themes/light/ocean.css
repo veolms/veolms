@@ -1,4 +1,4 @@
-/* ocean palette — light mode. */
+/* ocean palette - light mode. */
 :root[data-theme="light"][data-palette="ocean"] {
   --canvas: #e9eef4;
   --header: #e4eaf0;

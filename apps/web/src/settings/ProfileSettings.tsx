@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { At } from "@phosphor-icons/react/At";
-import { Camera } from "@phosphor-icons/react/Camera";
-import { Check } from "@phosphor-icons/react/Check";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
-import { GithubLogo } from "@phosphor-icons/react/GithubLogo";
-import { Globe } from "@phosphor-icons/react/Globe";
-import { LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
-import { Phone } from "@phosphor-icons/react/Phone";
-import { SealCheck } from "@phosphor-icons/react/SealCheck";
-import { ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
-import { X } from "@phosphor-icons/react/X";
+import { AtIcon as At } from "@phosphor-icons/react/At";
+import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { GithubLogoIcon as GithubLogo } from "@phosphor-icons/react/GithubLogo";
+import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
+import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
+import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
+import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
+import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import {
   getDefaultProfileIdentity,
   getProfileIdentity,
@@ -24,6 +25,7 @@ import type {
 } from "./profilePreferences";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { CircularCheckbox } from "../components/CircularCheckbox";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -104,22 +106,17 @@ function PublicVisibilityCheckbox({
   label,
 }: PublicVisibilityCheckboxProps) {
   return (
-    <label className="settings-profile__visibility-checkbox" htmlFor={id}>
-      <span>Show publicly</span>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        aria-label={label}
-      />
-      <span
-        className="settings-profile__visibility-checkbox-mark"
-        aria-hidden="true"
-      >
-        <Check size={10} weight="bold" />
-      </span>
-    </label>
+    <CircularCheckbox
+      id={id}
+      checked={checked}
+      onCheckedChange={onChange}
+      label="Show publicly"
+      ariaLabel={label}
+      labelPosition="before"
+      className="settings-profile__visibility-checkbox"
+      indicatorClassName="settings-profile__visibility-checkbox-mark"
+      unstyled
+    />
   );
 }
 
@@ -150,6 +147,11 @@ export function ProfileSettings({
   const [verificationRequested, setVerificationRequested] = useState(false);
   const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] =
     useState(false);
+
+  useBackDismiss({
+    open: mobileVisibilityPromptOpen,
+    onDismiss: () => setMobileVisibilityPromptOpen(false),
+  });
   const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] =
     useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -165,7 +167,9 @@ export function ProfileSettings({
   const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
   const activeEmail = activeUser?.email || initialIdentity.email;
   const isEmailVerified = Boolean(activeUser?.email);
-  const isMobileVerified = Boolean(activeUser?.phoneNo || draftProfile.mobileVerified);
+  const isMobileVerified = Boolean(
+    activeUser?.phoneNo || draftProfile.mobileVerified,
+  );
 
   useEffect(() => {
     // Restore default dummy identity for guest or active user context
@@ -178,7 +182,8 @@ export function ProfileSettings({
     } else {
       const identity = getProfileIdentity(role);
       const editableProfile = toEditableProfile(identity);
-      if (activeUser.displayName) editableProfile.displayName = activeUser.displayName;
+      if (activeUser.displayName)
+        editableProfile.displayName = activeUser.displayName;
       if (activeUser.username) editableProfile.username = activeUser.username;
       if (activeUser.phoneNo) {
         editableProfile.mobileNumber = activeUser.phoneNo;
@@ -255,7 +260,7 @@ export function ProfileSettings({
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [draftProfile, isDirty, isOnline, onProfileSaved, role]);
+  }, [activeUser, draftProfile, isDirty, isOnline, onProfileSaved, role]);
 
   const updateText = (field: keyof EditableProfile, value: string) => {
     setSaveError("");
@@ -563,6 +568,7 @@ export function ProfileSettings({
               <textarea
                 id="profile-bio"
                 name="bio"
+                className="[touch-action:pan-y_pinch-zoom] focus:touch-auto"
                 value={draftProfile.bio}
                 maxLength={160}
                 rows={3}
@@ -798,62 +804,62 @@ export function ProfileSettings({
             closeMobileVisibilityPrompt();
           }}
         >
-        <button
-          type="button"
-          className="settings-profile__privacy-dialog-close"
-          aria-label="Close mobile visibility confirmation"
-          onClick={closeMobileVisibilityPrompt}
-        >
-          <X size={18} />
-        </button>
-        <div
-          className="settings-profile__privacy-dialog-icon"
-          aria-hidden="true"
-        >
-          <ShieldWarning size={25} weight="fill" />
-        </div>
-        <div className="settings-profile__privacy-dialog-copy">
-          <h2 id="mobile-visibility-dialog-title">
-            Show your mobile number publicly?
-          </h2>
-          <p id="mobile-visibility-dialog-description">
-            Anyone who can view your profile will be able to see this number.
-            They may call you directly or message you on WhatsApp. Publishing is
-            not connected yet, so this acknowledgement will keep your number
-            private and will not send a request.
-          </p>
-        </div>
-        <label className="settings-profile__privacy-consent">
-          <input
-            type="checkbox"
-            checked={mobileVisibilityAcknowledged}
-            onChange={(event) =>
-              setMobileVisibilityAcknowledged(event.target.checked)
-            }
-          />
-          <span
-            className="settings-profile__privacy-consent-mark"
-            aria-hidden="true"
-          >
-            <Check size={12} weight="bold" />
-          </span>
-          <span>
-            I understand that anyone can call or message me on WhatsApp using
-            this number.
-          </span>
-        </label>
-        <div className="settings-profile__privacy-dialog-actions">
-          <button type="button" onClick={closeMobileVisibilityPrompt}>
-            Cancel
-          </button>
           <button
             type="button"
-            disabled={!mobileVisibilityAcknowledged}
-            onClick={confirmMobileVisibility}
+            className="settings-profile__privacy-dialog-close"
+            aria-label="Close mobile visibility confirmation"
+            onClick={closeMobileVisibilityPrompt}
           >
-            I understand, keep private
+            <X size={18} />
           </button>
-        </div>
+          <div
+            className="settings-profile__privacy-dialog-icon"
+            aria-hidden="true"
+          >
+            <ShieldWarning size={25} weight="fill" />
+          </div>
+          <div className="settings-profile__privacy-dialog-copy">
+            <h2 id="mobile-visibility-dialog-title">
+              Show your mobile number publicly?
+            </h2>
+            <p id="mobile-visibility-dialog-description">
+              Anyone who can view your profile will be able to see this number.
+              They may call you directly or message you on WhatsApp. Publishing
+              is not connected yet, so this acknowledgement will keep your
+              number private and will not send a request.
+            </p>
+          </div>
+          <label className="settings-profile__privacy-consent">
+            <input
+              type="checkbox"
+              checked={mobileVisibilityAcknowledged}
+              onChange={(event) =>
+                setMobileVisibilityAcknowledged(event.target.checked)
+              }
+            />
+            <span
+              className="settings-profile__privacy-consent-mark"
+              aria-hidden="true"
+            >
+              <Check size={12} weight="bold" />
+            </span>
+            <span>
+              I understand that anyone can call or message me on WhatsApp using
+              this number.
+            </span>
+          </label>
+          <div className="settings-profile__privacy-dialog-actions">
+            <button type="button" onClick={closeMobileVisibilityPrompt}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!mobileVisibilityAcknowledged}
+              onClick={confirmMobileVisibility}
+            >
+              I understand, keep private
+            </button>
+          </div>
         </dialog>
       )}
     </section>

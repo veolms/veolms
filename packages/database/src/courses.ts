@@ -17,7 +17,7 @@ export async function listPublishedCourses(
     id: row.id,
     slug: row.slug,
     title: row.title,
-    shortDescription: row.short_description,
+    shortDescription: row.short_description ?? "",
   }));
 }
 
@@ -40,7 +40,7 @@ export async function findPublishedCourseBySlug(
     id: row.id,
     slug: row.slug,
     title: row.title,
-    shortDescription: row.short_description,
-    description: row.description,
+    shortDescription: row.short_description ?? "",
+    description: row.description ?? "",
   };
 }

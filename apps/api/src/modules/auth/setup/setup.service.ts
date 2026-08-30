@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
+import { secureCompare } from "../../../lib/secure-compare.ts";
 import type { CreateUserInput } from "../authentication/authentication.types.ts";
 import * as academyRepository from "./setup.repository.ts";
 import type { AuthService } from "../authentication/authentication.service.ts";
@@ -26,14 +27,7 @@ export function createSetupService({
   sessionService,
 }: SetupServiceOptions) {
   function isValidSetupToken(submitted: string): boolean {
-    const submittedBytes = Buffer.from(submitted, "utf8");
-    const expectedBytes = Buffer.from(config.SETUP_TOKEN, "utf8");
-
-    if (submittedBytes.length !== expectedBytes.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(submittedBytes, expectedBytes);
+    return secureCompare(submitted, config.SETUP_TOKEN);
   }
 
   async function assertSetupOpen(): Promise<void> {
@@ -109,13 +103,13 @@ export function createSetupService({
     if (await authService.countUsers()) {
       throw new AppError(
         403,
-        "CREATOR_EXISTS",
-        "LMS platform has already been initialized. Creator account exists.",
+        "ADMIN_EXISTS",
+        "LMS platform has already been initialized. Administrator account exists.",
       );
     }
 
     const username = await authService.generateUniqueUsername(
-      input.email.split("@")[0] || "creator",
+      input.email.split("@")[0] || "admin",
     );
 
     const createInput: CreateUserInput = {
@@ -128,8 +122,9 @@ export function createSetupService({
     const userId = await authService.createUser(createInput);
     const user = await authService.requireUser(userId);
     const session = await sessionService.establishSession(user, request);
+    const rbac = await authService.getUserRbac(user.id);
 
-    return { user, session };
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function configureAcademy(input: AcademyRequest) {
@@ -170,8 +165,8 @@ export function createSetupService({
     if (!(await authService.countUsers())) {
       throw new AppError(
         400,
-        "CREATOR_NOT_REGISTERED",
-        "Register the creator account before finalizing setup.",
+        "ADMIN_NOT_REGISTERED",
+        "Register the administrator account before finalizing setup.",
       );
     }
 

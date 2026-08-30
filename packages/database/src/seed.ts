@@ -2,6 +2,7 @@ import { loadServerConfig } from "@veolms/config";
 
 import { createDatabase } from "./client.ts";
 import type { CourseStatus } from "./schema.ts";
+import { seedRolesAndPermissions } from "./seed-rbac.ts";
 
 const courses = [
   {
@@ -40,32 +41,7 @@ const config = loadServerConfig(process.env);
 const database = createDatabase(config.DATABASE_URL);
 
 try {
-
-  const roles = [
-    {
-      id: "00000000-0000-4000-8000-000000000001",
-      name: "creator",
-      description: "Platform owner and creator",
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "student",
-      description: "Enrolled student",
-    },
-  ];
-
-  for (const role of roles) {
-    await database
-      .insertInto("roles")
-      .values(role)
-      .onConflict((conflict) =>
-        conflict.column("name").doUpdateSet({
-          description: role.description,
-          updated_at: new Date(),
-        }),
-      )
-      .execute();
-  }
+  await seedRolesAndPermissions(database);
 
   for (const course of courses) {
     await database
@@ -84,7 +60,8 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${roles.length} roles and ${courses.length} published courses.`);
+  console.info(`Seeded ${courses.length} published courses.`);
 } finally {
   await database.destroy();
 }
+

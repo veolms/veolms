@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   courseVideos,
+  createCurriculumSections,
   formatMediaTime,
+  getCourseVideoForLesson,
   lessonSequence,
   getLessonSlug,
   lessonIdBySlug,
@@ -12,12 +14,14 @@ import {
   resolveCourseMediaBaseUrl,
   resolveCourseVideoSrc,
   sections,
+  totalCourseLectures,
 } from "../../src/learning/courseContent.js";
 import {
   getCourseBrandColor,
   getCourseThumbnail,
   getCourseTitle,
 } from "../../src/learning/courseMetadata.js";
+import { CURRICULUM_SECTION_COUNT_DEFAULT } from "../../src/learning/curriculumSize.js";
 
 describe("learning course content", () => {
   it("formats invalid, minute, and hour media durations exactly", () => {
@@ -31,9 +35,13 @@ describe("learning course content", () => {
 
   it("preserves deterministic lesson order and duration tuple strings", () => {
     expect(lessonSequence).toEqual(
-      Array.from({ length: 41 }, (_, index) => index + 1),
+      Array.from({ length: totalCourseLectures }, (_, index) => index + 1),
     );
     expect([...lessonsById.keys()]).toEqual(lessonSequence);
+    expect(sections).toHaveLength(CURRICULUM_SECTION_COUNT_DEFAULT);
+    expect(sections.flatMap(({ lessons }) => lessons)).toHaveLength(
+      totalCourseLectures,
+    );
     const lessonDurations = sections.flatMap(({ lessons }) =>
       lessons.map(([number, , duration]) => [number, duration]),
     );
@@ -68,6 +76,26 @@ describe("learning course content", () => {
     }
   });
 
+  it("builds session-sized curricula without changing canonical lecture data", () => {
+    const loadTestSections = createCurriculumSections(32, 600);
+    const sparseSections = createCurriculumSections(50, 10);
+
+    expect(loadTestSections).toHaveLength(32);
+    expect(loadTestSections.flatMap(({ lessons }) => lessons)).toHaveLength(
+      600,
+    );
+    expect(loadTestSections.at(-1)?.title).toBe("Load Test Section 32");
+    expect(loadTestSections.flatMap(({ lessons }) => lessons).at(-1)?.[0]).toBe(
+      600,
+    );
+    expect(sparseSections).toHaveLength(50);
+    expect(sparseSections.flatMap(({ lessons }) => lessons)).toHaveLength(10);
+    expect(
+      sparseSections.filter(({ lessons }) => lessons.length === 0),
+    ).toHaveLength(48);
+    expect(loadTestSections[0]?.lessons[0]).toEqual(sections[0]?.lessons[0]);
+  });
+
   it("assigns stable unique lecture slugs and resolves legacy lecture IDs", () => {
     expect(getLessonSlug(3)).toBe("the-design-mindset");
     expect(getLessonSlug(13)).toBe("the-design-mindset-13");
@@ -77,6 +105,8 @@ describe("learning course content", () => {
     expect(resolveLessonIdentifier("3")).toBe(3);
     expect(resolveLessonIdentifier("lecture-3")).toBe(3);
     expect(resolveLessonIdentifier("lesson-3")).toBe(3);
+    expect(getLessonSlug(1000)).toBe("lecture-1000");
+    expect(resolveLessonIdentifier("lecture-1000")).toBe(1000);
     expect(resolveLessonIdentifier("unknown-lecture")).toBeNull();
   });
 
@@ -94,6 +124,7 @@ describe("learning course content", () => {
     expect(lessonVideoMap[24]).toBe(lessonVideoMap[1]);
     expect(lessonVideoMap[32]).toBe(lessonVideoMap[1]);
     expect(lessonVideoMap[37]).toBe(lessonVideoMap[1]);
+    expect(getCourseVideoForLesson(600)).toBeDefined();
   });
 
   it("builds the course-video prefix from the configured media origin", () => {
@@ -128,12 +159,7 @@ describe("learning course content", () => {
 });
 
 describe("learning course metadata", () => {
-  it("prefers known slug titles over the deterministic fallback title", () => {
-    localStorage.setItem(
-      "veolms-current-course-title",
-      "Stored Academy Course",
-    );
-
+  it("resolves known slug titles before the deterministic fallback title", () => {
     expect(getCourseTitle("typescript-course")).toBe(
       "The Ultimate TypeScript Course",
     );

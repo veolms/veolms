@@ -12,8 +12,13 @@ export const test = base.extend({
       runtimeErrors.push(`pageerror: ${error.message}`),
     );
     page.on("console", (message) => {
-      if (message.type() === "error")
+      if (message.type() !== "error") return;
+      const isExpectedUnauthenticatedResponse =
+        message.text().includes("status of 401") &&
+        /\/api\/v1\/auth\//.test(message.location().url);
+      if (!isExpectedUnauthenticatedResponse) {
         runtimeErrors.push(`console.error: ${message.text()}`);
+      }
     });
 
     await page.route(/\.mp4(?:\?.*)?$/, async (route) => {

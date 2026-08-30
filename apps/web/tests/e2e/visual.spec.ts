@@ -13,7 +13,7 @@ test.describe("@visual", () => {
 
   test("Courses desktop · dark Graphite", async ({ page }) => {
     await installBaselineState(page);
-    await openApp(page, "/explore-courses");
+    await openApp(page, "/courses");
     await prepareVisualPage(page);
     await expect(page).toHaveScreenshot("courses-dark.png", { fullPage: true });
   });
@@ -26,7 +26,7 @@ test.describe("@visual", () => {
         "veolms-academy-theme-version": "veo-onyx-default-v2",
       },
     });
-    await openApp(page, "/explore-courses");
+    await openApp(page, "/courses");
     await prepareVisualPage(page);
     await expect(page).toHaveScreenshot("courses-light-ocean.png", {
       fullPage: true,
@@ -158,7 +158,7 @@ test.describe("@visual", () => {
   test("Courses mobile · dark Graphite", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installBaselineState(page);
-    await openApp(page, "/explore-courses");
+    await openApp(page, "/courses");
     await prepareVisualPage(page);
     await expect(page).toHaveScreenshot("courses-mobile-dark.png", {
       fullPage: true,

@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
@@ -18,6 +19,13 @@ const host =
   hostArgumentIndex >= 0 && process.argv[hostArgumentIndex + 1]
     ? process.argv[hostArgumentIndex + 1]
     : process.env.HOST || "127.0.0.1";
+const apiTargetArgumentIndex = process.argv.indexOf("--api-target");
+const apiTargetValue =
+  apiTargetArgumentIndex >= 0 && process.argv[apiTargetArgumentIndex + 1]
+    ? process.argv[apiTargetArgumentIndex + 1]
+    : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
+const apiTarget = new URL(apiTargetValue);
+const apiOrigin = apiTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -54,8 +62,67 @@ const resolveRequestPath = async (pathname) => {
   return path.join(root, "index.html");
 };
 
+const proxyApiRequest = (request, response, requestUrl) => {
+  const targetUrl = new URL(
+    `${requestUrl.pathname}${requestUrl.search}`,
+    apiOrigin,
+  );
+  const sendRequest =
+    targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+  const proxyRequest = sendRequest(
+    targetUrl,
+    {
+      method: request.method,
+      headers: { ...request.headers, host: targetUrl.host },
+    },
+    (proxyResponse) => {
+      response.writeHead(
+        proxyResponse.statusCode || 502,
+        proxyResponse.headers,
+      );
+      proxyResponse.pipe(response);
+    },
+  );
+
+  proxyRequest.on("error", () => {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+
+    response.writeHead(502, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    response.end(
+      JSON.stringify({
+        success: false,
+        statusCode: 502,
+        error: {
+          code: "API_UNAVAILABLE",
+          message: "The preview server could not reach the API.",
+        },
+      }),
+    );
+  });
+
+  request.on("aborted", () => proxyRequest.destroy());
+  response.on("close", () => {
+    if (!response.writableEnded) proxyRequest.destroy();
+  });
+  request.pipe(proxyRequest);
+};
+
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
+  if (
+    requestUrl.pathname === "/api" ||
+    requestUrl.pathname.startsWith("/api/")
+  ) {
+    proxyApiRequest(request, response, requestUrl);
+    return;
+  }
+
   const filePath = await resolveRequestPath(requestUrl.pathname);
   if (!filePath) {
     response.writeHead(400).end("Bad request");

@@ -1,4 +1,4 @@
-/* codex palette — dark mode. */
+/* codex palette - dark mode. */
 /* Additional academy palettes retain the same semantic tokens in both modes. */
 :root[data-palette="codex"] {
   --canvas: #0d0d0f;

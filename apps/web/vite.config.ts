@@ -6,6 +6,7 @@ import { loadWebConfig } from "@veolms/config";
 import { defineConfig, loadEnv } from "vite";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
+const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
 
 const shellPhosphorIcons = new Set([
   "Bell",
@@ -61,7 +62,15 @@ export default defineConfig(({ mode }) => {
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
-      include: ["react", "react-dom/client"],
+      include: [
+        "react",
+        "react-dom/client",
+        "emoji-picker-react",
+        "@tiptap/core",
+        "@tiptap/extension-link",
+        "@tiptap/markdown",
+        "@tiptap/starter-kit",
+      ],
     },
     define: {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
@@ -72,13 +81,21 @@ export default defineConfig(({ mode }) => {
       ),
     },
     plugins: [tailwindcss(), reactRouter()],
+    resolve: {
+      alias: {
+        "@": webSourceRoot,
+      },
+      dedupe: ["@tiptap/core", "@tiptap/pm"],
+    },
     build: {
       rollupOptions: {
         output: {
           manualChunks(id) {
             const iconName = getPhosphorIconName(id);
-            if (iconName && shellPhosphorIcons.has(iconName)) return "shell-icons";
-            if (iconName && homePhosphorIcons.has(iconName)) return "home-icons";
+            if (iconName && shellPhosphorIcons.has(iconName))
+              return "shell-icons";
+            if (iconName && homePhosphorIcons.has(iconName))
+              return "home-icons";
             if (iconName && settingsPhosphorIcons.has(iconName))
               return "settings-icons";
             return undefined;
@@ -101,7 +118,10 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": {
           target: config.STATIC_BUILD_API_URL
-            ? new URL(config.STATIC_BUILD_API_URL).origin.replace("localhost", "127.0.0.1")
+            ? new URL(config.STATIC_BUILD_API_URL).origin.replace(
+                "localhost",
+                "127.0.0.1",
+              )
             : "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,

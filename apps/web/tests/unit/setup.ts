@@ -27,3 +27,12 @@ Object.defineProperty(window, "matchMedia", {
     },
   }),
 });
+
+// CodeMirror measures DOM ranges to keep the active selection in view. JSDOM
+// does not implement these geometry methods, so tests provide empty geometry.
+if (!Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+}
+if (!Range.prototype.getBoundingClientRect) {
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}

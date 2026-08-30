@@ -4,6 +4,8 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as fs from "node:fs";
@@ -49,9 +51,7 @@ export class S3StorageService {
    * Verifies if an object exists in storage using Metadata/HEAD operation,
    * returning object metadata or null if not found.
    */
-  async headObject(
-    key: string,
-  ): Promise<{ contentLength?: number } | null> {
+  async headObject(key: string): Promise<{ contentLength?: number } | null> {
     try {
       const response = await this.client.send(
         new HeadObjectCommand({
@@ -148,6 +148,60 @@ export class S3StorageService {
         Key: key,
       }),
     );
+  }
+
+  /**
+   * Deletes multiple objects in the provider's maximum batch size. Object
+   * deletion is idempotent, which makes this safe for retention retries.
+   */
+  async deleteObjects(keys: string[]): Promise<void> {
+    const uniqueKeys = [...new Set(keys.filter((key) => key.length > 0))];
+    for (let offset = 0; offset < uniqueKeys.length; offset += 1_000) {
+      const batch = uniqueKeys.slice(offset, offset + 1_000);
+      const response = await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: {
+            Objects: batch.map((Key) => ({ Key })),
+            Quiet: true,
+          },
+        }),
+      );
+
+      if (response.Errors && response.Errors.length > 0) {
+        throw new Error(
+          `Failed to delete ${response.Errors.length} storage object(s).`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Deletes every object below a prefix, paging through object storage and
+   * batching deletes so large HLS outputs do not require one API call each.
+   */
+  async deletePrefix(prefix: string): Promise<void> {
+    if (!prefix) {
+      return;
+    }
+
+    let continuationToken: string | undefined;
+    do {
+      const response = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      const keys = (response.Contents ?? [])
+        .map((object) => object.Key)
+        .filter((key): key is string => Boolean(key));
+      await this.deleteObjects(keys);
+      continuationToken = response.IsTruncated
+        ? response.NextContinuationToken
+        : undefined;
+    } while (continuationToken);
   }
 }
 export type { Readable };

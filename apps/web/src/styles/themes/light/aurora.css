@@ -1,4 +1,4 @@
-/* aurora palette — light mode. */
+/* aurora palette - light mode. */
 :root[data-theme="light"][data-palette="aurora"] {
   --canvas: #edfbf7;
   --header: #e9f7f2;

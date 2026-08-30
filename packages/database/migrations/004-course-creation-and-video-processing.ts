@@ -89,7 +89,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().references("courses.id").onDelete("cascade"),
     )
     .addColumn("title", "text", (column) => column.notNull())
-    .addColumn("description", "text")
     .addColumn("position", "integer", (column) => column.notNull())
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -165,8 +164,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("access_type", "text", (column) => column.notNull())
     .addColumn("duration_type", "text", (column) => column.notNull())
     .addColumn("duration_days", "integer")
-    .addColumn("starts_at", "timestamptz")
-    .addColumn("expires_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -192,10 +189,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addColumn("pricing_type", "text", (column) => column.notNull())
     .addColumn("price", "integer", (column) => column.notNull())
-    .addColumn("currency", "text", (column) => column.notNull())
+    .addColumn("currency", "text", (column) =>
+      column.notNull().defaultTo("INR"),
+    )
     .addColumn("sale_price", "integer")
-    .addColumn("sale_starts_at", "timestamptz")
-    .addColumn("sale_ends_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -219,9 +216,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().defaultTo(true),
     )
     .addColumn("allow_comments", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
-    .addColumn("allow_reviews", "boolean", (column) =>
       column.notNull().defaultTo(true),
     )
     .addColumn("allow_downloads", "boolean", (column) =>

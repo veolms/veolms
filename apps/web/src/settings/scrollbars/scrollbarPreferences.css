@@ -1,0 +1,50 @@
+/* Browser scrollbar pseudo-elements are not expressible with Tailwind. This
+   feature-local exception owns only the application-wide preference variants. */
+:root[data-scrollbar-style="custom"] {
+  --scrollbar-thumb-size: 5px;
+  --scrollbar-firefox-width: thin;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: color-mix(
+    in srgb,
+    var(--text-secondary) 58%,
+    transparent
+  );
+  --scrollbar-thumb-hover-color: color-mix(
+    in srgb,
+    var(--text-secondary) 82%,
+    transparent
+  );
+}
+
+:root[data-scrollbar-style="theme"] {
+  --scrollbar-thumb-size: 6px;
+  --scrollbar-firefox-width: thin;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: color-mix(in srgb, var(--accent) 96%, transparent);
+  --scrollbar-thumb-hover-color: var(--accent-hover, var(--accent));
+}
+
+:root[data-scrollbar-style="thick"] {
+  --scrollbar-thumb-size: 12px;
+  --scrollbar-firefox-width: auto;
+  --scrollbar-track-color: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    var(--surface-strong)
+  );
+  --scrollbar-thumb-color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  --scrollbar-thumb-hover-color: var(--accent-hover, var(--accent));
+}
+
+html:not([data-scrollbar-style="default"]) .floating-scrollbar {
+  width: var(--scrollbar-thumb-size, 6px);
+  background: var(--scrollbar-track-color, transparent);
+}
+
+@media (forced-colors: active) {
+  :root:not([data-scrollbar-style="default"]) {
+    --scrollbar-track-color: Canvas;
+    --scrollbar-thumb-color: Highlight;
+    --scrollbar-thumb-hover-color: Highlight;
+  }
+}

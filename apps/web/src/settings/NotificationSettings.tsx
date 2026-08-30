@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Bell } from "@phosphor-icons/react/Bell";
-import { BellRinging } from "@phosphor-icons/react/BellRinging";
-import { BookOpen } from "@phosphor-icons/react/BookOpen";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { Trophy } from "@phosphor-icons/react/Trophy";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRinging";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
 import { SettingRow, SettingsToggle } from "./SettingsControls";
 
 interface NotificationPreferences {

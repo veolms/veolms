@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   canToggleDocumentFullscreen,
   getDocumentFullscreenElement,
+  lockScreenOrientation,
   toggleDocumentFullscreen,
+  unlockScreenOrientation,
 } from "../../src/fullscreen.ts";
 
 describe("fullscreen controls", () => {
@@ -42,5 +44,25 @@ describe("fullscreen controls", () => {
 
     await expect(toggleDocumentFullscreen(target)).resolves.toBe(true);
     expect(webkitRequestFullscreen).toHaveBeenCalledOnce();
+  });
+
+  it("locks a supported screen orientation to landscape", async () => {
+    const lock = vi.fn().mockResolvedValue(undefined);
+    const orientation = { lock };
+
+    await expect(lockScreenOrientation(orientation)).resolves.toBe(true);
+    expect(lock).toHaveBeenCalledWith("landscape");
+  });
+
+  it("handles unavailable orientation locking and unlocks safely", async () => {
+    const unlock = vi.fn();
+    const orientation = {
+      lock: vi.fn().mockRejectedValue(new Error("unsupported")),
+      unlock,
+    };
+
+    await expect(lockScreenOrientation(orientation)).resolves.toBe(false);
+    unlockScreenOrientation(orientation);
+    expect(unlock).toHaveBeenCalledOnce();
   });
 });

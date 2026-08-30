@@ -7,7 +7,11 @@ import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
-import { getSurfaceDepthBootstrapScript } from "./settings/settingsPreferences";
+import {
+  getControlRadiusBootstrapScript,
+  getScrollbarBootstrapScript,
+  getSurfaceDepthBootstrapScript,
+} from "./settings/settingsPreferences";
 import { useCurrentUser } from "./services/auth";
 import {
   ACADEMY_THEME_VERSION,
@@ -37,15 +41,20 @@ export function Layout({ children }: LayoutProps) {
       data-page-tab-colors="follow-sidebar"
       data-content-layout="framed"
       data-sidebar-header-layout="inline"
+      data-sidebar-glow="theme"
+      data-sidebar-glow-shape="circle"
       data-elevated-surfaces="true"
-      data-sidebar-menu-elevation="false"
+      data-hide-scrollbars="true"
+      data-scrollbar-style="theme"
+      data-sidebar-menu-elevation="true"
+      data-control-radius="balanced"
       suppressHydrationWarning
     >
       <head>
         <meta charSet="UTF-8" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
@@ -64,6 +73,14 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{ __html: getSurfaceDepthBootstrapScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: getScrollbarBootstrapScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getControlRadiusBootstrapScript(),
+          }}
         />
         <link rel="stylesheet" href={fullAppStylesheet} />
         <Meta />

@@ -10,8 +10,7 @@ export const productName = "ProCodrr";
 
 export type ShellPage =
   | "home"
-  | "my-courses"
-  | "explore-courses"
+  | "courses"
   | "reviews"
   | "orders"
   | "order-history"
@@ -35,7 +34,7 @@ export interface ShellRouteDescriptor {
 export interface LearningRouteDescriptor {
   kind: "learning";
   page: "learning";
-  section: "Explore Courses";
+  section: "Learning Space";
   settingsTab?: undefined;
   discussionTab?: undefined;
 }
@@ -82,17 +81,11 @@ export const routeDescriptors = {
     title: "Dashboard",
     description: "Review academy performance and creator activity in ProCodrr.",
   },
-  "my-courses": {
+  courses: {
     kind: "shell",
-    page: "my-courses",
-    title: "My Courses",
-    description: "Review enrolled ProCodrr courses and learning progress.",
-  },
-  "explore-courses": {
-    kind: "shell",
-    page: "explore-courses",
-    title: "Explore Courses",
-    description: "Browse enrolled and available ProCodrr courses.",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
   },
   "course-create": {
     kind: "shell",
@@ -106,7 +99,7 @@ export const routeDescriptors = {
   // Academy-layout detects it via the learningDescriptor-like approach below.
   wishlist: {
     kind: "shell",
-    page: "explore-courses",
+    page: "courses",
     section: "Wishlist",
     title: "Wishlist",
     description: "Review the courses saved to your ProCodrr wishlist.",
@@ -268,7 +261,7 @@ export const routeDescriptors = {
 const learningDescriptor = {
   kind: "learning",
   page: "learning",
-  section: "Explore Courses",
+  section: "Learning Space",
 } as const satisfies LearningRouteDescriptor;
 
 const courseOverviewDescriptor = {
@@ -280,8 +273,7 @@ const courseOverviewDescriptor = {
 export const destinationPaths: Readonly<Record<string, string>> = {
   home: "/",
   dashboard: "/dashboard",
-  "my-courses": "/my-courses",
-  "explore-courses": "/explore-courses",
+  courses: "/courses",
   "create-course": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
@@ -310,8 +302,7 @@ const canonicalPathsByRouteId = {
   home: "/",
   "home-alias": "/home",
   dashboard: "/dashboard",
-  "my-courses": "/my-courses",
-  "explore-courses": "/explore-courses",
+  courses: "/courses",
   "course-create": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
@@ -372,7 +363,7 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "course-overview") {
-    const match = /^\/explore-courses\/([^/]+)\/overview$/.exec(normalizedPath);
+    const match = /^\/courses\/([^/]+)\/overview$/.exec(normalizedPath);
     const encodedSlug = match?.[1];
     if (!encodedSlug) return "home-fallback";
     try {

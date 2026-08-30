@@ -6,7 +6,7 @@ import type {
   MouseEvent,
   ReactNode,
 } from "react";
-import { Check } from "@phosphor-icons/react/Check";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ThemedSelect } from "../ThemedSelect";
 import type { ThemedSelectOption } from "../ThemedSelect";
 
@@ -26,6 +26,7 @@ export interface ChoiceCardProps {
   preview?: ReactNode;
   children?: ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
 export function ChoiceCard({
@@ -37,6 +38,7 @@ export function ChoiceCard({
   preview,
   children,
   className = "",
+  disabled = false,
 }: ChoiceCardProps) {
   return (
     <button
@@ -45,6 +47,7 @@ export function ChoiceCard({
       role="radio"
       aria-checked={checked}
       tabIndex={checked ? 0 : -1}
+      disabled={disabled}
       onClick={onChange}
     >
       {preview}
@@ -185,7 +188,7 @@ export function SettingRow({
         <strong>{label}</strong>
         <small>{note}</small>
       </span>
-      <span className="settings-row__control">{children}</span>
+      <div className="settings-row__control">{children}</div>
     </div>
   );
 }

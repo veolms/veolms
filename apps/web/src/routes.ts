@@ -9,11 +9,7 @@ export default [
     index(homeMarker, { id: "home" }),
     route("home", homeMarker, { id: "home-alias", caseSensitive: true }),
     route("dashboard", homeMarker, { id: "dashboard", caseSensitive: true }),
-    route("my-courses", marker, { id: "my-courses", caseSensitive: true }),
-    route("explore-courses", marker, {
-      id: "explore-courses",
-      caseSensitive: true,
-    }),
+    route("courses", marker, { id: "courses", caseSensitive: true }),
     route("courses/create", marker, {
       id: "course-create",
       caseSensitive: true,
@@ -83,7 +79,7 @@ export default [
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
-    route("explore-courses/:courseSlug/overview", marker, {
+    route("courses/:courseSlug/overview", marker, {
       id: "course-overview",
       caseSensitive: true,
     }),

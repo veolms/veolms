@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -7,6 +7,19 @@ import type {
 
 const MINIMUM_TRACK_INSET = 8;
 const MINIMUM_THUMB_HEIGHT = 40;
+const DRAG_DIRECTION_THRESHOLD = 4;
+
+export const FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT =
+  "veolms:floating-scrollbar-horizontal-drag";
+
+export interface FloatingScrollbarHorizontalDragDetail {
+  phase: "start" | "move" | "end" | "cancel";
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  ariaControls: string;
+  handle: HTMLElement;
+}
 
 type FloatingScrollbarProps = {
   scrollportRef: RefObject<HTMLElement | null>;
@@ -14,12 +27,22 @@ type FloatingScrollbarProps = {
   ariaLabel?: string;
   className?: string;
   disabled?: boolean;
+  rightEdgeRef?: RefObject<HTMLElement | null>;
+  rightEdgeSelector?: string;
+  enableHorizontalDrag?: boolean;
 };
 
 type ScrollbarDrag = {
   pointerId: number;
+  startClientX: number;
   startClientY: number;
   startScrollTop: number;
+  clickedThumb: boolean;
+  trackTop: number;
+  thumbHeight: number;
+  maximumThumbOffset: number;
+  maximumScrollOffset: number;
+  mode: "pending" | "scroll" | "resize";
 };
 
 const clamp = (value: number, minimum: number, maximum: number) =>
@@ -31,9 +54,33 @@ export function FloatingScrollbar({
   ariaLabel = "Page scroll position",
   className,
   disabled = false,
+  rightEdgeRef,
+  rightEdgeSelector,
+  enableHorizontalDrag = false,
 }: FloatingScrollbarProps) {
   const scrollbarRef = useRef<HTMLSpanElement>(null);
   const dragRef = useRef<ScrollbarDrag | null>(null);
+  const [scrollportReadyVersion, setScrollportReadyVersion] = useState(0);
+
+  // Portal-based drawers can attach their scrollport after this sibling has
+  // committed. Retry until the ref exists, then reconnect the observers once.
+  useLayoutEffect(() => {
+    if (disabled || scrollportRef.current) return;
+
+    let animationFrame = 0;
+    let remainingAttempts = 60;
+    const waitForScrollport = () => {
+      if (scrollportRef.current) {
+        setScrollportReadyVersion((version) => version + 1);
+        return;
+      }
+      if (remainingAttempts-- <= 0) return;
+      animationFrame = window.requestAnimationFrame(waitForScrollport);
+    };
+    animationFrame = window.requestAnimationFrame(waitForScrollport);
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [disabled, scrollportRef]);
 
   useLayoutEffect(() => {
     const scrollport = scrollportRef.current;
@@ -62,14 +109,25 @@ export function FloatingScrollbar({
       }
 
       const scrollportRect = scrollport.getBoundingClientRect();
-      const topTrackInset = Math.max(
-        MINIMUM_TRACK_INSET,
-        Number.parseFloat(scrollportStyle.borderTopRightRadius) || 0,
-      );
-      const bottomTrackInset = Math.max(
-        MINIMUM_TRACK_INSET,
-        Number.parseFloat(scrollportStyle.borderBottomRightRadius) || 0,
-      );
+      const selectedRightEdgeRect = rightEdgeSelector
+        ? scrollport
+            .querySelector<HTMLElement>(rightEdgeSelector)
+            ?.getBoundingClientRect()
+        : null;
+      const referencedRightEdgeRect =
+        rightEdgeRef?.current?.getBoundingClientRect() ?? null;
+      const topTrackInset = selectedRightEdgeRect
+        ? 0
+        : Math.max(
+            MINIMUM_TRACK_INSET,
+            Number.parseFloat(scrollportStyle.borderTopRightRadius) || 0,
+          );
+      const bottomTrackInset = selectedRightEdgeRect
+        ? 0
+        : Math.max(
+            MINIMUM_TRACK_INSET,
+            Number.parseFloat(scrollportStyle.borderBottomRightRadius) || 0,
+          );
       const trackHeight = Math.max(
         0,
         scrollportRect.height - topTrackInset - bottomTrackInset,
@@ -104,7 +162,13 @@ export function FloatingScrollbar({
       );
       scrollbar.style.setProperty(
         "--floating-scrollbar-right",
-        `${Math.max(0, window.innerWidth - scrollportRect.right)}px`,
+        `${Math.max(
+          0,
+          window.innerWidth -
+            (referencedRightEdgeRect?.right ??
+              selectedRightEdgeRect?.right ??
+              scrollportRect.right),
+        )}px`,
       );
       scrollbar.style.setProperty(
         "--floating-scrollbar-height",
@@ -153,6 +217,7 @@ export function FloatingScrollbar({
         ? null
         : new ResizeObserver(scheduleSync);
     resizeObserver?.observe(scrollport);
+    if (rightEdgeRef?.current) resizeObserver?.observe(rightEdgeRef.current);
     layoutAncestors.forEach((ancestor) => resizeObserver?.observe(ancestor));
     Array.from(scrollport.children).forEach((child) =>
       resizeObserver?.observe(child),
@@ -182,7 +247,50 @@ export function FloatingScrollbar({
       resizeObserver?.disconnect();
       contentObserver.disconnect();
     };
-  }, [disabled, scrollportRef]);
+  }, [
+    disabled,
+    rightEdgeRef,
+    rightEdgeSelector,
+    scrollportReadyVersion,
+    scrollportRef,
+  ]);
+
+  const getTrackScrollTop = (drag: ScrollbarDrag, clientY: number) => {
+    if (drag.maximumThumbOffset <= 0) return 0;
+    const requestedThumbOffset = clamp(
+      clientY - drag.trackTop - drag.thumbHeight / 2,
+      0,
+      drag.maximumThumbOffset,
+    );
+    return (
+      (requestedThumbOffset / drag.maximumThumbOffset) *
+      drag.maximumScrollOffset
+    );
+  };
+
+  const dispatchHorizontalDrag = (
+    phase: FloatingScrollbarHorizontalDragDetail["phase"],
+    event: ReactPointerEvent<HTMLSpanElement>,
+    clientX = event.clientX,
+    clientY = event.clientY,
+  ) => {
+    if (!enableHorizontalDrag) return;
+    window.dispatchEvent(
+      new CustomEvent<FloatingScrollbarHorizontalDragDetail>(
+        FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
+        {
+          detail: {
+            phase,
+            pointerId: event.pointerId,
+            clientX,
+            clientY,
+            ariaControls,
+            handle: event.currentTarget,
+          },
+        },
+      ),
+    );
+  };
 
   const beginDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
     if (
@@ -209,7 +317,7 @@ export function FloatingScrollbar({
       event.clientY >= thumbRect.top && event.clientY <= thumbRect.bottom;
     let startScrollTop = scrollport.scrollTop;
 
-    if (!clickedThumb && maximumThumbOffset > 0) {
+    if (!enableHorizontalDrag && !clickedThumb && maximumThumbOffset > 0) {
       const requestedThumbOffset = clamp(
         event.clientY - trackRect.top - thumbRect.height / 2,
         0,
@@ -222,8 +330,15 @@ export function FloatingScrollbar({
 
     dragRef.current = {
       pointerId: event.pointerId,
+      startClientX: event.clientX,
       startClientY: event.clientY,
       startScrollTop,
+      clickedThumb,
+      trackTop: trackRect.top,
+      thumbHeight: thumbRect.height,
+      maximumThumbOffset,
+      maximumScrollOffset,
+      mode: enableHorizontalDrag ? "pending" : "scroll",
     };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.classList.add("is-dragging");
@@ -237,6 +352,40 @@ export function FloatingScrollbar({
       ".floating-scrollbar__thumb",
     );
     if (!drag || drag.pointerId !== event.pointerId || !scrollport || !thumb) {
+      return;
+    }
+
+    if (drag.mode === "pending") {
+      const horizontalDistance = Math.abs(event.clientX - drag.startClientX);
+      const verticalDistance = Math.abs(event.clientY - drag.startClientY);
+      if (
+        Math.max(horizontalDistance, verticalDistance) <
+        DRAG_DIRECTION_THRESHOLD
+      ) {
+        return;
+      }
+
+      if (horizontalDistance > verticalDistance) {
+        drag.mode = "resize";
+        event.currentTarget.classList.add("is-resizing");
+        dispatchHorizontalDrag(
+          "start",
+          event,
+          drag.startClientX,
+          drag.startClientY,
+        );
+      } else {
+        drag.mode = "scroll";
+        if (!drag.clickedThumb) {
+          drag.startScrollTop = getTrackScrollTop(drag, drag.startClientY);
+          scrollport.scrollTop = drag.startScrollTop;
+        }
+      }
+    }
+
+    if (drag.mode === "resize") {
+      dispatchHorizontalDrag("move", event);
+      event.preventDefault();
       return;
     }
 
@@ -257,10 +406,26 @@ export function FloatingScrollbar({
     );
   };
 
-  const endDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
+  const endDrag = (
+    event: ReactPointerEvent<HTMLSpanElement>,
+    cancelled = false,
+  ) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const scrollport = scrollportRef.current;
+    if (
+      !cancelled &&
+      drag.mode === "pending" &&
+      !drag.clickedThumb &&
+      scrollport
+    ) {
+      scrollport.scrollTop = getTrackScrollTop(drag, drag.startClientY);
+    } else if (drag.mode === "resize") {
+      dispatchHorizontalDrag(cancelled ? "cancel" : "end", event);
+    }
     dragRef.current = null;
     event.currentTarget.classList.remove("is-dragging");
+    event.currentTarget.classList.remove("is-resizing");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -299,6 +464,11 @@ export function FloatingScrollbar({
       aria-controls={ariaControls}
       aria-hidden="true"
       aria-orientation="vertical"
+      aria-description={
+        enableHorizontalDrag
+          ? "Drag vertically to scroll or horizontally to resize course content"
+          : undefined
+      }
       aria-valuemin={0}
       aria-valuemax={0}
       aria-valuenow={0}
@@ -306,10 +476,14 @@ export function FloatingScrollbar({
       onPointerDown={beginDrag}
       onPointerMove={dragThumb}
       onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerCancel={(event) => endDrag(event, true)}
       onLostPointerCapture={(event) => {
+        if (dragRef.current?.mode === "resize") {
+          dispatchHorizontalDrag("cancel", event);
+        }
         dragRef.current = null;
         event.currentTarget.classList.remove("is-dragging");
+        event.currentTarget.classList.remove("is-resizing");
       }}
       onKeyDown={handleKeyDown}
     >

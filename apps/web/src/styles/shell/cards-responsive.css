@@ -4,7 +4,6 @@
 .dashboard-panel,
 .home-goal-summary,
 .home-mini-course,
-.learning-summary-row article,
 .home-metric {
   border: 0;
   background: var(--card-surface);
@@ -12,8 +11,7 @@
 }
 
 .home-mini-course,
-.home-metric,
-.learning-summary-row article {
+.home-metric {
   background: var(--card-surface-raised);
 }
 
@@ -21,7 +19,6 @@
    between the app shell and independent dashboard/course surfaces. */
 .home-resume-card,
 .home-goal-summary,
-.learning-summary-row article,
 .learning-card {
   contain: layout style;
 }
@@ -32,124 +29,9 @@
   gap: 22px;
 }
 
-.learning-summary-row {
-  display: grid;
-  grid-template-columns:
-    minmax(0, 1.12fr) minmax(0, 0.96fr) minmax(0, 0.96fr)
-    minmax(0, 1.08fr);
-  gap: 12px;
-}
-
-.learning-summary-row article {
-  --summary-tone: var(--accent);
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 92px;
-  overflow: hidden;
-  grid-template-columns: 42px minmax(0, 1fr);
-  grid-template-rows: min-content min-content;
-  align-content: center;
-  align-items: center;
-  column-gap: 13px;
-  row-gap: 5px;
-  border: 0;
-  border-radius: 14px;
-  padding: 16px 17px;
-  background:
-    linear-gradient(
-      132deg,
-      color-mix(in srgb, var(--summary-tone) 9%, transparent),
-      transparent 58%
-    ),
-    var(--card-surface-raised);
-  box-shadow: var(--card-shadow);
-}
-
-.learning-summary-row article.tone-violet {
-  --summary-tone: #8c6aff;
-}
-
-.learning-summary-row article.tone-cyan {
-  --summary-tone: #21d4f3;
-}
-
-.learning-summary-row article.tone-green {
-  --summary-tone: #5eea7c;
-}
-
-.learning-summary-row article.tone-gold {
-  --summary-tone: #f6c945;
-}
-
-.learning-summary-row article > span {
-  width: 42px;
-  height: 42px;
-  grid-row: 1 / 3;
-  border-radius: 12px;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
-    0 8px 18px color-mix(in srgb, var(--summary-tone) 13%, transparent);
-}
-
-.learning-summary-row article strong {
-  align-self: end;
-  color: var(--text);
-  font-size: 1.24rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 740;
-  letter-spacing: -0.025em;
-  line-height: 1;
-}
-
-.learning-summary-row article p {
-  align-self: start;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 900px) {
-  .learning-summary-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-}
-
 @media (max-width: 520px) {
   .learning-page-header {
     gap: 18px;
-  }
-
-  .learning-summary-row article {
-    min-height: 82px;
-    grid-template-columns: 38px minmax(0, 1fr);
-    column-gap: 10px;
-    padding: 13px;
-  }
-
-  .learning-summary-row article > span {
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
-  }
-
-  .learning-summary-row article strong {
-    font-size: 1.05rem;
-  }
-
-  .learning-summary-row article p {
-    font-size: 0.66rem;
-    white-space: normal;
-  }
-}
-
-@media (max-width: 350px) {
-  .learning-summary-row {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -160,6 +42,15 @@
 .home-resume-list {
   border: 0;
   background: var(--card-surface-raised);
+}
+
+/* Breakpoint defaults are layout synchronization, not an interaction. Keep
+   that responsive state change instantaneous so resizing never animates the
+   shell track or briefly reveals the sidebar's expanded content. */
+:root[data-responsive-sidebar-switching="true"] .courses-app,
+:root[data-responsive-sidebar-switching="true"] .courses-sidebar,
+:root[data-responsive-sidebar-switching="true"] .courses-sidebar * {
+  transition: none !important;
 }
 
 .course-card--interactive:hover,
@@ -219,12 +110,17 @@
   }
 
   .courses-sidebar {
-    padding-top: 0;
+    /* The shell already contributes its 12px top inset. A second sticky inset
+       moved the pinned sidebar and all of its contents down on reveal. */
+    top: 0;
+    /* Keep the card's border box fixed while giving the header and navigation
+       the requested small optical drop. */
+    padding-top: 2px;
   }
 
   .courses-sidebar__brand {
     align-items: flex-end;
-    margin-top: 12px;
+    margin-top: 0;
   }
 
   .courses-app--collapsed .courses-sidebar__brand {
@@ -239,7 +135,7 @@
       );
   }
 
-  .courses-app.courses-app--resizing {
+  .courses-app.courses-app--resizing:not(.courses-app--hidden) {
     grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
         0,
         1fr
@@ -259,11 +155,14 @@
      covering the labels instead of shrinking the artwork and text. */
   .courses-sidebar__brand {
     position: relative;
-    min-height: 38px;
+    box-sizing: border-box;
+    min-height: 50px;
     flex-direction: row;
     justify-content: flex-start;
     gap: 8px;
     min-width: 0;
+    padding-top: 12px;
+    user-select: none;
     /* Matches the navigation label anchor: button inset + icon + row gap. */
     padding-left: 50.5px;
     overflow: visible;
@@ -271,7 +170,7 @@
 
   .sidebar-collapse {
     position: absolute;
-    top: 0;
+    top: 12px;
     right: auto;
     left: 6px;
     z-index: 2;
@@ -366,7 +265,7 @@
   }
 
   .courses-app--collapsed .courses-sidebar__brand {
-    min-height: 36px;
+    min-height: 48px;
     flex-direction: row;
     justify-content: flex-start;
     gap: 0;
@@ -444,6 +343,7 @@
   :root[data-collapsed-sidebar-logo="true"]
     .courses-app--collapsed
     .sidebar-collapse {
+    top: 12px;
     right: auto;
     left: 10px;
     transform: none;
@@ -452,6 +352,7 @@
   :root[data-collapsed-sidebar-logo="true"]
     .courses-app--collapsed
     .courses-logo-clip {
+    top: 15px;
     left: 19.375px;
     transform: none;
   }
@@ -462,7 +363,7 @@
   :root
     .courses-app--resize-content-visible.courses-app--collapsed
     .courses-sidebar__brand {
-    min-height: 38px;
+    min-height: 50px;
     align-items: flex-end;
     flex-direction: row;
     justify-content: flex-start;
@@ -572,7 +473,7 @@
     .courses-app--collapsed
     .sidebar-collapse {
     position: absolute;
-    top: 0;
+    top: 12px;
     right: auto;
     left: 10px;
     opacity: 1;
@@ -677,6 +578,7 @@
     gap: 0;
     padding: 0;
     background: var(--main-surface);
+    touch-action: pan-y pinch-zoom;
   }
 
   .courses-sidebar,
@@ -684,12 +586,33 @@
     display: none !important;
   }
 
+  .courses-app--hidden > .courses-sidebar {
+    display: flex !important;
+    z-index: 160;
+    width: min(var(--sidebar-expanded-width), calc(100vw - 28px));
+  }
+
+  .courses-app--hidden > .sidebar-edge-trigger {
+    display: block !important;
+    z-index: 159;
+  }
+
+  .courses-app--hidden.courses-app--edge-open .sidebar-resize-handle {
+    right: -22px;
+    width: 44px;
+  }
+
+  .courses-app--hidden.courses-app--edge-open .sidebar-resize-handle::after {
+    right: 21px;
+    left: 21px;
+  }
+
   .courses-main,
   .student-surface-main {
     min-height: 100vh;
     min-height: 100dvh;
     border-radius: 0;
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-bottom: calc(104px + var(--app-viewport-safe-area-max-bottom));
     box-shadow: none;
   }
 
@@ -699,11 +622,16 @@
     border-radius: 0;
   }
 
-  .courses-app .mobile-palette-menu {
-    right: 12px;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    left: auto;
-    width: min(216px, calc(100% - 24px));
+  .mobile-menu-sheet .mobile-palette-menu {
+    --mobile-palette-menu-width: min(216px, calc(100% - 24px));
+    right: auto;
+    bottom: calc(100% + 10px);
+    left: clamp(
+      0px,
+      calc(var(--mobile-palette-anchor-x, 50%) - 108px),
+      calc(100% - var(--mobile-palette-menu-width))
+    );
+    width: var(--mobile-palette-menu-width);
   }
 }
 

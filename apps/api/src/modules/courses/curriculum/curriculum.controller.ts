@@ -26,13 +26,12 @@ export function createCurriculumController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    const { title, description } = request.body;
+    const { title } = request.body;
 
     const section = await service.createCourseSection(
       id,
       creatorId,
       title,
-      description,
     );
     reply.code(201);
     return section;
@@ -46,14 +45,13 @@ export function createCurriculumController({
   ) {
     const { id, sectionId } = request.params;
     const creatorId = request.user!.id;
-    const { title, description } = request.body;
+    const { title } = request.body;
 
     return await service.updateCourseSection(
       id,
       sectionId,
       creatorId,
       title,
-      description,
     );
   }
 

@@ -1,7 +1,7 @@
 /* Creator dashboard */
 .creator-dashboard {
   min-width: 0;
-  padding: 2px 0 20px;
+  padding: 0;
   color: var(--text);
 }
 
@@ -443,11 +443,6 @@
 
 .creator-table {
   overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.creator-table::-webkit-scrollbar {
-  display: none;
 }
 
 .creator-table-head,

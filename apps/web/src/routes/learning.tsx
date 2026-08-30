@@ -9,15 +9,13 @@ import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import {
-  COURSE_PLAYER_SESSION_STORAGE_KEY,
-  clearRememberedCoursePlayerDestination,
-  getActiveCoursePlayerSession,
   getCoursePlayerBackLabel,
   getCoursePlayerOrigin,
-  getCoursePlayerParentPath,
   getCoursePlayerPath,
+  getCoursePlayerReturnPath,
+  getCoursePlayerSession,
   getStoredCourseLessonId,
-  rememberCoursePlayerDestination,
+  upsertCoursePlayerSessionFromRoute,
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
 import type { AcademyOutletContext } from "./academy-layout";
@@ -34,58 +32,66 @@ export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { navigateTo } = useOutletContext<AcademyOutletContext>();
+  const {
+    mobileBottomNavigation,
+    mobileBottomNavigationHidden,
+    navigateTo,
+  } = useOutletContext<AcademyOutletContext>();
   const origin = getCoursePlayerOrigin(location.search);
+  const routeReturnPath = getCoursePlayerReturnPath(location.search);
   const lessonId = courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
     : 1;
-  const canonicalPath = courseSlug
-    ? getCoursePlayerPath(courseSlug, origin, lessonId)
-    : getCoursePlayerParentPath(origin);
-
   useEffect(() => {
     const currentPath = `${location.pathname}${location.search}`;
-    if (currentPath !== canonicalPath) {
-      void navigate(canonicalPath, { replace: true });
+    const nextPath = courseSlug
+      ? upsertCoursePlayerSessionFromRoute(
+          courseSlug,
+          location.search,
+          lessonId,
+        )
+      : routeReturnPath;
+    if (currentPath !== nextPath) {
+      void navigate(nextPath, { replace: true });
     }
-  }, [canonicalPath, location.pathname, location.search, navigate]);
-
-  useEffect(() => {
-    if (courseSlug)
-      rememberCoursePlayerDestination(courseSlug, origin, lessonId);
-  }, [courseSlug, lessonId, origin]);
-
-  useEffect(() => {
-    if (!courseSlug) return undefined;
-    const closeReplacedSession = (event: StorageEvent) => {
-      if (event.key !== COURSE_PLAYER_SESSION_STORAGE_KEY) return;
-      const activeSession = getActiveCoursePlayerSession();
-      if (activeSession?.path === canonicalPath) return;
-      void navigate(getCoursePlayerParentPath(origin), { replace: true });
-    };
-    window.addEventListener("storage", closeReplacedSession);
-    return () => window.removeEventListener("storage", closeReplacedSession);
-  }, [canonicalPath, courseSlug, navigate, origin]);
+  }, [
+    courseSlug,
+    lessonId,
+    location.pathname,
+    location.search,
+    navigate,
+    routeReturnPath,
+  ]);
 
   return (
     <LearningWorkspace
       key={courseSlug}
       courseSlug={courseSlug}
       lessonId={lessonId}
-      backLabel={getCoursePlayerBackLabel(origin)}
+      mobileBottomNavigation={mobileBottomNavigation}
+      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+      backLabel={getCoursePlayerBackLabel(routeReturnPath)}
       onSelectLesson={(nextLessonId) => {
         if (!courseSlug) return;
-        const path = rememberCoursePlayerDestination(
+        const path = getCoursePlayerPath(
           courseSlug,
           origin,
           nextLessonId,
+          getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
         );
         void navigate(path, { preventScrollReset: true });
       }}
+      onOpenCourseOverview={() => {
+        if (!courseSlug) return;
+        navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
+      }}
       onNavigateBack={() => {
-        clearRememberedCoursePlayerDestination(origin);
-        navigateTo(getCoursePlayerParentPath(origin));
+        navigateTo(
+          (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+            routeReturnPath,
+          { exact: true },
+        );
       }}
     />
   );

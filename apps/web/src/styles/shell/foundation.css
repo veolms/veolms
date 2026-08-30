@@ -43,10 +43,15 @@
 }
 
 .courses-main {
+  --application-page-block-start: 22px;
+  --application-page-inline-gutter: 25px;
+  --application-page-block-end: 28px;
   min-height: calc(100vh - 22px);
   border-radius: 18px;
+  padding: var(--application-page-block-start)
+    var(--application-page-inline-gutter) var(--application-page-block-end);
   background: var(--main-surface);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--application-frame-shadow, var(--card-shadow));
 }
 
 /* The learning workspace owns its inner breathing room; keep the shell flush only on this route. */
@@ -54,6 +59,20 @@
   padding: 0;
   overflow: clip;
   border-radius: 18px;
+}
+
+@media (max-width: 820px) {
+  .courses-main {
+    --application-page-block-start: 20px;
+    --application-page-inline-gutter: 15px;
+    --application-page-block-end: calc(
+      104px + var(--app-viewport-safe-area-max-bottom)
+    );
+  }
+
+  .courses-main.courses-main--learning {
+    overflow: visible;
+  }
 }
 
 @media (min-width: 821px) {
@@ -95,12 +114,14 @@
     --page-tabs-sticky-top: calc(-1 * var(--student-surface-block-start, 0px));
   }
 
-  :root[data-content-layout="framed"] .courses-main {
+  :root[data-content-layout="framed"]:not([data-scrollbar-style="default"])
+    .courses-main {
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
 
-  :root[data-content-layout="framed"] .courses-main::-webkit-scrollbar {
+  :root[data-content-layout="framed"]:not([data-scrollbar-style="default"])
+    .courses-main::-webkit-scrollbar {
     display: none;
     width: 0;
     height: 0;
@@ -133,7 +154,10 @@
     left: var(--main-surface-inline-start);
     border-radius: 18px;
     pointer-events: none;
-    box-shadow: var(--surface-depth-edge-shadow, none);
+    box-shadow: var(
+      --application-frame-edge-shadow,
+      var(--surface-depth-edge-shadow, none)
+    );
   }
 }
 
@@ -142,8 +166,11 @@
   z-index: 45;
   top: var(--floating-scrollbar-top, 0);
   right: var(--floating-scrollbar-right, 0);
-  width: 12px;
+  width: var(--scrollbar-thumb-size, 6px);
   height: var(--floating-scrollbar-height, 0);
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
   pointer-events: none;
   touch-action: none;
   user-select: none;
@@ -156,6 +183,10 @@
   pointer-events: auto;
 }
 
+.floating-scrollbar--drawer {
+  z-index: 181;
+}
+
 .floating-scrollbar__thumb {
   position: absolute;
   top: 0;
@@ -163,13 +194,34 @@
   width: var(--scrollbar-thumb-size, 6px);
   height: var(--floating-scrollbar-thumb-height, 40px);
   border-radius: 999px;
-  background: var(--scrollbar-thumb-color, var(--accent));
+  background: var(
+    --scrollbar-thumb-color,
+    color-mix(in srgb, var(--accent) 96%, transparent)
+  );
   transform: translate3d(0, var(--floating-scrollbar-thumb-offset, 0), 0);
   transition: background-color 150ms ease-out;
 }
 
+@media (min-width: 1081px) {
+  .courses-main--learning:has(
+      .learning-workspace:not(.is-theater)
+        .learning-workspace__curriculum-column:not(.is-collapsed)
+    )
+    + .floating-scrollbar--learning-page {
+    --learning-scrollbar-edge-offset: var(--scrollbar-thumb-size, 6px);
+    right: calc(
+      var(--floating-scrollbar-right, 0px) -
+        var(--learning-scrollbar-edge-offset)
+    );
+    width: var(--scrollbar-thumb-size, 6px);
+    background: color-mix(in srgb, var(--accent) 36%, transparent);
+    box-shadow: none;
+  }
+}
+
 .floating-scrollbar:hover .floating-scrollbar__thumb,
-.floating-scrollbar.is-dragging .floating-scrollbar__thumb {
+.floating-scrollbar.is-dragging .floating-scrollbar__thumb,
+.floating-scrollbar.is-resizing .floating-scrollbar__thumb {
   background: var(
     --scrollbar-thumb-hover-color,
     var(--accent-hover, var(--accent))
@@ -186,8 +238,14 @@
     0 0 0 4px var(--accent);
 }
 
+:root[data-scrollbar-style="default"] .floating-scrollbar,
 :root[data-hide-scrollbars="true"] .floating-scrollbar,
-:root:not([data-content-layout="framed"]) .floating-scrollbar {
+:root:not([data-content-layout="framed"])
+  .floating-scrollbar:not(.floating-scrollbar--learning-page):not(
+    .floating-scrollbar--curriculum
+  ),
+:root[data-lesson-page-scrollbar="hidden"] .floating-scrollbar--learning-page,
+:root[data-curriculum-scrollbar="hidden"] .floating-scrollbar--curriculum {
   display: none;
 }
 

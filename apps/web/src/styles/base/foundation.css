@@ -2,17 +2,51 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* Android Chrome already excludes the system gesture area from its layout
+     viewport. Some OEM builds still expose that same area through env(), so
+     applying it again creates a large empty strip. Keep the real inset on
+     WebKit devices whose viewport-fit=cover layout needs it. */
+  --app-safe-area-bottom: 0px;
+
+  /* Chrome 135+ can extend the viewport behind Android's gesture area. Keep
+     these raw values separate from the layout-safe value above so fixed
+     bottom surfaces can bleed into that area without duplicating spacing. */
+  --app-viewport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --app-viewport-safe-area-max-bottom: env(
+    safe-area-max-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+}
+
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --app-safe-area-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 html {
   background: var(--canvas);
   scroll-behavior: smooth;
-  scrollbar-width: none;
 }
 
-html::-webkit-scrollbar {
+/* Native scrollbar chrome remains available by default. Users can opt out in
+   Appearance settings while retaining wheel, touch, keyboard, and script scrolling. */
+:root[data-hide-scrollbars="true"],
+:root[data-hide-scrollbars="true"] :where(*) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:root[data-hide-scrollbars="true"]::-webkit-scrollbar,
+:root[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 body {
+  position: relative;
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -39,6 +73,18 @@ input {
 
 button {
   cursor: pointer;
+}
+
+.native-search-clear-hidden::-webkit-search-cancel-button,
+.native-search-clear-hidden::-webkit-search-decoration {
+  display: none;
+  appearance: none;
+}
+
+.native-search-clear-hidden::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .app-slider {
@@ -229,28 +275,4 @@ button {
 ::selection {
   background: var(--accent);
   color: var(--on-accent);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 48%, transparent);
-  background-clip: padding-box;
-}
-
-.scrollbar-none {
-  scrollbar-width: none;
-}
-
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
 }

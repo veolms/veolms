@@ -1,4 +1,4 @@
-import { CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import type { RecentPaymentItem } from "./ordersData";
 
 export interface RecentPaymentsWidgetProps {
@@ -15,14 +15,14 @@ export function RecentPaymentsWidget({
   return (
     <section
       aria-labelledby="recent-payments-heading"
-      className="rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3
           id="recent-payments-heading"
-          className="font-bold text-base text-[var(--text)] tracking-tight"
+          className="font-bold text-base text-(--text) tracking-tight"
         >
           Recent Payments
         </h3>
@@ -30,7 +30,7 @@ export function RecentPaymentsWidget({
           <button
             type="button"
             onClick={onViewAll}
-            className="text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
+            className="text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
           >
             View all
           </button>
@@ -42,11 +42,11 @@ export function RecentPaymentsWidget({
         {payments.map((payment) => (
           <div
             key={payment.id}
-            className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors hover:bg-[var(--hover)]"
+            className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors hover:bg-(--hover)"
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg font-bold text-xs shadow-sm"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-bold text-xs shadow-sm"
                 style={{
                   backgroundColor: payment.badgeColor,
                   color: payment.badgeTextColor || "#ffffff",
@@ -56,10 +56,10 @@ export function RecentPaymentsWidget({
                 {payment.badgeText}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-xs md:text-sm text-[var(--text)]">
+                <div className="truncate font-semibold text-xs md:text-sm text-(--text)">
                   {payment.courseTitle}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] text-(--muted) mt-0.5">
                   <span>{payment.date}</span>
                   <span className="opacity-60">•</span>
                   <span
@@ -77,7 +77,7 @@ export function RecentPaymentsWidget({
               </div>
             </div>
 
-            <div className="text-right font-bold text-xs md:text-sm text-[var(--text)] flex-shrink-0">
+            <div className="text-right font-bold text-xs md:text-sm text-(--text) shrink-0">
               {payment.formattedPrice}
             </div>
           </div>
@@ -89,7 +89,7 @@ export function RecentPaymentsWidget({
         <button
           type="button"
           onClick={onOpenBillingHistory}
-          className="flex w-full items-center justify-between text-xs font-semibold text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer py-1"
+          className="flex w-full items-center justify-between text-xs font-semibold text-(--muted) hover:text-(--text) transition-colors cursor-pointer py-1"
         >
           <span>View full billing history</span>
           <CaretRight size={14} weight="bold" />

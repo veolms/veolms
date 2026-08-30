@@ -1,7 +1,6 @@
 /* Student home and learning library */
 .student-surface-main {
   --student-surface-block-start: 22px;
-  padding: var(--student-surface-block-start) 25px 28px;
 }
 
 .student-home,
@@ -461,8 +460,7 @@
   background: color-mix(in srgb, var(--surface) 52%, transparent);
 }
 
-.home-metric > span,
-.learning-summary-row article > span {
+.home-metric > span {
   display: inline-flex;
   width: 34px;
   height: 34px;
@@ -716,43 +714,6 @@
   min-height: 82px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
-}
-
-.learning-summary-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(132px, 1fr));
-  gap: 8px;
-}
-
-.learning-summary-row article {
-  display: grid;
-  min-height: 72px;
-  grid-template-columns: 38px 1fr;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 9px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 9px 12px;
-  background: color-mix(in srgb, var(--surface) 56%, transparent);
-}
-
-.learning-summary-row article > span {
-  grid-row: 1 / 3;
-}
-
-.learning-summary-row article strong {
-  align-self: end;
-  color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 650;
-}
-
-.learning-summary-row article p {
-  align-self: start;
-  color: var(--muted);
-  font-size: 0.62rem;
-  white-space: nowrap;
 }
 
 .learning-filters {
@@ -1101,10 +1062,6 @@
     flex-direction: column;
   }
 
-  .learning-summary-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .learning-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1168,7 +1125,6 @@
 
   .student-surface-main {
     --student-surface-block-start: 20px;
-    padding: var(--student-surface-block-start) 15px 30px;
   }
 
   .home-goal-summary {
@@ -1201,8 +1157,7 @@
     margin-top: 8px;
   }
 
-  .home-metrics-grid,
-  .learning-summary-row {
+  .home-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1214,11 +1169,6 @@
     grid-column: auto;
     overflow-x: auto;
     padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .learning-filter-tabs::-webkit-scrollbar {
-    display: none;
   }
 }
 
@@ -1275,9 +1225,5 @@
 
   .learning-page-header {
     gap: 16px;
-  }
-
-  .learning-summary-row {
-    grid-template-columns: 1fr;
   }
 }

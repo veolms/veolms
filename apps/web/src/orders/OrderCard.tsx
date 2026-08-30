@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
-import { CreditCard } from "@phosphor-icons/react/CreditCard";
-import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
-import { DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
-import { FileText } from "@phosphor-icons/react/FileText";
-import { LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
+import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import type { OrderItem, OrderStatus } from "./ordersData";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 
 export interface OrderCardProps {
   order: OrderItem;
@@ -19,6 +20,8 @@ export function OrderCard({
   setNotice,
 }: OrderCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useBackDismiss({ open: menuOpen, onDismiss: () => setMenuOpen(false) });
 
   const getStatusBadgeStyle = (status: OrderStatus) => {
     switch (status) {
@@ -49,14 +52,14 @@ export function OrderCard({
   return (
     <article
       id={order.id}
-      className="group relative rounded-[18px] border border-[var(--border)] bg-[var(--card-surface-raised,var(--surface))] p-4 md:p-5 transition-all duration-200 hover:bg-[var(--card-surface-hover,var(--hover))]"
+      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-4 md:p-5 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between min-w-0">
         {/* Left: Badge + Course Title & Order ID */}
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <div
-            className="flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl font-bold text-xs sm:text-sm shadow-sm"
+            className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl font-bold text-xs sm:text-sm shadow-sm"
             style={{
               backgroundColor: order.badgeColor,
               color: order.badgeTextColor || "#ffffff",
@@ -66,36 +69,36 @@ export function OrderCard({
             {order.badgeText}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-bold text-sm sm:text-base text-[var(--text)] tracking-tight">
+            <h3 className="truncate font-bold text-sm sm:text-base text-(--text) tracking-tight">
               {order.courseTitle}
             </h3>
-            <p className="text-xs text-[var(--muted)] mt-0.5 font-mono">
+            <p className="text-xs text-(--muted) mt-0.5 font-mono">
               Order ID: {order.orderNumber}
             </p>
           </div>
         </div>
 
         {/* Right Info Group: Date, Payment, Price, Status, Options */}
-        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-6 text-xs sm:text-sm flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-6 text-xs sm:text-sm shrink-0">
           {/* Date & Payment Method */}
-          <div className="flex flex-col gap-0.5 min-w-[90px]">
-            <div className="flex items-center gap-1.5 text-[var(--text-secondary)] font-medium">
-              <CalendarBlank size={14} className="text-[var(--muted)] flex-shrink-0" />
+          <div className="flex flex-col gap-0.5 min-w-22.5">
+            <div className="flex items-center gap-1.5 text-(--text-secondary) font-medium">
+              <CalendarBlank size={14} className="text-(--muted) shrink-0" />
               <span>{order.date}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
-              <CreditCard size={13} className="text-[var(--muted)] flex-shrink-0" />
+            <div className="flex items-center gap-1.5 text-[11px] text-(--muted)">
+              <CreditCard size={13} className="text-(--muted) shrink-0" />
               <span>{order.paymentMethod}</span>
             </div>
           </div>
 
           {/* Price */}
-          <div className="text-right font-extrabold text-base sm:text-lg text-[var(--text)] min-w-[65px]">
+          <div className="text-right font-extrabold text-base sm:text-lg text-(--text) min-w-16.25">
             {order.formattedPrice}
           </div>
 
           {/* Status Badge */}
-          <div className="min-w-[85px] flex justify-end">
+          <div className="min-w-21.25 flex justify-end">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getStatusBadgeStyle(
                 order.status,
@@ -107,13 +110,13 @@ export function OrderCard({
           </div>
 
           {/* More Actions Menu */}
-          <div className="relative flex-shrink-0">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-label={`Options for order ${order.orderNumber}`}
               aria-expanded={menuOpen}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
             >
               <DotsThreeVertical size={18} weight="bold" />
             </button>
@@ -126,7 +129,7 @@ export function OrderCard({
                 />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-1 z-30 min-w-[170px] rounded-xl border border-[var(--border)] bg-[var(--card-surface)] p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                  className="absolute right-0 top-full mt-1 z-30 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
                 >
                   <button
                     type="button"
@@ -135,7 +138,7 @@ export function OrderCard({
                       setMenuOpen(false);
                       onViewReceipt(order);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
                   >
                     <FileText size={14} />
                     <span>View invoice</span>
@@ -144,7 +147,7 @@ export function OrderCard({
                     type="button"
                     role="menuitem"
                     onClick={handleCopyOrderId}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
                   >
                     <LinkSimple size={14} />
                     <span>Copy Order ID</span>
@@ -153,7 +156,7 @@ export function OrderCard({
                     type="button"
                     role="menuitem"
                     onClick={handleDownload}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
                   >
                     <DownloadSimple size={14} />
                     <span>Download receipt</span>

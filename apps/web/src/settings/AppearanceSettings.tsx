@@ -1,18 +1,14 @@
-import { DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
-import { Moon } from "@phosphor-icons/react/Moon";
-import { Sun } from "@phosphor-icons/react/Sun";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
+import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import { academyThemes } from "../themes";
 import type { AcademyTheme } from "../themes";
 import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
 import type { ThemeRevealOrigin } from "../shell/themeViewTransition";
+import AppearanceAdditionalSettings from "./AppearanceDeferredSettings";
 import type { PageTabColors } from "./settingsPreferences";
 import { ChoiceCard, RadioGroup } from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
-
-const DeferredAppearanceSettings = lazy(
-  () => import("./AppearanceDeferredSettings"),
-);
 
 export type DisplayMode = "light" | "dark" | "device";
 
@@ -57,35 +53,12 @@ export function AppearanceSettings({
   pageTabColors,
   onPageTabColorsChange,
 }: AppearanceSettingsProps) {
-  const [showDeferredSettings, setShowDeferredSettings] = useState(false);
-  const deferredSentinelRef = useRef<HTMLDivElement>(null);
   const selectedColor = COLOR_THEMES.some((item) => item.id === academyTheme)
     ? academyTheme
     : "codex";
 
-  useEffect(() => {
-    const sentinel = deferredSentinelRef.current;
-    if (!sentinel || showDeferredSettings) return;
-
-    if (!("IntersectionObserver" in window)) {
-      setShowDeferredSettings(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setShowDeferredSettings(true);
-        observer.disconnect();
-      },
-      { rootMargin: "600px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [showDeferredSettings]);
-
   return (
-    <div className="settings-content">
+    <div className="settings-content settings-content--appearance">
       <section className="settings-section">
         <h2>Display mode</h2>
         <RadioGroup
@@ -144,19 +117,10 @@ export function AppearanceSettings({
         </RadioGroup>
       </section>
 
-      <div
-        ref={deferredSentinelRef}
-        className="settings-deferred-sentinel"
-        aria-hidden="true"
+      <AppearanceAdditionalSettings
+        pageTabColors={pageTabColors}
+        onPageTabColorsChange={onPageTabColorsChange}
       />
-      {showDeferredSettings && (
-        <Suspense fallback={null}>
-          <DeferredAppearanceSettings
-            pageTabColors={pageTabColors}
-            onPageTabColorsChange={onPageTabColorsChange}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

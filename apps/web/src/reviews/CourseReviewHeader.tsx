@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
-import { DotsThree } from "@phosphor-icons/react/DotsThree";
-import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
-import { ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
-import { Star } from "@phosphor-icons/react/Star";
-import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
+import { DotsThreeIcon as DotsThree } from "@phosphor-icons/react/DotsThree";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { CourseReviewMeta } from "./reviewsData";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 
 export interface CourseReviewHeaderProps {
   courseMeta: CourseReviewMeta;
@@ -23,6 +24,11 @@ export function CourseReviewHeader({
   setNotice,
 }: CourseReviewHeaderProps) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  useBackDismiss({
+    open: moreMenuOpen,
+    onDismiss: () => setMoreMenuOpen(false),
+  });
 
   const handleShare = () => {
     setMoreMenuOpen(false);
@@ -44,18 +50,18 @@ export function CourseReviewHeader({
       {/* Course Info */}
       <div className="flex items-center gap-3.5 min-w-0">
         <div
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm text-base tracking-tight"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm text-base tracking-tight"
           style={{ backgroundColor: courseMeta.badgeColor }}
           aria-hidden="true"
         >
           {courseMeta.badgeText}
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base md:text-lg font-semibold text-[var(--text)] tracking-tight">
+          <h2 className="truncate text-base md:text-lg font-semibold text-(--text) tracking-tight">
             {courseMeta.courseTitle}
           </h2>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-[var(--muted)] mt-0.5">
-            <span className="flex items-center gap-1 font-medium text-[var(--text)]">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-(--muted) mt-0.5">
+            <span className="flex items-center gap-1 font-medium text-(--text)">
               <Star size={15} weight="fill" className="text-amber-400 fill-amber-400" />
               {courseMeta.averageRating.toFixed(1)}
             </span>
@@ -71,7 +77,7 @@ export function CourseReviewHeader({
         <button
           type="button"
           onClick={onOpenWriteModal}
-          className="flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs md:text-sm font-semibold text-[var(--on-accent,#ffffff)] shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+          className="flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2.5 text-xs md:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
         >
           <PencilSimple size={17} weight="bold" />
           <span>Write a review</span>
@@ -83,10 +89,10 @@ export function CourseReviewHeader({
           aria-label={isBookmarked ? "Remove bookmark" : "Bookmark reviews"}
           aria-pressed={isBookmarked}
           title={isBookmarked ? "Bookmarked" : "Bookmark"}
-          className={`flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] transition-all hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer ${
+          className={`flex h-10 w-10 items-center justify-center rounded-xl border border-(--border) transition-all hover:bg-(--hover) hover:text-(--text) cursor-pointer ${
             isBookmarked
-              ? "bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent-border)]"
-              : "text-[var(--muted)]"
+              ? "bg-(--accent-soft) text-(--accent) border-(--accent-border)"
+              : "text-(--muted)"
           }`}
         >
           <BookmarkSimple
@@ -102,7 +108,7 @@ export function CourseReviewHeader({
             aria-label="More options"
             aria-expanded={moreMenuOpen}
             title="More actions"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] text-[var(--muted)] transition-all hover:bg-[var(--hover)] hover:text-[var(--text)] cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-(--border) text-(--muted) transition-all hover:bg-(--hover) hover:text-(--text) cursor-pointer"
           >
             <DotsThree size={22} weight="bold" />
           </button>
@@ -115,13 +121,13 @@ export function CourseReviewHeader({
               />
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-1.5 z-30 min-w-[190px] rounded-xl border border-[var(--border)] bg-[var(--card-surface)] p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 top-full mt-1.5 z-30 min-w-47.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
               >
                 <button
                   type="button"
                   role="menuitem"
                   onClick={handleShare}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs md:text-sm text-[var(--text)] transition-colors hover:bg-[var(--hover)] cursor-pointer"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs md:text-sm text-(--text) transition-colors hover:bg-(--hover) cursor-pointer"
                 >
                   <ShareNetwork size={16} />
                   <span>Share course reviews</span>
@@ -130,7 +136,7 @@ export function CourseReviewHeader({
                   type="button"
                   role="menuitem"
                   onClick={handleGuidelines}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs md:text-sm text-[var(--text)] transition-colors hover:bg-[var(--hover)] cursor-pointer"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs md:text-sm text-(--text) transition-colors hover:bg-(--hover) cursor-pointer"
                 >
                   <WarningCircle size={16} />
                   <span>Review guidelines</span>

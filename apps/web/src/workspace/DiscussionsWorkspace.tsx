@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
-import { At } from "@phosphor-icons/react/At";
-import { Bell } from "@phosphor-icons/react/Bell";
-import { BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
-import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
-import { Funnel } from "@phosphor-icons/react/Funnel";
-import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { Question } from "@phosphor-icons/react/Question";
-import { SealCheck } from "@phosphor-icons/react/SealCheck";
-import { UsersThree } from "@phosphor-icons/react/UsersThree";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
+import { AtIcon as At } from "@phosphor-icons/react/At";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ChatTeardropTextIcon as ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { FunnelIcon as Funnel } from "@phosphor-icons/react/Funnel";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
+import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import type { CourseRole } from "../courses/catalogue";
-import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
+import {
+  handleRovingTabKeyDown,
+  scrollKeyboardFocusedTabIntoView,
+} from "../accessibility/rovingTabFocus";
 import type { NavigateTo } from "../routing/navigation";
 import {
   normalizeDiscussionTab,
@@ -25,6 +28,10 @@ import {
 import type { DiscussionTab } from "../routing/tabSessionState";
 import { ThemedSelect } from "../ThemedSelect";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 type DiscussionStatus = "answered" | "mentioned" | "solved" | "open";
 
@@ -351,16 +358,12 @@ export function DiscussionsWorkspace({
             aria-controls="discussion-panel"
             data-page-tab-tone={tone}
             data-swipe-tab-id={id}
+            data-fixed-radius
             tabIndex={activeTab === id ? 0 : -1}
-            className={activeTab === id ? "is-active" : ""}
+            className={`rounded-none! ${activeTab === id ? "is-active" : ""}`}
             onClick={() => navigateTab(id)}
             onKeyDown={handleRovingTabKeyDown}
-            onFocus={(event) =>
-              event.currentTarget.scrollIntoView({
-                block: "nearest",
-                inline: "center",
-              })
-            }
+            onFocus={scrollKeyboardFocusedTabIntoView}
           >
             <Icon size={19} weight={activeTab === id ? "fill" : "regular"} />
             <span>{label}</span>
@@ -376,6 +379,7 @@ export function DiscussionsWorkspace({
         tabListRef={tablistRef}
         id="discussion-panel"
         labelledBy={`discussion-tab-${activeTab}`}
+        slideClassName="pb-8"
         stateAttribute="data-discussion-tab"
       >
         {(panelTab, preview) => (
@@ -398,10 +402,14 @@ export function DiscussionsWorkspace({
                     <MagnifyingGlass size={19} aria-hidden="true" />
                     <span className="sr-only">Search discussions</span>
                     <input
+                      id="workspace-discussions-search-input"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Search discussions by title or keyword..."
+                      data-search-shortcut-target
+                      aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
                     />
+                    <SearchShortcutHint />
                   </label>
                   <div className="discussion-hub__select">
                     <ThemedSelect
@@ -651,7 +659,7 @@ export function DiscussionsWorkspace({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onNavigatePage("/explore-courses")}
+                    onClick={() => onNavigatePage("/courses")}
                   >
                     <span>
                       <BookmarkSimple size={19} weight="duotone" />

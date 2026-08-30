@@ -1,13 +1,9 @@
 /* Settings workspace */
-.courses-main.student-surface-main.courses-main--settings {
-  padding-inline: 0;
-}
-
 .settings-page {
-  --settings-page-inline-gutter: calc(25px + clamp(16px, 2.4vw, 30px));
+  --settings-page-inline-gutter: 0px;
   min-width: 0;
   min-height: 100%;
-  padding: clamp(20px, 2.5vw, 32px) 0 36px;
+  padding: 0;
   color: var(--text);
 }
 
@@ -83,78 +79,6 @@
   will-change: width, transform;
 }
 
-.page-tabs[data-tab-swipe-active] .page-tabs__indicator {
-  opacity: 1;
-}
-
-.page-tabs[data-tab-swipe-tracking] .page-tabs__indicator {
-  transition: none;
-}
-
-.page-tabs[data-tab-swipe-active] button.is-active {
-  border-bottom-color: transparent;
-}
-
-.page-tabs[data-tab-swipe-active] .lesson-tool-tab.is-active::after {
-  opacity: 0;
-}
-
-.swipeable-tab-panel {
-  --tab-swipe-offset: 0px;
-  position: relative;
-  min-width: 0;
-  overflow-x: clip;
-  overflow-y: visible;
-  overscroll-behavior-x: contain;
-  touch-action: pan-y pinch-zoom;
-}
-
-.swipeable-tab-panel__layer {
-  min-width: 0;
-}
-
-.swipeable-tab-panel[data-tab-swipe-active]
-  .swipeable-tab-panel__layer.is-current {
-  transform: translate3d(var(--tab-swipe-offset), 0, 0);
-  will-change: transform;
-}
-
-.swipeable-tab-panel__layer.is-preview {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: clip;
-  pointer-events: none;
-  visibility: hidden;
-  will-change: transform;
-}
-
-.swipeable-tab-panel[data-tab-swipe-active]
-  .swipeable-tab-panel__layer.is-preview {
-  visibility: visible;
-}
-
-.swipeable-tab-panel__layer.is-preview.is-next {
-  transform: translate3d(calc(100% + var(--tab-swipe-offset)), 0, 0);
-}
-
-.swipeable-tab-panel__layer.is-preview.is-previous {
-  transform: translate3d(calc(-100% + var(--tab-swipe-offset)), 0, 0);
-}
-
-.swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
-  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .page-tabs__indicator,
-  .swipeable-tab-panel[data-tab-swipe-settling] .swipeable-tab-panel__layer {
-    transition: none;
-  }
-}
-
 .page-tabs [data-page-tab-tone="blue"] {
   --page-tab-tone: #5da9ff;
 }
@@ -224,13 +148,14 @@
 }
 
 .settings-tabs {
+  --settings-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
   position: sticky;
   top: var(--page-tabs-sticky-top, 0px);
   z-index: 25;
   display: flex;
   min-width: 0;
-  margin: 26px var(--settings-page-inline-gutter) 0;
-  padding-top: 6px;
+  margin: 26px calc(-1 * var(--settings-tab-nav-bleed)) 0;
+  padding: 6px var(--settings-tab-nav-bleed) 0;
   gap: 8px;
   overflow-x: auto;
   background: color-mix(in srgb, var(--main-surface) 94%, transparent);
@@ -238,11 +163,6 @@
   backdrop-filter: blur(10px);
   border-bottom: 1px solid
     color-mix(in srgb, var(--surface-strong) 72%, transparent);
-  scrollbar-width: none;
-}
-
-.settings-tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .settings-tabs button {
@@ -260,15 +180,20 @@
   background: transparent;
   font-size: 0.82rem;
   font-weight: 600;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease;
+  transition: none;
+}
+
+.settings-tabs .page-tabs__indicator {
+  transition: none;
+  will-change: auto;
 }
 
 .settings-tabs button:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 48%, transparent);
+}
+.settings-page > .settings-tabs button:hover {
+  background: transparent;
 }
 .settings-tabs button:focus-visible {
   outline: 2px solid var(--accent);
@@ -280,24 +205,18 @@
 }
 
 .settings-tab-content {
+  --settings-tab-swipe-bleed: calc(clamp(16px, 2.25vw, 25px) + 5px);
+  --swipeable-tab-panel-inline-start: var(--settings-tab-swipe-bleed);
+  --swipeable-tab-panel-inline-end: var(--settings-tab-swipe-bleed);
   min-width: 0;
   margin-top: 14px;
 }
+
 .settings-content {
   display: grid;
   gap: 14px;
   margin-top: 0;
   padding-inline: var(--settings-page-inline-gutter);
-}
-
-/* Skip layout and paint for settings sections that are still below the
-   viewport. Once visited, the browser remembers their real block size, which
-   keeps subsequent scrolling stable. */
-@supports (content-visibility: auto) {
-  .settings-content > .settings-section:nth-of-type(n + 2) {
-    content-visibility: auto;
-    contain-intrinsic-block-size: auto 720px;
-  }
 }
 
 .settings-tab-content
@@ -785,7 +704,10 @@
   align-content: center;
 }
 
-.settings-sidebar-width__value {
+.settings-sidebar-width__value,
+.settings-sidebar-glow-size__value,
+.settings-sidebar-glow-intensity__value,
+.settings-sidebar-glow-blur__value {
   display: inline-flex;
   min-width: 68px;
   min-height: 34px;
@@ -816,7 +738,10 @@
   font-weight: 650;
 }
 
-.settings-sidebar-width__range-labels {
+.settings-sidebar-width__range-labels,
+.settings-sidebar-glow-size__labels,
+.settings-sidebar-glow-intensity__labels,
+.settings-sidebar-glow-blur__labels {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
@@ -1136,6 +1061,126 @@
   white-space: nowrap;
 }
 
+.settings-row--control-radius {
+  align-items: start;
+}
+
+.settings-row--control-radius .settings-row__icon {
+  margin-top: 2px;
+}
+
+.settings-row--control-radius .settings-row__control {
+  width: min(100%, 520px);
+}
+
+.settings-control-radius {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+}
+
+.settings-control-radius__presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-control-radius__presets button {
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
+  padding: 0 13px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-strong) 74%, var(--canvas));
+  box-shadow: 0 5px 14px
+    color-mix(in srgb, var(--accent-shadow) 15%, transparent);
+  font-size: 0.72rem;
+  font-weight: 650;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.settings-control-radius__presets button:hover {
+  border-color: color-mix(in srgb, var(--text) 24%, transparent);
+  color: var(--text);
+  background: var(--hover);
+}
+
+.settings-control-radius__presets button.is-selected {
+  border-color: var(--text);
+  color: var(--canvas);
+  background: var(--text);
+  box-shadow: 0 7px 18px
+    color-mix(in srgb, var(--accent-shadow) 26%, transparent);
+}
+
+.settings-control-radius__presets button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-control-radius__custom {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.settings-control-radius__input {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: var(--control-radius-structured);
+  padding-right: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 68%, var(--canvas));
+}
+
+.settings-control-radius__input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.settings-control-radius__input input {
+  width: 64px;
+  min-height: 34px;
+  border: 0;
+  padding: 0 4px 0 11px;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .settings-row--control-radius {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .settings-row--control-radius .settings-row__control {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .settings-control-radius__presets {
+    justify-content: flex-start;
+  }
+
+  .settings-control-radius__custom {
+    justify-content: flex-start;
+  }
+}
+
 .settings-inline-options {
   display: flex;
   flex-wrap: wrap;
@@ -1279,13 +1324,6 @@
 
 .settings-sidebar-settings {
   gap: 16px;
-}
-
-/* Keep the complete settings markup available on first paint while allowing
-   the browser to skip layout and paint work for the long, off-screen tail. */
-.settings-sidebar-settings > :nth-child(n + 4) {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 420px;
 }
 
 .settings-sidebar-category-heading {
@@ -1449,6 +1487,58 @@
   line-height: 1.45;
 }
 
+.settings-section__count {
+  display: inline-flex;
+  min-height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  font-size: 0.7rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.settings-sidebar-glow-reset {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.settings-sidebar-glow-reset:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.settings-sidebar-glow-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-sidebar-glow-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .settings-section__hint {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1531,6 +1621,378 @@
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.45;
+}
+
+.settings-sidebar-glow-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.settings-sidebar-glow-option {
+  display: grid;
+  min-width: 0;
+  min-height: 64px;
+  grid-template-columns: 58px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  overflow: clip;
+  border: 0;
+  border-radius: 13px;
+  padding: 0 10px 0 0;
+  color: var(--text-secondary);
+  text-align: left;
+  background: color-mix(in srgb, var(--surface) 34%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-sidebar-glow-option:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.settings-sidebar-glow-option.is-selected {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+}
+
+.settings-sidebar-glow-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-sidebar-glow-option__preview {
+  position: relative;
+  align-self: stretch;
+  display: block;
+  width: 58px;
+  height: 100%;
+  min-height: 64px;
+  overflow: hidden;
+  overflow: clip;
+  isolation: isolate;
+  border-radius: 13px 0 0 13px;
+  background: color-mix(in srgb, var(--app-shell) 18%, transparent);
+  -webkit-backdrop-filter: blur(var(--sidebar-floating-base-blur, 6px))
+    saturate(1.08);
+  backdrop-filter: blur(var(--sidebar-floating-base-blur, 6px)) saturate(1.08);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.settings-sidebar-glow-option__preview::before {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle 24px at 18% 24%,
+      color-mix(in srgb, var(--settings-sidebar-glow-a) 72%, transparent) 0 55%,
+      transparent 76%
+    ),
+    radial-gradient(
+      circle 18px at 82% 22%,
+      color-mix(in srgb, var(--settings-sidebar-glow-a) 62%, transparent) 0 52%,
+      transparent 76%
+    ),
+    radial-gradient(
+      circle 22px at 58% 82%,
+      color-mix(in srgb, var(--settings-sidebar-glow-b) 68%, transparent) 0 54%,
+      transparent 78%
+    ),
+    transparent;
+  -webkit-mask-image:
+    var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
+    var(--sidebar-bokeh-mask);
+  mask-image:
+    var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
+    var(--sidebar-bokeh-mask);
+  -webkit-mask-position:
+    -5px 0,
+    36px -1px,
+    16px 38px;
+  mask-position:
+    -5px 0,
+    36px -1px,
+    16px 38px;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size:
+    28px 28px,
+    22px 22px,
+    26px 26px;
+  mask-size:
+    28px 28px,
+    22px 22px,
+    26px 26px;
+  content: "";
+  opacity: var(--settings-sidebar-preview-intensity, 0.5);
+  transition: opacity 140ms ease;
+}
+
+.settings-sidebar-glow-option__preview:not(.is-off)::after {
+  position: absolute;
+  inset: -8px 0;
+  background: color-mix(in srgb, var(--app-shell) 2%, transparent);
+  -webkit-backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px))
+    saturate(1.08);
+  backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px))
+    saturate(1.08);
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+  content: "";
+}
+
+.settings-sidebar-glow-option__preview.is-clear::after {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.settings-sidebar-glow-option__preview.is-off {
+  background: color-mix(in srgb, var(--track) 82%, var(--surface));
+}
+
+.settings-sidebar-glow-option__preview.is-off::before {
+  display: none;
+}
+
+.settings-sidebar-glow-option__preview.is-off::after {
+  position: absolute;
+  top: calc(50% - 1px);
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--muted);
+  content: "";
+  transform: rotate(-28deg);
+}
+
+.settings-sidebar-glow-option__copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.settings-sidebar-glow-option__copy strong {
+  color: inherit;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sidebar-glow-option .settings-radio {
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  border-color: color-mix(in srgb, var(--text-secondary) 72%, transparent);
+}
+
+.settings-sidebar-glow-option.is-selected .settings-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.settings-sidebar-glow-shape {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+}
+
+.settings-sidebar-glow-shape h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.settings-sidebar-glow-shape-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.settings-sidebar-glow-shape-option {
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  grid-template-columns: 24px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  text-align: left;
+  background: color-mix(in srgb, var(--surface) 34%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.settings-sidebar-glow-shape-option:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.settings-sidebar-glow-shape-option.is-selected {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+}
+
+.settings-sidebar-glow-shape-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.settings-sidebar-glow-shape-option__preview {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(
+    145deg,
+    var(--sidebar-glow-primary),
+    var(--sidebar-glow-secondary)
+  );
+  filter: drop-shadow(
+    0 4px 7px color-mix(in srgb, var(--sidebar-glow-primary) 32%, transparent)
+  );
+}
+
+.settings-sidebar-glow-shape-option__preview.is-circle {
+  border-radius: 50%;
+}
+
+.settings-sidebar-glow-shape-option__preview.is-triangle {
+  clip-path: polygon(50% 4%, 97% 94%, 3% 94%);
+}
+
+.settings-sidebar-glow-shape-option__preview.is-star {
+  clip-path: polygon(
+    50% 3%,
+    61% 35%,
+    96% 35%,
+    68% 56%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 56%,
+    4% 35%,
+    39% 35%
+  );
+}
+
+.settings-sidebar-glow-shape-option__preview.is-diamond {
+  clip-path: polygon(50% 2%, 98% 50%, 50% 98%, 2% 50%);
+}
+
+.settings-sidebar-glow-shape-option__preview.is-hexagon {
+  clip-path: polygon(25% 4%, 75% 4%, 98% 50%, 75% 96%, 25% 96%, 2% 50%);
+}
+
+.settings-sidebar-glow-shape-option strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sidebar-glow-shape-option .settings-radio {
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  border-color: color-mix(in srgb, var(--text-secondary) 72%, transparent);
+}
+
+.settings-sidebar-glow-shape-option.is-selected .settings-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.settings-sidebar-glow-size,
+.settings-sidebar-glow-intensity,
+.settings-sidebar-glow-blur {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+}
+
+.settings-sidebar-glow-size__heading,
+.settings-sidebar-glow-intensity__heading,
+.settings-sidebar-glow-blur__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-sidebar-glow-size__heading h3,
+.settings-sidebar-glow-intensity__heading h3,
+.settings-sidebar-glow-blur__heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.settings-sidebar-glow-size__heading p,
+.settings-sidebar-glow-intensity__heading p,
+.settings-sidebar-glow-blur__heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.settings-sidebar-glow-size__range,
+.settings-sidebar-glow-intensity__range,
+.settings-sidebar-glow-blur__range {
+  display: grid;
+  gap: 8px;
 }
 
 .settings-color-tools--redesign {
@@ -1691,12 +2153,9 @@
 }
 
 @media (max-width: 820px) {
-  .courses-main.student-surface-main.courses-main--settings {
-    padding-inline: 15px;
-  }
-
   .student-surface-main > .settings-page {
     --settings-page-inline-gutter: 0px;
+    padding-top: 0;
     padding-inline: 0;
   }
 }

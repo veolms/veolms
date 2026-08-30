@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   Course Wizard — Page Tab Colors integration
+   Course Wizard - Page Tab Colors integration
    The wizard nav uses the .page-tabs contract so the user's "Page tab colors"
    setting is respected. The indicator must always be visible (no swipe state).
    ───────────────────────────────────────────────────────────────────────────── */
@@ -34,14 +34,14 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Course Wizard — Mobile Bottom Action Bar
+   Course Wizard - Mobile Bottom Action Bar
    Synchronized with mobile-bottom-nav positioning & auto-hide behavior.
    ───────────────────────────────────────────────────────────────────────────── */
 .course-wizard-mobile-action-bar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(58px + env(safe-area-inset-bottom));
+  bottom: calc(58px + var(--app-viewport-safe-area-bottom));
   z-index: 135;
   box-sizing: border-box;
   padding: 10px 14px;
@@ -74,7 +74,7 @@
   opacity: 0;
   transform: translate3d(
     0,
-    calc(100% + 58px + env(safe-area-inset-bottom) + 4px),
+    calc(100% + 58px + var(--app-viewport-safe-area-bottom) + 4px),
     0
   );
   transition:
@@ -266,21 +266,6 @@
   padding: 6px 10px 4px !important;
 }
 
-/* Emoji list scrollbar */
-.course-wizard-emoji-popover .epr-body::-webkit-scrollbar {
-  width: 5px !important;
-}
-.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 40%, transparent) !important;
-  border-radius: 999px !important;
-}
-.course-wizard-emoji-popover .epr-body::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--accent) 65%, transparent) !important;
-}
-
 /* "What's your mood?" preview bar */
 .course-wizard-emoji-popover .epr-preview,
 .course-wizard-emoji-popover [class*="preview"] {
@@ -427,34 +412,6 @@
   box-sizing: border-box;
   overflow-wrap: break-word;
   word-break: break-word;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent)
-    transparent;
-}
-
-.course-wizard-editor textarea::-webkit-scrollbar {
-  width: 6px;
-}
-
-.course-wizard-editor textarea::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 6px 0;
-}
-
-.course-wizard-editor textarea::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: 999px;
-  transition: background 0.15s ease;
-}
-
-.course-wizard-editor textarea::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-.course-wizard-editor textarea::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
 }
 
 .course-wizard-editor textarea::-webkit-resizer {
@@ -479,7 +436,7 @@
   line-height: 1.65;
 }
 
-/* Preview wrapper — internal padding so content never touches card edges */
+/* Preview wrapper - internal padding so content never touches card edges */
 .course-preview-markdown-content {
   margin-top: 6px;
   padding: 2px 2px 4px;
@@ -716,26 +673,6 @@
   overflow-x: auto;
   font-size: 0.84em;
   line-height: 1.65;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent)
-    transparent;
-}
-
-.course-preview-markdown-content pre::-webkit-scrollbar {
-  height: 5px;
-}
-
-.course-preview-markdown-content pre::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.course-preview-markdown-content pre::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: 999px;
-}
-
-.course-preview-markdown-content pre::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 /* Reset inline code styles inside a pre block */

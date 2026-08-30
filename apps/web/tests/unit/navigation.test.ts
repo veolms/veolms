@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getInitialNavigationOrder,
+  getInitialNavigationVisibility,
   getNavigationDisplayLabel,
   getNavigationIconColor,
   getOrderedNavigation,
+  getVisibleOrderedNavigation,
 } from "../../src/shell/navigation.js";
 import type { NavigationItem } from "../../src/shell/navigation.ts";
 
@@ -12,8 +14,7 @@ const labels = (navigation: readonly NavigationItem[]) =>
 
 const studentDefault = [
   "Home",
-  "My Courses",
-  "Explore Courses",
+  "Courses",
   "Wishlist",
   "Discussions",
   "Order History",
@@ -39,6 +40,31 @@ describe("navigation order persistence", () => {
     expect(getInitialNavigationOrder("creator")).toEqual(creatorDefault);
   });
 
+  it("defaults creator menu visibility to every existing creator item", () => {
+    expect(getInitialNavigationVisibility("creator")).toEqual(creatorDefault);
+    expect(getInitialNavigationVisibility("student")).toEqual(studentDefault);
+  });
+
+  it("persists creator visibility choices and restores new defaults", () => {
+    localStorage.setItem(
+      "veolms-navigation-visibility-creator",
+      JSON.stringify(["Dashboard", "Missing", "Dashboard", "Orders"]),
+    );
+
+    expect(getInitialNavigationVisibility("creator")).toEqual([
+      "Dashboard",
+      "Orders",
+    ]);
+    expect(
+      labels(
+        getVisibleOrderedNavigation("creator", creatorDefault, [
+          "Orders",
+          "Dashboard",
+        ]),
+      ),
+    ).toEqual(["Dashboard", "Orders"]);
+  });
+
   it("falls back to defaults for invalid JSON and non-array saved values", () => {
     localStorage.setItem("veolms-navigation-order-student", "{");
     expect(getInitialNavigationOrder("student")).toEqual(studentDefault);
@@ -53,14 +79,13 @@ describe("navigation order persistence", () => {
   it("removes duplicate and unknown saved labels while preserving their first valid order", () => {
     localStorage.setItem(
       "veolms-navigation-order-student",
-      JSON.stringify(["Wishlist", "Missing", "Wishlist", "Explore Courses"]),
+      JSON.stringify(["Wishlist", "Missing", "Wishlist", "Courses"]),
     );
 
     expect(getInitialNavigationOrder("student")).toEqual([
       "Wishlist",
-      "Explore Courses",
+      "Courses",
       "Home",
-      "My Courses",
       "Discussions",
       "Order History",
       "Notifications",
@@ -106,24 +131,36 @@ describe("navigation order persistence", () => {
       "Settings",
       ...studentDefault.filter((label) => label !== "Settings"),
     ]);
-    expect(labels(getOrderedNavigation("guest", ["Explore Courses"]))).toEqual([
-      "Explore Courses",
-      ...studentDefault.filter((label) => label !== "Explore Courses"),
+    expect(labels(getOrderedNavigation("guest", ["Courses"]))).toEqual([
+      "Courses",
+      ...studentDefault.filter((label) => label !== "Courses"),
     ]);
   });
 
-  it("migrates the previous student labels without changing creator Courses", () => {
+  it("migrates every previous student course label into one Courses item", () => {
     localStorage.setItem(
       "veolms-navigation-order-student",
-      JSON.stringify(["Courses", "My Learning", "Home"]),
+      JSON.stringify(["Courses", "Courses", "My Learning", "Home"]),
     );
 
     expect(getInitialNavigationOrder("student").slice(0, 3)).toEqual([
-      "Explore Courses",
-      "My Courses",
+      "Courses",
       "Home",
+      "Wishlist",
     ]);
     expect(getInitialNavigationOrder("creator")).toEqual(creatorDefault);
+  });
+
+  it("migrates previous student course labels in saved visibility", () => {
+    localStorage.setItem(
+      "veolms-navigation-visibility-student",
+      JSON.stringify(["Home", "My Learning", "My Courses"]),
+    );
+
+    expect(getInitialNavigationVisibility("student")).toEqual([
+      "Home",
+      "Courses",
+    ]);
   });
 
   it("falls back to role defaults when storage access throws", () => {
@@ -136,42 +173,40 @@ describe("navigation order persistence", () => {
 });
 
 describe("navigation display and icon color helpers", () => {
-  it("singularizes Notifications outside the Explore Courses page only", () => {
-    expect(getNavigationDisplayLabel("Notifications", "explore-courses")).toBe(
+  it("singularizes Notifications outside the Courses page only", () => {
+    expect(getNavigationDisplayLabel("Notifications", "courses")).toBe(
       "Notifications",
     );
     expect(getNavigationDisplayLabel("Notifications", "home")).toBe(
       "Notification",
     );
-    expect(getNavigationDisplayLabel("Explore Courses", "home")).toBe(
-      "Explore Courses",
-    );
+    expect(getNavigationDisplayLabel("Courses", "home")).toBe("Courses");
   });
 
   it("uses tone, monochrome, and fallback colors exactly", () => {
-    expect(getNavigationIconColor("Explore Courses")).toBe("#8f70ff");
+    expect(getNavigationIconColor("Courses")).toBe("#8f70ff");
     expect(getNavigationIconColor("Unknown")).toBe("#8c9294");
     expect(
-      getNavigationIconColor("Explore Courses", {
+      getNavigationIconColor("Courses", {
         iconStyle: "monochrome",
         monochromeMode: "neutral",
       }),
     ).toBe("var(--text)");
     expect(
-      getNavigationIconColor("Explore Courses", {
+      getNavigationIconColor("Courses", {
         iconStyle: "monochrome",
         monochromeMode: "custom",
         monochromeColor: "#123456",
       }),
     ).toBe("#123456");
     expect(
-      getNavigationIconColor("Explore Courses", {
+      getNavigationIconColor("Courses", {
         iconStyle: "monochrome",
         monochromeMode: "custom",
       }),
     ).toBe("#6c78ff");
     expect(
-      getNavigationIconColor("Explore Courses", {
+      getNavigationIconColor("Courses", {
         iconStyle: "monochrome",
         monochromeMode: "theme",
       }),

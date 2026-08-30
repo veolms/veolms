@@ -1,4 +1,4 @@
-import { Eye } from "@phosphor-icons/react/Eye";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
 import {

@@ -51,6 +51,11 @@ const OPENAPI_TAGS = [
     name: "Course Lifecycle",
     description: "Validation, publishing, unpublishing, and previewing.",
   },
+  {
+    name: "Course Bin",
+    description:
+      "Administrator-only recovery and retention management for deleted courses.",
+  },
 ];
 
 /**

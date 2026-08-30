@@ -17,10 +17,21 @@ export function ReadingModeEffects() {
     };
 
     refresh();
+    let resizeFrame: number | null = null;
+    const scheduleRefresh = () => {
+      if (resizeFrame !== null) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        refresh();
+      });
+    };
     window.addEventListener(READING_MODE_CHANGE_EVENT, refresh);
+    window.addEventListener("resize", scheduleRefresh);
     window.addEventListener("storage", handleStorage);
     return () => {
+      if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
       window.removeEventListener(READING_MODE_CHANGE_EVENT, refresh);
+      window.removeEventListener("resize", scheduleRefresh);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);

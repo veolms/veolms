@@ -1,5 +1,5 @@
-/* sunlit palette — dark mode. */
-:root[data-palette="sunlit"] {
+/* sunlit palette - dark mode. */
+:root[data-theme="dark"][data-palette="sunlit"] {
   --canvas: #1c1b16;
   --header: #1b1a15;
   --surface: #323027;

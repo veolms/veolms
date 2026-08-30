@@ -1,5 +1,6 @@
 export interface NavigationOptions {
   preserveScroll?: boolean;
+  exact?: boolean;
 }
 
 export type NavigateTo = (

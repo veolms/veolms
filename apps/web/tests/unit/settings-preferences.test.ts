@@ -1,24 +1,139 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONTROL_RADIUS_CUSTOM_KEY,
+  CONTROL_RADIUS_DEFAULT,
+  CONTROL_RADIUS_KEY,
   ELEVATED_SURFACES_KEY,
+  ELASTIC_SCROLL_APPEARANCE_DEFAULT,
+  applySidebarGlowShapeSize,
+  getControlRadiusBootstrapScript,
+  getScrollbarBootstrapScript,
   getSurfaceDepthBootstrapScript,
   LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_PREFERENCES_KEY,
+  normalizeControlRadiusCustom,
+  normalizeControlRadiusPreset,
+  normalizeElasticScrollAppearance,
   normalizePageTabColors,
+  normalizeScrollbarStyle,
   normalizeSidebarDockItems,
   normalizeSidebarDockOrder,
   normalizeSidebarMaxWidth,
+  normalizeSidebarGlowShapeSize,
   PAGE_TAB_COLORS_DEFAULT,
   PAGE_TAB_COLORS_KEY,
+  persistControlRadiusPreference,
+  readControlRadiusPreference,
   readLearningPreferences,
   readElevatedSurfaces,
+  readElasticScrollPreferences,
   readPageTabColors,
+  readScrollbarStyle,
+  SCROLLBAR_STYLE_DEFAULT,
+  SCROLLBAR_STYLE_KEY,
 } from "../../src/settings/settingsPreferences.js";
 
 const runSurfaceDepthBootstrap = () => {
   // biome-ignore lint/security/noGlobalEval: Execute the generated inline bootstrap in JSDOM.
   window.eval(getSurfaceDepthBootstrapScript());
 };
+
+const runControlRadiusBootstrap = () => {
+  // biome-ignore lint/security/noGlobalEval: Execute the generated inline bootstrap in JSDOM.
+  window.eval(getControlRadiusBootstrapScript());
+};
+
+const runScrollbarBootstrap = () => {
+  // biome-ignore lint/security/noGlobalEval: Execute the generated inline bootstrap in JSDOM.
+  window.eval(getScrollbarBootstrapScript());
+};
+
+describe("scrollbar style preference", () => {
+  it("uses the themed default and normalizes unsupported values", () => {
+    expect(readScrollbarStyle()).toBe(SCROLLBAR_STYLE_DEFAULT);
+    expect(normalizeScrollbarStyle("custom")).toBe("custom");
+    expect(normalizeScrollbarStyle("unsupported")).toBe(
+      SCROLLBAR_STYLE_DEFAULT,
+    );
+  });
+
+  it("hydrates visibility and style before React mounts", () => {
+    localStorage.setItem("veolms-hide-scrollbars", "true");
+    localStorage.setItem(SCROLLBAR_STYLE_KEY, "thick");
+
+    runScrollbarBootstrap();
+
+    expect(document.documentElement.dataset.hideScrollbars).toBe("true");
+    expect(document.documentElement.dataset.scrollbarStyle).toBe("thick");
+  });
+
+  it("falls back to theme when the stored style is unsupported", () => {
+    localStorage.setItem(SCROLLBAR_STYLE_KEY, "unsupported");
+
+    runScrollbarBootstrap();
+
+    expect(document.documentElement.dataset.scrollbarStyle).toBe("theme");
+  });
+});
+
+describe("elastic scroller preference", () => {
+  it("defaults to the 2D appearance and normalizes unsupported values", () => {
+    expect(ELASTIC_SCROLL_APPEARANCE_DEFAULT).toBe("2d");
+    expect(readElasticScrollPreferences().appearance).toBe("2d");
+    expect(normalizeElasticScrollAppearance("unsupported")).toBe("2d");
+  });
+
+  it("hydrates the 2D default before React mounts", () => {
+    runScrollbarBootstrap();
+
+    expect(document.documentElement.dataset.elasticScrollAppearance).toBe(
+      "2d",
+    );
+  });
+});
+
+describe("control radius preference", () => {
+  it("uses the balanced default and clamps custom pixel values", () => {
+    expect(readControlRadiusPreference()).toEqual(CONTROL_RADIUS_DEFAULT);
+    expect(normalizeControlRadiusPreset("unsupported")).toBe("balanced");
+    expect(normalizeControlRadiusCustom(-4)).toBe(0);
+    expect(normalizeControlRadiusCustom(19.6)).toBe(20);
+    expect(normalizeControlRadiusCustom(100)).toBe(64);
+  });
+
+  it("persists a custom radius and applies it to the document root", () => {
+    persistControlRadiusPreference({ preset: "custom", customPx: 18 });
+
+    expect(localStorage.getItem(CONTROL_RADIUS_KEY)).toBe("custom");
+    expect(localStorage.getItem(CONTROL_RADIUS_CUSTOM_KEY)).toBe("18");
+    expect(document.documentElement.dataset.controlRadius).toBe("custom");
+    expect(
+      document.documentElement.style.getPropertyValue("--control-radius"),
+    ).toBe("18px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--control-radius-structured",
+      ),
+    ).toBe("14px");
+  });
+
+  it("hydrates the selected preset before React mounts", () => {
+    localStorage.setItem(CONTROL_RADIUS_KEY, "pill");
+    localStorage.setItem(CONTROL_RADIUS_CUSTOM_KEY, "22");
+
+    runControlRadiusBootstrap();
+
+    expect(document.documentElement.dataset.controlRadius).toBe("pill");
+    expect(
+      document.documentElement.style.getPropertyValue("--control-radius"),
+    ).toBe("999px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--control-radius-structured",
+      ),
+    ).toBe("14px");
+  });
+});
 
 describe("surface depth preference", () => {
   it("defaults to enabled and respects an explicit stored opt-out", () => {
@@ -29,6 +144,46 @@ describe("surface depth preference", () => {
 
     localStorage.setItem(ELEVATED_SURFACES_KEY, "true");
     expect(readElevatedSurfaces()).toBe(true);
+  });
+
+  it("hydrates sidebar menu elevation on by default and preserves opt-out", () => {
+    runSurfaceDepthBootstrap();
+    expect(document.documentElement.dataset.sidebarMenuElevation).toBe("true");
+
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ elevateMenus: false }),
+    );
+    runSurfaceDepthBootstrap();
+    expect(document.documentElement.dataset.sidebarMenuElevation).toBe("false");
+  });
+
+  it("hydrates and applies the sidebar glow shape scale before React mounts", () => {
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ glowShapeSize: 150 }),
+    );
+
+    runSurfaceDepthBootstrap();
+
+    expect(normalizeSidebarGlowShapeSize(150)).toBe(150);
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--sidebar-glow-field-width",
+      ),
+    ).toBe("1080.00px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--sidebar-bokeh-top-size",
+      ),
+    ).toBe("177.00px");
+
+    expect(applySidebarGlowShapeSize(50)).toBe(50);
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--sidebar-bokeh-top-size",
+      ),
+    ).toBe("59.00px");
   });
 });
 

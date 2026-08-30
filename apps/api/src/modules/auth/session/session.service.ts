@@ -121,10 +121,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const [totpEnabled, roles, permissions, passkeyCount] = await Promise.all([
+    const [totpEnabled, roles, permissions, menus, passkeyCount] = await Promise.all([
       mfaRepository.isTotpEnabled(database, user.id),
       userRepository.listUserRoleNames(database, user.id),
       userRepository.listUserPermissions(database, user.id),
+      userRepository.listUserMenus(database, user.id),
       mfaRepository.countUserPasskeys(database, user.id),
     ]);
 
@@ -143,6 +144,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
         phoneNo: user.phone_no,
         roles,
         permissions,
+        menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
         mfaMandatory: Boolean(user.mfa_mandatory),

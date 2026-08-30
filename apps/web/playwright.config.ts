@@ -43,10 +43,20 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "pnpm dev --host 127.0.0.1 --port 43917",
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command:
+        "node --env-file-if-exists=../../.env ../api/src/index.ts",
+      url: "http://127.0.0.1:4000/api/v1/health",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command:
+        "node node_modules/@react-router/dev/bin.cjs dev --host 127.0.0.1 --port 43917",
+      url: baseURL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
 });

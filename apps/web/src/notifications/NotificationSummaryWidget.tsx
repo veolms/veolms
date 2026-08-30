@@ -1,7 +1,7 @@
-import { At } from "@phosphor-icons/react/At";
-import { Bell } from "@phosphor-icons/react/Bell";
-import { BookOpen } from "@phosphor-icons/react/BookOpen";
-import { Megaphone } from "@phosphor-icons/react/Megaphone";
+import { AtIcon as At } from "@phosphor-icons/react/At";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/Megaphone";
 import type { NotificationTabId } from "./notificationsData";
 
 export interface NotificationSummaryWidgetProps {
@@ -19,8 +19,8 @@ export function NotificationSummaryWidget({
       label: "Unread",
       count: counts.unread,
       Icon: Bell,
-      iconColor: "text-[var(--accent)]",
-      iconBg: "bg-[var(--accent-soft)]",
+      iconColor: "text-(--accent)",
+      iconBg: "bg-(--accent-soft)",
     },
     {
       id: "mentions" as NotificationTabId,
@@ -51,12 +51,12 @@ export function NotificationSummaryWidget({
   return (
     <section
       aria-labelledby="notification-summary-heading"
-      className="rounded-[18px] border border-[var(--border)] bg-[var(--card-surface)] p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <h3
         id="notification-summary-heading"
-        className="font-bold text-base text-[var(--text)] tracking-tight"
+        className="font-bold text-base text-(--text) tracking-tight"
       >
         Summary
       </h3>
@@ -69,7 +69,7 @@ export function NotificationSummaryWidget({
               key={item.id}
               type="button"
               onClick={() => onSelectCategory?.(item.id)}
-              className="flex items-center justify-between rounded-xl px-2.5 py-2 text-xs md:text-sm text-[var(--text-secondary)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer text-left"
+              className="flex items-center justify-between rounded-xl px-2.5 py-2 text-xs md:text-sm text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer text-left"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -80,7 +80,7 @@ export function NotificationSummaryWidget({
                 </div>
                 <span className="font-medium">{item.label}</span>
               </div>
-              <span className="font-bold text-[var(--text)]">{item.count}</span>
+              <span className="font-bold text-(--text)">{item.count}</span>
             </button>
           );
         })}

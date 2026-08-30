@@ -8,8 +8,28 @@ import awsThumbnail from "../assets/course-thumbnails/aws-960.webp";
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
-export type CourseEnrollmentFilter = "all" | "enrolled" | "not-enrolled";
+export type CourseEnrollmentFilter =
+  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "archived";
 export type CourseSort = "latest" | "title" | "progress";
+export type CourseStatusFilter =
+  | "all"
+  | "in-progress"
+  | "not-started"
+  | "completed"
+  | "published"
+  | "draft"
+  | "archived";
+export type CourseLifecycleStatus = "published" | "draft" | "archived";
+
+export interface CourseOpenOptions {
+  preview?: boolean;
+}
+
+export interface CoursePricing {
+  price: string;
+  originalPrice: string;
+  discount: string;
+}
 
 export interface Course {
   id: string;
@@ -24,6 +44,9 @@ export interface Course {
   duration: string;
   students: number;
   thumbnail: string;
+  lifecycleStatus: CourseLifecycleStatus;
+  pricing?: CoursePricing;
+  certificateAvailable?: boolean;
 }
 
 export interface CourseCatalogueFilters {
@@ -31,27 +54,12 @@ export interface CourseCatalogueFilters {
   wishlisted: ReadonlySet<string>;
   role: CourseRole;
   enrollmentFilter: CourseEnrollmentFilter;
-  category: "all" | CourseCategory;
+  statusFilter: CourseStatusFilter;
   search: string;
   sort: CourseSort;
 }
 
 export const courses: readonly Course[] = [
-  {
-    id: "ui-ux-design-mastery",
-    title: "UI/UX Design Mastery",
-    description:
-      "Learn user-centered design principles and create stunning, intuitive interfaces.",
-    level: "Beginner",
-    category: "Design",
-    sections: 7,
-    lectures: 42,
-    progress: 65,
-    enrolled: true,
-    duration: "12h 40m",
-    students: 842,
-    thumbnail: "/assets/instructor-poster-960.webp",
-  },
   {
     id: "backend-nodejs",
     title: "Complete Backend with Node.js",
@@ -60,12 +68,13 @@ export const courses: readonly Course[] = [
     level: "Intermediate",
     category: "Development",
     sections: 23,
-    lectures: 185,
+    lectures: 600,
     progress: 80,
     enrolled: true,
     duration: "34h 20m",
     students: 1320,
     thumbnail: nodeThumbnail,
+    lifecycleStatus: "published",
   },
   {
     id: "typescript-course",
@@ -81,6 +90,7 @@ export const courses: readonly Course[] = [
     duration: "28h 10m",
     students: 967,
     thumbnail: typescriptThumbnail,
+    lifecycleStatus: "published",
   },
   {
     id: "javascript-course",
@@ -96,6 +106,24 @@ export const courses: readonly Course[] = [
     duration: "24h 35m",
     students: 1584,
     thumbnail: javascriptThumbnail,
+    lifecycleStatus: "draft",
+  },
+  {
+    id: "ui-ux-design-mastery",
+    title: "UI/UX Design Mastery",
+    description:
+      "Learn user-centered design principles and create stunning, intuitive interfaces.",
+    level: "Beginner",
+    category: "Design",
+    sections: 7,
+    lectures: 42,
+    progress: 100,
+    enrolled: true,
+    duration: "12h 40m",
+    students: 842,
+    thumbnail: "/assets/instructor-poster-960.webp",
+    lifecycleStatus: "published",
+    certificateAvailable: true,
   },
   {
     id: "figma-ui-essentials",
@@ -111,6 +139,12 @@ export const courses: readonly Course[] = [
     duration: "9h 15m",
     students: 611,
     thumbnail: figmaThumbnail,
+    lifecycleStatus: "draft",
+    pricing: {
+      price: "₹1,499",
+      originalPrice: "₹2,499",
+      discount: "40% off",
+    },
   },
   {
     id: "mongodb-database-design",
@@ -121,11 +155,12 @@ export const courses: readonly Course[] = [
     category: "Database",
     sections: 12,
     lectures: 68,
-    progress: 35,
+    progress: 0,
     enrolled: true,
     duration: "14h 45m",
     students: 723,
     thumbnail: mongodbThumbnail,
+    lifecycleStatus: "published",
   },
   {
     id: "aws-cloud-practitioner",
@@ -141,6 +176,12 @@ export const courses: readonly Course[] = [
     duration: "16h 30m",
     students: 489,
     thumbnail: awsThumbnail,
+    lifecycleStatus: "archived",
+    pricing: {
+      price: "₹1,999",
+      originalPrice: "₹2,999",
+      discount: "33% off",
+    },
   },
 ];
 
@@ -151,7 +192,7 @@ export function getVisibleCourses(
     wishlisted,
     role,
     enrollmentFilter,
-    category,
+    statusFilter,
     search,
     sort,
   }: CourseCatalogueFilters,
@@ -172,7 +213,30 @@ export function getVisibleCourses(
       course.enrolled
     )
       return false;
-    if (category !== "all" && course.category !== category) return false;
+    if (
+      role === "creator" &&
+      enrollmentFilter !== "all" &&
+      course.lifecycleStatus !== enrollmentFilter
+    )
+      return false;
+    if (statusFilter !== "all" && role === "student") {
+        const progress = course.progress ?? 0;
+        if (
+          statusFilter === "in-progress" &&
+          (!course.enrolled || progress <= 0 || progress >= 100)
+        )
+          return false;
+        if (
+          statusFilter === "not-started" &&
+          (!course.enrolled || progress !== 0)
+        )
+          return false;
+        if (
+          statusFilter === "completed" &&
+          (!course.enrolled || progress < 100)
+        )
+          return false;
+    }
     return (
       !normalizedSearch ||
       `${course.title} ${course.description}`
@@ -180,6 +244,26 @@ export function getVisibleCourses(
         .includes(normalizedSearch)
     );
   });
+  if (
+    role === "student" &&
+    enrollmentFilter === "all" &&
+    sort === "latest" &&
+    result.length > 1
+  ) {
+    const contrastingCourseIndex = result.findIndex(
+      (course, index) => index > 0 && course.enrolled !== result[0]?.enrolled,
+    );
+    if (contrastingCourseIndex > 1) {
+      const firstCourse = result[0]!;
+      const contrastingCourse = result[contrastingCourseIndex]!;
+      result = [
+        firstCourse,
+        contrastingCourse,
+        ...result.slice(1, contrastingCourseIndex),
+        ...result.slice(contrastingCourseIndex + 1),
+      ];
+    }
+  }
   if (sort === "title")
     result = [...result].sort((a, b) => a.title.localeCompare(b.title));
   if (sort === "progress")

@@ -75,7 +75,7 @@ test("compiled client serves direct routes and bundled course artwork", async ({
   expect(settingsHtml).toContain("Loading your workspace");
   expect(settingsHtml).not.toContain("Display mode");
 
-  const catalogueDocument = await page.request.get("/explore-courses");
+  const catalogueDocument = await page.request.get("/courses");
   expect(catalogueDocument.ok()).toBe(true);
   const catalogueHtml = await catalogueDocument.text();
   expect(catalogueHtml).toBe(settingsHtml);
@@ -86,12 +86,12 @@ test("compiled client serves direct routes and bundled course artwork", async ({
     page.getByRole("heading", { name: /Good evening, Ashi/ }),
   ).toBeVisible();
 
-  await page.goto("/explore-courses");
+  await page.goto("/courses");
   await expect(
-    page.getByRole("heading", { name: "Explore Courses", level: 1 }),
+    page.getByRole("heading", { name: "Courses", level: 1 }),
   ).toBeVisible();
   const courseImages = page
-    .getByRole("region", { name: "Explore Courses" })
+    .getByRole("region", { name: "Courses" })
     .locator("img");
   await expect(courseImages).toHaveCount(7);
   await expect

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { Eye } from "@phosphor-icons/react/Eye";
-import { Grains } from "@phosphor-icons/react/Grains";
-import { ThermometerSimple } from "@phosphor-icons/react/ThermometerSimple";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { DotsNineIcon as DotsNine } from "@phosphor-icons/react/DotsNine";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { GrainsIcon as Grains } from "@phosphor-icons/react/Grains";
+import { ThermometerSimpleIcon as ThermometerSimple } from "@phosphor-icons/react/ThermometerSimple";
 import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
 import {
@@ -36,7 +37,7 @@ interface ReadingModeRangeProps {
   id: string;
   label: string;
   value: number;
-  kind: "temperature" | "texture";
+  kind: "temperature" | "texture" | "grain-size";
   onChange: (value: number) => void;
 }
 
@@ -50,12 +51,20 @@ function ReadingModeRange({
   const valueText =
     kind === "temperature"
       ? getReadingModeTemperatureLabel(value)
-      : `${value}% texture`;
+      : kind === "texture"
+        ? `${value}% texture`
+        : `${value}% grain size`;
 
   return (
     <div className={`settings-reading-mode__range is-${kind}`}>
       <div className="settings-reading-mode__range-value" aria-hidden="true">
-        <span>{kind === "temperature" ? "Cool to warm" : "Paper grain"}</span>
+        <span>
+          {kind === "temperature"
+            ? "Cool to warm"
+            : kind === "texture"
+              ? "Paper grain"
+              : "Grain scale"}
+        </span>
         <output htmlFor={id}>
           {kind === "temperature" ? valueText : `${value}%`}
         </output>
@@ -78,11 +87,17 @@ function ReadingModeRange({
             <span>Neutral</span>
             <span>Warm</span>
           </>
-        ) : (
+        ) : kind === "texture" ? (
           <>
             <span>None</span>
             <span>Fine</span>
             <span>Paper</span>
+          </>
+        ) : (
+          <>
+            <span>Fine</span>
+            <span>Default</span>
+            <span>Coarse</span>
           </>
         )}
       </div>
@@ -115,7 +130,7 @@ function ReadingModePreview({
         data-reading-mode-colors={preferences.colors}
         style={style}
         role="img"
-        aria-label={`Reading mode preview: ${getReadingModeTemperatureLabel(preferences.colorTemperature)}, ${preferences.texture}% texture, ${READING_MODE_COLOR_LABELS[preferences.colors]}`}
+        aria-label={`Reading mode preview: ${getReadingModeTemperatureLabel(preferences.colorTemperature)}, ${preferences.texture}% texture, ${preferences.textureGrainSize}% grain size, ${READING_MODE_COLOR_LABELS[preferences.colors]}`}
       >
         <div
           className="settings-reading-mode__preview-scene"
@@ -185,12 +200,14 @@ export function ReadingModeSettings() {
         ...preferences,
         colorTemperature: READING_MODE_DEFAULTS.colorTemperature,
         texture: READING_MODE_DEFAULTS.texture,
+        textureGrainSize: READING_MODE_DEFAULTS.textureGrainSize,
       }),
     );
   };
   const slidersAreDefault =
     preferences.colorTemperature === READING_MODE_DEFAULTS.colorTemperature &&
-    preferences.texture === READING_MODE_DEFAULTS.texture;
+    preferences.texture === READING_MODE_DEFAULTS.texture &&
+    preferences.textureGrainSize === READING_MODE_DEFAULTS.textureGrainSize;
 
   return (
     <section className="settings-section settings-reading-mode">
@@ -200,7 +217,7 @@ export function ReadingModeSettings() {
       >
         <div>
           <h2>Reading mode</h2>
-          <p>Shift the display tone and add a fixed, paper-like grain.</p>
+          <p>Shift the display tone and tune a paper-like grain.</p>
         </div>
         <SettingsToggle
           checked={preferences.enabled}
@@ -251,6 +268,22 @@ export function ReadingModeSettings() {
             value={preferences.texture}
             kind="texture"
             onChange={(texture) => updatePreferences({ texture })}
+          />
+        </SettingRow>
+        <SettingRow
+          className="settings-row--reading-range"
+          icon={DotsNine}
+          label="Grain size"
+          note="Scale the texture from fine speckles to a coarser paper grain"
+        >
+          <ReadingModeRange
+            id="reading-mode-texture-grain-size"
+            label="Grain size"
+            value={preferences.textureGrainSize}
+            kind="grain-size"
+            onChange={(textureGrainSize) =>
+              updatePreferences({ textureGrainSize })
+            }
           />
         </SettingRow>
       </div>

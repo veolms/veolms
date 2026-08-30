@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { CaretLeft } from "@phosphor-icons/react/CaretLeft";
-import { CaretRight } from "@phosphor-icons/react/CaretRight";
-import { Check } from "@phosphor-icons/react/Check";
-import { ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
-import { CornersOut } from "@phosphor-icons/react/CornersOut";
-import { Gauge } from "@phosphor-icons/react/Gauge";
-import { GearSix } from "@phosphor-icons/react/GearSix";
-import { Monitor } from "@phosphor-icons/react/Monitor";
-import { Pause } from "@phosphor-icons/react/Pause";
-import { PictureInPicture } from "@phosphor-icons/react/PictureInPicture";
-import { Play } from "@phosphor-icons/react/Play";
-import { Rectangle } from "@phosphor-icons/react/Rectangle";
-import { Sparkle } from "@phosphor-icons/react/Sparkle";
-import { SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
-import { SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
+import { createPortal } from "react-dom";
+import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { GaugeIcon as Gauge } from "@phosphor-icons/react/Gauge";
+import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { MonitorIcon as Monitor } from "@phosphor-icons/react/Monitor";
+import { PauseIcon as Pause } from "@phosphor-icons/react/Pause";
+import { PictureInPictureIcon as PictureInPicture } from "@phosphor-icons/react/PictureInPicture";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { RectangleIcon as Rectangle } from "@phosphor-icons/react/Rectangle";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
+import { SpeakerHighIcon as SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
+import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { AppSlider } from "./AppSlider";
+import {
+  getDocumentFullscreenElement,
+  lockScreenOrientation,
+  unlockScreenOrientation,
+} from "./fullscreen";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import type { CourseVideo } from "./learning/courseContent";
 
@@ -86,24 +92,27 @@ function SwitchVisual({ checked }: SwitchVisualProps) {
 interface VideoPlayerProps {
   media: CourseVideo;
   lessonTitle: string;
-  posterSrc?: string;
   theaterMode: boolean;
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
+  onProgressChange?: (progress: number) => void;
+  resumePersistenceKey?: string;
 }
 
 export function VideoPlayer({
   media,
   lessonTitle,
-  posterSrc,
   theaterMode,
   onTheaterToggle,
   autoPlayOnMediaChange = false,
+  onProgressChange,
+  resumePersistenceKey,
 }: VideoPlayerProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
+  const ambientShellCanvasRef = useRef<HTMLCanvasElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const suppressNextPlayerActionRef = useRef(false);
@@ -111,12 +120,13 @@ export function VideoPlayer({
   const hudTimerRef = useRef<number | undefined>(undefined);
   const lastResumePersistedAtRef = useRef<number | null>(null);
   const lastKnownPlaybackTimeRef = useRef(0);
-  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => { });
-  const shortcutUpHandlerRef = useRef<(event: KeyboardEvent) => void>(() => { });
-  const blurHandlerRef = useRef<() => void>(() => { });
+  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  const shortcutUpHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  const blurHandlerRef = useRef<() => void>(() => {});
   const lastClickTimeRef = useRef(0);
   const wasPausedBeforeSpeedBoostRef = useRef(false);
   const longPressTimerRef = useRef<number | undefined>(undefined);
+  const orientationLockRequestedRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -135,7 +145,10 @@ export function VideoPlayer({
   // The server cannot read the saved device preference. Start from the same
   // deterministic value on both sides, then restore it after hydration.
   const [ambient, setAmbient] = useState(false);
+  const [ambientPortalHost, setAmbientPortalHost] =
+    useState<HTMLElement | null>(null);
   const [tempSpeedActive, setTempSpeedActive] = useState(false);
+  const resumeStorageKey = `veolms-watch-${resumePersistenceKey ?? media.fileName}`;
 
   const showHud = (message: string) => {
     window.clearTimeout(hudTimerRef.current);
@@ -166,6 +179,14 @@ export function VideoPlayer({
     }
   };
 
+  const reportProgress = (position: number, mediaDuration: number) => {
+    const nextProgress = mediaDuration
+      ? Math.max(0, Math.min(100, (position / mediaDuration) * 100))
+      : 0;
+    onProgressChange?.(nextProgress);
+    return nextProgress;
+  };
+
   const skip = (amount: number, announce = true) => {
     const video = videoRef.current;
     if (!video) return;
@@ -176,11 +197,7 @@ export function VideoPlayer({
     video.currentTime = nextTime;
     lastKnownPlaybackTimeRef.current = nextTime;
     setCurrentTime(nextTime);
-    setProgress(
-      video.duration || duration
-        ? (nextTime / (video.duration || duration)) * 100
-        : 0,
-    );
+    setProgress(reportProgress(nextTime, video.duration || duration));
     if (announce)
       showHud(`${amount > 0 ? "+" : "−"}${Math.abs(amount)} seconds`);
   };
@@ -188,6 +205,7 @@ export function VideoPlayer({
   const seekToProgress = (next: number) => {
     const safeProgress = Math.max(0, Math.min(100, next));
     setProgress(safeProgress);
+    onProgressChange?.(safeProgress);
     if (videoRef.current?.duration) {
       const nextTime = (safeProgress / 100) * videoRef.current.duration;
       videoRef.current.currentTime = nextTime;
@@ -248,10 +266,35 @@ export function VideoPlayer({
     }
   };
 
+  const isPortraitViewport = () => {
+    const orientationType = window.screen?.orientation?.type;
+    return orientationType
+      ? orientationType.startsWith("portrait")
+      : window.innerHeight > window.innerWidth;
+  };
+
   const requestFullscreen = async () => {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else if (shellRef.current?.requestFullscreen)
-      await shellRef.current.requestFullscreen();
+    if (getDocumentFullscreenElement()) {
+      orientationLockRequestedRef.current = false;
+      unlockScreenOrientation();
+      await document.exitFullscreen?.();
+      return;
+    }
+
+    const shell = shellRef.current;
+    if (!shell?.requestFullscreen) return;
+
+    const shouldLockLandscape = isPortraitViewport();
+    await shell.requestFullscreen();
+
+    if (shouldLockLandscape) {
+      const locked = await lockScreenOrientation();
+      if (!getDocumentFullscreenElement()) {
+        if (locked) unlockScreenOrientation();
+        return;
+      }
+      orientationLockRequestedRef.current = locked;
+    }
   };
 
   const persistResumePosition = useCallback(
@@ -267,28 +310,30 @@ export function VideoPlayer({
         return;
 
       try {
-        window.localStorage.setItem(
-          `veolms-watch-${media.fileName}`,
-          String(position),
-        );
+        window.localStorage.setItem(resumeStorageKey, String(position));
         lastResumePersistedAtRef.current = now;
       } catch {
         // Playback should remain available when browser storage is unavailable.
       }
     },
-    [media.fileName],
+    [resumeStorageKey],
   );
 
   const paintAmbientFrame = useCallback(() => {
     const video = videoRef.current;
-    const canvas = ambientCanvasRef.current;
-    if (!ambient || !video || !canvas || video.readyState < 2) return;
+    if (!ambient || !video || video.readyState < 2) return;
     try {
-      const context = canvas.getContext("2d", { alpha: false });
-      if (!context) return;
-      if (canvas.width !== 96) canvas.width = 96;
-      if (canvas.height !== 54) canvas.height = 54;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      for (const canvas of [
+        ambientCanvasRef.current,
+        ambientShellCanvasRef.current,
+      ]) {
+        if (!canvas) continue;
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) continue;
+        if (canvas.width !== 96) canvas.width = 96;
+        if (canvas.height !== 54) canvas.height = 54;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
     } catch {
       // Playback remains available when a cross-origin media response cannot be drawn to canvas.
     }
@@ -330,14 +375,15 @@ export function VideoPlayer({
       setTempSpeedActive(true);
       wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
       if (videoRef.current?.paused) {
-        void videoRef.current.play().catch(() => { });
+        void videoRef.current.play().catch(() => {});
       }
     } else {
       longPressTimerRef.current = window.setTimeout(() => {
         setTempSpeedActive(true);
-        wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
+        wasPausedBeforeSpeedBoostRef.current =
+          videoRef.current?.paused ?? false;
         if (videoRef.current?.paused) {
-          void videoRef.current.play().catch(() => { });
+          void videoRef.current.play().catch(() => {});
         }
       }, 500);
     }
@@ -381,10 +427,11 @@ export function VideoPlayer({
     return () => {
       active = false;
     };
-  }, [autoPlayOnMediaChange, media.duration, media.src]);
+  }, [autoPlayOnMediaChange, media.duration, media.src, onProgressChange]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = tempSpeedActive ? 2 : speed;
+    if (videoRef.current)
+      videoRef.current.playbackRate = tempSpeedActive ? 2 : speed;
   }, [speed, tempSpeedActive]);
 
   useEffect(() => {
@@ -394,6 +441,36 @@ export function VideoPlayer({
   useEffect(() => {
     setMuted(getInitialMuted());
     setMutedPreferenceReady(true);
+  }, []);
+
+  useEffect(() => {
+    const unlockOrientationAfterExit = () => {
+      if (getDocumentFullscreenElement()) return;
+      if (!orientationLockRequestedRef.current) return;
+      orientationLockRequestedRef.current = false;
+      unlockScreenOrientation();
+    };
+
+    document.addEventListener("fullscreenchange", unlockOrientationAfterExit);
+    document.addEventListener(
+      "webkitfullscreenchange",
+      unlockOrientationAfterExit,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        unlockOrientationAfterExit,
+      );
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        unlockOrientationAfterExit,
+      );
+      if (orientationLockRequestedRef.current) {
+        orientationLockRequestedRef.current = false;
+        unlockScreenOrientation();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -418,6 +495,55 @@ export function VideoPlayer({
   useEffect(() => {
     setAmbient(getAmbientDefault());
   }, []);
+
+  useEffect(() => {
+    setAmbientPortalHost(
+      shellRef.current?.closest<HTMLElement>(".courses-app") ?? null,
+    );
+  }, []);
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    const canvas = ambientShellCanvasRef.current;
+    if (!ambientPortalHost || !shell || !canvas) return undefined;
+
+    let animationFrame = 0;
+    const syncProjectionBounds = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const bounds = shell.getBoundingClientRect();
+        canvas.style.left = `${bounds.left}px`;
+        canvas.style.top = `${bounds.top}px`;
+        canvas.style.width = `${bounds.width}px`;
+        canvas.style.height = `${bounds.height}px`;
+      });
+    };
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(syncProjectionBounds);
+    const scrollport = shell.closest(".courses-main");
+
+    resizeObserver?.observe(shell);
+    scrollport?.addEventListener("scroll", syncProjectionBounds, {
+      passive: true,
+    });
+    window.addEventListener("resize", syncProjectionBounds, { passive: true });
+    window.visualViewport?.addEventListener("resize", syncProjectionBounds);
+    syncProjectionBounds();
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      scrollport?.removeEventListener("scroll", syncProjectionBounds);
+      window.removeEventListener("resize", syncProjectionBounds);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        syncProjectionBounds,
+      );
+    };
+  }, [ambientPortalHost, theaterMode]);
 
   useEffect(
     () => () => {
@@ -477,7 +603,7 @@ export function VideoPlayer({
     };
     animationFrame = window.requestAnimationFrame(draw);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [ambient, paintAmbientFrame, playing]);
+  }, [ambient, ambientPortalHost, paintAmbientFrame, playing]);
 
   useEffect(
     () => () => {
@@ -556,9 +682,10 @@ export function VideoPlayer({
       if (event.repeat) {
         if (!tempSpeedActive) {
           setTempSpeedActive(true);
-          wasPausedBeforeSpeedBoostRef.current = videoRef.current?.paused ?? false;
+          wasPausedBeforeSpeedBoostRef.current =
+            videoRef.current?.paused ?? false;
           if (videoRef.current?.paused) {
-            void videoRef.current.play().catch(() => { });
+            void videoRef.current.play().catch(() => {});
           }
         }
       }
@@ -659,6 +786,17 @@ export function VideoPlayer({
       ref={shellRef}
       className={`video-shell relative isolate ${theaterMode ? "video-shell--theater" : ""}`}
     >
+      {ambientPortalHost
+        ? createPortal(
+            <canvas
+              ref={ambientShellCanvasRef}
+              aria-hidden="true"
+              data-ambient-shell-projection
+              className={`ambient-canvas ambient-canvas--shell ${ambient && !mediaError ? "ambient-canvas--visible" : ""}`}
+            />,
+            ambientPortalHost,
+          )
+        : null}
       <canvas
         ref={ambientCanvasRef}
         aria-hidden="true"
@@ -668,6 +806,7 @@ export function VideoPlayer({
         ref={frameRef}
         role="region"
         aria-label={`Lesson video player for ${lessonTitle}`}
+        data-playing={playing ? "true" : "false"}
         tabIndex={0}
         onPointerDownCapture={handleFramePointerDown}
         onPointerUpCapture={clearTempSpeed}
@@ -688,33 +827,37 @@ export function VideoPlayer({
           event.currentTarget.focus({ preventScroll: true });
           runPlayerAction(togglePlay);
         }}
-        className={`youtube-player group relative z-10 w-full overflow-hidden rounded-[13px] border border-[var(--learning-panel-border)] bg-black shadow-[0_18px_50px_rgba(0,0,0,.2)] focus-visible:outline-4 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 ${theaterMode ? "lg:h-[calc(100vh-94px)] lg:min-h-[420px]" : ""} ${playing && !controlsAreVisible ? "cursor-none" : ""}`}
+        className={`youtube-player group relative z-10 w-full overflow-hidden rounded-[13px] border-0 bg-black shadow-[0_18px_50px_rgba(0,0,0,.2)] focus-visible:outline-4 focus-visible:outline-(--accent) focus-visible:outline-offset-2 ${theaterMode ? "lg:h-[calc(100vh-94px)] lg:min-h-105" : ""} ${playing && !controlsAreVisible ? "cursor-none" : ""}`}
       >
         <video
           ref={videoRef}
           className="size-full object-contain"
-          preload="none"
-          poster={posterSrc}
+          preload="auto"
           src={media.src}
           muted={muted}
           onLoadedMetadata={(event) => {
             setDuration(event.currentTarget.duration);
             let savedTime = 0;
             try {
-              savedTime = Number(
-                localStorage.getItem(`veolms-watch-${media.fileName}`),
-              );
+              savedTime = Number(localStorage.getItem(resumeStorageKey));
             } catch {
               // Resume from the beginning when browser storage is unavailable.
             }
             event.currentTarget.currentTime =
               Number.isFinite(savedTime) && savedTime > 0
                 ? Math.min(
-                  savedTime,
-                  Math.max(0, event.currentTarget.duration - 1),
-                )
+                    savedTime,
+                    Math.max(0, event.currentTarget.duration - 1),
+                  )
                 : Math.min(0.01, event.currentTarget.duration || 0);
             lastKnownPlaybackTimeRef.current = event.currentTarget.currentTime;
+            setCurrentTime(event.currentTarget.currentTime);
+            setProgress(
+              reportProgress(
+                event.currentTarget.currentTime,
+                event.currentTarget.duration,
+              ),
+            );
             event.currentTarget.playbackRate = tempSpeedActive ? 2 : speed;
             event.currentTarget.volume = volume;
           }}
@@ -735,7 +878,7 @@ export function VideoPlayer({
             const nextTime = event.currentTarget.currentTime;
             const nextDuration = event.currentTarget.duration;
             setCurrentTime(nextTime);
-            setProgress(nextDuration ? (nextTime / nextDuration) * 100 : 0);
+            setProgress(reportProgress(nextTime, nextDuration));
             lastKnownPlaybackTimeRef.current = nextTime;
             persistResumePosition(nextTime);
           }}
@@ -743,6 +886,8 @@ export function VideoPlayer({
           onEnded={(event) => {
             lastKnownPlaybackTimeRef.current = event.currentTarget.currentTime;
             persistResumePosition(event.currentTarget.currentTime, true);
+            setProgress(100);
+            onProgressChange?.(100);
             setPlaying(false);
           }}
         >
@@ -780,7 +925,7 @@ export function VideoPlayer({
             frameRef.current?.focus({ preventScroll: true });
             runPlayerAction(togglePlay);
           }}
-          className={`absolute left-1/2 top-1/2 z-10 flex size-[68px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-2xl transition duration-200 hover:bg-black/80 focus-visible:outline-4 focus-visible:outline-white/80 ${playing ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
+          className={`absolute left-1/2 top-1/2 z-10 flex size-17 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-2xl transition duration-200 hover:bg-black/80 focus-visible:outline-4 focus-visible:outline-white/80 ${playing ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
         >
           <Play size={34} weight="fill" className="translate-x-0.5" />
         </button>
@@ -897,6 +1042,7 @@ export function VideoPlayer({
                   <div
                     ref={settingsMenuRef}
                     data-player-menu
+                    data-control-radius-menu
                     role="group"
                     aria-label={
                       settingsPage === "speed"

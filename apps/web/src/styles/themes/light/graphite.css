@@ -1,4 +1,4 @@
-/* graphite palette — light mode. */
+/* graphite palette - light mode. */
 :root[data-theme="light"] {
   color-scheme: light;
   --canvas: #f4f6fb;

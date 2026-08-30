@@ -1,3 +1,4 @@
+import type { AuthMenuNode } from "@veolms/contracts";
 import "fastify";
 
 interface AuthenticatedUser {
@@ -9,6 +10,7 @@ interface AuthenticatedUser {
   phoneNo: string | null;
   roles: string[];
   permissions: string[];
+  menus: AuthMenuNode[];
   totpEnabled: boolean;
   passkeyEnabled: boolean;
   mfaMandatory: boolean;

@@ -4,12 +4,12 @@ export default function LegacyLearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
 
-  if (!courseSlug) return <Navigate replace to="/explore-courses" />;
+  if (!courseSlug) return <Navigate replace to="/courses" />;
   if (lectureSlug === "overview")
     return (
       <Navigate
         replace
-        to={`/explore-courses/${encodeURIComponent(courseSlug)}/overview${location.search}`}
+        to={`/courses/${encodeURIComponent(courseSlug)}/overview${location.search}`}
       />
     );
 

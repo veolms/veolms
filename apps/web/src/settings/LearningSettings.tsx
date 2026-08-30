@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { BookOpen } from "@phosphor-icons/react/BookOpen";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
-import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { Target } from "@phosphor-icons/react/Target";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { ThemedSelect } from "../ThemedSelect";
+import { CurriculumTestControls } from "./CurriculumTestControls";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import {
   LEARNING_PREFERENCES_KEY,
@@ -44,6 +45,10 @@ export function LearningSettings() {
     } catch {
       // Preferences remain available for this session when storage is blocked.
     }
+    document.documentElement.dataset.lessonPageScrollbar =
+      preferences.showLessonPageScrollbar ? "visible" : "hidden";
+    document.documentElement.dataset.curriculumScrollbar =
+      preferences.showCurriculumScrollbar ? "visible" : "hidden";
   }, [preferences, storageReady]);
 
   return (
@@ -115,6 +120,22 @@ export function LearningSettings() {
               note="Open the learning workspace with an expanded player."
               checked={preferences.startInTheaterMode}
               onChange={(startInTheaterMode) => update({ startInTheaterMode })}
+            />
+            <LearningToggleRow
+              label="Show lesson page scrollbar"
+              note="Drag vertically to scroll or sideways to resize course content."
+              checked={preferences.showLessonPageScrollbar}
+              onChange={(showLessonPageScrollbar) =>
+                update({ showLessonPageScrollbar })
+              }
+            />
+            <LearningToggleRow
+              label="Show course content scrollbar"
+              note="Display the scrollbar inside the course content panel."
+              checked={preferences.showCurriculumScrollbar}
+              onChange={(showCurriculumScrollbar) =>
+                update({ showCurriculumScrollbar })
+              }
             />
           </div>
         </section>
@@ -292,6 +313,8 @@ export function LearningSettings() {
             />
           </div>
         </section>
+
+        <CurriculumTestControls />
       </div>
     </div>
   );

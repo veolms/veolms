@@ -1,4 +1,4 @@
-/* ember palette — light mode. */
+/* ember palette - light mode. */
 :root[data-theme="light"][data-palette="ember"] {
   --canvas: #f3ece7;
   --header: #eee7e2;

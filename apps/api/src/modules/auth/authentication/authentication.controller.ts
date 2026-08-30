@@ -89,6 +89,7 @@ export function createAuthController(context: AuthContext) {
       phoneNo: user.phoneNo,
       roles: user.roles,
       permissions: user.permissions,
+      menus: user.menus,
       mfaVerified: request.session!.mfa_verified,
       totpEnabled: user.totpEnabled,
       passkeyEnabled: user.passkeyEnabled,

@@ -1,4 +1,4 @@
-/* lilac palette — light mode. */
+/* lilac palette - light mode. */
 :root[data-theme="light"][data-palette="lilac"] {
   --canvas: #f4eef9;
   --header: #efe8f5;

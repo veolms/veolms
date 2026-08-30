@@ -1,5 +1,5 @@
-/* rose palette — dark mode. */
-:root[data-palette="rose"] {
+/* rose palette - dark mode. */
+:root[data-theme="dark"][data-palette="rose"] {
   --canvas: #1e181a;
   --header: #1c1719;
   --surface: #34292d;

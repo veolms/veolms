@@ -1,50 +1,8 @@
-.lesson-drawer-shell {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: none;
-}
-
-.lesson-drawer-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: rgba(0, 0, 0, 0.62);
-  animation: drawer-backdrop-in 180ms ease-out both;
-}
-
-.lesson-drawer-panel {
-  position: absolute;
-  top: auto;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: min(100%, 550px);
-  height: min(84vh, 620px);
-  max-height: 84vh;
-  margin-inline: auto;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 18px 18px 0 0;
-  padding: 12px;
-  background: var(--canvas);
-  box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.32);
-  animation: drawer-panel-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.lesson-drawer-panel .learning-curriculum {
-  height: 100%;
-  border-radius: 12px 12px 0 0;
-}
-
 html:has(.learning-session-dialog[open]) {
   overflow: hidden;
 }
 
 .learning-session-dialog {
-  --scrollbar-track-block-inset: 17px;
-
   position: fixed;
   inset: 0;
   width: min(calc(100vw - 32px), 520px);
@@ -206,26 +164,6 @@ html:has(.learning-session-dialog[open]) {
   }
 }
 
-@keyframes drawer-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes drawer-panel-in {
-  from {
-    transform: translateY(32px);
-    opacity: 0.72;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 .video-shell {
   z-index: 0;
   isolation: isolate;
@@ -264,6 +202,16 @@ html:has(.learning-session-dialog[open]) {
   opacity: 0.62;
 }
 
+.ambient-canvas--shell {
+  position: fixed;
+  inset: auto;
+  z-index: 0;
+  width: 0;
+  height: 0;
+  filter: blur(46px) saturate(1.55);
+  transform: scale(1.085);
+}
+
 :root[data-theme="light"] .ambient-canvas--visible {
   opacity: 0.36;
 }
@@ -275,6 +223,12 @@ html:has(.learning-session-dialog[open]) {
 
 .video-shell--theater .ambient-canvas--visible {
   opacity: 0.64;
+}
+
+@media (max-width: 820px) {
+  .ambient-canvas--shell {
+    display: none;
+  }
 }
 
 .player-chrome {

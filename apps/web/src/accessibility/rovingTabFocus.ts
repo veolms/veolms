@@ -1,6 +1,22 @@
-import type { KeyboardEvent } from "react";
+import type { FocusEvent, KeyboardEvent } from "react";
 
 const TAB_SELECTOR = '[role="tab"]:not([disabled])';
+
+/**
+ * Keeps keyboard-focused tabs visible without moving a control underneath an
+ * active pointer. Scrolling a partially clipped tab during pointer focus can
+ * cancel the pointer's first click, which makes touch controls feel like they
+ * require two taps.
+ */
+export function scrollKeyboardFocusedTabIntoView(
+  event: FocusEvent<HTMLButtonElement>,
+) {
+  if (!event.currentTarget.matches(":focus-visible")) return;
+  event.currentTarget.scrollIntoView({
+    block: "nearest",
+    inline: "nearest",
+  });
+}
 
 /**
  * Applies the WAI-ARIA tablist keyboard model to an existing tab button.
