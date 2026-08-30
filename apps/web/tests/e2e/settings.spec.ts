@@ -101,9 +101,10 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   expect(navigationListBefore).not.toBeNull();
   expect(navigationListAfter).not.toBeNull();
   expect(navigationListAfter!.y).toBeCloseTo(navigationListBefore!.y, 0);
+  await expect(mobileProfileMenu.getByText("Workspace")).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Student" }),
-  ).toHaveAttribute("aria-checked", "true");
+  ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
   ).toHaveCount(0);
@@ -494,9 +495,7 @@ test("appearance and sidebar preferences persist through their direct settings r
 
   await expectAppearanceSettingsReady(page);
   const appearanceHeadings = await page
-    .locator(
-      ".settings-content--appearance:visible > .settings-section > h2",
-    )
+    .locator(".settings-content--appearance:visible > .settings-section > h2")
     .allTextContents();
   expect(appearanceHeadings.indexOf("Theme rotation")).toBe(
     appearanceHeadings.indexOf("Color theme") + 1,

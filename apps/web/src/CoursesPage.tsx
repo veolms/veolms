@@ -20,7 +20,6 @@ import type {
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -29,13 +28,9 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ToastNotification } from "./ToastNotification";
-import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
-import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import { UserIcon as User } from "@phosphor-icons/react/User";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
@@ -61,6 +56,7 @@ import type {
 import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
+import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
@@ -478,41 +474,6 @@ const isFocusedSidebarSwipeInput = (target: EventTarget | null) => {
   return focused === editable || Boolean(focused && editable.contains(focused));
 };
 
-const getProfileInitials = (displayName: string) => {
-  const words = displayName.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return "?";
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]?.toLocaleUpperCase())
-    .join("");
-};
-
-function ShellProfileAvatar({
-  avatarUrl,
-  displayName,
-}: {
-  avatarUrl: string | null;
-  displayName: string;
-}) {
-  return (
-    <i className="shell-profile-avatar" aria-hidden="true">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt=""
-          width={43}
-          height={43}
-          loading="lazy"
-          decoding="async"
-          fetchPriority="low"
-        />
-      ) : (
-        <strong>{getProfileInitials(displayName)}</strong>
-      )}
-    </i>
-  );
-}
-
 function LoginProfileButton({
   className,
   iconSize,
@@ -533,7 +494,7 @@ function LoginProfileButton({
     >
       <i
         aria-hidden="true"
-        className="courses-profile__login-icon flex size-[43px] shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_44%,var(--border))] text-(--accent) shadow-[0_0_16px_color-mix(in_srgb,var(--accent)_20%,transparent)]"
+        className="courses-profile__login-icon flex size-[43px] shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] text-(--accent) shadow-none"
       >
         <User size={iconSize} weight="duotone" />
       </i>
@@ -550,102 +511,6 @@ function LoginProfileButton({
         <CaretRight size={arrowSize} weight="bold" />
       </i>
     </button>
-  );
-}
-
-interface ProfileMenuProps {
-  role: CourseRole;
-  allowedRoles: readonly CourseRole[];
-  sidebarHidden?: boolean;
-  includeSidebarControl?: boolean;
-  id?: string;
-  className?: string;
-  onClose: () => void;
-  onRoleChange: (role: CourseRole) => void;
-  onToggleSidebar?: () => void;
-  onLogout: () => void;
-}
-
-function ProfileMenu({
-  role,
-  allowedRoles,
-  sidebarHidden = false,
-  includeSidebarControl = true,
-  id,
-  className,
-  onClose,
-  onRoleChange,
-  onToggleSidebar,
-  onLogout,
-}: ProfileMenuProps) {
-  const selectRole = (nextRole: CourseRole) => {
-    onRoleChange(nextRole);
-    onClose();
-  };
-  const canPreviewAsStudent = allowedRoles.includes("student");
-  const canPreviewAsCreator = allowedRoles.includes("creator");
-  const canSwitchWorkspace = canPreviewAsStudent && canPreviewAsCreator;
-
-  return (
-    <div
-      id={id}
-      className={className ? `profile-menu ${className}` : "profile-menu"}
-      role="menu"
-    >
-      {canSwitchWorkspace ? <p>Preview workspace as</p> : <p>Workspace</p>}
-      {canPreviewAsStudent ? (
-        <button
-          type="button"
-          role="menuitemradio"
-          aria-checked={role === "student"}
-          onClick={() => selectRole("student")}
-        >
-          <Student size={18} />
-          <span>Student</span>
-          {role === "student" && (
-            <Check className="profile-menu__check" size={16} weight="bold" />
-          )}
-        </button>
-      ) : null}
-      {canPreviewAsCreator ? (
-        <button
-          type="button"
-          role="menuitemradio"
-          aria-checked={role === "creator"}
-          onClick={() => selectRole("creator")}
-        >
-          <Users size={18} />
-          <span>Creator</span>
-          {role === "creator" && (
-            <Check className="profile-menu__check" size={16} weight="bold" />
-          )}
-        </button>
-      ) : null}
-      {includeSidebarControl && onToggleSidebar && (
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            onToggleSidebar();
-            onClose();
-          }}
-        >
-          <SidebarSimple size={18} />
-          <span>{sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}</span>
-        </button>
-      )}
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onClose();
-          onLogout();
-        }}
-      >
-        <SignOut size={18} />
-        <span>Logout</span>
-      </button>
-    </div>
   );
 }
 
@@ -845,11 +710,7 @@ export function CoursesPage({
     activeUser?.displayName ??
     (role === "creator" ? "Anurag Singh" : "Ashi Singh");
   const shellProfileAvatarUrl =
-    activeUser && savedShellProfile?.avatarDataUrl
-      ? savedShellProfile.avatarDataUrl
-      : role === "creator"
-        ? "/assets/ethan-avatar-160.webp"
-        : "/assets/sofia-avatar-160.webp";
+    (activeUser && savedShellProfile?.avatarDataUrl) || null;
   const profileRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
@@ -3522,10 +3383,7 @@ export function CoursesPage({
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar
-                    avatarUrl={shellProfileAvatarUrl}
-                    displayName={shellProfileDisplayName}
-                  />
+                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
@@ -4128,10 +3986,7 @@ export function CoursesPage({
                   aria-label={`${shellProfileDisplayName}, ${role === "creator" ? "Instructor" : "Student"}. Open role menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar
-                    avatarUrl={shellProfileAvatarUrl}
-                    displayName={shellProfileDisplayName}
-                  />
+                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
