@@ -1,6 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   AuthMessageResponse,
+  CurrentUserResponse,
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
   LoginRequest,
@@ -19,6 +24,20 @@ import { clearStoredProfilePreferences } from "../../settings/profilePreferences
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 
+function persistAuthenticatedSession(
+  queryClient: QueryClient,
+  data: LoginResponse,
+) {
+  authStore.setUser(data.user);
+  queryClient.setQueryData<CurrentUserResponse>(authKeys.me(), {
+    ...data.user,
+    mfaVerified: !data.mfaRequired,
+    totpEnabled: data.totpEnabled,
+    passkeyEnabled: data.passkeyEnabled,
+    mfaMandatory: data.mfaMandatory,
+  });
+}
+
 export function useSendOtp() {
   return useMutation<AuthMessageResponse, ApiError, OtpSendRequest>({
     mutationFn: (payload) => authService.sendOtp(payload),
@@ -31,10 +50,7 @@ export function useLogin() {
   return useMutation<LoginResponse, ApiError, LoginRequest>({
     mutationFn: (payload) => authService.login(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }
@@ -45,10 +61,7 @@ export function useRegister() {
   return useMutation<LoginResponse, ApiError, RegisterRequest>({
     mutationFn: (payload) => authService.register(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }
@@ -65,10 +78,7 @@ export function useOauthLogin() {
   return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
     mutationFn: (payload) => authService.oauthLogin(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }

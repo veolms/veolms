@@ -9,6 +9,7 @@ import {
   resolveAuthenticatedDestination,
   resolveSessionAccess,
   sanitizeReturnTo,
+  shouldRedirectToMfaChallenge,
 } from "../../src/routing/routeAccess.ts";
 
 describe("route access policy", () => {
@@ -78,5 +79,23 @@ describe("route access policy", () => {
   it("sanitizes return targets", () => {
     expect(sanitizeReturnTo("/courses?tab=mine")).toBe("/courses?tab=mine");
     expect(sanitizeReturnTo("/mfa-setup")).toBeNull();
+  });
+
+  it("does not bounce public or auth screens to MFA on a 403", () => {
+    const mfaError = { status: 403, code: "MFA_REQUIRED" };
+
+    expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(false);
+    expect(shouldRedirectToMfaChallenge("/settings/appearance", mfaError)).toBe(
+      false,
+    );
+    expect(shouldRedirectToMfaChallenge("/", mfaError)).toBe(false);
+    expect(shouldRedirectToMfaChallenge("/login", mfaError)).toBe(false);
+    expect(shouldRedirectToMfaChallenge("/discussions", mfaError)).toBe(true);
+    expect(
+      shouldRedirectToMfaChallenge("/courses", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      }),
+    ).toBe(false);
   });
 });
