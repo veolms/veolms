@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { AccountForm } from "./AccountForm";
 import { MfaEnrollmentSetup } from "./MfaEnrollmentSetup";
@@ -60,6 +60,11 @@ export function LoginView() {
       { replace: true },
     );
   };
+
+  useEffect(() => {
+    if (flow.status !== "authenticated") return;
+    handleAuthComplete();
+  }, [flow.status, navigate, searchParams]);
 
   const handleSendCode = async (identifier: AuthIdentifier) => {
     if (sendOtpMutation.isPending) return;
@@ -136,7 +141,6 @@ export function LoginView() {
 
       authStore.setUser(response.user);
       dispatch({ type: "OTP_VERIFIED", next: "authenticated" });
-      handleAuthComplete();
     } catch (err: unknown) {
       const errorObj = err as { code?: string; message?: string };
 
@@ -211,7 +215,6 @@ export function LoginView() {
       }
 
       dispatch({ type: "ACCOUNT_CREATED" });
-      handleAuthComplete();
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       const message =
@@ -227,7 +230,6 @@ export function LoginView() {
         <MfaEnrollmentSetup
           onDone={() => {
             dispatch({ type: "ADMIN_MFA_SETUP_DONE" });
-            handleAuthComplete();
           }}
           onError={(message) => {
             dispatch({ type: "ADMIN_MFA_SETUP_FAILED", message });
@@ -311,7 +313,6 @@ export function LoginView() {
           allowPasskey={mfaCapabilities.allowPasskey}
           onDone={() => {
             dispatch({ type: "TWO_FACTOR_VERIFIED" });
-            handleAuthComplete();
           }}
         />
       );
@@ -320,6 +321,8 @@ export function LoginView() {
     if (flow.status === "authenticated") {
       return (
         <div
+          aria-label="Redirecting"
+          role="region"
           style={{
             display: "grid",
             justifyItems: "center",

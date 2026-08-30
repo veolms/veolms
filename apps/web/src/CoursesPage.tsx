@@ -79,15 +79,19 @@ import {
 } from "./courses/courseAdapter";
 import {
   getDefaultNavigationOrder,
+  getDefaultNavigationVisibility,
   getInitialNavigationOrder,
   getInitialNavigationVisibility,
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
+  getPublicNavigationItems,
   getNavigationDestination,
-  getNavigationDisplayLabel,
   getNavigationIconColor,
+  hasNavigationMenu,
   getVisibleOrderedNavigation,
+  resolveShellNavigation,
 } from "./shell/navigation";
+import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   getUserRoles,
   getVisibleWorkspaceRoles,
@@ -657,6 +661,7 @@ export function CoursesPage({
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
+  const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
@@ -672,14 +677,14 @@ export function CoursesPage({
   const [navigationOrders, setNavigationOrders] = useState<
     Record<CourseRole, string[]>
   >(() => ({
-    student: getDefaultNavigationOrder("student"),
-    creator: getDefaultNavigationOrder("creator"),
+    student: getDefaultNavigationOrder(publicNavigationItems),
+    creator: getDefaultNavigationOrder(publicNavigationItems),
   }));
   const [navigationVisibility, setNavigationVisibility] = useState<
     Record<CourseRole, string[]>
   >(() => ({
-    student: getDefaultNavigationOrder("student"),
-    creator: getDefaultNavigationOrder("creator"),
+    student: getDefaultNavigationOrder(publicNavigationItems),
+    creator: getDefaultNavigationOrder(publicNavigationItems),
   }));
   const [draggedNavigationLabel, setDraggedNavigationLabel] = useState<
     string | null
@@ -784,6 +789,9 @@ export function CoursesPage({
   >(MOBILE_DRAWER_INITIAL_SNAP_POINT);
   const [mobileBottomNavHidden, setMobileBottomNavHidden] = useState(false);
   const [notice, setNotice] = useState("");
+  const [hydratedNavigationKey, setHydratedNavigationKey] = useState<
+    string | null
+  >(null);
   const [isFullscreen, setIsFullscreen] = useState(() =>
     typeof document === "undefined"
       ? false
@@ -791,10 +799,26 @@ export function CoursesPage({
   );
   const shortcutPlatform = useShortcutPlatform();
   useGlobalSearchShortcut(shortcutPlatform);
-  const { data: authUser } = useCurrentUser();
+  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
   const storeUser = useAuthStore((s) => s.user);
   const activeUser = authUser || storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
+    () => resolveShellNavigation(activeUser?.menus),
+    [activeUser?.menus],
+  );
+  const navigationSignature = useMemo(
+    () =>
+      navigationItems
+        .map(([label, , metadata]) =>
+          [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
+        )
+        .join("|"),
+    [navigationItems],
+  );
+  const shouldRenderLearningSpace = Boolean(
+    activeUser && hasNavigationMenu(activeUser.menus, "Learning Space"),
+  );
   const userRoles = getUserRoles(activeUser);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
@@ -909,6 +933,13 @@ export function CoursesPage({
         : page === "courses"
           ? "Courses"
           : null));
+  const isNavigationItemActive = (item: NavigationItemWithMetadata) => {
+    const label = item[0];
+    return (
+      activeNavigationSection === label ||
+      (label === "Notification" && activeNavigationSection === "Notifications")
+    );
+  };
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const sidebarResizeMoveRef = useRef<
     ((event: PointerPositionEvent) => void) | null
@@ -974,15 +1005,6 @@ export function CoursesPage({
               ),
       );
       setSidebarWidth(getInitialSidebarWidth());
-      setNavigationOrders({
-        student: getInitialNavigationOrder("student"),
-        creator: getInitialNavigationOrder("creator"),
-      });
-      setNavigationVisibility({
-        student: getInitialNavigationVisibility("student"),
-        creator: getInitialNavigationVisibility("creator"),
-      });
-
       const storedTheme = localStorage.getItem("veolms-theme");
       setTheme(
         storedTheme === "light" ||
@@ -1018,6 +1040,44 @@ export function CoursesPage({
       setStoredPreferencesReady(true);
     }
   }, []);
+
+  const navigationHydrationKey = [
+    activeUser ? "authenticated" : "guest",
+    role,
+    navigationSignature,
+  ].join(":");
+
+  useEffect(() => {
+    if (!storedPreferencesReady) return;
+    if (!activeUser && !authUserFetched) return;
+    if (hydratedNavigationKey === navigationHydrationKey) return;
+
+    setNavigationOrders((current) => ({
+      ...current,
+      [role]: isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItems)
+        : getInitialNavigationOrder(role, navigationItems),
+    }));
+    setNavigationVisibility((current) => ({
+      ...current,
+      [role]: isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItems)
+        : getInitialNavigationVisibility(role, navigationItems),
+    }));
+    setHydratedNavigationKey(navigationHydrationKey);
+  }, [
+    activeUser,
+    authUserFetched,
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationItems,
+    role,
+    storedPreferencesReady,
+  ]);
+
+  const navigationPreferencesReady =
+    hydratedNavigationKey === navigationHydrationKey;
 
   useEffect(
     () => () => {
@@ -1244,23 +1304,39 @@ export function CoursesPage({
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
+    if (isPublicNavigation) return;
+    if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
         `veolms-navigation-order-${roleName}`,
         JSON.stringify(order),
       );
     });
-  }, [navigationOrders, storedPreferencesReady]);
+  }, [
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationOrders,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
+    if (isPublicNavigation) return;
+    if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
         `veolms-navigation-visibility-${roleName}`,
         JSON.stringify(visibleItems),
       );
     });
-  }, [navigationVisibility, storedPreferencesReady]);
+  }, [
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationVisibility,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     const nextRole = resolveWorkspaceRole(userRoles, role);
@@ -1584,11 +1660,18 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
-
   const navigation = getVisibleOrderedNavigation(
-    role,
-    navigationOrders[role],
-    navigationVisibility[role],
+    navigationPreferencesReady && !isPublicNavigation
+      ? navigationOrders[role]
+      : isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItems)
+        : getInitialNavigationOrder(role, navigationItems),
+    navigationPreferencesReady && !isPublicNavigation
+      ? navigationVisibility[role]
+      : isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItems)
+        : getInitialNavigationVisibility(role, navigationItems),
+    navigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
@@ -1762,10 +1845,13 @@ export function CoursesPage({
     action();
   };
 
-  const selectNavigation = (label: string) => {
+  const selectNavigation = (
+    label: string,
+    item?: NavigationItemWithMetadata,
+  ) => {
     setEdgeSidebarOpen(false);
     dismissMobileMenuThen(() =>
-      onNavigatePage?.(getNavigationDestination(label)),
+      onNavigatePage?.(getNavigationDestination(item ?? label)),
     );
   };
 
@@ -1776,7 +1862,12 @@ export function CoursesPage({
   ) => {
     if (!sourceLabel || !targetLabel || sourceLabel === targetLabel) return;
     setNavigationOrders((current) => {
-      const currentOrder = current[role] || getInitialNavigationOrder(role);
+      const currentOrder =
+        navigationPreferencesReady && !isPublicNavigation
+          ? current[role] || getInitialNavigationOrder(role, navigationItems)
+          : isPublicNavigation
+            ? getDefaultNavigationOrder(navigationItems)
+            : getInitialNavigationOrder(role, navigationItems);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -1794,7 +1885,12 @@ export function CoursesPage({
 
   const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
     const currentOrder =
-      navigationOrders[role] || getInitialNavigationOrder(role);
+      navigationPreferencesReady && !isPublicNavigation
+        ? navigationOrders[role] ||
+          getInitialNavigationOrder(role, navigationItems)
+        : isPublicNavigation
+          ? getDefaultNavigationOrder(navigationItems)
+          : getInitialNavigationOrder(role, navigationItems);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -1965,13 +2061,14 @@ export function CoursesPage({
   const handleNavigationClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
     label: string,
+    item?: NavigationItemWithMetadata,
   ) => {
     if (navigationDragConsumedRef.current) {
       navigationDragConsumedRef.current = false;
       event.preventDefault();
       return;
     }
-    selectNavigation(label);
+    selectNavigation(label, item);
   };
 
   const navigationUsesCompactInteraction =
@@ -3092,7 +3189,7 @@ export function CoursesPage({
   );
   const mobileMoreActive = Boolean(
     activeNavigationSection &&
-    mobileMoreNavigation.some(([label]) => label === activeNavigationSection),
+    mobileMoreNavigation.some(isNavigationItemActive),
   );
   const currentAcademyThemeIndex = academyThemes.findIndex(
     (item) => item.id === academyTheme,
@@ -3256,9 +3353,10 @@ export function CoursesPage({
                 updateNavigationScrollFade();
               }}
             >
-              {navigation.map(([label, Icon], navigationIndex) => {
-                const active = activeNavigationSection === label;
-                const displayLabel = getNavigationDisplayLabel(label, page);
+              {navigation.map((item, navigationIndex) => {
+                const [label, Icon] = item;
+                const active = isNavigationItemActive(item);
+                const displayLabel = label;
                 const accessibleLabel = [
                   displayLabel,
                   label === "Wishlist" && wishlisted.size > 0
@@ -3269,7 +3367,7 @@ export function CoursesPage({
                   .join(", ");
                 return (
                   <Fragment key={label}>
-                    {role === "student" &&
+                    {shouldRenderLearningSpace &&
                       !compactNavigation &&
                       label === "Settings" && (
                         <LearningSpace
@@ -3306,7 +3404,9 @@ export function CoursesPage({
                       }
                       data-navigation-label={label}
                       data-sortable="true"
-                      onClick={(event) => handleNavigationClick(event, label)}
+                      onClick={(event) =>
+                        handleNavigationClick(event, label, item)
+                      }
                       onContextMenu={(event) => {
                         if (navigationUsesCompactInteraction)
                           event.preventDefault();
@@ -3356,7 +3456,7 @@ export function CoursesPage({
                         <b>{wishlisted.size}</b>
                       )}
                     </button>
-                    {role === "student" &&
+                    {shouldRenderLearningSpace &&
                       mobileSidebarNavigationActive &&
                       label === "Courses" && (
                         <LearningSpace
@@ -3377,7 +3477,7 @@ export function CoursesPage({
                   </Fragment>
                 );
               })}
-              {role === "student" &&
+              {shouldRenderLearningSpace &&
                 !compactNavigation &&
                 !navigation.some(([label]) => label === "Settings") && (
                   <LearningSpace
@@ -3766,7 +3866,14 @@ export function CoursesPage({
               onSidebarPreferencesChange={setSidebarPreferences}
               sidebarMode={sidebarMode}
               onSidebarModeChange={setSidebarMode}
-              navigationVisibleItems={navigationVisibility[role]}
+              navigationItems={navigationItems}
+              navigationVisibleItems={
+                navigationPreferencesReady && !isPublicNavigation
+                  ? navigationVisibility[role]
+                  : isPublicNavigation
+                    ? getDefaultNavigationVisibility(navigationItems)
+                    : getInitialNavigationVisibility(role, navigationItems)
+              }
               onNavigationVisibilityChange={(visibleItems) =>
                 setNavigationVisibility((current) => ({
                   ...current,
@@ -3877,9 +3984,10 @@ export function CoursesPage({
           aria-label={`${role === "creator" ? "Creator" : "Student"} mobile navigation`}
           onFocusCapture={() => setMobileBottomNavHidden(false)}
         >
-          {mobileNavigation.map(([label, Icon]) => {
-            const active = activeNavigationSection === label;
-            const displayLabel = getNavigationDisplayLabel(label, page);
+          {mobileNavigation.map((item) => {
+            const [label, Icon] = item;
+            const active = isNavigationItemActive(item);
+            const displayLabel = label;
             return (
               <Fragment key={label}>
                 <button
@@ -3903,7 +4011,7 @@ export function CoursesPage({
                     .filter(Boolean)
                     .join(", ")}
                   data-navigation-label={label}
-                  onClick={() => selectNavigation(label)}
+                  onClick={() => selectNavigation(label, item)}
                 >
                   <span>
                     <Icon size={23} weight={active ? "fill" : "regular"} />
@@ -3913,7 +4021,7 @@ export function CoursesPage({
                   </span>
                   <small>{displayLabel}</small>
                 </button>
-                {role === "student" && label === "Courses" && (
+                {shouldRenderLearningSpace && label === "Courses" && (
                   <LearningSpace
                     sessions={learningSessions}
                     activeCourseId={visibleLearningCourseId}
@@ -4060,9 +4168,10 @@ export function CoursesPage({
               className="mobile-menu-sheet__list"
               aria-label="More navigation options"
             >
-              {mobileMoreNavigation.map(([label, Icon]) => {
-                const active = activeNavigationSection === label;
-                const displayLabel = getNavigationDisplayLabel(label, page);
+              {mobileMoreNavigation.map((item) => {
+                const [label, Icon] = item;
+                const active = isNavigationItemActive(item);
+                const displayLabel = label;
                 return (
                   <button
                     type="button"
@@ -4098,7 +4207,9 @@ export function CoursesPage({
                       .filter(Boolean)
                       .join(", ")}
                     data-navigation-label={label}
-                    onClick={(event) => handleNavigationClick(event, label)}
+                    onClick={(event) =>
+                      handleNavigationClick(event, label, item)
+                    }
                   >
                     <Icon size={23} weight={active ? "fill" : "regular"} />
                     <span>{displayLabel}</span>

@@ -5,6 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthLayout from "../../src/routes/auth-layout.tsx";
 import { useAuthAppearance } from "../../src/auth/useAuthAppearance.ts";
 import { academyThemes } from "../../src/themes.ts";
+import { renderWithAppProviders } from "./test-utils.tsx";
+
+vi.mock("../../src/services/auth", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../src/services/auth")
+  >("../../src/services/auth");
+
+  return {
+    ...actual,
+    useCurrentUser: () => ({
+      data: null,
+      isSuccess: true,
+      isPending: false,
+      isFetched: true,
+    }),
+  };
+});
 
 vi.mock("../../src/auth/AuthBrandPanel.tsx", () => ({
   AuthBrandPanel: () => null,
@@ -185,22 +202,14 @@ describe("AuthLayout", () => {
     storePalette("ocean");
     window.localStorage.setItem("veolms-theme", "light");
 
-    render(
-      <MemoryRouter initialEntries={["/login"]}>
-        <AuthLayout />
-      </MemoryRouter>,
-    );
+    renderWithAppProviders(<AuthLayout />, ["/login"]);
 
     expect(document.documentElement.dataset.palette).toBe("ocean");
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("uses the saved appearance without adding an auth-only control", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/login"]}>
-        <AuthLayout />
-      </MemoryRouter>,
-    );
+    const { container } = renderWithAppProviders(<AuthLayout />, ["/login"]);
 
     expect(container.querySelector(".auth-appearance")).toBeNull();
   });

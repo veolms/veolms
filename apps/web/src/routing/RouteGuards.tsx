@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
+import {
+  Outlet,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
@@ -68,9 +73,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (!access.isAuthenticated) {
-      navigate(buildLoginPath(`${location.pathname}${location.search}`), {
-        replace: true,
-      });
+      navigate(APP_HOME_PATH, { replace: true });
       return;
     }
 
@@ -123,10 +126,9 @@ export function AuthRouteGuard() {
       return;
     }
 
-    navigate(
-      resolveAuthenticatedDestination(searchParams.get("returnTo")),
-      { replace: true },
-    );
+    navigate(resolveAuthenticatedDestination(searchParams.get("returnTo")), {
+      replace: true,
+    });
   }, [
     access.isAuthenticated,
     access.isSessionReady,

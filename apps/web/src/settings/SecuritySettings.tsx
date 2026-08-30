@@ -339,7 +339,7 @@ function StatusNote({ children }: { children: ReactNode }) {
 
 export function SecuritySettings() {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const sessionQuery = useSessions();
+  const sessionQuery = useSessions({ enabled: Boolean(currentUser) });
   const revokeSession = useRevokeSession();
   const revokeAll = useRevokeAllOtherSessions();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
