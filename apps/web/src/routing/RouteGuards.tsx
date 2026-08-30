@@ -140,7 +140,7 @@ export function AuthRouteGuard() {
   ]);
 
   if (pending) {
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen variant="embedded" />;
   }
 
   if (path === "/auth/callback") {
@@ -149,13 +149,13 @@ export function AuthRouteGuard() {
 
   if (path === "/mfa-setup") {
     if (!access.isAuthenticated || access.isSessionReady) {
-      return <AppLoadingScreen />;
+      return <AppLoadingScreen variant="embedded" />;
     }
     return <Outlet />;
   }
 
   if (access.isSessionReady) {
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen variant="embedded" />;
   }
 
   return <Outlet />;
