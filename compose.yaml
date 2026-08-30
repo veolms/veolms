@@ -19,7 +19,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks: [veolms]
 
 volumes:
   postgres-data:
     name: veolms-postgres-18-data
+
+networks:
+  veolms:
+    name: veolms-fleet
