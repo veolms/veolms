@@ -5,3 +5,4 @@ export * from "./media.ts";
 export * from "./discussion.ts";
 export * from "./health.ts";
 export * from "./error.ts";
+export * from "./fleet.ts";

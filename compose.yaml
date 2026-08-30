@@ -27,4 +27,4 @@ volumes:
 
 networks:
   veolms:
-    name: veolms-fleet
+    name: ${DOCKER_NETWORK:-veolms-fleet}
