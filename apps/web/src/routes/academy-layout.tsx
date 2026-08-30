@@ -13,6 +13,7 @@ import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
 import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
+import { AcademyRouteGuard } from "../routing/RouteGuards";
 import {
   getInitialNavigationOrder,
   getInitialNavigationVisibility,
@@ -249,7 +250,7 @@ export default function AcademyLayout() {
   );
 
   return (
-    <>
+    <AcademyRouteGuard>
       <CoursesPage
         page={route.page}
         section={route.section}
@@ -278,6 +279,6 @@ export default function AcademyLayout() {
             : null
         }
       />
-    </>
+    </AcademyRouteGuard>
   );
 }

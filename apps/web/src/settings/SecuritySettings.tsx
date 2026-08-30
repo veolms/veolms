@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
@@ -6,9 +7,14 @@ import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { SettingRow } from "./SettingsControls";
+import {
+  formatRelativeDate,
+  formatSessionDevice,
+  isMobileSession,
+} from "./sessionDisplay";
 import { MFA_CONFIG } from "../auth/mfa.config";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { validateOtpCode } from "../auth/authFlow";
@@ -24,23 +30,28 @@ import {
   useRevokeAllOtherSessions,
 } from "../services/auth";
 
-function formatRelativeDate(dateStr: string | undefined): string {
-  if (!dateStr) return "Unknown";
-  try {
-    const date = new Date(dateStr);
-    const now = Date.now();
-    const diff = now - date.getTime();
-    const minutes = Math.floor(diff / 60_000);
-    const hours = Math.floor(diff / 3_600_000);
-    const days = Math.floor(diff / 86_400_000);
-
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  } catch {
-    return "Unknown";
+function SettingsModalOverlay({
+  labelledBy,
+  children,
+}: {
+  labelledBy: string;
+  children: ReactNode;
+}) {
+  if (typeof document === "undefined") {
+    return null;
   }
+
+  return createPortal(
+    <div
+      className="auth-mfa-setup__overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
 }
 
 interface BackupCodesModalProps {
@@ -62,12 +73,7 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
   };
 
   return (
-    <div
-      className="auth-mfa-setup__overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="backup-codes-title"
-    >
+    <SettingsModalOverlay labelledBy="backup-codes-title">
       <div className="auth-mfa-setup__modal">
         <div className="auth-mfa-setup__modal-header">
           <h3 id="backup-codes-title">Save your backup codes</h3>
@@ -110,7 +116,7 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </SettingsModalOverlay>
   );
 }
 
@@ -175,12 +181,7 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
   };
 
   return (
-    <div
-      className="auth-mfa-setup__overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="totp-modal-title"
-    >
+    <SettingsModalOverlay labelledBy="totp-modal-title">
       <div className="auth-mfa-setup__modal">
         <div className="auth-mfa-setup__modal-header">
           <h3 id="totp-modal-title">
@@ -312,7 +313,27 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
           </form>
         )}
       </div>
-    </div>
+    </SettingsModalOverlay>
+  );
+}
+
+const SECURITY_ROW_CLASS =
+  "max-[480px]:[grid-template-columns:2rem_minmax(0,1fr)] max-[480px]:[&_.settings-row__control]:col-start-2 max-[480px]:[&_.settings-row__control]:justify-stretch max-[480px]:[&_.settings-action]:w-full";
+
+function RecommendedBadge() {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-(--accent-soft) px-1.5 py-px text-[0.62rem] font-semibold text-(--accent)">
+      <Star aria-hidden size={10} weight="fill" />
+      Recommended
+    </span>
+  );
+}
+
+function StatusNote({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[0.72rem] font-semibold whitespace-nowrap text-(--muted)">
+      {children}
+    </span>
   );
 }
 
@@ -329,9 +350,6 @@ export function SecuritySettings() {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeySuccess, setPasskeySuccess] = useState(false);
   const [totpSuccess, setTotpSuccess] = useState(false);
-  const [mfaEnrollmentError, setMfaEnrollmentError] = useState<string | null>(
-    null,
-  );
 
   const totpEnabled = currentUser?.totpEnabled ?? false;
   const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
@@ -403,7 +421,7 @@ export function SecuritySettings() {
 
       {showEnrollmentSetup ? (
         <section
-          className="settings-section settings-section--mfa-enrollment"
+          className="settings-section"
           aria-labelledby="mfa-enrollment-heading"
         >
           <header className="settings-section__heading">
@@ -416,15 +434,82 @@ export function SecuritySettings() {
             </div>
           </header>
 
-          <MfaEnrollmentSetup
-            onDone={() => setMfaEnrollmentError(null)}
-            onError={setMfaEnrollmentError}
-          />
-          {mfaEnrollmentError && (
-            <p className="auth-form__error" role="alert">
-              {mfaEnrollmentError}
+          <div className="settings-row-list">
+            {MFA_CONFIG.ALLOW_PASSKEY ? (
+              <SettingRow
+                className={SECURITY_ROW_CLASS}
+                icon={Fingerprint}
+                label="Passkey sign-in"
+                note={
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <RecommendedBadge />
+                    <span>
+                      Use your device fingerprint, face, or PIN — no code to
+                      type.
+                    </span>
+                  </span>
+                }
+              >
+                {passkeyBrowserSupported ? (
+                  <button
+                    aria-busy={
+                      passkeyOptionsMutation.isPending ||
+                      passkeyVerifyMutation.isPending
+                    }
+                    className="settings-action"
+                    disabled={
+                      passkeyOptionsMutation.isPending ||
+                      passkeyVerifyMutation.isPending
+                    }
+                    onClick={handleRegisterPasskey}
+                    type="button"
+                  >
+                    {passkeyOptionsMutation.isPending ||
+                    passkeyVerifyMutation.isPending
+                      ? "Registering…"
+                      : "Register passkey"}
+                  </button>
+                ) : (
+                  <StatusNote>Not supported in this browser</StatusNote>
+                )}
+              </SettingRow>
+            ) : null}
+
+            {MFA_CONFIG.ALLOW_TOTP ? (
+              <SettingRow
+                className={SECURITY_ROW_CLASS}
+                icon={LockKey}
+                label="Authenticator app"
+                note="Use Google Authenticator, Authy, or any TOTP app as a second factor."
+              >
+                <button
+                  className="settings-action settings-action--quiet"
+                  onClick={() => setShowTotpModal(true)}
+                  type="button"
+                >
+                  Set up
+                </button>
+              </SettingRow>
+            ) : null}
+          </div>
+
+          {passkeySuccess ? (
+            <p className="auth-mfa-setup__success-note" role="status">
+              ✓ Passkey registered successfully.
             </p>
-          )}
+          ) : null}
+
+          {passkeyError ? (
+            <p className="auth-form__error px-3.5 py-1" role="alert">
+              {passkeyError}
+            </p>
+          ) : null}
+
+          {totpSuccess ? (
+            <p className="auth-mfa-setup__success-note" role="status">
+              ✓ Authenticator app activated successfully.
+            </p>
+          ) : null}
         </section>
       ) : (
         <>
@@ -446,6 +531,7 @@ export function SecuritySettings() {
 
               <div className="settings-row-list">
                 <SettingRow
+                  className={SECURITY_ROW_CLASS}
                   icon={LockKey}
                   label="Passkey sign-in"
                   note={
@@ -478,9 +564,7 @@ export function SecuritySettings() {
                           : "Register passkey"}
                     </button>
                   ) : (
-                    <span className="settings-row__tag">
-                      Not supported in this browser
-                    </span>
+                    <StatusNote>Not supported in this browser</StatusNote>
                   )}
                 </SettingRow>
 
@@ -491,11 +575,7 @@ export function SecuritySettings() {
                 )}
 
                 {passkeyError && (
-                  <p
-                    className="auth-form__error"
-                    role="alert"
-                    style={{ padding: "4px 14px" }}
-                  >
+                  <p className="auth-form__error px-3.5 py-1" role="alert">
                     {passkeyError}
                   </p>
                 )}
@@ -521,6 +601,7 @@ export function SecuritySettings() {
 
               <div className="settings-row-list">
                 <SettingRow
+                  className={SECURITY_ROW_CLASS}
                   icon={LockKey}
                   label="Two-factor authentication"
                   note={
@@ -573,59 +654,62 @@ export function SecuritySettings() {
         {sessionQuery.data && sessionQuery.data.length > 0 && (
           <>
             <div className="settings-session-list">
-              {sessionQuery.data.map((session) => (
-                <div className="settings-session" key={session.id}>
-                  <span className="settings-session__icon">
-                    {session.userAgent?.toLowerCase().includes("mobile") ? (
-                      <DeviceMobile size={20} weight="duotone" />
+              {sessionQuery.data.map((session) => {
+                const deviceLabel = session.isCurrent
+                  ? "This device"
+                  : formatSessionDevice(session.userAgent);
+
+                return (
+                  <div className="settings-session" key={session.id}>
+                    <span className="settings-session__icon" aria-hidden>
+                      {isMobileSession(session.userAgent) ? (
+                        <DeviceMobile size={20} weight="duotone" />
+                      ) : (
+                        <Laptop size={20} weight="duotone" />
+                      )}
+                    </span>
+
+                    <span className="min-w-0 flex-1 overflow-hidden">
+                      <strong title={session.userAgent ?? undefined}>
+                        {deviceLabel}
+                      </strong>
+                      <small>
+                        <span className="truncate">
+                          {session.ipAddress ?? "Unknown IP"}
+                        </span>
+                        <span aria-hidden className="shrink-0">
+                          ·
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1">
+                          <Timer aria-hidden size={11} />
+                          {formatRelativeDate(session.lastUsedAt)}
+                        </span>
+                      </small>
+                    </span>
+
+                    {session.isCurrent ? (
+                      <em>Current</em>
                     ) : (
-                      <Laptop size={20} weight="duotone" />
+                      <button
+                        aria-busy={revokeSession.isPending}
+                        className="settings-action settings-action--quiet"
+                        disabled={revokeSession.isPending}
+                        onClick={() => handleRevokeSession(session.id)}
+                        type="button"
+                      >
+                        <SignOut size={14} /> Sign out
+                      </button>
                     )}
-                  </span>
-
-                  <span>
-                    <strong>
-                      {session.isCurrent
-                        ? "This device (current)"
-                        : (session.userAgent ?? "Unknown device")}
-                    </strong>
-                    <small>
-                      {session.ipAddress ?? "Unknown IP"} ·{" "}
-                      <Timer
-                        aria-hidden
-                        size={11}
-                        style={{ verticalAlign: "middle" }}
-                      />{" "}
-                      {formatRelativeDate(session.lastUsedAt)}
-                    </small>
-                  </span>
-
-                  {!session.isCurrent && (
-                    <button
-                      aria-busy={revokeSession.isPending}
-                      className="settings-action settings-action--quiet"
-                      disabled={revokeSession.isPending}
-                      onClick={() => handleRevokeSession(session.id)}
-                      type="button"
-                    >
-                      <SignOut size={14} /> Sign out
-                    </button>
-                  )}
-
-                  {session.isCurrent && (
-                    <em style={{ fontSize: "0.76rem", color: "var(--accent)" }}>
-                      Current
-                    </em>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
 
-            {sessionQuery.data.some((s) => !s.isCurrent) && (
-              <div style={{ marginTop: "12px" }}>
+            {sessionQuery.data.some((session) => !session.isCurrent) && (
+              <div className="mt-3">
                 <button
                   aria-busy={revokeAll.isPending}
-                  className="settings-action settings-action--quiet"
+                  className="settings-action settings-action--quiet max-sm:w-full"
                   disabled={revokeAll.isPending}
                   onClick={handleRevokeAll}
                   type="button"
@@ -641,13 +725,7 @@ export function SecuritySettings() {
         )}
 
         {sessionQuery.data && sessionQuery.data.length === 0 && (
-          <p
-            style={{
-              fontSize: "0.84rem",
-              color: "var(--muted)",
-              padding: "12px 0",
-            }}
-          >
+          <p className="py-3 text-[0.84rem] text-(--muted)">
             No other active sessions found.
           </p>
         )}

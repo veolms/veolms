@@ -16,7 +16,7 @@ import { createAuthController } from "./authentication.controller.ts";
 const authenticationRoutes: RoutePlugin = async (app, options) => {
   const context = createAuthContext(options);
   const controller = createAuthController(context);
-  const { middleware, mfaVerified } = context;
+  const { middleware, authenticated } = context;
 
   app.post(
     "/auth/login",
@@ -102,14 +102,13 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Get current user profile",
         description:
-          "Inspects and returns the active authenticated user profile details.",
+          "Inspects and returns the active authenticated user profile details, including whether the current session has completed MFA. This endpoint does not require MFA step-up so the client can choose verify vs enroll.",
         response: {
           200: jsonResponse("User context.", userProfileResponseSchema),
           401: errorResponse("Session missing or invalid."),
-          403: errorResponse("MFA step-up required."),
         },
       },
-      preHandler: mfaVerified,
+      preHandler: authenticated,
     },
     controller.me,
   );

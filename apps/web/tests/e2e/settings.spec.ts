@@ -106,18 +106,13 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   ).toHaveAttribute("aria-checked", "true");
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
-  ).toHaveAttribute("aria-checked", "false");
+  ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitem", { name: "Hide sidebar" }),
   ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitem", { name: "Logout" }),
   ).toBeVisible();
-  await mobileProfileMenu
-    .getByRole("menuitemradio", { name: "Creator" })
-    .click();
-  await expect(mobileProfileMenu).toBeHidden();
-  await expect(mobileProfile).toContainText("Instructor");
   await page.keyboard.press("Escape");
 });
 
@@ -181,9 +176,8 @@ test("creator settings control which sidebar menu items are visible", async ({
   page,
 }) => {
   await openApp(page, "/settings/sidebar");
-
-  await page.getByRole("button", { name: /Ashi Singh, Student\./ }).click();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
 
   await expect(page.getByRole("heading", { name: "Menu items" })).toBeVisible();
   await expect(page.getByText("9 visible")).toBeVisible();

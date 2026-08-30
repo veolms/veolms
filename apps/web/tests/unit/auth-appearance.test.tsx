@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthLayout from "../../src/routes/auth-layout.tsx";
 import { useAuthAppearance } from "../../src/auth/useAuthAppearance.ts";
+import { academyThemes } from "../../src/themes.ts";
 
 vi.mock("../../src/auth/AuthBrandPanel.tsx", () => ({
   AuthBrandPanel: () => null,
@@ -31,27 +32,50 @@ beforeEach(() => {
 });
 
 describe("useAuthAppearance", () => {
-  it("holds the auth screens on the palette the sign-in artwork is drawn for", () => {
+  it("uses the default academy appearance when no preference is stored", () => {
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("codex");
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
-  it("ignores a stored palette, because nobody is signed in yet", () => {
+  it("uses the stored academy palette on auth screens", () => {
     storePalette("graphite");
 
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("graphite");
   });
 
-  it("ignores a stored light or dark choice", () => {
+  it.each(
+    academyThemes.flatMap(({ id }) =>
+      (["light", "dark"] as const).map((themeMode) => [id, themeMode] as const),
+    ),
+  )("supports the %s academy palette in %s mode", (palette, themeMode) => {
+    storePalette(palette);
+    window.localStorage.setItem("veolms-theme", themeMode);
+
+    render(<AppearanceHarness />);
+
+    expect(document.documentElement.dataset.palette).toBe(palette);
+    expect(document.documentElement.dataset.theme).toBe(themeMode);
+  });
+
+  it("uses the stored light or dark choice", () => {
     window.localStorage.setItem("veolms-theme", "light");
 
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it("resolves the stored device choice from the operating-system theme", () => {
+    window.localStorage.setItem("veolms-theme", "device");
+
+    render(<AppearanceHarness />);
+
+    expect(document.documentElement.dataset.appearance).toBe("device");
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("hands the palette and mode back when the visitor leaves the auth screens", () => {
@@ -109,7 +133,7 @@ describe("useAuthAppearance", () => {
 
     expect(() => render(<AppearanceHarness />)).not.toThrow();
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("codex");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(consoleError).not.toHaveBeenCalled();
   });
@@ -130,20 +154,20 @@ describe("useAuthAppearance ?theme= preview", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
-  it("stays locked when the parameter names no palette", () => {
+  it("falls back to the saved appearance when the parameter names no palette", () => {
     window.history.replaceState(null, "", "/login?theme=not-a-real-palette");
 
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("codex");
   });
 
-  it("stays locked when the parameter is empty", () => {
+  it("falls back to the saved appearance when the parameter is empty", () => {
     window.history.replaceState(null, "", "/login?theme=");
 
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("codex");
   });
 
   it("is absent from a production build", () => {
@@ -152,12 +176,12 @@ describe("useAuthAppearance ?theme= preview", () => {
 
     render(<AppearanceHarness />);
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
+    expect(document.documentElement.dataset.palette).toBe("codex");
   });
 });
 
 describe("AuthLayout", () => {
-  it("renders in the fixed auth appearance whatever the visitor stored", () => {
+  it("renders in the visitor's saved academy appearance", () => {
     storePalette("ocean");
     window.localStorage.setItem("veolms-theme", "light");
 
@@ -167,11 +191,11 @@ describe("AuthLayout", () => {
       </MemoryRouter>,
     );
 
-    expect(document.documentElement.dataset.palette).toBe("midnight");
-    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.palette).toBe("ocean");
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
-  it("offers no appearance control, because the auth screens have one look", () => {
+  it("uses the saved appearance without adding an auth-only control", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/login"]}>
         <AuthLayout />

@@ -1,31 +1,23 @@
 import { useReducer, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { AccountForm } from "./AccountForm";
 import { MfaEnrollmentSetup } from "./MfaEnrollmentSetup";
 import { AuthBrandMark } from "./AuthBrandPanel";
 import { IdentifierForm } from "./IdentifierForm";
 import { OtpForm } from "./OtpForm";
 import { SocialLoginActions } from "./SocialLoginActions";
-import { TwoFactorForm } from "./TwoFactorForm";
+import { MfaStepUp } from "./MfaStepUp";
 import {
   AUTH_CARD_HEADING_ID,
-  TWO_FACTOR_METHOD,
   authFlowReducer,
   initialAuthFlowState,
 } from "./authFlow";
 import type { AuthIdentifier } from "./authFlow";
 import { generateUniqueUsername } from "./username";
-import { startPasskeyAuthentication } from "./webauthn";
 import { getSecondaryVerificationMethodRequired } from "./authConfig";
+import { resolveAuthenticatedDestination } from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
-import {
-  useLogin,
-  usePasskeyLoginOptions,
-  usePasskeyLoginVerify,
-  useRegister,
-  useSendOtp,
-  useVerifyMfaTotp,
-} from "../services/auth";
+import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
 
 function resolvePayload(identifier: AuthIdentifier) {
@@ -39,7 +31,6 @@ export function LoginView() {
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
   const [primaryVerifiedIdentifier, setPrimaryVerifiedIdentifier] =
     useState<AuthIdentifier | null>(null);
   const [pendingSecondaryMethod, setPendingSecondaryMethod] = useState<
@@ -57,16 +48,17 @@ export function LoginView() {
     Partial<Record<"email" | "mobile", string>>
   >({});
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const sendOtpMutation = useSendOtp();
   const loginMutation = useLogin();
   const registerMutation = useRegister();
-  const verifyMfaMutation = useVerifyMfaTotp();
-  const passkeyLoginOptionsMutation = usePasskeyLoginOptions();
-  const passkeyLoginVerifyMutation = usePasskeyLoginVerify();
 
   const handleAuthComplete = () => {
-    navigate("/settings/profile", { replace: true });
+    navigate(
+      resolveAuthenticatedDestination(searchParams.get("returnTo")),
+      { replace: true },
+    );
   };
 
   const handleSendCode = async (identifier: AuthIdentifier) => {
@@ -229,51 +221,6 @@ export function LoginView() {
     }
   };
 
-  const handleVerifyTotp = async (directCode?: string) => {
-    if (verifyMfaMutation.isPending) return;
-    const rawCode = directCode ?? ("code" in flow ? flow.code : "");
-    const code = rawCode.trim();
-    if (!code) return;
-
-    setTwoFactorError(null);
-    dispatch({ type: "SUBMIT_TWO_FACTOR" });
-
-    try {
-      await verifyMfaMutation.mutateAsync({ code });
-      dispatch({ type: "TWO_FACTOR_VERIFIED" });
-      handleAuthComplete();
-    } catch (err: unknown) {
-      const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message || "Something went wrong. Please try again.";
-      setTwoFactorError(message);
-      dispatch({ type: "TWO_FACTOR_REJECTED", message });
-    }
-  };
-
-  const handlePasskeyLogin = async () => {
-    setTwoFactorError(null);
-    dispatch({ type: "SUBMIT_TWO_FACTOR" });
-
-    try {
-      const serverOptions = await passkeyLoginOptionsMutation.mutateAsync();
-      const credential = await startPasskeyAuthentication(serverOptions);
-      await passkeyLoginVerifyMutation.mutateAsync(credential);
-      dispatch({ type: "TWO_FACTOR_VERIFIED" });
-      handleAuthComplete();
-    } catch (err: unknown) {
-      const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message ||
-        "Passkey sign-in failed. Please try again or use your authenticator app.";
-      setTwoFactorError(message);
-      dispatch({
-        type: "TWO_FACTOR_REJECTED",
-        message,
-      });
-    }
-  };
-
   function renderStep() {
     if (flow.status === "adminMfaSetup") {
       return (
@@ -358,38 +305,14 @@ export function LoginView() {
       flow.status === "twoFactorAuthenticator" ||
       flow.status === "verifyingTwoFactor"
     ) {
-      const verifying =
-        flow.status === "verifyingTwoFactor" ||
-        verifyMfaMutation.isPending ||
-        passkeyLoginOptionsMutation.isPending ||
-        passkeyLoginVerifyMutation.isPending;
-
       return (
-        <TwoFactorForm
+        <MfaStepUp
           allowAuthenticator={mfaCapabilities.allowAuthenticator}
           allowPasskey={mfaCapabilities.allowPasskey}
-          code={flow.code}
-          errorMessage={
-            verifying
-              ? undefined
-              : (twoFactorError ?? flow.message ?? undefined)
-          }
-          method={
-            flow.status === "verifyingTwoFactor"
-              ? flow.method
-              : TWO_FACTOR_METHOD[flow.status]
-          }
-          onCodeChange={(code) => {
-            setTwoFactorError(null);
-            dispatch({ type: "CHANGE_TWO_FACTOR_CODE", code });
+          onDone={() => {
+            dispatch({ type: "TWO_FACTOR_VERIFIED" });
+            handleAuthComplete();
           }}
-          onMethodChange={(method) => {
-            setTwoFactorError(null);
-            dispatch({ type: "CHANGE_TWO_FACTOR_METHOD", method });
-          }}
-          onSubmit={(code) => handleVerifyTotp(code)}
-          onUsePasskey={handlePasskeyLogin}
-          status={verifying ? "verifying" : "idle"}
         />
       );
     }

@@ -92,6 +92,7 @@ export function createAuthController(context: AuthContext) {
       mfaVerified: request.session!.mfa_verified,
       totpEnabled: user.totpEnabled,
       passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
     };
   }
 

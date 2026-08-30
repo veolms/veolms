@@ -6,12 +6,12 @@ import axios, {
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
+import { isAuthFlowPath, MFA_CHALLENGE_PATH } from "../routing/routeAccess";
 
 export { getApiError, type ApiError };
 
 const BACKEND_URL =
   import.meta.env.VITE_API_BASE_URL || "/api/v1";
-const MFA_SETUP_PATH = "/mfa-setup";
 
 function redirectToMfaSetup(apiError: ApiError): void {
   if (
@@ -23,11 +23,10 @@ function redirectToMfaSetup(apiError: ApiError): void {
   }
 
   const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
-  if (currentPath === MFA_SETUP_PATH) return;
+  if (isAuthFlowPath(currentPath)) return;
 
-  window.location.replace(`${MFA_SETUP_PATH}?mfa=required`);
+  window.location.replace(MFA_CHALLENGE_PATH);
 }
-
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: BACKEND_URL,
   withCredentials: true,

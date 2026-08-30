@@ -113,6 +113,7 @@ export const userProfileResponseSchema = z.object({
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
+  mfaMandatory: z.boolean(),
 });
 
 export const creatorRegisterRequestSchema = z.object({

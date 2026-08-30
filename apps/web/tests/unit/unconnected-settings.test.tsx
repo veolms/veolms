@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { AccountSettings } from "../../src/settings/AccountSettings.tsx";
@@ -18,6 +18,18 @@ describe("unconnected account settings", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Export requested")).not.toBeInTheDocument();
+  });
+
+  it("asks for confirmation before signing out", () => {
+    renderWithAppProviders(<AccountSettings role="student" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Sign out?" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stay signed in" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 

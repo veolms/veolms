@@ -13,16 +13,26 @@ import { renderWithQueryClient } from "./test-utils.tsx";
 vi.mock("../../src/ThemedSelect.tsx", () => ({
   ThemedSelect: ({
     ariaLabel,
+    onValueChange,
     options,
     value,
   }: {
     ariaLabel: string;
+    onValueChange: (value: string) => void;
     options: readonly (readonly [string, string])[];
     value: string;
   }) => (
-    <button type="button" role="combobox" aria-label={ariaLabel}>
-      {options.find(([optionValue]) => optionValue === value)?.[1] ?? ariaLabel}
-    </button>
+    <select
+      aria-label={ariaLabel}
+      onChange={(event) => onValueChange(event.target.value)}
+      value={value}
+    >
+      {options.map(([optionValue, label]) => (
+        <option key={optionValue} value={optionValue}>
+          {label}
+        </option>
+      ))}
+    </select>
   ),
 }));
 
@@ -197,7 +207,7 @@ describe("error reporting", () => {
     const field = screen.getByLabelText("Mobile number");
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(field).toHaveAttribute("aria-describedby", alert.id);
@@ -267,16 +277,21 @@ describe("mobile validation", () => {
   it("keeps the country trigger down to the dial code it contributes", () => {
     renderForm();
 
-    expect(
-      screen.getByRole("combobox", { name: "Country code" }),
-    ).toHaveTextContent(/^\+91$/);
+    expect(screen.getByRole("combobox", { name: "Country code" })).toHaveValue(
+      "IN",
+    );
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent(
+      "+91",
+    );
   });
 
   it("rejects a number that is one digit short", () => {
     submitMobile("987654321");
 
     expect(
-      screen.getByText("Please enter a valid 10-digit mobile number."),
+      screen.getByText(
+        "Please enter a valid 10-digit mobile number for India.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -284,8 +299,44 @@ describe("mobile validation", () => {
     submitMobile("5876543210");
 
     expect(
-      screen.getByText("Please enter a valid 10-digit mobile number."),
+      screen.getByText(
+        "Please enter a valid 10-digit mobile number for India.",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("uses the selected country's digit count in validation", () => {
+    renderForm();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Country code" }), {
+      target: { value: "SG" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
+      target: { value: "9123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      screen.getByText(
+        "Please enter a valid 8-digit mobile number for Singapore.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("refreshes an existing validation message when the country changes", () => {
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
+      target: { value: "9123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Country code" }), {
+      target: { value: "SG" },
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Please enter a valid 8-digit mobile number for Singapore.",
+    );
   });
 
   it("hands a valid number to the caller in international form", () => {
