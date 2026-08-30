@@ -21,6 +21,7 @@ import {
   getCourseThumbnail,
   getCourseTitle,
 } from "../../src/learning/courseMetadata.js";
+import { CURRICULUM_SECTION_COUNT_DEFAULT } from "../../src/learning/curriculumSize.js";
 
 describe("learning course content", () => {
   it("formats invalid, minute, and hour media durations exactly", () => {
@@ -37,7 +38,7 @@ describe("learning course content", () => {
       Array.from({ length: totalCourseLectures }, (_, index) => index + 1),
     );
     expect([...lessonsById.keys()]).toEqual(lessonSequence);
-    expect(sections).toHaveLength(23);
+    expect(sections).toHaveLength(CURRICULUM_SECTION_COUNT_DEFAULT);
     expect(sections.flatMap(({ lessons }) => lessons)).toHaveLength(
       totalCourseLectures,
     );

@@ -27,6 +27,7 @@ type FloatingScrollbarProps = {
   ariaLabel?: string;
   className?: string;
   disabled?: boolean;
+  rightEdgeRef?: RefObject<HTMLElement | null>;
   rightEdgeSelector?: string;
   enableHorizontalDrag?: boolean;
 };
@@ -53,6 +54,7 @@ export function FloatingScrollbar({
   ariaLabel = "Page scroll position",
   className,
   disabled = false,
+  rightEdgeRef,
   rightEdgeSelector,
   enableHorizontalDrag = false,
 }: FloatingScrollbarProps) {
@@ -107,18 +109,20 @@ export function FloatingScrollbar({
       }
 
       const scrollportRect = scrollport.getBoundingClientRect();
-      const rightEdgeRect = rightEdgeSelector
+      const selectedRightEdgeRect = rightEdgeSelector
         ? scrollport
             .querySelector<HTMLElement>(rightEdgeSelector)
             ?.getBoundingClientRect()
         : null;
-      const topTrackInset = rightEdgeRect
+      const referencedRightEdgeRect =
+        rightEdgeRef?.current?.getBoundingClientRect() ?? null;
+      const topTrackInset = selectedRightEdgeRect
         ? 0
         : Math.max(
             MINIMUM_TRACK_INSET,
             Number.parseFloat(scrollportStyle.borderTopRightRadius) || 0,
           );
-      const bottomTrackInset = rightEdgeRect
+      const bottomTrackInset = selectedRightEdgeRect
         ? 0
         : Math.max(
             MINIMUM_TRACK_INSET,
@@ -160,7 +164,10 @@ export function FloatingScrollbar({
         "--floating-scrollbar-right",
         `${Math.max(
           0,
-          window.innerWidth - (rightEdgeRect?.right ?? scrollportRect.right),
+          window.innerWidth -
+            (referencedRightEdgeRect?.right ??
+              selectedRightEdgeRect?.right ??
+              scrollportRect.right),
         )}px`,
       );
       scrollbar.style.setProperty(
@@ -210,6 +217,7 @@ export function FloatingScrollbar({
         ? null
         : new ResizeObserver(scheduleSync);
     resizeObserver?.observe(scrollport);
+    if (rightEdgeRef?.current) resizeObserver?.observe(rightEdgeRef.current);
     layoutAncestors.forEach((ancestor) => resizeObserver?.observe(ancestor));
     Array.from(scrollport.children).forEach((child) =>
       resizeObserver?.observe(child),
@@ -239,7 +247,13 @@ export function FloatingScrollbar({
       resizeObserver?.disconnect();
       contentObserver.disconnect();
     };
-  }, [disabled, rightEdgeSelector, scrollportReadyVersion, scrollportRef]);
+  }, [
+    disabled,
+    rightEdgeRef,
+    rightEdgeSelector,
+    scrollportReadyVersion,
+    scrollportRef,
+  ]);
 
   const getTrackScrollTop = (drag: ScrollbarDrag, clientY: number) => {
     if (drag.maximumThumbOffset <= 0) return 0;

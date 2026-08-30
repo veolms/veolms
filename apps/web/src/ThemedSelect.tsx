@@ -41,6 +41,7 @@ export interface ThemedSelectProps<Value extends string = string> {
   contentClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
+  compactOnMobile?: boolean;
 }
 
 const joinClasses = (
@@ -72,6 +73,7 @@ export function ThemedSelect<Value extends string>({
   contentClassName = "",
   searchable = false,
   searchPlaceholder = "Search...",
+  compactOnMobile = false,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -213,6 +215,7 @@ export function ThemedSelect<Value extends string>({
 
     if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
+      if (event.key === "Escape") event.stopPropagation();
       closeMenu(true);
       return;
     }
@@ -263,19 +266,33 @@ export function ThemedSelect<Value extends string>({
         aria-expanded={open}
         aria-controls={menuId}
         data-state={open ? "open" : "closed"}
+        data-compact-mobile={compactOnMobile || undefined}
         disabled={disabled}
         onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className="themed-select__trigger-value">
+        <span
+          className={joinClasses(
+            "themed-select__trigger-value",
+            compactOnMobile && "max-sm:justify-center",
+          )}
+        >
           {selectedFlag && (
             <span className="themed-select__trigger-flag" aria-hidden="true">
               {selectedFlag}
             </span>
           )}
-          <span>{selectedLabel}</span>
+          <span className={compactOnMobile ? "max-sm:sr-only" : undefined}>
+            {selectedLabel}
+          </span>
         </span>
-        <span className="themed-select__caret" aria-hidden="true">
+        <span
+          className={joinClasses(
+            "themed-select__caret",
+            compactOnMobile && "max-sm:hidden",
+          )}
+          aria-hidden="true"
+        >
           <CaretDown size={16} weight="bold" />
         </span>
       </button>

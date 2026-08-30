@@ -90,7 +90,9 @@ interface CourseActionMenuProps {
   children: ReactNode;
   className?: string;
   triggerClassName?: string;
+  menuClassName?: string;
   dataMenu?: string;
+  anchorPoint?: { x: number; y: number } | null;
 }
 
 export function CourseActionMenu({
@@ -101,7 +103,9 @@ export function CourseActionMenu({
   children,
   className = "relative z-30 ml-auto shrink-0",
   triggerClassName = "size-10",
+  menuClassName = "",
   dataMenu,
+  anchorPoint,
 }: CourseActionMenuProps) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -139,6 +143,47 @@ export function CourseActionMenu({
     const measuredHeight =
       menu.scrollHeight || menu.offsetHeight || menuBounds.height;
     const height = Math.min(measuredHeight || maxHeight, maxHeight);
+
+    if (anchorPoint) {
+      const roomOnRight =
+        window.innerWidth - courseMenuViewportPadding - anchorPoint.x;
+      const roomBelow =
+        window.innerHeight - courseMenuViewportPadding - anchorPoint.y;
+      const horizontalPlacement: CourseMenuHorizontalPlacement =
+        roomOnRight >= width + courseMenuGap ? "right" : "left";
+      const verticalPlacement: CourseMenuVerticalPlacement =
+        roomBelow >= height + courseMenuGap ? "below" : "above";
+      const naturalLeft =
+        horizontalPlacement === "right"
+          ? anchorPoint.x + courseMenuGap
+          : anchorPoint.x - width - courseMenuGap;
+      const naturalTop =
+        verticalPlacement === "below"
+          ? anchorPoint.y + courseMenuGap
+          : anchorPoint.y - height - courseMenuGap;
+      const left = Math.min(
+        Math.max(courseMenuViewportPadding, naturalLeft),
+        window.innerWidth - courseMenuViewportPadding - width,
+      );
+      const top = Math.min(
+        Math.max(courseMenuViewportPadding, naturalTop),
+        window.innerHeight - courseMenuViewportPadding - height,
+      );
+
+      setMenuHorizontalPlacement(horizontalPlacement);
+      setMenuVerticalPlacement(verticalPlacement);
+      setMenuPosition((current) => {
+        if (
+          current?.left === left &&
+          current.top === top &&
+          current.maxHeight === maxHeight
+        )
+          return current;
+        return { left, top, maxHeight };
+      });
+      return;
+    }
+
     const roomOnRight =
       window.innerWidth - courseMenuViewportPadding - buttonBounds.right;
     const roomOnLeft = buttonBounds.left - courseMenuViewportPadding;
@@ -188,7 +233,7 @@ export function CourseActionMenu({
         return current;
       return { left, top, maxHeight };
     });
-  }, []);
+  }, [anchorPoint]);
 
   useLayoutEffect(() => {
     if (!open || typeof window === "undefined") {
@@ -351,7 +396,7 @@ export function CourseActionMenu({
           <CourseMenuDismissContext.Provider value={dismissMenuThen}>
             <div
               ref={menuRef}
-              className="fixed z-[1000000] w-59.5 max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-xl border border-(--border-strong) bg-(--surface) p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.38)]"
+              className={`fixed z-[1000000] w-59.5 max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-xl border border-(--border-strong) bg-(--surface) p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.38)] ${menuClassName}`.trim()}
               role="menu"
               aria-label={menuLabel}
               data-placement={`${menuVerticalPlacement}-${menuHorizontalPlacement}`}

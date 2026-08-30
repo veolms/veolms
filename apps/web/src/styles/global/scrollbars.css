@@ -22,6 +22,14 @@
   scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
 }
 
+/* Keep the native browser/OS treatment for Default. */
+:where(
+  html[data-scrollbar-style="default"],
+  html[data-scrollbar-style="default"] *
+) {
+  scrollbar-width: thin;
+}
+
 :where(
   html:not([data-scrollbar-style="default"]),
   html:not([data-scrollbar-style="default"]) *

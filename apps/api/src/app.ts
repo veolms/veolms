@@ -15,6 +15,7 @@ import type { RoutePluginOptions } from "./lib/route-plugin.ts";
 import { registerOpenApi } from "./openapi.ts";
 import { createServices, type AppServices } from "./services/index.ts";
 import { config } from "./config.ts";
+import { registerBackgroundJobs } from "./background-jobs.ts";
 
 export const API_ROUTE_PREFIX = "/api/v1";
 
@@ -51,6 +52,14 @@ export async function createApp({
   await registerOpenApi(app);
   registerErrorHandler(app);
 
+  // Note: raw-body buffering for HMAC signature verification (Razorpay
+  // webhooks) used to be registered here app-wide, so every request in the
+  // entire API held both the raw buffer and the parsed JSON in memory. It's
+  // now scoped to just the /webhooks/razorpay plugin — see
+  // modules/commerce/webhooks/webhook.routes.ts — relying on Fastify's
+  // per-plugin encapsulation (content type parsers registered inside a
+  // registered plugin only apply to that plugin's own routes, not siblings).
+
   app.addHook("preSerialization", async (request, reply, payload) => {
     if (request.url.startsWith("/api/docs")) {
       return payload;
@@ -84,6 +93,14 @@ export async function createApp({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   });
 
+  // Centralized bootstrap for every commerce background poller (fulfillment
+  // scheduler, payment event queue) — see background-jobs.ts for why this
+  // isn't started inside a route plugin file instead.
+  const paymentEventQueue = registerBackgroundJobs(app, {
+    database,
+    services: appServices,
+  });
+
   // Every module in src/modules is scanned, and only files ending in .routes.ts
   // are loaded as Fastify plugins.
   await app.register(fastifyAutoload, {
@@ -95,6 +112,7 @@ export async function createApp({
       prefix: API_ROUTE_PREFIX,
       database,
       services: appServices,
+      paymentEventQueue,
     } satisfies RoutePluginOptions,
   });
 

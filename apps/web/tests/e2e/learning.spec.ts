@@ -726,6 +726,46 @@ test("player edge control uses a native title and the short content shortcut", a
   await expect(curriculumColumn).not.toHaveClass(/is-collapsed/);
 });
 
+test("a held second player press floats the desktop course content", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const playerWrap = page.locator(".learning-workspace__player-wrap");
+  const curriculumColumn = page.locator(
+    ".learning-workspace__curriculum-column",
+  );
+  await playerWrap.hover();
+  await page.getByRole("button", { name: "Collapse course content" }).click();
+
+  const secondPress = page.getByRole("button", {
+    name: "Expand course content",
+  });
+  const secondPressBounds = await secondPress.boundingBox();
+  expect(secondPressBounds).not.toBeNull();
+  await page.mouse.move(
+    secondPressBounds!.x + secondPressBounds!.width / 2,
+    secondPressBounds!.y + secondPressBounds!.height / 2,
+  );
+  await page.mouse.down();
+  await expect(secondPress).toHaveAttribute("data-second-press-holding", "true");
+  await page.waitForTimeout(520);
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
+  await expect(curriculumColumn).toHaveClass(/is-collapsed/);
+  await page.mouse.up();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(curriculumColumn).toHaveClass(/is-collapsed/);
+});
+
 test("course content panel slides symmetrically when opened and closed", async ({
   page,
 }) => {
@@ -832,6 +872,146 @@ test("course content shortcut opens and closes the mobile lesson drawer", async 
   await page.keyboard.press("Alt+C");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+test("tablet player control opens a translucent floating course drawer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 779 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  const back = page.getByRole("button", { name: "Return to Courses" });
+  const player = page.getByRole("region", {
+    name: "Lesson video player for What is UI/UX Design?",
+  });
+  const video = player.locator("video");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(player).toHaveAttribute("data-playing", "false");
+  await expect(toggle).toHaveCSS("opacity", "1");
+  await expect(back).toHaveCSS("opacity", "1");
+
+  await video.evaluate((element) =>
+    element.dispatchEvent(new Event("play", { bubbles: true })),
+  );
+  await expect(player).toHaveAttribute("data-playing", "true");
+  await expect(toggle).toHaveCSS("opacity", "0");
+  await expect(toggle).toHaveCSS("pointer-events", "none");
+  await expect(back).toHaveCSS("opacity", "0");
+  await expect(back).toHaveCSS("pointer-events", "none");
+
+  await video.evaluate((element) =>
+    element.dispatchEvent(new Event("pause", { bubbles: true })),
+  );
+  await expect(player).toHaveAttribute("data-playing", "false");
+  await expect(toggle).toHaveCSS("opacity", "1");
+  await expect(back).toHaveCSS("opacity", "1");
+  await toggle.click();
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
+  await expect
+    .poll(() =>
+      dialog.evaluate((element) => {
+        const color = getComputedStyle(element).backgroundColor;
+        const rgbaAlpha = color.match(
+          /rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/,
+        )?.[1];
+        const colorFunctionAlpha = color.match(/\/\s*([\d.]+)\s*\)$/)?.[1];
+        return Number(rgbaAlpha ?? colorFunctionAlpha ?? 1);
+      }),
+    )
+    .toBeLessThan(1);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.setViewportSize({ width: 640, height: 844 });
+  await expect(toggle).toBeHidden();
+});
+
+test("tablet curriculum scrollbar stays on the floating drawer edge", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 679, height: 779 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("veolms-hide-scrollbars", "false");
+    window.localStorage.setItem("veolms-scrollbar-style", "theme");
+    window.localStorage.setItem("veolms-floating-curriculum-width", "300");
+  });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  await toggle.click({ force: true });
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const curriculumScrollbar = page.locator(
+    '.floating-scrollbar[aria-controls="lesson-drawer-curriculum-scrollport"]',
+  );
+  await expect(dialog).toBeVisible();
+  await expect(curriculumScrollbar).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const [dialogBounds, scrollbarBounds, viewportWidth] = await Promise.all([
+        dialog.boundingBox(),
+        curriculumScrollbar.boundingBox(),
+        page.evaluate(() => window.innerWidth),
+      ]);
+      if (!dialogBounds || !scrollbarBounds) return Number.POSITIVE_INFINITY;
+      const visibleDialogRight = Math.min(
+        viewportWidth,
+        dialogBounds.x + dialogBounds.width,
+      );
+      return Math.abs(
+        visibleDialogRight - (scrollbarBounds.x + scrollbarBounds.width),
+      );
+    })
+    .toBeLessThanOrEqual(0.5);
+});
+
+test("tablet curriculum resize rail can drag the floating drawer closed", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 800, height: 779 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("veolms-floating-curriculum-width", "300");
+  });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const toggle = page.getByRole("button", { name: "Expand course content" });
+  await toggle.click({ force: true });
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const resizeRail = page.getByRole("separator", {
+    name: "Resize floating course curriculum",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(resizeRail).toBeVisible();
+
+  const railBounds = await resizeRail.boundingBox();
+  expect(railBounds).not.toBeNull();
+  const startX = railBounds!.x + railBounds!.width / 2;
+  const startY = railBounds!.y + railBounds!.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 180, startY, { steps: 6 });
+  await expect
+    .poll(async () => (await dialog.boundingBox())?.width ?? Infinity)
+    .toBeLessThanOrEqual(150);
+  await page.mouse.up();
+
+  await expect(dialog).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 });
 
 test("course drawer stays closed when a resize exits the compact workspace", async ({
@@ -2299,7 +2479,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
   const curriculum = dialog.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
+  const scrollTopButton = curriculum.locator(".elastic-scroller__button");
 
   const initialMetrics = await curriculum.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -2330,7 +2510,7 @@ test("mobile lesson drawer exposes its full curriculum without expanding", async
     );
     const lastSection = sectionToggles?.[sectionToggles.length - 1];
     const scrollTopButton = curriculum?.querySelector<HTMLElement>(
-      ".elastic-scroll-control__button",
+      ".elastic-scroller__button",
     );
     if (!curriculum || !lastSection || !scrollTopButton) return null;
     const curriculumBounds = curriculum.getBoundingClientRect();
@@ -2377,9 +2557,9 @@ test("mobile curriculum scroll control owns diagonal gestures inside its drawer"
   const curriculum = dialog.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const gestureBoundary = curriculum.locator(".elastic-scroll-control");
+  const gestureBoundary = curriculum.locator(".elastic-scroller");
   const scrollControl = gestureBoundary.locator(
-    ".elastic-scroll-control__button",
+    ".elastic-scroller__button",
   );
 
   await curriculum.evaluate((element) => {
@@ -2457,15 +2637,15 @@ test("curriculum scroll control follows direction, stops, and accelerates with d
   const curriculum = page.getByRole("complementary", {
     name: "Course curriculum",
   });
-  const scrollControl = curriculum.locator(".elastic-scroll-control__button");
+  const scrollControl = curriculum.locator(".elastic-scroller__button");
   const scrollControlIcon = scrollControl.locator(
-    ".elastic-scroll-control__icon",
+    ".elastic-scroller__icon",
   );
   const scrollProgressPuck = curriculum.locator(
-    ".elastic-scroll-control__progress-puck",
+    ".elastic-scroller__progress-puck",
   );
   const scrollProgressRing = curriculum.locator(
-    ".elastic-scroll-control__progress-ring",
+    ".elastic-scroller__progress-ring",
   );
   const readScrollMetrics = () =>
     curriculum.evaluate((element) => ({
@@ -2881,7 +3061,7 @@ test("curriculum overview, section, and chapter zones keep their actions separat
   const lessonSearchButton = curriculum.getByRole("button", {
     name: "Search lessons",
   });
-  const scrollTopButton = curriculum.locator(".elastic-scroll-control__button");
+  const scrollTopButton = curriculum.locator(".elastic-scroller__button");
 
   await expect(scrollTopButton).toBeHidden();
   await curriculum.evaluate((container) => container.scrollTo({ top: 160 }));

@@ -1,10 +1,4 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { LearningSpace } from "../../src/learning-space/LearningSpace";
@@ -85,16 +79,17 @@ const renderLearningSpace = ({
 
 describe("LearningSpace", () => {
   it.each([1, 3, 6, 10])(
-    "renders the open-session count and all %i session rows",
+    "renders the active-session count and all %i session rows",
     (count) => {
       renderLearningSpace({ sessions: createSessions(count) });
 
       expect(
         screen.getByRole("button", {
-          name: new RegExp(
-            `Collapse Learning Space, ${count} open session${count === 1 ? "$" : "s$"}`,
-          ),
+          name: `Learning Space, ${count} active ${count === 1 ? "session" : "sessions"}`,
         }),
+      ).toHaveAttribute("aria-expanded", "true");
+      expect(
+        screen.getByRole("region", { name: "Learning Space" }),
       ).toBeVisible();
       expect(screen.getAllByRole("listitem")).toHaveLength(count);
     },
@@ -111,16 +106,19 @@ describe("LearningSpace", () => {
       "Building VeoLMS: Idea to Production",
     );
 
-    const lectureLabel = screen.getByText("L7 · Research Methods");
-    expect(lectureLabel).toHaveClass("truncate");
-    expect(lectureLabel).toHaveAttribute("title", "L7 · Research Methods");
+    const lectureLabel = screen.getByText("Section 2 · Research Methods");
+    expect(lectureLabel).toHaveClass("line-clamp-2");
+    expect(lectureLabel).toHaveAttribute(
+      "title",
+      "Section 2 · Research Methods",
+    );
     expect(
       screen.getByRole("button", {
-        name: "Open Building VeoLMS: Idea to Production, L7 · Research Methods",
+        name: "Open Building VeoLMS: Idea to Production, Section 2 · Research Methods",
       }),
     ).toHaveAttribute(
       "title",
-      "Building VeoLMS: Idea to Production — L7 · Research Methods",
+      "Building VeoLMS: Idea to Production — Section 2 · Research Methods",
     );
   });
 
@@ -154,7 +152,7 @@ describe("LearningSpace", () => {
     expect(screen.queryByRole("button", { current: "page" })).toBeNull();
   });
 
-  it("keeps the count visible when collapsed and persists disclosure through its owner callback", () => {
+  it("keeps the session count on the trigger and persists panel dismissal through its owner callback", () => {
     const sessions = createSessions(3);
     const onExpandedChange = vi.fn();
     const { rerender } = renderLearningSpace({
@@ -164,7 +162,7 @@ describe("LearningSpace", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Collapse Learning Space, 3 open sessions",
+        name: "Learning Space, 3 active sessions",
       }),
     );
     expect(onExpandedChange).toHaveBeenCalledWith(false);
@@ -181,30 +179,48 @@ describe("LearningSpace", () => {
     );
     expect(
       screen.getByRole("button", {
-        name: "Expand Learning Space, 3 open sessions",
+        name: "Learning Space, 3 active sessions",
       }),
     ).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Learning Space" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("uses the collapsed rail control to request the full sidebar", () => {
-    const onRequestSidebarExpand = vi.fn();
+  it("always exposes a close control, including for an unpinned panel", () => {
+    const onExpandedChange = vi.fn();
+    renderLearningSpace({ onExpandedChange });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close Learning Space panel" }),
+    );
+
+    expect(onExpandedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("opens the floating panel directly from the collapsed sidebar", () => {
+    const sessions = createSessions(6);
+    const onExpandedChange = vi.fn();
+    const onActivate = vi.fn();
     renderLearningSpace({
-      sessions: createSessions(6),
+      sessions,
       collapsedSidebar: true,
-      onRequestSidebarExpand,
+      expanded: false,
+      onExpandedChange,
+      onActivate,
     });
 
-    const expandSidebar = screen.getByRole("button", {
-      name: "Expand sidebar to view Learning Space, 6 open sessions",
+    const trigger = screen.getByRole("button", {
+      name: "Learning Space, 6 active sessions",
     });
-    expect(expandSidebar).not.toHaveAttribute("aria-expanded");
-    expect(within(expandSidebar).getByText("6")).toBeVisible();
-    fireEvent.click(expandSidebar);
-    expect(onRequestSidebarExpand).toHaveBeenCalledTimes(1);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("title", "Learning Space · 6 active");
+    fireEvent.click(trigger);
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
+    expect(onActivate).toHaveBeenCalledWith(sessions[5]);
   });
 
-  it("uses the drawer as the only mobile scroll surface and keeps row actions touch-sized", () => {
+  it("uses the floating panel as the mobile scroll surface and keeps row actions touch-sized", () => {
     renderLearningSpace({ mobile: true });
 
     const region = screen.getByRole("region", { name: "Learning Space" });
@@ -213,10 +229,10 @@ describe("LearningSpace", () => {
       name: "More actions for The Ultimate TypeScript Course",
     });
 
-    expect(region).toHaveClass("min-h-fit");
-    expect(sessionPanel).toHaveClass("overflow-visible");
-    expect(sessionPanel).not.toHaveClass("overflow-y-auto");
-    expect(moreActions).toHaveClass("size-11");
+    expect(region).toHaveClass("fixed", "overflow-hidden");
+    expect(region).toHaveAttribute("data-learning-swipe-ignore");
+    expect(sessionPanel).toHaveClass("overflow-y-auto", "overscroll-contain");
+    expect(moreActions).toHaveClass("size-9");
   });
 
   it("opens row actions without activating the session and closes only on command", async () => {
@@ -238,11 +254,11 @@ describe("LearningSpace", () => {
       name: "Close session",
     });
     expect(
-      screen.getByRole("menuitem", { name: "Rename session" }),
-    ).toHaveAttribute("aria-disabled", "true");
+      screen.getByRole("menuitem", { name: "Open session" }),
+    ).toBeEnabled();
     expect(
-      screen.getByRole("menuitem", { name: "Pin session" }),
-    ).toHaveAttribute("aria-disabled", "true");
+      screen.getByRole("menuitem", { name: "Open in new tab" }),
+    ).toBeEnabled();
 
     fireEvent.pointerDown(document.body);
     await waitFor(() =>

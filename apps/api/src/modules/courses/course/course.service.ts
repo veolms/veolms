@@ -7,7 +7,10 @@ import type {
   AccessDurationType,
   PricingType,
 } from "@veolms/database";
-import type { UpdateCourseBasicsRequest } from "@veolms/contracts";
+import type {
+  CreateCourseRequest,
+  UpdateCourseBasicsRequest,
+} from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import {
@@ -15,7 +18,11 @@ import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
-import { ADMIN_ROLE, createAuthService, type AuthService } from "../../auth/index.ts";
+import {
+  ADMIN_ROLE,
+  createAuthService,
+  type AuthService,
+} from "../../auth/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
   createCategoryService,
@@ -30,9 +37,14 @@ import {
   type ConfigurationService,
 } from "../configuration/configuration.service.ts";
 import {
-  createMediaService,
-  type MediaService,
-} from "../../media/index.ts";
+  createIncludesService,
+  type IncludesService,
+} from "../includes/includes.service.ts";
+import { createMediaService, type MediaService } from "../../media/index.ts";
+import {
+  createCourseDeletionService,
+  type CourseDeletionService,
+} from "../lifecycle/course-deletion.service.ts";
 
 export interface CourseServiceOptions {
   database: Kysely<Database>;
@@ -41,7 +53,9 @@ export interface CourseServiceOptions {
   categoryService?: CategoryService;
   curriculumService?: CurriculumService;
   configurationService?: ConfigurationService;
+  includesService?: IncludesService;
   mediaService?: MediaService;
+  deletionService?: CourseDeletionService;
 }
 
 export function createCourseService({
@@ -51,9 +65,13 @@ export function createCourseService({
   categoryService = createCategoryService({ database }),
   curriculumService = createCurriculumService({ database, services }),
   configurationService = createConfigurationService({ database }),
+  includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
+  deletionService = createCourseDeletionService({
+    database,
+    storage: services.storage,
+  }),
 }: CourseServiceOptions) {
-
   /**
    * Verifies course existence and owner permissions.
    */
@@ -97,6 +115,7 @@ export function createCourseService({
         categoryId: row.category_id,
         thumbnailMediaId: row.thumbnail_media_id,
         trailerMediaId: row.trailer_media_id,
+        instructorAlias: row.instructor_alias ?? null,
         version: row.version,
         createdAt: row.created_at.toISOString(),
         updatedAt: row.updated_at.toISOString(),
@@ -106,15 +125,21 @@ export function createCourseService({
   }
 
   /**
-   * Creates a draft course with only a title.
+   * Creates a draft course with optional basic fields.
    */
-  async function createCourse(title: string, creatorId: string) {
+  async function createCourse(
+    payload: string | CreateCourseRequest,
+    creatorId: string,
+  ) {
+    const data: CreateCourseRequest =
+      typeof payload === "string" ? { title: payload } : payload;
+    const title = data.title;
     const baseSlug = slugify(title);
     let slug = baseSlug;
     let attempts = 0;
 
     // Check slug collision and append salt if needed
-    while (await courseRepo.findCourseBySlug(database, slug)) {
+    while (await courseRepo.findCourseBySlugIncludingDeleted(database, slug)) {
       attempts++;
       slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
       if (attempts > 5) {
@@ -125,12 +150,27 @@ export function createCourseService({
 
     const courseId = crypto.randomUUID();
     const now = new Date();
+    const shortDescription = data.shortDescription ?? null;
+    const description = data.description ?? null;
+    const categoryId = data.categoryId ?? null;
+    const difficulty = (data.difficulty ?? data.difficultyLevel ?? null) as
+      "beginner" | "intermediate" | "advanced" | null;
+    const thumbnailMediaId = data.thumbnailMediaId ?? null;
+    const trailerMediaId = data.trailerMediaId ?? null;
+    const instructorAlias = data.instructorAlias ?? null;
 
     await courseRepo.insertCourse(database, {
       id: courseId,
       slug,
       title,
+      short_description: shortDescription,
+      description,
       creator_id: creatorId,
+      category_id: categoryId,
+      difficulty,
+      thumbnail_media_id: thumbnailMediaId,
+      trailer_media_id: trailerMediaId,
+      instructor_alias: instructorAlias,
       status: "draft",
       version: 1,
       created_at: now,
@@ -141,14 +181,15 @@ export function createCourseService({
       id: courseId,
       slug,
       title,
-      shortDescription: null,
-      description: null,
-      difficulty: null,
+      shortDescription,
+      description,
+      difficulty,
       status: "draft" as const,
       creatorId,
-      categoryId: null,
-      thumbnailMediaId: null,
-      trailerMediaId: null,
+      categoryId,
+      thumbnailMediaId,
+      trailerMediaId,
+      instructorAlias,
       version: 1,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -174,6 +215,7 @@ export function createCourseService({
       categoryId: c.category_id,
       thumbnailMediaId: c.thumbnail_media_id,
       trailerMediaId: c.trailer_media_id,
+      instructorAlias: c.instructor_alias ?? null,
       version: c.version,
       createdAt: c.created_at.toISOString(),
       updatedAt: c.updated_at.toISOString(),
@@ -264,11 +306,14 @@ export function createCourseService({
       version,
       {
         title: updates.title,
+        short_description: updates.shortDescription,
         description: updates.description,
-        category_id: updates.categoryId,
-        difficulty: updates.difficulty,
+        category_id: updates.categoryId ?? updates.category,
+        difficulty: (updates.difficulty ?? updates.difficultyLevel) as
+          "beginner" | "intermediate" | "advanced" | null | undefined,
         thumbnail_media_id: updates.thumbnailMediaId,
         trailer_media_id: updates.trailerMediaId,
+        instructor_alias: updates.instructorAlias,
         version: newVersion,
         updated_at: now,
       },
@@ -302,21 +347,26 @@ export function createCourseService({
         id: course.id,
         slug: course.slug,
         title: updates.title ?? course.title,
-        shortDescription: course.short_description,
+        shortDescription:
+          updates.shortDescription !== undefined
+            ? updates.shortDescription
+            : course.short_description,
         description:
           updates.description !== undefined
             ? updates.description
             : course.description,
         difficulty:
-          updates.difficulty !== undefined
-            ? updates.difficulty
+          updates.difficulty !== undefined ||
+          updates.difficultyLevel !== undefined
+            ? ((updates.difficulty ?? updates.difficultyLevel) as
+                "beginner" | "intermediate" | "advanced" | null)
             : (course.difficulty as
                 "beginner" | "intermediate" | "advanced" | null),
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id as string,
         categoryId:
-          updates.categoryId !== undefined
-            ? updates.categoryId
+          updates.categoryId !== undefined || updates.category !== undefined
+            ? (updates.categoryId ?? updates.category ?? null)
             : course.category_id,
         thumbnailMediaId:
           updates.thumbnailMediaId !== undefined
@@ -326,6 +376,10 @@ export function createCourseService({
           updates.trailerMediaId !== undefined
             ? updates.trailerMediaId
             : course.trailer_media_id,
+        instructorAlias:
+          updates.instructorAlias !== undefined
+            ? updates.instructorAlias
+            : (course.instructor_alias ?? null),
         version: newVersion,
         createdAt: course.created_at.toISOString(),
         updatedAt: now.toISOString(),
@@ -340,18 +394,18 @@ export function createCourseService({
   async function getCourseEditorData(courseId: string, creatorId: string) {
     const course = await getCourseAndVerifyOwner(courseId, creatorId);
 
-    const [sections, lessons, accessRules, pricing, settings] =
+    const [sections, lessons, accessRules, pricing, settings, includes] =
       await Promise.all([
         curriculumService.findSectionsByCourseId(courseId),
         curriculumService.findLessonsByCourseId(courseId),
         configurationService.findAccessRuleByCourseId(courseId),
         configurationService.findPricingByCourseId(courseId),
         configurationService.findSettingsByCourseId(courseId),
+        includesService.listCourseIncludes(courseId),
       ]);
     const lessonIds = lessons.map((l) => l.id);
-    const resources = await curriculumService.listResourcesForLessons(
-      lessonIds,
-    );
+    const resources =
+      await curriculumService.listResourcesForLessons(lessonIds);
 
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
@@ -385,7 +439,6 @@ export function createCourseService({
         id: sec.id,
         courseId: sec.course_id,
         title: sec.title,
-        description: sec.description,
         position: sec.position,
         lessons: secLessons,
       };
@@ -405,6 +458,7 @@ export function createCourseService({
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
         trailerMediaId: course.trailer_media_id,
+        instructorAlias: course.instructor_alias ?? null,
         version: course.version,
         createdAt: course.created_at.toISOString(),
         updatedAt: course.updated_at.toISOString(),
@@ -418,8 +472,6 @@ export function createCourseService({
             accessType: accessRules.access_type as AccessType,
             durationType: accessRules.duration_type as AccessDurationType,
             durationDays: accessRules.duration_days,
-            startsAt: accessRules.starts_at?.toISOString() ?? null,
-            expiresAt: accessRules.expires_at?.toISOString() ?? null,
           }
         : null,
       pricing: pricing
@@ -430,8 +482,6 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
-            saleStartsAt: pricing.sale_starts_at?.toISOString() ?? null,
-            saleEndsAt: pricing.sale_ends_at?.toISOString() ?? null,
           }
         : null,
       settings: settings
@@ -440,13 +490,14 @@ export function createCourseService({
             courseId: settings.course_id,
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
-            allowReviews: settings.allow_reviews,
             allowDownloads: settings.allow_downloads,
             certificateEnabled: settings.certificate_enabled,
+            showInstructorName: settings.show_instructor_name,
             language: settings.language,
             estimatedDuration: settings.estimated_duration,
           }
         : null,
+      includes,
     };
   }
 
@@ -491,10 +542,9 @@ export function createCourseService({
       accessRules,
       pricing,
       settings,
+      includes,
     ] = await Promise.all([
-      course.creator_id
-        ? authService.findUserById(course.creator_id)
-        : null,
+      course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
         ? categoryService.findCategoryById(course.category_id)
         : null,
@@ -503,6 +553,7 @@ export function createCourseService({
       configurationService.findAccessRuleByCourseId(courseId),
       configurationService.findPricingByCourseId(courseId),
       configurationService.findSettingsByCourseId(courseId),
+      includesService.listCourseIncludes(courseId),
     ]);
 
     const creator = creatorUser
@@ -582,7 +633,6 @@ export function createCourseService({
         id: sec.id,
         courseId: sec.course_id,
         title: sec.title,
-        description: sec.description,
         position: sec.position,
         lessons: secLessons,
       };
@@ -610,6 +660,7 @@ export function createCourseService({
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
         trailerMediaId: course.trailer_media_id,
+        instructorAlias: course.instructor_alias ?? null,
         version: course.version,
         createdAt: course.created_at.toISOString(),
         updatedAt: course.updated_at.toISOString(),
@@ -625,8 +676,6 @@ export function createCourseService({
             accessType: accessRules.access_type as AccessType,
             durationType: accessRules.duration_type as AccessDurationType,
             durationDays: accessRules.duration_days,
-            startsAt: accessRules.starts_at?.toISOString() ?? null,
-            expiresAt: accessRules.expires_at?.toISOString() ?? null,
           }
         : null,
       pricing: pricing
@@ -637,8 +686,6 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
-            saleStartsAt: pricing.sale_starts_at?.toISOString() ?? null,
-            saleEndsAt: pricing.sale_ends_at?.toISOString() ?? null,
           }
         : null,
       settings: settings
@@ -647,19 +694,27 @@ export function createCourseService({
             courseId: settings.course_id,
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
-            allowReviews: settings.allow_reviews,
             allowDownloads: settings.allow_downloads,
             certificateEnabled: settings.certificate_enabled,
+            showInstructorName: settings.show_instructor_name,
             language: settings.language,
             estimatedDuration: settings.estimated_duration,
           }
         : null,
+      includes,
       stats: {
         totalSections: sections.length,
         totalLessons: lessons.length,
         totalDurationSeconds,
       },
     };
+  }
+
+  /**
+   * Soft deletes a course after verifying ownership.
+   */
+  async function deleteCourse(courseId: string, creatorId: string) {
+    return await deletionService.scheduleCourseDeletion(courseId, creatorId);
   }
 
   return {
@@ -672,6 +727,7 @@ export function createCourseService({
     updateCourseBasics,
     getCourseEditorData,
     getCourseOverviewData,
+    deleteCourse,
   };
 }
 

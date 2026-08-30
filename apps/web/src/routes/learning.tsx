@@ -32,7 +32,11 @@ export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { navigateTo } = useOutletContext<AcademyOutletContext>();
+  const {
+    mobileBottomNavigation,
+    mobileBottomNavigationHidden,
+    navigateTo,
+  } = useOutletContext<AcademyOutletContext>();
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
   const lessonId = courseSlug
@@ -65,6 +69,8 @@ export default function LearningRoute() {
       key={courseSlug}
       courseSlug={courseSlug}
       lessonId={lessonId}
+      mobileBottomNavigation={mobileBottomNavigation}
+      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
       backLabel={getCoursePlayerBackLabel(routeReturnPath)}
       onSelectLesson={(nextLessonId) => {
         if (!courseSlug) return;

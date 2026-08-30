@@ -225,8 +225,8 @@ export function CourseCard({
         <a
           href={overviewPath}
           className="absolute inset-0 z-10 cursor-pointer rounded-b-[11px] outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
-          aria-label={`View curriculum for ${course.title}`}
-          title="View Curriculum"
+          aria-label={`View course overview for ${course.title}`}
+          title="View Course Overview"
           data-course-card-curriculum
           onClick={(event) => {
             if (
@@ -518,7 +518,7 @@ export function CourseCard({
                 return;
               }
 
-              onNavigatePage(`${overviewPath}#cov-curriculum-heading`);
+              onNavigatePage(overviewPath);
             }}
           >
             {role === "creator" ? (

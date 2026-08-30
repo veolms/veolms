@@ -24,6 +24,7 @@ const defaultPreferences = {
   showKeyboardShortcuts: true,
   showCollapsedLabels: true,
   showCollapsedLogo: true,
+  showSidebarOnMobile: false,
   glowPalette: "theme",
   glowShape: "circle",
   glowShapeSize: 100,
