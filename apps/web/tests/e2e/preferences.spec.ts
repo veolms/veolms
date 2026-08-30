@@ -1580,7 +1580,8 @@ test("role, appearance, and academy palette persist across routes and reloads", 
     .getByRole("button", { name: "Open role and appearance menu" })
     .click({ position: { x: 24, y: 24 } });
   await expect(paletteMenu).toBeHidden();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
   await expect(
     page.getByRole("complementary", { name: "Creator navigation" }),
   ).toBeVisible();

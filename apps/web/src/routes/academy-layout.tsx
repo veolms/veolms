@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
 } from "react";
@@ -14,7 +15,8 @@ import {
 } from "react-router";
 import { CoursesPage } from "../CoursesPage";
 import type { Course, CourseOpenOptions } from "../courses/catalogue";
-import { useLogout } from "../services/auth";
+import { useCurrentUser, useLogout } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
 import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
@@ -28,11 +30,15 @@ import {
   subscribeToLearningMiniPlayer,
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo } from "../routing/navigation";
+import { AcademyRouteGuard } from "../routing/RouteGuards";
 import {
+  getDefaultNavigationOrder,
+  getDefaultNavigationVisibility,
   getInitialNavigationOrder,
   getInitialNavigationVisibility,
-  getNavigationDestination,
   getVisibleOrderedNavigation,
+  getNavigationDestination,
+  resolveShellNavigation,
 } from "../shell/navigation";
 import {
   readApplicationScrollPosition,
@@ -123,6 +129,13 @@ export default function AcademyLayout() {
   );
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  const { data: authUser } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
+  const activeUser = authUser || storeUser;
+  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
+    () => resolveShellNavigation(activeUser?.menus),
+    [activeUser?.menus],
+  );
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -226,11 +239,15 @@ export default function AcademyLayout() {
       const index = getNumberShortcutIndex(event);
       if (index === null) return;
 
-      const role = localStorage.getItem("veolms-role") || "student";
+      const navigationRole = localStorage.getItem("veolms-role") || "student";
       const orderedNavigation = getVisibleOrderedNavigation(
-        role,
-        getInitialNavigationOrder(role),
-        getInitialNavigationVisibility(role),
+        isPublicNavigation
+          ? getDefaultNavigationOrder(navigationItems)
+          : getInitialNavigationOrder(navigationRole, navigationItems),
+        isPublicNavigation
+          ? getDefaultNavigationVisibility(navigationItems)
+          : getInitialNavigationVisibility(navigationRole, navigationItems),
+        navigationItems,
       ).filter(
         ([label]) =>
           label !== "Settings" ||
@@ -246,7 +263,7 @@ export default function AcademyLayout() {
         window.clearTimeout(numberNavigationTimerRef.current);
       }
       numberNavigationTimerRef.current = window.setTimeout(() => {
-        navigateToRef.current(getNavigationDestination(destination[0]));
+        navigateToRef.current(getNavigationDestination(destination));
         numberNavigationTimerRef.current = null;
       }, 60);
     };
@@ -258,7 +275,7 @@ export default function AcademyLayout() {
         window.clearTimeout(numberNavigationTimerRef.current);
       }
     };
-  }, []);
+  }, [activeUser, isPublicNavigation, navigationItems]);
 
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
@@ -287,7 +304,7 @@ export default function AcademyLayout() {
   }, [closeLearningMiniPlayer, learningMiniPlayer, navigateTo]);
 
   return (
-    <>
+    <AcademyRouteGuard>
       <CoursesPage
         page={route.page}
         section={route.section}
@@ -321,6 +338,6 @@ export default function AcademyLayout() {
           onRestore={restoreLearningMiniPlayer}
         />
       ) : null}
-    </>
+    </AcademyRouteGuard>
   );
 }

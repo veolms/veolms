@@ -82,7 +82,7 @@ export function formatPriceWithCurrency(
   currency: string = "INR",
 ): string {
   const sym = getCurrencySymbol(currency);
-  return `${sym}${amount.toLocaleString()}`;
+  return `${sym}${amount.toLocaleString("en-US")}`;
 }
 
 export function isCourseSaleActive(
