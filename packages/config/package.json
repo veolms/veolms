@@ -5,9 +5,13 @@
   "exports": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'tests/**/*.test.ts' tests/*.test.ts"
   },
   "dependencies": {
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.13"
   }
 }
