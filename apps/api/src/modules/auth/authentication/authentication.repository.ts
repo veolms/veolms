@@ -1,3 +1,4 @@
+import type { AuthMenuNode } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 
 export function findUserById(database: Executor, userId: string) {
@@ -131,6 +132,87 @@ export async function listUserPermissions(
   }
 
   return Array.from(permissions);
+}
+
+export async function listUserMenus(
+  database: Executor,
+  userId: string,
+): Promise<AuthMenuNode[]> {
+  const rows = await database
+    .selectFrom("user_roles")
+    .innerJoin("permissions", "permissions.role_id", "user_roles.role_id")
+    .innerJoin("menus", "menus.id", "permissions.menu_id")
+    .select([
+      "menus.id",
+      "menus.parent_id",
+      "menus.label",
+      "menus.route_link",
+      "menus.icon",
+      "menus.expanded",
+      "menus.check_list",
+      "menus.is_both",
+      "permissions.can_create",
+      "permissions.can_read",
+      "permissions.can_update",
+      "permissions.can_delete",
+    ])
+    .where("user_roles.user_id", "=", userId)
+    .execute();
+
+  const menuMap = new Map<string, AuthMenuNode>();
+  for (const row of rows) {
+    const existing = menuMap.get(row.id);
+    if (existing) {
+      existing.permissions.canCreate =
+        existing.permissions.canCreate || Boolean(row.can_create);
+      existing.permissions.canRead =
+        existing.permissions.canRead || Boolean(row.can_read);
+      existing.permissions.canUpdate =
+        existing.permissions.canUpdate || Boolean(row.can_update);
+      existing.permissions.canDelete =
+        existing.permissions.canDelete || Boolean(row.can_delete);
+    } else {
+      menuMap.set(row.id, {
+        id: row.id,
+        parentId: row.parent_id,
+        label: row.label,
+        routeLink: row.route_link,
+        icon: row.icon,
+        expanded: Boolean(row.expanded),
+        checkList: row.check_list,
+        isBoth: Boolean(row.is_both),
+        permissions: {
+          canCreate: Boolean(row.can_create),
+          canRead: Boolean(row.can_read),
+          canUpdate: Boolean(row.can_update),
+          canDelete: Boolean(row.can_delete),
+        },
+      });
+    }
+  }
+
+  const accessibleMenus = Array.from(menuMap.values()).filter(
+    (m) =>
+      m.permissions.canRead ||
+      m.permissions.canCreate ||
+      m.permissions.canUpdate ||
+      m.permissions.canDelete,
+  );
+
+  const rootMenus: AuthMenuNode[] = [];
+  const accessibleMap = new Map(accessibleMenus.map((m) => [m.id, m]));
+
+  for (const menu of accessibleMenus) {
+    if (menu.parentId && accessibleMap.has(menu.parentId)) {
+      const parent = accessibleMap.get(menu.parentId)!;
+      parent.children = parent.children ?? [];
+      parent.children.push(menu);
+    } else {
+      rootMenus.push(menu);
+    }
+  }
+
+  return rootMenus;
 }
 
 export async function findRoleIdByName(

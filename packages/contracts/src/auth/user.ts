@@ -102,6 +102,52 @@ export const registerRequestSchema = z
     },
   );
 
+export const authMenuPermissionSchema = z.object({
+  canCreate: z.boolean(),
+  canRead: z.boolean(),
+  canUpdate: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+export interface AuthMenuNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  routeLink: string;
+  icon: string | null;
+  expanded: boolean;
+  checkList?: string | null;
+  isBoth: boolean;
+  permissions: z.output<typeof authMenuPermissionSchema>;
+  children?: AuthMenuNode[];
+}
+
+export const authMenuNodeSchema: z.ZodType<AuthMenuNode> = z.lazy(() =>
+  z.object({
+    id: z.uuid(),
+    parentId: z.uuid().nullable(),
+    label: z.string(),
+    routeLink: z.string(),
+    icon: z.string().nullable(),
+    expanded: z.boolean(),
+    checkList: z.string().nullable().optional(),
+    isBoth: z.boolean(),
+    permissions: authMenuPermissionSchema,
+    children: z.array(authMenuNodeSchema).optional(),
+  }),
+);
+
+export const authUserSchema = z.object({
+  id: z.uuid(),
+  username: z.string().max(30),
+  displayName: z.string().max(100),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(15).nullable(),
+  roles: z.array(z.string().max(50)).default([]),
+  permissions: z.array(z.string().max(50)).default([]),
+  menus: z.array(authMenuNodeSchema).default([]),
+});
+
 export const userProfileResponseSchema = z.object({
   id: z.uuid(),
   username: z.string().max(30),
@@ -110,6 +156,7 @@ export const userProfileResponseSchema = z.object({
   phoneNo: z.string().max(15).nullable(),
   roles: z.array(z.string().max(50)),
   permissions: z.array(z.string().max(50)),
+  menus: z.array(authMenuNodeSchema),
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
@@ -165,8 +212,12 @@ export const setupTokenRequestSchema = z.object({
 export type OtpSendRequest = z.input<typeof otpSendRequestSchema>;
 export type OtpVerifyRequest = z.input<typeof otpVerifyRequestSchema>;
 export type RegisterRequest = z.input<typeof registerRequestSchema>;
+export type AuthMenuPermission = z.output<typeof authMenuPermissionSchema>;
+export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
-export type CreatorRegisterRequest = z.input<typeof creatorRegisterRequestSchema>;
+export type CreatorRegisterRequest = z.input<
+  typeof creatorRegisterRequestSchema
+>;
 export type AcademyRequest = z.input<typeof academyRequestSchema>;
 export type AcademyResponse = z.output<typeof academyResponseSchema>;
 export type SetupTokenRequest = z.input<typeof setupTokenRequestSchema>;

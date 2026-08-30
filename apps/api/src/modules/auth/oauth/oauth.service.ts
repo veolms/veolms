@@ -158,7 +158,8 @@ export function createOauthService({
     }
 
     const session = await sessionService.establishSession(user, request);
-    return { user, session };
+    const rbac = await authService.getUserRbac(user.id);
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function register(
@@ -193,7 +194,8 @@ export function createOauthService({
         existingUser,
         requestMeta,
       );
-      return { statusCode: 200 as const, user: existingUser, session };
+      const rbac = await authService.getUserRbac(existingUser.id);
+      return { statusCode: 200 as const, user: { ...existingUser, ...rbac }, session };
     }
 
     const localPart = profile.email.split("@")[0] || "oauth_user";
@@ -210,8 +212,9 @@ export function createOauthService({
     });
     const user = await authService.requireUser(userId);
     const session = await sessionService.establishSession(user, requestMeta);
+    const rbac = await authService.getUserRbac(user.id);
 
-    return { statusCode: 201 as const, user, session };
+    return { statusCode: 201 as const, user: { ...user, ...rbac }, session };
   }
 
   return {
