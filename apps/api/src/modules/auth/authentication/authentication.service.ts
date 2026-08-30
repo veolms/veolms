@@ -5,7 +5,7 @@ import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
 import {
-  CREATOR_ROLE,
+  ADMIN_ROLE,
   STUDENT_ROLE,
   USERNAME_SUFFIX_ATTEMPTS,
 } from "../shared/auth.constants.ts";
@@ -81,6 +81,15 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
+  async function getUserRbac(userId: string) {
+    const [roles, permissions, menus] = await Promise.all([
+      userRepository.listUserRoleNames(database, userId),
+      userRepository.listUserPermissions(database, userId),
+      userRepository.listUserMenus(database, userId),
+    ]);
+    return { roles, permissions, menus };
+  }
+
   async function login(input: {
     identifier: string;
     identifierType: IdentifierType;
@@ -116,7 +125,8 @@ export function createAuthService({
     );
 
     const session = await sessionService.establishSession(user, input.request);
-    return { user, session };
+    const rbac = await getUserRbac(user.id);
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function register(input: {
@@ -208,8 +218,9 @@ export function createAuthService({
     });
     const user = await requireUser(userId);
     const session = await sessionService.establishSession(user, input.request);
+    const rbac = await getUserRbac(user.id);
 
-    return { user, session };
+    return { user: { ...user, ...rbac }, session };
   }
 
   /** Appends a numeric suffix until the username is free. */
@@ -235,7 +246,7 @@ export function createAuthService({
   }
 
   /**
-   * Creates an account, granting the creator role to the very first user.
+   * Creates an account, granting the administrator role to the very first user.
    *
    * The whole thing runs in one transaction behind a transaction-scoped
    * advisory lock. Counting users outside the transaction (or even inside it
@@ -250,7 +261,7 @@ export function createAuthService({
         trx,
       );
 
-      const isCreator = (await userRepository.countUsers(trx)) === 0;
+      const isFirstUser = (await userRepository.countUsers(trx)) === 0;
 
       await userRepository.insertUser(trx, {
         id: userId,
@@ -259,7 +270,7 @@ export function createAuthService({
         username: input.username,
         displayName: input.displayName,
         emailVerifiedAt: input.emailVerified ? new Date() : null,
-        mfaMandatory: isCreator,
+        mfaMandatory: isFirstUser,
       });
 
       if (input.oauth) {
@@ -271,7 +282,7 @@ export function createAuthService({
         });
       }
 
-      const roleName = isCreator ? CREATOR_ROLE : STUDENT_ROLE;
+      const roleName = isFirstUser ? ADMIN_ROLE : STUDENT_ROLE;
       const roleId = await userRepository.findRoleIdByName(trx, roleName);
 
       if (!roleId) {
@@ -313,6 +324,7 @@ export function createAuthService({
     usernameExists,
     login,
     register,
+    getUserRbac,
     generateUniqueUsername,
     createUser,
     requireUser,
