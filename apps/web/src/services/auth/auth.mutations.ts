@@ -28,14 +28,23 @@ function persistAuthenticatedSession(
   queryClient: QueryClient,
   data: LoginResponse,
 ) {
-  authStore.setUser(data.user);
-  queryClient.setQueryData<CurrentUserResponse>(authKeys.me(), {
-    ...data.user,
+  const currentUser: NonNullable<CurrentUserResponse> = {
+    id: data.user.id,
+    username: data.user.username,
+    displayName: data.user.displayName,
+    email: data.user.email,
+    phoneNo: data.user.phoneNo,
+    roles: data.user.roles,
+    permissions: data.user.permissions,
+    menus: data.user.menus,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,
     mfaMandatory: data.mfaMandatory,
-  });
+  };
+
+  authStore.setUser(data.user);
+  queryClient.setQueryData(authKeys.me(), currentUser);
 }
 
 export function useSendOtp() {
