@@ -40,7 +40,11 @@ import {
 import type { PageTabColors } from "./settingsPreferences";
 
 export type DisplayMode = "light" | "dark" | "device";
-
+const FONT_FAMILIES = [
+  ["default", "Manrope"],
+  ["system", "System Default"],
+  ["cursive", "Cursive"],
+] as const;
 interface DisplayModeOption {
   id: DisplayMode;
   label: string;
@@ -96,6 +100,9 @@ export function AppearanceSettings({
     useState(readElevatedSurfaces);
   const [textSize, setTextSize] = useState(() =>
     readStored("veolms-text-size", "default"),
+  );
+  const [fontFamily, setFontFamily] = useState(() =>
+    readStored("veolms-font-family", "default"),
   );
   const shortcutPlatformPreference = useShortcutPlatformPreference();
   const [themeRotation, setThemeRotation] = useState(
@@ -158,7 +165,15 @@ export function AppearanceSettings({
     document.documentElement.dataset.textSize = textSize;
     window.localStorage.setItem("veolms-text-size", textSize);
   }, [textSize]);
+  useEffect(() => {
+    if (fontFamily === "default") {
+      document.documentElement.removeAttribute("data-font-family");
+    } else {
+      document.documentElement.dataset.fontFamily = fontFamily;
+    }
 
+    window.localStorage.setItem("veolms-font-family", fontFamily);
+  }, [fontFamily]);
   return (
     <div className="settings-content">
       <section className="settings-section">
@@ -372,6 +387,38 @@ export function AppearanceSettings({
                     shortcutPlatformPreference === value ? "is-selected" : ""
                   }
                   onClick={() => persistShortcutPlatformPreference(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </RadioGroup>
+          </SettingRow>
+          <SettingRow
+            icon={TextAa}
+            label="Font family"
+            note="Choose the font used across the application"
+          >
+            <RadioGroup
+              label="Font family"
+              className="settings-segmented settings-segmented--font-family"
+            >
+              {FONT_FAMILIES.map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={fontFamily === value}
+                  tabIndex={fontFamily === value ? 0 : -1}
+                  className={fontFamily === value ? "is-selected" : ""}
+                  onClick={() => setFontFamily(value)}
+                  style={{
+                    fontFamily:
+                      value === "default"
+                        ? '"Manrope Variable", Manrope, sans-serif'
+                        : value === "system"
+                          ? "system-ui"
+                          : "cursive",
+                  }}
                 >
                   {label}
                 </button>

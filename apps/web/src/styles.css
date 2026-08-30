@@ -33,6 +33,13 @@
   --danger: #fb7185;
 }
 
+html[data-font-family="system"] {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-font-family="cursive"] {
+  font-family: cursive;
+}
 :root[data-palette="ember"] {
   --canvas: #100b08;
   --header: #0e0907;

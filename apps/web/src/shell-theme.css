@@ -5170,7 +5170,7 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
 }
 .settings-segmented {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(82px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
   border-radius: 8px;
   background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
@@ -5208,7 +5208,11 @@ html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
   padding-inline: 4px;
   white-space: nowrap;
 }
-
+.settings-segmented--font-family button {
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
 .settings-segmented--page-tabs {
   width: 340px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
