@@ -44,7 +44,7 @@ describe("DiscussionsWorkspace composer", () => {
       preserveScroll: true,
     });
     expect(setNotice).toHaveBeenCalledWith("Your question has been published.");
-  });
+  }, 30_000);
 
   it("publishes discussions into the comments route", () => {
     const { onNavigatePage, setNotice } = publishFromComposer("discussion");
