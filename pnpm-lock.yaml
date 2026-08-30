@@ -323,6 +323,9 @@ importers:
       isbot:
         specifier: ^5
         version: 5.2.1
+      iso-639-1:
+        specifier: ^3.1.6
+        version: 3.1.6
       lucide-react:
         specifier: ^1.31.0
         version: 1.31.0(react@19.2.8)
@@ -3479,6 +3482,9 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
+  iso-639-1@3.1.6:
+    resolution: {integrity: sha512-ZFar/L4ngX7wZh2QX+Fiftmuf0igWJsrJtfizrovWifF1gAWkfmRa5Z1m0LQZbm0hKCHRDYhLRSLFrSqNe4EJA==}
+    engines: {node: '>=6.0'}
   isexe@3.1.5:
     resolution: {integrity: sha512-6B3tLtFqtQS4ekarvLVMZ+X+VlvQekbe4taUkf/rhVO3d/h0M2rfARm/pXLcPEsjjMsFgrFgSrhQIxcSVrBz8w==}
     engines: {node: '>=18'}
@@ -8661,6 +8667,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
+  iso-639-1@3.1.6: {}
   isexe@3.1.5: {}
 
   iterator.prototype@1.1.5:

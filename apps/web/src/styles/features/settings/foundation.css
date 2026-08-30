@@ -845,11 +845,18 @@
   position: relative;
   display: inline-flex;
   width: 42px;
+  min-width: 42px;
+  max-width: 42px;
   height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   align-items: center;
   border: 0;
   border-radius: 999px;
   padding: 3px;
+  cursor: pointer;
   background: color-mix(
     in srgb,
     var(--text-secondary) 32%,
@@ -858,6 +865,8 @@
   transition:
     background-color 150ms ease,
     box-shadow 150ms ease;
+  user-select: none;
+  touch-action: manipulation;
 }
 .settings-toggle:hover {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
@@ -869,22 +878,42 @@
 .settings-toggle > span {
   display: block;
   width: 18px;
+  min-width: 18px;
+  max-width: 18px;
   height: 18px;
+  min-height: 18px;
+  max-height: 18px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: var(--text);
-  transition: transform 150ms ease;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease;
+  will-change: transform;
 }
 .settings-toggle.is-on {
   background: var(--accent);
 }
 .settings-toggle.is-on > span {
   transform: translateX(18px);
-  background: var(--on-accent);
+  background: var(--on-accent, #ffffff);
+}
+
+:root[data-theme="light"] .settings-toggle {
+  background: color-mix(
+    in srgb,
+    var(--text) 24%,
+    var(--surface)
+  );
+}
+
+:root[data-theme="light"] .settings-toggle.is-on {
+  background: var(--accent);
 }
 
 :root[data-theme="light"] .settings-toggle > span {
-  background: rgb(255 255 255);
-  box-shadow: 0 1px 3px rgb(25 32 45 / 22%);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(25, 32, 45, 0.25);
 }
 
 .settings-theme-pool {

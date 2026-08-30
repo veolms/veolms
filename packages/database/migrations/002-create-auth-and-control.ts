@@ -1,6 +1,6 @@
 import { sql, type Kysely } from "kysely";
 
-export async function up(database: Kysely<unknown>): Promise<void> {
+export async function up(database: Kysely<any>): Promise<void> {
   // 1. Create academy table
   await database.schema
     .createTable("academy")
@@ -267,22 +267,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .execute();
 }
 
-export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropTable("webauthn_challenges")
-    .ifExists()
-    .cascade()
-    .execute();
-  await database.schema
-    .dropTable("mfa_backup_codes")
-    .ifExists()
-    .cascade()
-    .execute();
-  await database.schema
-    .dropTable("user_totp_credentials")
-    .ifExists()
-    .cascade()
-    .execute();
+export async function down(database: Kysely<any>): Promise<void> {
+  await database.schema.dropTable("webauthn_challenges").ifExists().cascade().execute();
+  await database.schema.dropTable("mfa_backup_codes").ifExists().cascade().execute();
+  await database.schema.dropTable("user_totp_credentials").ifExists().cascade().execute();
   await database.schema.dropTable("passkeys").ifExists().cascade().execute();
   await database.schema.dropTable("otp_codes").ifExists().cascade().execute();
   await database.schema

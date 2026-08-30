@@ -9,3 +9,4 @@
 @import "./styles/features/student-learning.css";
 @import "./styles/features/course-wizard.css";
 @import "./styles/components/confirm-delete-modal.css";
+@import "./styles/components/toast-notification.css";
