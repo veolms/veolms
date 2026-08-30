@@ -16,5 +16,3 @@ catalog:
 # installation explicit so parallel dev tasks cannot race while relinking.
 verifyDepsBeforeRun: false
 
-allowBuilds:
-  esbuild: set this to true or false
