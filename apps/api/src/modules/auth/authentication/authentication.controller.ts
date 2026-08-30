@@ -79,7 +79,12 @@ export function createAuthController(context: AuthContext) {
   }
 
   async function me(request: FastifyRequest) {
-    const user = request.user!;
+    const user = request.user;
+    const session = request.session;
+
+    if (!user || !session) {
+      return null;
+    }
 
     return {
       id: user.id,
@@ -90,9 +95,10 @@ export function createAuthController(context: AuthContext) {
       roles: user.roles,
       permissions: user.permissions,
       menus: user.menus,
-      mfaVerified: request.session!.mfa_verified,
+      mfaVerified: session.mfa_verified,
       totpEnabled: user.totpEnabled,
       passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
     };
   }
 

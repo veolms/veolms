@@ -981,15 +981,16 @@
     color-mix(in srgb, var(--card-shadow, #000) 10%, transparent);
 }
 
-:root[data-theme="light"] .auth-page__form-column {
-  background: var(--surface);
-  box-shadow: 0 12px 30px
-    color-mix(in srgb, var(--card-shadow, #000) 8%, transparent);
+@media (min-width: 1024px) {
+  :root[data-theme="light"] .auth-page__form-column {
+    background: var(--surface);
+    box-shadow: 0 12px 30px
+      color-mix(in srgb, var(--card-shadow, #000) 8%, transparent);
+  }
 }
 
 :root[data-theme="light"] .auth-brand-panel {
-  background: color-mix(in srgb, var(--surface) 92%, var(--accent-soft));
-  border: 1px solid var(--auth-line);
-  border-radius: 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
-

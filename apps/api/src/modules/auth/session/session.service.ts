@@ -4,6 +4,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { SESSION_TTL_MS } from "../shared/auth.constants.ts";
+import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
 import type {
   AuthenticatedRequestContext,
   EstablishedSession,
@@ -49,7 +50,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
     user: SessionUser,
     request: { ip: string; userAgent: string | null },
   ): Promise<EstablishedSession> {
-    const mfa = await resolveMfaState(user.id, Boolean(user.mfa_mandatory));
+    const roles = await userRepository.listUserRoleNames(database, user.id);
+    const mfa = await resolveMfaState(
+      user.id,
+      isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
+    );
 
     const token = generateRandomToken();
     const sessionId = crypto.randomUUID();
@@ -147,7 +152,10 @@ export function createSessionService({ database }: SessionServiceOptions) {
         menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
-        mfaMandatory: Boolean(user.mfa_mandatory),
+        mfaMandatory: isMfaMandatoryAccount(
+          Boolean(user.mfa_mandatory),
+          roles,
+        ),
       },
       session: {
         id: session.id,

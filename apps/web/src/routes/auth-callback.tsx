@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { AuthBrandMark } from "../auth/AuthBrandPanel";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
+import { resolvePostAuthPath } from "../auth/postAuthNavigation";
 import { useOauthLogin } from "../services/auth";
 import { authStore } from "../store/auth.store";
 
@@ -56,8 +57,10 @@ export default function AuthCallbackRoute() {
         redirectUri,
       })
       .then((response) => {
-        authStore.setUser(response.user);
-        navigate("/settings/profile", { replace: true });
+        if (!response.mfaRequired) {
+          authStore.setUser(response.user);
+        }
+        navigate(resolvePostAuthPath(response), { replace: true });
       })
       .catch((err: unknown) => {
         const errorObj = err as { message?: string };
