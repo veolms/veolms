@@ -6,24 +6,24 @@ import axios, {
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
-import { isAuthFlowPath, MFA_CHALLENGE_PATH } from "../routing/routeAccess";
+import {
+  MFA_CHALLENGE_PATH,
+  shouldRedirectToMfaChallenge,
+} from "../routing/routeAccess";
 
 export { getApiError, type ApiError };
 
-const BACKEND_URL =
-  import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 function redirectToMfaSetup(apiError: ApiError): void {
-  if (
-    typeof window === "undefined" ||
-    apiError.status !== 403 ||
-    apiError.code !== "MFA_REQUIRED"
-  ) {
+  if (typeof window === "undefined") {
     return;
   }
 
   const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
-  if (isAuthFlowPath(currentPath)) return;
+  if (!shouldRedirectToMfaChallenge(currentPath, apiError)) {
+    return;
+  }
 
   window.location.replace(MFA_CHALLENGE_PATH);
 }

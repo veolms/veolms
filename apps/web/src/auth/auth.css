@@ -897,25 +897,14 @@
       no-repeat;
   }
 
-  /* Theme-adaptive blend overlay that selectively re-tints only the illustration's glowing elements */
-  .auth-brand-panel__illustration-slot::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: var(--accent);
-    mix-blend-mode: hue;
-    opacity: 0.85;
-    pointer-events: none;
-    transition: background-color 200ms ease;
+  /* The artwork is a black-backed WebP. Lighten knocks the black out against
+     the dark card so the 3D cluster floats without a colored rectangle. */
+  :root[data-theme="dark"] .auth-brand-panel__illustration-slot {
+    mix-blend-mode: lighten;
   }
 
-  /* Palette-tailored adjustments: monochrome Veo Onyx / Codex */
   :root[data-palette="codex"] .auth-brand-panel__illustration-slot {
     filter: saturate(0.18) brightness(1.05);
-  }
-
-  :root[data-palette="codex"] .auth-brand-panel__illustration-slot::after {
-    display: none;
   }
 
   .auth-otp-form__destination {

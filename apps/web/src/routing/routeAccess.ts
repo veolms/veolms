@@ -128,3 +128,23 @@ export function resolveAuthenticatedDestination(
 ): string {
   return sanitizeReturnTo(returnTo) ?? APP_HOME_PATH;
 }
+
+export function shouldRedirectToMfaChallenge(
+  pathname: string,
+  error: { status: number; code: string },
+): boolean {
+  if (error.status !== 403 || error.code !== "MFA_REQUIRED") {
+    return false;
+  }
+
+  const path = normalizeAppPath(pathname);
+  if (
+    isAuthFlowPath(path) ||
+    isPublicAcademyPath(path) ||
+    isGuestLandingPath(path)
+  ) {
+    return false;
+  }
+
+  return true;
+}

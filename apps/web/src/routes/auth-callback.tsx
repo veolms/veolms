@@ -35,7 +35,9 @@ export default function AuthCallbackRoute() {
     const errorDescription = searchParams.get("error_description");
 
     if (error) {
-      setErrorMessage(errorDescription || "Authentication was cancelled or failed.");
+      setErrorMessage(
+        errorDescription || "Authentication was cancelled or failed.",
+      );
       return;
     }
 
@@ -45,9 +47,14 @@ export default function AuthCallbackRoute() {
     }
 
     const redirectUri = `${window.location.origin}/auth/callback`;
-    const storedProvider = sessionStorage.getItem("veolms_oauth_provider") as "google" | "github" | null;
-    const isGithub = searchParams.get("iss")?.includes("github") || storedProvider === "github";
-    const provider: "google" | "github" = isGithub ? "github" : (storedProvider ?? "google");
+    const storedProvider = sessionStorage.getItem("veolms_oauth_provider") as
+      "google" | "github" | null;
+    const isGithub =
+      searchParams.get("iss")?.includes("github") ||
+      storedProvider === "github";
+    const provider: "google" | "github" = isGithub
+      ? "github"
+      : (storedProvider ?? "google");
 
     oauthLoginMutation
       .mutateAsync({
@@ -57,14 +64,13 @@ export default function AuthCallbackRoute() {
         redirectUri,
       })
       .then((response) => {
-        if (!response.mfaRequired) {
-          authStore.setUser(response.user);
-        }
+        authStore.setUser(response.user);
         navigate(resolvePostAuthPath(response), { replace: true });
       })
       .catch((err: unknown) => {
         const errorObj = err as { message?: string };
-        const message = errorObj?.message || "Authentication failed. Please try again.";
+        const message =
+          errorObj?.message || "Authentication failed. Please try again.";
         setErrorMessage(message);
       });
   }, [searchParams, navigate, oauthLoginMutation]);
