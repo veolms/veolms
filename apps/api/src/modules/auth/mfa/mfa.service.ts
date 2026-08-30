@@ -32,6 +32,7 @@ import {
   verifyTotp,
 } from "../shared/auth.utils.ts";
 import type { SessionService } from "../session/session.service.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface MfaServiceOptions {
   database: Kysely<Database>;
@@ -50,6 +51,7 @@ export function createMfaService({
   database,
   sessionService,
 }: MfaServiceOptions) {
+  const outbox = createOutboxService();
   async function assertStepUpForFactorChange(
     userId: string,
     mfaVerified: boolean,
@@ -96,9 +98,10 @@ export function createMfaService({
       crypto.randomInt(BACKUP_CODE_MIN, BACKUP_CODE_MAX + 1).toString(),
     );
 
+    const credentialId = crypto.randomUUID();
     await database.transaction().execute(async (trx) => {
       await mfaRepository.replaceTotpCredential(trx, {
-        id: crypto.randomUUID(),
+        id: credentialId,
         userId,
         secretEncrypted: encryptSecret(secret, config.MFA_ENCRYPTION_KEY),
         lastUsedStep: String(result.step),
@@ -113,6 +116,13 @@ export function createMfaService({
           code_hash: hashToken(value),
         })),
       );
+      await outbox.publish(trx, {
+        type: "auth.mfa_enabled",
+        version: 1,
+        dedupeKey: `auth.mfa_enabled:${credentialId}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId },
+      });
     });
 
     await sessionService.completeMfaEnrolment(userId, sessionId);
@@ -278,13 +288,23 @@ export function createMfaService({
     }
 
     const { credential } = verification.registrationInfo;
-    await mfaRepository.insertPasskey(database, {
-      id: crypto.randomUUID(),
-      userId,
-      credentialId: credential.id,
-      publicKey: Buffer.from(credential.publicKey).toString("base64"),
-      counter: credential.counter,
-      transports: response.transports?.join(",") ?? null,
+    const passkeyId = crypto.randomUUID();
+    await database.transaction().execute(async (trx) => {
+      await mfaRepository.insertPasskey(trx, {
+        id: passkeyId,
+        userId,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey).toString("base64"),
+        counter: credential.counter,
+        transports: response.transports?.join(",") ?? null,
+      });
+      await outbox.publish(trx, {
+        type: "auth.passkey_added",
+        version: 1,
+        dedupeKey: `auth.passkey_added:${passkeyId}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId, passkeyId },
+      });
     });
 
     await sessionService.completeMfaEnrolment(userId, sessionId);

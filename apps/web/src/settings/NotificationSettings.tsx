@@ -1,64 +1,89 @@
-import { useEffect, useState } from "react";
+import type {
+  NotificationChannel,
+  NotificationPreference,
+} from "@veolms/contracts";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRinging";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
+
+import {
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+} from "../services/notifications";
 import { SettingRow, SettingsToggle } from "./SettingsControls";
 
-interface NotificationPreferences {
-  email: boolean;
-  inApp: boolean;
-  courseUpdates: boolean;
-  discussionReplies: boolean;
-  learningReminders: boolean;
-  achievements: boolean;
+const optionalNotificationTypes = [
+  "course.published",
+  "purchase.completed",
+  "payment.failed",
+  "refund.completed",
+  "video.processing_completed",
+  "video.processing_failed",
+  "user.mentioned",
+  "comment.replied",
+  "qa.answered",
+  "assignment.reminder",
+  "learning.reminder",
+  "certificate.generated",
+] as const;
+
+const courseUpdateTypes = [
+  "course.published",
+  "video.processing_completed",
+  "video.processing_failed",
+] as const;
+const discussionTypes = [
+  "user.mentioned",
+  "comment.replied",
+  "qa.answered",
+] as const;
+const reminderTypes = ["assignment.reminder", "learning.reminder"] as const;
+const achievementTypes = ["certificate.generated"] as const;
+const channels = ["in_app", "email"] as const;
+
+function preferenceKey(type: string, channel: NotificationChannel): string {
+  return `${type}:${channel}`;
 }
 
-const STORAGE_KEY = "veolms-notification-preferences";
-const defaults: NotificationPreferences = {
-  email: true,
-  inApp: true,
-  courseUpdates: true,
-  discussionReplies: true,
-  learningReminders: true,
-  achievements: true,
-};
-
-function readPreferences(): NotificationPreferences {
-  if (typeof window === "undefined") return defaults;
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    const parsed: unknown = stored ? JSON.parse(stored) : {};
-    return {
-      ...defaults,
-      ...(typeof parsed === "object" && parsed !== null ? parsed : {}),
-    };
-  } catch {
-    return defaults;
-  }
+function buildPreferenceMap(preferences: readonly NotificationPreference[]) {
+  return new Map(
+    preferences.map((preference) => [
+      preferenceKey(preference.notificationType, preference.channel),
+      preference.enabled,
+    ]),
+  );
 }
 
 export function NotificationSettings() {
-  const [preferences, setPreferences] = useState(defaults);
-  const [storageReady, setStorageReady] = useState(false);
-  const update = (next: Partial<NotificationPreferences>) =>
-    setPreferences((current) => ({ ...current, ...next }));
+  const query = useNotificationPreferences();
+  const update = useUpdateNotificationPreferences();
+  const preferenceMap = buildPreferenceMap(query.data?.preferences ?? []);
+  const isEnabled = (type: string, channel: NotificationChannel) =>
+    preferenceMap.get(preferenceKey(type, channel)) ?? true;
+  const isChannelEnabled = (channel: NotificationChannel) =>
+    optionalNotificationTypes.every((type) => isEnabled(type, channel));
+  const isGroupEnabled = (types: readonly string[]) =>
+    types.every((type) => channels.some((channel) => isEnabled(type, channel)));
+  const isSaving = update.isPending;
 
-  useEffect(() => {
-    setPreferences(readPreferences());
-    setStorageReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!storageReady) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch {
-      // Preferences remain available for this session when storage is blocked.
-    }
-  }, [preferences, storageReady]);
+  const save = (
+    types: readonly string[],
+    targetChannels: readonly NotificationChannel[],
+    enabled: boolean,
+  ) => {
+    update.mutate({
+      preferences: types.flatMap((notificationType) =>
+        targetChannels.map((channel) => ({
+          notificationType,
+          channel,
+          enabled,
+        })),
+      ),
+    });
+  };
 
   return (
     <div className="settings-detail" aria-label="Notification settings">
@@ -68,7 +93,12 @@ export function NotificationSettings() {
           <p>Choose the updates that deserve your attention.</p>
         </div>
         <span className="settings-detail__saved">
-          <CheckCircle size={17} weight="fill" /> Saved automatically
+          <CheckCircle size={17} weight="fill" />
+          {update.isError
+            ? "Save failed"
+            : isSaving
+              ? "Saving…"
+              : "Saved automatically"}
         </span>
       </header>
 
@@ -77,7 +107,7 @@ export function NotificationSettings() {
           <BellRinging size={20} weight="duotone" />
           <div>
             <h3 id="delivery-heading">Delivery</h3>
-            <p>Keep a quiet channel open for what matters most.</p>
+            <p>Choose where optional updates should reach you.</p>
           </div>
         </header>
         <div className="settings-row-list">
@@ -87,20 +117,26 @@ export function NotificationSettings() {
             note="Show activity and reminders in the notification center."
           >
             <SettingsToggle
-              checked={preferences.inApp}
-              onChange={(inApp) => update({ inApp })}
+              checked={isChannelEnabled("in_app")}
+              onChange={(enabled) =>
+                save(optionalNotificationTypes, ["in_app"], enabled)
+              }
               label="In-app notifications"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
             icon={BellRinging}
-            label="Email digest"
-            note="Receive a concise daily summary of course activity."
+            label="Email notifications"
+            note="Receive optional updates at your verified email address."
           >
             <SettingsToggle
-              checked={preferences.email}
-              onChange={(email) => update({ email })}
-              label="Email digest"
+              checked={isChannelEnabled("email")}
+              onChange={(enabled) =>
+                save(optionalNotificationTypes, ["email"], enabled)
+              }
+              label="Email notifications"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
         </div>
@@ -120,12 +156,13 @@ export function NotificationSettings() {
           <SettingRow
             icon={BookOpen}
             label="Course updates"
-            note="New lessons, materials, and changes to enrolled courses."
+            note="Published courses and media processing updates."
           >
             <SettingsToggle
-              checked={preferences.courseUpdates}
-              onChange={(courseUpdates) => update({ courseUpdates })}
+              checked={isGroupEnabled(courseUpdateTypes)}
+              onChange={(enabled) => save(courseUpdateTypes, channels, enabled)}
               label="Course updates"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -134,9 +171,10 @@ export function NotificationSettings() {
             note="Replies, mentions, and answers in conversations you follow."
           >
             <SettingsToggle
-              checked={preferences.discussionReplies}
-              onChange={(discussionReplies) => update({ discussionReplies })}
+              checked={isGroupEnabled(discussionTypes)}
+              onChange={(enabled) => save(discussionTypes, channels, enabled)}
               label="Discussion replies"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -145,20 +183,22 @@ export function NotificationSettings() {
             note="Gentle prompts to make time for your next lesson."
           >
             <SettingsToggle
-              checked={preferences.learningReminders}
-              onChange={(learningReminders) => update({ learningReminders })}
+              checked={isGroupEnabled(reminderTypes)}
+              onChange={(enabled) => save(reminderTypes, channels, enabled)}
               label="Learning reminders"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
             icon={Trophy}
             label="Milestones & achievements"
-            note="Celebrate course completions and learning streaks."
+            note="Celebrate course completions and certificates."
           >
             <SettingsToggle
-              checked={preferences.achievements}
-              onChange={(achievements) => update({ achievements })}
+              checked={isGroupEnabled(achievementTypes)}
+              onChange={(enabled) => save(achievementTypes, channels, enabled)}
               label="Milestones and achievements"
+              disabled={query.isPending || isSaving}
             />
           </SettingRow>
         </div>

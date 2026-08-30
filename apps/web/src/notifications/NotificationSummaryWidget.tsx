@@ -51,7 +51,7 @@ export function NotificationSummaryWidget({
   return (
     <section
       aria-labelledby="notification-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <h3
@@ -69,7 +69,7 @@ export function NotificationSummaryWidget({
               key={item.id}
               type="button"
               onClick={() => onSelectCategory?.(item.id)}
-              className="flex items-center justify-between rounded-xl px-2.5 py-2 text-xs md:text-sm text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer text-left"
+              className="flex cursor-pointer items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) md:text-sm"
             >
               <div className="flex items-center gap-3">
                 <div
