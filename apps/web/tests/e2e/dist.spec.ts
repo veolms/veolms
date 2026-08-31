@@ -127,6 +127,9 @@ test("compiled learning route loads the same-origin adaptive HLS manifest", asyn
   const manifestRequest = page.waitForRequest((request) =>
     /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(request.url()),
   );
+  const manifestResponse = page.waitForResponse((response) =>
+    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(response.url()),
+  );
   await openApp(page, "/learn/typescript-course");
   await expect(
     page.getByRole("heading", {
@@ -138,4 +141,10 @@ test("compiled learning route loads the same-origin adaptive HLS manifest", asyn
   await expect(player).toBeVisible();
   const mediaUrl = new URL((await manifestRequest).url());
   expect(mediaUrl.pathname).toMatch(/\/course-hls\/[a-z0-9-]+\/master\.m3u8$/);
+  const mediaResponse = await manifestResponse;
+  expect(mediaResponse.ok()).toBe(true);
+  expect(mediaResponse.headers()["content-type"]).toMatch(
+    /application\/(?:vnd\.apple\.)?mpegurl/i,
+  );
+  expect(await mediaResponse.text()).toContain("#EXTM3U");
 });
