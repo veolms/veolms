@@ -14,6 +14,7 @@ import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as manualPaymentRepo from "./manual-payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface ManualPaymentService {
   submitManualPayment(
@@ -22,7 +23,9 @@ export interface ManualPaymentService {
     request: SubmitManualPaymentRequest,
   ): Promise<ManualPaymentRequest>;
   listUserManualPayments(userId: string): Promise<ManualPaymentRequest[]>;
-  listAllManualPayments(status?: ManualPaymentStatus): Promise<ManualPaymentRequest[]>;
+  listAllManualPayments(
+    status?: ManualPaymentStatus,
+  ): Promise<ManualPaymentRequest[]>;
   verifyManualPayment(
     adminUserId: string,
     requestId: string,
@@ -36,6 +39,7 @@ export function createManualPaymentService({
   database: Executor;
 }): ManualPaymentService {
   const courseAccessService = createCourseAccessService();
+  const outbox = createOutboxService();
 
   async function submitManualPayment(
     userId: string,
@@ -173,17 +177,18 @@ export function createManualPaymentService({
       // Execute verified approval inside transaction
       await database.transaction().execute(async (trx) => {
         // 1. Update manual payment request to verified atomically (must be pending)
-        const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
-          trx,
-          requestId,
-          {
-            status: "verified",
-            admin_notes: request.adminNotes ?? null,
-            verified_by: adminUserId,
-            verified_at: now,
-          },
-          "pending",
-        );
+        const updatedReq =
+          await manualPaymentRepo.updateManualPaymentRequestStatus(
+            trx,
+            requestId,
+            {
+              status: "verified",
+              admin_notes: request.adminNotes ?? null,
+              verified_by: adminUserId,
+              verified_at: now,
+            },
+            "pending",
+          );
         if (!updatedReq) {
           throw new AppError(
             400,
@@ -198,7 +203,11 @@ export function createManualPaymentService({
         }
 
         // 2. Mark order as paid
-        const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+        const markedPaid = await orderRepo.markOrderPaidIfPending(
+          trx,
+          order.id,
+          now,
+        );
         if (!markedPaid) {
           throw new AppError(
             400,
@@ -208,8 +217,9 @@ export function createManualPaymentService({
         }
 
         // 3. Insert manual payment record
+        const paymentId = crypto.randomUUID();
         await paymentRepo.insertPayment(trx, {
-          id: crypto.randomUUID(),
+          id: paymentId,
           order_id: order.id,
           gateway_provider: "manual",
           gateway_order_id: `manual_ord_${order.id}`,
@@ -228,20 +238,41 @@ export function createManualPaymentService({
 
         // 4. Grant course access & active enrollment with admin_grant source (audited manual grant)
         const orderItems = await orderRepo.listOrderItems(trx, order.id);
-        await courseAccessService.grantAccessForOrder(trx, order, orderItems, now);
+        await courseAccessService.grantAccessForOrder(
+          trx,
+          order,
+          orderItems,
+          now,
+        );
+        await outbox.publish(trx, {
+          type: "payment.completed",
+          version: 1,
+          dedupeKey: `payment.completed:${paymentId}`,
+          occurredAt: now,
+          payload: {
+            paymentId,
+            orderId: order.id,
+            orderNumber: order.order_number,
+            recipientUserId: order.user_id,
+            totalAmount: order.total_amount,
+            currency: order.currency,
+            itemTitles: orderItems.map((item) => item.title_snapshot),
+          },
+        });
       });
     } else {
-      const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
-        database,
-        requestId,
-        {
-          status: "rejected",
-          admin_notes: request.adminNotes ?? null,
-          verified_by: adminUserId,
-          verified_at: now,
-        },
-        "pending",
-      );
+      const updatedReq =
+        await manualPaymentRepo.updateManualPaymentRequestStatus(
+          database,
+          requestId,
+          {
+            status: "rejected",
+            admin_notes: request.adminNotes ?? null,
+            verified_by: adminUserId,
+            verified_at: now,
+          },
+          "pending",
+        );
       if (!updatedReq) {
         throw new AppError(
           400,

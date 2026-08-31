@@ -336,6 +336,10 @@ describe("framework route descriptors", () => {
   it("preserves navigation destination aliases and direct paths", () => {
     expect(destinationPaths).toMatchObject({
       home: "/",
+      Courses: "/courses",
+      "/Courses": "/courses",
+      "/explore-courses": "/courses",
+      "/my-courses": "/courses",
       settings: "/settings",
       Settings: "/settings",
       discussions: "/discussions",
@@ -345,6 +349,9 @@ describe("framework route descriptors", () => {
       "Order History": "/order-history",
       Logout: "/logout",
     });
+    expect(getDestinationPath("Courses")).toBe("/courses");
+    expect(getDestinationPath("/Courses")).toBe("/courses");
+    expect(getDestinationPath("/explore-courses")).toBe("/courses");
     expect(getDestinationPath("Settings")).toBe("/settings/profile");
     expect(getDestinationPath("Discussions")).toBe("/discussions/q-and-a");
     sessionStorage.setItem(SETTINGS_TAB_SESSION_KEY, "sidebar");

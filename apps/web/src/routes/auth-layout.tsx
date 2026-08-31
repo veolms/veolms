@@ -1,6 +1,7 @@
 import { Outlet } from "react-router";
 import { AuthBrandPanel } from "../auth/AuthBrandPanel";
 import { useAuthAppearance } from "../auth/useAuthAppearance";
+import { AuthRouteGuard } from "../routing/RouteGuards";
 import { productName } from "../routing/routeDescriptors";
 import "../auth/auth.css";
 import "../auth/mfa-setup.css";
@@ -12,7 +13,7 @@ export default function AuthLayout() {
     <div className="auth-page">
       <div className="auth-page__container">
         <div className="auth-page__form-column">
-          <Outlet />
+          <AuthRouteGuard />
         </div>
 
         <div className="auth-page__brand-column">

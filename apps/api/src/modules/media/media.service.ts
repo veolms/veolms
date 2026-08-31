@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
-import type { Database, MediaAssetStatus } from "@veolms/database";
+import type {
+  Database,
+  MediaAssetStatus,
+  VideoQualityLevel,
+} from "@veolms/database";
 import type { PresignMediaRequest } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
@@ -11,6 +15,8 @@ export interface MediaServiceOptions {
   database: Kysely<Database>;
   services: AppServices;
 }
+
+const VIDEO_QUALITIES: VideoQualityLevel[] = ["360p", "720p", "1080p"];
 
 /** Postgres unique_violation (23505), as raised by the pg driver via node-postgres. */
 function isUniqueViolation(err: unknown): boolean {
@@ -169,6 +175,7 @@ export function createMediaService({
     if (existingJob) {
       if (
         existingJob.status === "queued" ||
+        existingJob.status === "provisioning" ||
         existingJob.status === "processing"
       ) {
         logger?.info(
@@ -193,16 +200,17 @@ export function createMediaService({
 
     const jobId = crypto.randomUUID();
     const now = new Date();
+    const outputPrefix = `transcoded/${media.id}`;
 
     try {
       await mediaRepo.insertVideoJob(database, {
         id: jobId,
         video_id: media.id,
-        input_path: media.storage_key,
+        video_key: media.storage_key,
+        output_prefix: outputPrefix,
+        video_size: Number(media.size_bytes),
+        qualities: VIDEO_QUALITIES,
         status: "queued",
-        current_stage: "queued",
-        progress_percent: 0,
-        quality: [360, 720, 1080],
         created_at: now,
       });
     } catch (insertErr) {
@@ -225,10 +233,13 @@ export function createMediaService({
     // Dispatch the transcoding job (always queue, and trigger lambda if configured)
     try {
       await services.videoDispatch.dispatch({
+        action: "claim",
         jobId,
         videoId: media.id,
-        inputPath: media.storage_key,
-        quality: [360, 720, 1080],
+        videoKey: media.storage_key,
+        outputPrefix,
+        qualities: VIDEO_QUALITIES,
+        videoSize: Number(media.size_bytes),
       });
       logger?.info(
         { jobId, mediaId: media.id },
@@ -243,8 +254,7 @@ export function createMediaService({
       );
       await mediaRepo.updateVideoJobStatus(database, jobId, {
         status: "failed",
-        current_stage: "failed",
-        error: message,
+        error_message: message,
         failed_at: new Date(),
       });
     }
@@ -291,17 +301,9 @@ export function createMediaService({
     }
 
     return {
-      status: job.status as "queued" | "processing" | "completed" | "failed",
-      progressPercent: job.progress_percent,
-      currentStage: job.current_stage as
-        | "queued"
-        | "downloading"
-        | "transcoding"
-        | "uploading"
-        | "finalizing"
-        | "completed"
-        | "failed",
-      error: job.error,
+      status: job.status,
+      progressPercent: Number(job.progress_percent),
+      error: job.error_message,
     };
   }
 

@@ -62,8 +62,9 @@ import type {
 } from "./settingsPreferences";
 import {
   getDefaultNavigationVisibility,
-  getNavigationItems,
+  getPublicNavigationItems,
 } from "../shell/navigation";
+import type { NavigationItemWithMetadata } from "../shell/navigation";
 import type { ProfileRole } from "./profilePreferences";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
@@ -201,6 +202,7 @@ export interface SidebarSettingsProps {
   sidebarMode: SidebarMode;
   onSidebarModeChange?: (mode: SidebarMode) => void;
   role?: ProfileRole;
+  navigationItems?: readonly NavigationItemWithMetadata[];
   navigationVisibleItems?: readonly string[];
   onNavigationVisibilityChange?: (visibleItems: string[]) => void;
 }
@@ -212,6 +214,7 @@ export function SidebarSettings({
   sidebarMode,
   onSidebarModeChange,
   role = "student",
+  navigationItems: providedNavigationItems,
   navigationVisibleItems,
   onNavigationVisibilityChange,
 }: SidebarSettingsProps) {
@@ -253,9 +256,9 @@ export function SidebarSettings({
   const glowIntensity = normalizeSidebarGlowIntensity(
     preferences.glowIntensity,
   );
-  const navigationItems = getNavigationItems(role);
+  const navigationItems = providedNavigationItems ?? getPublicNavigationItems();
   const visibleNavigationItems = new Set(
-    navigationVisibleItems ?? getDefaultNavigationVisibility(role),
+    navigationVisibleItems ?? getDefaultNavigationVisibility(navigationItems),
   );
   const glowIsDefault =
     glowPalette === SIDEBAR_GLOW_DEFAULT &&

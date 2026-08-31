@@ -19,10 +19,9 @@ export interface NotificationFiltersBarProps {
 
 const categoryOptions: readonly [string, string][] = [
   ["all", "All categories"],
-  ["mention", "Mentions"],
-  ["course", "Course activity"],
-  ["assignment", "Assignments"],
-  ["announcement", "Announcements"],
+  ["transactional", "Transactions"],
+  ["social", "Social"],
+  ["learning", "Learning"],
   ["system", "System"],
 ];
 
@@ -50,12 +49,12 @@ export function NotificationFiltersBar({
 }: NotificationFiltersBarProps) {
   return (
     <div
-      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 md:p-3.5 transition-all"
+      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 transition-all md:p-3.5"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
-        <label className="flex min-h-9.75 min-w-52.5 flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label className="flex min-h-9.75 min-w-52.5 flex-1 cursor-text items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -86,7 +85,7 @@ export function NotificationFiltersBar({
         </label>
 
         {/* Category Select */}
-        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
+        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
           <ThemedSelect
             id="notifications-category-filter"
             value={categoryFilter}
@@ -98,7 +97,7 @@ export function NotificationFiltersBar({
         </div>
 
         {/* Status Select */}
-        <div className="flex min-h-9.75 min-w-31.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
+        <div className="flex min-h-9.75 min-w-31.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
           <ThemedSelect
             id="notifications-status-filter"
             value={statusFilter}
@@ -110,7 +109,7 @@ export function NotificationFiltersBar({
         </div>
 
         {/* Sort Select */}
-        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all shrink-0">
+        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
           <ThemedSelect
             id="notifications-sort-filter"
             value={sortBy}
