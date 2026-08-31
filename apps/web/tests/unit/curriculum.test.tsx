@@ -120,7 +120,7 @@ describe("Curriculum", () => {
     if (!sectionToggle) throw new Error("Expected Section 3 toggle");
     fireEvent.click(sectionToggle);
     const activeLesson = screen.getByRole("button", {
-      name: /11\.\s*The Beginning of a Design Journey\s*09:13/,
+      name: /11\.\s*The Beginning of a Design Journey\s*07:34/,
     });
     expect(
       within(activeLesson).getByRole("progressbar", {
@@ -260,7 +260,7 @@ describe("Curriculum", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /11\.\s*The Beginning of a Design Journey\s*09:13/,
+        name: /11\.\s*The Beginning of a Design Journey\s*07:34/,
       }),
     );
     expect(onSelectLesson).toHaveBeenCalledWith(11);

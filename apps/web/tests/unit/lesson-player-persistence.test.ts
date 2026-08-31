@@ -4,10 +4,12 @@ import {
   readAmbientPreference,
   readAutoplayPreference,
   readMutedPreference,
+  readPlaybackRatePreference,
   readResumePosition,
   writeAmbientPreference,
   writeAutoplayPreference,
   writeMutedPreference,
+  writePlaybackRatePreference,
   writeResumePosition,
 } from "../../src/learning/player/lessonPlayerPersistence.js";
 
@@ -45,6 +47,20 @@ describe("lesson player persistence", () => {
     ).toBe(false);
   });
 
+  it("defaults playback speed to normal and restores a valid saved rate", () => {
+    expect(readPlaybackRatePreference(storageWith({}))).toBe(1);
+    expect(
+      readPlaybackRatePreference(
+        storageWith({ [lessonPlayerStorageKeys.playbackRate]: "1.75" }),
+      ),
+    ).toBe(1.75);
+    expect(
+      readPlaybackRatePreference(
+        storageWith({ [lessonPlayerStorageKeys.playbackRate]: "invalid" }),
+      ),
+    ).toBe(1);
+  });
+
   it("isolates and clamps resume positions by caller-provided media key", () => {
     const mediaKey = "course-a-lesson-7";
     const storage = storageWith({
@@ -69,10 +85,14 @@ describe("lesson player persistence", () => {
     expect(readMutedPreference(blockedStorage)).toBe(false);
     expect(readAmbientPreference(blockedStorage, true)).toBe(false);
     expect(readAutoplayPreference(blockedStorage)).toBe(true);
+    expect(readPlaybackRatePreference(blockedStorage)).toBe(1);
     expect(readResumePosition("lesson", 90, blockedStorage)).toBe(0);
     expect(() => writeMutedPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAmbientPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAutoplayPreference(true, blockedStorage)).not.toThrow();
+    expect(() =>
+      writePlaybackRatePreference(1.5, blockedStorage),
+    ).not.toThrow();
     expect(() =>
       writeResumePosition("lesson", 12, blockedStorage),
     ).not.toThrow();
@@ -85,6 +105,7 @@ describe("lesson player persistence", () => {
     writeMutedPreference(true, storage);
     writeAmbientPreference(false, storage);
     writeAutoplayPreference(true, storage);
+    writePlaybackRatePreference(1.5, storage);
     writeResumePosition("course-a-lesson-7", 42, storage);
 
     expect(setItem).toHaveBeenNthCalledWith(
@@ -104,6 +125,11 @@ describe("lesson player persistence", () => {
     );
     expect(setItem).toHaveBeenNthCalledWith(
       4,
+      lessonPlayerStorageKeys.playbackRate,
+      "1.5",
+    );
+    expect(setItem).toHaveBeenNthCalledWith(
+      5,
       "veolms-watch-course-a-lesson-7",
       "42",
     );

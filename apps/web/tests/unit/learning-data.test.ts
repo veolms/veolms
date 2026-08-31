@@ -49,7 +49,7 @@ describe("learning course content", () => {
       lessons.map(([number, , duration]) => [number, duration]),
     );
     const sourceDurations = [
-      [1, "09:13"],
+      [1, "07:34"],
       [2, "01:43"],
       [3, "3:04:47"],
       [4, "34:50"],
@@ -114,11 +114,11 @@ describe("learning course content", () => {
   });
 
   it("keeps encoded media paths and shared lesson media references", () => {
-    expect(courseVideos).toHaveLength(8);
+    expect(courseVideos).toHaveLength(9);
     expect(lessonVideoMap[1]).toMatchObject({
-      fileName: "01 introduction to veolms.mp4",
-      duration: 553.74,
-      src: "/course-hls/01-introduction-to-veolms/master.m3u8",
+      fileName: "The Complete JavaScript Course Trailer.mp4",
+      duration: 454.9,
+      src: "/course-hls/the-complete-javascript-course-trailer/master.m3u8",
     });
     expect(lessonVideoMap[4]).toBe(lessonVideoMap[9]);
     expect(lessonVideoMap[6]).toBe(lessonVideoMap[10]);

@@ -1,6 +1,7 @@
 const PLAYER_MUTED_STORAGE_KEY = "veolms-player-muted";
 const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
 const PLAYER_AUTOPLAY_STORAGE_KEY = "veolms-player-autoplay";
+const PLAYER_PLAYBACK_RATE_STORAGE_KEY = "veolms-player-playback-rate";
 const PLAYER_MINI_RESTORE_STORAGE_KEY = "veolms-player-mini-restore";
 
 interface StorageReader {
@@ -37,6 +38,7 @@ export const lessonPlayerStorageKeys = {
   ambient: PLAYER_AMBIENT_STORAGE_KEY,
   autoplay: PLAYER_AUTOPLAY_STORAGE_KEY,
   muted: PLAYER_MUTED_STORAGE_KEY,
+  playbackRate: PLAYER_PLAYBACK_RATE_STORAGE_KEY,
   resume: (mediaKey: string) => `veolms-watch-${mediaKey}`,
 } as const;
 
@@ -61,6 +63,18 @@ export function readMutedPreference(
     return value === "true" || value === "on";
   } catch {
     return false;
+  }
+}
+
+export function readPlaybackRatePreference(
+  storage: StorageReader | null = getBrowserStorage(),
+): number {
+  if (!storage) return 1;
+  try {
+    const value = Number(storage.getItem(PLAYER_PLAYBACK_RATE_STORAGE_KEY));
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  } catch {
+    return 1;
   }
 }
 
@@ -110,6 +124,18 @@ export function writeMutedPreference(
     storage?.setItem(PLAYER_MUTED_STORAGE_KEY, String(muted));
   } catch {
     // Playback remains available when browser storage is unavailable.
+  }
+}
+
+export function writePlaybackRatePreference(
+  playbackRate: number,
+  storage: StorageWriter | null = getBrowserStorage(),
+): void {
+  if (!Number.isFinite(playbackRate) || playbackRate <= 0) return;
+  try {
+    storage?.setItem(PLAYER_PLAYBACK_RATE_STORAGE_KEY, String(playbackRate));
+  } catch {
+    // Playback remains usable when browser storage is unavailable.
   }
 }
 

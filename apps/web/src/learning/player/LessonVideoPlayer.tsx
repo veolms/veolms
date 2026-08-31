@@ -29,9 +29,11 @@ import {
   lessonPlayerStorageKeys,
   readAmbientPreference,
   readMutedPreference,
+  readPlaybackRatePreference,
   readResumePosition,
   writeAmbientPreference,
   writeMutedPreference,
+  writePlaybackRatePreference,
   writeResumePosition,
 } from "./lessonPlayerPersistence";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
@@ -122,7 +124,7 @@ export function LessonVideoPlayer({
         duration: media.duration,
         title: lessonTitle,
       },
-      streaming: isHls ? { abrEnabled: true } : undefined,
+      streaming: isHls ? { abrEnabled: true, bufferBehind: 600 } : undefined,
       textTracks: [
         {
           src: "/assets/designing-users.vtt",
@@ -173,6 +175,7 @@ export function LessonVideoPlayer({
         }
         latestPositionRef.current = clampedPosition;
         lastPersistedAtRef.current = null;
+        playerRef.current?.setPlaybackRate(readPlaybackRatePreference());
         if (clampedPosition > 0 && actualDuration > 0) {
           onProgressChange?.(
             Math.max(
@@ -223,6 +226,8 @@ export function LessonVideoPlayer({
         if (preferencesReadyRef.current) {
           writeMutedPreference(event.detail.muted);
         }
+      } else if (event.type === "ratechange") {
+        writePlaybackRatePreference(event.detail.playbackRate);
       } else if (event.type === "texttrackchange") {
         captionsEnabledRef.current = event.detail.track !== null;
       }

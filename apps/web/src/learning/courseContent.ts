@@ -81,6 +81,7 @@ const courseVideo = (fileName: string, duration: number): CourseVideo => ({
 });
 
 export const courseVideos: CourseVideo[] = [
+  courseVideo("The Complete JavaScript Course Trailer.mp4", 454.9),
   courseVideo("04 ui design system and storybook.mp4", 2090.61),
   courseVideo("00 welcome to the typescript course.mp4", 103.05),
   courseVideo("03 the idea of veolms.mp4", 699.94),
@@ -92,16 +93,16 @@ export const courseVideos: CourseVideo[] = [
 ];
 
 const sourceLessonVideos = [
-  courseVideos[4]!,
-  courseVideos[1]!,
-  courseVideos[7]!,
   courseVideos[0]!,
-  courseVideos[5]!,
   courseVideos[2]!,
+  courseVideos[8]!,
+  courseVideos[1]!,
   courseVideos[6]!,
   courseVideos[3]!,
-  courseVideos[0]!,
-  courseVideos[2]!,
+  courseVideos[7]!,
+  courseVideos[4]!,
+  courseVideos[1]!,
+  courseVideos[3]!,
 ];
 
 const repeatedSectionLessonCounts = [6, 7, 8, 5, 5];

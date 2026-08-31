@@ -546,7 +546,7 @@ describe("LessonVideoPlayer adapter", () => {
           duration: 90,
           title: "Designing for real users",
         },
-        streaming: { abrEnabled: true },
+        streaming: { abrEnabled: true, bufferBehind: 600 },
         textTracks: [
           {
             src: "/assets/designing-users.vtt",
@@ -560,6 +560,22 @@ describe("LessonVideoPlayer adapter", () => {
       options: undefined,
     });
     expect(engine.getSnapshot().lifecycle).toBe("ready");
+  });
+
+  it("restores and persists the last selected playback speed", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    localStorage.setItem(lessonPlayerStorageKeys.playbackRate, "1.75");
+
+    render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
+
+    await waitFor(() =>
+      expect(engine.getSnapshot().playbackRate).toBe(1.75),
+    );
+
+    act(() => engine.setPlaybackRate(1.5));
+    expect(localStorage.getItem(lessonPlayerStorageKeys.playbackRate)).toBe(
+      "1.5",
+    );
   });
 
   it("groups transport controls and toggles the time pill to remaining time", async () => {
