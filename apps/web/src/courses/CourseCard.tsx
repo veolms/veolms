@@ -18,11 +18,12 @@ import {
   UploadSimpleIcon as UploadSimple,
   UsersThreeIcon as UsersThree,
 } from "@phosphor-icons/react";
+import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 
 const courseOverviewPath = (course: Course) =>
-  `/courses/${encodeURIComponent(course.id)}/overview`;
+  `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
 
 const creatorStatusStyles = {
   published: "border-emerald-400/25 bg-emerald-500/15 text-emerald-300",
@@ -481,27 +482,29 @@ export function CourseCard({
           className="relative z-10 mt-auto flex flex-col"
           data-course-card-actions
         >
-          {role === "student" && !course.enrolled && Boolean(course.pricing) && (
-            <div
-              className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
-              data-course-card-pricing
-              aria-label={`Course price ${course.pricing?.price}`}
-            >
-              <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
-                {course.pricing?.price}
-              </strong>
-              {Boolean(course.pricing?.originalPrice) && (
-                <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
-                  {course.pricing?.originalPrice}
-                </span>
-              )}
-              {Boolean(course.pricing?.discount) && (
-                <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                  {course.pricing?.discount}
-                </span>
-              )}
-            </div>
-          )}
+          {role === "student" &&
+            !course.enrolled &&
+            Boolean(course.pricing) && (
+              <div
+                className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+                data-course-card-pricing
+                aria-label={`Course price ${course.pricing?.price}`}
+              >
+                <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
+                  {course.pricing?.price}
+                </strong>
+                {Boolean(course.pricing?.originalPrice) && (
+                  <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
+                    {course.pricing?.originalPrice}
+                  </span>
+                )}
+                {Boolean(course.pricing?.discount) && (
+                  <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
+                    {course.pricing?.discount}
+                  </span>
+                )}
+              </div>
+            )}
 
           {role === "student" && course.enrolled && (
             <div
@@ -525,7 +528,9 @@ export function CourseCard({
             </div>
           )}
 
-          {role === "creator" && (isBin || course.deletedAt) && !onRestoreRequested ? null : (
+          {role === "creator" &&
+          (isBin || course.deletedAt) &&
+          !onRestoreRequested ? null : (
             <button
               type="button"
               disabled={

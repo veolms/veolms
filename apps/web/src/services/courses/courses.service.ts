@@ -42,11 +42,13 @@ export const coursesService = {
   },
 
   getBySlug: (slug: string): Promise<PublicCourse> => {
-    return api.get<PublicCourse>(`/courses/${slug}`);
+    return api.get<PublicCourse>(`/courses/${encodeURIComponent(slug)}`);
   },
 
   getOverview: (idOrSlug: string): Promise<CourseOverviewResponse> => {
-    return api.get<CourseOverviewResponse>(`/courses/${idOrSlug}/overview`);
+    return api.get<CourseOverviewResponse>(
+      `/courses/${encodeURIComponent(idOrSlug)}/overview`,
+    );
   },
 
   listMyCourses: (): Promise<MyCoursesListResponse> => {

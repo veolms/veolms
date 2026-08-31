@@ -13,7 +13,11 @@ import {
   useParams,
 } from "react-router";
 import { CoursesPage } from "../CoursesPage";
-import type { Course, CourseOpenOptions } from "../courses/catalogue";
+import {
+  getCourseRouteKey,
+  type Course,
+  type CourseOpenOptions,
+} from "../courses/catalogue";
 import { useCurrentUser, useLogout } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
@@ -263,8 +267,9 @@ export default function AcademyLayout() {
 
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
+      const courseRouteKey = getCourseRouteKey(course);
       navigateTo(
-        `/learn/${encodeURIComponent(course.id)}${options?.preview ? "/1" : ""}`,
+        `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`,
       );
     },
     [navigateTo],

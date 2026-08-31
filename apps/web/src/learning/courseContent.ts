@@ -12,7 +12,7 @@ export interface CourseVideo {
 }
 
 export type LessonStatus = "done" | "active" | "todo";
-export type Lesson = [number, string, string, LessonStatus];
+export type Lesson = [number, string, string, LessonStatus, boolean?];
 
 export interface CourseSection {
   id: number;

@@ -9,12 +9,7 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  | "all"
-  | "enrolled"
-  | "not-enrolled"
-  | "published"
-  | "draft"
-  | "bin";
+  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"
@@ -58,6 +53,14 @@ export interface Course {
   deletedAt?: string;
   purgeAt?: string;
   isApi?: boolean;
+}
+
+/**
+ * Learner-facing links should use the readable public slug. The ID fallback
+ * keeps local/demo courses and older records working.
+ */
+export function getCourseRouteKey(course: Pick<Course, "id" | "slug">): string {
+  return course.slug?.trim() || course.id;
 }
 
 export interface CourseCatalogueFilters {
@@ -232,22 +235,19 @@ export function getVisibleCourses(
     )
       return false;
     if (statusFilter !== "all" && role === "student") {
-        const progress = course.progress ?? 0;
-        if (
-          statusFilter === "in-progress" &&
-          (!course.enrolled || progress <= 0 || progress >= 100)
-        )
-          return false;
-        if (
-          statusFilter === "not-started" &&
-          (!course.enrolled || progress !== 0)
-        )
-          return false;
-        if (
-          statusFilter === "completed" &&
-          (!course.enrolled || progress < 100)
-        )
-          return false;
+      const progress = course.progress ?? 0;
+      if (
+        statusFilter === "in-progress" &&
+        (!course.enrolled || progress <= 0 || progress >= 100)
+      )
+        return false;
+      if (
+        statusFilter === "not-started" &&
+        (!course.enrolled || progress !== 0)
+      )
+        return false;
+      if (statusFilter === "completed" && (!course.enrolled || progress < 100))
+        return false;
     }
     return (
       !normalizedSearch ||
