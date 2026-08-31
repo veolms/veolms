@@ -8,8 +8,6 @@ export * from "./commerce.schema.ts";
 export * from "./webhooks.schema.ts";
 export * from "./notifications.schema.ts";
 export * from "./json.schema.ts";
-export * from "./config.schema.ts";
-export * from "./fleet.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
