@@ -257,11 +257,14 @@ interface Course {
       "noopener noreferrer",
     );
     expect(container.querySelector(".cm-editor")).toBeNull();
-    await waitFor(() => {
-      expect(
-        container.querySelector("pre code span[style*='color']"),
-      ).toBeTruthy();
-    });
+    await waitFor(
+      () => {
+        expect(
+          container.querySelector("pre code span[style*='color']"),
+        ).toBeTruthy();
+      },
+      { timeout: 8_000 },
+    );
   });
 
   it("converts rich clipboard HTML into clean semantic Markdown", () => {

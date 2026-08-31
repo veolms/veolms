@@ -1,0 +1,76 @@
+name: Test development SSH
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ssh:
+    name: Test deployment server SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    environment:
+      name: development
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${DEPLOY_SSH_PRIVATE_KEY}" || {
+            echo "DEPLOY_SSH_PRIVATE_KEY is missing"
+            exit 1
+          }
+
+          test -n "${DEPLOY_KNOWN_HOSTS}" || {
+            echo "DEPLOY_KNOWN_HOSTS is missing"
+            exit 1
+          }
+
+          install -m 700 -d "${HOME}/.ssh"
+
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" \
+            > "${HOME}/.ssh/deploy_key"
+
+          chmod 600 "${HOME}/.ssh/deploy_key"
+
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" \
+            > "${HOME}/.ssh/known_hosts"
+
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+      - name: Test SSH connection
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${DEPLOY_HOST}" || {
+            echo "DEPLOY_HOST is missing"
+            exit 1
+          }
+
+          test -n "${DEPLOY_USER}" || {
+            echo "DEPLOY_USER is missing"
+            exit 1
+          }
+
+          echo "Connecting to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT:-22}"
+
+          ssh \
+            -i "${HOME}/.ssh/deploy_key" \
+            -p "${DEPLOY_PORT:-22}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'echo "SSH CONNECTION SUCCESSFUL"; echo "User: $(whoami)"; echo "Host: $(hostname)"'

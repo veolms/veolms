@@ -46,6 +46,7 @@ apps/web/
 ```
 
 **Shared packages already wired in:**
+
 - `@veolms/contracts` — Zod schemas + TypeScript interfaces (`CourseSummary`, `PublicCourse`, etc.)
 - `@veolms/config` — `loadWebConfig()` — reads env vars with type safety
 - `@veolms/database` — Kysely client + schema (used by API, not web)
@@ -56,15 +57,15 @@ apps/web/
 
 ### Core — Already Installed
 
-| Tool | Version | Notes |
-|---|---|---|
-| **React** | 19.x | Concurrent features, `use()` hook |
+| Tool             | Version  | Notes                                                     |
+| ---------------- | -------- | --------------------------------------------------------- |
+| **React**        | 19.x     | Concurrent features, `use()` hook                         |
 | **React Router** | **v8.x** | Framework Mode — `ssr:false`, prerender, loaders, actions |
-| **TypeScript** | **7.x** | Native TS compiler (`@typescript/native`) |
-| **Tailwind CSS** | v4.x | `@tailwindcss/vite` plugin, CSS-first config |
-| **Vite** | v8.x | Ultra-fast HMR, built into RR8 dev server |
-| **pnpm** | v11.x | Workspace package manager |
-| **Turborepo** | v2.x | Task pipeline: build, dev, typecheck |
+| **TypeScript**   | **7.x**  | Native TS compiler (`@typescript/native`)                 |
+| **Tailwind CSS** | v4.x     | `@tailwindcss/vite` plugin, CSS-first config              |
+| **Vite**         | v8.x     | Ultra-fast HMR, built into RR8 dev server                 |
+| **pnpm**         | v11.x    | Workspace package manager                                 |
+| **Turborepo**    | v2.x     | Task pipeline: build, dev, typecheck                      |
 
 ---
 
@@ -72,13 +73,13 @@ apps/web/
 
 > **Rule:** Never mix state types. Each tool handles only what it's designed for.
 
-| State Type | Tool | Reason |
-|---|---|---|
-| **Server / async** | **TanStack Query v5** | Caching, background refetch, pagination, mutations |
-| **Global client UI** | **Zustand v5** | Auth user, theme mode, sidebar, player, cart |
-| **Form state** | **React Hook Form v7** | Uncontrolled — zero re-renders on keystroke |
-| **URL / filter state** | **React Router `useSearchParams`** | Shareable, bookmarkable, browser-native |
-| **Local UI state** | `useState` / `useReducer` | Modals, toggles, accordions — never global |
+| State Type             | Tool                               | Reason                                             |
+| ---------------------- | ---------------------------------- | -------------------------------------------------- |
+| **Server / async**     | **TanStack Query v5**              | Caching, background refetch, pagination, mutations |
+| **Global client UI**   | **Zustand v5**                     | Auth user, theme mode, sidebar, player, cart       |
+| **Form state**         | **React Hook Form v7**             | Uncontrolled — zero re-renders on keystroke        |
+| **URL / filter state** | **React Router `useSearchParams`** | Shareable, bookmarkable, browser-native            |
+| **Local UI state**     | `useState` / `useReducer`          | Modals, toggles, accordions — never global         |
 
 **Why NOT Redux?** — Massive boilerplate for LMS. RTK Query duplicates TanStack Query.  
 **Why NOT Context alone?** — Re-renders entire tree. Fatal for dashboards with many widgets.  
@@ -90,15 +91,15 @@ apps/web/
 
 The project already has a **CSS variable token system** in `app/app.css` (dark mode, purple accent `#8b5cf6`). Extend it — don't replace it. Ship dark/light first; extra color themes can wait until branding needs are real.
 
-| Tool | Role |
-|---|---|
-| **Tailwind CSS v4** | Already installed. Utility-first layout, spacing, responsive |
-| **CSS Variables** | Already in `app.css`. Extend with theme tokens for multi-theme |
-| **Radix UI** | Accessible headless primitives installed as `@radix-ui/react-*` packages |
-| **class-variance-authority (cva)** | Type-safe component variant API |
-| **clsx + tailwind-merge** | Safe conditional classname merging |
-| **Framer Motion v12** | Page transitions, micro-animations |
-| **@tailwindcss/typography** | Prose styling for Tiptap rich text output |
+| Tool                               | Role                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| **Tailwind CSS v4**                | Already installed. Utility-first layout, spacing, responsive             |
+| **CSS Variables**                  | Already in `app.css`. Extend with theme tokens for multi-theme           |
+| **Radix UI**                       | Accessible headless primitives installed as `@radix-ui/react-*` packages |
+| **class-variance-authority (cva)** | Type-safe component variant API                                          |
+| **clsx + tailwind-merge**          | Safe conditional classname merging                                       |
+| **Framer Motion v12**              | Page transitions, micro-animations                                       |
+| **@tailwindcss/typography**        | Prose styling for Tiptap rich text output                                |
 
 **Existing CSS classes to keep and build on:**
 
@@ -135,11 +136,11 @@ The project already has a **CSS variable token system** in `app/app.css` (dark m
 
 ### 📝 Forms
 
-| Tool | Version | Role |
-|---|---|---|
-| **React Hook Form** | v7.x | Uncontrolled forms, zero re-renders |
-| **Zod** | v3.x | Validation schemas — **already used in `@veolms/contracts`** |
-| **@hookform/resolvers** | v4.x | Connects Zod to RHF |
+| Tool                    | Version | Role                                                         |
+| ----------------------- | ------- | ------------------------------------------------------------ |
+| **React Hook Form**     | v7.x    | Uncontrolled forms, zero re-renders                          |
+| **Zod**                 | v3.x    | Validation schemas — **already used in `@veolms/contracts`** |
+| **@hookform/resolvers** | v4.x    | Connects Zod to RHF                                          |
 
 **Power move:** Extend `@veolms/contracts` with form schemas (not just API response schemas). Then RHF + Fastify share the same Zod schema — change once, both sides validate.
 
@@ -147,12 +148,12 @@ The project already has a **CSS variable token system** in `app/app.css` (dark m
 
 ### 📖 Rich Text Editor
 
-| Tool | Verdict | Reason |
-|---|---|---|
-| **Tiptap v2** | ✅ **Use this** | Headless, Tailwind-styled, ProseMirror-based, TypeScript-first |
-| Quill / react-quill | ❌ Avoid | Abandoned since 2019, CSS conflicts, SSR broken |
-| Lexical (Meta) | ⚠️ Complex | Very low-level, requires building everything |
-| CKEditor 5 | ❌ Avoid | License issues, heavy, opinionated CSS |
+| Tool                | Verdict         | Reason                                                         |
+| ------------------- | --------------- | -------------------------------------------------------------- |
+| **Tiptap v2**       | ✅ **Use this** | Headless, Tailwind-styled, ProseMirror-based, TypeScript-first |
+| Quill / react-quill | ❌ Avoid        | Abandoned since 2019, CSS conflicts, SSR broken                |
+| Lexical (Meta)      | ⚠️ Complex      | Very low-level, requires building everything                   |
+| CKEditor 5          | ❌ Avoid        | License issues, heavy, opinionated CSS                         |
 
 Tiptap is what **Notion, Linear, GitLab** use. It's headless — no default CSS, you style 100% with Tailwind.  
 Used for: course description, lesson content, quiz instructions, announcements.
@@ -161,11 +162,11 @@ Used for: course description, lesson content, quiz instructions, announcements.
 
 ### 🎥 Video Player
 
-| Tool | Verdict | Reason |
-|---|---|---|
+| Tool            | Verdict                                                            | Reason |
+| --------------- | ------------------------------------------------------------------ | ------ |
 | **Vidstack v2** | ✅ React-first, HLS built-in, fully accessible, Tailwind-styleable |
-| raw hls.js | ⚠️ You build the entire UI yourself |
-| Plyr | ⚠️ React wrapper is unofficial |
+| raw hls.js      | ⚠️ You build the entire UI yourself                                |
+| Plyr            | ⚠️ React wrapper is unofficial                                     |
 
 ---
 
@@ -191,34 +192,34 @@ The monorepo uses **Kysely** in `packages/database` — not Drizzle, not Prisma.
 
 ### 🧪 Testing
 
-| Layer | Tool | Scope |
-|---|---|---|
-| Unit | **Vitest** | Utility functions, Zod schemas, Zustand store logic |
-| Component | **@testing-library/react** | Rendering, interactions, a11y |
-| E2E | **Playwright** | Full flows: enroll → watch → quiz → certificate |
-| API mock | **MSW v2** | Mock Fastify during unit/component tests |
+| Layer     | Tool                       | Scope                                               |
+| --------- | -------------------------- | --------------------------------------------------- |
+| Unit      | **Vitest**                 | Utility functions, Zod schemas, Zustand store logic |
+| Component | **@testing-library/react** | Rendering, interactions, a11y                       |
+| E2E       | **Playwright**             | Full flows: enroll → watch → quiz → certificate     |
+| API mock  | **MSW v2**                 | Mock Fastify during unit/component tests            |
 
 ---
 
 ### 📦 Other Libraries
 
-| Library | Role |
-|---|---|
-| **Zustand v5** | Global client state (auth, theme, player, UI) |
-| **TanStack Query v5** | Server state, caching, mutations |
-| **TanStack Table v8** | Headless data tables (admin panels) |
-| **TanStack Virtual** | Virtualized lesson lists and very large admin tables |
-| **Recharts** | Analytics charts (enrollment, revenue) |
-| **Sonner** | Toast notifications |
-| **Lucide React** | Icon library (tree-shakeable) |
-| **date-fns v4** | Date formatting/manipulation |
-| **jsPDF + jspdf-autotable** | Certificate PDF export |
-| **xlsx + papaparse** | Excel/CSV admin import-export |
-| **cmdk** | Command palette (⌘K search) |
-| **Socket.IO Client** | Real-time notifications + video job progress |
-| **vite-plugin-pwa** | PWA — offline support, install prompt |
-| **web-vitals** | LCP, INP, CLS measurement and reporting |
-| **Framer Motion v12** | Animations, page transitions |
+| Library                     | Role                                                 |
+| --------------------------- | ---------------------------------------------------- |
+| **Zustand v5**              | Global client state (auth, theme, player, UI)        |
+| **TanStack Query v5**       | Server state, caching, mutations                     |
+| **TanStack Table v8**       | Headless data tables (admin panels)                  |
+| **TanStack Virtual**        | Virtualized lesson lists and very large admin tables |
+| **Recharts**                | Analytics charts (enrollment, revenue)               |
+| **Sonner**                  | Toast notifications                                  |
+| **Lucide React**            | Icon library (tree-shakeable)                        |
+| **date-fns v4**             | Date formatting/manipulation                         |
+| **jsPDF + jspdf-autotable** | Certificate PDF export                               |
+| **xlsx + papaparse**        | Excel/CSV admin import-export                        |
+| **cmdk**                    | Command palette (⌘K search)                          |
+| **Socket.IO Client**        | Real-time notifications + video job progress         |
+| **vite-plugin-pwa**         | PWA — offline support, install prompt                |
+| **web-vitals**              | LCP, INP, CLS measurement and reporting              |
+| **Framer Motion v12**       | Animations, page transitions                         |
 
 ---
 
@@ -662,7 +663,12 @@ React Router v8 uses an **explicit route manifest** in `routes.ts` (already exis
 
 ```ts
 // app/routes.ts (extend existing)
-import { index, layout, route, type RouteConfig } from "@react-router/dev/routes";
+import {
+  index,
+  layout,
+  route,
+  type RouteConfig,
+} from "@react-router/dev/routes";
 
 export default [
   // ✅ Existing — keep
@@ -684,7 +690,10 @@ export default [
       route("learn/:id/lesson", "routes/dashboard.learn.$id.lesson.tsx"),
       route("learn/:id/quiz", "routes/dashboard.learn.$id.quiz.tsx"),
       route("learn/:id/notes", "routes/dashboard.learn.$id.notes.tsx"),
-      route("learn/:id/discussion", "routes/dashboard.learn.$id.discussion.tsx"),
+      route(
+        "learn/:id/discussion",
+        "routes/dashboard.learn.$id.discussion.tsx",
+      ),
     ]),
     route("profile", "routes/dashboard.profile.tsx"),
     route("certificates", "routes/dashboard.certificates.tsx"),
@@ -703,6 +712,7 @@ export default [
 ```
 
 Each route file exports:
+
 - `loader()` — server-side data fetch (runs at build for prerendered pages)
 - `clientLoader()` — client-side data fetch (private/auth pages)
 - `action()` / `clientAction()` — form submissions, mutations
@@ -716,23 +726,25 @@ Use feature-specific error boundaries for large areas (`learn`, `admin`, `dashbo
 
 ### API Functions and `fetch-client.ts`
 
-| File | Purpose |
-|---|---|
-| `app/lib/api.ts` ✅ | Keep only for existing public prerender loaders until those calls move into feature services. Do not grow this into a second API layer. |
-| `app/lib/fetch-client.ts` ➕ | Shared authenticated fetch wrapper. Reads session/auth state, handles 401 → refresh → retry, and maps API errors. |
-| `app/**/{feature}.service.ts` ➕ | Preferred home for resource-specific API calls, colocated with feature hooks when the feature owns the workflow. |
+| File                             | Purpose                                                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/lib/api.ts` ✅              | Keep only for existing public prerender loaders until those calls move into feature services. Do not grow this into a second API layer. |
+| `app/lib/fetch-client.ts` ➕     | Shared authenticated fetch wrapper. Reads session/auth state, handles 401 → refresh → retry, and maps API errors.                       |
+| `app/**/{feature}.service.ts` ➕ | Preferred home for resource-specific API calls, colocated with feature hooks when the feature owns the workflow.                        |
 
 ```ts
 // lib/fetch-client.ts
 export async function authFetch(url: string, init?: RequestInit) {
-  const token = useAuthStore.getState().accessToken
+  const token = useAuthStore.getState().accessToken;
   const res = await fetch(url, {
     ...init,
     headers: { ...init?.headers, Authorization: `Bearer ${token}` },
-  })
-  if (res.status === 401) { /* refresh + retry */ }
-  if (!res.ok) throw new ApiError(res.status, await res.json())
-  return res.json()
+  });
+  if (res.status === 401) {
+    /* refresh + retry */
+  }
+  if (!res.ok) throw new ApiError(res.status, await res.json());
+  return res.json();
 }
 ```
 
@@ -749,7 +761,7 @@ export const features = {
   discussion: true,
   coupons: true,
   ai: false,
-} as const
+} as const;
 ```
 
 Do not hide incomplete authorization or payment behavior only with client-side flags. Server-side capability checks still decide what is allowed.
@@ -807,13 +819,18 @@ export const useAuthStore = create<AuthStore>()(
         user: null,
         accessToken: null,
         isAuthenticated: false,
-        setAuth: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
-        clearAuth: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+        setAuth: (user, token) =>
+          set({ user, accessToken: token, isAuthenticated: true }),
+        clearAuth: () =>
+          set({ user: null, accessToken: null, isAuthenticated: false }),
       }),
-      { name: 'veolms-auth', partialize: (s) => ({ accessToken: s.accessToken }) }
-    )
-  )
-)
+      {
+        name: "veolms-auth",
+        partialize: (s) => ({ accessToken: s.accessToken }),
+      },
+    ),
+  ),
+);
 ```
 
 ```ts
@@ -821,14 +838,14 @@ export const useAuthStore = create<AuthStore>()(
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set) => ({
-      colorTheme: 'default',   // default | green | blue | pink | yellow | rose
-      mode: 'dark',            // dark (already in app.css) | light
+      colorTheme: "default", // default | green | blue | pink | yellow | rose
+      mode: "dark", // dark (already in app.css) | light
       setTheme: (t) => set({ colorTheme: t }),
       setMode: (m) => set({ mode: m }),
     }),
-    { name: 'veolms-theme' }
-  )
-)
+    { name: "veolms-theme" },
+  ),
+);
 ```
 
 ---
@@ -844,18 +861,18 @@ Naming: `use-{resource}.ts` for queries, `use-{resource}-mutations.ts` for mutat
 // Wraps course.service.ts functions inside useQuery
 export function useCourses(filters?: CourseFilters) {
   return useQuery({
-    queryKey: ['courses', filters],
+    queryKey: ["courses", filters],
     queryFn: () => getCourses(),
-    staleTime: 5 * 60 * 1000,     // 5 minutes
-  })
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 }
 
 export function useCourse(slug: string) {
   return useQuery({
-    queryKey: ['courses', slug],
+    queryKey: ["courses", slug],
     queryFn: () => getCourse(slug),
     enabled: !!slug,
-  })
+  });
 }
 ```
 
@@ -868,20 +885,29 @@ Order matters — inner providers can use hooks from outer providers:
 ```tsx
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <QueryProvider>           {/* 1st — TanStack Query (auth uses useQuery inside) */}
-      <ThemeProvider>         {/* 2nd — reads Zustand, writes to <html> */}
-        <AuthProvider>        {/* 3rd — calls getMe() query on mount */}
-          <SocketProvider>    {/* 4th — connects Socket.IO after auth */}
+    <QueryProvider>
+      {" "}
+      {/* 1st — TanStack Query (auth uses useQuery inside) */}
+      <ThemeProvider>
+        {" "}
+        {/* 2nd — reads Zustand, writes to <html> */}
+        <AuthProvider>
+          {" "}
+          {/* 3rd — calls getMe() query on mount */}
+          <SocketProvider>
+            {" "}
+            {/* 4th — connects Socket.IO after auth */}
             {children}
           </SocketProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryProvider>
-  )
+  );
 }
 ```
 
 Wire into `root.tsx`:
+
 ```tsx
 // app/root.tsx — extend existing Layout
 export function Layout({ children }: { children: ReactNode }) {
@@ -892,13 +918,13 @@ export function Layout({ children }: { children: ReactNode }) {
         <AppProviders>
           <Header />
           {children}
-          <Toaster />          {/* Sonner toast container */}
+          <Toaster /> {/* Sonner toast container */}
         </AppProviders>
         <ScrollRestoration />
         <Scripts />
       </body>
     </html>
-  )
+  );
 }
 ```
 
@@ -943,7 +969,7 @@ Currently `contracts` only has API response schemas. Extend with form schemas to
 export const loginSchema = z.object({
   email: z.email(),
   password: z.string().min(8),
-})
+});
 
 // packages/contracts/src/course.ts  ← EXTEND
 export const createCourseSchema = z.object({
@@ -951,7 +977,7 @@ export const createCourseSchema = z.object({
   shortDescription: z.string().min(10).max(200),
   price: z.number().min(0),
   // ...
-})
+});
 ```
 
 Frontend uses for RHF validation. Backend (Fastify) uses same schema for request body validation.
@@ -998,14 +1024,14 @@ Each wrapper should:
 ### `vitest.config.ts` — New
 
 ```ts
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    coverage: { provider: 'v8', reporter: ['text', 'lcov'] }
-  }
-})
+    environment: "jsdom",
+    setupFiles: ["./tests/setup.ts"],
+    coverage: { provider: "v8", reporter: ["text", "lcov"] },
+  },
+});
 ```
 
 ---

@@ -2,16 +2,10 @@ import { InvokeCommand } from "@aws-sdk/client-lambda";
 import type { FastifyBaseLogger } from "fastify";
 
 import { getLambdaClient } from "../../lib/lambda.ts";
-
-export interface VideoJobDispatchPayload {
-  jobId: string;
-  videoId: string;
-  inputPath: string;
-  quality: number[];
-}
+import type { VideoJobEvent } from "@veolms/contracts";
 
 export interface VideoDispatchService {
-  dispatch(payload: VideoJobDispatchPayload): Promise<void>;
+  dispatch(payload: VideoJobEvent): Promise<void>;
 }
 
 export interface FleetManagerTriggerOptions {
@@ -30,7 +24,7 @@ export function createVideoDispatchService(
 ): VideoDispatchService {
   async function triggerViaHttp(
     url: string,
-    payload: VideoJobDispatchPayload,
+    payload: VideoJobEvent,
   ): Promise<void> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -55,7 +49,7 @@ export function createVideoDispatchService(
 
   async function triggerViaLambdaSdk(
     functionName: string,
-    payload: VideoJobDispatchPayload,
+    payload: VideoJobEvent,
   ): Promise<void> {
     const client = getLambdaClient();
     const command = new InvokeCommand({
@@ -72,7 +66,7 @@ export function createVideoDispatchService(
     }
   }
 
-  async function dispatch(payload: VideoJobDispatchPayload): Promise<void> {
+  async function dispatch(payload: VideoJobEvent): Promise<void> {
     options.logger.info(
       { jobId: payload.jobId, videoId: payload.videoId },
       "Triggering Fleet Manager for video job",

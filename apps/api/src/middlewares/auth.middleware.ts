@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { httpError } from "../lib/errors.ts";
+import { sessionNeedsMfaChallenge } from "../modules/auth/shared/mfa-policy.ts";
 import type { SessionService } from "../modules/auth/index.ts";
 
 export interface AuthMiddleware {
@@ -67,12 +68,14 @@ export function createAuthMiddleware(
         .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
     }
 
-    const mfaRequired =
-      request.user.mfaMandatory ||
-      request.user.totpEnabled ||
-      request.user.passkeyEnabled;
-
-    if (mfaRequired && !request.session.mfa_verified) {
+    if (
+      sessionNeedsMfaChallenge({
+        mfaMandatory: request.user.mfaMandatory,
+        totpEnabled: request.user.totpEnabled,
+        passkeyEnabled: request.user.passkeyEnabled,
+        mfaVerified: request.session.mfa_verified,
+      })
+    ) {
       return reply
         .code(403)
         .send(
@@ -98,11 +101,14 @@ export function createAuthMiddleware(
       }
 
       // 2. Enforce MFA check for users who have MFA enabled or mandatory
-      const mfaRequired =
-        request.user.mfaMandatory ||
-        request.user.totpEnabled ||
-        request.user.passkeyEnabled;
-      if (mfaRequired && !request.session.mfa_verified) {
+      if (
+        sessionNeedsMfaChallenge({
+          mfaMandatory: request.user.mfaMandatory,
+          totpEnabled: request.user.totpEnabled,
+          passkeyEnabled: request.user.passkeyEnabled,
+          mfaVerified: request.session.mfa_verified,
+        })
+      ) {
         return reply
           .code(403)
           .send(
