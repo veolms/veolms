@@ -25,7 +25,7 @@ const notificationRetryScheduleSchema = z
 const serverConfigSchema = z.object({
   DATABASE_URL: z
     .string()
-    .default("postgresql://veolms:veolms@localhost:5433/veolms"),
+    .default("postgresql://veolms:veolms@127.0.0.1:5433/veolms"),
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   NODE_ENV: z

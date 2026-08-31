@@ -42,6 +42,7 @@ export async function createApp({
   const app = Fastify({
     logger,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
+    forceCloseConnections: true,
   });
 
   const appServices = services ?? createServices({ config, logger: app.log });
