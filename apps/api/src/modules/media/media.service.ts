@@ -39,7 +39,7 @@ export function createMediaService({
     id: string;
     storage_key: string;
     mime_type: string;
-    size_bytes: string | number ;
+    size_bytes: string | number;
   }) {
     const uploadUrl = await services.storage.getPresignedPutUrl(
       media.storage_key,
@@ -62,7 +62,7 @@ export function createMediaService({
     existingMedia: {
       original_filename: string;
       mime_type: string;
-      size_bytes: string| number;
+      size_bytes: string | number;
       type: string;
     },
     incomingPayload: PresignMediaRequest,
@@ -112,16 +112,22 @@ export function createMediaService({
     idempotencyKey: string,
   ) {
     // STEP 1: Check if this idempotency key was already processed
-    const existingMedia =
-      await mediaRepo.findMediaAssetByIdempotencyKey(
-        database,
-        ownerId,
-        idempotencyKey,
-      );
+    const existingMedia = await mediaRepo.findMediaAssetByIdempotencyKey(
+      database,
+      ownerId,
+      idempotencyKey,
+    );
 
     if (existingMedia) {
       // Validate that the reused key has the same payload
       validateSameUpload(existingMedia, payload);
+      if (existingMedia.status !== "uploading") {
+        throw new AppError(
+          409,
+          "IDEMPOTENCY_KEY_ALREADY_USED",
+          "This idempotency key has already been used and the upload can no longer be restarted.",
+        );
+      }
       // Return the previously generated presigned URL
       return createPresignedUploadResponse(existingMedia);
     }
@@ -135,8 +141,7 @@ export function createMediaService({
       : undefined;
 
     const storageKey =
-      `media/${ownerId}/${mediaId}` +
-      (extension ? `.${extension}` : "");
+      `media/${ownerId}/${mediaId}` + (extension ? `.${extension}` : "");
 
     // STEP 3: Attempt to insert media asset
     // Using try-catch to handle race conditions where concurrent requests
@@ -159,12 +164,11 @@ export function createMediaService({
       // If we hit the unique constraint, another concurrent request inserted first.
       // Retry the lookup and return the winner's result.
       if (isUniqueViolation(error)) {
-        const concurrentWinner =
-          await mediaRepo.findMediaAssetByIdempotencyKey(
-            database,
-            ownerId,
-            idempotencyKey,
-          );
+        const concurrentWinner = await mediaRepo.findMediaAssetByIdempotencyKey(
+          database,
+          ownerId,
+          idempotencyKey,
+        );
 
         if (!concurrentWinner) {
           // Constraint error but can't find the media - something went wrong
