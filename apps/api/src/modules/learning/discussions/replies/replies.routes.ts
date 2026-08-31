@@ -31,7 +31,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId/replies",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listLearningReplies",
         tags: ["Learning Discussions"],
@@ -43,6 +43,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
             "List of replies",
             learningRepliesListResponseSchema,
           ),
+          401: errorResponse("Unauthorized"),
           404: errorResponse("Discussion thread not found"),
         },
       },
@@ -103,7 +104,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "deleteLearningReply",
         tags: ["Learning Discussions"],
-        summary: "Delete a reply (Author or Moderator)",
+        summary: "Soft delete a reply (Author or Moderator)",
         params: z.object({ replyId: z.uuid() }),
         response: {
           200: jsonResponse("Reply deleted", z.object({ message: z.string() })),
@@ -124,11 +125,15 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "acceptLearningReply",
         tags: ["Learning Discussions"],
-        summary: "Mark or unmark a reply as the accepted answer for a Q&A question",
+        summary:
+          "Mark or unmark a reply as the accepted answer for a Q&A question",
         params: z.object({ replyId: z.uuid() }),
         body: acceptReplyRequestSchema,
         response: {
-          200: jsonResponse("Accepted reply status updated", acceptReplyResponseSchema),
+          200: jsonResponse(
+            "Accepted reply status updated",
+            acceptReplyResponseSchema,
+          ),
           400: errorResponse("Not a question or invalid reply"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Question author or moderator only"),

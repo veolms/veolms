@@ -27,7 +27,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/lessons/:lessonId/threads",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listLessonThreads",
         tags: ["Learning Discussions"],
@@ -42,6 +42,8 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
             "List of discussion threads for lesson",
             learningThreadsListResponseSchema,
           ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - No course access"),
           404: errorResponse("Lesson or course not found"),
         },
       },
@@ -67,7 +69,9 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
           201: jsonResponse("Thread created", learningThreadSchema),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - User participation suspended"),
+          403: errorResponse(
+            "Forbidden - No course access or participation suspended",
+          ),
         },
       },
     },
@@ -78,7 +82,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listHubThreads",
         tags: ["Learning Discussions"],
@@ -89,6 +93,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
             "List of filtered threads",
             learningThreadsListResponseSchema,
           ),
+          401: errorResponse("Unauthorized"),
         },
       },
     },
@@ -99,7 +104,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "getLearningThread",
         tags: ["Learning Discussions"],
@@ -107,6 +112,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ threadId: z.uuid() }),
         response: {
           200: jsonResponse("Thread details", learningThreadSchema),
+          401: errorResponse("Unauthorized"),
           404: errorResponse("Thread not found"),
         },
       },

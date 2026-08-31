@@ -15,6 +15,10 @@ import type {
   UserSuspension,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import {
+  createDiscussionAccess,
+  type DiscussionActor,
+} from "../shared/discussion.access.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { ModerationRepository } from "./moderation.repository.ts";
@@ -28,13 +32,15 @@ export interface ModerationService {
 
   listReports(
     db: DatabaseExecutor,
+    actor: DiscussionActor,
     query: ListReportsQuery,
+    scope: "course" | "platform",
   ): Promise<ReportsListResponse>;
 
   moderateThread(
     db: DatabaseExecutor,
     threadId: string,
-    moderatorId: string,
+    actor: DiscussionActor,
     input: ModerateThreadRequest,
     courseId?: string,
     ipAddress?: string,
@@ -43,7 +49,7 @@ export interface ModerationService {
   moderateReply(
     db: DatabaseExecutor,
     replyId: string,
-    moderatorId: string,
+    actor: DiscussionActor,
     input: ModerateReplyRequest,
     courseId?: string,
     ipAddress?: string,
@@ -51,21 +57,23 @@ export interface ModerationService {
 
   suspendUser(
     db: DatabaseExecutor,
-    moderatorId: string,
+    actor: DiscussionActor,
     input: SuspendUserRequest,
     ipAddress?: string,
   ): Promise<UserSuspension>;
 
   unsuspendUser(
     db: DatabaseExecutor,
-    moderatorId: string,
+    actor: DiscussionActor,
     input: UnsuspendUserRequest,
     ipAddress?: string,
   ): Promise<{ message: string }>;
 
   listAuditLogs(
     db: DatabaseExecutor,
+    actor: DiscussionActor,
     query: ListAuditLogsQuery,
+    scope: "course" | "platform",
   ): Promise<AuditLogsListResponse>;
 }
 
@@ -78,9 +86,26 @@ export function createModerationService({
   repliesRepo: RepliesRepository;
   moderationRepo: ModerationRepository;
 }): ModerationService {
+  const courseAccess = createDiscussionAccess();
+
   async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db.selectFrom("academy").select("id").executeTakeFirst();
+    const academy = await db
+      .selectFrom("academy")
+      .select("id")
+      .executeTakeFirst();
     return academy?.id || "00000000-0000-0000-0000-000000000000";
+  }
+
+  async function assertModerationScope(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    courseId?: string | null,
+  ): Promise<void> {
+    if (courseId) {
+      await courseAccess.assertCanModerateCourse(db, actor, courseId);
+      return;
+    }
+    courseAccess.assertCanModeratePlatform(actor);
   }
 
   return {
@@ -89,7 +114,11 @@ export function createModerationService({
       if (input.targetType === "thread") {
         const thread = await threadsRepo.findThreadById(db, input.targetId);
         if (!thread) {
-          throw httpError(404, "TARGET_NOT_FOUND", "Reported discussion thread not found");
+          throw httpError(
+            404,
+            "TARGET_NOT_FOUND",
+            "Reported discussion thread not found",
+          );
         }
       } else if (input.targetType === "reply") {
         const reply = await repliesRepo.findReplyById(db, input.targetId);
@@ -127,7 +156,12 @@ export function createModerationService({
       return { message: "Report submitted successfully." };
     },
 
-    async listReports(db, query) {
+    async listReports(db, actor, query, scope) {
+      await assertModerationScope(
+        db,
+        actor,
+        scope === "course" ? query.courseId : null,
+      );
       const rows = await moderationRepo.listReports(db, query);
       const reports: LearningReport[] = rows.map((r) => ({
         id: r.id,
@@ -135,7 +169,8 @@ export function createModerationService({
         reporter: {
           id: r.reporterId,
           displayName: r.reporterName || "Learner",
-          username: r.reporterUsername || (r.reporterEmail || "user").split("@")[0],
+          username:
+            r.reporterUsername || (r.reporterEmail || "user").split("@")[0],
           avatarUrl: null,
           role: "Student",
         },
@@ -164,14 +199,19 @@ export function createModerationService({
       };
     },
 
-    async moderateThread(db, threadId, moderatorId, input, courseId, ipAddress) {
+    async moderateThread(db, threadId, actor, input, courseId, ipAddress) {
+      await assertModerationScope(db, actor, courseId);
       const thread = await threadsRepo.findThreadById(db, threadId);
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
       if (courseId && thread.courseId !== courseId) {
-        throw httpError(403, "FORBIDDEN", "Discussion thread does not belong to this course");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "Discussion thread does not belong to this course",
+        );
       }
 
       if (input.action === "hide") {
@@ -191,7 +231,7 @@ export function createModerationService({
         id: crypto.randomUUID(),
         academyId,
         courseId: thread.courseId,
-        actorUserId: moderatorId,
+        actorUserId: actor.userId,
         action: `${input.action}_thread`,
         targetType: "thread",
         targetId: threadId,
@@ -200,7 +240,8 @@ export function createModerationService({
       });
     },
 
-    async moderateReply(db, replyId, moderatorId, input, courseId, ipAddress) {
+    async moderateReply(db, replyId, actor, input, courseId, ipAddress) {
+      await assertModerationScope(db, actor, courseId);
       const reply = await repliesRepo.findReplyById(db, replyId);
       if (!reply) {
         throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
@@ -208,7 +249,11 @@ export function createModerationService({
 
       const thread = await threadsRepo.findThreadById(db, reply.threadId);
       if (courseId && thread && thread.courseId !== courseId) {
-        throw httpError(403, "FORBIDDEN", "Reply does not belong to this course");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "Reply does not belong to this course",
+        );
       }
 
       if (input.action === "hide") {
@@ -224,8 +269,14 @@ export function createModerationService({
           .where("id", "=", replyId)
           .execute();
       } else if (input.action === "delete") {
-        await repliesRepo.deleteReply(db, replyId);
-        await threadsRepo.incrementRepliesCount(db, reply.threadId, -1);
+        const deleted = await repliesRepo.deleteReply(db, replyId);
+        if (deleted) {
+          await threadsRepo.incrementRepliesCount(db, reply.threadId, -1);
+          if (reply.isAccepted || thread?.acceptedAnswerId === replyId) {
+            await repliesRepo.setAcceptedStatus(db, replyId, false);
+            await threadsRepo.setAcceptedAnswer(db, reply.threadId, null);
+          }
+        }
       }
 
       const academyId = await resolveAcademyId(db);
@@ -233,7 +284,7 @@ export function createModerationService({
         id: crypto.randomUUID(),
         academyId,
         courseId: thread?.courseId || courseId || null,
-        actorUserId: moderatorId,
+        actorUserId: actor.userId,
         action: `${input.action}_reply`,
         targetType: "reply",
         targetId: replyId,
@@ -242,7 +293,8 @@ export function createModerationService({
       });
     },
 
-    async suspendUser(db, moderatorId, input, ipAddress) {
+    async suspendUser(db, actor, input, ipAddress) {
+      await assertModerationScope(db, actor, input.courseId);
       const academyId = await resolveAcademyId(db);
       const id = crypto.randomUUID();
       const expiresAt =
@@ -255,7 +307,7 @@ export function createModerationService({
         academyId,
         courseId: input.courseId || null,
         userId: input.userId,
-        suspendedByUserId: moderatorId,
+        suspendedByUserId: actor.userId,
         scope: input.scope || "all",
         reason: input.reason,
         expiresAt,
@@ -265,7 +317,7 @@ export function createModerationService({
         id: crypto.randomUUID(),
         academyId,
         courseId: input.courseId || null,
-        actorUserId: moderatorId,
+        actorUserId: actor.userId,
         action: "suspend_user",
         targetType: "user",
         targetId: input.userId,
@@ -283,7 +335,7 @@ export function createModerationService({
         academyId,
         courseId: input.courseId || null,
         userId: input.userId,
-        suspendedByUserId: moderatorId,
+        suspendedByUserId: actor.userId,
         scope: input.scope || "all",
         reason: input.reason,
         expiresAt: expiresAt ? expiresAt.toISOString() : null,
@@ -292,15 +344,20 @@ export function createModerationService({
       };
     },
 
-    async unsuspendUser(db, moderatorId, input, ipAddress) {
+    async unsuspendUser(db, actor, input, ipAddress) {
+      await assertModerationScope(db, actor, input.courseId);
       const academyId = await resolveAcademyId(db);
-      await moderationRepo.deactivateSuspension(db, input.userId, input.courseId);
+      await moderationRepo.deactivateSuspension(
+        db,
+        input.userId,
+        input.courseId,
+      );
 
       await moderationRepo.createAuditLog(db, {
         id: crypto.randomUUID(),
         academyId,
         courseId: input.courseId || null,
-        actorUserId: moderatorId,
+        actorUserId: actor.userId,
         action: "unsuspend_user",
         targetType: "user",
         targetId: input.userId,
@@ -314,7 +371,12 @@ export function createModerationService({
       return { message: "User participation suspension has been lifted." };
     },
 
-    async listAuditLogs(db, query) {
+    async listAuditLogs(db, actor, query, scope) {
+      await assertModerationScope(
+        db,
+        actor,
+        scope === "course" ? query.courseId : null,
+      );
       const academyId = await resolveAcademyId(db);
       const rows = await moderationRepo.listAuditLogs(db, academyId, query);
       const logs: LearningAuditLog[] = rows.map((r) => ({
@@ -326,7 +388,8 @@ export function createModerationService({
           ? {
               id: r.actorUserId,
               displayName: r.actorName || "Staff Member",
-              username: r.actorUsername || (r.actorEmail || "staff").split("@")[0],
+              username:
+                r.actorUsername || (r.actorEmail || "staff").split("@")[0],
               avatarUrl: null,
               role: "Admin",
             }

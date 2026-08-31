@@ -3,6 +3,7 @@ import type {
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
+import { sql } from "kysely";
 
 export interface RepliesRepository {
   createReply(
@@ -20,10 +21,7 @@ export interface RepliesRepository {
     },
   ): Promise<void>;
 
-  findReplyById(
-    db: DatabaseExecutor,
-    replyId: string,
-  ): Promise<any | null>;
+  findReplyById(db: DatabaseExecutor, replyId: string): Promise<any | null>;
 
   listRepliesByThreadId(
     db: DatabaseExecutor,
@@ -37,15 +35,18 @@ export interface RepliesRepository {
     updates: UpdateLearningReplyRequest & { plainText?: string },
   ): Promise<void>;
 
-  deleteReply(
-    db: DatabaseExecutor,
-    replyId: string,
-  ): Promise<void>;
+  deleteReply(db: DatabaseExecutor, replyId: string): Promise<boolean>;
 
   setAcceptedStatus(
     db: DatabaseExecutor,
     replyId: string,
     isAccepted: boolean,
+  ): Promise<void>;
+
+  incrementLikesCount(
+    db: DatabaseExecutor,
+    replyId: string,
+    delta: number,
   ): Promise<void>;
 }
 
@@ -146,7 +147,8 @@ export function createRepliesRepository(): RepliesRepository {
         updated_at: new Date(),
       };
       if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.plainText !== undefined) updateData.plain_text = updates.plainText;
+      if (updates.plainText !== undefined)
+        updateData.plain_text = updates.plainText;
       if (updates.timestampSeconds !== undefined)
         updateData.timestamp_seconds = updates.timestampSeconds;
 
@@ -158,10 +160,16 @@ export function createRepliesRepository(): RepliesRepository {
     },
 
     async deleteReply(db, replyId) {
-      await db
-        .deleteFrom("learning_replies")
+      const result = await db
+        .updateTable("learning_replies")
+        .set({
+          status: "deleted",
+          updated_at: new Date(),
+        })
         .where("id", "=", replyId)
-        .execute();
+        .where("status", "!=", "deleted")
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
     },
 
     async setAcceptedStatus(db, replyId, isAccepted) {
@@ -171,6 +179,17 @@ export function createRepliesRepository(): RepliesRepository {
           is_accepted: isAccepted,
           updated_at: new Date(),
         })
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async incrementLikesCount(db, replyId, delta) {
+      await db
+        .updateTable("learning_replies")
+        .set((eb) => ({
+          likes_count: sql`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
+          updated_at: new Date(),
+        }))
         .where("id", "=", replyId)
         .execute();
     },

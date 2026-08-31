@@ -7,7 +7,16 @@ export const DiscussionErrors = {
   unauthorized() {
     return httpError(401, "UNAUTHORIZED", "Authentication required");
   },
-  forbidden(message: string = "You do not have permission to perform this action") {
+  courseAccessDenied() {
+    return httpError(
+      403,
+      "COURSE_ACCESS_DENIED",
+      "You do not have access to this course.",
+    );
+  },
+  forbidden(
+    message: string = "You do not have permission to perform this action",
+  ) {
     return httpError(403, "FORBIDDEN", message);
   },
   suspended(reason: string, scope?: string) {

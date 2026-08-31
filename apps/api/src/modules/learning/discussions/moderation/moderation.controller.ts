@@ -9,6 +9,7 @@ import type {
   SuspendUserRequest,
   UnsuspendUserRequest,
 } from "@veolms/contracts";
+import { discussionActor } from "../shared/discussion.access.ts";
 import type { ModerationService } from "./moderation.service.ts";
 
 export interface ModerationController {
@@ -129,20 +130,32 @@ export function createModerationController({
     },
 
     async listCourseReports(request, reply) {
+      const user = request.user!;
       const { courseId } = request.params;
       const query = request.query;
 
-      const result = await service.listReports(database, {
-        ...query,
-        courseId,
-      });
+      const result = await service.listReports(
+        database,
+        discussionActor(user),
+        {
+          ...query,
+          courseId,
+        },
+        "course",
+      );
       reply.status(200).send(result);
     },
 
     async listPlatformReports(request, reply) {
+      const user = request.user!;
       const query = request.query;
 
-      const result = await service.listReports(database, query);
+      const result = await service.listReports(
+        database,
+        discussionActor(user),
+        query,
+        "platform",
+      );
       reply.status(200).send(result);
     },
 
@@ -154,12 +167,14 @@ export function createModerationController({
       await service.moderateThread(
         database,
         threadId,
-        user.id,
+        discussionActor(user),
         body,
         courseId,
         request.ip,
       );
-      reply.status(200).send({ message: `Thread action '${body.action}' applied.` });
+      reply
+        .status(200)
+        .send({ message: `Thread action '${body.action}' applied.` });
     },
 
     async moderatePlatformThread(request, reply) {
@@ -170,12 +185,14 @@ export function createModerationController({
       await service.moderateThread(
         database,
         threadId,
-        user.id,
+        discussionActor(user),
         body,
         undefined,
         request.ip,
       );
-      reply.status(200).send({ message: `Thread action '${body.action}' applied.` });
+      reply
+        .status(200)
+        .send({ message: `Thread action '${body.action}' applied.` });
     },
 
     async moderateCourseReply(request, reply) {
@@ -186,12 +203,14 @@ export function createModerationController({
       await service.moderateReply(
         database,
         replyId,
-        user.id,
+        discussionActor(user),
         body,
         courseId,
         request.ip,
       );
-      reply.status(200).send({ message: `Reply action '${body.action}' applied.` });
+      reply
+        .status(200)
+        .send({ message: `Reply action '${body.action}' applied.` });
     },
 
     async moderatePlatformReply(request, reply) {
@@ -202,12 +221,14 @@ export function createModerationController({
       await service.moderateReply(
         database,
         replyId,
-        user.id,
+        discussionActor(user),
         body,
         undefined,
         request.ip,
       );
-      reply.status(200).send({ message: `Reply action '${body.action}' applied.` });
+      reply
+        .status(200)
+        .send({ message: `Reply action '${body.action}' applied.` });
     },
 
     async suspendCourseParticipant(request, reply) {
@@ -217,7 +238,7 @@ export function createModerationController({
 
       const suspension = await service.suspendUser(
         database,
-        user.id,
+        discussionActor(user),
         {
           ...body,
           userId,
@@ -235,7 +256,7 @@ export function createModerationController({
 
       const suspension = await service.suspendUser(
         database,
-        user.id,
+        discussionActor(user),
         {
           ...body,
           userId,
@@ -253,7 +274,7 @@ export function createModerationController({
 
       const result = await service.unsuspendUser(
         database,
-        user.id,
+        discussionActor(user),
         {
           userId,
           courseId,
@@ -271,7 +292,7 @@ export function createModerationController({
 
       const result = await service.unsuspendUser(
         database,
-        user.id,
+        discussionActor(user),
         {
           userId,
           courseId: null,
@@ -283,20 +304,32 @@ export function createModerationController({
     },
 
     async listCourseAuditLogs(request, reply) {
+      const user = request.user!;
       const { courseId } = request.params;
       const query = request.query;
 
-      const result = await service.listAuditLogs(database, {
-        ...query,
-        courseId,
-      });
+      const result = await service.listAuditLogs(
+        database,
+        discussionActor(user),
+        {
+          ...query,
+          courseId,
+        },
+        "course",
+      );
       reply.status(200).send(result);
     },
 
     async listPlatformAuditLogs(request, reply) {
+      const user = request.user!;
       const query = request.query;
 
-      const result = await service.listAuditLogs(database, query);
+      const result = await service.listAuditLogs(
+        database,
+        discussionActor(user),
+        query,
+        "platform",
+      );
       reply.status(200).send(result);
     },
   };

@@ -54,7 +54,8 @@ const notesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getCourseNotesOverview",
         tags: ["Learning Notes"],
-        summary: "Get hierarchical course notes organized by section and lesson",
+        summary:
+          "Get hierarchical course notes organized by section and lesson",
         params: z.object({
           courseId: z.uuid(),
         }),
@@ -64,6 +65,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
             courseNotesOverviewResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Course access denied"),
           404: errorResponse("Course not found"),
         },
       },
@@ -85,6 +87,8 @@ const notesRoutes: RoutePlugin = async (app, options) => {
           201: jsonResponse("Note created", learningNoteSchema),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Course access denied"),
+          404: errorResponse("Course not found"),
         },
       },
     },

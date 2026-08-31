@@ -10,6 +10,10 @@ import type {
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
 import { extractPlainText } from "../shared/discussion.utils.ts";
+import {
+  createDiscussionAccess,
+  type DiscussionActor,
+} from "../shared/discussion.access.ts";
 import type { NotesRepository } from "./notes.repository.ts";
 
 export interface NotesService {
@@ -17,6 +21,7 @@ export interface NotesService {
     db: DatabaseExecutor,
     input: {
       userId: string;
+      roles: readonly string[];
       courseId: string;
       lessonId: string;
       title?: string;
@@ -42,7 +47,7 @@ export interface NotesService {
   getCourseNotesOverview(
     db: DatabaseExecutor,
     courseId: string,
-    userId: string,
+    actor: DiscussionActor,
   ): Promise<CourseNotesOverviewResponse>;
 
   updateNote(
@@ -59,11 +64,14 @@ export interface NotesService {
   ): Promise<void>;
 }
 
-export function createNotesService(
-  notesRepo: NotesRepository,
-): NotesService {
+export function createNotesService(notesRepo: NotesRepository): NotesService {
+  const courseAccess = createDiscussionAccess();
+
   async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db.selectFrom("academy").select("id").executeTakeFirst();
+    const academy = await db
+      .selectFrom("academy")
+      .select("id")
+      .executeTakeFirst();
     return academy?.id || "00000000-0000-0000-0000-000000000000";
   }
 
@@ -75,10 +83,16 @@ export function createNotesService(
       courseTitle: row.courseTitle,
       sectionId: row.sectionId,
       sectionTitle: row.sectionTitle,
-      sectionPosition: row.sectionPosition !== undefined ? Number(row.sectionPosition) : undefined,
+      sectionPosition:
+        row.sectionPosition !== undefined
+          ? Number(row.sectionPosition)
+          : undefined,
       lessonId: row.lessonId,
       lessonTitle: row.lessonTitle,
-      lessonPosition: row.lessonPosition !== undefined ? Number(row.lessonPosition) : undefined,
+      lessonPosition:
+        row.lessonPosition !== undefined
+          ? Number(row.lessonPosition)
+          : undefined,
       timestampSeconds: row.timestampSeconds ?? null,
       title: row.title ?? null,
       content: row.content,
@@ -113,6 +127,12 @@ export function createNotesService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
+      await courseAccess.assertCanAccessCourse(
+        db,
+        { userId: input.userId, roles: input.roles },
+        input.courseId,
+      );
+
       const lesson = await db
         .selectFrom("course_lessons")
         .selectAll()
@@ -120,7 +140,11 @@ export function createNotesService(
         .executeTakeFirst();
 
       if (!lesson || lesson.course_id !== input.courseId) {
-        throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
+        throw httpError(
+          400,
+          "INVALID_LESSON",
+          "Lesson does not belong to this course",
+        );
       }
 
       const id = crypto.randomUUID();
@@ -141,7 +165,11 @@ export function createNotesService(
 
       const created = await notesRepo.findNoteById(db, id);
       if (!created) {
-        throw httpError(500, "CREATE_FAILED", "Failed to retrieve created note");
+        throw httpError(
+          500,
+          "CREATE_FAILED",
+          "Failed to retrieve created note",
+        );
       }
 
       return mapNoteRow(created);
@@ -154,7 +182,11 @@ export function createNotesService(
       }
 
       if (note.userId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You do not have access to this note");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "You do not have access to this note",
+        );
       }
 
       return mapNoteRow(note);
@@ -171,11 +203,17 @@ export function createNotesService(
       };
     },
 
-    async getCourseNotesOverview(db, courseId, userId) {
-      const overview = await notesRepo.getCourseNotesOverview(db, courseId, userId);
+    async getCourseNotesOverview(db, courseId, actor) {
+      const overview = await notesRepo.getCourseNotesOverview(
+        db,
+        courseId,
+        actor.userId,
+      );
       if (!overview.course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
+
+      await courseAccess.assertCanAccessCourse(db, actor, courseId);
 
       const allNotes = overview.notes.map(mapNoteRow);
       const notesByLessonId = new Map<string, LearningNote[]>();
@@ -210,7 +248,10 @@ export function createNotesService(
 
       const sections = overview.sections.map((sec) => {
         const lessons = lessonsBySectionId.get(sec.id) || [];
-        const sectionNotesCount = lessons.reduce((sum, l) => sum + l.notesCount, 0);
+        const sectionNotesCount = lessons.reduce(
+          (sum, l) => sum + l.notesCount,
+          0,
+        );
 
         return {
           sectionId: sec.id,
@@ -222,7 +263,10 @@ export function createNotesService(
       });
 
       if (unassignedLessons.length > 0) {
-        const unassignedNotesCount = unassignedLessons.reduce((sum, l) => sum + l.notesCount, 0);
+        const unassignedNotesCount = unassignedLessons.reduce(
+          (sum, l) => sum + l.notesCount,
+          0,
+        );
         sections.push({
           sectionId: "00000000-0000-0000-0000-000000000000",
           sectionTitle: "General Lessons",
@@ -247,10 +291,16 @@ export function createNotesService(
       }
 
       if (note.userId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You do not have access to this note");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "You do not have access to this note",
+        );
       }
 
-      const plainText = updates.content ? extractPlainText(updates.content) : undefined;
+      const plainText = updates.content
+        ? extractPlainText(updates.content)
+        : undefined;
       await notesRepo.updateNote(db, noteId, {
         ...updates,
         ...(plainText ? { plainText } : {}),
@@ -267,7 +317,11 @@ export function createNotesService(
       }
 
       if (note.userId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You do not have access to this note");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "You do not have access to this note",
+        );
       }
 
       await notesRepo.deleteNote(db, noteId);

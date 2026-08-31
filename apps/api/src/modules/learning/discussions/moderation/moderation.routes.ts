@@ -61,14 +61,14 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   );
 
   // ==========================================
-  // 2. COURSE-OWNER / INSTRUCTOR MODERATION
+  // 2. COURSE OWNER / ADMIN MODERATION
   // ==========================================
 
   // GET /courses/:courseId/moderation/reports
   app.get(
     "/courses/:courseId/moderation/reports",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listCourseModerationReports",
         tags: ["Course Moderation"],
@@ -81,7 +81,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
             reportsListResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Instructor/Moderator required"),
+          403: errorResponse("Forbidden - Course owner or admin required"),
         },
       },
     },
@@ -92,11 +92,12 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/threads/:threadId",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "moderateCourseThread",
         tags: ["Course Moderation"],
-        summary: "Moderate a discussion thread within a course (Hide, Lock, Delete)",
+        summary:
+          "Moderate a discussion thread within a course (Hide, Lock, Delete)",
         params: z.object({
           courseId: z.uuid(),
           threadId: z.uuid(),
@@ -120,7 +121,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/replies/:replyId",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "moderateCourseReply",
         tags: ["Course Moderation"],
@@ -148,7 +149,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/users/:userId/suspend",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "suspendCourseParticipant",
         tags: ["Course Moderation"],
@@ -161,7 +162,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse("User suspended from course", userSuspensionSchema),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Instructor required"),
+          403: errorResponse("Forbidden - Course owner or admin required"),
         },
       },
     },
@@ -172,7 +173,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/courses/:courseId/moderation/users/:userId/unsuspend",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "unsuspendCourseParticipant",
         tags: ["Course Moderation"],
@@ -181,14 +182,16 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
           courseId: z.uuid(),
           userId: z.uuid(),
         }),
-        body: unsuspendUserRequestSchema.omit({ userId: true, courseId: true }).optional(),
+        body: unsuspendUserRequestSchema
+          .omit({ userId: true, courseId: true })
+          .optional(),
         response: {
           200: jsonResponse(
             "Suspension lifted",
             z.object({ message: z.string() }),
           ),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Instructor required"),
+          403: errorResponse("Forbidden - Course owner or admin required"),
         },
       },
     },
@@ -199,7 +202,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/moderation/audit-logs",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "listCourseModerationAuditLogs",
         tags: ["Course Moderation"],
@@ -224,7 +227,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/reports",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "listPlatformModerationReports",
         tags: ["Platform Moderation"],
@@ -236,7 +239,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
             reportsListResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Moderator required"),
+          403: errorResponse("Forbidden - Admin required"),
         },
       },
     },
@@ -247,7 +250,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/threads/:threadId",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "moderatePlatformThread",
         tags: ["Platform Moderation"],
@@ -260,7 +263,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
             z.object({ message: z.string() }),
           ),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden"),
+          403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Thread not found"),
         },
       },
@@ -272,7 +275,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/replies/:replyId",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "moderatePlatformReply",
         tags: ["Platform Moderation"],
@@ -285,7 +288,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
             z.object({ message: z.string() }),
           ),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden"),
+          403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Reply not found"),
         },
       },
@@ -297,7 +300,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/users/:userId/suspend",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "suspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -318,7 +321,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/users/:userId/unsuspend",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "unsuspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -342,7 +345,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/audit-logs",
     {
-      preHandler: permissions.requireModerator,
+      preHandler: permissions.requireAdmin,
       schema: {
         operationId: "listPlatformAuditLogs",
         tags: ["Platform Moderation"],
@@ -351,7 +354,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Audit logs list", auditLogsListResponseSchema),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden"),
+          403: errorResponse("Forbidden - Admin required"),
         },
       },
     },

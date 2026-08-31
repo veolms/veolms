@@ -6,6 +6,7 @@ import type {
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
 import type { ThreadsService } from "./threads.service.ts";
+import { discussionActor } from "../shared/discussion.access.ts";
 
 export interface ThreadsController {
   createLessonThread(
@@ -69,6 +70,7 @@ export function createThreadsController({
 
       const thread = await service.createThread(database, {
         userId: user.id,
+        roles: user.roles,
         courseId,
         lessonId,
         kind: body.kind,
@@ -83,7 +85,7 @@ export function createThreadsController({
     },
 
     async listLessonThreads(request, reply) {
-      const user = request.user;
+      const user = request.user!;
       const { courseId, lessonId } = request.params;
       const query = request.query;
 
@@ -91,29 +93,35 @@ export function createThreadsController({
         ...query,
         courseId,
         lessonId,
-        currentUserId: user?.id,
+        currentUserId: user.id,
+        roles: user.roles,
       });
 
       reply.status(200).send(result);
     },
 
     async listHubThreads(request, reply) {
-      const user = request.user;
+      const user = request.user!;
       const query = request.query;
 
       const result = await service.listThreads(database, {
         ...query,
-        currentUserId: user?.id,
+        currentUserId: user.id,
+        roles: user.roles,
       });
 
       reply.status(200).send(result);
     },
 
     async getThread(request, reply) {
-      const user = request.user;
+      const user = request.user!;
       const { threadId } = request.params;
 
-      const thread = await service.getThread(database, threadId, user?.id);
+      const thread = await service.getThread(
+        database,
+        threadId,
+        discussionActor(user),
+      );
       reply.status(200).send(thread);
     },
 
@@ -122,20 +130,23 @@ export function createThreadsController({
       const { threadId } = request.params;
       const body = request.body;
 
-      const thread = await service.updateThread(database, threadId, user.id, body);
+      const thread = await service.updateThread(
+        database,
+        threadId,
+        discussionActor(user),
+        body,
+      );
       reply.status(200).send(thread);
     },
 
     async deleteThread(request, reply) {
       const user = request.user!;
       const { threadId } = request.params;
-      const isModerator =
-        user.roles.includes("admin") ||
-        user.roles.includes("instructor") ||
-        user.roles.includes("creator");
 
-      await service.deleteThread(database, threadId, user.id, isModerator);
-      reply.status(200).send({ message: "Discussion thread deleted successfully." });
+      await service.deleteThread(database, threadId, discussionActor(user));
+      reply
+        .status(200)
+        .send({ message: "Discussion thread deleted successfully." });
     },
   };
 }

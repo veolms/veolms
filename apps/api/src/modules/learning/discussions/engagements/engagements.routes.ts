@@ -47,6 +47,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Like state toggled", toggleLikeResponseSchema),
           401: errorResponse("Unauthorized"),
+          404: errorResponse("Discussion thread or reply not found"),
         },
       },
     },
@@ -69,6 +70,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
             toggleBookmarkResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
+          404: errorResponse("Discussion thread not found"),
         },
       },
     },
@@ -88,6 +90,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Follow state toggled", toggleFollowResponseSchema),
           401: errorResponse("Unauthorized"),
+          404: errorResponse("Discussion thread not found"),
         },
       },
     },
@@ -120,14 +123,21 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/interactions/users/autocomplete",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "autocompleteUsersForMention",
         tags: ["Learning Engagements"],
-        summary: "Search and autocomplete users in academy for @mentions",
+        summary: "Search course participants for @mentions",
         querystring: searchMentionsQuerySchema,
         response: {
-          200: jsonResponse("List of matching users", searchMentionsResponseSchema),
+          200: jsonResponse(
+            "List of matching users",
+            searchMentionsResponseSchema,
+          ),
+          400: errorResponse("Query and courseId are required"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - No course access"),
+          404: errorResponse("Course not found"),
         },
       },
     },

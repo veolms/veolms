@@ -8,14 +8,42 @@ import type {
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import {
+  createDiscussionOutbox,
+  syncMentionsAndNotify,
+  withWriteTransaction,
+} from "../shared/discussion.mentions.ts";
 import { extractPlainText } from "../shared/discussion.utils.ts";
+import {
+  createDiscussionAccess,
+  type DiscussionActor,
+} from "../shared/discussion.access.ts";
 import type { ThreadsRepository } from "./threads.repository.ts";
+
+function assertVisibilityAllowed(
+  kind: string,
+  visibility: string | undefined,
+): void {
+  if (!visibility) return;
+  const normalized = kind === "qna" ? "question" : kind;
+  if (
+    (normalized === "comment" || normalized === "question") &&
+    visibility === "private"
+  ) {
+    throw httpError(
+      400,
+      "INVALID_VISIBILITY",
+      "Comments and Q&A questions can only be 'public' or 'unlisted'.",
+    );
+  }
+}
 
 export interface ThreadsService {
   createThread(
     db: DatabaseExecutor,
     input: {
       userId: string;
+      roles: readonly string[];
       courseId: string;
       lessonId?: string | null;
       kind: CreateLearningThreadRequest["kind"];
@@ -30,36 +58,42 @@ export interface ThreadsService {
   getThread(
     db: DatabaseExecutor,
     threadId: string,
-    currentUserId?: string,
+    actor: DiscussionActor,
   ): Promise<LearningThread>;
 
   listThreads(
     db: DatabaseExecutor,
     query: ListLearningThreadsQuery & {
-      currentUserId?: string;
+      currentUserId: string;
+      roles: readonly string[];
     },
   ): Promise<LearningThreadsListResponse>;
 
   updateThread(
     db: DatabaseExecutor,
     threadId: string,
-    userId: string,
+    actor: DiscussionActor,
     updates: UpdateLearningThreadRequest,
   ): Promise<LearningThread>;
 
   deleteThread(
     db: DatabaseExecutor,
     threadId: string,
-    userId: string,
-    isModerator?: boolean,
+    actor: DiscussionActor,
   ): Promise<void>;
 }
 
 export function createThreadsService(
   threadsRepo: ThreadsRepository,
 ): ThreadsService {
+  const outbox = createDiscussionOutbox();
+  const courseAccess = createDiscussionAccess();
+
   async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db.selectFrom("academy").select("id").executeTakeFirst();
+    const academy = await db
+      .selectFrom("academy")
+      .select("id")
+      .executeTakeFirst();
     return academy?.id || "00000000-0000-0000-0000-000000000000";
   }
 
@@ -74,9 +108,15 @@ export function createThreadsService(
     },
   ): LearningThread {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
-    const isLiked = engagements?.likedThreadIds ? engagements.likedThreadIds.has(row.id) : false;
-    const isBookmarked = engagements?.bookmarkedThreadIds ? engagements.bookmarkedThreadIds.has(row.id) : false;
-    const isFollowing = engagements?.followedThreadIds ? engagements.followedThreadIds.has(row.id) : false;
+    const isLiked = engagements?.likedThreadIds
+      ? engagements.likedThreadIds.has(row.id)
+      : false;
+    const isBookmarked = engagements?.bookmarkedThreadIds
+      ? engagements.bookmarkedThreadIds.has(row.id)
+      : false;
+    const isFollowing = engagements?.followedThreadIds
+      ? engagements.followedThreadIds.has(row.id)
+      : false;
 
     return {
       id: row.id,
@@ -87,7 +127,9 @@ export function createThreadsService(
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username: (row.authorUsername || row.authorEmail || "user").split("@")[0],
+        username: (row.authorUsername || row.authorEmail || "user").split(
+          "@",
+        )[0],
         avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
         role: "Student",
       },
@@ -109,7 +151,11 @@ export function createThreadsService(
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
-        metadata: a.metadata ? (typeof a.metadata === "string" ? JSON.parse(a.metadata) : a.metadata) : null,
+        metadata: a.metadata
+          ? typeof a.metadata === "string"
+            ? JSON.parse(a.metadata)
+            : a.metadata
+          : null,
       })),
       isLiked,
       isBookmarked,
@@ -141,6 +187,15 @@ export function createThreadsService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
+      await courseAccess.assertCanAccessCourse(
+        db,
+        {
+          userId: input.userId,
+          roles: input.roles,
+        },
+        input.courseId,
+      );
+
       // Validate lesson hierarchy
       if (input.lessonId) {
         const lesson = await db
@@ -150,119 +205,107 @@ export function createThreadsService(
           .executeTakeFirst();
 
         if (!lesson || lesson.course_id !== input.courseId) {
-          throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
-        }
-      }
-
-      // Check suspension with scope
-      const threadKind = input.kind === "qna" ? "question" : (input.kind || "comment");
-      const requiredScopes: ("commenting" | "qa" | "all")[] =
-        threadKind === "comment" ? ["commenting", "all"] : ["qa", "all"];
-
-      if (threadKind !== "note") {
-        const activeSuspension = await db
-          .selectFrom("learning_suspensions")
-          .selectAll()
-          .where("user_id", "=", input.userId)
-          .where("is_active", "=", true)
-          .where("scope", "in", requiredScopes)
-          .where((eb) =>
-            eb.or([
-              eb("course_id", "is", null),
-              eb("course_id", "=", input.courseId),
-            ]),
-          )
-          .where((eb) =>
-            eb.or([
-              eb("expires_at", "is", null),
-              eb("expires_at", ">", new Date()),
-            ]),
-          )
-          .executeTakeFirst();
-
-        if (activeSuspension) {
           throw httpError(
-            403,
-            "PARTICIPATION_SUSPENDED",
-            `Your participation for ${activeSuspension.scope} is suspended. Reason: ${activeSuspension.reason}`,
+            400,
+            "INVALID_LESSON",
+            "Lesson does not belong to this course",
           );
         }
       }
 
-      // Validate visibility rules: comments & questions cannot be private
+      const threadKind =
+        input.kind === "qna" ? "question" : input.kind || "comment";
+      await courseAccess.assertNotSuspended(
+        db,
+        input.userId,
+        input.courseId,
+        threadKind,
+      );
+
       const visibility = input.visibility || "public";
-      if ((threadKind === "comment" || threadKind === "question") && visibility === "private") {
-        throw httpError(
-          400,
-          "INVALID_VISIBILITY",
-          "Comments and Q&A questions can only be 'public' or 'unlisted'.",
-        );
-      }
+      assertVisibilityAllowed(threadKind, visibility);
 
       const id = crypto.randomUUID();
       const plainText = extractPlainText(input.content);
 
-      await threadsRepo.createThread(db, {
-        id,
-        academyId,
-        courseId: input.courseId,
-        lessonId: input.lessonId || null,
-        userId: input.userId,
-        kind: threadKind,
-        title: input.title || null,
-        content: input.content,
-        plainText,
-        timestampSeconds: input.timestampSeconds ?? null,
-        visibility,
-      });
+      return withWriteTransaction(db, async (trx) => {
+        await threadsRepo.createThread(trx, {
+          id,
+          academyId,
+          courseId: input.courseId,
+          lessonId: input.lessonId || null,
+          userId: input.userId,
+          kind: threadKind,
+          title: input.title || null,
+          content: input.content,
+          plainText,
+          timestampSeconds: input.timestampSeconds ?? null,
+          visibility,
+        });
 
-      // Attach any verified attachments owned by the caller
-      if (input.attachmentIds && input.attachmentIds.length > 0) {
-        for (const attachmentId of input.attachmentIds) {
-          const attachment = await db
-            .selectFrom("learning_attachments")
-            .selectAll()
-            .where("id", "=", attachmentId)
-            .executeTakeFirst();
+        await syncMentionsAndNotify(trx, outbox, {
+          sourceType: "thread",
+          sourceId: id,
+          actorUserId: input.userId,
+          content: input.content,
+          courseId: input.courseId,
+          threadId: id,
+          plainText,
+        });
 
-          if (attachment && attachment.owner_id === input.userId && attachment.status === "ready") {
-            await db
-              .updateTable("learning_attachments")
-              .set({
-                target_type: "thread",
-                target_id: id,
-              })
+        // Attach any verified attachments owned by the caller
+        if (input.attachmentIds && input.attachmentIds.length > 0) {
+          for (const attachmentId of input.attachmentIds) {
+            const attachment = await trx
+              .selectFrom("learning_attachments")
+              .selectAll()
               .where("id", "=", attachmentId)
-              .execute();
+              .executeTakeFirst();
+
+            if (
+              attachment &&
+              attachment.owner_id === input.userId &&
+              attachment.status === "ready"
+            ) {
+              await trx
+                .updateTable("learning_attachments")
+                .set({
+                  target_type: "thread",
+                  target_id: id,
+                })
+                .where("id", "=", attachmentId)
+                .execute();
+            }
           }
         }
-      }
 
-      const created = await threadsRepo.findThreadById(db, id);
-      if (!created) {
-        throw httpError(500, "CREATE_FAILED", "Failed to load created thread");
-      }
+        const created = await threadsRepo.findThreadById(trx, id);
+        if (!created) {
+          throw httpError(
+            500,
+            "CREATE_FAILED",
+            "Failed to load created thread",
+          );
+        }
 
-      const attachments = await db
-        .selectFrom("learning_attachments")
-        .selectAll()
-        .where("target_type", "=", "thread")
-        .where("target_id", "=", id)
-        .execute();
+        const attachments = await trx
+          .selectFrom("learning_attachments")
+          .selectAll()
+          .where("target_type", "=", "thread")
+          .where("target_id", "=", id)
+          .execute();
 
-      return mapThreadRow(created, input.userId, attachments);
+        return mapThreadRow(created, input.userId, attachments);
+      });
     },
 
-    async getThread(db, threadId, currentUserId) {
+    async getThread(db, threadId, actor) {
       const row = await threadsRepo.findThreadById(db, threadId);
       if (!row) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
-      // Check private visibility permissions
-      if (row.visibility === "private" && row.userId !== currentUserId) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
-      }
+      await courseAccess.assertCanAccessThread(db, actor, row);
 
       const attachments = await db
         .selectFrom("learning_attachments")
@@ -275,35 +318,33 @@ export function createThreadsService(
       let isBookmarked = false;
       let isFollowing = false;
 
-      if (currentUserId) {
-        const [like, bookmark, follow] = await Promise.all([
-          db
-            .selectFrom("learning_likes")
-            .select("id")
-            .where("user_id", "=", currentUserId)
-            .where("target_type", "=", "thread")
-            .where("target_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_bookmarks")
-            .select("id")
-            .where("user_id", "=", currentUserId)
-            .where("thread_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_follows")
-            .select("id")
-            .where("user_id", "=", currentUserId)
-            .where("thread_id", "=", threadId)
-            .executeTakeFirst(),
-        ]);
+      const [like, bookmark, follow] = await Promise.all([
+        db
+          .selectFrom("learning_likes")
+          .select("id")
+          .where("user_id", "=", actor.userId)
+          .where("target_type", "=", "thread")
+          .where("target_id", "=", threadId)
+          .executeTakeFirst(),
+        db
+          .selectFrom("learning_bookmarks")
+          .select("id")
+          .where("user_id", "=", actor.userId)
+          .where("thread_id", "=", threadId)
+          .executeTakeFirst(),
+        db
+          .selectFrom("learning_follows")
+          .select("id")
+          .where("user_id", "=", actor.userId)
+          .where("thread_id", "=", threadId)
+          .executeTakeFirst(),
+      ]);
 
-        isLiked = Boolean(like);
-        isBookmarked = Boolean(bookmark);
-        isFollowing = Boolean(follow);
-      }
+      isLiked = Boolean(like);
+      isBookmarked = Boolean(bookmark);
+      isFollowing = Boolean(follow);
 
-      const mapped = mapThreadRow(row, currentUserId, attachments);
+      const mapped = mapThreadRow(row, actor.userId, attachments);
       mapped.isLiked = isLiked;
       mapped.isBookmarked = isBookmarked;
       mapped.isFollowing = isFollowing;
@@ -312,8 +353,39 @@ export function createThreadsService(
     },
 
     async listThreads(db, query) {
+      const actor = { userId: query.currentUserId, roles: query.roles };
+      if (query.courseId) {
+        const course = await db
+          .selectFrom("courses")
+          .select("id")
+          .where("id", "=", query.courseId)
+          .executeTakeFirst();
+        if (!course) {
+          throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
+        }
+        await courseAccess.assertCanAccessCourse(db, actor, query.courseId);
+      }
+
+      const accessibleCourseIds = query.courseId
+        ? undefined
+        : await courseAccess.listAccessibleCourseIds(db, actor);
+
+      if (
+        accessibleCourseIds &&
+        accessibleCourseIds !== "all" &&
+        accessibleCourseIds.length === 0
+      ) {
+        return { threads: [], nextCursor: null, totalCount: 0 };
+      }
+
       const academyId = await resolveAcademyId(db);
-      const rows = await threadsRepo.listThreads(db, { ...query, academyId });
+      const rows = await threadsRepo.listThreads(db, {
+        ...query,
+        academyId,
+        ...(accessibleCourseIds && accessibleCourseIds !== "all"
+          ? { accessibleCourseIds }
+          : {}),
+      });
 
       let likedThreadIds = new Set<string>();
       let bookmarkedThreadIds = new Set<string>();
@@ -363,45 +435,77 @@ export function createThreadsService(
       };
     },
 
-    async updateThread(db, threadId, userId, updates) {
-      const row = await threadsRepo.findThreadById(db, threadId);
-      if (!row) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
-      }
+    async updateThread(db, threadId, actor, updates) {
+      return withWriteTransaction(db, async (trx) => {
+        const row = await threadsRepo.findThreadById(trx, threadId);
+        if (!row) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
 
-      if (row.userId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You are not allowed to update this discussion thread",
+        await courseAccess.assertCanAccessThread(trx, actor, row);
+        courseAccess.assertThreadIsActive(row);
+
+        if (row.userId !== actor.userId) {
+          throw httpError(
+            403,
+            "FORBIDDEN",
+            "You are not allowed to update this discussion thread",
+          );
+        }
+
+        courseAccess.assertThreadNotLocked(row);
+        await courseAccess.assertNotSuspended(
+          trx,
+          actor.userId,
+          row.courseId,
+          row.kind,
         );
-      }
+        assertVisibilityAllowed(row.kind, updates.visibility);
 
-      if (row.isLocked) {
-        throw httpError(
-          400,
-          "THREAD_LOCKED",
-          "This discussion thread is locked and cannot be edited",
-        );
-      }
+        const plainText = updates.content
+          ? extractPlainText(updates.content)
+          : undefined;
+        await threadsRepo.updateThread(trx, threadId, {
+          ...updates,
+          ...(plainText ? { plainText } : {}),
+        });
 
-      const plainText = updates.content ? extractPlainText(updates.content) : undefined;
-      await threadsRepo.updateThread(db, threadId, {
-        ...updates,
-        ...(plainText ? { plainText } : {}),
+        if (updates.content) {
+          await syncMentionsAndNotify(trx, outbox, {
+            sourceType: "thread",
+            sourceId: threadId,
+            actorUserId: actor.userId,
+            content: updates.content,
+            courseId: row.courseId,
+            threadId,
+            plainText,
+          });
+        }
+
+        const updated = await threadsRepo.findThreadById(trx, threadId);
+        return mapThreadRow(updated, actor.userId);
       });
-
-      const updated = await threadsRepo.findThreadById(db, threadId);
-      return mapThreadRow(updated, userId);
     },
 
-    async deleteThread(db, threadId, userId, isModerator = false) {
+    async deleteThread(db, threadId, actor) {
       const row = await threadsRepo.findThreadById(db, threadId);
       if (!row) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
-      if (row.userId !== userId && !isModerator) {
+      await courseAccess.assertCanAccessThread(db, actor, row);
+      courseAccess.assertThreadIsActive(row);
+
+      const canStaffModerate = await courseAccess.canModerateCourse(
+        db,
+        actor,
+        row.courseId,
+      );
+      if (row.userId !== actor.userId && !canStaffModerate) {
         throw httpError(
           403,
           "FORBIDDEN",

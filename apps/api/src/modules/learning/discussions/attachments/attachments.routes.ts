@@ -12,6 +12,7 @@ import {
 import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
+import { createDiscussionUploadStore } from "../../../discussion-uploads/index.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createAttachmentsController } from "./attachments.controller.ts";
 import { createAttachmentsRepository } from "./attachments.repository.ts";
@@ -24,7 +25,8 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
 
   const permissions = createDiscussionPermissions(options);
   const repo = createAttachmentsRepository();
-  const service = createAttachmentsService(repo);
+  const uploadStore = createDiscussionUploadStore(options.services.storage);
+  const service = createAttachmentsService(repo, uploadStore);
   const controller = createAttachmentsController({
     database: options.database,
     service,
@@ -41,7 +43,10 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Initiate upload session for media or code file",
         body: initiateAttachmentUploadRequestSchema,
         response: {
-          201: jsonResponse("Upload slot initiated", initiateAttachmentUploadResponseSchema),
+          201: jsonResponse(
+            "Upload slot initiated",
+            initiateAttachmentUploadResponseSchema,
+          ),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
         },
@@ -103,7 +108,10 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Direct single-step file upload",
         consumes: ["multipart/form-data"],
         response: {
-          201: jsonResponse("Attachment uploaded", learningUploadResponseSchema),
+          201: jsonResponse(
+            "Attachment uploaded",
+            learningUploadResponseSchema,
+          ),
           400: errorResponse("File is required"),
           401: errorResponse("Unauthorized"),
           413: errorResponse("File is too large"),

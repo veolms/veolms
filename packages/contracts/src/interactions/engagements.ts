@@ -52,8 +52,9 @@ export const userAutocompleteItemSchema = z.object({
 export type UserAutocompleteItem = z.infer<typeof userAutocompleteItemSchema>;
 
 export const userAutocompleteQuerySchema = z.object({
-  query: z.string().max(80).default(""),
-  courseId: z.uuid().optional(),
+  query: z.string().min(1).max(80).optional(),
+  q: z.string().min(1).max(80).optional(),
+  courseId: z.uuid(),
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 export type UserAutocompleteQuery = z.infer<typeof userAutocompleteQuerySchema>;

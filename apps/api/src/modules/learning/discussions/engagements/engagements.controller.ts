@@ -6,6 +6,7 @@ import type {
   ToggleLikeRequest,
 } from "@veolms/contracts";
 import type { EngagementsService } from "./engagements.service.ts";
+import { discussionActor } from "../shared/discussion.access.ts";
 
 export interface EngagementsController {
   toggleLike(
@@ -51,7 +52,7 @@ export function createEngagementsController({
 
       const result = await service.toggleLike(
         database,
-        user.id,
+        discussionActor(user),
         targetType,
         targetId,
       );
@@ -62,7 +63,11 @@ export function createEngagementsController({
       const user = request.user!;
       const { threadId } = request.params;
 
-      const result = await service.toggleBookmark(database, user.id, threadId);
+      const result = await service.toggleBookmark(
+        database,
+        discussionActor(user),
+        threadId,
+      );
       reply.status(200).send(result);
     },
 
@@ -70,7 +75,11 @@ export function createEngagementsController({
       const user = request.user!;
       const { threadId } = request.params;
 
-      const result = await service.toggleFollow(database, user.id, threadId);
+      const result = await service.toggleFollow(
+        database,
+        discussionActor(user),
+        threadId,
+      );
       reply.status(200).send(result);
     },
 
@@ -78,28 +87,22 @@ export function createEngagementsController({
       const user = request.user!;
       const { threadId } = request.params;
       const { isLocked } = request.body;
-      const isModerator =
-        user.roles.includes("admin") ||
-        user.roles.includes("instructor") ||
-        user.roles.includes("creator");
 
       const result = await service.lockThread(
         database,
         threadId,
         isLocked,
-        user.id,
-        isModerator,
+        discussionActor(user),
       );
       reply.status(200).send(result);
     },
 
     async searchMentions(request, reply) {
-      const { query, limit } = request.query;
-
+      const user = request.user!;
       const users = await service.searchMentions(
         database,
-        query,
-        limit,
+        discussionActor(user),
+        request.query,
       );
       reply.status(200).send({ users });
     },

@@ -6,6 +6,7 @@ import type {
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
+import { discussionActor } from "../shared/discussion.access.ts";
 import type { RepliesService } from "./replies.service.ts";
 
 export interface RepliesController {
@@ -65,10 +66,10 @@ export function createRepliesController({
       const created = await service.createReply(database, {
         threadId,
         userId: user.id,
+        roles: user.roles,
         content: body.content,
         parentReplyId: body.parentReplyId,
         replyToReplyId: body.replyToReplyId,
-        replyToUserId: body.replyToUserId,
         timestampSeconds: body.timestampSeconds,
         attachmentIds: body.attachmentIds,
       });
@@ -77,7 +78,7 @@ export function createRepliesController({
     },
 
     async listReplies(request, reply) {
-      const user = request.user;
+      const user = request.user!;
       const { threadId } = request.params;
       const query = request.query;
 
@@ -85,7 +86,7 @@ export function createRepliesController({
         database,
         threadId,
         query,
-        user?.id,
+        discussionActor(user),
       );
       reply.status(200).send(result);
     },
@@ -98,7 +99,7 @@ export function createRepliesController({
       const updated = await service.updateReply(
         database,
         replyId,
-        user.id,
+        discussionActor(user),
         body,
       );
       reply.status(200).send(updated);
@@ -107,30 +108,22 @@ export function createRepliesController({
     async deleteReply(request, reply) {
       const user = request.user!;
       const { replyId } = request.params;
-      const isModerator =
-        user.roles.includes("admin") ||
-        user.roles.includes("instructor") ||
-        user.roles.includes("creator");
 
-      await service.deleteReply(database, replyId, user.id, isModerator);
+      await service.deleteReply(database, replyId, discussionActor(user));
       reply.status(200).send({ message: "Reply deleted successfully." });
     },
 
     async acceptReply(request, reply) {
       const user = request.user!;
       const { replyId } = request.params;
-      const accepted = request.body?.accepted !== undefined ? request.body.accepted : true;
-      const isModerator =
-        user.roles.includes("admin") ||
-        user.roles.includes("instructor") ||
-        user.roles.includes("creator");
+      const accepted =
+        request.body?.accepted !== undefined ? request.body.accepted : true;
 
       const result = await service.acceptReply(
         database,
         replyId,
         accepted,
-        user.id,
-        isModerator,
+        discussionActor(user),
       );
       reply.status(200).send(result);
     },

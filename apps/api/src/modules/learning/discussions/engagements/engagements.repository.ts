@@ -1,8 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
-import type {
-  EngagementTargetType,
-  UserMention,
-} from "@veolms/contracts";
+import type { EngagementTargetType, UserMention } from "@veolms/contracts";
 import { sql } from "kysely";
 
 export interface EngagementsRepository {
@@ -18,14 +15,14 @@ export interface EngagementsRepository {
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   removeLike(
     db: DatabaseExecutor,
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   findBookmark(
     db: DatabaseExecutor,
@@ -65,8 +62,11 @@ export interface EngagementsRepository {
 
   searchUsersForMention(
     db: DatabaseExecutor,
-    query: string,
-    limit: number,
+    options: {
+      query: string;
+      userIds: readonly string[];
+      limit: number;
+    },
   ): Promise<UserMention[]>;
 }
 
@@ -83,7 +83,7 @@ export function createEngagementsRepository(): EngagementsRepository {
     },
 
     async addLike(db, userId, targetType, targetId) {
-      await db
+      const result = await db
         .insertInto("learning_likes")
         .values({
           id: sql`gen_random_uuid()`,
@@ -91,17 +91,21 @@ export function createEngagementsRepository(): EngagementsRepository {
           target_type: targetType,
           target_id: targetId,
         })
-        .onConflict((oc) => oc.columns(["user_id", "target_type", "target_id"]).doNothing())
-        .execute();
+        .onConflict((oc) =>
+          oc.columns(["user_id", "target_type", "target_id"]).doNothing(),
+        )
+        .executeTakeFirst();
+      return Number(result?.numInsertedOrUpdatedRows ?? 0) > 0;
     },
 
     async removeLike(db, userId, targetType, targetId) {
-      await db
+      const result = await db
         .deleteFrom("learning_likes")
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
-        .execute();
+        .executeTakeFirst();
+      return Number(result?.numDeletedRows ?? 0) > 0;
     },
 
     async findBookmark(db, userId, threadId) {
@@ -162,27 +166,36 @@ export function createEngagementsRepository(): EngagementsRepository {
         .execute();
     },
 
-    async searchUsersForMention(db, query, limit) {
-      const searchPattern = `%${query.toLowerCase()}%`;
+    async searchUsersForMention(db, { query, userIds, limit }) {
+      if (userIds.length === 0) return [];
+
+      const pattern = `%${query}%`;
       const users = await db
         .selectFrom("users")
-        .select(["id", "display_name", "username", "email"])
+        .select(["id", "display_name", "username"])
+        .where("id", "in", [...userIds])
+        .where("username", "is not", null)
         .where((eb) =>
           eb.or([
-            eb(sql`lower(display_name)`, "like", searchPattern),
-            eb(sql`lower(username)`, "like", searchPattern),
-            eb(sql`lower(email)`, "like", searchPattern),
+            eb(sql<string>`lower(display_name)`, "like", pattern),
+            eb(sql<string>`lower(username)`, "like", pattern),
           ]),
         )
+        .orderBy("username", "asc")
         .limit(limit)
         .execute();
 
-      return users.map((u) => ({
-        id: u.id,
-        displayName: u.display_name,
-        username: u.username ?? (u.email ? u.email.split("@")[0]! : "user"),
-        avatarUrl: null,
-      }));
+      return users.flatMap((u) => {
+        if (!u.username) return [];
+        return [
+          {
+            id: u.id,
+            displayName: u.display_name,
+            username: u.username,
+            avatarUrl: null,
+          },
+        ];
+      });
     },
   };
 }

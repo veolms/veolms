@@ -25,5 +25,7 @@ export * from "./moderation/moderation.controller.ts";
 export * from "./shared/discussion.types.ts";
 export * from "./shared/discussion.errors.ts";
 export * from "./shared/discussion.permissions.ts";
+export * from "./shared/discussion.access.ts";
 export * from "./shared/discussion.constants.ts";
 export * from "./shared/discussion.utils.ts";
+export * from "./shared/discussion.mentions.ts";

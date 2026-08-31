@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import fs from "node:fs/promises";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   AttachmentKind,
@@ -11,6 +10,10 @@ import type {
   LinkPreviewResponse,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import {
+  discussionUploadPublicUrl,
+  type DiscussionUploadStore,
+} from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 
@@ -53,14 +56,22 @@ export interface AttachmentsService {
 
 export function createAttachmentsService(
   attachmentsRepo: AttachmentsRepository,
+  uploadStore: DiscussionUploadStore,
 ): AttachmentsService {
-  function getAttachmentKind(mimetype: string, filename: string): AttachmentKind {
+  function getAttachmentKind(
+    mimetype: string,
+    filename: string,
+  ): AttachmentKind {
     if (mimetype.startsWith("image/")) {
       if (filename.toLowerCase().includes("screenshot")) return "screenshot";
       return "image";
     }
     const ext = path.extname(filename).toLowerCase();
-    if ((DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]).includes(ext)) {
+    if (
+      (
+        DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]
+      ).includes(ext)
+    ) {
       return "code";
     }
     return "document";
@@ -73,12 +84,18 @@ export function createAttachmentsService(
     return "document";
   }
 
+  function sanitizeExtension(ext: string): string {
+    const cleaned = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 17);
+    return cleaned.startsWith(".") ? cleaned : ".bin";
+  }
+
   return {
     async initiateUpload(db, userId, input) {
       const id = crypto.randomUUID();
       const ext = path.extname(input.fileName) || ".bin";
-      const storageKey = `attachments/${id}${ext}`;
-      const kind = input.kind || getAttachmentKind(input.mimeType, input.fileName);
+      const storageKey = `discussion-uploads/${id}${sanitizeExtension(ext)}`;
+      const kind =
+        input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
       await attachmentsRepo.createAttachment(db, {
         id,
@@ -104,27 +121,39 @@ export function createAttachmentsService(
     },
 
     async uploadFile(db, attachmentId, userId, file) {
-      const existing = await attachmentsRepo.findAttachmentById(db, attachmentId);
+      const existing = await attachmentsRepo.findAttachmentById(
+        db,
+        attachmentId,
+      );
       if (!existing) {
-        throw httpError(404, "ATTACHMENT_NOT_FOUND", "Attachment upload slot not found");
+        throw httpError(
+          404,
+          "ATTACHMENT_NOT_FOUND",
+          "Attachment upload slot not found",
+        );
       }
 
       if (existing.ownerId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You are not the owner of this attachment upload slot");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "You are not the owner of this attachment upload slot",
+        );
       }
 
-      const ext = path.extname(file.filename) || ".bin";
+      const ext = sanitizeExtension(path.extname(file.filename));
       const sanitizedName = `${attachmentId}${ext}`;
-      const uploadsDir = path.resolve(process.cwd(), "tmp", "discussion-uploads");
-      await fs.mkdir(uploadsDir, { recursive: true });
-      const targetFilePath = path.join(uploadsDir, sanitizedName);
-      await fs.writeFile(targetFilePath, file.data);
-
-      const fileUrl = `/api/v1/dev/discussion-uploads/${sanitizedName}`;
+      await uploadStore.putFromBuffer({
+        fileName: sanitizedName,
+        mimeType: file.mimetype,
+        data: file.data,
+      });
+      const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
       await db
         .updateTable("learning_attachments")
         .set({
+          storage_key: `discussion-uploads/${sanitizedName}`,
           file_name: file.filename,
           file_url: fileUrl,
           mime_type: file.mimetype,
@@ -138,21 +167,35 @@ export function createAttachmentsService(
         .where("id", "=", attachmentId)
         .execute();
 
-      const updated = await attachmentsRepo.findAttachmentById(db, attachmentId);
+      const updated = await attachmentsRepo.findAttachmentById(
+        db,
+        attachmentId,
+      );
       if (!updated) {
-        throw httpError(500, "UPLOAD_FAILED", "Failed to finalize attachment upload");
+        throw httpError(
+          500,
+          "UPLOAD_FAILED",
+          "Failed to finalize attachment upload",
+        );
       }
       return updated;
     },
 
     async completeUpload(db, attachmentId, userId) {
-      const existing = await attachmentsRepo.findAttachmentById(db, attachmentId);
+      const existing = await attachmentsRepo.findAttachmentById(
+        db,
+        attachmentId,
+      );
       if (!existing) {
         throw httpError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found");
       }
 
       if (existing.ownerId !== userId) {
-        throw httpError(403, "FORBIDDEN", "You are not the owner of this attachment");
+        throw httpError(
+          403,
+          "FORBIDDEN",
+          "You are not the owner of this attachment",
+        );
       }
 
       await db
@@ -167,24 +210,27 @@ export function createAttachmentsService(
         .where("id", "=", attachmentId)
         .execute();
 
-      const completed = await attachmentsRepo.findAttachmentById(db, attachmentId);
+      const completed = await attachmentsRepo.findAttachmentById(
+        db,
+        attachmentId,
+      );
       return completed!;
     },
 
     async processUpload(db, userId, file) {
       const id = crypto.randomUUID();
-      const ext = path.extname(file.filename) || ".bin";
+      const ext = sanitizeExtension(path.extname(file.filename));
       const sanitizedName = `${id}${ext}`;
-      const storageKey = `attachments/${sanitizedName}`;
+      const storageKey = `discussion-uploads/${sanitizedName}`;
       const kind = getAttachmentKind(file.mimetype, file.filename);
       const mediaType = getMediaType(kind, file.mimetype);
 
-      const uploadsDir = path.resolve(process.cwd(), "tmp", "discussion-uploads");
-      await fs.mkdir(uploadsDir, { recursive: true });
-      const targetFilePath = path.join(uploadsDir, sanitizedName);
-      await fs.writeFile(targetFilePath, file.data);
-
-      const fileUrl = `/api/v1/dev/discussion-uploads/${sanitizedName}`;
+      await uploadStore.putFromBuffer({
+        fileName: sanitizedName,
+        mimeType: file.mimetype,
+        data: file.data,
+      });
+      const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
       await attachmentsRepo.createAttachment(db, {
         id,

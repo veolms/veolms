@@ -26,14 +26,15 @@ export interface ThreadsRepository {
     },
   ): Promise<void>;
 
-  findThreadById(
-    db: DatabaseExecutor,
-    threadId: string,
-  ): Promise<any | null>;
+  findThreadById(db: DatabaseExecutor, threadId: string): Promise<any | null>;
 
   listThreads(
     db: DatabaseExecutor,
-    options: ListLearningThreadsQuery & { academyId: string; currentUserId?: string },
+    options: ListLearningThreadsQuery & {
+      academyId: string;
+      currentUserId?: string;
+      accessibleCourseIds?: readonly string[];
+    },
   ): Promise<any[]>;
 
   updateThread(
@@ -42,10 +43,7 @@ export interface ThreadsRepository {
     updates: UpdateLearningThreadRequest & { plainText?: string },
   ): Promise<void>;
 
-  deleteThread(
-    db: DatabaseExecutor,
-    threadId: string,
-  ): Promise<void>;
+  deleteThread(db: DatabaseExecutor, threadId: string): Promise<void>;
 
   incrementRepliesCount(
     db: DatabaseExecutor,
@@ -163,10 +161,18 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.username as authorUsername",
           "u.email as authorEmail",
         ])
-        .where("t.status", "=", "active");
+        .where("t.status", "=", "active")
+        .where("t.academy_id", "=", options.academyId);
 
       if (options.courseId) {
         query = query.where("t.course_id", "=", options.courseId);
+      } else if (
+        options.accessibleCourseIds &&
+        options.accessibleCourseIds.length > 0
+      ) {
+        query = query.where("t.course_id", "in", [
+          ...options.accessibleCourseIds,
+        ]);
       }
 
       if (options.lessonId) {
@@ -174,7 +180,8 @@ export function createThreadsRepository(): ThreadsRepository {
       }
 
       if (options.kind && options.kind !== "all") {
-        const normalizedKind = options.kind === "qna" ? "question" : options.kind;
+        const normalizedKind =
+          options.kind === "qna" ? "question" : options.kind;
         query = query.where("t.kind", "=", normalizedKind);
       }
 
@@ -188,9 +195,13 @@ export function createThreadsRepository(): ThreadsRepository {
         }
       } else if (options.currentUserId) {
         if (options.visibility === "private") {
-          query = query.where("t.visibility", "=", "private").where("t.user_id", "=", options.currentUserId);
+          query = query
+            .where("t.visibility", "=", "private")
+            .where("t.user_id", "=", options.currentUserId);
         } else if (options.visibility === "unlisted") {
-          query = query.where("t.visibility", "=", "unlisted").where("t.user_id", "=", options.currentUserId);
+          query = query
+            .where("t.visibility", "=", "unlisted")
+            .where("t.user_id", "=", options.currentUserId);
         } else if (options.visibility === "public") {
           query = query.where("t.visibility", "=", "public");
         } else {
@@ -231,10 +242,15 @@ export function createThreadsRepository(): ThreadsRepository {
 
       if (options.sort === "highest_engagement" || options.sort === "popular") {
         query = query
-          .orderBy(sql`(${sql.ref("t.likes_count")} + ${sql.ref("t.replies_count")})`, "desc")
+          .orderBy(
+            sql`(${sql.ref("t.likes_count")} + ${sql.ref("t.replies_count")})`,
+            "desc",
+          )
           .orderBy("t.created_at", "desc");
       } else if (options.sort === "replies") {
-        query = query.orderBy("t.replies_count", "desc").orderBy("t.created_at", "desc");
+        query = query
+          .orderBy("t.replies_count", "desc")
+          .orderBy("t.created_at", "desc");
       } else if (options.sort === "activity") {
         query = query.orderBy("t.updated_at", "desc");
       } else {
@@ -251,7 +267,8 @@ export function createThreadsRepository(): ThreadsRepository {
       };
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.plainText !== undefined) updateData.plain_text = updates.plainText;
+      if (updates.plainText !== undefined)
+        updateData.plain_text = updates.plainText;
       if (updates.timestampSeconds !== undefined)
         updateData.timestamp_seconds = updates.timestampSeconds;
       if (updates.visibility !== undefined)
@@ -266,8 +283,13 @@ export function createThreadsRepository(): ThreadsRepository {
 
     async deleteThread(db, threadId) {
       await db
-        .deleteFrom("learning_threads")
+        .updateTable("learning_threads")
+        .set({
+          status: "deleted",
+          updated_at: new Date(),
+        })
         .where("id", "=", threadId)
+        .where("status", "!=", "deleted")
         .execute();
     },
 

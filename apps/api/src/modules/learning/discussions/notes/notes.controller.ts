@@ -5,6 +5,7 @@ import type {
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
+import { discussionActor } from "../shared/discussion.access.ts";
 import type { NotesService } from "./notes.service.ts";
 
 export interface NotesController {
@@ -57,6 +58,7 @@ export function createNotesController({
       const note = await service.createNote(database, {
         ...body,
         userId: user.id,
+        roles: user.roles,
       });
 
       reply.status(201).send(note);
@@ -85,7 +87,7 @@ export function createNotesController({
       const result = await service.getCourseNotesOverview(
         database,
         courseId,
-        user.id,
+        discussionActor(user),
       );
       reply.status(200).send(result);
     },
@@ -95,12 +97,7 @@ export function createNotesController({
       const { noteId } = request.params;
       const body = request.body;
 
-      const updated = await service.updateNote(
-        database,
-        noteId,
-        user.id,
-        body,
-      );
+      const updated = await service.updateNote(database, noteId, user.id, body);
       reply.status(200).send(updated);
     },
 
