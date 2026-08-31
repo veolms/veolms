@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import React from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AuthLayout from "../../src/routes/auth-layout.tsx";
 import RegisterRoute, {
   clientLoader as registerClientLoader,
@@ -10,11 +10,24 @@ import {
   AuthBrandMark,
   AuthBrandPanel,
 } from "../../src/auth/AuthBrandPanel.tsx";
+import {
+  getDefaultLoginMethod,
+  isEmailLoginEnabled,
+  isMethodSwitchVisible,
+  isMobileLoginEnabled,
+} from "../../src/auth/authConfig.ts";
 import LoginRoute, { meta as loginMeta } from "../../src/routes/login.tsx";
 import {
   renderWithAppProviders,
   renderWithQueryClient,
 } from "./test-utils.tsx";
+
+const currentUserQuery = vi.hoisted(() => ({
+  data: undefined as unknown,
+  isPending: false,
+  isFetched: true,
+  isSuccess: false,
+}));
 
 vi.mock("../../src/services/auth", async () => {
   const actual = await vi.importActual<
@@ -23,8 +36,20 @@ vi.mock("../../src/services/auth", async () => {
 
   return {
     ...actual,
-    useCurrentUser: () => ({ data: undefined, isSuccess: false }),
+    useCurrentUser: () => ({
+      data: currentUserQuery.data,
+      isPending: currentUserQuery.isPending,
+      isFetched: currentUserQuery.isFetched,
+      isSuccess: currentUserQuery.isSuccess,
+    }),
   };
+});
+
+beforeEach(() => {
+  currentUserQuery.data = undefined;
+  currentUserQuery.isPending = false;
+  currentUserQuery.isFetched = true;
+  currentUserQuery.isSuccess = false;
 });
 
 describe("login screen", () => {
@@ -48,13 +73,28 @@ describe("login screen", () => {
   it("mounts the identifier form and the social actions in the card", () => {
     renderWithAppProviders(<LoginRoute />);
 
-    expect(screen.getByRole("tab", { name: "Mobile" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    if (isMethodSwitchVisible()) {
+      expect(screen.getByRole("tab", { name: "Mobile" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByRole("tab", { name: "Email" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+    } else if (isMobileLoginEnabled()) {
+      expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+    } else {
+      expect(isEmailLoginEnabled()).toBe(true);
+      expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Mobile number")).not.toBeInTheDocument();
+    }
+
+    expect(getDefaultLoginMethod()).toBe(
+      isMobileLoginEnabled() ? "mobile" : "email",
     );
-    expect(screen.getByRole("tab", { name: "Email" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Continue with Google" }),
     ).toBeInTheDocument();
@@ -135,6 +175,22 @@ describe("auth layout", () => {
     expect(footer).not.toBeNull();
     expect(footer).toHaveTextContent("© 2026 ProCodrr. All rights reserved.");
     expect(footer).toHaveTextContent("Learn. Build. Grow.");
+  });
+
+  it("keeps session loading inside the form column so the illustration cannot overlap it", async () => {
+    currentUserQuery.isPending = true;
+    currentUserQuery.isFetched = false;
+
+    const { container } = renderLayout();
+
+    const loading = await screen.findByLabelText("Loading ProCodrr");
+    const formColumn = container.querySelector(".auth-page__form-column");
+
+    expect(formColumn).toContainElement(loading);
+    expect(loading).not.toHaveClass("fixed");
+    expect(screen.getByText("Loading your workspace")).toBeInTheDocument();
+    expect(container.querySelector(".auth-page__brand-column")).not.toBeNull();
+    expect(container.querySelector(".auth-page__footer")).not.toBeNull();
   });
 });
 

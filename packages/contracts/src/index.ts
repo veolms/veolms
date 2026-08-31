@@ -4,6 +4,7 @@ export * from "./commerce/index.ts";
 export * from "./media.ts";
 export * from "./discussion.ts";
 export * from "./interactions/index.ts";
+export * from "./notification.ts";
 export * from "./health.ts";
 export * from "./error.ts";
 

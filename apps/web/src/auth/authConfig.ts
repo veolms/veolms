@@ -9,7 +9,7 @@ type ValidAuthConfig = {
 export const AUTH_CONFIG: ValidAuthConfig = {
   // Login / Start screen options (At least one MUST be true)
   ALLOW_EMAIL_LOGIN: true,
-  ALLOW_MOBILE_LOGIN: true,
+  ALLOW_MOBILE_LOGIN: false,
 
   // Registration requirement: "either" | "both" | "email" | "mobile"
   // "either" = Single step (uses whatever method the user entered)
