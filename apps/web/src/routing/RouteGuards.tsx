@@ -1,174 +1,42 @@
-import type { ReactNode } from "react";
-import { useEffect } from "react";
-import {
-  Outlet,
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from "react-router";
+import { lazy, Suspense, type ReactNode } from "react";
+import { useLocation } from "react-router";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
-import { useCurrentUser } from "../services/auth";
-import { useAuthStore } from "../store/auth.store";
 import {
-  APP_HOME_PATH,
-  MFA_CHALLENGE_PATH,
-  buildLoginPath,
   isGuestLandingPath,
   normalizeAppPath,
   requiresAcademyAuth,
-  resolveAuthenticatedDestination,
-  resolveSessionAccess,
 } from "./routeAccess";
 
-function useSessionAccess() {
-  const { data: user, isPending, isFetched } = useCurrentUser();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const access = resolveSessionAccess({ user, isAuthenticated });
-
-  return {
-    access,
-    pending: isPending && !isFetched,
-  };
-}
-
-function shouldBlockAcademyRender(
-  pathname: string,
-  access: ReturnType<typeof resolveSessionAccess>,
-): boolean {
-  const path = normalizeAppPath(pathname);
-
-  if (isGuestLandingPath(path)) {
-    return true;
-  }
-
-  if (!requiresAcademyAuth(path)) {
-    return false;
-  }
-
-  if (!access.isAuthenticated) {
-    return true;
-  }
-
-  return access.needsMfaChallenge;
-}
+const AuthenticatedAcademyRouteGuard = lazy(() =>
+  import("./AuthenticatedRouteGuards").then((module) => ({
+    default: module.AuthenticatedAcademyRouteGuard,
+  })),
+);
+const AuthRouteGuardRuntime = lazy(() =>
+  import("./AuthenticatedRouteGuards").then((module) => ({
+    default: module.AuthRouteGuardRuntime,
+  })),
+);
 
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { access, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
+  const authenticationRequired = requiresAcademyAuth(path);
+  if (!authenticationRequired && !isGuestLandingPath(path)) return children;
 
-  useEffect(() => {
-    if (pending) {
-      return;
-    }
-
-    if (isGuestLandingPath(path)) {
-      navigate(APP_HOME_PATH, { replace: true });
-      return;
-    }
-
-    if (!requiresAcademyAuth(path)) {
-      return;
-    }
-
-    if (!access.isAuthenticated) {
-      navigate(APP_HOME_PATH, { replace: true });
-      return;
-    }
-
-    if (access.needsMfaChallenge) {
-      navigate(MFA_CHALLENGE_PATH, { replace: true });
-    }
-  }, [
-    access.isAuthenticated,
-    access.isSessionReady,
-    access.needsMfaChallenge,
-    location.pathname,
-    location.search,
-    navigate,
-    path,
-    pending,
-  ]);
-
-  if (pending || shouldBlockAcademyRender(path, access)) {
-    return <AppLoadingScreen />;
-  }
-
-  return <>{children}</>;
+  return (
+    <Suspense fallback={<AppLoadingScreen />}>
+      <AuthenticatedAcademyRouteGuard>
+        {children}
+      </AuthenticatedAcademyRouteGuard>
+    </Suspense>
+  );
 }
 
 export function AuthRouteGuard() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { access, pending } = useSessionAccess();
-  const path = normalizeAppPath(location.pathname);
-
-  useEffect(() => {
-    if (pending || path === "/auth/callback") {
-      return;
-    }
-
-    if (path === "/mfa-setup") {
-      if (!access.isAuthenticated) {
-        navigate(buildLoginPath(), { replace: true });
-        return;
-      }
-
-      if (access.isSessionReady) {
-        navigate(APP_HOME_PATH, { replace: true });
-      }
-      return;
-    }
-
-    if (access.needsMfaChallenge) {
-      if (path !== "/login") {
-        navigate(MFA_CHALLENGE_PATH, { replace: true });
-      }
-      return;
-    }
-
-    if (!access.isSessionReady) {
-      return;
-    }
-
-    navigate(resolveAuthenticatedDestination(searchParams.get("returnTo")), {
-      replace: true,
-    });
-  }, [
-    access.isAuthenticated,
-    access.isSessionReady,
-    access.needsMfaChallenge,
-    location.pathname,
-    navigate,
-    path,
-    pending,
-    searchParams,
-  ]);
-
-  if (pending) {
-    return <AppLoadingScreen variant="embedded" />;
-  }
-
-  if (path === "/auth/callback") {
-    return <Outlet />;
-  }
-
-  if (path === "/mfa-setup") {
-    if (!access.isAuthenticated || access.isSessionReady) {
-      return <AppLoadingScreen variant="embedded" />;
-    }
-    return <Outlet />;
-  }
-
-  if (access.isSessionReady) {
-    return <AppLoadingScreen variant="embedded" />;
-  }
-
-  if (access.needsMfaChallenge && path !== "/login") {
-    return <AppLoadingScreen variant="embedded" />;
-  }
-
-  return <Outlet />;
+  return (
+    <Suspense fallback={<AppLoadingScreen variant="embedded" />}>
+      <AuthRouteGuardRuntime />
+    </Suspense>
+  );
 }

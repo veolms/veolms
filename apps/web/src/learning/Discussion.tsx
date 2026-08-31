@@ -1,20 +1,18 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "../components/ui/drawer";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
-import { CommentComposer } from "./CommentComposer";
-import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
+import {
+  DeferredCommentComposer,
+  preloadCommentComposer,
+} from "./DeferredCommentComposer";
+import {
+  DeferredDiscussionThreadPanel,
+  preloadDiscussionThreadPanel,
+} from "./DeferredDiscussionThreadPanel";
+import {
+  DeferredMobileDiscussionComposerDrawer,
+  preloadMobileDiscussionComposerDrawer,
+} from "./DeferredMobileDiscussionComposerDrawer";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
@@ -182,7 +180,7 @@ export const getDiscussionComposerViewportGeometry = (
   };
 };
 
-interface DiscussionProps {
+export interface DiscussionProps {
   persistenceKey: string;
   mobileBottomNavigation?: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -285,6 +283,13 @@ export function Discussion({
   const draftIsTooLong =
     countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
   const canSubmitDraft = draftHasContent && !draftIsTooLong;
+  const openDiscussionThread = useCallback(
+    (id: number, focusComposer = false) => {
+      preloadDiscussionThreadPanel();
+      setOpenThread({ id, focusComposer });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (postedEntries.length === 0) return;
@@ -551,11 +556,9 @@ export function Discussion({
         onReport={() =>
           setNotice("Report received. Our moderation team will review it.")
         }
-        onOpenThread={(id, focusComposer = false) =>
-          setOpenThread({ id, focusComposer })
-        }
+        onOpenThread={openDiscussionThread}
       />
-      <DiscussionThreadPanel
+      <DeferredDiscussionThreadPanel
         open={openThread !== null}
         activeEntryId={openThread?.id ?? null}
         entries={threadEntries}
@@ -638,6 +641,8 @@ function ThreadSurface({
   const compactComposerScrollHidden =
     mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
+  const [mobileComposerDrawerRequested, setMobileComposerDrawerRequested] =
+    useState(false);
   const [
     mobileComposerCollapsedSnapPoint,
     setMobileComposerCollapsedSnapPoint,
@@ -649,11 +654,6 @@ function ThreadSurface({
     useState(0);
   const [mobileComposerViewportHeight, setMobileComposerViewportHeight] =
     useState<number | null>(null);
-  const mobileComposerSnapPoints = useMemo(
-    () => [mobileComposerCollapsedSnapPoint, 1],
-    [mobileComposerCollapsedSnapPoint],
-  );
-
   const getMobileComposerViewportGeometry = useCallback(() => {
     const playerBottom = document
       .querySelector<HTMLElement>(".learning-workspace__player-wrap")
@@ -668,6 +668,8 @@ function ThreadSurface({
   }, []);
 
   const openMobileComposer = useCallback(() => {
+    preloadMobileDiscussionComposerDrawer();
+    setMobileComposerDrawerRequested(true);
     const geometry = getMobileComposerViewportGeometry();
     setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
     setMobileComposerSnapPoint(geometry.collapsedSnapPoint);
@@ -799,10 +801,10 @@ function ThreadSurface({
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className="mt-4 scroll-mt-4"
+          className="mt-4 scroll-mt-4 max-sm:hidden"
         >
           {composerMode === "desktop" ? (
-            <CommentComposer
+            <DeferredCommentComposer
               draft={draft}
               documentId={
                 editingEntryId === null
@@ -825,6 +827,7 @@ function ThreadSurface({
             <CompactComposer
               draft={draft}
               attachmentCount={draftAttachmentCount}
+              onPrepare={preloadCommentComposer}
               onOpen={() => setComposerMode("desktop")}
             />
           )}
@@ -838,7 +841,7 @@ function ThreadSurface({
       <div
         role="group"
         aria-label="Filter discussion entries"
-        className={`learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isPhone ? "mt-2" : "mt-5"}`}
+        className="learning-discussion__filter-group mt-2 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
       >
         {entryFilters.map(([value, label]) => (
           <button
@@ -853,7 +856,7 @@ function ThreadSurface({
         ))}
       </div>
 
-      <div className={`mt-1 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+      <div className="mt-1 flex flex-col gap-1 pb-36 sm:pb-4">
         {entries.map((entry) => (
           <CommentCard
             key={entry.id}
@@ -890,85 +893,34 @@ function ThreadSurface({
             draft={draft}
             attachmentCount={draftAttachmentCount}
             mobile
+            onPrepare={preloadMobileDiscussionComposerDrawer}
             onOpen={openMobileComposer}
           />
         </div>
       )}
 
       {isPhone && (
-        <Drawer
+        <DeferredMobileDiscussionComposerDrawer
+          requested={mobileComposerDrawerRequested}
           open={composerMode === "mobile"}
-          onOpenChange={(open) => {
-            if (open) openMobileComposer();
-            else closeComposer();
-          }}
-          modal={false}
-          snapPoints={mobileComposerSnapPoints}
+          draft={draft}
+          entryKind={entryKind}
+          visibility={visibility}
+          editingEntryId={editingEntryId}
+          invalid={draftIsTooLong}
+          canSubmit={canSubmitDraft}
+          collapsedSnapPoint={mobileComposerCollapsedSnapPoint}
           snapPoint={mobileComposerSnapPoint}
-          onSnapPointChange={(snapPoint) => {
-            if (typeof snapPoint === "number" || snapPoint === null) {
-              setMobileComposerSnapPoint(snapPoint);
-            }
-          }}
-          snapToSequentialPoints
-          showSwipeHandle
-          swipeDirection="down"
-          swipeHandleClassName="pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_34%,transparent)]"
-        >
-          <DrawerContent
-            data-comment-composer-container
-            style={
-              {
-                "--drawer-content-height": mobileComposerViewportHeight
-                  ? `${mobileComposerViewportHeight}px`
-                  : "100dvh",
-                "--drawer-content-max-height": mobileComposerViewportHeight
-                  ? `${mobileComposerViewportHeight}px`
-                  : "100dvh",
-                bottom: `${mobileComposerKeyboardInset}px`,
-                paddingBottom:
-                  mobileComposerKeyboardInset > 0
-                    ? "0px"
-                    : "var(--app-safe-area-bottom)",
-              } as React.CSSProperties
-            }
-            aria-label={
-              editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"
-            }
-            className="learning-comment-composer-drawer overflow-hidden rounded-t-[22px]! bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] px-0 pt-0 shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-expanded:rounded-none!"
-          >
-            <DrawerTitle className="sr-only">
-              {editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"}
-            </DrawerTitle>
-            <DrawerDescription className="sr-only">
-              Write a comment, Q&A, or note for this lesson.
-            </DrawerDescription>
-            <CommentComposer
-              draft={draft}
-              documentId={
-                editingEntryId === null
-                  ? "discussion-new"
-                  : `discussion-edit-${editingEntryId}`
-              }
-              entryKind={entryKind}
-              visibility={visibility}
-              invalid={draftIsTooLong}
-              canSubmit={canSubmitDraft}
-              editing={editingEntryId !== null}
-              autoFocus
-              presentation="drawer"
-              onDraftChange={onDraftChange}
-              onEntryKindChange={onEntryKindChange}
-              onVisibilityChange={onVisibilityChange}
-              onSubmit={submitAndCollapse}
-              onClose={closeComposer}
-            />
-          </DrawerContent>
-        </Drawer>
+          keyboardInset={mobileComposerKeyboardInset}
+          viewportHeight={mobileComposerViewportHeight}
+          onOpen={openMobileComposer}
+          onClose={closeComposer}
+          onSnapPointChange={setMobileComposerSnapPoint}
+          onDraftChange={onDraftChange}
+          onEntryKindChange={onEntryKindChange}
+          onVisibilityChange={onVisibilityChange}
+          onSubmit={submitAndCollapse}
+        />
       )}
     </div>
   );
@@ -978,6 +930,7 @@ interface CompactComposerProps {
   draft: DiscussionDraft;
   attachmentCount: number;
   mobile?: boolean;
+  onPrepare?: () => void;
   onOpen: () => void;
 }
 
@@ -985,6 +938,7 @@ function CompactComposer({
   draft,
   attachmentCount,
   mobile = false,
+  onPrepare,
   onOpen,
 }: CompactComposerProps) {
   const preview =
@@ -999,12 +953,20 @@ function CompactComposer({
       type="button"
       data-compact-comment-composer
       aria-label="Open discussion composer"
-      onClick={onOpen}
+      onPointerEnter={onPrepare}
+      onPointerDown={onPrepare}
+      onFocus={onPrepare}
+      onClick={() => {
+        onPrepare?.();
+        onOpen();
+      }}
       className={`flex w-full items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] text-left shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_94%,var(--hover))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
     >
       <img
         src={CURRENT_USER.avatar}
         alt=""
+        loading="lazy"
+        decoding="async"
         className="pointer-events-none size-9 shrink-0 rounded-full object-cover"
       />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">

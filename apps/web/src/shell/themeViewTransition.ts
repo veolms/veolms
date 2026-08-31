@@ -1,5 +1,3 @@
-import "./theme-view-transition.css";
-
 export type ThemeViewTransitionKind = "mode" | "palette";
 
 // Pointer coordinates for the reveal circle. Callers pass one only when a

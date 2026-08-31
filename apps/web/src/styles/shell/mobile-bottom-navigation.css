@@ -1,0 +1,130 @@
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 820px) {
+  .mobile-bottom-nav {
+    --mobile-nav-inset: env(safe-area-inset-bottom, 0px);
+    --mobile-nav-max-inset: var(--app-viewport-safe-area-max-bottom);
+    --mobile-nav-offset: calc(
+      var(--mobile-nav-inset) - var(--mobile-nav-max-inset)
+    );
+
+    position: fixed;
+    right: 0;
+    /* The surface grows once using the maximum inset, then follows Chrome's
+       dynamic chin through `bottom` without triggering repeated layout. */
+    bottom: var(--mobile-nav-offset);
+    left: 0;
+    z-index: 140;
+    display: grid;
+    min-height: calc(58px + var(--app-viewport-safe-area-max-bottom));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    border: 0;
+    border-radius: 0;
+    padding: 2px 2px calc(2px + var(--app-viewport-safe-area-max-bottom));
+    background: rgba(15, 15, 15, 0.7);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    box-shadow: none;
+    isolation: isolate;
+    visibility: visible;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 150ms ease-out,
+      visibility 0s linear 0s;
+    will-change: transform;
+  }
+
+  .mobile-bottom-nav.is-scroll-hidden {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate3d(0, calc(100% + 4px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.4, 0, 1, 1),
+      opacity 110ms ease-in,
+      visibility 0s linear 180ms;
+  }
+
+  :root[data-theme="light"] .mobile-bottom-nav {
+    background: color-mix(in srgb, var(--app-shell) 72%, transparent);
+  }
+
+  @supports not (
+    (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+  ) {
+    .mobile-bottom-nav {
+      background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
+    }
+  }
+
+  .mobile-bottom-nav > button {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 0;
+    color: var(--muted);
+  }
+
+  .mobile-bottom-nav > button > span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-bottom-nav > button svg {
+    color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-bottom-nav > button small {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.61rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-bottom-nav > button b {
+    position: absolute;
+    top: -7px;
+    right: -10px;
+    display: inline-flex;
+    min-width: 17px;
+    height: 17px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0 4px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 0.56rem;
+  }
+
+  .mobile-bottom-nav > button.is-active {
+    color: var(--nav-icon-color, var(--accent));
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-bottom-nav > button.is-active svg {
+    color: currentColor;
+  }
+}
+
+@media (max-width: 440px) {
+  .mobile-bottom-nav > button small {
+    font-size: 0.58rem;
+  }
+}

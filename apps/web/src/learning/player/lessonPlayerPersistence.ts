@@ -176,6 +176,26 @@ export function writeMiniPlayerRestore(
   }
 }
 
+/**
+ * Checks for a matching mini-player handoff without consuming it. The
+ * deferred player uses this to decide whether it must mount; the real player
+ * remains responsible for consuming the handoff and restoring its play state.
+ */
+export function hasMiniPlayerRestore(
+  mediaKey: string,
+  storage: StorageReader | null = getSessionStorage(),
+): boolean {
+  if (!storage) return false;
+  try {
+    const value = storage.getItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
+    if (!value) return false;
+    const restore = JSON.parse(value) as { mediaKey?: unknown };
+    return restore.mediaKey === mediaKey;
+  } catch {
+    return false;
+  }
+}
+
 export function consumeMiniPlayerRestore(
   mediaKey: string,
   storage: StorageMutator | null = getSessionStorage(),

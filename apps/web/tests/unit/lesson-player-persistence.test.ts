@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  consumeMiniPlayerRestore,
+  hasMiniPlayerRestore,
   lessonPlayerStorageKeys,
   readAmbientPreference,
   readAutoplayPreference,
@@ -9,6 +11,7 @@ import {
   writeAmbientPreference,
   writeAutoplayPreference,
   writeMutedPreference,
+  writeMiniPlayerRestore,
   writePlaybackRatePreference,
   writeResumePosition,
 } from "../../src/learning/player/lessonPlayerPersistence.js";
@@ -133,5 +136,25 @@ describe("lesson player persistence", () => {
       "veolms-watch-course-a-lesson-7",
       "42",
     );
+  });
+
+  it("detects a mini-player handoff without consuming its play state", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+
+    writeMiniPlayerRestore("lesson-a", true, storage);
+    expect(hasMiniPlayerRestore("lesson-a", storage)).toBe(true);
+    expect(hasMiniPlayerRestore("lesson-b", storage)).toBe(false);
+    expect(consumeMiniPlayerRestore("lesson-a", storage)).toBe(true);
+    expect(hasMiniPlayerRestore("lesson-a", storage)).toBe(false);
+
+    writeMiniPlayerRestore("lesson-a", false, storage);
+    expect(hasMiniPlayerRestore("lesson-a", storage)).toBe(true);
+    expect(consumeMiniPlayerRestore("lesson-a", storage)).toBe(false);
+    expect(hasMiniPlayerRestore("lesson-a", storage)).toBe(false);
   });
 });

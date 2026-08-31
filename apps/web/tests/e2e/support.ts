@@ -48,7 +48,20 @@ export async function installBaselineState(
   );
 }
 
-export async function openApp(page: Page, path = "/") {
+export async function activateDeferredVideo(page: Page) {
+  const deferredPlay = page.locator(
+    'button.youtube-player[aria-label^="Play "]',
+  );
+  if ((await deferredPlay.count()) === 0) return;
+  await deferredPlay.first().click();
+  await expect(deferredPlay).toHaveCount(0, { timeout: 15_000 });
+}
+
+export async function openApp(
+  page: Page,
+  path = "/",
+  options: { activateVideo?: boolean } = {},
+) {
   await page.goto(path);
   await expect(page.locator("[data-app-loading]")).toHaveCount(0, {
     timeout: 15_000,
@@ -66,6 +79,10 @@ export async function openApp(page: Page, path = "/") {
         ),
     );
   });
+
+  if (options.activateVideo !== false && path.startsWith("/learn/")) {
+    await activateDeferredVideo(page);
+  }
 }
 
 export async function updateSidebarPreferences(

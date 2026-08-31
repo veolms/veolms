@@ -3,6 +3,7 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { useEffect, useRef, useState } from "react";
+import "../learning-interactions.css";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import { CommentPublishingOptions } from "./CommentPublishingOptions";
 import {
@@ -10,13 +11,11 @@ import {
   type DiscussionVisibility,
   type DiscussionDraft,
 } from "./discussion-editor/types";
-import {
-  DiscussionEditor,
-  type DiscussionEditorController,
-} from "./discussion-editor/DiscussionEditor";
+import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor.types";
+import { DeferredDiscussionEditor } from "./discussion-editor/DeferredDiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 
-interface CommentComposerProps {
+export interface CommentComposerProps {
   draft: DiscussionDraft;
   documentId: string;
   entryKind: DiscussionEntryKind;
@@ -103,7 +102,7 @@ export function CommentComposer({
           <div
             className={`relative ${presentation === "drawer" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : ""}`}
           >
-            <DiscussionEditor
+            <DeferredDiscussionEditor
               documentId={documentId}
               value={draft}
               label={getEditorLabel(entryKind, editing)}
@@ -133,6 +132,8 @@ export function CommentComposer({
             <img
               src="/assets/sofia-avatar-160.webp"
               alt=""
+              loading="lazy"
+              decoding="async"
               className="size-9 shrink-0 rounded-full object-cover sm:size-10"
             />
             {editorController && (

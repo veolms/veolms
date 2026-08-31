@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import type { ElasticScrollAppearance } from "../../settings/settingsPreferences";
 import {
   ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE,
@@ -35,7 +35,7 @@ export function ElasticScrollerSocket({
 
   return (
     <span
-      className={cn(
+      className={clsx(
         "size-12 rounded-full",
         hasDepth
           ? "border border-[color-mix(in_srgb,var(--border-strong)_72%,var(--text)_28%)] bg-(--canvas) shadow-[inset_0_4px_8px_color-mix(in_srgb,black_52%,transparent),inset_0_-1px_1px_color-mix(in_srgb,white_8%,transparent)]"

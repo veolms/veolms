@@ -32,6 +32,7 @@
 @import "./styles/themes/light/lime.css";
 @import "./styles/themes/contracts.css";
 @import "./styles/features/home.css";
+@import "./styles/shell/mobile-bottom-navigation.css";
 @import "./styles/global/scrollbars.css";
 @import "./styles/features/placeholders.css";
 @import "./styles/shell/foundation.css";

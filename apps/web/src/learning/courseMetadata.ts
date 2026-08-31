@@ -36,7 +36,9 @@ export const getCourseTitle = (courseSlug: string | undefined) =>
   (courseSlug ? courseTitlesBySlug[courseSlug] : undefined) ||
   "UI/UX Design Mastery";
 
-const courseThumbnailsBySlug: Record<string, string | undefined> = {
+export const courseThumbnailsBySlug: Readonly<
+  Record<string, string | undefined>
+> = {
   "ui-ux-design-mastery": "/assets/instructor-poster-960.webp",
   "typescript-course": typescriptCourseThumbnail,
   "javascript-course": javascriptCourseThumbnail,

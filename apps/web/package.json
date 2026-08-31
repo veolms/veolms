@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
+    "build": "react-router build && node scripts/optimize-prerender-resources.mjs",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",

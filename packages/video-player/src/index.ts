@@ -165,15 +165,17 @@ export { formatMediaTime } from "./accessibility/formatMediaTime";
 
 export {
   BUILT_IN_PLAYER_THEMES,
-  BUILT_IN_PLAYER_THEME_IDS,
   PLAYER_THEME_OPTIONS,
   createPlayerTheme,
   getPlayerThemeStyle,
-  isBuiltInPlayerThemeId,
   resolvePlayerTheme,
 } from "./themes/playerThemes";
+export {
+  BUILT_IN_PLAYER_THEME_IDS,
+  isBuiltInPlayerThemeId,
+} from "./themes/playerThemeIds";
+export type { BuiltInPlayerThemeId } from "./themes/playerThemeIds";
 export type {
-  BuiltInPlayerThemeId,
   CreatePlayerThemeOptions,
   PlayerTheme,
   PlayerThemeDefinition,

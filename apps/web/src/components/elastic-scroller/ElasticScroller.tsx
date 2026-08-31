@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { ElasticScrollerGlyph } from "./ElasticScrollerIcon";
 import { useElasticScroller } from "./useElasticScroller";
 import { useElasticScrollerPreferences } from "./useElasticScrollerPreferences";
@@ -101,7 +101,7 @@ export const ElasticScroller = forwardRef<
 
   return (
     <div
-      className={cn(
+      className={clsx(
         "elastic-scroller pointer-events-none sticky top-[calc(100%-var(--elastic-scroller-bottom-clearance))] z-30 flex h-0 flex-none justify-center",
         control.visible
           ? "visible translate-y-0 opacity-100"
@@ -125,8 +125,7 @@ export const ElasticScroller = forwardRef<
       style={
         {
           "--elastic-scroller-spring": spring,
-          "--elastic-scroller-bottom-clearance":
-            normalizedBottomClearance,
+          "--elastic-scroller-bottom-clearance": normalizedBottomClearance,
           transition: control.visible
             ? "visibility 0s linear 0s, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)"
             : "visibility 0s linear 280ms, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -183,7 +182,7 @@ export const ElasticScroller = forwardRef<
       <button
         type="button"
         data-fixed-radius
-        className={cn(
+        className={clsx(
           "elastic-scroller__button pointer-events-auto relative z-10 isolate inline-flex size-10 flex-none touch-none cursor-pointer items-center justify-center rounded-full border p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none",
           elasticScrollerButtonSurface(preferences.appearance),
           hasDepth
@@ -259,7 +258,7 @@ export const ElasticScroller = forwardRef<
       >
         <ElasticScrollerGlyph
           icon={preferences.icon}
-          className={cn(
+          className={clsx(
             "elastic-scroller__icon relative z-10 motion-reduce:transition-none",
             hasDepth &&
               "drop-shadow-[0_2px_1px_color-mix(in_srgb,var(--canvas)_74%,transparent)]",

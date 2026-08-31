@@ -1,5 +1,10 @@
 import { test, expect } from "./app.fixture.ts";
-import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
+import {
+  activateDeferredVideo,
+  expectStoredValue,
+  installBaselineState,
+  openApp,
+} from "./support.ts";
 
 const LEARNING_DESKTOP_VIEWPORT = { width: 1424, height: 678 } as const;
 
@@ -533,6 +538,7 @@ test("lesson choice, curriculum width, and player preferences persist", async ({
   await expect(
     page.getByRole("heading", { name: "Usability Testing", level: 1 }),
   ).toBeVisible();
+  await activateDeferredVideo(page);
   await expect
     .poll(() =>
       page
@@ -3785,6 +3791,7 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     .toBe(true);
 
   await page.reload();
+  await activateDeferredVideo(page);
   const reloadedVideo = page.locator("video");
   await expect
     .poll(() =>
@@ -3795,6 +3802,7 @@ test("player shortcuts work page-wide outside editors and mute persists across l
   await page.keyboard.press("m");
   await expectStoredValue(page, "veolms-player-muted", "false");
   await page.reload();
+  await activateDeferredVideo(page);
   await expect
     .poll(() =>
       page

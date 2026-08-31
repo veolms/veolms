@@ -1,7 +1,7 @@
 import {
   isBuiltInPlayerThemeId,
   type BuiltInPlayerThemeId,
-} from "@veolms/video-player";
+} from "@veolms/video-player/theme-ids";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 220;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;

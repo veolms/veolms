@@ -9,45 +9,92 @@ const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
 
 const shellPhosphorIcons = new Set([
+  "ArrowCounterClockwise",
+  "ArrowLeft",
+  "ArrowSquareOut",
   "Bell",
   "BookOpen",
   "CaretDown",
   "CaretRight",
   "ChartBar",
   "ChatCircleDots",
+  "ChatTeardropDots",
   "Check",
+  "CheckCircle",
+  "Circle",
+  "CircleNotch",
   "CornersIn",
   "CornersOut",
+  "DotsThreeVertical",
   "DotsThreeCircle",
   "EnvelopeSimple",
   "Eye",
+  "FileText",
   "GearSix",
   "GraduationCap",
   "Heart",
   "House",
+  "Info",
+  "Lock",
+  "MagnifyingGlass",
   "Moon",
   "Palette",
+  "PencilSimple",
   "Play",
   "Question",
+  "ShareNetwork",
   "SidebarSimple",
   "SignOut",
   "SquaresFour",
   "Star",
   "Student",
   "Sun",
+  "ThumbsUp",
   "Tote",
+  "Trash",
   "User",
   "Users",
-]);
-const homePhosphorIcons = new Set([
-  "ArrowRight",
-  "ChartLineUp",
-  "CheckCircle",
-  "Clock",
-  "Fire",
-  "Target",
+  "WarningCircle",
+  "X",
+  "XCircle",
 ]);
 const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
+
+const rootCoreModules = new Set([
+  "appStylesheet.ts",
+  "bootstrap/AppLoadingScreen.tsx",
+  "courses/catalogue.ts",
+  "learning/courseMetadata.ts",
+  "reading-mode/readingModePreferences.ts",
+  "routing/routeAccess.ts",
+  "routing/routeDescriptors.ts",
+  "routing/tabSessionState.ts",
+  "settings/settingsPreferences.ts",
+  "themes.ts",
+]);
+
+const academyCoreModules = new Set([
+  "keyboardShortcuts.ts",
+  "learning/courseContent.ts",
+  "learning/curriculumSize.ts",
+  "learning/useSessionStorageState.ts",
+  "searchShortcut.tsx",
+  "shell/navigation.ts",
+  "useShortcutPlatform.ts",
+]);
+
+const learnCoreModules = new Set([
+  "learning/player/lessonPlayerPersistence.ts",
+  "learning/useCurriculumTestPreferences.ts",
+]);
+
+const normalizedWebSourceRoot = `${webSourceRoot.replaceAll("\\", "/")}/`;
+const getWebSourceModuleId = (id: string) => {
+  const normalizedId = id.replaceAll("\\", "/").split("?", 1)[0] ?? "";
+  return normalizedId.startsWith(normalizedWebSourceRoot)
+    ? normalizedId.slice(normalizedWebSourceRoot.length)
+    : null;
+};
 
 const getPhosphorIconName = (id: string) =>
   id
@@ -67,6 +114,8 @@ export default defineConfig(({ mode }) => {
       include: [
         "react",
         "react-dom/client",
+        "@tanstack/react-query",
+        "axios",
         "emoji-picker-react",
         "@tiptap/core",
         "@tiptap/extension-link",
@@ -96,14 +145,32 @@ export default defineConfig(({ mode }) => {
             const iconName = getPhosphorIconName(id);
             if (iconName && shellPhosphorIcons.has(iconName))
               return "shell-icons";
-            if (iconName && homePhosphorIcons.has(iconName))
-              return "home-icons";
             if (iconName && settingsPhosphorIcons.has(iconName))
               return "settings-icons";
+            const normalizedId = id.replaceAll("\\", "/").split("?", 1)[0];
+            if (
+              normalizedId?.includes("/node_modules/react-router/") ||
+              normalizedId?.includes("/node_modules/@react-router/")
+            ) {
+              return "react-router-runtime";
+            }
+            const webModuleId = getWebSourceModuleId(id);
+            if (webModuleId && rootCoreModules.has(webModuleId))
+              return "root-core";
+            if (webModuleId && academyCoreModules.has(webModuleId))
+              return "academy-core";
+            if (webModuleId && learnCoreModules.has(webModuleId))
+              return "learn-core";
             return undefined;
           },
         },
       },
+    },
+    // The icon packages expose very large barrel modules. Bundling them in the
+    // server build lets Vite tree-shake to the glyphs each route actually uses
+    // instead of making the prerender worker evaluate both complete barrels.
+    ssr: {
+      noExternal: ["@phosphor-icons/react", "lucide-react"],
     },
     server: {
       port: config.WEB_PORT,

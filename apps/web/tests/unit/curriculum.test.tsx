@@ -285,6 +285,8 @@ describe("Curriculum", () => {
       ".learning-curriculum__hero",
     );
     expect(curriculumHero).not.toBeNull();
+    expect(curriculumHero).toHaveAttribute("aria-haspopup", "menu");
+    expect(curriculumHero).not.toHaveAttribute("aria-expanded");
 
     fireEvent.contextMenu(curriculum, { clientX: 48, clientY: 72 });
     expect(

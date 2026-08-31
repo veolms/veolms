@@ -1,5 +1,4 @@
 import { Navigate, useLocation, useParams } from "react-router";
-
 export default function LegacyLearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();

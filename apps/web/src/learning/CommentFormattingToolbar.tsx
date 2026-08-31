@@ -14,7 +14,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
-import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
+import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor.types";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storage";
 

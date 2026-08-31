@@ -23,8 +23,8 @@ import {
   createEmptyDiscussionDraft,
   hasDiscussionDraftContent,
 } from "./discussion-editor/types";
-import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
-import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
+import { DeferredDiscussionMarkdown } from "./discussion-editor/DeferredDiscussionMarkdown";
+import { DeferredDiscussionEditor } from "./discussion-editor/DeferredDiscussionEditor";
 
 export interface CommentReply {
   id: number;
@@ -170,6 +170,8 @@ export function CommentCard({
             <img
               src={comment.avatar}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="relative z-10 size-10 shrink-0 rounded-full object-cover sm:size-11"
             />
 
@@ -242,8 +244,9 @@ export function CommentCard({
                 />
               </div>
 
-              <DiscussionMarkdown
-                content={comment.content ?? createDiscussionDraft(comment.text)}
+              <DeferredDiscussionMarkdown
+                content={comment.content}
+                text={comment.text}
                 label={`${entryLabel} by ${comment.name}`}
                 className="mt-0.5 pr-9 sm:pr-10"
               />
@@ -327,7 +330,7 @@ export function CommentCard({
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
                     <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
-                      <DiscussionEditor
+                      <DeferredDiscussionEditor
                         value={replyDraft}
                         documentId={`reply-new-${comment.id}`}
                         label={`Reply to ${comment.name}`}
@@ -428,6 +431,8 @@ function ReplyCard({
             <img
               src={reply.avatar}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="relative z-10 size-9 shrink-0 rounded-full object-cover sm:size-10"
             />
 
@@ -485,8 +490,9 @@ function ReplyCard({
                   onSave={saveEdit}
                 />
               ) : (
-                <DiscussionMarkdown
-                  content={reply.content ?? createDiscussionDraft(reply.text)}
+                <DeferredDiscussionMarkdown
+                  content={reply.content}
+                  text={reply.text}
                   label={`Reply by ${reply.name}`}
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
@@ -567,7 +573,7 @@ export function InlineEditForm({
       }}
     >
       <div className="min-h-18 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
-        <DiscussionEditor
+        <DeferredDiscussionEditor
           value={value}
           documentId={documentId}
           label={label}

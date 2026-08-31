@@ -5,7 +5,7 @@ import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
 
-export function useCurrentUser() {
+export function useCurrentUser(options?: { enabled?: boolean }) {
   const queryClient = useQueryClient();
 
   return useQuery<CurrentUserResponse, ApiError>({
@@ -29,6 +29,7 @@ export function useCurrentUser() {
 
       return profile;
     },
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

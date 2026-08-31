@@ -28,7 +28,7 @@ import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScr
 import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import { LessonVideoPlayer } from "./player";
+import { DeferredLessonVideoPlayer } from "./player/DeferredLessonVideoPlayer";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
 import {
   readAutoplayPreference,
@@ -40,8 +40,9 @@ import {
   getCourseVideoForLesson,
 } from "./courseContent";
 import { Curriculum } from "./Curriculum";
-import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
+import { DeferredCourseLessonDrawer } from "./DeferredCourseLessonDrawer";
 import { Discussion } from "./Discussion";
+import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import {
   getSideLessonDrawerBounds,
@@ -51,12 +52,6 @@ import {
   useLessonDrawerHeroControl,
 } from "./useLessonDrawerHeroControl";
 import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 
 const CURRICULUM_COLLAPSED_WIDTH = 0;
 const CURRICULUM_MIN_WIDTH = 300;
@@ -168,6 +163,7 @@ const getInitialFloatingLessonDrawerWidth = () => {
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   lessonId: number;
+  lessonPersistenceReady?: boolean;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
   backLabel: string;
@@ -229,6 +225,7 @@ type LearningWorkspaceStyle = CSSProperties & {
 export function LearningWorkspace({
   courseSlug,
   lessonId,
+  lessonPersistenceReady = true,
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
   backLabel,
@@ -250,6 +247,7 @@ export function LearningWorkspace({
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
+  const [lessonDrawerRequested, setLessonDrawerRequested] = useState(false);
   const [lessonDrawerForcedFloating, setLessonDrawerForcedFloating] =
     useState(false);
   const [lessonDrawerSnapPoint, setLessonDrawerSnapPoint] = useState<
@@ -260,7 +258,7 @@ export function LearningWorkspace({
   const [lessonDrawerViewportBounds, setLessonDrawerViewportBounds] =
     useState<LessonDrawerViewportBounds | null>(null);
   const [floatingLessonDrawerWidth, setFloatingLessonDrawerWidth] = useState(
-    getInitialFloatingLessonDrawerWidth,
+    LESSON_DRAWER_DEFAULT_FLOATING_WIDTH,
   );
   const [floatingLessonDrawerResizing, setFloatingLessonDrawerResizing] =
     useState(false);
@@ -281,12 +279,23 @@ export function LearningWorkspace({
   );
   const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
   const [curriculumWidth, setCurriculumWidth] = useState(
-    getInitialCurriculumWidth,
+    CURRICULUM_DEFAULT_WIDTH,
   );
   const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
     useState<number | null>(null);
+  const [workspacePreferencesReady, setWorkspacePreferencesReady] =
+    useState(false);
+
+  // Keep the server output and the first hydration pass deterministic. Restore
+  // browser-only sizing before the hydrated UI paints so React never has to
+  // reconcile different inline widths from the same initial render.
+  useLayoutEffect(() => {
+    setCurriculumWidth(getInitialCurriculumWidth());
+    setFloatingLessonDrawerWidth(getInitialFloatingLessonDrawerWidth());
+    setWorkspacePreferencesReady(true);
+  }, []);
   const { preferences: curriculumTestPreferences } =
     useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
@@ -529,7 +538,10 @@ export function LearningWorkspace({
       ? lessonId
       : firstCurriculumLessonId;
     if (nextLessonId === undefined || nextLessonId === selectedLesson) return;
-    setAutoPlayOnLessonChange(true);
+    // Back/forward navigation and the course-root resume correction are route
+    // synchronization, not explicit playback requests. Curriculum selections
+    // already opt into autoplay in selectLesson above.
+    setAutoPlayOnLessonChange(false);
     setSelectedLesson(nextLessonId);
     if (nextLessonId !== lessonId) onSelectLesson(nextLessonId);
   }, [
@@ -576,6 +588,7 @@ export function LearningWorkspace({
     setLessonDrawerViewportBounds(
       getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
     );
+    setLessonDrawerRequested(true);
     setLessonDrawer(true);
   }, [
     getLessonDrawerCollapsedSnapPoint,
@@ -603,6 +616,7 @@ export function LearningWorkspace({
     setLessonDrawerViewportBounds(
       getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
     );
+    setLessonDrawerRequested(true);
     setLessonDrawer(true);
   }, [
     getLessonDrawerCollapsedSnapPoint,
@@ -1300,12 +1314,13 @@ export function LearningWorkspace({
   });
 
   useEffect(() => {
+    if (!lessonPersistenceReady || selectedLesson !== lessonId) return;
     try {
       localStorage.setItem(lessonStorageKey, String(selectedLesson));
     } catch {
       // Lesson selection remains usable when browser storage is unavailable.
     }
-  }, [lessonStorageKey, selectedLesson]);
+  }, [lessonId, lessonPersistenceReady, lessonStorageKey, selectedLesson]);
 
   useEffect(() => {
     setAutoplayEnabled(readAutoplayPreference());
@@ -1342,12 +1357,6 @@ export function LearningWorkspace({
       onPointerDownCapture={startCurriculumScreenSwipe}
       onClickCapture={suppressCurriculumSwipeClick}
     >
-      <link
-        rel="preload"
-        as="image"
-        href={courseThumbnail}
-        fetchPriority="high"
-      />
       <main
         ref={mainRef}
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
@@ -1355,8 +1364,12 @@ export function LearningWorkspace({
         aria-hidden={lessonDrawer || undefined}
         style={
           {
-            "--learning-curriculum-width": `${curriculumViewportWidth}px`,
-            "--learning-curriculum-expanded-width": `${curriculumWidth}px`,
+            "--learning-curriculum-width": workspacePreferencesReady
+              ? `${curriculumViewportWidth}px`
+              : "var(--learning-initial-curriculum-width, 400px)",
+            "--learning-curriculum-expanded-width": workspacePreferencesReady
+              ? `${curriculumWidth}px`
+              : "var(--learning-initial-curriculum-width, 400px)",
           } as LearningWorkspaceStyle
         }
       >
@@ -1396,9 +1409,10 @@ export function LearningWorkspace({
                 />
               </span>
             </button>
-            <LessonVideoPlayer
+            <DeferredLessonVideoPlayer
               media={getCourseVideoForLesson(currentLesson[0])}
               lessonTitle={currentLesson[1]}
+              poster={courseThumbnail}
               theaterMode={theaterMode}
               onTheaterToggle={toggleTheaterMode}
               autoPlayOnMediaChange={autoPlayOnLessonChange}
@@ -1509,79 +1523,81 @@ export function LearningWorkspace({
         disabled={curriculumCollapsed || theaterMode || lessonDrawer}
       />
 
-      <Drawer
+      <DeferredCourseLessonDrawer
         key={phoneLessonDrawer ? "phone-course-lessons" : "side-course-lessons"}
-        open={lessonDrawer}
-        onOpenChange={(open) => {
-          if (open) openLessonDrawer();
-          else closeLessonDrawer();
+        requested={lessonDrawerRequested}
+        drawerProps={{
+          open: lessonDrawer,
+          onOpenChange: (open) => {
+            if (open) openLessonDrawer();
+            else closeLessonDrawer();
+          },
+          onOpenChangeComplete: (open) => {
+            if (!open) {
+              setLessonDrawerViewportBounds(null);
+              if (phoneLessonDrawer)
+                setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
+            }
+          },
+          snapPoints: phoneLessonDrawer ? lessonDrawerSnapPoints : undefined,
+          snapPoint: phoneLessonDrawer ? lessonDrawerSnapPoint : undefined,
+          onSnapPointChange: phoneLessonDrawer
+            ? setLessonDrawerSnapPoint
+            : undefined,
+          snapToSequentialPoints: phoneLessonDrawer,
+          showSwipeHandle: phoneLessonDrawer,
+          swipeDirection: phoneLessonDrawer ? "down" : "right",
+          swipeHandleClassName:
+            "absolute inset-x-0 top-0 z-30 pt-2 group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 after:shadow-[0_1px_3px_rgba(0,0,0,0.48)]",
+          triggerId: "learning-course-content-trigger",
         }}
-        onOpenChangeComplete={(open) => {
-          if (!open) {
-            setLessonDrawerViewportBounds(null);
-            if (phoneLessonDrawer)
-              setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
-          }
-        }}
-        snapPoints={phoneLessonDrawer ? lessonDrawerSnapPoints : undefined}
-        snapPoint={phoneLessonDrawer ? lessonDrawerSnapPoint : undefined}
-        onSnapPointChange={
-          phoneLessonDrawer ? setLessonDrawerSnapPoint : undefined
-        }
-        snapToSequentialPoints={phoneLessonDrawer}
-        showSwipeHandle={phoneLessonDrawer}
-        swipeDirection={phoneLessonDrawer ? "down" : "right"}
-        swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2 group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 after:shadow-[0_1px_3px_rgba(0,0,0,0.48)]"
-        triggerId="learning-course-content-trigger"
-      >
-        <DrawerContent
-          ref={lessonDrawerSurfaceRef}
-          aria-label="Course lessons"
-          initialFocus
-          finalFocus={() => {
+        contentProps={{
+          ref: lessonDrawerSurfaceRef,
+          "aria-label": "Course lessons",
+          initialFocus: true,
+          finalFocus: () => {
             if (lessonDrawerSkipFinalFocusRef.current) {
               lessonDrawerSkipFinalFocusRef.current = false;
               return false;
             }
             return previousFocusRef.current || lessonTriggerRef.current;
-          }}
-          style={
-            {
-              ...(phoneLessonDrawer && lessonDrawerCollapsedSnapPoint > 1
+          },
+          style: {
+            ...(phoneLessonDrawer && lessonDrawerCollapsedSnapPoint > 1
+              ? {
+                  "--learning-drawer-collapsed-height": `${lessonDrawerCollapsedSnapPoint}px`,
+                }
+              : {}),
+            ...(lessonDrawerViewportBounds
+              ? {
+                  "--learning-floating-curriculum-radius":
+                    lessonDrawerViewportBounds.borderRadius ?? "14px",
+                  bottom: `${lessonDrawerViewportBounds.bottom ?? 12}px`,
+                  left: `${lessonDrawerViewportBounds.left}px`,
+                  right: "auto",
+                  top: `${lessonDrawerViewportBounds.top ?? 12}px`,
+                  width: `${lessonDrawerViewportBounds.width}px`,
+                }
+              : !phoneLessonDrawer
                 ? {
-                    "--learning-drawer-collapsed-height": `${lessonDrawerCollapsedSnapPoint}px`,
+                    "--learning-floating-curriculum-radius": "14px",
+                    bottom: "max(10px, var(--app-safe-area-bottom))",
+                    left: "auto",
+                    right: "max(10px, env(safe-area-inset-right))",
+                    top: "max(10px, env(safe-area-inset-top))",
+                    width: `min(${floatingLessonDrawerWidth}px, calc(100dvw - 20px))`,
                   }
                 : {}),
-              ...(lessonDrawerViewportBounds
-                ? {
-                    "--learning-floating-curriculum-radius":
-                      lessonDrawerViewportBounds.borderRadius ?? "14px",
-                    bottom: `${lessonDrawerViewportBounds.bottom ?? 12}px`,
-                    left: `${lessonDrawerViewportBounds.left}px`,
-                    right: "auto",
-                    top: `${lessonDrawerViewportBounds.top ?? 12}px`,
-                    width: `${lessonDrawerViewportBounds.width}px`,
-                  }
-                : !phoneLessonDrawer
-                  ? {
-                      "--learning-floating-curriculum-radius": "14px",
-                      bottom: "max(10px, var(--app-safe-area-bottom))",
-                      left: "auto",
-                      right: "max(10px, env(safe-area-inset-right))",
-                      top: "max(10px, env(safe-area-inset-top))",
-                      width: `min(${floatingLessonDrawerWidth}px, calc(100dvw - 20px))`,
-                    }
-                  : {}),
-            } as CSSProperties
-          }
-          className={[
+          } as CSSProperties,
+          className: [
             "learning-course-content-drawer overflow-hidden",
             phoneLessonDrawer
               ? "[--drawer-bleed-background:var(--canvas)] bg-(--canvas) data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] rounded-(--learning-floating-curriculum-radius)! bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-(--sidebar-menu-active-shadow) backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] [&_.learning-curriculum]:bg-transparent!",
-          ].join(" ")}
-        >
-          {!phoneLessonDrawer && (
+          ].join(" "),
+        }}
+        resizeHandle={
+          !phoneLessonDrawer ? (
             <div
               data-base-ui-swipe-ignore=""
               data-floating-curriculum-resize=""
@@ -1616,33 +1632,30 @@ export function LearningWorkspace({
                 className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-70 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100"
               />
             </div>
-          )}
-          <DrawerTitle className="sr-only">Course lessons</DrawerTitle>
-          <DrawerDescription className="sr-only">
-            Browse sections and choose a lesson.
-          </DrawerDescription>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <Curriculum
-              sections={curriculumSections}
-              lessonsById={curriculumLessonsById}
-              scrollportRef={lessonDrawerScrollportRef}
-              scrollportId="lesson-drawer-curriculum-scrollport"
-              selectedLesson={selectedLesson}
-              lessonProgress={lessonProgress}
-              onSelectLesson={selectLesson}
-              onOpenCourseOverview={onOpenCourseOverview}
-              courseTitle={courseTitle}
-              courseThumbnail={courseThumbnail}
-              focusRequest={curriculumFocusRequest}
-              persistenceKey={coursePersistenceKey}
-              onClose={closeLessonDrawer}
-              drawerHeroControlProps={
-                phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
-              }
-            />
-          </div>
-        </DrawerContent>
-      </Drawer>
+          ) : undefined
+        }
+      >
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <Curriculum
+            sections={curriculumSections}
+            lessonsById={curriculumLessonsById}
+            scrollportRef={lessonDrawerScrollportRef}
+            scrollportId="lesson-drawer-curriculum-scrollport"
+            selectedLesson={selectedLesson}
+            lessonProgress={lessonProgress}
+            onSelectLesson={selectLesson}
+            onOpenCourseOverview={onOpenCourseOverview}
+            courseTitle={courseTitle}
+            courseThumbnail={courseThumbnail}
+            focusRequest={curriculumFocusRequest}
+            persistenceKey={coursePersistenceKey}
+            onClose={closeLessonDrawer}
+            drawerHeroControlProps={
+              phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
+            }
+          />
+        </div>
+      </DeferredCourseLessonDrawer>
       <FloatingScrollbar
         scrollportRef={lessonDrawerScrollportRef}
         rightEdgeRef={lessonDrawerSurfaceRef}

@@ -1,0 +1,18 @@
+/* Utilities for interaction surfaces whose JavaScript is already lazy. Vite
+   loads this stylesheet with the first requested drawer/editor, so the public
+   lesson's initial CSS does not pay for closed UI while those surfaces still
+   render fully styled on their first frame. */
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@source "./components/ui/drawer.tsx";
+@source "./learning/CommentComposer.tsx";
+@source "./learning/CommentFormattingToolbar.tsx";
+@source "./learning/CommentPublishingOptions.tsx";
+@source "./learning/CourseLessonDrawer.tsx";
+@source "./learning/DeferredCommentComposer.tsx";
+@source "./learning/DiscussionThreadPanel.tsx";
+@source "./learning/MobileDiscussionComposerDrawer.tsx";
+@source "./learning/discussion-editor";
+@source "./shell/DeferredMobileNavigationDrawer.tsx";

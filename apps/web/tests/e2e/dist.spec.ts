@@ -25,14 +25,16 @@ test("first visible shell uses the persisted layout geometry", async ({
 
       if (app && !document.documentElement.dataset.testFirstSidebarWidth) {
         document.documentElement.dataset.testFirstSidebarWidth =
-          app.style.getPropertyValue("--sidebar-expanded-width");
+          getComputedStyle(app).getPropertyValue("--sidebar-expanded-width");
       }
       if (
         learningMain &&
         !document.documentElement.dataset.testFirstCurriculumWidth
       ) {
         document.documentElement.dataset.testFirstCurriculumWidth =
-          learningMain.style.getPropertyValue("--learning-curriculum-width");
+          getComputedStyle(learningMain).getPropertyValue(
+            "--learning-curriculum-width",
+          );
       }
       if (
         document.documentElement.dataset.testFirstSidebarWidth &&
@@ -124,18 +126,51 @@ test("compiled client serves direct routes and bundled course artwork", async ({
 test("compiled learning route loads the same-origin adaptive HLS manifest", async ({
   page,
 }) => {
-  const manifestRequest = page.waitForRequest((request) =>
-    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(request.url()),
+  const learningDocument = await page.request.get(
+    "/learn/typescript-course/the-beginning-of-a-design-journey",
   );
-  await openApp(page, "/learn/typescript-course");
+  expect(learningDocument.ok()).toBe(true);
+  const learningHtml = await learningDocument.text();
+  const stylesheetIndex = learningHtml.indexOf(
+    'rel="stylesheet" href="/assets/full-app-',
+  );
+  const modulePreloadIndex = learningHtml.indexOf('rel="modulepreload"');
+  expect(stylesheetIndex).toBeGreaterThan(-1);
+  expect(stylesheetIndex).toBeLessThan(modulePreloadIndex);
+  expect(learningHtml).not.toMatch(/\.m3u8|segment_\d+\.ts/);
+
+  const manifestRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(request.url()))
+      manifestRequests.push(request.url());
+  });
+  await openApp(page, "/learn/typescript-course", { activateVideo: false });
   await expect(
     page.getByRole("heading", {
       name: "The Beginning of a Design Journey",
       level: 1,
     }),
   ).toBeVisible();
+  expect(manifestRequests).toEqual([]);
+  const manifestRequest = page.waitForRequest((request) =>
+    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(request.url()),
+  );
+  const manifestResponse = page.waitForResponse((response) =>
+    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(response.url()),
+  );
+  await page
+    .getByRole("button", {
+      name: "Play The Beginning of a Design Journey",
+    })
+    .click();
   const player = page.getByRole("region", { name: /Lesson video player/ });
   await expect(player).toBeVisible();
   const mediaUrl = new URL((await manifestRequest).url());
   expect(mediaUrl.pathname).toMatch(/\/course-hls\/[a-z0-9-]+\/master\.m3u8$/);
+  const mediaResponse = await manifestResponse;
+  expect(mediaResponse.ok()).toBe(true);
+  expect(mediaResponse.headers()["content-type"]).toMatch(
+    /application\/(?:vnd\.apple\.)?mpegurl/i,
+  );
+  expect(await mediaResponse.text()).toContain("#EXTM3U");
 });

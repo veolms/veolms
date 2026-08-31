@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -15,12 +17,10 @@ import {
 } from "react-router";
 import { CoursesPage } from "../CoursesPage";
 import type { Course, CourseOpenOptions } from "../courses/catalogue";
-import { useCurrentUser, useLogout } from "../services/auth";
-import { useAuthStore } from "../store/auth.store";
+import { authStore, useAuthStore } from "../store/auth.store";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
 import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
-import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -31,6 +31,11 @@ import {
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
+import {
+  isCoursesPublicPath,
+  isLearningPath,
+  isPublicAcademyPath,
+} from "../routing/routeAccess";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
@@ -56,6 +61,12 @@ import {
   normalizeNavigationPath,
 } from "../routing/routeDescriptors";
 
+const LazyLearningMiniPlayer = lazy(() =>
+  import("../learning/player/LearningMiniPlayer").then((module) => ({
+    default: module.LearningMiniPlayer,
+  })),
+);
+
 export interface AcademyOutletContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
@@ -67,6 +78,22 @@ const isSettingsPath = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
   return pathname === "/settings" || pathname.startsWith("/settings/");
 };
+
+function LearningMiniPlayerFallback({
+  lessonTitle,
+}: Pick<LearningMiniPlayerSession, "lessonTitle">) {
+  return (
+    <aside
+      role="status"
+      aria-busy="true"
+      aria-label={`Loading mini player for ${lessonTitle}`}
+      className="fixed right-3 z-150 aspect-video w-[min(82vw,22rem)] overflow-hidden rounded-xl border border-white/14 bg-black shadow-[0_18px_48px_rgba(0,0,0,0.52)] sm:hidden"
+      style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
+    >
+      <span className="sr-only">Loading mini player…</span>
+    </aside>
+  );
+}
 
 const decorateCoursePlayerLaunch = (
   destinationPath: string,
@@ -129,9 +156,13 @@ export default function AcademyLayout() {
   );
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
-  const { data: authUser } = useCurrentUser();
+  const publicLearningRoute =
+    isPublicAcademyPath(location.pathname) &&
+    isLearningPath(location.pathname) &&
+    !isCoursesPublicPath(location.pathname);
+  const currentUserQueryEnabled = !publicLearningRoute;
   const storeUser = useAuthStore((state) => state.user);
-  const activeUser = authUser || storeUser;
+  const activeUser = storeUser;
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(activeUser?.menus),
     [activeUser?.menus],
@@ -144,16 +175,22 @@ export default function AcademyLayout() {
     }
   }, [currentLocationPath]);
 
-  const logoutMutation = useLogout();
-
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
-      void logoutMutation.mutateAsync().finally(() => {
-        clearStoredProfilePreferences();
-        window.location.href = "/";
-      });
-      return;
+      let active = true;
+      void import("../services/auth/auth.service")
+        .then(({ authService }) => authService.logout())
+        .catch(() => undefined)
+        .finally(() => {
+          if (!active) return;
+          authStore.clearAuth();
+          clearStoredProfilePreferences();
+          window.location.href = "/";
+        });
+      return () => {
+        active = false;
+      };
     }
     const destination =
       pathname === "/my-learning" ||
@@ -163,7 +200,8 @@ export default function AcademyLayout() {
         : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
-  }, [location.pathname, location.search, navigate, logoutMutation]);
+    return undefined;
+  }, [location.pathname, location.search, navigate]);
 
   useLayoutEffect(() => {
     const position = preservedScrollPositionRef.current;
@@ -311,6 +349,7 @@ export default function AcademyLayout() {
         settingsTab={route.settingsTab}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
+        currentUserQueryEnabled={currentUserQueryEnabled}
         onNavigatePage={navigateTo}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
@@ -332,11 +371,19 @@ export default function AcademyLayout() {
         }
       />
       {learningMiniPlayer ? (
-        <LearningMiniPlayer
-          session={learningMiniPlayer}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-        />
+        <Suspense
+          fallback={
+            <LearningMiniPlayerFallback
+              lessonTitle={learningMiniPlayer.lessonTitle}
+            />
+          }
+        >
+          <LazyLearningMiniPlayer
+            session={learningMiniPlayer}
+            onClose={closeLearningMiniPlayer}
+            onRestore={restoreLearningMiniPlayer}
+          />
+        </Suspense>
       ) : null}
     </AcademyRouteGuard>
   );

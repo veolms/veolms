@@ -19,6 +19,7 @@ import {
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperInstance } from "swiper/types";
 import "swiper/css";
+import "../learning-interactions.css";
 import {
   Drawer,
   DrawerContent,
@@ -33,11 +34,9 @@ import {
   type CommentReply,
 } from "./CommentCard";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
-import {
-  DiscussionEditor,
-  type DiscussionEditorController,
-} from "./discussion-editor/DiscussionEditor";
-import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
+import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor.types";
+import { DeferredDiscussionEditor } from "./discussion-editor/DeferredDiscussionEditor";
+import { DeferredDiscussionMarkdown } from "./discussion-editor/DeferredDiscussionMarkdown";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import {
   createDiscussionDraft,
@@ -57,7 +56,7 @@ const THREAD_PANEL_SLIDE_DURATION = 320;
 const useThreadPanelLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-interface DiscussionThreadPanelProps {
+export interface DiscussionThreadPanelProps {
   open: boolean;
   activeEntryId: number | null;
   entries: Comment[];
@@ -765,8 +764,9 @@ function ThreadRootEntry({
               className="absolute -top-1 right-0 z-20 shrink-0"
             />
           </div>
-          <DiscussionMarkdown
-            content={entry.content ?? createDiscussionDraft(entry.text)}
+          <DeferredDiscussionMarkdown
+            content={entry.content}
+            text={entry.text}
             label={`Discussion entry by ${entry.name}`}
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
@@ -894,8 +894,9 @@ function ThreadReplyEntry({
               }}
             />
           ) : (
-            <DiscussionMarkdown
-              content={reply.content ?? createDiscussionDraft(reply.text)}
+            <DeferredDiscussionMarkdown
+              content={reply.content}
+              text={reply.text}
               label={`Reply by ${reply.name}`}
               className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
             />
@@ -985,7 +986,7 @@ function ThreadReplyComposer({
       data-thread-reply-composer
       className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
-      <DiscussionEditor
+      <DeferredDiscussionEditor
         documentId={`thread-reply-${entry.id}`}
         value={draft}
         label={`Reply to ${entry.name}`}

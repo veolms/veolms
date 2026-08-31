@@ -198,9 +198,11 @@ describe("discussion composer Atomic behavior", () => {
       />,
     );
 
-    const editor = await screen.findByRole("textbox", {
-      name: "Write a comment",
-    });
+    const editor = await screen.findByRole(
+      "textbox",
+      { name: "Write a comment" },
+      { timeout: 5_000 },
+    );
     const view = EditorView.findFromDOM(editor);
     expect(view).not.toBeNull();
     view?.dispatch({ selection: { anchor: 9 } });

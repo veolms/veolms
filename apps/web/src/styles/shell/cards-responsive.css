@@ -146,6 +146,19 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  :root[data-sidebar-initial-mode="collapsed"] .courses-app {
+    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
+        0,
+        1fr
+      );
+    transition: none;
+  }
+
+  :root[data-sidebar-initial-mode="hidden"] .courses-app {
+    grid-template-columns: minmax(0, 1fr);
+    transition: none;
+  }
+
   .courses-app--hidden .courses-sidebar {
     width: var(--sidebar-expanded-width);
   }

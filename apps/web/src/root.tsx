@@ -1,18 +1,21 @@
-import type { ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts } from "react-router";
+import { lazy, Suspense, type ReactNode } from "react";
+import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
-import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
+import {
+  isCoursesPublicPath,
+  isLearningPath,
+  isPublicAcademyPath,
+} from "./routing/routeAccess";
 import {
   getControlRadiusBootstrapScript,
   getScrollbarBootstrapScript,
   getSurfaceDepthBootstrapScript,
 } from "./settings/settingsPreferences";
-import { useCurrentUser } from "./services/auth";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -24,9 +27,11 @@ interface LayoutProps {
 }
 
 const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
-
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
+
+const getLayoutGeometryBootstrapScript = () =>
+  `(()=>{const r=document.documentElement,n=(k,d,a,b)=>{try{const s=localStorage.getItem(k);if(s===null||s.trim()==="")return d;const v=Number(s);return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d}catch{return d}},g=k=>{try{return localStorage.getItem(k)}catch{return null}};r.style.setProperty("--sidebar-initial-width",n("veolms-sidebar-width",300,220,300)+"px");r.style.setProperty("--learning-initial-curriculum-width",n("veolms-curriculum-width",400,300,560)+"px");const s=g("veolms-sidebar-mode"),l=g("veolms-sidebar-collapsed"),v=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia("(max-width: 1080px)").matches?"collapsed":"expanded");r.dataset.sidebarInitialMode=v})();`;
 
 export function Layout({ children }: LayoutProps) {
   return (
@@ -43,6 +48,7 @@ export function Layout({ children }: LayoutProps) {
       data-sidebar-header-layout="inline"
       data-sidebar-glow="theme"
       data-sidebar-glow-shape="circle"
+      data-sidebar-initial-mode="expanded"
       data-elevated-surfaces="true"
       data-hide-scrollbars="true"
       data-scrollbar-style="theme"
@@ -58,6 +64,12 @@ export function Layout({ children }: LayoutProps) {
         />
         <meta name="theme-color" content="#151718" />
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
+        <meta data-full-app-css content={fullAppStylesheet} />
+        <link
+          rel="stylesheet"
+          href={fullAppStylesheet}
+          data-route-app-css="true"
+        />
         <link
           rel="preload"
           href={manropeFontUrl}
@@ -65,8 +77,15 @@ export function Layout({ children }: LayoutProps) {
           type="font/woff2"
           crossOrigin="anonymous"
         />
+        <Meta />
+        <Links />
         <script
           dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getLayoutGeometryBootstrapScript(),
+          }}
         />
         <script
           dangerouslySetInnerHTML={{ __html: getReadingModeBootstrapScript() }}
@@ -82,9 +101,6 @@ export function Layout({ children }: LayoutProps) {
             __html: getControlRadiusBootstrapScript(),
           }}
         />
-        <link rel="stylesheet" href={fullAppStylesheet} />
-        <Meta />
-        <Links />
       </head>
       <body>
         <div id="root">{children}</div>
@@ -108,17 +124,26 @@ export function HydrateFallback() {
   return <AppLoadingScreen />;
 }
 
-function SessionInitializer({ children }: { children: ReactNode }) {
-  useCurrentUser();
-  return <>{children}</>;
-}
+const AuthenticatedRootRuntime = lazy(() =>
+  import("./bootstrap/AuthenticatedRootRuntime").then((module) => ({
+    default: module.AuthenticatedRootRuntime,
+  })),
+);
 
 export default function Root() {
+  const location = useLocation();
+  const publicLearningRoute =
+    isPublicAcademyPath(location.pathname) &&
+    isLearningPath(location.pathname) &&
+    !isCoursesPublicPath(location.pathname);
+
+  if (publicLearningRoute) return <Outlet />;
+
   return (
-    <QueryProvider>
-      <SessionInitializer>
+    <Suspense fallback={<AppLoadingScreen />}>
+      <AuthenticatedRootRuntime>
         <Outlet />
-      </SessionInitializer>
-    </QueryProvider>
+      </AuthenticatedRootRuntime>
+    </Suspense>
   );
 }

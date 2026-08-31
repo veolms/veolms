@@ -13,34 +13,17 @@ import {
 } from "react";
 import { createDiscussionClipboardExtension } from "./clipboard";
 import { DISCUSSION_CODE_LANGUAGES } from "./code-languages";
-import {
-  createDiscussionEditorCommands,
-  type DiscussionEditorCommands,
-  type DiscussionFormattingState,
-} from "./commands";
+import { createDiscussionEditorCommands } from "./commands";
 import { insertDiscussionAttachment } from "./attachments";
-import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
-import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
+import type {
+  DiscussionEditorController,
+  DiscussionEditorProps,
+} from "./DiscussionEditor.types";
 
-export interface DiscussionEditorController extends DiscussionEditorCommands {
-  attach(file: File): Promise<{ inserted: boolean; message: string | null }>;
-  getMarkdown(): string;
-}
-
-interface DiscussionEditorProps {
-  value: DiscussionDraft;
-  documentId: string;
-  label: string;
-  placeholderText: string;
-  invalid?: boolean;
-  autoFocus?: boolean;
-  autoGrow?: boolean;
-  className?: string;
-  onChange: (draft: DiscussionDraft) => void;
-  onControllerChange?: (controller: DiscussionEditorController | null) => void;
-  onFormattingStateChange?: (state: DiscussionFormattingState) => void;
-  onAttachmentNotice?: (message: string | null) => void;
+interface DiscussionEditorImplementationProps extends DiscussionEditorProps {
+  attachmentsEnabled: boolean;
+  createDraft: (markdown: string) => DiscussionEditorProps["value"];
 }
 
 export function DiscussionEditor({
@@ -56,7 +39,9 @@ export function DiscussionEditor({
   onControllerChange,
   onFormattingStateChange,
   onAttachmentNotice,
-}: DiscussionEditorProps) {
+  attachmentsEnabled,
+  createDraft,
+}: DiscussionEditorImplementationProps) {
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useLatest(onChange);
@@ -71,7 +56,7 @@ export function DiscussionEditor({
       ...commands,
       getMarkdown: () => atomicHandleRef.current?.getMarkdown() ?? "",
       attach: async (file) => {
-        if (!DISCUSSION_ATTACHMENTS_ENABLED) {
+        if (!attachmentsEnabled) {
           const message = "Attachments are not available in this deployment.";
           onAttachmentNoticeRef.current?.(message);
           return { inserted: false, message };
@@ -82,7 +67,7 @@ export function DiscussionEditor({
         return result;
       },
     }),
-    [commands, onAttachmentNoticeRef],
+    [attachmentsEnabled, commands, onAttachmentNoticeRef],
   );
 
   const extensions = useMemo(
@@ -96,7 +81,7 @@ export function DiscussionEditor({
         role: "textbox",
         spellcheck: "true",
       }),
-      ...(DISCUSSION_ATTACHMENTS_ENABLED
+      ...(attachmentsEnabled
         ? [
             createDiscussionClipboardExtension({
               onFiles: (files) => {
@@ -131,6 +116,7 @@ export function DiscussionEditor({
       ),
     ],
     [
+      attachmentsEnabled,
       controller,
       invalid,
       label,
@@ -172,7 +158,7 @@ export function DiscussionEditor({
         codeLanguages={DISCUSSION_CODE_LANGUAGES}
         extensions={extensions}
         onMarkdownChange={(markdown) =>
-          onChangeRef.current(createDiscussionDraft(markdown))
+          onChangeRef.current(createDraft(markdown))
         }
       />
     </div>

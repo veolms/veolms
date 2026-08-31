@@ -11,6 +11,12 @@ export interface AuthState {
 
 const STORAGE_KEY = "veolms-auth-user";
 
+const ANONYMOUS_AUTH_STATE: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+};
+
 function getInitialUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
   try {
@@ -110,6 +116,6 @@ export function useAuthStore<T = AuthState>(
   return useSyncExternalStore(
     authStore.subscribe,
     () => selector(authStore.getState()),
-    () => selector(authStore.getState()),
+    () => selector(ANONYMOUS_AUTH_STATE),
   );
 }

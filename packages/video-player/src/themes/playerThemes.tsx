@@ -51,14 +51,16 @@ import {
   type IconWeight,
 } from "@phosphor-icons/react";
 import type { CSSProperties, ComponentType } from "react";
+import {
+  BUILT_IN_PLAYER_THEME_IDS,
+  type BuiltInPlayerThemeId,
+} from "./playerThemeIds";
 
-export const BUILT_IN_PLAYER_THEME_IDS = [
-  "youtube",
-  "aurora",
-  "minimal",
-] as const;
-
-export type BuiltInPlayerThemeId = (typeof BUILT_IN_PLAYER_THEME_IDS)[number];
+export {
+  BUILT_IN_PLAYER_THEME_IDS,
+  isBuiltInPlayerThemeId,
+} from "./playerThemeIds";
+export type { BuiltInPlayerThemeId } from "./playerThemeIds";
 
 export interface PlayerThemeIconProps extends Omit<IconProps, "weight"> {
   active?: boolean;
@@ -354,15 +356,6 @@ export const BUILT_IN_PLAYER_THEMES: Record<
 export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.map(
   (id) => BUILT_IN_PLAYER_THEMES[id],
 );
-
-export function isBuiltInPlayerThemeId(
-  value: unknown,
-): value is BuiltInPlayerThemeId {
-  return (
-    typeof value === "string" &&
-    BUILT_IN_PLAYER_THEME_IDS.includes(value as BuiltInPlayerThemeId)
-  );
-}
 
 export function resolvePlayerTheme(
   theme: PlayerTheme = "youtube",

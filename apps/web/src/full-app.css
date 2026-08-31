@@ -1,6 +1,7 @@
 @import "./styles.css";
 @import "./shell-theme.css";
 @import "./reading-mode.css";
+@import "./shell/theme-view-transition.css";
 /* Scrollbar pseudo-elements cannot be expressed with Tailwind. Keep their
    application-wide preference styles owned by the settings feature. */
 @import "./settings/scrollbars/scrollbarPreferences.css";

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   useLocation,
   useNavigate,
@@ -38,13 +38,34 @@ export default function LearningRoute() {
     navigateTo,
     openLearningMiniPlayer,
   } = useOutletContext<AcademyOutletContext>();
-  const origin = getCoursePlayerOrigin(location.search);
-  const routeReturnPath = getCoursePlayerReturnPath(location.search);
-  const lessonId = courseSlug
-    ? (resolveLessonIdentifier(lectureSlug) ??
-      getStoredCourseLessonId(courseSlug))
-    : 1;
+  // Prerendered lesson documents are shared by every valid `from` query.
+  // Start from the canonical course origin on both server and client, then
+  // apply query-derived navigation after hydration to avoid stale attributes.
+  const [hydratedSearch, setHydratedSearch] = useState("");
+  const [storedLessonId, setStoredLessonId] = useState(1);
+  const routeLessonId = resolveLessonIdentifier(lectureSlug);
+  const [storedLessonReady, setStoredLessonReady] = useState(
+    routeLessonId !== null,
+  );
+  const origin = getCoursePlayerOrigin(hydratedSearch);
+  const routeReturnPath = getCoursePlayerReturnPath(hydratedSearch);
+  const lessonId = routeLessonId ?? storedLessonId;
+
   useEffect(() => {
+    setHydratedSearch(location.search);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!courseSlug || routeLessonId !== null) {
+      setStoredLessonReady(true);
+      return;
+    }
+    setStoredLessonId(getStoredCourseLessonId(courseSlug));
+    setStoredLessonReady(true);
+  }, [courseSlug, routeLessonId]);
+
+  useEffect(() => {
+    if (routeLessonId === null && !storedLessonReady) return;
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
       ? upsertCoursePlayerSessionFromRoute(
@@ -62,7 +83,9 @@ export default function LearningRoute() {
     location.pathname,
     location.search,
     navigate,
+    routeLessonId,
     routeReturnPath,
+    storedLessonReady,
   ]);
 
   return (
@@ -70,6 +93,7 @@ export default function LearningRoute() {
       key={courseSlug}
       courseSlug={courseSlug}
       lessonId={lessonId}
+      lessonPersistenceReady={routeLessonId !== null || storedLessonReady}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
       backLabel={getCoursePlayerBackLabel(routeReturnPath)}

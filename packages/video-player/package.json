@@ -6,9 +6,12 @@
     ".": "./src/index.ts",
     "./shaka": "./src/engines/shaka/index.ts",
     "./styles.css": "./src/styles/player.css",
+    "./theme-ids": "./src/themes/playerThemeIds.ts",
     "./testing": "./src/testing/index.ts"
   },
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",

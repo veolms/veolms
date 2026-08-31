@@ -15,11 +15,6 @@ import type {
   TotpEnableRequest,
   TotpVerifyRequest,
 } from "@veolms/contracts";
-import {
-  passkeyAuthenticationOptionsResponseSchema,
-  passkeyRegistrationOptionsResponseSchema,
-  sessionResponseSchema,
-} from "@veolms/contracts";
 
 export interface TotpSetupResponse {
   secret: string;
@@ -63,9 +58,11 @@ export const authService = {
 
   getPasskeyRegisterOptions:
     async (): Promise<PasskeyRegistrationOptionsResponse> => {
-      const response = await api.post<unknown>(
-        "/auth/passkey/register/options",
-      );
+      const [{ passkeyRegistrationOptionsResponseSchema }, response] =
+        await Promise.all([
+          import("@veolms/contracts"),
+          api.post<unknown>("/auth/passkey/register/options"),
+        ]);
       return passkeyRegistrationOptionsResponseSchema.parse(response);
     },
 
@@ -80,7 +77,11 @@ export const authService = {
 
   getPasskeyLoginOptions:
     async (): Promise<PasskeyAuthenticationOptionsResponse> => {
-      const response = await api.post<unknown>("/auth/passkey/login/options");
+      const [{ passkeyAuthenticationOptionsResponseSchema }, response] =
+        await Promise.all([
+          import("@veolms/contracts"),
+          api.post<unknown>("/auth/passkey/login/options"),
+        ]);
       return passkeyAuthenticationOptionsResponseSchema.parse(response);
     },
 
@@ -91,7 +92,10 @@ export const authService = {
   },
 
   getSessions: async (): Promise<SessionResponse[]> => {
-    const response = await api.get<unknown>("/auth/sessions");
+    const [{ sessionResponseSchema }, response] = await Promise.all([
+      import("@veolms/contracts"),
+      api.get<unknown>("/auth/sessions"),
+    ]);
     return sessionResponseSchema.array().parse(response);
   },
 

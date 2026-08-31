@@ -1,0 +1,9 @@
+/* Player controls and their Tailwind utilities are fetched with the player
+   runtime, after the learner presses Play. The poster remains fully styled by
+   learning-app.css and the rest of the lesson stays immediately interactive. */
+@import "tailwindcss" source(none);
+@import "@veolms/video-player/styles.css";
+@import "./styles/features/player.css";
+
+@source "./learning/player";
+@source "../../../packages/video-player/src";

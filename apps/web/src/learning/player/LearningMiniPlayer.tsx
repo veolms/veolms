@@ -6,6 +6,7 @@ import {
   type VideoPlayerHandle,
   usePlayerTheme,
 } from "@veolms/video-player";
+import "../../player-runtime.css";
 import { useCallback, useEffect, useRef } from "react";
 import type { LearningMiniPlayerSession } from "./learningMiniPlayerTypes";
 import {

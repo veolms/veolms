@@ -462,9 +462,11 @@ describe("Discussion", () => {
       screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
     );
 
-    const thread = await screen.findByRole("dialog", {
-      name: "Discussion thread",
-    });
+    const thread = await screen.findByRole(
+      "dialog",
+      { name: "Discussion thread" },
+      { timeout: 8_000 },
+    );
     expect(
       within(thread).getByRole("heading", { name: "Discussion thread" }),
     ).toBeVisible();
@@ -476,9 +478,11 @@ describe("Discussion", () => {
     expect(
       within(thread).getByRole("document", { name: "Reply by Ashi Singh" }),
     ).toBeVisible();
-    const replyTextbox = within(thread).getByRole("textbox", {
-      name: "Reply to Rohit Sharma",
-    });
+    const replyTextbox = await within(thread).findByRole(
+      "textbox",
+      { name: "Reply to Rohit Sharma" },
+      { timeout: 8_000 },
+    );
     expect(replyTextbox).toBeVisible();
     await waitFor(() => expect(replyTextbox).toHaveFocus());
     const activeThreadSlide = thread.querySelector<HTMLElement>(
@@ -772,7 +776,9 @@ describe("Discussion", () => {
       name: "Discussion thread",
     });
     expect(
-      within(thread).getByRole("textbox", { name: "Reply to Rohit Sharma" }),
+      await within(thread).findByRole("textbox", {
+        name: "Reply to Rohit Sharma",
+      }),
     ).toBeVisible();
   });
 
@@ -829,7 +835,7 @@ describe("Discussion", () => {
       expect(swipeRegion).toHaveAttribute("data-base-ui-swipe-ignore");
       expect(swipeRegion).toHaveAttribute("data-learning-swipe-ignore");
       expect(swipeRegion).toHaveClass("touch-pan-y");
-      const initialReply = within(thread).getByRole("textbox", {
+      const initialReply = await within(thread).findByRole("textbox", {
         name: "Reply to Rohit Sharma",
       });
       await waitFor(() => expect(initialReply).toHaveFocus());
