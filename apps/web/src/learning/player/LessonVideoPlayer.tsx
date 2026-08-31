@@ -107,12 +107,13 @@ export function LessonVideoPlayer({
   const restoreAutoplayRef = useRef(consumeMiniPlayerRestore(mediaKey));
   requestedMediaKeyRef.current = mediaKey;
 
-  const source = useMemo<VideoSource>(
-    () => ({
+  const source = useMemo<VideoSource>(() => {
+    const isHls = /\.m3u8(?:$|[?#])/i.test(media.src);
+    return {
       id: mediaKey,
       src: media.src,
-      type: "video/mp4",
-      kind: "file",
+      type: isHls ? "application/x-mpegurl" : "video/mp4",
+      kind: isHls ? "hls" : "file",
       // The catalog duration can be stale after an asset replacement. Shaka
       // receives the stored position and the loaded event clamps it against
       // the actual media duration before progress is reported.
@@ -121,6 +122,7 @@ export function LessonVideoPlayer({
         duration: media.duration,
         title: lessonTitle,
       },
+      streaming: isHls ? { abrEnabled: true } : undefined,
       textTracks: [
         {
           src: "/assets/designing-users.vtt",
@@ -130,9 +132,8 @@ export function LessonVideoPlayer({
           mimeType: "text/vtt",
         },
       ],
-    }),
-    [lessonTitle, media.duration, media.src, mediaKey],
-  );
+    };
+  }, [lessonTitle, media.duration, media.src, mediaKey]);
 
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;

@@ -4,6 +4,7 @@ import {
   createCurriculumSections,
   formatMediaTime,
   getCourseVideoForLesson,
+  getCourseVideoHlsSlug,
   lessonSequence,
   getLessonSlug,
   lessonIdBySlug,
@@ -12,6 +13,8 @@ import {
   lessonVideoMap,
   resolveLessonIdentifier,
   resolveCourseMediaBaseUrl,
+  resolveCourseHlsBaseUrl,
+  resolveCourseHlsSrc,
   resolveCourseVideoSrc,
   sections,
   totalCourseLectures,
@@ -115,7 +118,7 @@ describe("learning course content", () => {
     expect(lessonVideoMap[1]).toMatchObject({
       fileName: "01 introduction to veolms.mp4",
       duration: 553.74,
-      src: "/course-videos/01%20introduction%20to%20veolms.mp4",
+      src: "/course-hls/01-introduction-to-veolms/master.m3u8",
     });
     expect(lessonVideoMap[4]).toBe(lessonVideoMap[9]);
     expect(lessonVideoMap[6]).toBe(lessonVideoMap[10]);
@@ -155,6 +158,20 @@ describe("learning course content", () => {
     ).toBe(
       "https://media.example.cloudfront.net/course-videos/03%20creating%20velms%20respository.mp4",
     );
+  });
+
+  it("maps course filenames to same-origin adaptive HLS manifests", () => {
+    expect(resolveCourseHlsBaseUrl()).toBe("/course-hls");
+    expect(resolveCourseHlsBaseUrl("  ")).toBe("/course-hls");
+    expect(
+      resolveCourseHlsBaseUrl("https://media.example.cloudfront.net///"),
+    ).toBe("https://media.example.cloudfront.net/course-hls");
+    expect(
+      getCourseVideoHlsSlug("02 Frontend Tech and UI Discussions.mp4"),
+    ).toBe("02-frontend-tech-and-ui-discussions");
+    expect(
+      resolveCourseHlsSrc("03 creating velms respository.mp4", "/course-hls/"),
+    ).toBe("/course-hls/03-creating-velms-respository/master.m3u8");
   });
 });
 

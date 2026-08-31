@@ -50,10 +50,34 @@ export function resolveCourseVideoSrc(
   return `${baseUrl.replace(/\/+$/, "")}/${encodeURIComponent(fileName)}`;
 }
 
+export function resolveCourseHlsBaseUrl(configuredBaseUrl?: string) {
+  const normalizedBaseUrl = configuredBaseUrl?.trim().replace(/\/+$/, "");
+  return normalizedBaseUrl ? `${normalizedBaseUrl}/course-hls` : "/course-hls";
+}
+
+export const courseHlsBaseUrl = resolveCourseHlsBaseUrl();
+
+export function getCourseVideoHlsSlug(fileName: string) {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function resolveCourseHlsSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/${getCourseVideoHlsSlug(fileName)}/master.m3u8`;
+}
+
 const courseVideo = (fileName: string, duration: number): CourseVideo => ({
   fileName,
   duration,
-  src: resolveCourseVideoSrc(fileName),
+  src: resolveCourseHlsSrc(fileName),
 });
 
 export const courseVideos: CourseVideo[] = [

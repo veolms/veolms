@@ -89,13 +89,13 @@ class RecordingFakeVideoEngine extends FakeVideoEngine {
 const firstMedia: CourseVideo = {
   fileName: "lesson-one.mp4",
   duration: 90,
-  src: "/course-videos/lesson-one.mp4",
+  src: "/course-hls/lesson-one/master.m3u8",
 };
 
 const secondMedia: CourseVideo = {
   fileName: "lesson-two.mp4",
   duration: 150,
-  src: "/course-videos/lesson-two.mp4",
+  src: "/course-hls/lesson-two/master.m3u8",
 };
 
 function playerProps(media: CourseVideo, engine: RecordingFakeVideoEngine) {
@@ -447,7 +447,7 @@ describe("LessonVideoPlayer adapter", () => {
           lessonTitle: "Designing for real users",
           mediaKey: "lesson-one.mp4",
           source: expect.objectContaining({
-            src: "/course-videos/lesson-one.mp4",
+            src: "/course-hls/lesson-one/master.m3u8",
           }),
         }),
       );
@@ -538,14 +538,15 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engine.loadCalls[0]).toEqual({
       source: {
         id: "lesson-one.mp4",
-        src: "/course-videos/lesson-one.mp4",
-        type: "video/mp4",
-        kind: "file",
+        src: "/course-hls/lesson-one/master.m3u8",
+        type: "application/x-mpegurl",
+        kind: "hls",
         startTime: 0,
         metadata: {
           duration: 90,
           title: "Designing for real users",
         },
+        streaming: { abrEnabled: true },
         textTracks: [
           {
             src: "/assets/designing-users.vtt",
@@ -912,7 +913,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engineFactory).toHaveBeenCalledTimes(2);
     expect(secondEngine.loadCalls[0]?.source).toMatchObject({
       id: "lesson-two.mp4",
-      src: "/course-videos/lesson-two.mp4",
+      src: "/course-hls/lesson-two/master.m3u8",
       metadata: { title: "The design mindset" },
     });
   });
