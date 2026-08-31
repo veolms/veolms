@@ -8,6 +8,7 @@ import * as orderRepo from "../orders/order.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as cartRepo from "../cart/cart.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface FinalizePaymentParams {
   /** Internal payment record id */
@@ -40,7 +41,9 @@ export interface PaymentReconciliationService {
    * (order paid, coupon redeemed, access granted, enrollment created) to
    * execute more than once.
    */
-  finalizeSuccessfulPayment(params: FinalizePaymentParams): Promise<FinalizePaymentResult>;
+  finalizeSuccessfulPayment(
+    params: FinalizePaymentParams,
+  ): Promise<FinalizePaymentResult>;
 }
 
 export function createPaymentReconciliationService({
@@ -51,6 +54,7 @@ export function createPaymentReconciliationService({
   accessService?: AccessService;
 }): PaymentReconciliationService {
   const courseAccessService = createCourseAccessService({ accessService });
+  const outbox = createOutboxService();
   /**
    * Idempotently captures a payment and fulfills the associated order.
    *
@@ -115,7 +119,10 @@ export function createPaymentReconciliationService({
       }
 
       // 1. Record successful payment attempt
-      const existingAttempts = await paymentRepo.listPaymentAttempts(trx, paymentId);
+      const existingAttempts = await paymentRepo.listPaymentAttempts(
+        trx,
+        paymentId,
+      );
       await paymentRepo.insertPaymentAttempt(trx, {
         id: crypto.randomUUID(),
         payment_id: paymentId,
@@ -126,7 +133,11 @@ export function createPaymentReconciliationService({
 
       // 2. Mark order paid — idempotent conditional UPDATE
       //    (safe even if somehow called twice because WHERE filters non-paid statuses)
-      const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
+      const markedPaid = await orderRepo.markOrderPaidIfPending(
+        trx,
+        order.id,
+        now,
+      );
       if (!markedPaid) {
         // The payment claim gate above succeeded, but the order itself is in
         // a settled state (cancelled/paid/partially_refunded/refunded) that
@@ -183,12 +194,21 @@ export function createPaymentReconciliationService({
         })),
       );
 
-      // Note: this used to also insert a "purchase.completed" row into
-      // outbox_events for "durable post-purchase processing" — removed.
-      // Grepped the whole apps/api/src tree: nothing ever reads outbox_events
-      // (no dispatcher/worker exists), so it was a write-only table growing
-      // unbounded forever. If a real consumer is built later (analytics,
-      // notifications, CRM sync, etc.), re-add the write alongside it.
+      await outbox.publish(trx, {
+        type: "payment.completed",
+        version: 1,
+        dedupeKey: `payment.completed:${claimed.id}`,
+        occurredAt: now,
+        payload: {
+          paymentId: claimed.id,
+          orderId: order.id,
+          orderNumber: order.order_number,
+          recipientUserId: order.user_id,
+          totalAmount: order.total_amount,
+          currency: order.currency,
+          itemTitles: orderItems.map((item) => item.title_snapshot),
+        },
+      });
     });
 
     // If orderId was never set, the claim returned undefined → already captured

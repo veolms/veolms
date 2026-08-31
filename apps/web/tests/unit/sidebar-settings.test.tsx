@@ -3,7 +3,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SidebarSettings } from "../../src/settings/SidebarSettings";
-import type { SidebarPreferences } from "../../src/settings/settingsPreferences";
+import {
+  SIDEBAR_GLOW_INTENSITY_DEFAULT,
+  type SidebarPreferences,
+} from "../../src/settings/settingsPreferences";
 import type { NavigationItemWithMetadata } from "../../src/shell/navigation";
 
 const navigationFromLabels = (
@@ -149,8 +152,11 @@ describe("sidebar settings draft inputs", () => {
       name: "Sidebar glow intensity",
     });
 
-    expect(slider).toHaveValue("50");
-    expect(slider).toHaveAttribute("aria-valuetext", "50 percent");
+    expect(slider).toHaveValue(String(SIDEBAR_GLOW_INTENSITY_DEFAULT));
+    expect(slider).toHaveAttribute(
+      "aria-valuetext",
+      `${SIDEBAR_GLOW_INTENSITY_DEFAULT} percent`,
+    );
 
     fireEvent.change(slider, { target: { value: "42" } });
     expect(onChange).toHaveBeenLastCalledWith({
@@ -254,7 +260,7 @@ describe("sidebar settings draft inputs", () => {
       glowShape: "circle",
       glowShapeSize: 100,
       glowBlur: 8,
-      glowIntensity: 50,
+      glowIntensity: SIDEBAR_GLOW_INTENSITY_DEFAULT,
     });
   });
 

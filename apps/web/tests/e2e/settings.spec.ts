@@ -101,9 +101,10 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   expect(navigationListBefore).not.toBeNull();
   expect(navigationListAfter).not.toBeNull();
   expect(navigationListAfter!.y).toBeCloseTo(navigationListBefore!.y, 0);
+  await expect(mobileProfileMenu.getByText("Workspace")).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Student" }),
-  ).toHaveAttribute("aria-checked", "true");
+  ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
   ).toHaveCount(0);

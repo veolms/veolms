@@ -2175,14 +2175,14 @@ test("mobile More sheet anchors below lesson video and scrolls its navigation co
 
   await profile.click();
   const profileMenu = page.locator("#mobile-profile-menu");
-  const studentOption = profileMenu.getByRole("menuitemradio", {
-    name: "Student",
+  const logoutOption = profileMenu.getByRole("menuitem", {
+    name: "Logout",
   });
   await expect(profileMenu).toBeVisible();
-  await expect(studentOption).toBeVisible();
-  const [profileMenuBounds, studentOptionIsReachable] = await Promise.all([
+  await expect(logoutOption).toBeVisible();
+  const [profileMenuBounds, logoutOptionIsReachable] = await Promise.all([
     profileMenu.boundingBox(),
-    studentOption.evaluate((element) => {
+    logoutOption.evaluate((element) => {
       const bounds = element.getBoundingClientRect();
       const hitTarget = document.elementFromPoint(
         bounds.left + bounds.width / 2,
@@ -2192,8 +2192,8 @@ test("mobile More sheet anchors below lesson video and scrolls its navigation co
     }),
   ]);
   expect(profileMenuBounds).not.toBeNull();
-  expect(profileMenuBounds!.height).toBeGreaterThan(120);
-  expect(studentOptionIsReachable).toBe(true);
+  expect(profileMenuBounds!.height).toBeGreaterThan(40);
+  expect(logoutOptionIsReachable).toBe(true);
 
   const swipeHandleBounds = await swipeHandle.boundingBox();
   expect(swipeHandleBounds).not.toBeNull();
