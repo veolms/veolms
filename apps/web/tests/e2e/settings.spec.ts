@@ -101,23 +101,19 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   expect(navigationListBefore).not.toBeNull();
   expect(navigationListAfter).not.toBeNull();
   expect(navigationListAfter!.y).toBeCloseTo(navigationListBefore!.y, 0);
+  await expect(mobileProfileMenu.getByText("Workspace")).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Student" }),
-  ).toHaveAttribute("aria-checked", "true");
+  ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
-  ).toHaveAttribute("aria-checked", "false");
+  ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitem", { name: "Hide sidebar" }),
   ).toHaveCount(0);
   await expect(
     mobileProfileMenu.getByRole("menuitem", { name: "Logout" }),
   ).toBeVisible();
-  await mobileProfileMenu
-    .getByRole("menuitemradio", { name: "Creator" })
-    .click();
-  await expect(mobileProfileMenu).toBeHidden();
-  await expect(mobileProfile).toContainText("Instructor");
   await page.keyboard.press("Escape");
 });
 
@@ -181,9 +177,8 @@ test("creator settings control which sidebar menu items are visible", async ({
   page,
 }) => {
   await openApp(page, "/settings/sidebar");
-
-  await page.getByRole("button", { name: /Ashi Singh, Student\./ }).click();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
 
   await expect(page.getByRole("heading", { name: "Menu items" })).toBeVisible();
   await expect(page.getByText("9 visible")).toBeVisible();
@@ -500,9 +495,7 @@ test("appearance and sidebar preferences persist through their direct settings r
 
   await expectAppearanceSettingsReady(page);
   const appearanceHeadings = await page
-    .locator(
-      ".settings-content--appearance:visible > .settings-section > h2",
-    )
+    .locator(".settings-content--appearance:visible > .settings-section > h2")
     .allTextContents();
   expect(appearanceHeadings.indexOf("Theme rotation")).toBe(
     appearanceHeadings.indexOf("Color theme") + 1,

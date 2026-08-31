@@ -3,6 +3,34 @@
    The wizard nav uses the .page-tabs contract so the user's "Page tab colors"
    setting is respected. The indicator must always be visible (no swipe state).
    ───────────────────────────────────────────────────────────────────────────── */
+/* Sticky Course Wizard Tabs Navigation */
+.course-wizard-steps-nav {
+  --wizard-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
+  position: sticky !important;
+  top: var(--page-tabs-sticky-top, 0px) !important;
+  z-index: 30 !important;
+  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 14px !important;
+  padding: 0 var(--wizard-tab-nav-bleed) !important;
+  gap: 8px !important;
+  background: color-mix(in srgb, var(--main-surface) 78%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent) !important;
+}
+
+:root[data-theme="light"] .course-wizard-steps-nav {
+  border-bottom-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--main-surface) 84%, transparent) !important;
+}
+
+.course-wizard-steps-nav button,
+.course-wizard-steps-nav [role="tab"] {
+  min-height: 48px !important;
+  padding: 0 14px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+}
+
 .course-wizard-steps-nav .page-tabs__indicator {
   opacity: 1;
   transition:
@@ -24,6 +52,14 @@
   border-right: 0 !important;
   border-top: 0 !important;
   border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+}
+
+.course-wizard-steps-nav [role="tab"]:hover,
+.course-wizard-steps-nav button:hover {
+  color: var(--text) !important;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .course-wizard-steps-nav [role="tab"]:focus-visible,
@@ -716,3 +752,58 @@
   border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   margin: 1.25rem 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Mobile Scrollport Bottom Space Optimization
+   Eliminate excess trailing blank space beneath cards on small viewports.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 820px) {
+  .student-surface-main:has(.course-wizard-steps-nav),
+  .student-surface-main:has(.course-wizard-mobile-action-bar) {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard — Swipeable Tab Content & Layout Constraints
+   ───────────────────────────────────────────────────────────────────────────── */
+.course-wizard-tab-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.course-wizard-tab-content .swipeable-tab-panel__swiper {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.course-wizard-tab-content .swiper-slide {
+  min-width: 0 !important;
+  box-sizing: border-box;
+  padding: 0 !important;
+}
+
+.course-wizard-tab-content .swiper-slide:not(.swiper-slide-active) {
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden;
+}
+
+.course-wizard-tab-content .swiper-slide.swiper-slide-active {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  visibility: visible;
+}
+
+.course-wizard-tab-content .swipeable-tab-panel__swiper.swiper-touch .swiper-slide {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  visibility: visible;
+}
+

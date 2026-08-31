@@ -43,7 +43,7 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
           400: errorResponse("Category slug already exists"),
         },
       },
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requireCourseAuthor,
     },
     controller.createCategory,
   );

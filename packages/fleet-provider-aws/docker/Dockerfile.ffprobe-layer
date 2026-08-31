@@ -1,0 +1,11 @@
+ARG TARGETARCH=arm64
+FROM --platform=linux/${TARGETARCH} mwader/static-ffmpeg:latest AS ffmpeg-source
+
+FROM alpine:latest AS builder
+RUN apk add --no-cache zip
+WORKDIR /layer
+COPY --from=ffmpeg-source /ffprobe /layer/bin/ffprobe
+RUN chmod 755 /layer/bin/ffprobe && zip -9 -r /ffprobe-layer.zip bin/ffprobe
+
+FROM scratch AS export
+COPY --from=builder /ffprobe-layer.zip /ffprobe-layer.zip

@@ -5,3 +5,9 @@ build
 pnpm-lock.yaml
 **/playwright-report/
 **/test-results/
+s3-bucket
+**/s3-bucket
+dist
+**/dist
+scratch
+**/scratch

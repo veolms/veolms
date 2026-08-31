@@ -11,6 +11,7 @@ import * as refundRepo from "./refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface RefundService {
   processRefund(
@@ -29,6 +30,7 @@ export function createRefundService({
   paymentGateway: PaymentGateway;
 }): RefundService {
   const courseAccessService = createCourseAccessService();
+  const outbox = createOutboxService();
 
   /**
    * Processes a refund (full or partial) via PaymentGateway and tracks refund status idempotently.
@@ -54,66 +56,95 @@ export function createRefundService({
     const refundId = crypto.randomUUID();
 
     // 1. Reserve — see the concurrency note above.
-    const { order, targetItem, payment, requestedAmount, totalRefundedAlready } = await database
-      .transaction()
-      .execute(async (trx) => {
-        const order = await orderRepo.findOrderByIdForUpdate(trx, orderId);
-        if (!order) {
-          throw CommerceErrors.ORDER_NOT_FOUND(orderId);
-        }
-        if (order.status !== "paid" && order.status !== "partially_refunded") {
-          throw CommerceErrors.REFUND_NOT_ALLOWED("Order is not in a refundable state.");
-        }
+    const {
+      order,
+      targetItem,
+      payment,
+      requestedAmount,
+      totalRefundedAlready,
+    } = await database.transaction().execute(async (trx) => {
+      const order = await orderRepo.findOrderByIdForUpdate(trx, orderId);
+      if (!order) {
+        throw CommerceErrors.ORDER_NOT_FOUND(orderId);
+      }
+      if (order.status !== "paid" && order.status !== "partially_refunded") {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(
+          "Order is not in a refundable state.",
+        );
+      }
 
-        let targetItem = null;
-        if (orderItemId) {
-          targetItem = await orderRepo.findOrderItemById(trx, orderItemId);
-          if (!targetItem || targetItem.order_id !== orderId) {
-            throw CommerceErrors.REFUND_NOT_ALLOWED("Target order item not found on this order.");
-          }
-        }
-
-        const payment = await paymentRepo.findPaymentByOrderId(trx, orderId);
-        if (!payment || !payment.gateway_payment_id || payment.status !== "captured") {
-          throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
-        }
-
-        // Calculate total already refunded — safe from the race now that
-        // this read happens under the order row's lock. No exclusion
-        // needed: this refund doesn't exist as a row yet.
-        const totalRefundedAlready = await refundRepo.sumOtherCountedRefunds(trx, orderId);
-
-        const maxRefundable = payment.amount - totalRefundedAlready;
-        if (maxRefundable <= 0) {
-          throw CommerceErrors.REFUND_NOT_ALLOWED("This order has already been fully refunded.");
-        }
-
-        // If orderItemId was provided without an explicit amount, default to target item final amount
-        const requestedAmount = amount ?? (targetItem ? Math.min(targetItem.final_amount, maxRefundable) : maxRefundable);
-        if (requestedAmount > maxRefundable) {
+      let targetItem = null;
+      if (orderItemId) {
+        targetItem = await orderRepo.findOrderItemById(trx, orderItemId);
+        if (!targetItem || targetItem.order_id !== orderId) {
           throw CommerceErrors.REFUND_NOT_ALLOWED(
-            `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
+            "Target order item not found on this order.",
           );
         }
+      }
 
-        const now = new Date();
-        await refundRepo.insertRefund(trx, {
-          id: refundId,
-          order_id: order.id,
-          order_item_id: targetItem?.id ?? null,
-          payment_id: payment.id,
-          gateway_refund_id: null,
-          amount: requestedAmount,
-          currency: payment.currency,
-          reason: reason ?? null,
-          status: "pending",
-          created_by: adminUserId,
-          created_at: now,
-          updated_at: now,
-        });
+      const payment = await paymentRepo.findPaymentByOrderId(trx, orderId);
+      if (
+        !payment ||
+        !payment.gateway_payment_id ||
+        payment.status !== "captured"
+      ) {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(
+          "No captured payment exists for this order.",
+        );
+      }
 
-        return { order, targetItem, payment, requestedAmount, totalRefundedAlready };
+      // Calculate total already refunded — safe from the race now that
+      // this read happens under the order row's lock. No exclusion
+      // needed: this refund doesn't exist as a row yet.
+      const totalRefundedAlready = await refundRepo.sumOtherCountedRefunds(
+        trx,
+        orderId,
+      );
+
+      const maxRefundable = payment.amount - totalRefundedAlready;
+      if (maxRefundable <= 0) {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(
+          "This order has already been fully refunded.",
+        );
+      }
+
+      // If orderItemId was provided without an explicit amount, default to target item final amount
+      const requestedAmount =
+        amount ??
+        (targetItem
+          ? Math.min(targetItem.final_amount, maxRefundable)
+          : maxRefundable);
+      if (requestedAmount > maxRefundable) {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(
+          `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
+        );
+      }
+
+      const now = new Date();
+      await refundRepo.insertRefund(trx, {
+        id: refundId,
+        order_id: order.id,
+        order_item_id: targetItem?.id ?? null,
+        payment_id: payment.id,
+        gateway_refund_id: null,
+        amount: requestedAmount,
+        currency: payment.currency,
+        reason: reason ?? null,
+        status: "pending",
+        created_by: adminUserId,
+        created_at: now,
+        updated_at: now,
       });
+
+      return {
+        order,
+        targetItem,
+        payment,
+        requestedAmount,
+        totalRefundedAlready,
+      };
+    });
 
     // 2. Dispatch refund through the PaymentGateway abstraction (outside
     //    the reservation transaction/lock above).
@@ -202,6 +233,21 @@ export function createRefundService({
             });
           }
         }
+
+        await outbox.publish(trx, {
+          type: "refund.completed",
+          version: 1,
+          dedupeKey: `refund.completed:${record.id}`,
+          occurredAt: now,
+          payload: {
+            refundId: record.id,
+            orderId: order.id,
+            orderNumber: order.order_number,
+            recipientUserId: order.user_id,
+            amount: requestedAmount,
+            currency: payment.currency,
+          },
+        });
       }
 
       return record;

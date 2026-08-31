@@ -124,6 +124,9 @@ export function IdentifierForm({
 
     if (next) {
       setCountry(next);
+      setInvalidReason(
+        mobile.trim().length > 0 ? validateMobile(mobile, next) : null,
+      );
     }
   };
 

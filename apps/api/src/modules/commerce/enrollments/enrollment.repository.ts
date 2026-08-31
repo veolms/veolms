@@ -51,6 +51,25 @@ export async function listUserEnrolledCourseIds(
   return rows.map((r) => r.course_id);
 }
 
+export async function listActiveUserIdsByCourseId(
+  database: Executor,
+  courseId: string,
+) {
+  const rows = await database
+    .selectFrom("enrollments")
+    .select("user_id")
+    .where("course_id", "=", courseId)
+    .where("status", "=", "active")
+    .where((expression) =>
+      expression.or([
+        expression("access_expires_at", "is", null),
+        expression("access_expires_at", ">", new Date()),
+      ]),
+    )
+    .execute();
+  return rows.map((row) => row.user_id);
+}
+
 export async function insertEnrollment(
   database: Executor,
   values: {
@@ -124,7 +143,10 @@ export async function updateEnrollmentStatus(
  * every enrollment for that (user, course) pair regardless of which order
  * granted it.
  */
-export async function revokeEnrollmentsByOrderId(database: Executor, orderId: string) {
+export async function revokeEnrollmentsByOrderId(
+  database: Executor,
+  orderId: string,
+) {
   return await database
     .updateTable("enrollments")
     .set({

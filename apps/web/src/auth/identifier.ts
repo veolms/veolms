@@ -138,7 +138,6 @@ const NATIONAL_MOBILE_PREFIXES: Record<string, RegExp> = {
   GB: /^[7]/,
 };
 
-const DIGITS_WITH_APPROVED_COPY = 10;
 const INVALID_EMAIL_MESSAGE = "Please enter a valid email address.";
 
 export function findCountry(id: string): CountryOption | undefined {
@@ -180,9 +179,7 @@ function toNationalNumber(value: string, country: CountryOption): string {
 }
 
 function invalidMobileMessage(country: CountryOption): string {
-  return country.nationalDigits === DIGITS_WITH_APPROVED_COPY
-    ? `Please enter a valid ${country.nationalDigits}-digit mobile number.`
-    : "Please enter a valid mobile number.";
+  return `Please enter a valid ${country.nationalDigits}-digit mobile number for ${country.name}.`;
 }
 
 export function validateMobile(

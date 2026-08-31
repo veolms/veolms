@@ -1,15 +1,42 @@
 import { z } from "zod";
 
+export interface CoursePricingSummary {
+  pricingType: "free" | "paid";
+  price: number;
+  currency: string;
+  salePrice: number | null;
+}
+
 export interface CourseSummary {
   id: string;
   slug: string;
   title: string;
   shortDescription: string;
+  difficulty?: "beginner" | "intermediate" | "advanced" | null;
+  thumbnailUrl?: string | null;
+  instructorName?: string | null;
+  categoryName?: string | null;
+  totalSections: number;
+  totalLessons: number;
+  totalDurationSeconds: number;
+  pricing: CoursePricingSummary;
+  certificateEnabled: boolean;
 }
 
-export interface PublicCourse extends CourseSummary {
+export interface PublicCourse {
+  id: string;
+  slug: string;
+  title: string;
+  shortDescription: string;
   description: string;
 }
+
+export const coursePricingSummarySchema = z.strictObject({
+  pricingType: z.enum(["free", "paid"]),
+  price: z.number().int().nonnegative(),
+  currency: z.string().min(3).max(3).default("INR"),
+  salePrice: z.number().int().nonnegative().nullable().default(null),
+});
 
 const courseSummaryObjectSchema = z.strictObject({
   id: z.uuid().meta({ description: "Stable identifier of the course." }),
@@ -24,19 +51,45 @@ const courseSummaryObjectSchema = z.strictObject({
     .max(500)
     .default("")
     .meta({ description: "One-line summary shown in catalogue listings." }),
+  difficulty: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .nullable()
+    .optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  instructorName: z.string().nullable().optional(),
+  categoryName: z.string().nullable().optional(),
+  totalSections: z.number().int().nonnegative().default(0),
+  totalLessons: z.number().int().nonnegative().default(0),
+  totalDurationSeconds: z.number().int().nonnegative().default(0),
+  pricing: coursePricingSummarySchema,
+  certificateEnabled: z.boolean().default(false),
 });
 
 export const courseSummarySchema: z.ZodType<CourseSummary> =
   courseSummaryObjectSchema;
 
+const publicCourseObjectSchema = z.strictObject({
+  id: z.uuid().meta({ description: "Stable identifier of the course." }),
+  slug: z
+    .string()
+    .min(1)
+    .max(160)
+    .meta({ description: "URL-safe identifier used to address the course." }),
+  title: z.string().min(1).max(255).meta({ description: "Course title." }),
+  shortDescription: z
+    .string()
+    .max(500)
+    .default("")
+    .meta({ description: "One-line summary shown in catalogue listings." }),
+  description: z
+    .string()
+    .min(1)
+    .max(2000)
+    .meta({ description: "Full course description." }),
+});
+
 export const publicCourseSchema: z.ZodType<PublicCourse> =
-  courseSummaryObjectSchema.extend({
-    description: z
-      .string()
-      .min(1)
-      .max(2000)
-      .meta({ description: "Full course description." }),
-  });
+  publicCourseObjectSchema;
 
 export const courseListResponseSchema = z.strictObject({
   courses: z
@@ -334,6 +387,9 @@ export const courseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   publishedAt: z.string().nullable().optional(),
+  totalSections: z.number().int().nonnegative().optional(),
+  totalLessons: z.number().int().nonnegative().optional(),
+  totalDurationSeconds: z.number().int().nonnegative().optional(),
 });
 
 export const createCourseRequestSchema = z.object({
@@ -441,18 +497,49 @@ export type DeletedCoursesListResponse = z.infer<
 >;
 export type RestoreCourseResponse = z.infer<typeof restoreCourseResponseSchema>;
 
+// --- Validation & Publishing ---
+export const courseValidationAreaSchema = z.enum([
+  "basics",
+  "curriculum",
+  "accessRules",
+  "pricing",
+  "extras",
+]);
+
 export const courseValidationIssueSchema = z.object({
   code: z.string(),
   message: z.string(),
+  area: courseValidationAreaSchema.optional(),
+});
+
+export const validationItemSchema = z.object({
+  valid: z.boolean(),
+  status: z.string(),
+  errors: z.array(z.string()),
+});
+
+export const courseValidationSectionsSchema = z.object({
+  basics: validationItemSchema,
+  curriculum: validationItemSchema,
+  accessRules: validationItemSchema,
+  pricing: validationItemSchema,
+  extras: validationItemSchema,
 });
 
 export const courseValidationResponseSchema = z.object({
   canPublish: z.boolean(),
+  valid: z.boolean(),
+  sections: courseValidationSectionsSchema,
   errors: z.array(courseValidationIssueSchema),
   warnings: z.array(courseValidationIssueSchema),
 });
 
+export type CourseValidationArea = z.infer<typeof courseValidationAreaSchema>;
 export type CourseValidationIssue = z.infer<typeof courseValidationIssueSchema>;
+export type ValidationItem = z.infer<typeof validationItemSchema>;
+export type CourseValidationSections = z.infer<
+  typeof courseValidationSectionsSchema
+>;
 export type CourseValidationResponse = z.infer<
   typeof courseValidationResponseSchema
 >;
@@ -526,6 +613,12 @@ z.globalRegistry.add(restoreCourseResponseSchema, {
 });
 z.globalRegistry.add(courseOverviewSchema, {
   id: "CourseOverviewResponse",
+});
+z.globalRegistry.add(validationItemSchema, {
+  id: "ValidationItem",
+});
+z.globalRegistry.add(courseValidationSectionsSchema, {
+  id: "CourseValidationSections",
 });
 z.globalRegistry.add(courseValidationResponseSchema, {
   id: "CourseValidationResponse",

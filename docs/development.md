@@ -117,3 +117,20 @@ The workflow uses the GitHub `development` environment and exchanges GitHub's OI
 - `VITE_COURSE_MEDIA_BASE_URL` (optional)
 
 Do not add long-lived AWS access keys as GitHub secrets. Restrict the role's trust policy to the repository's immutable `development` environment subject, `repo:veolms@301170291/veolms@1320067532:environment:development`. Its permissions should be limited to listing the deployment bucket, putting and deleting objects in that bucket, and creating and reading invalidations for the development CloudFront distribution.
+
+## Development API deployment
+
+Every push to `development` also runs `.github/workflows/deploy-development-api.yml`. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit that triggered the workflow, installs the frozen lockfile, applies pending migrations, type-checks the API, restarts the systemd service, and checks the API liveness endpoint.
+
+The server must have Node.js 24, pnpm 11, Git, PostgreSQL access, `curl`, and a systemd unit for the API. Keep the production `.env` on the server in the repository's expected location; the workflow never transfers or replaces it. The deploy user needs read/write access to the application directory and passwordless permission to restart only the API service, for example:
+
+```sudoers
+veolms-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart veolms-api.service
+```
+
+Configure these values on the GitHub `development` environment:
+
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/api/v1/health`).
+- Secrets: `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS`.
+
+The server checkout's `origin` must point to the repository and the deploy key must be able to fetch the `development` branch. `DEPLOY_KNOWN_HOSTS` should contain the server's verified `known_hosts` entry; do not use `ssh-keyscan` inside the workflow or disable host-key checking.

@@ -5,6 +5,7 @@ import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/Down
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { useLogout } from "../services/auth";
+import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
 import { clearStoredProfilePreferences } from "./profilePreferences";
 import type { ProfileRole } from "./profilePreferences";
 
@@ -18,7 +19,18 @@ export function AccountSettings({
   onNavigatePage,
 }: AccountSettingsProps) {
   const [confirmDeactivation, setConfirmDeactivation] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const logoutMutation = useLogout();
+
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // ignore
+    }
+    clearStoredProfilePreferences();
+    window.location.href = "/";
+  };
 
   return (
     <div className="settings-detail" aria-label="Account settings">
@@ -112,15 +124,7 @@ export function AccountSettings({
           <button
             type="button"
             className="settings-action"
-            onClick={async () => {
-              try {
-                await logoutMutation.mutateAsync();
-              } catch {
-                // ignore
-              }
-              clearStoredProfilePreferences();
-              window.location.href = "/";
-            }}
+            onClick={() => setLogoutConfirmOpen(true)}
           >
             <SignOut size={16} /> Sign out
           </button>
@@ -162,6 +166,15 @@ export function AccountSettings({
           </p>
         )}
       </section>
+
+      <LogoutConfirmModal
+        isOpen={logoutConfirmOpen}
+        isPending={logoutMutation.isPending}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          void handleLogout();
+        }}
+      />
     </div>
   );
 }

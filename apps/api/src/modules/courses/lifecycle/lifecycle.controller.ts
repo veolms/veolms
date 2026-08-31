@@ -12,12 +12,7 @@ export function createLifecycleController({
     const { id } = request.params;
     const creatorId = request.user!.id;
 
-    const issues = await service.validateCourse(id, creatorId);
-    return {
-      canPublish: issues.length === 0,
-      errors: issues,
-      warnings: [],
-    };
+    return await service.validateCourse(id, creatorId);
   }
 
   async function publishCourse(

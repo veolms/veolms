@@ -9,3 +9,6 @@ build/
 .env
 *.log
 .DS_Store
+s3-bucket/
+dist/
+scratch/

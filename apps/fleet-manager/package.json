@@ -2,9 +2,38 @@
   "name": "@veolms/fleet-manager",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./serverless": "./src/entrypoints/serverless.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
+    "build:serverless": "node --env-file-if-exists=.env scripts/build-serverless.ts",
     "typecheck": "tsc --noEmit",
-    "start": "node src/index.ts"
+    "test": "node --test tests/**/*.test.ts",
+    "start": "node --env-file-if-exists=.env src/index.ts",
+    "run": "node --env-file-if-exists=.env src/cli.ts run",
+    "cli": "node --env-file-if-exists=.env src/cli.ts",
+    "provider": "node --env-file-if-exists=.env src/provider-select.ts",
+    "infra": "node --env-file-if-exists=.env src/cli.ts infra",
+    "destroy": "node --env-file-if-exists=.env src/destroy.ts",
+    "bundle:upload": "node --env-file-if-exists=.env scripts/upload-worker-bundle.ts",
+    "queue:trigger": "node --env-file-if-exists=.env scripts/queue-and-trigger-lambda.ts",
+    "test:pipeline": "node --env-file-if-exists=.env scripts/test-local-pipeline.ts"
+  },
+  "dependencies": {
+    "@veolms/database": "workspace:*",
+    "@veolms/config": "workspace:*",
+    "@veolms/contracts": "workspace:*",
+    "@veolms/fleet-provider-aws": "workspace:*",
+    "@veolms/fleet-provider-local": "workspace:*",
+    "@veolms/fleet-types": "workspace:*",
+    "kysely": "catalog:",
+    "pg": "^8.22.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.5",
+    "esbuild": "^0.25.0"
   }
 }

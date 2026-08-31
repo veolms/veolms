@@ -14,6 +14,7 @@
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
         [type="color"]
       ),
+    textarea,
     select,
     [data-control-radius-surface],
     :where(label, div):has(> [data-search-shortcut-target]),
@@ -36,7 +37,9 @@
     .learning-comment-composer__search
   ):not(.learning-comment-card__like):not(.learning-comment-card__replies):not(
     .lesson-tool-tab
-  ):not(.player-menu-row):not(.player-text-control) {
+  ):not(.player-menu-row):not(.player-text-control):not(
+    .settings-tabs button
+  ):not(.settings-tabs [role="tab"]) {
   border-radius: var(--control-radius-structured) !important;
 }
 
@@ -50,19 +53,41 @@
     .workspace-button,
     .settings-profile__primary-action,
     .course-wizard-link-btn-primary,
+    .delete-modal-confirm,
+    .delete-modal-cancel,
     button.is-primary
   ) {
   border-radius: var(--control-radius-action) !important;
 }
 
-/* Settings section navigation uses an underline, so rounded tab backgrounds
-   add visual noise and can deform into capsules. */
+/* Course Creation Wizard & Course Overview Panels */
 :root[data-control-radius]
   .courses-app
-  #courses-main-scrollport
+  :is(
+    [data-course-wizard] section,
+    [data-course-wizard] article,
+    [data-course-wizard] textarea,
+    [data-course-wizard] input,
+    [data-course-wizard] select,
+    [data-course-wizard] .course-wizard-tab-content > div,
+    [data-course-overview] > div,
+    [data-course-overview] section,
+    [data-course-overview] article,
+    [data-course-overview] textarea,
+    [data-course-overview] input,
+    [data-course-overview] select,
+    [data-course-overview] [role="listitem"],
+    .delete-modal-card
+  ):not([class~="rounded-full"]):not(.page-tabs__indicator) {
+  border-radius: var(--control-radius-structured) !important;
+}
+
+/* Settings section navigation uses flat bottom underline styling */
+:root[data-control-radius]
+  .courses-app
   .settings-tabs
   button {
-  border-radius: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
 }
 
 :root[data-control-radius]

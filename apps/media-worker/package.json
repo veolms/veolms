@@ -2,9 +2,26 @@
   "name": "@veolms/media-worker",
   "private": true,
   "type": "module",
+  "exports": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/media-worker.js",
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/**/*.test.ts",
     "start": "node src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@veolms/config": "workspace:*",
+    "@veolms/database": "workspace:*",
+    "@veolms/fleet-types": "workspace:*",
+    "@veolms/storage": "workspace:*",
+    "kysely": "catalog:",
+    "pg": "^8.22.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.5",
+    "esbuild": "^0.25.0"
   }
 }

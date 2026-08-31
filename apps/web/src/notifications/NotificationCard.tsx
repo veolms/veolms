@@ -18,15 +18,17 @@ import { useBackDismiss } from "../navigation/useBackDismiss";
 
 export interface NotificationCardProps {
   notification: NotificationItem;
-  onToggleRead: (id: string) => void;
-  onDelete: (id: string) => void;
+  onMarkRead: (id: string) => void;
+  onArchive: (id: string) => void;
+  onOpen?: (destination: string) => void;
   setNotice?: (message: string) => void;
 }
 
 export function NotificationCard({
   notification,
-  onToggleRead,
-  onDelete,
+  onMarkRead,
+  onArchive,
+  onOpen,
   setNotice,
 }: NotificationCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,14 +70,14 @@ export function NotificationCard({
     }
   };
 
-  const handleDelete = () => {
+  const handleArchive = () => {
     setMenuOpen(false);
-    onDelete(notification.id);
+    onArchive(notification.id);
   };
 
-  const handleToggleRead = () => {
+  const handleMarkRead = () => {
     setMenuOpen(false);
-    onToggleRead(notification.id);
+    if (!notification.isRead) onMarkRead(notification.id);
   };
 
   return (
@@ -105,7 +107,20 @@ export function NotificationCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-sm sm:text-base text-(--text) tracking-tight">
-              {notification.title}
+              {notification.actionUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleMarkRead();
+                    onOpen?.(notification.actionUrl!);
+                  }}
+                  className="cursor-pointer text-left hover:underline"
+                >
+                  {notification.title}
+                </button>
+              ) : (
+                notification.title
+              )}
             </h3>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-(--text-secondary) leading-relaxed">
@@ -147,19 +162,19 @@ export function NotificationCard({
                 />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-1 z-30 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                  className="absolute right-0 top-full z-30 mt-1 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={handleToggleRead}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
-                  >
-                    <Check size={14} />
-                    <span>
-                      {notification.isRead ? "Mark as unread" : "Mark as read"}
-                    </span>
-                  </button>
+                  {!notification.isRead && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleMarkRead}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    >
+                      <Check size={14} />
+                      <span>Mark as read</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
@@ -172,11 +187,11 @@ export function NotificationCard({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={handleDelete}
+                    onClick={handleArchive}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover) cursor-pointer"
                   >
                     <Trash size={14} />
-                    <span>Delete</span>
+                    <span>Archive</span>
                   </button>
                 </div>
               </>

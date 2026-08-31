@@ -389,13 +389,8 @@ test("every creator create action opens the dedicated course editor", async ({
   page,
 }) => {
   await openApp(page, "/");
-  const sidebar = page.getByRole("complementary", {
-    name: "Student navigation",
-  });
-  await sidebar
-    .getByRole("button", { name: "Open role and appearance menu" })
-    .click();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
   await expect(
     page.getByRole("complementary", { name: "Creator navigation" }),
   ).toBeVisible();

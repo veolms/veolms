@@ -9,7 +9,12 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "archived";
+  | "all"
+  | "enrolled"
+  | "not-enrolled"
+  | "published"
+  | "draft"
+  | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"
@@ -18,7 +23,7 @@ export type CourseStatusFilter =
   | "completed"
   | "published"
   | "draft"
-  | "archived";
+  | "bin";
 export type CourseLifecycleStatus = "published" | "draft" | "archived";
 
 export interface CourseOpenOptions {
@@ -47,6 +52,12 @@ export interface Course {
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;
+  slug?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  purgeAt?: string;
+  isApi?: boolean;
 }
 
 export interface CourseCatalogueFilters {
@@ -216,6 +227,7 @@ export function getVisibleCourses(
     if (
       role === "creator" &&
       enrollmentFilter !== "all" &&
+      enrollmentFilter !== "bin" &&
       course.lifecycleStatus !== enrollmentFilter
     )
       return false;
@@ -263,6 +275,16 @@ export function getVisibleCourses(
         ...result.slice(contrastingCourseIndex + 1),
       ];
     }
+  }
+  if (role === "creator" && sort === "latest") {
+    result = [...result].sort((a, b) => {
+      const dateA = a.updatedAt || a.createdAt;
+      const dateB = b.updatedAt || b.createdAt;
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+      if (timeA !== timeB) return timeB - timeA;
+      return 0;
+    });
   }
   if (sort === "title")
     result = [...result].sort((a, b) => a.title.localeCompare(b.title));

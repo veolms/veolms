@@ -100,7 +100,7 @@ describe("course catalogue selector", () => {
       select({
         role: "creator",
         enrollmentFilter: "published",
-        statusFilter: "archived",
+        statusFilter: "bin",
       }).map(({ lifecycleStatus }) => lifecycleStatus),
     ).toEqual(["published", "published", "published", "published"]);
   });

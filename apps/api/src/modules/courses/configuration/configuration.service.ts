@@ -29,10 +29,11 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const durationType =
-      updates.accessType === "everyone" ? "lifetime" : updates.durationType;
+    const durationType = updates.durationType;
     const durationDays =
-      updates.accessType === "everyone" ? null : updates.durationDays ?? null;
+      updates.durationType === "fixed_duration"
+        ? updates.durationDays ?? null
+        : null;
 
     const id = await configRepo.upsertAccessRule(database, {
       id: crypto.randomUUID(),

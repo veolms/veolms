@@ -1580,7 +1580,8 @@ test("role, appearance, and academy palette persist across routes and reloads", 
     .getByRole("button", { name: "Open role and appearance menu" })
     .click({ position: { x: 24, y: 24 } });
   await expect(paletteMenu).toBeHidden();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
   await expect(
     page.getByRole("complementary", { name: "Creator navigation" }),
   ).toBeVisible();
@@ -3389,12 +3390,12 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   expect(compactOptionGeometry.previewBackdropFilter).toBe(
     "blur(8px) saturate(1.08)",
   );
-  expect(compactOptionGeometry.previewBokehOpacity).toBe("0.5");
+  expect(compactOptionGeometry.previewBokehOpacity).toBe("0.25");
   await expect(resetGlow).toBeDisabled();
-  await expect(intensity).toHaveValue("50");
+  await expect(intensity).toHaveValue("25");
   await expect(intensity).toHaveAttribute("min", "0");
   await expect(intensity).toHaveAttribute("max", "100");
-  await expect(intensity).toHaveAttribute("aria-valuetext", "50 percent");
+  await expect(intensity).toHaveAttribute("aria-valuetext", "25 percent");
   await expect(blur).toHaveValue("8");
   await expect(blur).toHaveAttribute("min", "0");
   await expect(blur).toHaveAttribute("max", "32");
@@ -3678,7 +3679,7 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   await expect(circleShape).toHaveAttribute("aria-checked", "true");
   await expect(shapeSize).toHaveValue("100");
   await expect(blur).toHaveValue("8");
-  await expect(intensity).toHaveValue("50");
+  await expect(intensity).toHaveValue("25");
   await expect(resetGlow).toBeDisabled();
   await expect(root).toHaveAttribute("data-sidebar-glow", "theme");
   await expect(root).toHaveAttribute("data-sidebar-glow-shape", "circle");

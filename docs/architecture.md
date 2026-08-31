@@ -4,7 +4,7 @@ VeoLMS currently has four application boundaries:
 
 - **Web** is a React Router application that reads public course data through the API and builds to static files.
 - **API** is the Fastify service that owns public HTTP endpoints and accesses PostgreSQL through Kysely.
-- **Fleet Manager** is an unimplemented shell for a future infrastructure reconciliation service. It will not run jobs.
-- **Media Worker** is an unimplemented shell for future media processing that will run independently from the API.
+- **Fleet Manager** is the control plane responsible for ephemeral worker provisioning, dynamic monitoring, direct heartbeats, and job reconciliation ([docs](./fleet-manager-and-video-transcoding.md)).
+- **Media Worker** is the autonomous media processing worker engine that executes FFmpeg multi-rendition HLS transcoding and streams progress and heartbeats directly to PostgreSQL.
 
-Shared packages contain only validated configuration, public course contracts, and database access needed by the current course catalogue slice.
+For full architectural and operational details of the video transcoding infrastructure, see [`docs/fleet-manager-and-video-transcoding.md`](./fleet-manager-and-video-transcoding.md).

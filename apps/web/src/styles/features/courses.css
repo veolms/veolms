@@ -165,6 +165,11 @@
 .courses-profile {
   position: relative;
   margin-top: 14px;
+  container-type: inline-size;
+}
+
+.mobile-menu-sheet__profile-wrap {
+  container-type: inline-size;
 }
 
 .courses-profile__button {
@@ -229,6 +234,65 @@
 
 .courses-profile__button > svg {
   color: var(--muted);
+}
+
+.courses-profile__login-button {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.courses-profile__login-button > .courses-profile__login-copy {
+  min-width: 0;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.courses-profile__login-button .courses-profile__login-subtitle {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.courses-profile__login-arrow {
+  transition: transform 150ms ease;
+}
+
+.courses-profile__login-button:hover .courses-profile__login-arrow {
+  transform: translateX(2px);
+}
+
+/* The profile surface can be resized independently of the viewport. Container
+   queries keep its content stable at narrow custom sidebar and drawer widths. */
+@container (max-width: 245px) {
+  .courses-profile__login-icon {
+    width: 39px;
+    height: 39px;
+  }
+
+  .courses-profile__login-button .courses-profile__login-subtitle {
+    display: none;
+  }
+}
+
+@container (max-width: 120px) {
+  .courses-profile__login-button {
+    justify-content: center;
+  }
+
+  .courses-profile__login-button > .courses-profile__login-copy,
+  .courses-profile__login-button > .courses-profile__login-arrow {
+    display: none;
+  }
+}
+
+/* The collapsed rail keeps only the login icon so the compact control cannot
+   overflow even in browsers without container-query support. */
+.courses-app--collapsed
+  .courses-profile__button
+  > .courses-profile__login-arrow {
+  display: none;
 }
 
 .profile-menu {

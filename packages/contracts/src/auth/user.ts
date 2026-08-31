@@ -160,7 +160,11 @@ export const userProfileResponseSchema = z.object({
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
+  mfaMandatory: z.boolean(),
 });
+
+/** The session may be absent when the client is visiting a public route. */
+export const currentUserResponseSchema = userProfileResponseSchema.nullable();
 
 export const creatorRegisterRequestSchema = z.object({
   name: z
@@ -214,6 +218,7 @@ export type RegisterRequest = z.input<typeof registerRequestSchema>;
 export type AuthMenuPermission = z.output<typeof authMenuPermissionSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
+export type CurrentUserResponse = z.output<typeof currentUserResponseSchema>;
 export type CreatorRegisterRequest = z.input<
   typeof creatorRegisterRequestSchema
 >;

@@ -149,27 +149,27 @@ export function ConfirmDeleteModal({
           onClick={dismissModal}
           aria-label="Close dialog"
         >
-          <X size={14} weight="bold" />
+          <X size={15} weight="bold" />
         </button>
 
         {/* Header with Icon and Text */}
-        <div className="flex items-start gap-3.5 pr-8 mb-5">
+        <div className="flex items-start gap-4 pr-7 mb-5.5">
           <div
-            className="flex w-10 h-10 items-center justify-center rounded-xl text-red-400 bg-red-500/12 border border-red-500/20 shadow-[0_2px_8px_rgba(239,68,68,0.12)] shrink-0"
+            className="flex w-11 h-11 items-center justify-center rounded-xl text-red-400 bg-red-500/12 border border-red-500/20 shadow-[0_2px_12px_rgba(239,68,68,0.16)] shrink-0"
             aria-hidden="true"
           >
-            <Trash size={18} weight="duotone" />
+            <Trash size={20} weight="duotone" />
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
             <h3
               id="delete-modal-title"
-              className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold tracking-[-0.015em] leading-tight"
+              className="m-0 mb-1.5 text-(--text) text-[1.1rem] font-bold tracking-[-0.015em] leading-snug break-words"
             >
               {title}
             </h3>
             <p
               id="delete-modal-description"
-              className="m-0 text-(--muted) text-[0.82rem] leading-[1.45]"
+              className="m-0 text-(--muted) text-[0.86rem] leading-[1.5] break-words"
             >
               {message}
             </p>
@@ -177,7 +177,7 @@ export function ConfirmDeleteModal({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2.5 max-[480px]:flex-col-reverse max-[480px]:w-full">
+        <div className="flex items-center justify-end gap-3 max-[480px]:flex-col-reverse max-[480px]:w-full max-[480px]:gap-2.5">
           <button
             ref={cancelBtnRef}
             type="button"
@@ -189,16 +189,7 @@ export function ConfirmDeleteModal({
           <button
             ref={confirmBtnRef}
             type="button"
-            style={{
-              fontSize: "0.80rem",
-              fontWeight: 700,
-              height: "34px",
-              borderRadius: "8px",
-              gap: "6px",
-              paddingLeft: "16px",
-              paddingRight: "16px",
-            }}
-            className="relative inline-flex items-center justify-center border border-red-500/40 text-white bg-red-600 hover:bg-red-700 hover:border-red-500/60 active:scale-[0.98] cursor-pointer overflow-hidden shadow-[0_3px_10px_rgba(220,38,38,0.35)] hover:shadow-[0_4px_14px_rgba(220,38,38,0.45)] transition-all duration-150 ease-out select-none box-border w-38.75 min-w-38.75 max-w-38.75 max-[480px]:w-full max-[480px]:min-w-full max-[480px]:max-w-full max-[480px]:h-9.5"
+            className="delete-modal-confirm"
             onMouseDown={startHold}
             onMouseUp={resetHold}
             onMouseLeave={resetHold}
@@ -221,16 +212,31 @@ export function ConfirmDeleteModal({
           >
             {/* Smooth Fill Progress Bar */}
             <span
-              className="absolute inset-0 bg-black/35 origin-left pointer-events-none"
+              className="delete-modal-progress"
               style={{
                 transform: `scaleX(${holdProgress})`,
                 transition: isHolding ? "none" : "transform 0.15s ease-out",
               }}
               aria-hidden="true"
             />
-            <span className="relative z-10 inline-flex items-center gap-1.5">
-              <Trash size={15} weight="bold" />
-              <span>{isHolding ? "Hold to Delete..." : `Hold to ${confirmLabel}`}</span>
+            <span className="relative z-10 inline-flex items-center gap-1.5 font-semibold">
+              <Trash size={15} weight={isHolding ? "fill" : "bold"} />
+              <span className="grid [grid-template-areas:'stack'] items-center text-center">
+                <span
+                  className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
+                    isHolding ? "opacity-0 invisible pointer-events-none" : "opacity-100 visible"
+                  }`}
+                >
+                  Hold to {confirmLabel}
+                </span>
+                <span
+                  className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
+                    isHolding ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+                  }`}
+                >
+                  Hold to Delete...
+                </span>
+              </span>
             </span>
           </button>
         </div>

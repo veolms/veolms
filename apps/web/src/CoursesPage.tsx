@@ -19,7 +19,7 @@ import type {
   ReactNode,
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -28,11 +28,9 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
-import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
-import { StudentIcon as Student } from "@phosphor-icons/react/Student";
+import { ToastNotification } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { UserIcon as User } from "@phosphor-icons/react/User";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
@@ -57,21 +55,44 @@ import type {
 } from "./courses/catalogue";
 import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
+import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
+import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
 import {
+  useCourses,
+  useDeleteCourse,
+  useDeletedCourses,
+  useMyCourses,
+  useRestoreCourse,
+} from "./services/courses";
+import {
+  adaptApiCourseToCatalogueCourse,
+  adaptCourseSummaryToCatalogueCourse,
+  adaptDeletedCourseToCatalogueCourse,
+} from "./courses/courseAdapter";
+import {
   getDefaultNavigationOrder,
+  getDefaultNavigationVisibility,
   getInitialNavigationOrder,
   getInitialNavigationVisibility,
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
+  getPublicNavigationItems,
   getNavigationDestination,
-  getNavigationDisplayLabel,
   getNavigationIconColor,
+  hasNavigationMenu,
   getVisibleOrderedNavigation,
+  resolveShellNavigation,
 } from "./shell/navigation";
+import type { NavigationItemWithMetadata } from "./shell/navigation";
+import {
+  getUserRoles,
+  getVisibleWorkspaceRoles,
+  resolveWorkspaceRole,
+} from "./shell/workspaceRole";
 import {
   SIDEBAR_MIN_WIDTH,
   clampSidebarMaxWidth,
@@ -453,125 +474,43 @@ const isFocusedSidebarSwipeInput = (target: EventTarget | null) => {
   return focused === editable || Boolean(focused && editable.contains(focused));
 };
 
-const getProfileInitials = (displayName: string) => {
-  const words = displayName.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return "?";
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]?.toLocaleUpperCase())
-    .join("");
-};
-
-function ShellProfileAvatar({
-  avatarUrl,
-  displayName,
+function LoginProfileButton({
+  className,
+  iconSize,
+  arrowSize,
+  onLogin,
 }: {
-  avatarUrl: string | null;
-  displayName: string;
+  className: string;
+  iconSize: number;
+  arrowSize: number;
+  onLogin: () => void;
 }) {
   return (
-    <i className="shell-profile-avatar" aria-hidden="true">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt=""
-          width={43}
-          height={43}
-          loading="lazy"
-          decoding="async"
-          fetchPriority="low"
-        />
-      ) : (
-        <strong>{getProfileInitials(displayName)}</strong>
-      )}
-    </i>
-  );
-}
-
-interface ProfileMenuProps {
-  role: CourseRole;
-  sidebarHidden?: boolean;
-  includeSidebarControl?: boolean;
-  id?: string;
-  className?: string;
-  onClose: () => void;
-  onRoleChange: (role: CourseRole) => void;
-  onToggleSidebar?: () => void;
-  onLogout: () => void;
-}
-
-function ProfileMenu({
-  role,
-  sidebarHidden = false,
-  includeSidebarControl = true,
-  id,
-  className,
-  onClose,
-  onRoleChange,
-  onToggleSidebar,
-  onLogout,
-}: ProfileMenuProps) {
-  const selectRole = (nextRole: CourseRole) => {
-    onRoleChange(nextRole);
-    onClose();
-  };
-
-  return (
-    <div
-      id={id}
-      className={className ? `profile-menu ${className}` : "profile-menu"}
-      role="menu"
+    <button
+      type="button"
+      className={`${className} courses-profile__login-button`}
+      aria-label="Login. Access Your Learning Journey"
+      onClick={onLogin}
     >
-      <p>Preview workspace as</p>
-      <button
-        type="button"
-        role="menuitemradio"
-        aria-checked={role === "student"}
-        onClick={() => selectRole("student")}
+      <i
+        aria-hidden="true"
+        className="courses-profile__login-icon flex size-[43px] shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] text-(--accent) shadow-none"
       >
-        <Student size={18} />
-        <span>Student</span>
-        {role === "student" && (
-          <Check className="profile-menu__check" size={16} weight="bold" />
-        )}
-      </button>
-      <button
-        type="button"
-        role="menuitemradio"
-        aria-checked={role === "creator"}
-        onClick={() => selectRole("creator")}
+        <User size={iconSize} weight="duotone" />
+      </i>
+      <span className="courses-profile__login-copy">
+        <strong className="courses-profile__login-title">Login</strong>
+        <small className="courses-profile__login-subtitle">
+          Access Your Learning Journey
+        </small>
+      </span>
+      <i
+        aria-hidden="true"
+        className="courses-profile__login-arrow ml-auto flex shrink-0 items-center justify-center text-(--accent)"
       >
-        <Users size={18} />
-        <span>Creator</span>
-        {role === "creator" && (
-          <Check className="profile-menu__check" size={16} weight="bold" />
-        )}
-      </button>
-      {includeSidebarControl && onToggleSidebar && (
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            onToggleSidebar();
-            onClose();
-          }}
-        >
-          <SidebarSimple size={18} />
-          <span>{sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}</span>
-        </button>
-      )}
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onClose();
-          onLogout();
-        }}
-      >
-        <SignOut size={18} />
-        <span>Logout</span>
-      </button>
-    </div>
+        <CaretRight size={arrowSize} weight="bold" />
+      </i>
+    </button>
   );
 }
 
@@ -587,6 +526,7 @@ export function CoursesPage({
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
+  const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
@@ -602,14 +542,14 @@ export function CoursesPage({
   const [navigationOrders, setNavigationOrders] = useState<
     Record<CourseRole, string[]>
   >(() => ({
-    student: getDefaultNavigationOrder("student"),
-    creator: getDefaultNavigationOrder("creator"),
+    student: getDefaultNavigationOrder(publicNavigationItems),
+    creator: getDefaultNavigationOrder(publicNavigationItems),
   }));
   const [navigationVisibility, setNavigationVisibility] = useState<
     Record<CourseRole, string[]>
   >(() => ({
-    student: getDefaultNavigationOrder("student"),
-    creator: getDefaultNavigationOrder("creator"),
+    student: getDefaultNavigationOrder(publicNavigationItems),
+    creator: getDefaultNavigationOrder(publicNavigationItems),
   }));
   const [draggedNavigationLabel, setDraggedNavigationLabel] = useState<
     string | null
@@ -683,6 +623,7 @@ export function CoursesPage({
   const [storedPreferencesReady, setStoredPreferencesReady] = useState(false);
   const [courseMenu, setCourseMenu] = useState<string | null>(null);
   const [profileMenu, setProfileMenu] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [paletteMenu, setPaletteMenu] = useState(false);
   const [paletteMenuSource, setPaletteMenuSource] = useState<
     "appearance" | "theme"
@@ -713,6 +654,9 @@ export function CoursesPage({
   >(MOBILE_DRAWER_INITIAL_SNAP_POINT);
   const [mobileBottomNavHidden, setMobileBottomNavHidden] = useState(false);
   const [notice, setNotice] = useState("");
+  const [hydratedNavigationKey, setHydratedNavigationKey] = useState<
+    string | null
+  >(null);
   const [isFullscreen, setIsFullscreen] = useState(() =>
     typeof document === "undefined"
       ? false
@@ -720,21 +664,53 @@ export function CoursesPage({
   );
   const shortcutPlatform = useShortcutPlatform();
   useGlobalSearchShortcut(shortcutPlatform);
-  const { data: authUser } = useCurrentUser();
+  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
   const storeUser = useAuthStore((s) => s.user);
   const activeUser = authUser || storeUser;
+  const isAuthenticated = Boolean(activeUser);
+  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
+    () => resolveShellNavigation(activeUser?.menus),
+    [activeUser?.menus],
+  );
+  const navigationSignature = useMemo(
+    () =>
+      navigationItems
+        .map(([label, , metadata]) =>
+          [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
+        )
+        .join("|"),
+    [navigationItems],
+  );
+  const shouldRenderLearningSpace = Boolean(
+    activeUser && hasNavigationMenu(activeUser.menus, "Learning Space"),
+  );
+  const userRoles = getUserRoles(activeUser);
+  const allowedWorkspaceRoles = useMemo(
+    () => getVisibleWorkspaceRoles(userRoles, role),
+    [role, userRoles],
+  );
   const logoutMutation = useLogout();
+  const { data: publishedCoursesData } = useCourses({
+    enabled: role === "student",
+  });
+  const { data: myCoursesData } = useMyCourses({
+    enabled: role === "creator" && enrollmentFilter !== "bin",
+  });
+  const { data: deletedCoursesData } = useDeletedCourses(undefined, {
+    enabled: role === "creator" && enrollmentFilter === "bin",
+  });
+  const deleteCourseMutation = useDeleteCourse();
+  const restoreCourseMutation = useRestoreCourse();
+  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
     activeUser?.displayName ??
     (role === "creator" ? "Anurag Singh" : "Ashi Singh");
   const shellProfileAvatarUrl =
-    activeUser && savedShellProfile?.avatarDataUrl
-      ? savedShellProfile.avatarDataUrl
-      : role === "creator"
-        ? "/assets/ethan-avatar-160.webp"
-        : "/assets/sofia-avatar-160.webp";
+    (activeUser && savedShellProfile?.avatarDataUrl) || null;
   const profileRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
@@ -751,6 +727,11 @@ export function CoursesPage({
   const revertPalettePreviewRef = useRef<
     ((origin?: ThemeRevealOrigin) => void) | null
   >(null);
+  const openLogoutConfirm = useCallback(() => {
+    setProfileMenu(false);
+    setLogoutConfirmOpen(true);
+  }, []);
+
   const handleLogout = useCallback(() => {
     void logoutMutation
       .mutateAsync()
@@ -813,6 +794,13 @@ export function CoursesPage({
         : page === "courses"
           ? "Courses"
           : null));
+  const isNavigationItemActive = (item: NavigationItemWithMetadata) => {
+    const label = item[0];
+    return (
+      activeNavigationSection === label ||
+      (label === "Notification" && activeNavigationSection === "Notifications")
+    );
+  };
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const sidebarResizeMoveRef = useRef<
     ((event: PointerPositionEvent) => void) | null
@@ -878,15 +866,6 @@ export function CoursesPage({
               ),
       );
       setSidebarWidth(getInitialSidebarWidth());
-      setNavigationOrders({
-        student: getInitialNavigationOrder("student"),
-        creator: getInitialNavigationOrder("creator"),
-      });
-      setNavigationVisibility({
-        student: getInitialNavigationVisibility("student"),
-        creator: getInitialNavigationVisibility("creator"),
-      });
-
       const storedTheme = localStorage.getItem("veolms-theme");
       setTheme(
         storedTheme === "light" ||
@@ -922,6 +901,44 @@ export function CoursesPage({
       setStoredPreferencesReady(true);
     }
   }, []);
+
+  const navigationHydrationKey = [
+    activeUser ? "authenticated" : "guest",
+    role,
+    navigationSignature,
+  ].join(":");
+
+  useEffect(() => {
+    if (!storedPreferencesReady) return;
+    if (!activeUser && !authUserFetched) return;
+    if (hydratedNavigationKey === navigationHydrationKey) return;
+
+    setNavigationOrders((current) => ({
+      ...current,
+      [role]: isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItems)
+        : getInitialNavigationOrder(role, navigationItems),
+    }));
+    setNavigationVisibility((current) => ({
+      ...current,
+      [role]: isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItems)
+        : getInitialNavigationVisibility(role, navigationItems),
+    }));
+    setHydratedNavigationKey(navigationHydrationKey);
+  }, [
+    activeUser,
+    authUserFetched,
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationItems,
+    role,
+    storedPreferencesReady,
+  ]);
+
+  const navigationPreferencesReady =
+    hydratedNavigationKey === navigationHydrationKey;
 
   useEffect(
     () => () => {
@@ -1148,23 +1165,46 @@ export function CoursesPage({
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
+    if (isPublicNavigation) return;
+    if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
         `veolms-navigation-order-${roleName}`,
         JSON.stringify(order),
       );
     });
-  }, [navigationOrders, storedPreferencesReady]);
+  }, [
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationOrders,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
+    if (isPublicNavigation) return;
+    if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
         `veolms-navigation-visibility-${roleName}`,
         JSON.stringify(visibleItems),
       );
     });
-  }, [navigationVisibility, storedPreferencesReady]);
+  }, [
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationVisibility,
+    storedPreferencesReady,
+  ]);
+
+  useEffect(() => {
+    const nextRole = resolveWorkspaceRole(userRoles, role);
+    if (nextRole !== role) {
+      setRole(nextRole);
+    }
+  }, [role, userRoles]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -1481,16 +1521,18 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
-  useEffect(() => {
-    if (!notice) return undefined;
-    const timer = window.setTimeout(() => setNotice(""), 3200);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-
   const navigation = getVisibleOrderedNavigation(
-    role,
-    navigationOrders[role],
-    navigationVisibility[role],
+    navigationPreferencesReady && !isPublicNavigation
+      ? navigationOrders[role]
+      : isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItems)
+        : getInitialNavigationOrder(role, navigationItems),
+    navigationPreferencesReady && !isPublicNavigation
+      ? navigationVisibility[role]
+      : isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItems)
+        : getInitialNavigationVisibility(role, navigationItems),
+    navigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
@@ -1521,9 +1563,98 @@ export function CoursesPage({
     };
   }, [compactNavigation, navigation, role, sidebarMode]);
 
+  const allCourses = useMemo(() => {
+    if (role !== "creator") {
+      const apiCourses = (publishedCoursesData?.courses || []).map(
+        adaptCourseSummaryToCatalogueCourse,
+      );
+      const existingIds = new Set(apiCourses.map((c) => c.id));
+      const nonConflictingMockCourses = courses.filter(
+        (c) => !existingIds.has(c.id),
+      );
+      return [...apiCourses, ...nonConflictingMockCourses];
+    }
+    if (enrollmentFilter === "bin") {
+      const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
+        adaptDeletedCourseToCatalogueCourse,
+      );
+      const mockDeletedCourses = courses.filter((c) =>
+        deletedMockCourseIds.has(c.id),
+      );
+      return [...apiDeletedCourses, ...mockDeletedCourses];
+    }
+    const apiCourses = (myCoursesData?.courses || []).map(
+      adaptApiCourseToCatalogueCourse,
+    );
+    const existingIds = new Set(apiCourses.map((c) => c.id));
+    const nonConflictingMockCourses = courses.filter(
+      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
+    );
+    return [...apiCourses, ...nonConflictingMockCourses];
+  }, [
+    deletedCoursesData?.courses,
+    deletedMockCourseIds,
+    enrollmentFilter,
+    myCoursesData?.courses,
+    publishedCoursesData?.courses,
+    role,
+  ]);
+
+  const handleDeleteCourse = async (course: Course) => {
+    const isMock = !course.id.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+
+    if (isMock) {
+      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
+      setNotice(`${course.title} moved to Bin.`);
+      return;
+    }
+
+    try {
+      await deleteCourseMutation.mutateAsync(course.id);
+      setNotice(`${course.title} moved to Bin.`);
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      setNotice(
+        apiError?.message ||
+          `Failed to move "${course.title}" to Bin. Please try again.`,
+      );
+      throw err;
+    }
+  };
+
+  const handleRestoreCourse = async (course: Course) => {
+    const isMock = !course.id.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+
+    if (isMock) {
+      setDeletedMockCourseIds((prev) => {
+        const next = new Set(prev);
+        next.delete(course.id);
+        return next;
+      });
+      setNotice(`${course.title} was restored.`);
+      return;
+    }
+
+    try {
+      await restoreCourseMutation.mutateAsync(course.id);
+      setNotice(`${course.title} was restored.`);
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      setNotice(
+        apiError?.message ||
+          `Failed to restore "${course.title}". Please try again.`,
+      );
+      throw err;
+    }
+  };
+
   const visibleCourses = useMemo(
     () =>
-      getVisibleCourses(courses, {
+      getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
         role,
@@ -1534,6 +1665,7 @@ export function CoursesPage({
       }),
     [
       activeSection,
+      allCourses,
       enrollmentFilter,
       role,
       search,
@@ -1574,10 +1706,13 @@ export function CoursesPage({
     action();
   };
 
-  const selectNavigation = (label: string) => {
+  const selectNavigation = (
+    label: string,
+    item?: NavigationItemWithMetadata,
+  ) => {
     setEdgeSidebarOpen(false);
     dismissMobileMenuThen(() =>
-      onNavigatePage?.(getNavigationDestination(label)),
+      onNavigatePage?.(getNavigationDestination(item ?? label)),
     );
   };
 
@@ -1588,7 +1723,12 @@ export function CoursesPage({
   ) => {
     if (!sourceLabel || !targetLabel || sourceLabel === targetLabel) return;
     setNavigationOrders((current) => {
-      const currentOrder = current[role] || getInitialNavigationOrder(role);
+      const currentOrder =
+        navigationPreferencesReady && !isPublicNavigation
+          ? current[role] || getInitialNavigationOrder(role, navigationItems)
+          : isPublicNavigation
+            ? getDefaultNavigationOrder(navigationItems)
+            : getInitialNavigationOrder(role, navigationItems);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -1606,7 +1746,12 @@ export function CoursesPage({
 
   const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
     const currentOrder =
-      navigationOrders[role] || getInitialNavigationOrder(role);
+      navigationPreferencesReady && !isPublicNavigation
+        ? navigationOrders[role] ||
+          getInitialNavigationOrder(role, navigationItems)
+        : isPublicNavigation
+          ? getDefaultNavigationOrder(navigationItems)
+          : getInitialNavigationOrder(role, navigationItems);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -1777,13 +1922,14 @@ export function CoursesPage({
   const handleNavigationClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
     label: string,
+    item?: NavigationItemWithMetadata,
   ) => {
     if (navigationDragConsumedRef.current) {
       navigationDragConsumedRef.current = false;
       event.preventDefault();
       return;
     }
-    selectNavigation(label);
+    selectNavigation(label, item);
   };
 
   const navigationUsesCompactInteraction =
@@ -2904,7 +3050,7 @@ export function CoursesPage({
   );
   const mobileMoreActive = Boolean(
     activeNavigationSection &&
-    mobileMoreNavigation.some(([label]) => label === activeNavigationSection),
+    mobileMoreNavigation.some(isNavigationItemActive),
   );
   const currentAcademyThemeIndex = academyThemes.findIndex(
     (item) => item.id === academyTheme,
@@ -3068,9 +3214,10 @@ export function CoursesPage({
                 updateNavigationScrollFade();
               }}
             >
-              {navigation.map(([label, Icon], navigationIndex) => {
-                const active = activeNavigationSection === label;
-                const displayLabel = getNavigationDisplayLabel(label, page);
+              {navigation.map((item, navigationIndex) => {
+                const [label, Icon] = item;
+                const active = isNavigationItemActive(item);
+                const displayLabel = label;
                 const accessibleLabel = [
                   displayLabel,
                   label === "Wishlist" && wishlisted.size > 0
@@ -3081,7 +3228,7 @@ export function CoursesPage({
                   .join(", ");
                 return (
                   <Fragment key={label}>
-                    {role === "student" &&
+                    {shouldRenderLearningSpace &&
                       !compactNavigation &&
                       label === "Settings" && (
                         <LearningSpace
@@ -3118,7 +3265,9 @@ export function CoursesPage({
                       }
                       data-navigation-label={label}
                       data-sortable="true"
-                      onClick={(event) => handleNavigationClick(event, label)}
+                      onClick={(event) =>
+                        handleNavigationClick(event, label, item)
+                      }
                       onContextMenu={(event) => {
                         if (navigationUsesCompactInteraction)
                           event.preventDefault();
@@ -3168,7 +3317,7 @@ export function CoursesPage({
                         <b>{wishlisted.size}</b>
                       )}
                     </button>
-                    {role === "student" &&
+                    {shouldRenderLearningSpace &&
                       mobileSidebarNavigationActive &&
                       label === "Courses" && (
                         <LearningSpace
@@ -3189,7 +3338,7 @@ export function CoursesPage({
                   </Fragment>
                 );
               })}
-              {role === "student" &&
+              {shouldRenderLearningSpace &&
                 !compactNavigation &&
                 !navigation.some(([label]) => label === "Settings") && (
                   <LearningSpace
@@ -3209,9 +3358,10 @@ export function CoursesPage({
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
-              {profileMenu && (
+              {profileMenu && isAuthenticated && (
                 <ProfileMenu
                   role={role}
+                  allowedRoles={allowedWorkspaceRoles}
                   sidebarHidden={sidebarPresentedAsOverlay}
                   includeSidebarControl={!compactNavigation}
                   onClose={() => setProfileMenu(false)}
@@ -3220,30 +3370,36 @@ export function CoursesPage({
                     setSidebarMode(sidebarHidden ? "expanded" : "hidden");
                     setEdgeSidebarOpen(false);
                   }}
-                  onLogout={handleLogout}
+                  onLogout={openLogoutConfirm}
                 />
               )}
-              <button
-                type="button"
-                className="courses-profile__button"
-                aria-label={`${shellProfileDisplayName}, ${
-                  role === "creator" ? "Instructor" : "Student"
-                }. Open role and appearance menu`}
-                aria-expanded={profileMenu}
-                onClick={() => setProfileMenu((current) => !current)}
-              >
-                <ShellProfileAvatar
-                  avatarUrl={shellProfileAvatarUrl}
-                  displayName={shellProfileDisplayName}
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  className="courses-profile__button"
+                  aria-label={`${shellProfileDisplayName}, ${
+                    role === "creator" ? "Instructor" : "Student"
+                  }. Open role and appearance menu`}
+                  aria-expanded={profileMenu}
+                  onClick={() => setProfileMenu((current) => !current)}
+                >
+                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <span>
+                    <strong>{shellProfileDisplayName}</strong>
+                    <small>
+                      {role === "creator" ? "Instructor" : "Student"} <i />
+                    </small>
+                  </span>
+                  <CaretDown size={16} />
+                </button>
+              ) : (
+                <LoginProfileButton
+                  className="courses-profile__button"
+                  iconSize={30}
+                  arrowSize={16}
+                  onLogin={() => onNavigatePage("/login")}
                 />
-                <span>
-                  <strong>{shellProfileDisplayName}</strong>
-                  <small>
-                    {role === "creator" ? "Instructor" : "Student"} <i />
-                  </small>
-                </span>
-                <CaretDown size={16} />
-              </button>
+              )}
               <div
                 ref={appearanceControlsRef}
                 className={`sidebar-appearance sidebar-appearance--${appearanceControlsHorizontal ? "horizontal" : "vertical"}`}
@@ -3568,7 +3724,14 @@ export function CoursesPage({
               onSidebarPreferencesChange={setSidebarPreferences}
               sidebarMode={sidebarMode}
               onSidebarModeChange={setSidebarMode}
-              navigationVisibleItems={navigationVisibility[role]}
+              navigationItems={navigationItems}
+              navigationVisibleItems={
+                navigationPreferencesReady && !isPublicNavigation
+                  ? navigationVisibility[role]
+                  : isPublicNavigation
+                    ? getDefaultNavigationVisibility(navigationItems)
+                    : getInitialNavigationVisibility(role, navigationItems)
+              }
               onNavigationVisibilityChange={(visibleItems) =>
                 setNavigationVisibility((current) => ({
                   ...current,
@@ -3656,6 +3819,8 @@ export function CoursesPage({
               setNotice={setNotice}
               onNavigatePage={onNavigatePage}
               onResetCatalogue={resetCatalogue}
+              onDeleteCourse={handleDeleteCourse}
+              onRestoreCourse={handleRestoreCourse}
             />
           )}
         </>
@@ -3677,9 +3842,10 @@ export function CoursesPage({
           aria-label={`${role === "creator" ? "Creator" : "Student"} mobile navigation`}
           onFocusCapture={() => setMobileBottomNavHidden(false)}
         >
-          {mobileNavigation.map(([label, Icon]) => {
-            const active = activeNavigationSection === label;
-            const displayLabel = getNavigationDisplayLabel(label, page);
+          {mobileNavigation.map((item) => {
+            const [label, Icon] = item;
+            const active = isNavigationItemActive(item);
+            const displayLabel = label;
             return (
               <Fragment key={label}>
                 <button
@@ -3703,7 +3869,7 @@ export function CoursesPage({
                     .filter(Boolean)
                     .join(", ")}
                   data-navigation-label={label}
-                  onClick={() => selectNavigation(label)}
+                  onClick={() => selectNavigation(label, item)}
                 >
                   <span>
                     <Icon size={23} weight={active ? "fill" : "regular"} />
@@ -3713,7 +3879,7 @@ export function CoursesPage({
                   </span>
                   <small>{displayLabel}</small>
                 </button>
-                {role === "student" && label === "Courses" && (
+                {shouldRenderLearningSpace && label === "Courses" && (
                   <LearningSpace
                     sessions={learningSessions}
                     activeCourseId={visibleLearningCourseId}
@@ -3810,36 +3976,45 @@ export function CoursesPage({
               className="mobile-menu-sheet__profile-wrap"
               data-profile-surface
             >
-              <button
-                type="button"
-                className="mobile-menu-sheet__profile"
-                aria-haspopup="menu"
-                aria-expanded={profileMenu}
-                aria-controls="mobile-profile-menu"
-                aria-label={`${shellProfileDisplayName}, ${role === "creator" ? "Instructor" : "Student"}. Open role menu`}
-                onClick={() => setProfileMenu((current) => !current)}
-              >
-                <ShellProfileAvatar
-                  avatarUrl={shellProfileAvatarUrl}
-                  displayName={shellProfileDisplayName}
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  className="mobile-menu-sheet__profile"
+                  aria-haspopup="menu"
+                  aria-expanded={profileMenu}
+                  aria-controls="mobile-profile-menu"
+                  aria-label={`${shellProfileDisplayName}, ${role === "creator" ? "Instructor" : "Student"}. Open role menu`}
+                  onClick={() => setProfileMenu((current) => !current)}
+                >
+                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <span>
+                    <strong>{shellProfileDisplayName}</strong>
+                    <small>
+                      {role === "creator" ? "Instructor" : "Student"}
+                    </small>
+                  </span>
+                  <CaretDown size={17} aria-hidden="true" />
+                </button>
+              ) : (
+                <LoginProfileButton
+                  className="mobile-menu-sheet__profile"
+                  iconSize={30}
+                  arrowSize={17}
+                  onLogin={() => onNavigatePage("/login")}
                 />
-                <span>
-                  <strong>{shellProfileDisplayName}</strong>
-                  <small>{role === "creator" ? "Instructor" : "Student"}</small>
-                </span>
-                <CaretDown size={17} aria-hidden="true" />
-              </button>
-              {profileMenu && (
+              )}
+              {profileMenu && isAuthenticated && (
                 <ProfileMenu
                   id="mobile-profile-menu"
                   className="mobile-menu-sheet__profile-menu"
                   role={role}
+                  allowedRoles={allowedWorkspaceRoles}
                   includeSidebarControl={false}
                   onClose={() => setProfileMenu(false)}
                   onRoleChange={setRole}
                   onLogout={() => {
                     closeMobileMenu();
-                    handleLogout();
+                    setLogoutConfirmOpen(true);
                   }}
                 />
               )}
@@ -3848,9 +4023,10 @@ export function CoursesPage({
               className="mobile-menu-sheet__list"
               aria-label="More navigation options"
             >
-              {mobileMoreNavigation.map(([label, Icon]) => {
-                const active = activeNavigationSection === label;
-                const displayLabel = getNavigationDisplayLabel(label, page);
+              {mobileMoreNavigation.map((item) => {
+                const [label, Icon] = item;
+                const active = isNavigationItemActive(item);
+                const displayLabel = label;
                 return (
                   <button
                     type="button"
@@ -3886,7 +4062,9 @@ export function CoursesPage({
                       .filter(Boolean)
                       .join(", ")}
                     data-navigation-label={label}
-                    onClick={(event) => handleNavigationClick(event, label)}
+                    onClick={(event) =>
+                      handleNavigationClick(event, label, item)
+                    }
                   >
                     <Icon size={23} weight={active ? "fill" : "regular"} />
                     <span>{displayLabel}</span>
@@ -4115,10 +4293,19 @@ export function CoursesPage({
         </DrawerContent>
       </Drawer>
 
+      <LogoutConfirmModal
+        isOpen={logoutConfirmOpen}
+        isPending={logoutMutation.isPending}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={handleLogout}
+      />
+
       {notice && (
-        <div className="courses-toast" role="status">
-          <Question size={18} /> {notice}
-        </div>
+        <ToastNotification
+          message={notice}
+          type="info"
+          onDismiss={() => setNotice("")}
+        />
       )}
     </div>
   );

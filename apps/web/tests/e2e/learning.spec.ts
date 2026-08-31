@@ -752,7 +752,10 @@ test("a held second player press floats the desktop course content", async ({
     secondPressBounds!.y + secondPressBounds!.height / 2,
   );
   await page.mouse.down();
-  await expect(secondPress).toHaveAttribute("data-second-press-holding", "true");
+  await expect(secondPress).toHaveAttribute(
+    "data-second-press-holding",
+    "true",
+  );
   await page.waitForTimeout(520);
 
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
@@ -2085,14 +2088,14 @@ test("mobile More sheet anchors below lesson video and scrolls its navigation co
 
   await profile.click();
   const profileMenu = page.locator("#mobile-profile-menu");
-  const studentOption = profileMenu.getByRole("menuitemradio", {
-    name: "Student",
+  const logoutOption = profileMenu.getByRole("menuitem", {
+    name: "Logout",
   });
   await expect(profileMenu).toBeVisible();
-  await expect(studentOption).toBeVisible();
-  const [profileMenuBounds, studentOptionIsReachable] = await Promise.all([
+  await expect(logoutOption).toBeVisible();
+  const [profileMenuBounds, logoutOptionIsReachable] = await Promise.all([
     profileMenu.boundingBox(),
-    studentOption.evaluate((element) => {
+    logoutOption.evaluate((element) => {
       const bounds = element.getBoundingClientRect();
       const hitTarget = document.elementFromPoint(
         bounds.left + bounds.width / 2,
@@ -2102,8 +2105,8 @@ test("mobile More sheet anchors below lesson video and scrolls its navigation co
     }),
   ]);
   expect(profileMenuBounds).not.toBeNull();
-  expect(profileMenuBounds!.height).toBeGreaterThan(120);
-  expect(studentOptionIsReachable).toBe(true);
+  expect(profileMenuBounds!.height).toBeGreaterThan(40);
+  expect(logoutOptionIsReachable).toBe(true);
 
   const swipeHandleBounds = await swipeHandle.boundingBox();
   expect(swipeHandleBounds).not.toBeNull();
@@ -2558,9 +2561,7 @@ test("mobile curriculum scroll control owns diagonal gestures inside its drawer"
     name: "Course curriculum",
   });
   const gestureBoundary = curriculum.locator(".elastic-scroller");
-  const scrollControl = gestureBoundary.locator(
-    ".elastic-scroller__button",
-  );
+  const scrollControl = gestureBoundary.locator(".elastic-scroller__button");
 
   await curriculum.evaluate((element) => {
     element.scrollTop = Math.min(
@@ -2638,9 +2639,7 @@ test("curriculum scroll control follows direction, stops, and accelerates with d
     name: "Course curriculum",
   });
   const scrollControl = curriculum.locator(".elastic-scroller__button");
-  const scrollControlIcon = scrollControl.locator(
-    ".elastic-scroller__icon",
-  );
+  const scrollControlIcon = scrollControl.locator(".elastic-scroller__icon");
   const scrollProgressPuck = curriculum.locator(
     ".elastic-scroller__progress-puck",
   );

@@ -4,6 +4,24 @@ const booleanEnvironmentValueSchema = z
   .enum(["true", "false"])
   .transform((value) => value === "true");
 
+const notificationRetryScheduleSchema = z
+  .string()
+  .default("60,300,1800,7200")
+  .transform((value, context) => {
+    const parsed = value.split(",").map((part) => Number(part.trim()));
+    if (
+      parsed.length === 0 ||
+      parsed.some((item) => !Number.isInteger(item) || item <= 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Expected a comma-separated list of positive integers.",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
 const serverConfigSchema = z.object({
   DATABASE_URL: z
     .string()
@@ -65,6 +83,18 @@ const serverConfigSchema = z.object({
    * derives a sensible value from `NODE_ENV` and `SMTP_HOST`.
    */
   EMAIL_TRANSPORT: z.enum(["smtp", "console"]).optional(),
+
+  // Notification outbox and email worker
+  NOTIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
+  NOTIFICATION_LEASE_SECONDS: z.coerce.number().int().min(30).default(300),
+  NOTIFICATION_OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  NOTIFICATION_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  NOTIFICATION_RETRY_SECONDS: notificationRetryScheduleSchema,
+  NOTIFICATION_OUTBOX_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(30),
 
   // SMS Delivery
   SMS_PRIMARY_URL: z.string().default("https://api.nexmo.com/v1/messages"),
@@ -193,3 +223,18 @@ export function loadServerConfig(
 export function loadWebConfig(environment: Record<string, string | undefined>) {
   return webConfigSchema.parse(environment);
 }
+
+export {
+  resolveProviderName,
+  fleetManagerConfigSchema,
+  loadFleetManagerConfig,
+  type FleetManagerConfig,
+} from "./fleet-manager.ts";
+
+export {
+  resolveDefaultUploadConcurrency,
+  mediaWorkerConfigSchema,
+  loadMediaWorkerConfig,
+  type DefaultUploadConcurrency,
+  type MediaWorkerConfig,
+} from "./media-worker.ts";

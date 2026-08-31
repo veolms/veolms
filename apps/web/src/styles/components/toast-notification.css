@@ -1,0 +1,260 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Toast Notification Component Styles & In/Out Animations
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Desktop In/Out (Bottom-Right) */
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+}
+
+/* Mobile In/Out (Top-Center) */
+@keyframes toastSlideInTop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -24px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes toastSlideOutTop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.94);
+  }
+}
+
+/* Progress / Time Bar Animation */
+@keyframes toastProgressBar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-notification {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9999;
+  display: flex;
+  min-height: 48px;
+  max-width: min(440px, calc(100vw - 32px));
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: var(--control-radius-structured, 12px);
+  padding: 10px 14px 12px 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    0 16px 40px -4px rgba(0, 0, 0, 0.38),
+    0 4px 14px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-sizing: border-box;
+  overflow: hidden;
+  animation: toastSlideIn 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  cursor: default;
+  user-select: none;
+}
+
+:root[data-theme="light"] .toast-notification {
+  border-color: color-mix(in srgb, var(--text) 16%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow:
+    0 16px 40px -4px rgba(0, 0, 0, 0.16),
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.toast-notification.is-exiting {
+  animation: toastSlideOut 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
+.toast-notification__icon-wrap {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: min(var(--control-radius-structured, 8px), 8px);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.toast-notification--success .toast-notification__icon-wrap {
+  background: color-mix(in srgb, #10b981 18%, transparent);
+  color: #10b981;
+}
+
+.toast-notification--error .toast-notification__icon-wrap {
+  background: color-mix(in srgb, #ef4444 18%, transparent);
+  color: #ef4444;
+}
+
+.toast-notification--warning .toast-notification__icon-wrap {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #f59e0b;
+}
+
+.toast-notification__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.toast-notification__close {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  margin-left: 2px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.toast-notification__close:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* Time Progress Bar Track & Fill */
+.toast-notification__progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  overflow: hidden;
+  border-radius: 0 0 inherit inherit;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.toast-notification__progress-fill {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: var(--accent);
+  animation: toastProgressBar var(--toast-duration, 3200ms) linear forwards;
+  will-change: transform;
+}
+
+.toast-notification:hover .toast-notification__progress-fill,
+.toast-notification.is-paused .toast-notification__progress-fill {
+  animation-play-state: paused;
+}
+
+.toast-notification--success .toast-notification__progress-fill {
+  background: #10b981;
+}
+
+.toast-notification--error .toast-notification__progress-fill {
+  background: #ef4444;
+}
+
+.toast-notification--warning .toast-notification__progress-fill {
+  background: #f59e0b;
+}
+
+/* Smaller Screens: Top-Center Position with Safe Inset */
+@media (max-width: 768px) {
+  .toast-notification {
+    top: max(16px, env(safe-area-inset-top, 16px));
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, 0);
+    max-width: min(480px, calc(100vw - 32px));
+    width: max-content;
+    animation: toastSlideInTop 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .toast-notification.is-exiting {
+    animation: toastSlideOutTop 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-notification {
+    animation: toastFadeIn 200ms ease-out forwards;
+  }
+  .toast-notification.is-exiting {
+    animation: toastFadeOut 180ms ease-in forwards;
+  }
+
+  @keyframes toastFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes toastFadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  .toast-notification__progress-fill {
+    animation: none;
+    display: none;
+  }
+}

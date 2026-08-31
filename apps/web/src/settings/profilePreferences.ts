@@ -166,7 +166,9 @@ export const getProfileIdentity = (role: ProfileRole): ProfileIdentity => {
           ? storedProfile.username
           : defaults.username,
       bio:
-        typeof storedProfile.bio === "string" ? storedProfile.bio : defaults.bio,
+        typeof storedProfile.bio === "string"
+          ? storedProfile.bio
+          : defaults.bio,
       mobileNumber,
       mobileVerified: Boolean(
         mobileNumber && storedProfile.mobileVerified === true,

@@ -1,4 +1,6 @@
+import type { AuthMenuNode } from "@veolms/contracts";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
@@ -15,44 +17,145 @@ import type { SidebarPreferences } from "../settings/settingsPreferences";
 
 import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
 
-export type NavigationItem = readonly [label: string, icon: Icon];
+export interface NavigationItemMetadata {
+  id: string;
+  routeLink: string;
+  parentId: string | null;
+  source: "server" | "default";
+}
 
-export const MESSAGES_NAVIGATION_ENABLED = false;
-
-const studentNavigation: readonly NavigationItem[] = [
-  ["Home", House],
-  ["Courses", GraduationCap],
-  ["Wishlist", Heart],
-  ["Discussions", ChatCircleDots],
-  ["Order History", Tote],
-  ["Notifications", Bell],
-  ["Settings", GearSix],
+export type NavigationItem = readonly [
+  label: string,
+  icon: Icon,
+  metadata?: NavigationItemMetadata,
 ];
 
-const allCreatorNavigation: readonly NavigationItem[] = [
-  ["Dashboard", SquaresFour],
-  ["Courses", GraduationCap],
-  ["Students", Users],
-  ["Reviews", ChatTeardropDots],
-  ["Wishlist", Heart],
-  ["Discussions", ChatCircleDots],
-  ["Analytics", ChartBar],
-  ["Orders", Tote],
-  ["Messages", EnvelopeSimple],
-  ["Settings", GearSix],
+export type DynamicNavigationItem = readonly [
+  label: string,
+  icon: Icon,
+  metadata: NavigationItemMetadata,
 ];
 
-const creatorNavigation = allCreatorNavigation.filter(
-  ([label]) => MESSAGES_NAVIGATION_ENABLED || label !== "Messages",
-);
+export type NavigationItemWithMetadata = NavigationItem;
 
-const navigationByRole: Record<string, readonly NavigationItem[]> = {
-  student: studentNavigation,
-  creator: creatorNavigation,
+const publicNavigation: readonly NavigationItem[] = [
+  [
+    "Courses",
+    GraduationCap,
+    {
+      id: "default-courses",
+      routeLink: "/courses",
+      parentId: null,
+      source: "default",
+    },
+  ],
+  [
+    "Settings",
+    GearSix,
+    {
+      id: "default-settings",
+      routeLink: "/settings",
+      parentId: null,
+      source: "default",
+    },
+  ],
+];
+
+const menuIcons: Record<string, Icon> = {
+  Bell,
+  BookOpen,
+  ChartBar,
+  ChatCircleDots,
+  ChatTeardropDots,
+  EnvelopeSimple,
+  GearSix,
+  GraduationCap,
+  Heart,
+  House,
+  SquaresFour,
+  Star,
+  Tote,
+  Users,
 };
 
-export function getNavigationItems(role: string): readonly NavigationItem[] {
-  return navigationByRole[role] || studentNavigation;
+const getMenuIcon = (iconName: string | null): Icon =>
+  (iconName && menuIcons[iconName]) || SquaresFour;
+
+/**
+ * Converts the server's effective RBAC menu tree to the shell's flat
+ * navigation shape. Learning Space remains a special shell control because it
+ * owns transient course-player sessions; its database children are still
+ * exposed as ordinary navigation items.
+ */
+export function getNavigationItemsFromMenus(
+  menus: readonly AuthMenuNode[] | null | undefined,
+): DynamicNavigationItem[] {
+  if (!menus?.length) return [];
+
+  const items: DynamicNavigationItem[] = [];
+  const seenLabels = new Set<string>();
+
+  const visit = (nodes: readonly AuthMenuNode[]) => {
+    for (const menu of nodes) {
+      if (menu.label !== "Learning Space") {
+        // The current shell is label-oriented for drag/drop and preference
+        // persistence. Keep the first effective entry when an admin receives
+        // both student and instructor variants of the same menu label.
+        if (!seenLabels.has(menu.label)) {
+          seenLabels.add(menu.label);
+          items.push([
+            menu.label,
+            getMenuIcon(menu.icon),
+            {
+              id: menu.id,
+              routeLink: menu.routeLink,
+              parentId: menu.parentId,
+              source: "server",
+            },
+          ]);
+        }
+      }
+
+      if (menu.children?.length) visit(menu.children);
+    }
+  };
+
+  visit(menus);
+  return items;
+}
+
+export function hasNavigationMenu(
+  menus: readonly AuthMenuNode[] | null | undefined,
+  label: string,
+): boolean {
+  if (!menus?.length) return false;
+
+  return menus.some(
+    (menu) => menu.label === label || hasNavigationMenu(menu.children, label),
+  );
+}
+
+export function getPublicNavigationItems(): readonly NavigationItem[] {
+  return publicNavigation;
+}
+
+/**
+ * Sidebar items for the current session: role menus from `/auth/me` when the
+ * backend returns any, otherwise the public Courses and Settings defaults.
+ * Guests, empty `menus: []`, and menus that flatten to nothing all use the
+ * same fallback so the sidebar never renders blank.
+ */
+export function resolveShellNavigation(
+  menus: readonly AuthMenuNode[] | null | undefined,
+): {
+  items: readonly NavigationItemWithMetadata[];
+  isDefault: boolean;
+} {
+  const serverItems = getNavigationItemsFromMenus(menus);
+  if (serverItems.length > 0) {
+    return { items: serverItems, isDefault: false };
+  }
+  return { items: getPublicNavigationItems(), isDefault: true };
 }
 
 const navigationTones: Record<string, string> = {
@@ -75,31 +178,23 @@ const navigationTones: Record<string, string> = {
   Logout: "#8c9294",
 };
 
-export function getNavigationDisplayLabel(label: string, page: string): string {
-  if (page !== "courses" && label === "Notifications") return "Notification";
-  return label;
+export function getDefaultNavigationOrder(
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string[] {
+  return navigationItems.map(([label]) => label);
 }
 
-const migrateStudentNavigationLabel = (label: string) => {
-  if (
-    label === "My Learning" ||
-    label === "My Courses" ||
-    label === "Explore Courses"
-  )
-    return "Courses";
-  return label;
-};
-
-export function getDefaultNavigationOrder(role: string): string[] {
-  return getNavigationItems(role).map(([label]) => label);
+export function getDefaultNavigationVisibility(
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string[] {
+  return getDefaultNavigationOrder(navigationItems);
 }
 
-export function getDefaultNavigationVisibility(role: string): string[] {
-  return getDefaultNavigationOrder(role);
-}
-
-export function getInitialNavigationOrder(role: string): string[] {
-  const defaultOrder = getDefaultNavigationOrder(role);
+export function getInitialNavigationOrder(
+  role: string,
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string[] {
+  const defaultOrder = getDefaultNavigationOrder(navigationItems);
   if (typeof window === "undefined") return defaultOrder;
 
   try {
@@ -107,11 +202,10 @@ export function getInitialNavigationOrder(role: string): string[] {
       localStorage.getItem(`veolms-navigation-order-${role}`) || "[]",
     );
     if (!Array.isArray(parsedOrder)) return defaultOrder;
-    const savedOrder = parsedOrder
-      .filter((label): label is string => typeof label === "string")
-      .map((label) =>
-        role === "student" ? migrateStudentNavigationLabel(label) : label,
-      );
+    const savedOrder = parsedOrder.filter(
+      (label): label is string =>
+        typeof label === "string" && defaultOrder.includes(label),
+    );
     const validSavedOrder = savedOrder.filter(
       (label, index) =>
         defaultOrder.includes(label) && savedOrder.indexOf(label) === index,
@@ -125,8 +219,11 @@ export function getInitialNavigationOrder(role: string): string[] {
   }
 }
 
-export function getInitialNavigationVisibility(role: string): string[] {
-  const defaultVisibility = getDefaultNavigationVisibility(role);
+export function getInitialNavigationVisibility(
+  role: string,
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string[] {
+  const defaultVisibility = getDefaultNavigationVisibility(navigationItems);
   if (typeof window === "undefined") return defaultVisibility;
 
   try {
@@ -135,11 +232,10 @@ export function getInitialNavigationVisibility(role: string): string[] {
     );
     if (!Array.isArray(parsedVisibility)) return defaultVisibility;
 
-    const normalizedVisibility = parsedVisibility
-      .filter((label): label is string => typeof label === "string")
-      .map((label) =>
-        role === "student" ? migrateStudentNavigationLabel(label) : label,
-      );
+    const normalizedVisibility = parsedVisibility.filter(
+      (label): label is string =>
+        typeof label === "string" && defaultVisibility.includes(label),
+    );
     const savedVisibility = normalizedVisibility.filter(
       (label, index) =>
         defaultVisibility.includes(label) &&
@@ -152,10 +248,9 @@ export function getInitialNavigationVisibility(role: string): string[] {
 }
 
 export function getOrderedNavigation(
-  role: string,
   order: readonly string[] | undefined,
-): NavigationItem[] {
-  const navigationItems = getNavigationItems(role);
+  navigationItems: readonly NavigationItemWithMetadata[],
+): NavigationItemWithMetadata[] {
   const itemByLabel = new Map(navigationItems.map((item) => [item[0], item]));
   const orderedLabels = [
     ...(order || []),
@@ -168,32 +263,24 @@ export function getOrderedNavigation(
 }
 
 export function getVisibleOrderedNavigation(
-  role: string,
   order: readonly string[] | undefined,
   visibleLabels: readonly string[] | undefined,
-): NavigationItem[] {
+  navigationItems: readonly NavigationItemWithMetadata[],
+): NavigationItemWithMetadata[] {
   const visible = new Set(
-    visibleLabels ?? getDefaultNavigationVisibility(role),
+    visibleLabels ?? getDefaultNavigationVisibility(navigationItems),
   );
-  return getOrderedNavigation(role, order).filter(([label]) =>
+  return getOrderedNavigation(order, navigationItems).filter(([label]) =>
     visible.has(label),
   );
 }
 
 export function getMobilePrimaryNavigation(
   role: string,
-  navigation: readonly NavigationItem[],
-): NavigationItem[] {
+  navigation: readonly NavigationItemWithMetadata[],
+): NavigationItemWithMetadata[] {
   const capacity = role === "student" ? 3 : 4;
-  const primary = navigation.slice(0, capacity);
-  if (role !== "student" || primary.some(([label]) => label === "Courses"))
-    return primary;
-
-  const courses =
-    navigation.find(([label]) => label === "Courses") ??
-    getNavigationItems(role).find(([label]) => label === "Courses");
-  if (!courses) return primary;
-  return [...primary.slice(0, capacity - 1), courses];
+  return navigation.slice(0, capacity);
 }
 
 export function getMobileOverflowNavigation(
@@ -204,12 +291,13 @@ export function getMobileOverflowNavigation(
   return navigation.filter(([label]) => !primaryLabels.has(label));
 }
 
-export function getNavigationDestination(label: string): string {
-  if (label === "Home") return "home";
-  if (label === "Dashboard") return "dashboard";
-  if (label === "Courses") return "courses";
-  if (label === "Wishlist") return "wishlist";
-  return label;
+export function getNavigationDestination(
+  destination: string | NavigationItemWithMetadata,
+): string {
+  if (typeof destination !== "string") {
+    return destination[2]?.routeLink || destination[0];
+  }
+  return destination;
 }
 
 export function getNavigationIconColor(

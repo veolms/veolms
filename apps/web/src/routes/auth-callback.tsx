@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { AuthBrandMark } from "../auth/AuthBrandPanel";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
+import { resolvePostAuthPath } from "../auth/postAuthNavigation";
 import { useOauthLogin } from "../services/auth";
 import { authStore } from "../store/auth.store";
 
@@ -34,7 +35,9 @@ export default function AuthCallbackRoute() {
     const errorDescription = searchParams.get("error_description");
 
     if (error) {
-      setErrorMessage(errorDescription || "Authentication was cancelled or failed.");
+      setErrorMessage(
+        errorDescription || "Authentication was cancelled or failed.",
+      );
       return;
     }
 
@@ -44,9 +47,14 @@ export default function AuthCallbackRoute() {
     }
 
     const redirectUri = `${window.location.origin}/auth/callback`;
-    const storedProvider = sessionStorage.getItem("veolms_oauth_provider") as "google" | "github" | null;
-    const isGithub = searchParams.get("iss")?.includes("github") || storedProvider === "github";
-    const provider: "google" | "github" = isGithub ? "github" : (storedProvider ?? "google");
+    const storedProvider = sessionStorage.getItem("veolms_oauth_provider") as
+      "google" | "github" | null;
+    const isGithub =
+      searchParams.get("iss")?.includes("github") ||
+      storedProvider === "github";
+    const provider: "google" | "github" = isGithub
+      ? "github"
+      : (storedProvider ?? "google");
 
     oauthLoginMutation
       .mutateAsync({
@@ -57,11 +65,12 @@ export default function AuthCallbackRoute() {
       })
       .then((response) => {
         authStore.setUser(response.user);
-        navigate("/settings/profile", { replace: true });
+        navigate(resolvePostAuthPath(response), { replace: true });
       })
       .catch((err: unknown) => {
         const errorObj = err as { message?: string };
-        const message = errorObj?.message || "Authentication failed. Please try again.";
+        const message =
+          errorObj?.message || "Authentication failed. Please try again.";
         setErrorMessage(message);
       });
   }, [searchParams, navigate, oauthLoginMutation]);

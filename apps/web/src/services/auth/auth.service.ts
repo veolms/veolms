@@ -1,6 +1,7 @@
 import { api } from "../../lib/api-client";
 import type {
   AuthMessageResponse,
+  CurrentUserResponse,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -13,7 +14,6 @@ import type {
   SessionResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
-  UserProfileResponse,
 } from "@veolms/contracts";
 import {
   passkeyAuthenticationOptionsResponseSchema,
@@ -103,8 +103,8 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
   },
 
-  getMe: (): Promise<UserProfileResponse> => {
-    return api.get<UserProfileResponse>("/auth/me");
+  getMe: (): Promise<CurrentUserResponse> => {
+    return api.get<CurrentUserResponse>("/auth/me");
   },
 
   logout: (): Promise<AuthMessageResponse> => {
