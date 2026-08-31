@@ -11,6 +11,7 @@ import {
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { errorResponse, httpError } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createAuthContext } from "../auth/shared/auth.context.ts";
@@ -239,15 +240,19 @@ const systemConfigRoutes: RoutePlugin = async (app, options) => {
             "Updated active theme presets.",
             themeListResponseSchema,
           ),
+          404: errorResponse("Theme preset not found."),
         },
       },
     },
-    async (request) => {
+    async (request, reply) => {
       const adminUser = request.user!;
       const { slug } = request.params;
       const body = request.body as Record<string, unknown>;
       const themes = await repository.updateThemePresetAdmin(database, adminUser.id, slug, body);
-      return { themes: themes ?? [] };
+      if (!themes) {
+        return reply.code(404).send(httpError(404, "THEME_PRESET_NOT_FOUND", `Theme preset with slug "${slug}" not found.`));
+      }
+      return { themes };
     },
   );
 

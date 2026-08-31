@@ -10,6 +10,7 @@ export async function listPublishedCourses(
     .selectFrom("courses")
     .select(["id", "slug", "title", "short_description"])
     .where("status", "=", "published")
+    .where("deleted_at", "is", null)
     .orderBy("created_at", "asc")
     .execute();
 
@@ -18,6 +19,11 @@ export async function listPublishedCourses(
     slug: row.slug,
     title: row.title,
     shortDescription: row.short_description ?? "",
+    totalSections: 0,
+    totalLessons: 0,
+    totalDurationSeconds: 0,
+    pricing: { pricingType: "free", price: 0, currency: "USD", salePrice: null },
+    certificateEnabled: false,
   }));
 }
 
@@ -30,6 +36,7 @@ export async function findPublishedCourseBySlug(
     .select(["id", "slug", "title", "short_description", "description"])
     .where("slug", "=", slug)
     .where("status", "=", "published")
+    .where("deleted_at", "is", null)
     .executeTakeFirst();
 
   if (!row) {

@@ -52,7 +52,6 @@ export const createThemePresetInputSchema = z.object({
 });
 
 export const updateThemePresetInputSchema = z.object({
-  slug: z.string().min(2).optional(),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),

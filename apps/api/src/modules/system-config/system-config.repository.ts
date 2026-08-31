@@ -98,7 +98,7 @@ export async function getUserPreferences(database: Executor, userId: string) {
     defaultPlaybackSpeed: row.default_playback_speed,
     resumeFromLastPosition: row.resume_from_last_position,
     startInTheatreMode: row.start_in_theatre_mode,
-    weeklyLearningGoalHrs: row.weekly_learning_goal_hrs ? Number(row.weekly_learning_goal_hrs) : null,
+    weeklyLearningGoalHrs: row.weekly_learning_goal_hrs !== null && row.weekly_learning_goal_hrs !== undefined ? Number(row.weekly_learning_goal_hrs) : null,
     learningRemindersEnabled: row.learning_reminders_enabled,
     reminderDays: row.reminder_days,
     reminderTime: row.reminder_time,
