@@ -1,4 +1,4 @@
-import type { Database, UserPreferenceTable } from "@veolms/database";
+import type { Database } from "@veolms/database";
 import type { Insertable, Updateable, Kysely } from "kysely";
 
 type Executor = Kysely<Database>;
@@ -119,11 +119,11 @@ export async function upsertUserPreferences(
   userId: string,
   updates: Record<string, unknown>
 ) {
-  const updatePayload: Updateable<UserPreferenceTable> = {
+  const updatePayload: Record<string, any> = {
     updated_at: new Date(),
   };
 
-  const fieldMapping: Record<string, keyof UserPreferenceTable> = {
+  const fieldMapping: Record<string, string> = {
     uiMode: "ui_mode",
     colorTheme: "color_theme",
     randomThemeOnOpen: "random_theme_on_open",
@@ -177,23 +177,23 @@ export async function upsertUserPreferences(
     if (jsKey in updates && updates[jsKey] !== undefined) {
       const val = updates[jsKey];
       if (Array.isArray(val) && (dbCol === "sidebar_dock_items" || dbCol === "sidebar_dock_order")) {
-        (updatePayload as Record<string, unknown>)[dbCol] = JSON.stringify(val);
+        updatePayload[dbCol] = JSON.stringify(val);
       } else {
-        (updatePayload as Record<string, unknown>)[dbCol] = val;
+        updatePayload[dbCol] = val;
       }
     }
   }
 
-  const insertPayload: Insertable<UserPreferenceTable> = {
+  const insertPayload = {
     ...updatePayload,
     user_id: userId,
   };
 
   await database
     .insertInto("user_preferences")
-    .values(insertPayload)
+    .values(insertPayload as any)
     .onConflict((oc) =>
-      oc.column("user_id").doUpdateSet(updatePayload)
+      oc.column("user_id").doUpdateSet(updatePayload as any)
     )
     .execute();
 
