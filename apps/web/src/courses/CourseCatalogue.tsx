@@ -13,6 +13,7 @@ import type {
   CourseSort,
   CourseStatusFilter,
 } from "./catalogue";
+import { getCourseRouteKey } from "./catalogue";
 
 export interface CourseCatalogueProps {
   activeSection: string;
@@ -120,7 +121,9 @@ export function CourseCatalogue({
         )
       }
       onExplore={(selected) =>
-        onNavigatePage(`/courses/${encodeURIComponent(selected.id)}/overview`)
+        onNavigatePage(
+          `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
+        )
       }
       onEdit={(selected) =>
         onNavigatePage(

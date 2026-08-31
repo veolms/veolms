@@ -107,9 +107,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         operationId: "getCourseOverview",
         tags: ["Courses"],
         summary:
-          "Get full course overview data for learners and authenticated users",
+          "Get full course overview data for learners and public visitors",
         description:
-          "Returns the course overview including curriculum preview, instructor info, category, pricing, settings, and duration metrics. Can be accessed by any authenticated user role.",
+          "Returns the published course overview including its curriculum, instructor info, category, pricing, settings, and duration metrics. Authentication is optional; unpublished courses remain private.",
         params: z.object({
           idOrSlug: z
             .string()
@@ -125,7 +125,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("No course matches the provided ID or slug."),
         },
       },
-      preHandler: ctx.requireAuthenticated,
+      // Parse an optional session so owners/admins can still preview their
+      // unpublished courses while anonymous visitors can view published ones.
+      preHandler: ctx.middleware.authenticate,
     },
     controller.getCourseOverview,
   );

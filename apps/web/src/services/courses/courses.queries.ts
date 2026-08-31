@@ -43,6 +43,7 @@ export function useCourseOverview(
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
     staleTime: 60 * 1000,
+    retry: false,
   });
 }
 

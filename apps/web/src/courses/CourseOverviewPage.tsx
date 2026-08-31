@@ -25,8 +25,14 @@ import type {
   CourseEditorDataResponse,
   CourseOverviewResponse,
 } from "@veolms/contracts";
+import {
+  getCourseRouteKey,
+  type Course,
+  type CourseLevel,
+  type CourseCategory,
+  type CourseLifecycleStatus,
+} from "./catalogue";
 import { courses } from "./catalogue";
-import type { Course, CourseLevel, CourseCategory, CourseLifecycleStatus } from "./catalogue";
 import { sections } from "../learning/courseContent";
 import type { CourseSection } from "../learning/courseContent";
 import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
@@ -82,7 +88,7 @@ export function formatPriceWithCurrency(
   currency: string = "INR",
 ): string {
   const sym = getCurrencySymbol(currency);
-  return `${sym}${amount.toLocaleString()}`;
+  return `${sym}${amount.toLocaleString("en-US")}`;
 }
 
 export function isCourseSaleActive(
@@ -220,7 +226,9 @@ export function getSectionTitle(course: Course, index: number): string {
 
 function getCourseSections(courseSlug: string | undefined): CourseSection[] {
   if (courseSlug === "ui-ux-design-mastery") return sections;
-  const course = courseSlug ? courses.find((c) => c.id === courseSlug) : undefined;
+  const course = courseSlug
+    ? courses.find((c) => c.id === courseSlug)
+    : undefined;
   if (!course) return [];
   return buildFallbackSections(course);
 }
@@ -301,9 +309,7 @@ function CurriculumSectionItem({
         >
           {index + 1}
         </span>
-        <span className="flex-1 min-w-0 text-(--text)">
-          {section.title}
-        </span>
+        <span className="flex-1 min-w-0 text-(--text)">{section.title}</span>
         <span className="shrink-0 text-(--muted) text-[0.82rem] font-normal mr-1">
           {lessonCount} Lesson{lessonCount === 1 ? "" : "s"}
           {durationLabel ? ` • ${durationLabel}` : ""}
@@ -332,60 +338,62 @@ function CurriculumSectionItem({
         <div className="overflow-hidden min-h-0">
           <div className="px-3.5 pt-1 pb-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
             {section.lessons.length > 0 ? (
-              section.lessons.map(([number, title, duration, status]) => {
-                const isDoc =
-                  title.toLowerCase().includes("discord") ||
-                  title.toLowerCase().includes("app") ||
-                  title.toLowerCase().includes("community") ||
-                  title.toLowerCase().includes("download") ||
-                  title.toLowerCase().endsWith(".pdf") ||
-                  title.toLowerCase().endsWith(".doc") ||
-                  title.toLowerCase().endsWith(".docx");
-                return (
-                  <div
-                    className="group/lesson flex items-center gap-3 min-h-9.5 px-3 py-1.5 rounded-md text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
-                    key={number}
-                  >
-                    <span
-                      className="inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 group-hover/lesson:text-(--accent)"
-                      aria-hidden="true"
+              section.lessons.map(
+                ([number, title, duration, status, isPreview]) => {
+                  const isDoc =
+                    title.toLowerCase().includes("discord") ||
+                    title.toLowerCase().includes("app") ||
+                    title.toLowerCase().includes("community") ||
+                    title.toLowerCase().includes("download") ||
+                    title.toLowerCase().endsWith(".pdf") ||
+                    title.toLowerCase().endsWith(".doc") ||
+                    title.toLowerCase().endsWith(".docx");
+                  return (
+                    <div
+                      className="group/lesson flex items-center gap-3 min-h-9.5 px-3 py-1.5 rounded-md text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                      key={number}
                     >
-                      {isDoc ? (
-                        <FileText size={16} weight="regular" />
-                      ) : (
-                        <PlayCircle size={16} weight="regular" />
-                      )}
-                    </span>
-                    <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                      {title}
-                    </span>
-                    {duration ? (
-                      <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                        {duration}
-                      </span>
-                    ) : null}
-                    {status === "done" ? (
                       <span
-                        className="inline-flex items-center justify-center shrink-0"
+                        className="inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 group-hover/lesson:text-(--accent)"
                         aria-hidden="true"
                       >
-                        <CheckCircle
-                          size={16}
-                          weight="fill"
-                          className="text-[#10b981]"
-                        />
+                        {isDoc ? (
+                          <FileText size={16} weight="regular" />
+                        ) : (
+                          <PlayCircle size={16} weight="regular" />
+                        )}
                       </span>
-                    ) : status === "todo" ? (
-                      <span
-                        className="inline-flex items-center justify-center shrink-0"
-                        aria-hidden="true"
-                      >
-                        <Circle size={16} className="text-(--muted)" />
+                      <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
+                        {title}
                       </span>
-                    ) : null}
-                  </div>
-                );
-              })
+                      {duration ? (
+                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+                          {duration}
+                        </span>
+                      ) : null}
+                      {status === "done" ? (
+                        <span
+                          className="inline-flex items-center justify-center shrink-0"
+                          aria-hidden="true"
+                        >
+                          <CheckCircle
+                            size={16}
+                            weight="fill"
+                            className="text-[#10b981]"
+                          />
+                        </span>
+                      ) : status === "todo" ? (
+                        <span
+                          className="inline-flex items-center justify-center shrink-0"
+                          aria-hidden="true"
+                        >
+                          <Circle size={16} className="text-(--muted)" />
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                },
+              )
             ) : (
               <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                 No lessons added yet
@@ -434,8 +442,11 @@ function CourseHeroSection({
   isReadOnlyPreview = false,
 }: CourseHeroSectionProps) {
   const price = pricing?.price ?? DEFAULT_PRICE;
-  const originalPrice = pricing?.originalPrice ?? (pricing?.price ? undefined : DEFAULT_ORIGINAL_PRICE);
-  const discount = pricing?.discount ?? (pricing?.price ? undefined : DEFAULT_DISCOUNT);
+  const originalPrice =
+    pricing?.originalPrice ??
+    (pricing?.price ? undefined : DEFAULT_ORIGINAL_PRICE);
+  const discount =
+    pricing?.discount ?? (pricing?.price ? undefined : DEFAULT_DISCOUNT);
   const perksList = inclusions ?? [
     "Full lifetime access",
     "Access on mobile & desktop",
@@ -447,7 +458,7 @@ function CourseHeroSection({
     event.preventDefault();
     if (isReadOnlyPreview) return;
     if (onNavigatePage) {
-      onNavigatePage(`/learn/${encodeURIComponent(course.id)}`);
+      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
     }
   };
 
@@ -506,7 +517,9 @@ function CourseHeroSection({
               )}
               <span className="inline-flex items-center gap-1.5">
                 <Stack size={17} aria-hidden="true" />
-                <span>{course.sections} Section{course.sections === 1 ? "" : "s"}</span>
+                <span>
+                  {course.sections} Section{course.sections === 1 ? "" : "s"}
+                </span>
               </span>
               <span
                 className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
@@ -516,7 +529,9 @@ function CourseHeroSection({
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <BookOpen size={17} aria-hidden="true" />
-                <span>{course.lectures} Lesson{course.lectures === 1 ? "" : "s"}</span>
+                <span>
+                  {course.lectures} Lesson{course.lectures === 1 ? "" : "s"}
+                </span>
               </span>
               {/* Language metadata is temporarily hidden per requirements (retained for future use) */}
               {categoryName ? (
@@ -584,9 +599,7 @@ function CourseHeroSection({
                 aria-pressed={wishlisted}
                 disabled={isReadOnlyPreview}
                 onClick={onToggleWishlist}
-                title={
-                  wishlisted ? "Remove from wishlist" : "Add to wishlist"
-                }
+                title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
               >
                 <Heart
                   size={20}
@@ -609,9 +622,7 @@ function CourseHeroSection({
                   className="shrink-0"
                   aria-hidden="true"
                 />
-                <span className="font-[750] truncate">
-                  Apply coupon
-                </span>
+                <span className="font-[750] truncate">Apply coupon</span>
               </button>
 
               <button
@@ -620,7 +631,9 @@ function CourseHeroSection({
                 disabled={isReadOnlyPreview}
                 onClick={() => {
                   if (!isReadOnlyPreview && onNavigatePage) {
-                    onNavigatePage(`/learn/${encodeURIComponent(course.id)}`);
+                    onNavigatePage(
+                      `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+                    );
                   }
                 }}
               >
@@ -898,7 +911,8 @@ export function adaptCourseOverviewResponse(
   defaultInstructorName: string,
 ): AdaptedOverviewData {
   const c = overview.course;
-  const totalSections = overview.stats?.totalSections ?? overview.sections.length;
+  const totalSections =
+    overview.stats?.totalSections ?? overview.sections.length;
   const totalLessons =
     overview.stats?.totalLessons ??
     overview.sections.reduce((acc, sec) => acc + (sec.lessons?.length ?? 0), 0);
@@ -912,7 +926,9 @@ export function adaptCourseOverviewResponse(
 
   const showInstructor = overview.settings?.showInstructorName !== false;
   const resolvedInstructorName = showInstructor
-    ? (c.instructorAlias?.trim() || overview.creator?.displayName || defaultInstructorName)
+    ? c.instructorAlias?.trim() ||
+      overview.creator?.displayName ||
+      defaultInstructorName
     : undefined;
 
   const resolvedDuration = overview.settings?.estimatedDuration
@@ -941,7 +957,9 @@ export function adaptCourseOverviewResponse(
     duration: resolvedDuration,
     students: 0,
     thumbnail: resolvedThumbnail,
-    lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
+    lifecycleStatus: (c.status === "published"
+      ? "published"
+      : "draft") as CourseLifecycleStatus,
   };
 
   const adaptedSections: CourseSection[] = (overview.sections || [])
@@ -959,6 +977,7 @@ export function adaptCourseOverviewResponse(
           les.title || `Lesson ${lesIdx + 1}`,
           "",
           "todo" as const,
+          les.isPreview,
         ]),
     }));
 
@@ -976,10 +995,7 @@ export function adaptCourseOverviewResponse(
   if (!pr || pr.pricingType === "free") {
     pricingProps = { price: "Free" };
   } else {
-    const activeSale = isCourseSaleActive(
-      pr.salePrice,
-      pr.price,
-    );
+    const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
 
     if (activeSale && pr.salePrice != null) {
       const discountPct = Math.round(
@@ -1034,11 +1050,12 @@ export function adaptPreviewDataToOverview(
 
   const showInstructor = previewData.settings?.showInstructorName !== false;
   const resolvedInstructorName = showInstructor
-    ? (c.instructorAlias?.trim() || defaultInstructorName)
+    ? c.instructorAlias?.trim() || defaultInstructorName
     : undefined;
 
   const adaptedCourse: Course = {
     id: c.id,
+    slug: c.slug,
     title: c.title || "Untitled Course",
     description: c.description || "",
     level: (difficultyStr || "Beginner") as CourseLevel,
@@ -1054,7 +1071,9 @@ export function adaptPreviewDataToOverview(
     thumbnail: c.thumbnailMediaId
       ? `/api/v1/media/${c.thumbnailMediaId}`
       : "/assets/instructor-poster.jpg",
-    lifecycleStatus: (c.status === "published" ? "published" : "draft") as CourseLifecycleStatus,
+    lifecycleStatus: (c.status === "published"
+      ? "published"
+      : "draft") as CourseLifecycleStatus,
   };
 
   const adaptedSections: CourseSection[] = (previewData.sections || [])
@@ -1072,6 +1091,7 @@ export function adaptPreviewDataToOverview(
           les.title || `Lesson ${lesIdx + 1}`,
           "", // No fake duration
           "todo" as const,
+          les.isPreview,
         ]),
     }));
 
@@ -1089,10 +1109,7 @@ export function adaptPreviewDataToOverview(
   if (!pr || pr.pricingType === "free") {
     pricingProps = { price: "Free" };
   } else {
-    const activeSale = isCourseSaleActive(
-      pr.salePrice,
-      pr.price,
-    );
+    const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
 
     if (activeSale && pr.salePrice != null) {
       const discountPct = Math.round(
@@ -1178,9 +1195,7 @@ export function CourseOverviewSkeleton({
 
         {/* Right Column: 16:9 Course Trailer Video Placeholder */}
         <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
-          <div
-            className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0"
-          >
+          <div className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0">
             <div className="w-13.5 h-13.5 rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] flex items-center justify-center">
               <div className="w-5 h-5 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)]" />
             </div>
@@ -1223,7 +1238,11 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
-    ? adaptPreviewDataToOverview(props.previewData, serverCategories, defaultInstructorName)
+    ? adaptPreviewDataToOverview(
+        props.previewData,
+        serverCategories,
+        defaultInstructorName,
+      )
     : null;
 
   const adaptedFromOverview = apiOverview
@@ -1242,8 +1261,15 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         )
       : undefined);
 
-  if (isOverviewLoading && !course && !props.previewData && !props.customCourse) {
-    return <CourseOverviewSkeleton onNavigateCourses={props.onNavigateCourses} />;
+  if (
+    isOverviewLoading &&
+    !course &&
+    !props.previewData &&
+    !props.customCourse
+  ) {
+    return (
+      <CourseOverviewSkeleton onNavigateCourses={props.onNavigateCourses} />
+    );
   }
 
   if (!course) {
@@ -1336,30 +1362,32 @@ function CourseOverviewContent({
     return () => window.cancelAnimationFrame(frame);
   }, [courseSlug, locationHash]);
 
-  const title = adaptedFromPreview?.course.title ?? customCourse?.title ?? course.title;
-  const thumbnail = adaptedFromPreview?.course.thumbnail ?? customCourse?.thumbnail ?? course.thumbnail;
+  const title =
+    adaptedFromPreview?.course.title ?? customCourse?.title ?? course.title;
+  const thumbnail =
+    adaptedFromPreview?.course.thumbnail ??
+    customCourse?.thumbnail ??
+    course.thumbnail;
   const shortDescription =
-    adaptedFromPreview?.shortDescription ??
-    customShortDescription ??
-    undefined;
+    adaptedFromPreview?.shortDescription ?? customShortDescription ?? undefined;
   const categoryName =
     adaptedFromPreview !== null
       ? adaptedFromPreview?.categoryName
-      : customCategoryName ??
-        (!isReadOnlyPreview && course.category ? course.category : undefined);
+      : (customCategoryName ??
+        (!isReadOnlyPreview && course.category ? course.category : undefined));
   const instructorName =
     adaptedFromPreview !== null
       ? adaptedFromPreview?.instructorName
       : customInstructor !== undefined
         ? customInstructor
         : defaultInstructorName;
-  const language =
-    adaptedFromPreview?.language ??
-    customLanguage ??
-    undefined;
+  const language = adaptedFromPreview?.language ?? customLanguage ?? undefined;
   const courseSections =
-    adaptedFromPreview?.sections ?? customSections ?? getCourseSections(course.id);
-  const activeDescription = adaptedFromPreview?.description ?? customDescription;
+    adaptedFromPreview?.sections ??
+    customSections ??
+    getCourseSections(course.id);
+  const activeDescription =
+    adaptedFromPreview?.description ?? customDescription;
   const activePricing = adaptedFromPreview?.pricing ?? customPricing;
 
   const inclusions: string[] | undefined = adaptedFromPreview

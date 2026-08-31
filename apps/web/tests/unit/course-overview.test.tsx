@@ -34,7 +34,9 @@ describe("CourseOverviewPage", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: target.title, level: 1 })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: target.title, level: 1 }),
+    ).toBeVisible();
     expect(screen.getByText(/About this course/i)).toBeVisible();
     expect(screen.getByText(/Course curriculum/i)).toBeVisible();
   });
@@ -54,7 +56,9 @@ describe("CourseOverviewPage", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Custom Preview Title", level: 1 })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Custom Preview Title", level: 1 }),
+    ).toBeVisible();
   });
 
   it("renders not-found state when courseSlug is unknown and calls onNavigateCourses", async () => {
@@ -66,9 +70,16 @@ describe("CourseOverviewPage", () => {
       />,
     );
 
-    expect(await screen.findByRole("heading", { name: "Course not found", level: 2 })).toBeVisible();
     expect(
-      screen.getByText("The course you are looking for does not exist or may have been removed."),
+      await screen.findByRole("heading", {
+        name: "Course not found",
+        level: 2,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "The course you are looking for does not exist or may have been removed.",
+      ),
     ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Explore courses" }));
@@ -78,10 +89,7 @@ describe("CourseOverviewPage", () => {
   it("associates unique aria-controls and panel IDs on section toggles", () => {
     const target = courses.find((c) => c.id === "ui-ux-design-mastery")!;
     renderWithClient(
-      <CourseOverviewPage
-        courseSlug={target.id}
-        onNavigateCourses={vi.fn()}
-      />,
+      <CourseOverviewPage courseSlug={target.id} onNavigateCourses={vi.fn()} />,
     );
 
     const toggleButtons = screen.getAllByRole("button", { expanded: true });
@@ -190,9 +198,13 @@ describe("CourseOverviewPage", () => {
       },
     };
 
-    const adapted = adaptCourseOverviewResponse(mockOverview, "Default Instructor");
+    const adapted = adaptCourseOverviewResponse(
+      mockOverview,
+      "Default Instructor",
+    );
 
     expect(adapted.course.id).toBe("12345678-1234-4234-a234-123456789012");
+    expect(adapted.course.slug).toBe("rust-systems");
     expect(adapted.course.title).toBe("Rust Systems Engineering");
     expect(adapted.course.level).toBe("Advanced");
     expect(adapted.categoryName).toBe("Systems Programming");
@@ -200,7 +212,17 @@ describe("CourseOverviewPage", () => {
     expect(adapted.language).toBe("English");
     expect(adapted.sections.length).toBe(1);
     expect(adapted.sections[0]?.title).toBe("Introduction to Rust");
-    expect(adapted.inclusions).toEqual(["Full lifetime access", "Certificate of completion"]);
+    expect(adapted.sections[0]?.lessons[0]).toEqual([
+      1,
+      "Memory Safety & Ownership",
+      "",
+      "todo",
+      true,
+    ]);
+    expect(adapted.inclusions).toEqual([
+      "Full lifetime access",
+      "Certificate of completion",
+    ]);
     expect(adapted.pricing.price).toBe("₹1,999");
     expect(adapted.pricing.originalPrice).toBe("₹2,999");
     expect(adapted.pricing.discount).toBe("33% OFF");
@@ -211,6 +233,8 @@ describe("CourseOverviewPage", () => {
     render(<CourseOverviewSkeleton onNavigateCourses={onNavigateCourses} />);
 
     expect(screen.getByTestId("course-overview-skeleton")).toBeVisible();
-    expect(screen.getByTestId("course-overview-skeleton")).toHaveClass("animate-pulse");
+    expect(screen.getByTestId("course-overview-skeleton")).toHaveClass(
+      "animate-pulse",
+    );
   });
 });

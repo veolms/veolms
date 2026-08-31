@@ -36,6 +36,9 @@ import {
 } from "./courseContent";
 import { Curriculum } from "./Curriculum";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
+import { getPublicPreviewLessonNumbers } from "./coursePlayerAccess";
+import { useAuthStore } from "../store/auth.store";
+import { useCourseOverview } from "../services/courses";
 import { Discussion } from "./Discussion";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import {
@@ -230,9 +233,29 @@ export function LearningWorkspace({
   onOpenCourseOverview,
   onNavigateBack,
 }: LearningWorkspaceProps) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { data: courseOverview } = useCourseOverview(courseSlug, {
+    enabled: Boolean(courseSlug) && !isAuthenticated,
+  });
+  const publicPreviewLessonNumbers = useMemo(
+    () => getPublicPreviewLessonNumbers(courseOverview),
+    [courseOverview],
+  );
+  const publicPreviewLessonSet = useMemo(
+    () => new Set(publicPreviewLessonNumbers),
+    [publicPreviewLessonNumbers],
+  );
+  const firstPublicPreviewLessonId = publicPreviewLessonNumbers[0] ?? 1;
+  const isLessonAvailable = useCallback(
+    (lessonNumber: number) =>
+      isAuthenticated || publicPreviewLessonSet.has(lessonNumber),
+    [isAuthenticated, publicPreviewLessonSet],
+  );
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
-  const [selectedLesson, setSelectedLesson] = useState(lessonId);
+  const [selectedLesson, setSelectedLesson] = useState(
+    isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
+  );
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [lessonProgress, setLessonProgress] = useState<Record<number, number>>(
     {},
@@ -454,6 +477,7 @@ export function LearningWorkspace({
   );
 
   const selectLesson = (lessonNumber: number) => {
+    if (!isLessonAvailable(lessonNumber)) return;
     if (lessonNumber === selectedLesson) return;
     pendingLessonSelectionRef.current = lessonNumber;
     setAutoPlayOnLessonChange(true);
@@ -483,8 +507,11 @@ export function LearningWorkspace({
       pendingLessonSelectionRef.current = null;
     }
 
-    const nextLessonId = curriculumLessonsById.has(lessonId)
+    const requestedLessonId = isLessonAvailable(lessonId)
       ? lessonId
+      : firstPublicPreviewLessonId;
+    const nextLessonId = curriculumLessonsById.has(requestedLessonId)
+      ? requestedLessonId
       : firstCurriculumLessonId;
     if (nextLessonId === undefined || nextLessonId === selectedLesson) return;
     setAutoPlayOnLessonChange(true);
@@ -493,6 +520,8 @@ export function LearningWorkspace({
   }, [
     curriculumLessonsById,
     firstCurriculumLessonId,
+    firstPublicPreviewLessonId,
+    isLessonAvailable,
     lessonId,
     onSelectLesson,
     selectedLesson,
@@ -1438,6 +1467,7 @@ export function LearningWorkspace({
               selectedLesson={selectedLesson}
               lessonProgress={lessonProgress}
               onSelectLesson={selectLesson}
+              isLessonAvailable={isLessonAvailable}
               onOpenCourseOverview={onOpenCourseOverview}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
@@ -1577,6 +1607,7 @@ export function LearningWorkspace({
               selectedLesson={selectedLesson}
               lessonProgress={lessonProgress}
               onSelectLesson={selectLesson}
+              isLessonAvailable={isLessonAvailable}
               onOpenCourseOverview={onOpenCourseOverview}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
