@@ -1,0 +1,114 @@
+name: Deploy development API
+
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: development
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check API
+        run: pnpm --filter @veolms/api typecheck
+
+      - name: Type-check database package and migrations
+        run: pnpm --filter @veolms/database typecheck
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "${DEPLOY_SSH_PRIVATE_KEY}"
+          test -n "${DEPLOY_KNOWN_HOSTS}"
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+      - name: Deploy API and run migrations
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+          DEPLOY_SERVICE_NAME: ${{ vars.DEPLOY_SERVICE_NAME }}
+          API_HEALTHCHECK_URL: ${{ vars.API_HEALTHCHECK_URL }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_APP_DIR}"
+          test -n "${DEPLOY_SERVICE_NAME}"
+          test -n "${API_HEALTHCHECK_URL}"
+
+          ssh \
+            -i "${HOME}/.ssh/deploy_key" \
+            -p "${DEPLOY_PORT:-22}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${DEPLOY_APP_DIR}" "${DEPLOY_SHA}" "${DEPLOY_SERVICE_NAME}" "${API_HEALTHCHECK_URL}" <<'REMOTE'
+          set -Eeuo pipefail
+
+          app_dir="$0"
+          deploy_sha="$1"
+          service_name="$2"
+          healthcheck_url="$3"
+
+          cd "${app_dir}"
+          git fetch --prune origin development
+          if ! git cat-file --quiet --exit-code "${deploy_sha}^{commit}"; then
+            git fetch origin "${deploy_sha}"
+          fi
+          git checkout --force -B development "${deploy_sha}"
+
+          test "$(git rev-parse HEAD)" = "${deploy_sha}"
+
+          pnpm install --frozen-lockfile
+          pnpm db:migrate
+          pnpm --filter @veolms/api build
+
+          sudo systemctl restart "${service_name}"
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            "${healthcheck_url}"
+          REMOTE
