@@ -59,7 +59,7 @@ export function useThreadReplies(
   options?: { enabled?: boolean },
 ) {
   return useQuery<LearningRepliesListResponse, ApiError>({
-    queryKey: learningInteractionKeys.threadReplies(threadId),
+    queryKey: learningInteractionKeys.threadReplies(threadId, query),
     queryFn: () => learningInteractionsService.listReplies(threadId, query),
     enabled: options?.enabled ?? Boolean(threadId),
   });

@@ -129,14 +129,25 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .columns(["reply_to_reply_id"])
     .execute();
 
-  // Foreign key for accepted_answer_id on learning_threads
+  // Unique index required so the composite foreign key below can reference
+  // (thread_id, id) together, tying an accepted reply to its own thread.
+  await database.schema
+    .createIndex("idx_learning_replies_thread_id_unique")
+    .on("learning_replies")
+    .columns(["thread_id", "id"])
+    .unique()
+    .execute();
+
+  // Composite foreign key for accepted_answer_id on learning_threads: ties
+  // the accepted reply id AND its thread ownership together atomically, so
+  // a thread can never point at another thread's reply.
   await database.schema
     .alterTable("learning_threads")
     .addForeignKeyConstraint(
       "fk_learning_threads_accepted_answer",
-      ["accepted_answer_id"],
+      ["id", "accepted_answer_id"],
       "learning_replies",
-      ["id"],
+      ["thread_id", "id"],
       (cb) => cb.onDelete("set null"),
     )
     .execute();
@@ -448,6 +459,11 @@ export async function down(database: Kysely<unknown>): Promise<void> {
   await database.schema.dropTable("learning_follows").ifExists().execute();
   await database.schema.dropTable("learning_bookmarks").ifExists().execute();
   await database.schema.dropTable("learning_likes").ifExists().execute();
+  await database.schema
+    .alterTable("learning_threads")
+    .dropConstraint("fk_learning_threads_accepted_answer")
+    .ifExists()
+    .execute();
   await database.schema.dropTable("learning_replies").ifExists().execute();
   await database.schema.dropTable("learning_threads").ifExists().execute();
 }

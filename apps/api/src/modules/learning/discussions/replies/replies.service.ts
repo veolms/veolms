@@ -252,28 +252,27 @@ export function createRepliesService({
           plainText,
         });
 
-        // Attach any verified attachments owned by the caller
+        // Attach any verified, still-unattached attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
           for (const attachmentId of input.attachmentIds) {
-            const attachment = await trx
-              .selectFrom("learning_attachments")
-              .selectAll()
+            const result = await trx
+              .updateTable("learning_attachments")
+              .set({
+                target_type: "reply",
+                target_id: id,
+              })
               .where("id", "=", attachmentId)
+              .where("owner_id", "=", input.userId)
+              .where("status", "=", "ready")
+              .where("target_id", "is", null)
               .executeTakeFirst();
 
-            if (
-              attachment &&
-              attachment.owner_id === input.userId &&
-              attachment.status === "ready"
-            ) {
-              await trx
-                .updateTable("learning_attachments")
-                .set({
-                  target_type: "reply",
-                  target_id: id,
-                })
-                .where("id", "=", attachmentId)
-                .execute();
+            if (Number(result.numUpdatedRows ?? 0) === 0) {
+              throw httpError(
+                400,
+                "INVALID_ATTACHMENT",
+                `Attachment ${attachmentId} is unavailable or already attached elsewhere`,
+              );
             }
           }
         }
@@ -312,21 +311,43 @@ export function createRepliesService({
       const { page, hasMore } = takePage(rows, query.limit);
 
       let likedReplyIds = new Set<string>();
+      let attachmentsByReplyId = new Map<string, LearningAttachmentRow[]>();
       if (page.length > 0) {
         const replyIds = page.map((r) => r.id);
-        const likes = await db
-          .selectFrom("learning_likes")
-          .select("target_id")
-          .where("user_id", "=", actor.userId)
-          .where("target_type", "=", "reply")
-          .where("target_id", "in", replyIds)
-          .execute();
+        const [likes, attachmentRows] = await Promise.all([
+          db
+            .selectFrom("learning_likes")
+            .select("target_id")
+            .where("user_id", "=", actor.userId)
+            .where("target_type", "=", "reply")
+            .where("target_id", "in", replyIds)
+            .execute(),
+          db
+            .selectFrom("learning_attachments")
+            .selectAll()
+            .where("target_type", "=", "reply")
+            .where("target_id", "in", replyIds)
+            .where("status", "=", "ready")
+            .execute(),
+        ]);
 
         likedReplyIds = new Set(likes.map((l) => l.target_id));
+        for (const attachment of attachmentRows) {
+          const targetId = attachment.target_id;
+          if (!targetId) continue;
+          const group = attachmentsByReplyId.get(targetId) ?? [];
+          group.push(attachment);
+          attachmentsByReplyId.set(targetId, group);
+        }
       }
 
       const replies = page.map((r) =>
-        mapReplyRow(r, actor.userId, [], likedReplyIds),
+        mapReplyRow(
+          r,
+          actor.userId,
+          attachmentsByReplyId.get(r.id) ?? [],
+          likedReplyIds,
+        ),
       );
 
       const last = page.at(-1);
@@ -507,6 +528,23 @@ export function createRepliesService({
           );
         }
 
+        // Serialize concurrent accept/unaccept requests for this thread so
+        // only one reply ends up accepted.
+        const lockedThread = await trx
+          .selectFrom("learning_threads")
+          .select(["id", "accepted_answer_id as acceptedAnswerId"])
+          .where("id", "=", thread.id)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!lockedThread) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+        thread.acceptedAnswerId = lockedThread.acceptedAnswerId ?? null;
+
         if (accepted) {
           if (thread.acceptedAnswerId && thread.acceptedAnswerId !== replyId) {
             await repliesRepo.setAcceptedStatus(
@@ -557,7 +595,10 @@ export function createRepliesService({
           replyId,
           threadId: thread.id,
           isAccepted: false,
-          acceptedAnswerId: null,
+          acceptedAnswerId:
+            thread.acceptedAnswerId === replyId
+              ? null
+              : thread.acceptedAnswerId,
         };
       });
     },

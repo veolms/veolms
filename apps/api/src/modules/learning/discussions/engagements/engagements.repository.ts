@@ -2,13 +2,17 @@ import type { DatabaseExecutor } from "@veolms/database";
 import type { EngagementTargetType, UserMention } from "@veolms/contracts";
 import { sql } from "kysely";
 
+export interface EngagementExistenceRow {
+  id: string;
+}
+
 export interface EngagementsRepository {
   findLike(
     db: DatabaseExecutor,
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<any | null>;
+  ): Promise<EngagementExistenceRow | undefined>;
 
   addLike(
     db: DatabaseExecutor,
@@ -28,7 +32,7 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     userId: string,
     threadId: string,
-  ): Promise<any | null>;
+  ): Promise<EngagementExistenceRow | undefined>;
 
   addBookmark(
     db: DatabaseExecutor,
@@ -46,7 +50,7 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     userId: string,
     threadId: string,
-  ): Promise<any | null>;
+  ): Promise<EngagementExistenceRow | undefined>;
 
   addFollow(
     db: DatabaseExecutor,
@@ -75,7 +79,7 @@ export function createEngagementsRepository(): EngagementsRepository {
     async findLike(db, userId, targetType, targetId) {
       return db
         .selectFrom("learning_likes")
-        .selectAll()
+        .select("id")
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
@@ -111,7 +115,7 @@ export function createEngagementsRepository(): EngagementsRepository {
     async findBookmark(db, userId, threadId) {
       return db
         .selectFrom("learning_bookmarks")
-        .selectAll()
+        .select("id")
         .where("user_id", "=", userId)
         .where("thread_id", "=", threadId)
         .executeTakeFirst();
@@ -140,7 +144,7 @@ export function createEngagementsRepository(): EngagementsRepository {
     async findFollow(db, userId, threadId) {
       return db
         .selectFrom("learning_follows")
-        .selectAll()
+        .select("id")
         .where("user_id", "=", userId)
         .where("thread_id", "=", threadId)
         .executeTakeFirst();

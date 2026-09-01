@@ -8,6 +8,7 @@ import {
 } from "../../../../events/outbox.service.ts";
 import { extractPlainText } from "./discussion.utils.ts";
 import { DISCUSSION_CONSTANTS } from "./discussion.constants.ts";
+import { createDiscussionAccess } from "./discussion.access.ts";
 
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})/g;
 const MAX_ACTOR_NAME = 255;
@@ -98,12 +99,20 @@ export async function syncMentionsAndNotify(
   const mentionedIds = new Set<string>();
 
   if (usernames.length > 0) {
-    const users = await db
-      .selectFrom("users")
-      .select("id")
-      .where("username", "in", usernames)
-      .execute();
-    for (const user of users) mentionedIds.add(user.id);
+    const courseAccess = createDiscussionAccess();
+    const participantIds = await courseAccess.listCourseParticipantIds(
+      db,
+      input.courseId,
+    );
+    if (participantIds.length > 0) {
+      const users = await db
+        .selectFrom("users")
+        .select("id")
+        .where("username", "in", usernames)
+        .where("id", "in", participantIds)
+        .execute();
+      for (const user of users) mentionedIds.add(user.id);
+    }
   }
 
   for (const extraId of input.extraUserIds ?? []) {

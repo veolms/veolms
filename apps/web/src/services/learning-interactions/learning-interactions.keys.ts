@@ -6,10 +6,13 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.all, "hub-threads", filters] as const,
   threadDetails: (threadId: string) =>
     [...learningInteractionKeys.all, "thread", threadId] as const,
-  threadReplies: (threadId: string) =>
+  threadRepliesRoot: (threadId: string) =>
     [...learningInteractionKeys.all, "replies", threadId] as const,
+  threadReplies: (threadId: string, query?: Record<string, unknown>) =>
+    [...learningInteractionKeys.threadRepliesRoot(threadId), query] as const,
+  notesRoot: () => [...learningInteractionKeys.all, "notes"] as const,
   notes: (filters?: Record<string, unknown>) =>
-    [...learningInteractionKeys.all, "notes", filters] as const,
+    [...learningInteractionKeys.notesRoot(), filters] as const,
   noteDetails: (noteId: string) =>
     [...learningInteractionKeys.all, "note", noteId] as const,
   mentions: (query: string) =>

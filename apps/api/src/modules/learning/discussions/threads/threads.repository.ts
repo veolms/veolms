@@ -17,6 +17,10 @@ import {
 
 export type LearningThreadRow = Selectable<LearningThreadTable>;
 
+// Kysely represents a `"learning_threads as t"` aliased query with the alias
+// added as its own entry on the DB generic, not the bare table name.
+type ThreadsAliasedDB = Database & { t: LearningThreadTable };
+
 export interface ThreadRowWithAuthor {
   id: string;
   academyId: string;
@@ -38,7 +42,6 @@ export interface ThreadRowWithAuthor {
   updatedAt: Date;
   authorName: string | null;
   authorUsername: string | null;
-  authorEmail: string | null;
   authorRole: string | null;
 }
 
@@ -122,11 +125,11 @@ export interface ThreadsRepository {
   ): Promise<void>;
 }
 
-function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
-  query: T,
+function applyThreadFilters<O>(
+  query: SelectQueryBuilder<ThreadsAliasedDB, "t", O>,
   options: ThreadFilterOptions,
-): T {
-  let q: any = query
+): SelectQueryBuilder<ThreadsAliasedDB, "t", O> {
+  let q = query
     .where("t.status", "=", "active")
     .where("t.academy_id", "=", options.academyId);
 
@@ -155,23 +158,24 @@ function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
       q = q.where(sql<boolean>`1 = 0`);
     }
   } else if (options.currentUserId) {
+    const currentUserId = options.currentUserId;
     if (options.visibility === "private") {
       q = q
         .where("t.visibility", "=", "private")
-        .where("t.user_id", "=", options.currentUserId);
+        .where("t.user_id", "=", currentUserId);
     } else if (options.visibility === "unlisted") {
       q = q
         .where("t.visibility", "=", "unlisted")
-        .where("t.user_id", "=", options.currentUserId);
+        .where("t.user_id", "=", currentUserId);
     } else if (options.visibility === "public") {
       q = q.where("t.visibility", "=", "public");
     } else {
-      q = q.where((eb: any) =>
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
         eb.or([
           eb("t.visibility", "=", "public"),
           eb.and([
             eb("t.visibility", "in", ["private", "unlisted"]),
-            eb("t.user_id", "=", options.currentUserId),
+            eb("t.user_id", "=", currentUserId),
           ]),
         ]),
       );
@@ -182,7 +186,7 @@ function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
 
   if (options.search) {
     const searchPattern = `%${options.search.toLowerCase()}%`;
-    q = q.where((eb: any) =>
+    q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
       eb.or([
         eb(sql`lower(t.title)`, "like", searchPattern),
         eb(sql`lower(t.plain_text)`, "like", searchPattern),
@@ -202,7 +206,8 @@ function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
     if (!options.currentUserId) {
       q = q.where(sql<boolean>`1 = 0`);
     } else {
-      q = q.where((eb: any) =>
+      const currentUserId = options.currentUserId;
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
         eb.or([
           eb.exists(
             eb
@@ -210,7 +215,7 @@ function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
               .select(sql`1`.as("one"))
               .whereRef("m.source_id", "=", "t.id")
               .where("m.source_type", "=", "thread")
-              .where("m.mentioned_user_id", "=", options.currentUserId),
+              .where("m.mentioned_user_id", "=", currentUserId),
           ),
           eb.exists(
             eb
@@ -219,25 +224,25 @@ function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
               .select(sql`1`.as("one"))
               .whereRef("lr.thread_id", "=", "t.id")
               .where("m.source_type", "=", "reply")
-              .where("m.mentioned_user_id", "=", options.currentUserId),
+              .where("m.mentioned_user_id", "=", currentUserId),
           ),
         ]),
       );
     }
   }
 
-  return q as T;
+  return q;
 }
 
-function applyThreadCursor<T extends SelectQueryBuilder<any, any, any>>(
-  query: T,
+function applyThreadCursor<O>(
+  query: SelectQueryBuilder<ThreadsAliasedDB, "t", O>,
   options: ThreadFilterOptions,
-): T {
+): SelectQueryBuilder<ThreadsAliasedDB, "t", O> {
   const cursor = options.pageCursor;
   if (!cursor) return query;
   const sort = normalizeThreadSort(options.sort);
   if (sort === "activity" && cursor.updatedAt) {
-    return (query as any).where(
+    return query.where(
       sql<boolean>`(
         t.updated_at < ${cursor.updatedAt}
         or (t.updated_at = ${cursor.updatedAt} and t.id < ${cursor.id}::uuid)
@@ -245,7 +250,7 @@ function applyThreadCursor<T extends SelectQueryBuilder<any, any, any>>(
     );
   }
   if (sort === "replies" && cursor.repliesCount !== undefined) {
-    return (query as any).where(
+    return query.where(
       sql<boolean>`(
         t.replies_count < ${cursor.repliesCount}
         or (t.replies_count = ${cursor.repliesCount} and t.created_at < ${cursor.createdAt})
@@ -258,7 +263,7 @@ function applyThreadCursor<T extends SelectQueryBuilder<any, any, any>>(
     );
   }
   if (sort === "popular" && cursor.engagement !== undefined) {
-    return (query as any).where(
+    return query.where(
       sql<boolean>`(
         (t.likes_count + t.replies_count) < ${cursor.engagement}
         or (
@@ -273,7 +278,7 @@ function applyThreadCursor<T extends SelectQueryBuilder<any, any, any>>(
       )`,
     );
   }
-  return (query as any).where(createdAtIdDescSql("t", cursor));
+  return query.where(createdAtIdDescSql("t", cursor));
 }
 
 export function createThreadsRepository(): ThreadsRepository {
@@ -326,7 +331,6 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
-          "u.email as authorEmail",
           authorRoleSql("t.user_id"),
         ])
         .where("t.id", "=", threadId)
@@ -336,8 +340,11 @@ export function createThreadsRepository(): ThreadsRepository {
     },
 
     async listThreads(db, options) {
-      let query = db
-        .selectFrom("learning_threads as t")
+      let filtered = db.selectFrom("learning_threads as t");
+      filtered = applyThreadFilters(filtered, options);
+      filtered = applyThreadCursor(filtered, options);
+
+      let query = filtered
         .innerJoin("users as u", "u.id", "t.user_id")
         .select([
           "t.id as id",
@@ -360,12 +367,8 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
-          "u.email as authorEmail",
           authorRoleSql("t.user_id"),
         ]);
-
-      query = applyThreadFilters(query, options);
-      query = applyThreadCursor(query, options);
 
       if (options.sort === "highest_engagement" || options.sort === "popular") {
         query = query

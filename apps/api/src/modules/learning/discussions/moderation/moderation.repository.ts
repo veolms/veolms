@@ -25,6 +25,10 @@ export type LearningReportRow = Selectable<LearningReportTable>;
 export type LearningSuspensionRow = Selectable<LearningSuspensionTable>;
 export type LearningAuditLogRow = Selectable<LearningAuditLogTable>;
 
+// Kysely represents a `"learning_reports as rep"` aliased query with the
+// alias added as its own entry on the DB generic, not the bare table name.
+type ReportsAliasedDB = Database & { rep: LearningReportTable };
+
 export interface ReportRowWithReporter {
   id: string;
   reporterId: string;
@@ -118,7 +122,7 @@ export interface ModerationRepository {
     db: DatabaseExecutor,
     userId: string,
     courseId?: string | null,
-  ): Promise<void>;
+  ): Promise<number>;
 
   getActiveSuspension(
     db: DatabaseExecutor,
@@ -148,21 +152,21 @@ export interface ModerationRepository {
   ): Promise<AuditLogRowWithActor[]>;
 }
 
-function applyReportFilters<DB extends Database, TB extends keyof DB, O>(
-  query: SelectQueryBuilder<DB, TB, O>,
+function applyReportFilters<O>(
+  query: SelectQueryBuilder<ReportsAliasedDB, "rep", O>,
   options: ListReportsQuery,
-): SelectQueryBuilder<DB, TB, O> {
+): SelectQueryBuilder<ReportsAliasedDB, "rep", O> {
   let q = query;
   if (options.courseId) {
-    q = q.where("rep.course_id" as any, "=", options.courseId);
+    q = q.where("rep.course_id", "=", options.courseId);
   }
 
   if (options.status) {
-    q = q.where("rep.status" as any, "=", options.status);
+    q = q.where("rep.status", "=", options.status);
   }
 
   if (options.targetType) {
-    q = q.where("rep.target_type" as any, "=", options.targetType);
+    q = q.where("rep.target_type", "=", options.targetType);
   }
 
   return q;
@@ -200,8 +204,13 @@ export function createModerationRepository(): ModerationRepository {
     },
 
     async listReports(db, options) {
-      let query = db
-        .selectFrom("learning_reports as rep")
+      let filtered = db.selectFrom("learning_reports as rep");
+      filtered = applyReportFilters(filtered, options);
+      if (options.pageCursor) {
+        filtered = filtered.where(createdAtIdDescSql("rep", options.pageCursor));
+      }
+
+      const rows = await filtered
         .innerJoin("users as u", "u.id", "rep.reporter_id")
         .select([
           "rep.id as id",
@@ -220,15 +229,7 @@ export function createModerationRepository(): ModerationRepository {
           "u.username as reporterUsername",
           "u.email as reporterEmail",
           authorRoleSql("rep.reporter_id"),
-        ]);
-
-      query = applyReportFilters(query, options);
-
-      if (options.pageCursor) {
-        query = query.where(createdAtIdDescSql("rep", options.pageCursor));
-      }
-
-      const rows = await query
+        ])
         .orderBy("rep.created_at", "desc")
         .orderBy("rep.id", "desc")
         .limit(options.limit + 1)
@@ -294,11 +295,12 @@ export function createModerationRepository(): ModerationRepository {
         .where("user_id", "=", userId)
         .where("is_active", "=", true);
 
-      if (courseId) {
-        query = query.where("course_id", "=", courseId);
-      }
+      query = courseId
+        ? query.where("course_id", "=", courseId)
+        : query.where("course_id", "is", null);
 
-      await query.execute();
+      const result = await query.executeTakeFirst();
+      return Number(result.numUpdatedRows ?? 0);
     },
 
     async getActiveSuspension(db, userId, courseId) {
@@ -314,11 +316,14 @@ export function createModerationRepository(): ModerationRepository {
           ]),
         );
 
-      if (courseId) {
-        query = query.where((eb) =>
-          eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]),
-        );
-      }
+      query = courseId
+        ? query.where((eb) =>
+            eb.or([
+              eb("course_id", "is", null),
+              eb("course_id", "=", courseId),
+            ]),
+          )
+        : query.where("course_id", "is", null);
 
       const row = await query.executeTakeFirst();
       return row ?? null;

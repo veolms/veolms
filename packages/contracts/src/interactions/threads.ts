@@ -131,7 +131,7 @@ export const listLearningThreadsQuerySchema = z.object({
   status: questionFilterStatusSchema.default("all"),
   visibility: discussionVisibilitySchema.optional(),
   sort: threadSortSchema.default("latest"),
-  mine: z.coerce.boolean().optional(),
+  mine: z.stringbool().optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

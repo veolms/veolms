@@ -1,13 +1,22 @@
 import fastifyMultipart from "@fastify/multipart";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
+import type { DatabaseExecutor } from "@veolms/database";
 import { discussionUploadResponseSchema } from "@veolms/contracts";
+import type { LearningAttachment } from "@veolms/contracts";
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../learning/discussions/shared/discussion.permissions.ts";
+import {
+  createDiscussionAccess,
+  discussionActor,
+  type DiscussionActor,
+} from "../learning/discussions/shared/discussion.access.ts";
 import { createAttachmentsRepository } from "../learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "../learning/discussions/attachments/attachments.service.ts";
+import { createRepliesRepository } from "../learning/discussions/replies/replies.repository.ts";
+import { createThreadsRepository } from "../learning/discussions/threads/threads.repository.ts";
 import { createDiscussionUploadStore } from "./discussion-upload.storage.ts";
 
 const fileNameSchema = z.string().regex(/^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i);
@@ -21,6 +30,43 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
   const store = createDiscussionUploadStore(options.services.storage);
   const attachmentsRepo = createAttachmentsRepository();
   const attachmentsService = createAttachmentsService(attachmentsRepo, store);
+  const threadsRepo = createThreadsRepository();
+  const repliesRepo = createRepliesRepository();
+  const discussionAccess = createDiscussionAccess();
+
+  async function isAuthorizedToReadAttachment(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    attachment: LearningAttachment,
+  ): Promise<boolean> {
+    if (attachment.ownerId === actor.userId) return true;
+    if (!attachment.targetId) return false;
+
+    try {
+      if (attachment.targetType === "thread") {
+        const thread = await threadsRepo.findThreadById(
+          db,
+          attachment.targetId,
+        );
+        if (!thread) return false;
+        await discussionAccess.assertCanAccessThread(db, actor, thread);
+        return true;
+      }
+
+      if (attachment.targetType === "reply") {
+        const reply = await repliesRepo.findReplyById(db, attachment.targetId);
+        if (!reply) return false;
+        const thread = await threadsRepo.findThreadById(db, reply.threadId);
+        if (!thread) return false;
+        await discussionAccess.assertCanAccessThread(db, actor, thread);
+        return true;
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }
 
   const uploadResponse = {
     200: jsonResponse(
@@ -113,21 +159,44 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       },
     },
     async (request, reply) => {
-      const file = await store.get(request.params.fileName);
-      if (!file) {
-        return reply.code(404).send({
+      const notFound = () =>
+        reply.code(404).send({
           success: false,
           statusCode: 404,
           error: "Not Found",
           message: "Discussion attachment not found.",
         });
+
+      const user = request.user!;
+      const { fileName } = request.params;
+      const attachmentId = fileName.slice(0, fileName.lastIndexOf("."));
+      const attachment = await attachmentsRepo.findAttachmentById(
+        options.database,
+        attachmentId,
+      );
+      if (!attachment) {
+        return notFound();
+      }
+
+      const authorized = await isAuthorizedToReadAttachment(
+        options.database,
+        discussionActor(user),
+        attachment,
+      );
+      if (!authorized) {
+        return notFound();
+      }
+
+      const file = await store.get(fileName);
+      if (!file) {
+        return notFound();
       }
 
       return (reply as FastifyReply)
         .header("Content-Type", file.mimeType)
         .header("Content-Length", file.size)
         .header("X-Content-Type-Options", "nosniff")
-        .header("Cache-Control", "private, max-age=31536000, immutable")
+        .header("Cache-Control", "no-store")
         .send(file.stream);
     },
   );

@@ -21,13 +21,15 @@ const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
   "video/webm": ".webm",
 };
 
-const EXTENSION_MIME_TYPES: Readonly<Record<string, string>> =
-  Object.fromEntries(
+const EXTENSION_MIME_TYPES: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(
     Object.entries(MIME_EXTENSIONS).map(([mimeType, extension]) => [
       extension,
       mimeType,
     ]),
-  );
+  ),
+  ".jpeg": "image/jpeg",
+};
 
 const SAFE_FILE_NAME = /^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i;
 
@@ -80,7 +82,7 @@ function mimeFromFileName(
   return EXTENSION_MIME_TYPES[extname(fileName).toLowerCase()] ?? fallback;
 }
 
-function useObjectStorage(): boolean {
+function shouldUseObjectStorage(): boolean {
   return Boolean(
     config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY,
   );
@@ -89,7 +91,7 @@ function useObjectStorage(): boolean {
 export function createDiscussionUploadStore(
   objectStorage: S3StorageService,
 ): DiscussionUploadStore {
-  const s3 = useObjectStorage() ? objectStorage : null;
+  const s3 = shouldUseObjectStorage() ? objectStorage : null;
 
   async function writeDiskFile(
     fileName: string,
@@ -129,6 +131,10 @@ export function createDiscussionUploadStore(
 
     async putFromBuffer({ fileName, mimeType, data }) {
       if (!isSafeDiscussionUploadFileName(fileName)) {
+        throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
+      }
+
+      if (!MIME_EXTENSIONS[mimeType]) {
         throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
       }
 

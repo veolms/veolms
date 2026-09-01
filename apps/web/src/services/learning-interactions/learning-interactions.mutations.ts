@@ -67,7 +67,7 @@ export function useCreateReply(threadId: string) {
       learningInteractionsService.createReply(threadId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadReplies(threadId),
+        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -83,7 +83,7 @@ export function useUpdateReply(threadId: string) {
       learningInteractionsService.updateReply(replyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadReplies(threadId),
+        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
     },
   });
@@ -95,7 +95,7 @@ export function useDeleteReply(threadId: string) {
     mutationFn: (replyId) => learningInteractionsService.deleteReply(replyId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadReplies(threadId),
+        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -150,7 +150,7 @@ export function useAcceptReply(threadId: string) {
         queryKey: learningInteractionKeys.threadDetails(threadId),
       });
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadReplies(threadId),
+        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -181,7 +181,7 @@ export function useCreateNote() {
     mutationFn: (payload) => learningInteractionsService.createNote(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notes(),
+        queryKey: learningInteractionKeys.notesRoot(),
       });
     },
   });
@@ -194,7 +194,7 @@ export function useUpdateNote(noteId: string) {
       learningInteractionsService.updateNote(noteId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notes(),
+        queryKey: learningInteractionKeys.notesRoot(),
       });
     },
   });
@@ -206,7 +206,7 @@ export function useDeleteNote() {
     mutationFn: (noteId) => learningInteractionsService.deleteNote(noteId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notes(),
+        queryKey: learningInteractionKeys.notesRoot(),
       });
     },
   });
@@ -238,7 +238,7 @@ export function useModerateReply(replyId: string, threadId: string) {
       learningInteractionsService.moderatePlatformReply(replyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadReplies(threadId),
+        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
     },
   });

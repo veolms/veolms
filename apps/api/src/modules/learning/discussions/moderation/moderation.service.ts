@@ -41,6 +41,18 @@ import type {
   ReportRowWithReporter,
 } from "./moderation.repository.ts";
 
+function parseAuditLogDetails(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ModerationService {
   createReport(
     db: DatabaseExecutor,
@@ -130,7 +142,8 @@ export function createModerationService({
 
   return {
     async createReport(db, reporterId, input) {
-      // 1. Verify target item exists
+      // 1. Verify target item exists and derive its actual course
+      let courseId: string | null = null;
       if (input.targetType === "thread") {
         const thread = await threadsRepo.findThreadById(db, input.targetId);
         if (!thread) {
@@ -140,11 +153,14 @@ export function createModerationService({
             "Reported discussion thread not found",
           );
         }
+        courseId = thread.courseId;
       } else if (input.targetType === "reply") {
         const reply = await repliesRepo.findReplyById(db, input.targetId);
         if (!reply) {
           throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
         }
+        const thread = await threadsRepo.findThreadById(db, reply.threadId);
+        courseId = thread?.courseId ?? null;
       }
 
       // 2. Prevent spam / duplicate pending reports by the same reporter
@@ -165,7 +181,7 @@ export function createModerationService({
           reporterId,
           targetType: input.targetType,
           targetId: input.targetId,
-          courseId: input.courseId || null,
+          courseId,
           reason: input.reason,
           details: input.details,
         });
@@ -252,7 +268,7 @@ export function createModerationService({
           throw httpError(404, "REPORT_NOT_FOUND", "Report not found");
         }
 
-        if (courseId && report.course_id && report.course_id !== courseId) {
+        if (courseId && report.course_id !== courseId) {
           throw httpError(
             403,
             "FORBIDDEN",
@@ -386,7 +402,7 @@ export function createModerationService({
           await outbox.publish(trx, {
             type: "moderation.content_moderated",
             version: 1,
-            dedupeKey: `moderation.content_moderated:thread:${threadId}:${input.action}:${Date.now()}`,
+            dedupeKey: `moderation.content_moderated:thread:${threadId}:${input.action}`,
             occurredAt: new Date(),
             payload: {
               recipientUserId: thread.userId,
@@ -503,7 +519,7 @@ export function createModerationService({
           await outbox.publish(trx, {
             type: "moderation.content_moderated",
             version: 1,
-            dedupeKey: `moderation.content_moderated:reply:${replyId}:${input.action}:${Date.now()}`,
+            dedupeKey: `moderation.content_moderated:reply:${replyId}:${input.action}`,
             occurredAt: new Date(),
             payload: {
               recipientUserId: reply.userId,
@@ -604,13 +620,19 @@ export function createModerationService({
     async unsuspendUser(db, actor, input, ipAddress) {
       await assertModerationScope(db, actor, input.courseId);
       return withWriteTransaction(db, async (trx) => {
-        const academyId = await resolveAcademyId(trx);
-        await moderationRepo.deactivateSuspension(
+        const affectedRows = await moderationRepo.deactivateSuspension(
           trx,
           input.userId,
           input.courseId,
         );
 
+        if (affectedRows === 0) {
+          return {
+            message: "User has no active participation suspension.",
+          };
+        }
+
+        const academyId = await resolveAcademyId(trx);
         await moderationRepo.createAuditLog(trx, {
           id: crypto.randomUUID(),
           academyId,
@@ -630,7 +652,7 @@ export function createModerationService({
         await outbox.publish(trx, {
           type: "moderation.user_unsuspended",
           version: 1,
-          dedupeKey: `moderation.user_unsuspended:${input.userId}:${Date.now()}`,
+          dedupeKey: `moderation.user_unsuspended:${input.userId}:${input.courseId || "platform"}`,
           occurredAt: new Date(),
           payload: {
             recipientUserId: input.userId,
@@ -676,7 +698,7 @@ export function createModerationService({
         targetId: r.targetId,
         details:
           typeof r.details === "string"
-            ? JSON.parse(r.details)
+            ? parseAuditLogDetails(r.details)
             : (r.details as Record<string, unknown> | null),
         ipAddress: r.ipAddress ?? null,
         createdAt:

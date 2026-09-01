@@ -130,9 +130,7 @@ export function createThreadsService(
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username:
-          (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
-          "user",
+        username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
         avatarUrl: null,
         role: mapAuthorRole(row.authorRole),
       },
@@ -557,13 +555,15 @@ export function createThreadsService(
         );
       }
 
-      await threadsRepo.deleteThread(db, threadId);
-      await db
-        .updateTable("learning_attachments")
-        .set({ status: "deleted" })
-        .where("target_type", "=", "thread")
-        .where("target_id", "=", threadId)
-        .execute();
+      await withWriteTransaction(db, async (trx) => {
+        await threadsRepo.deleteThread(trx, threadId);
+        await trx
+          .updateTable("learning_attachments")
+          .set({ status: "deleted" })
+          .where("target_type", "=", "thread")
+          .where("target_id", "=", threadId)
+          .execute();
+      });
     },
   };
 }

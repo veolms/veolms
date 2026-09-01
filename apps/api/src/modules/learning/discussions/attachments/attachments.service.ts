@@ -150,22 +150,27 @@ export function createAttachmentsService(
       });
       const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
-      await db
-        .updateTable("learning_attachments")
-        .set({
-          storage_key: `discussion-uploads/${sanitizedName}`,
-          file_name: file.filename,
-          file_url: fileUrl,
-          mime_type: file.mimetype,
-          file_size: file.data.length,
-          status: "ready",
-          metadata: JSON.stringify({
-            ...(existing.metadata || {}),
-            uploadedAt: new Date().toISOString(),
-          }),
-        })
-        .where("id", "=", attachmentId)
-        .execute();
+      try {
+        await db
+          .updateTable("learning_attachments")
+          .set({
+            storage_key: `discussion-uploads/${sanitizedName}`,
+            file_name: file.filename,
+            file_url: fileUrl,
+            mime_type: file.mimetype,
+            file_size: file.data.length,
+            status: "ready",
+            metadata: JSON.stringify({
+              ...(existing.metadata || {}),
+              uploadedAt: new Date().toISOString(),
+            }),
+          })
+          .where("id", "=", attachmentId)
+          .execute();
+      } catch (error) {
+        await uploadStore.remove(sanitizedName);
+        throw error;
+      }
 
       const updated = await attachmentsRepo.findAttachmentById(
         db,
@@ -259,18 +264,23 @@ export function createAttachmentsService(
       });
       const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
-      await attachmentsRepo.createAttachment(db, {
-        id,
-        ownerId: userId,
-        kind,
-        storageKey,
-        fileName: file.filename,
-        fileUrl,
-        mimeType: file.mimetype,
-        fileSize: file.data.length,
-        status: "ready",
-        metadata: { uploadedAt: new Date().toISOString() },
-      });
+      try {
+        await attachmentsRepo.createAttachment(db, {
+          id,
+          ownerId: userId,
+          kind,
+          storageKey,
+          fileName: file.filename,
+          fileUrl,
+          mimeType: file.mimetype,
+          fileSize: file.data.length,
+          status: "ready",
+          metadata: { uploadedAt: new Date().toISOString() },
+        });
+      } catch (error) {
+        await uploadStore.remove(sanitizedName);
+        throw error;
+      }
 
       return {
         id,

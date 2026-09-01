@@ -5,6 +5,7 @@ import type {
   CreateLearningNoteRequest,
   LearningNote,
   LearningNotesListResponse,
+  LessonNotesOverviewItem,
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
@@ -21,7 +22,7 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
-import type { NotesRepository } from "./notes.repository.ts";
+import type { NoteRow, NotesRepository } from "./notes.repository.ts";
 
 export interface NotesService {
   createNote(
@@ -74,14 +75,14 @@ export interface NotesService {
 export function createNotesService(notesRepo: NotesRepository): NotesService {
   const courseAccess = createDiscussionAccess();
 
-  function mapNoteRow(row: any): LearningNote {
+  function mapNoteRow(row: NoteRow): LearningNote {
     return {
       id: row.id,
       userId: row.userId,
       courseId: row.courseId,
       courseTitle: row.courseTitle,
-      sectionId: row.sectionId,
-      sectionTitle: row.sectionTitle,
+      sectionId: row.sectionId ?? undefined,
+      sectionTitle: row.sectionTitle ?? undefined,
       sectionPosition:
         row.sectionPosition !== undefined
           ? Number(row.sectionPosition)
@@ -98,8 +99,6 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       plainText: row.plainText,
       visibility: row.visibility || "private",
       tags: row.tags || [],
-      likesCount: Number(row.likesCount || 0),
-      repliesCount: Number(row.repliesCount || 0),
       createdAt:
         row.createdAt instanceof Date
           ? row.createdAt.toISOString()
@@ -111,7 +110,10 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     };
   }
 
-  function assertOwnNote(note: { userId: string } | null, userId: string) {
+  function assertOwnNote<T extends { userId: string } | null>(
+    note: T,
+    userId: string,
+  ): asserts note is NonNullable<T> {
     if (!note || note.userId !== userId) {
       throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
     }
@@ -231,8 +233,8 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         notesByLessonId.set(note.lessonId, list);
       }
 
-      const lessonsBySectionId = new Map<string, any[]>();
-      const unassignedLessons: any[] = [];
+      const lessonsBySectionId = new Map<string, LessonNotesOverviewItem[]>();
+      const unassignedLessons: LessonNotesOverviewItem[] = [];
 
       for (const lesson of overview.lessons) {
         const lessonNotes = notesByLessonId.get(lesson.id) || [];
@@ -300,10 +302,13 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         : undefined;
       await notesRepo.updateNote(db, noteId, {
         ...updates,
-        ...(plainText ? { plainText } : {}),
+        ...(plainText !== undefined ? { plainText } : {}),
       });
 
       const updated = await notesRepo.findNoteById(db, noteId);
+      if (!updated) {
+        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
+      }
       return mapNoteRow(updated);
     },
 

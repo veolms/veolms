@@ -1,13 +1,57 @@
-import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  Database,
+  DatabaseExecutor,
+  LearningNoteTable,
+} from "@veolms/database";
+import type {
+  DiscussionVisibility,
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
+import type { ExpressionBuilder, SelectQueryBuilder, Updateable } from "kysely";
 import { sql } from "kysely";
 import {
   createdAtIdDescSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
+
+export interface NoteRow {
+  id: string;
+  userId: string;
+  courseId: string;
+  courseTitle?: string;
+  sectionId: string | null;
+  sectionTitle: string | null;
+  sectionPosition: number | null;
+  lessonId: string;
+  lessonTitle: string;
+  lessonPosition: number;
+  timestampSeconds: number | null;
+  title: string | null;
+  content: string;
+  plainText: string;
+  visibility: DiscussionVisibility;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CourseSectionRow {
+  id: string;
+  title: string;
+  position: number;
+}
+
+export interface CourseLessonRow {
+  id: string;
+  sectionId: string | null;
+  title: string;
+  position: number;
+}
+
+// Kysely represents a `"learning_notes as n"` aliased query with the alias
+// added as its own entry on the DB generic, not the bare table name.
+type NotesAliasedDB = Database & { n: LearningNoteTable };
 
 const noteSelect = [
   "n.id",
@@ -48,13 +92,13 @@ export interface NotesRepository {
     },
   ): Promise<void>;
 
-  findNoteById(db: DatabaseExecutor, noteId: string): Promise<any | null>;
+  findNoteById(db: DatabaseExecutor, noteId: string): Promise<NoteRow | null>;
 
   listNotes(
     db: DatabaseExecutor,
     userId: string,
     options: ListLearningNotesQuery & { pageCursor?: DiscussionListCursor },
-  ): Promise<any[]>;
+  ): Promise<NoteRow[]>;
 
   countNotes(
     db: DatabaseExecutor,
@@ -68,9 +112,9 @@ export interface NotesRepository {
     userId: string,
   ): Promise<{
     course: { id: string; title: string } | null;
-    sections: any[];
-    lessons: any[];
-    notes: any[];
+    sections: CourseSectionRow[];
+    lessons: CourseLessonRow[];
+    notes: NoteRow[];
   }>;
 
   updateNote(
@@ -82,28 +126,28 @@ export interface NotesRepository {
   deleteNote(db: DatabaseExecutor, noteId: string): Promise<void>;
 }
 
-function applyNoteFilters(
-  query: any,
+function applyNoteFilters<O>(
+  query: SelectQueryBuilder<NotesAliasedDB, "n", O>,
   userId: string,
   options: ListLearningNotesQuery,
-) {
-  query = query.where("n.user_id", "=", userId);
+): SelectQueryBuilder<NotesAliasedDB, "n", O> {
+  let q = query.where("n.user_id", "=", userId);
 
   if (options.courseId) {
-    query = query.where("n.course_id", "=", options.courseId);
+    q = q.where("n.course_id", "=", options.courseId);
   }
 
   if (options.lessonId) {
-    query = query.where("n.lesson_id", "=", options.lessonId);
+    q = q.where("n.lesson_id", "=", options.lessonId);
   }
 
   if (options.visibility) {
-    query = query.where("n.visibility", "=", options.visibility);
+    q = q.where("n.visibility", "=", options.visibility);
   }
 
   if (options.query) {
     const searchPattern = `%${options.query.toLowerCase()}%`;
-    query = query.where((eb: any) =>
+    q = q.where((eb: ExpressionBuilder<NotesAliasedDB, "n">) =>
       eb.or([
         eb(sql`lower(n.title)`, "like", searchPattern),
         eb(sql`lower(n.plain_text)`, "like", searchPattern),
@@ -112,10 +156,10 @@ function applyNoteFilters(
   }
 
   if (options.tag) {
-    query = query.where(sql<boolean>`${options.tag} = ANY(n.tags)`);
+    q = q.where(sql<boolean>`${options.tag} = ANY(n.tags)`);
   }
 
-  return query;
+  return q;
 }
 
 export function createNotesRepository(): NotesRepository {
@@ -149,28 +193,27 @@ export function createNotesRepository(): NotesRepository {
         .where("n.id", "=", noteId)
         .executeTakeFirst();
 
-      return row ?? null;
+      return (row as NoteRow | undefined) ?? null;
     },
 
     async listNotes(db, userId, options) {
-      let query = db
-        .selectFrom("learning_notes as n")
+      let filtered = db.selectFrom("learning_notes as n");
+      filtered = applyNoteFilters(filtered, userId, options);
+      if (options.pageCursor) {
+        filtered = filtered.where(createdAtIdDescSql("n", options.pageCursor));
+      }
+
+      const rows = await filtered
         .innerJoin("courses as c", "c.id", "n.course_id")
         .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
         .leftJoin("course_sections as s", "s.id", "l.section_id")
-        .select([...noteSelect]);
-
-      query = applyNoteFilters(query, userId, options);
-
-      if (options.pageCursor) {
-        query = query.where(createdAtIdDescSql("n", options.pageCursor));
-      }
-
-      return query
+        .select([...noteSelect])
         .orderBy("n.created_at", "desc")
         .orderBy("n.id", "desc")
         .limit(options.limit + 1)
         .execute();
+
+      return rows as NoteRow[];
     },
 
     async countNotes(db, userId, options) {
@@ -243,14 +286,14 @@ export function createNotesRepository(): NotesRepository {
 
       return {
         course,
-        sections,
-        lessons,
-        notes,
+        sections: sections as CourseSectionRow[],
+        lessons: lessons as CourseLessonRow[],
+        notes: notes as NoteRow[],
       };
     },
 
     async updateNote(db, noteId, updates) {
-      const updateData: Record<string, any> = {
+      const updateData: Updateable<LearningNoteTable> = {
         updated_at: new Date(),
       };
       if (updates.title !== undefined) updateData.title = updates.title;
