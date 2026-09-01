@@ -47,7 +47,7 @@ function mentionContext(plainText: string): string {
   return clamp(snippet, MAX_CONTEXT);
 }
 
-async function resolveDeepLink(
+export async function resolveDeepLink(
   db: DatabaseExecutor,
   courseId: string,
   threadId: string,
@@ -63,7 +63,7 @@ async function resolveDeepLink(
   return "/discussions";
 }
 
-async function resolveActorName(
+export async function resolveActorName(
   db: DatabaseExecutor,
   userId: string,
 ): Promise<string> {
@@ -135,8 +135,6 @@ export async function syncMentionsAndNotify(
       .execute();
   }
 
-  if (addedIds.length === 0) return;
-
   const actorName = await resolveActorName(db, input.actorUserId);
   const context = mentionContext(
     input.plainText ?? extractPlainText(input.content),
@@ -144,6 +142,7 @@ export async function syncMentionsAndNotify(
   const deepLink = await resolveDeepLink(db, input.courseId, input.threadId);
   const occurredAt = new Date();
 
+  // 1. Notify newly @mentioned users
   for (const mentionedUserId of addedIds) {
     const inserted = await db
       .insertInto("learning_mentions")
@@ -175,5 +174,64 @@ export async function syncMentionsAndNotify(
         deepLink,
       },
     });
+  }
+
+  // 2. If this is a new reply, notify thread author and followers
+  if (input.sourceType === "reply") {
+    const [thread, followers] = await Promise.all([
+      db
+        .selectFrom("learning_threads")
+        .select(["title", "user_id"])
+        .where("id", "=", input.threadId)
+        .executeTakeFirst(),
+      db
+        .selectFrom("learning_follows")
+        .select("user_id")
+        .where("thread_id", "=", input.threadId)
+        .execute(),
+    ]);
+
+    const subscriberIds = new Set<string>();
+
+    // Add thread author
+    if (thread?.user_id && thread.user_id !== input.actorUserId) {
+      subscriberIds.add(thread.user_id);
+    }
+
+    // Add thread followers
+    for (const follower of followers) {
+      if (follower.user_id !== input.actorUserId) {
+        subscriberIds.add(follower.user_id);
+      }
+    }
+
+    // Add parent reply author if direct reply
+    for (const extraId of input.extraUserIds ?? []) {
+      if (extraId && extraId !== input.actorUserId) {
+        subscriberIds.add(extraId);
+      }
+    }
+
+    // Exclude users already notified via @mention
+    for (const mentionedId of addedIds) {
+      subscriberIds.delete(mentionedId);
+    }
+
+    const threadTitle = thread?.title || "Discussion Thread";
+    for (const subscriberUserId of subscriberIds) {
+      await outbox.publish(db, {
+        type: "discussion.reply_created",
+        version: 1,
+        dedupeKey: `discussion.reply_created:${input.sourceId}:${subscriberUserId}`,
+        occurredAt,
+        payload: {
+          recipientUserId: subscriberUserId,
+          actorName,
+          threadTitle,
+          replySnippet: context,
+          deepLink,
+        },
+      });
+    }
   }
 }

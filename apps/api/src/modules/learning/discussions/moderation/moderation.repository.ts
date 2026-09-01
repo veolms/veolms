@@ -1,4 +1,10 @@
-import type { DatabaseExecutor } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  LearningAuditLogTable,
+  LearningReportTable,
+  LearningSuspensionTable,
+} from "@veolms/database";
 import type {
   EngagementTargetType,
   ListAuditLogsQuery,
@@ -7,12 +13,53 @@ import type {
   ReportStatus,
   SuspensionScope,
 } from "@veolms/contracts";
+import type { Selectable, SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
   createdAtIdDescSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
+
+export type LearningReportRow = Selectable<LearningReportTable>;
+export type LearningSuspensionRow = Selectable<LearningSuspensionTable>;
+export type LearningAuditLogRow = Selectable<LearningAuditLogTable>;
+
+export interface ReportRowWithReporter {
+  id: string;
+  reporterId: string;
+  targetType: EngagementTargetType;
+  targetId: string;
+  courseId: string | null;
+  reason: ReportReason;
+  details: string | null;
+  status: ReportStatus;
+  reviewedByUserId: string | null;
+  actionTaken: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  reporterName: string | null;
+  reporterUsername: string | null;
+  reporterEmail: string | null;
+  authorRole: string | null;
+}
+
+export interface AuditLogRowWithActor {
+  id: string;
+  academyId: string;
+  courseId: string | null;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  details: unknown | null;
+  ipAddress: string | null;
+  createdAt: Date;
+  actorName: string | null;
+  actorUsername: string | null;
+  actorEmail: string | null;
+  authorRole: string | null;
+}
 
 export interface ModerationRepository {
   createReport(
@@ -33,12 +80,12 @@ export interface ModerationRepository {
     reporterId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<any | null>;
+  ): Promise<LearningReportRow | null>;
 
   listReports(
     db: DatabaseExecutor,
     options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
-  ): Promise<any[]>;
+  ): Promise<ReportRowWithReporter[]>;
 
   countReports(
     db: DatabaseExecutor,
@@ -77,7 +124,7 @@ export interface ModerationRepository {
     db: DatabaseExecutor,
     userId: string,
     courseId?: string | null,
-  ): Promise<any | null>;
+  ): Promise<LearningSuspensionRow | null>;
 
   createAuditLog(
     db: DatabaseExecutor,
@@ -98,23 +145,27 @@ export interface ModerationRepository {
     db: DatabaseExecutor,
     academyId: string,
     options: ListAuditLogsQuery & { pageCursor?: DiscussionListCursor },
-  ): Promise<any[]>;
+  ): Promise<AuditLogRowWithActor[]>;
 }
 
-function applyReportFilters(query: any, options: ListReportsQuery) {
+function applyReportFilters<DB extends Database, TB extends keyof DB, O>(
+  query: SelectQueryBuilder<DB, TB, O>,
+  options: ListReportsQuery,
+): SelectQueryBuilder<DB, TB, O> {
+  let q = query;
   if (options.courseId) {
-    query = query.where("rep.course_id", "=", options.courseId);
+    q = q.where("rep.course_id" as any, "=", options.courseId);
   }
 
   if (options.status) {
-    query = query.where("rep.status", "=", options.status);
+    q = q.where("rep.status" as any, "=", options.status);
   }
 
   if (options.targetType) {
-    query = query.where("rep.target_type", "=", options.targetType);
+    q = q.where("rep.target_type" as any, "=", options.targetType);
   }
 
-  return query;
+  return q;
 }
 
 export function createModerationRepository(): ModerationRepository {
@@ -136,7 +187,7 @@ export function createModerationRepository(): ModerationRepository {
     },
 
     async findPendingReport(db, reporterId, targetType, targetId) {
-      return db
+      const row = await db
         .selectFrom("learning_reports")
         .selectAll()
         .where("reporter_id", "=", reporterId)
@@ -144,6 +195,8 @@ export function createModerationRepository(): ModerationRepository {
         .where("target_id", "=", targetId)
         .where("status", "=", "pending")
         .executeTakeFirst();
+
+      return row ?? null;
     },
 
     async listReports(db, options) {
@@ -175,11 +228,13 @@ export function createModerationRepository(): ModerationRepository {
         query = query.where(createdAtIdDescSql("rep", options.pageCursor));
       }
 
-      return query
+      const rows = await query
         .orderBy("rep.created_at", "desc")
         .orderBy("rep.id", "desc")
         .limit(options.limit + 1)
         .execute();
+
+      return rows as ReportRowWithReporter[];
     },
 
     async countReports(db, options) {
@@ -265,7 +320,8 @@ export function createModerationRepository(): ModerationRepository {
         );
       }
 
-      return query.executeTakeFirst();
+      const row = await query.executeTakeFirst();
+      return row ?? null;
     },
 
     async createAuditLog(db, log) {
@@ -327,11 +383,13 @@ export function createModerationRepository(): ModerationRepository {
         query = query.where(createdAtIdDescSql("a", options.pageCursor));
       }
 
-      return query
+      const rows = await query
         .orderBy("a.created_at", "desc")
         .orderBy("a.id", "desc")
         .limit(options.limit + 1)
         .execute();
+
+      return rows as AuditLogRowWithActor[];
     },
   };
 }

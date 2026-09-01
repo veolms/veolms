@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
-import type { DatabaseExecutor } from "@veolms/database";
+import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
+import type { Selectable } from "kysely";
 import type {
   CreateLearningThreadRequest,
   LearningThread,
@@ -27,7 +27,9 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
-import type { ThreadsRepository } from "./threads.repository.ts";
+import type { ThreadsRepository, ThreadRowWithAuthor } from "./threads.repository.ts";
+
+type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
 function assertVisibilityAllowed(
   kind: string,
@@ -73,8 +75,8 @@ export interface ThreadsService {
   listThreads(
     db: DatabaseExecutor,
     query: ListLearningThreadsQuery & {
-      currentUserId: string;
-      roles: readonly string[];
+      currentUserId?: string;
+      roles?: readonly string[];
     },
   ): Promise<LearningThreadsListResponse>;
 
@@ -99,9 +101,9 @@ export function createThreadsService(
   const courseAccess = createDiscussionAccess();
 
   function mapThreadRow(
-    row: any,
+    row: ThreadRowWithAuthor,
     currentUserId?: string,
-    attachments: any[] = [],
+    attachments: LearningAttachmentRow[] = [],
     engagements?: {
       likedThreadIds?: Set<string>;
       bookmarkedThreadIds?: Set<string>;
@@ -128,9 +130,9 @@ export function createThreadsService(
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username: (row.authorUsername || row.authorEmail || "user").split(
-          "@",
-        )[0],
+        username:
+          (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
+          "user",
         avatarUrl: null,
         role: mapAuthorRole(row.authorRole),
       },
@@ -354,7 +356,10 @@ export function createThreadsService(
     },
 
     async listThreads(db, query) {
-      const actor = { userId: query.currentUserId, roles: query.roles };
+      const actor: DiscussionActor = {
+        userId: query.currentUserId || "",
+        roles: query.roles || [],
+      };
       if (query.courseId) {
         const course = await db
           .selectFrom("courses")
@@ -519,6 +524,13 @@ export function createThreadsService(
         }
 
         const updated = await threadsRepo.findThreadById(trx, threadId);
+        if (!updated) {
+          throw httpError(
+            500,
+            "UPDATE_FAILED",
+            "Failed to load updated discussion thread",
+          );
+        }
         return mapThreadRow(updated, actor.userId);
       });
     },
@@ -546,6 +558,12 @@ export function createThreadsService(
       }
 
       await threadsRepo.deleteThread(db, threadId);
+      await db
+        .updateTable("learning_attachments")
+        .set({ status: "deleted" })
+        .where("target_type", "=", "thread")
+        .where("target_id", "=", threadId)
+        .execute();
     },
   };
 }

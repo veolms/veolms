@@ -8,6 +8,7 @@ import type {
   ModerateThreadRequest,
   SuspendUserRequest,
   UnsuspendUserRequest,
+  UpdateReportRequest,
 } from "@veolms/contracts";
 import { discussionActor } from "../shared/discussion.access.ts";
 import type { ModerationService } from "./moderation.service.ts";
@@ -26,9 +27,25 @@ export interface ModerationController {
     reply: FastifyReply,
   ): Promise<void>;
 
+  updateCourseReportStatus(
+    request: FastifyRequest<{
+      Params: { courseId: string; reportId: string };
+      Body: UpdateReportRequest;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
   listPlatformReports(
     request: FastifyRequest<{
       Querystring: ListReportsQuery;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  updatePlatformReportStatus(
+    request: FastifyRequest<{
+      Params: { reportId: string };
+      Body: UpdateReportRequest;
     }>,
     reply: FastifyReply,
   ): Promise<void>;
@@ -146,6 +163,22 @@ export function createModerationController({
       reply.status(200).send(result);
     },
 
+    async updateCourseReportStatus(request, reply) {
+      const user = request.user!;
+      const { courseId, reportId } = request.params;
+      const body = request.body;
+
+      const result = await service.updateReportStatus(
+        database,
+        reportId,
+        discussionActor(user),
+        body,
+        courseId,
+        request.ip,
+      );
+      reply.status(200).send(result);
+    },
+
     async listPlatformReports(request, reply) {
       const user = request.user!;
       const query = request.query;
@@ -155,6 +188,22 @@ export function createModerationController({
         discussionActor(user),
         query,
         "platform",
+      );
+      reply.status(200).send(result);
+    },
+
+    async updatePlatformReportStatus(request, reply) {
+      const user = request.user!;
+      const { reportId } = request.params;
+      const body = request.body;
+
+      const result = await service.updateReportStatus(
+        database,
+        reportId,
+        discussionActor(user),
+        body,
+        undefined,
+        request.ip,
       );
       reply.status(200).send(result);
     },

@@ -1,10 +1,12 @@
-import type { DatabaseExecutor } from "@veolms/database";
+import type { Database, DatabaseExecutor, LearningThreadTable } from "@veolms/database";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,
+  InteractionStatus,
   ListLearningThreadsQuery,
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
+import type { ExpressionBuilder, Selectable, SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
@@ -12,6 +14,40 @@ import {
   type DiscussionListCursor,
   normalizeThreadSort,
 } from "../shared/discussion.utils.ts";
+
+export type LearningThreadRow = Selectable<LearningThreadTable>;
+
+export interface ThreadRowWithAuthor {
+  id: string;
+  academyId: string;
+  courseId: string;
+  lessonId: string | null;
+  userId: string;
+  kind: DiscussionEntryKind;
+  title: string | null;
+  content: string;
+  plainText: string;
+  timestampSeconds: number | null;
+  visibility: DiscussionVisibility;
+  status: InteractionStatus;
+  isLocked: boolean;
+  acceptedAnswerId: string | null;
+  likesCount: number;
+  repliesCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorEmail: string | null;
+  authorRole: string | null;
+}
+
+export type ThreadFilterOptions = ListLearningThreadsQuery & {
+  academyId: string;
+  currentUserId?: string;
+  accessibleCourseIds?: readonly string[];
+  pageCursor?: DiscussionListCursor;
+};
 
 export interface ThreadsRepository {
   createThread(
@@ -32,25 +68,19 @@ export interface ThreadsRepository {
     },
   ): Promise<void>;
 
-  findThreadById(db: DatabaseExecutor, threadId: string): Promise<any | null>;
+  findThreadById(
+    db: DatabaseExecutor,
+    threadId: string,
+  ): Promise<ThreadRowWithAuthor | null>;
 
   listThreads(
     db: DatabaseExecutor,
-    options: ListLearningThreadsQuery & {
-      academyId: string;
-      currentUserId?: string;
-      accessibleCourseIds?: readonly string[];
-      pageCursor?: DiscussionListCursor;
-    },
-  ): Promise<any[]>;
+    options: ThreadFilterOptions,
+  ): Promise<ThreadRowWithAuthor[]>;
 
   countThreads(
     db: DatabaseExecutor,
-    options: ListLearningThreadsQuery & {
-      academyId: string;
-      currentUserId?: string;
-      accessibleCourseIds?: readonly string[];
-    },
+    options: ThreadFilterOptions,
   ): Promise<number>;
 
   updateThread(
@@ -88,52 +118,55 @@ export interface ThreadsRepository {
   setStatus(
     db: DatabaseExecutor,
     threadId: string,
-    status: "active" | "hidden" | "deleted",
+    status: InteractionStatus,
   ): Promise<void>;
 }
 
-function applyThreadFilters(query: any, options: any): any {
-  query = query
+function applyThreadFilters<T extends SelectQueryBuilder<any, any, any>>(
+  query: T,
+  options: ThreadFilterOptions,
+): T {
+  let q: any = query
     .where("t.status", "=", "active")
     .where("t.academy_id", "=", options.academyId);
 
   if (options.courseId) {
-    query = query.where("t.course_id", "=", options.courseId);
+    q = q.where("t.course_id", "=", options.courseId);
   } else if (
     options.accessibleCourseIds &&
     options.accessibleCourseIds.length > 0
   ) {
-    query = query.where("t.course_id", "in", [...options.accessibleCourseIds]);
+    q = q.where("t.course_id", "in", [...options.accessibleCourseIds]);
   }
 
   if (options.lessonId) {
-    query = query.where("t.lesson_id", "=", options.lessonId);
+    q = q.where("t.lesson_id", "=", options.lessonId);
   }
 
   if (options.kind && options.kind !== "all") {
     const normalizedKind = options.kind === "qna" ? "question" : options.kind;
-    query = query.where("t.kind", "=", normalizedKind);
+    q = q.where("t.kind", "=", normalizedKind);
   }
 
   if (options.mine || options.sort === "me") {
     if (options.currentUserId) {
-      query = query.where("t.user_id", "=", options.currentUserId);
+      q = q.where("t.user_id", "=", options.currentUserId);
     } else {
-      query = query.where(sql<boolean>`1 = 0`);
+      q = q.where(sql<boolean>`1 = 0`);
     }
   } else if (options.currentUserId) {
     if (options.visibility === "private") {
-      query = query
+      q = q
         .where("t.visibility", "=", "private")
         .where("t.user_id", "=", options.currentUserId);
     } else if (options.visibility === "unlisted") {
-      query = query
+      q = q
         .where("t.visibility", "=", "unlisted")
         .where("t.user_id", "=", options.currentUserId);
     } else if (options.visibility === "public") {
-      query = query.where("t.visibility", "=", "public");
+      q = q.where("t.visibility", "=", "public");
     } else {
-      query = query.where((eb: any) =>
+      q = q.where((eb: any) =>
         eb.or([
           eb("t.visibility", "=", "public"),
           eb.and([
@@ -144,12 +177,12 @@ function applyThreadFilters(query: any, options: any): any {
       );
     }
   } else {
-    query = query.where("t.visibility", "=", "public");
+    q = q.where("t.visibility", "=", "public");
   }
 
   if (options.search) {
     const searchPattern = `%${options.search.toLowerCase()}%`;
-    query = query.where((eb: any) =>
+    q = q.where((eb: any) =>
       eb.or([
         eb(sql`lower(t.title)`, "like", searchPattern),
         eb(sql`lower(t.plain_text)`, "like", searchPattern),
@@ -158,18 +191,18 @@ function applyThreadFilters(query: any, options: any): any {
   }
 
   if (options.status === "answered") {
-    query = query.where("t.replies_count", ">", 0);
+    q = q.where("t.replies_count", ">", 0);
   } else if (options.status === "solved") {
-    query = query.where("t.accepted_answer_id", "is not", null);
+    q = q.where("t.accepted_answer_id", "is not", null);
   } else if (options.status === "open") {
-    query = query
+    q = q
       .where("t.replies_count", "=", 0)
       .where("t.accepted_answer_id", "is", null);
   } else if (options.status === "mentioned") {
     if (!options.currentUserId) {
-      query = query.where(sql<boolean>`1 = 0`);
+      q = q.where(sql<boolean>`1 = 0`);
     } else {
-      query = query.where((eb: any) =>
+      q = q.where((eb: any) =>
         eb.or([
           eb.exists(
             eb
@@ -193,15 +226,18 @@ function applyThreadFilters(query: any, options: any): any {
     }
   }
 
-  return query;
+  return q as T;
 }
 
-function applyThreadCursor(query: any, options: any): any {
-  const cursor = options.pageCursor as DiscussionListCursor | undefined;
+function applyThreadCursor<T extends SelectQueryBuilder<any, any, any>>(
+  query: T,
+  options: ThreadFilterOptions,
+): T {
+  const cursor = options.pageCursor;
   if (!cursor) return query;
   const sort = normalizeThreadSort(options.sort);
   if (sort === "activity" && cursor.updatedAt) {
-    return query.where(
+    return (query as any).where(
       sql<boolean>`(
         t.updated_at < ${cursor.updatedAt}
         or (t.updated_at = ${cursor.updatedAt} and t.id < ${cursor.id}::uuid)
@@ -209,7 +245,7 @@ function applyThreadCursor(query: any, options: any): any {
     );
   }
   if (sort === "replies" && cursor.repliesCount !== undefined) {
-    return query.where(
+    return (query as any).where(
       sql<boolean>`(
         t.replies_count < ${cursor.repliesCount}
         or (t.replies_count = ${cursor.repliesCount} and t.created_at < ${cursor.createdAt})
@@ -222,7 +258,7 @@ function applyThreadCursor(query: any, options: any): any {
     );
   }
   if (sort === "popular" && cursor.engagement !== undefined) {
-    return query.where(
+    return (query as any).where(
       sql<boolean>`(
         (t.likes_count + t.replies_count) < ${cursor.engagement}
         or (
@@ -237,7 +273,7 @@ function applyThreadCursor(query: any, options: any): any {
       )`,
     );
   }
-  return query.where(createdAtIdDescSql("t", cursor));
+  return (query as any).where(createdAtIdDescSql("t", cursor));
 }
 
 export function createThreadsRepository(): ThreadsRepository {
@@ -296,7 +332,7 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("t.id", "=", threadId)
         .executeTakeFirst();
 
-      return row ?? null;
+      return (row as ThreadRowWithAuthor | undefined) ?? null;
     },
 
     async listThreads(db, options) {
@@ -350,7 +386,8 @@ export function createThreadsRepository(): ThreadsRepository {
         query = query.orderBy("t.created_at", "desc").orderBy("t.id", "desc");
       }
 
-      return query.limit(options.limit + 1).execute();
+      const rows = await query.limit(options.limit + 1).execute();
+      return rows as ThreadRowWithAuthor[];
     },
 
     async countThreads(db, options) {
@@ -363,7 +400,14 @@ export function createThreadsRepository(): ThreadsRepository {
     },
 
     async updateThread(db, threadId, updates) {
-      const updateData: Record<string, any> = {
+      const updateData: {
+        updated_at: Date;
+        title?: string | null;
+        content?: string;
+        plain_text?: string;
+        timestamp_seconds?: number | null;
+        visibility?: DiscussionVisibility;
+      } = {
         updated_at: new Date(),
       };
       if (updates.title !== undefined) updateData.title = updates.title;

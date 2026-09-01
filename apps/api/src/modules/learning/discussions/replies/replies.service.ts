@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
-import type { DatabaseExecutor } from "@veolms/database";
+import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
+import type { Selectable } from "kysely";
 import type {
   AcceptReplyResponse,
   LearningRepliesListResponse,
@@ -8,8 +8,11 @@ import type {
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
+  resolveActorName,
+  resolveDeepLink,
   syncMentionsAndNotify,
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
@@ -26,7 +29,9 @@ import {
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
-import type { RepliesRepository } from "./replies.repository.ts";
+import type { RepliesRepository, ReplyRowWithAuthor } from "./replies.repository.ts";
+
+type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
 export interface RepliesService {
   createReply(
@@ -82,9 +87,9 @@ export function createRepliesService({
   const courseAccess = createDiscussionAccess();
 
   function mapReplyRow(
-    row: any,
+    row: ReplyRowWithAuthor,
     currentUserId?: string,
-    attachments: any[] = [],
+    attachments: LearningAttachmentRow[] = [],
     likedReplyIds?: Set<string>,
   ): LearningReply {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
@@ -95,7 +100,7 @@ export function createRepliesService({
         ? {
             id: row.replyToReplyId || row.parentReplyId || row.id,
             userId: row.replyToUserId || row.userId,
-            username: (row.replyToUsername || "user").split("@")[0],
+            username: (row.replyToUsername || "user").split("@")[0] || "user",
             displayName: row.replyToDisplayName || "Learner",
             textSnippet: row.replyToContent
               ? row.replyToContent.slice(0, 120)
@@ -114,9 +119,9 @@ export function createRepliesService({
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username: (row.authorUsername || row.authorEmail || "user").split(
-          "@",
-        )[0],
+        username:
+          (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
+          "user",
         avatarUrl: null,
         role: mapAuthorRole(row.authorRole),
       },
@@ -184,6 +189,7 @@ export function createRepliesService({
 
         // Resolve reply-to from the parent reply only — never from client user ids
         let targetReplyId = input.replyToReplyId || input.parentReplyId || null;
+        let parentReplyId = input.parentReplyId || null;
         let targetUserId: string | null = null;
 
         if (targetReplyId) {
@@ -192,14 +198,30 @@ export function createRepliesService({
             targetReplyId,
           );
           if (!targetReply || targetReply.threadId !== input.threadId) {
-            throw httpError(
-              400,
-              "INVALID_PARENT_REPLY",
-              "Referenced reply does not belong to this thread",
-            );
+            throw DiscussionErrors.invalidReply();
           }
           courseAccess.assertReplyIsActive(targetReply);
+
+          // If the referenced reply is already a child reply (has parentReplyId), nesting further is disallowed
+          if (targetReply.parentReplyId !== null) {
+            throw DiscussionErrors.maxNestingExceeded();
+          }
+
           targetUserId = targetReply.userId;
+        }
+
+        if (parentReplyId && parentReplyId !== targetReplyId) {
+          const parentReply = await repliesRepo.findReplyById(
+            trx,
+            parentReplyId,
+          );
+          if (!parentReply || parentReply.threadId !== input.threadId) {
+            throw DiscussionErrors.invalidReply();
+          }
+          courseAccess.assertReplyIsActive(parentReply);
+          if (parentReply.parentReplyId !== null) {
+            throw DiscussionErrors.maxNestingExceeded();
+          }
         }
 
         const id = crypto.randomUUID();
@@ -257,6 +279,9 @@ export function createRepliesService({
         }
 
         const created = await repliesRepo.findReplyById(trx, id);
+        if (!created) {
+          throw httpError(500, "CREATE_FAILED", "Failed to load created reply");
+        }
         const attachments = await trx
           .selectFrom("learning_attachments")
           .selectAll()
@@ -376,6 +401,9 @@ export function createRepliesService({
         }
 
         const updated = await repliesRepo.findReplyById(trx, replyId);
+        if (!updated) {
+          throw httpError(500, "UPDATE_FAILED", "Failed to load updated reply");
+        }
         return mapReplyRow(updated, actor.userId);
       });
     },
@@ -417,6 +445,13 @@ export function createRepliesService({
           throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
         }
 
+        await trx
+          .updateTable("learning_attachments")
+          .set({ status: "deleted" })
+          .where("target_type", "=", "reply")
+          .where("target_id", "=", replyId)
+          .execute();
+
         await threadsRepo.incrementRepliesCount(trx, reply.threadId, -1);
 
         if (reply.isAccepted || thread.acceptedAnswerId === replyId) {
@@ -452,19 +487,11 @@ export function createRepliesService({
         );
 
         if (thread.kind !== "question") {
-          throw httpError(
-            400,
-            "NOT_A_QUESTION",
-            "Only Q&A questions can have accepted answers",
-          );
+          throw DiscussionErrors.notAQuestion();
         }
 
         if (reply.threadId !== thread.id) {
-          throw httpError(
-            400,
-            "INVALID_REPLY",
-            "The answer does not belong to this question thread",
-          );
+          throw DiscussionErrors.invalidReply();
         }
 
         const canStaffModerate = await courseAccess.canModerateCourse(
@@ -491,6 +518,27 @@ export function createRepliesService({
 
           await repliesRepo.setAcceptedStatus(trx, replyId, true);
           await threadsRepo.setAcceptedAnswer(trx, thread.id, replyId);
+
+          if (reply.userId !== actor.userId) {
+            const actorName = await resolveActorName(trx, actor.userId);
+            const deepLink = await resolveDeepLink(
+              trx,
+              thread.courseId,
+              thread.id,
+            );
+            await outbox.publish(trx, {
+              type: "discussion.answer_accepted",
+              version: 1,
+              dedupeKey: `discussion.answer_accepted:${thread.id}:${replyId}`,
+              occurredAt: new Date(),
+              payload: {
+                recipientUserId: reply.userId,
+                actorName,
+                threadTitle: thread.title || "Question",
+                deepLink,
+              },
+            });
+          }
 
           return {
             replyId,

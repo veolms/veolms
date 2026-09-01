@@ -59,6 +59,12 @@ export const createReportRequestSchema = z.object({
 });
 export type CreateReportRequest = z.infer<typeof createReportRequestSchema>;
 
+export const updateReportRequestSchema = z.object({
+  status: reportStatusSchema,
+  actionTaken: z.string().max(500).optional(),
+});
+export type UpdateReportRequest = z.infer<typeof updateReportRequestSchema>;
+
 export const learningReportSchema = z.object({
   id: z.uuid(),
   reporterId: z.uuid(),

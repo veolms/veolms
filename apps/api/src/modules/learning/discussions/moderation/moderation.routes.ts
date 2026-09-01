@@ -9,6 +9,7 @@ import {
   reportsListResponseSchema,
   suspendUserRequestSchema,
   unsuspendUserRequestSchema,
+  updateReportRequestSchema,
   userSuspensionSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../../lib/errors.ts";
@@ -86,6 +87,35 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listCourseReports,
+  );
+
+  // POST /courses/:courseId/moderation/reports/:reportId/status
+  app.post(
+    "/courses/:courseId/moderation/reports/:reportId/status",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "updateCourseReportStatus",
+        tags: ["Course Moderation"],
+        summary:
+          "Update status of a report within a course (reviewed, dismissed, actioned)",
+        params: z.object({
+          courseId: z.uuid(),
+          reportId: z.uuid(),
+        }),
+        body: updateReportRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Report status updated",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Course owner or admin required"),
+          404: errorResponse("Report not found"),
+        },
+      },
+    },
+    controller.updateCourseReportStatus,
   );
 
   // POST /courses/:courseId/moderation/threads/:threadId
@@ -244,6 +274,32 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listPlatformReports,
+  );
+
+  // POST /moderation/reports/:reportId/status
+  app.post(
+    "/moderation/reports/:reportId/status",
+    {
+      preHandler: permissions.requireAdmin,
+      schema: {
+        operationId: "updatePlatformReportStatus",
+        tags: ["Platform Moderation"],
+        summary:
+          "Update status of a report globally (reviewed, dismissed, actioned)",
+        params: z.object({ reportId: z.uuid() }),
+        body: updateReportRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Report status updated",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Report not found"),
+        },
+      },
+    },
+    controller.updatePlatformReportStatus,
   );
 
   // POST /moderation/threads/:threadId

@@ -1,13 +1,41 @@
-import type { DatabaseExecutor } from "@veolms/database";
+import type { DatabaseExecutor, LearningReplyTable } from "@veolms/database";
 import type {
+  InteractionStatus,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
+import type { Selectable } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
+
+export type LearningReplyRow = Selectable<LearningReplyTable>;
+
+export interface ReplyRowWithAuthor {
+  id: string;
+  threadId: string;
+  parentReplyId: string | null;
+  replyToReplyId: string | null;
+  replyToUserId: string | null;
+  userId: string;
+  content: string;
+  plainText: string;
+  timestampSeconds: number | null;
+  isAccepted: boolean;
+  status: InteractionStatus;
+  likesCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorEmail: string | null;
+  authorRole: string | null;
+  replyToUsername: string | null;
+  replyToDisplayName: string | null;
+  replyToContent: string | null;
+}
 
 export interface RepliesRepository {
   createReply(
@@ -25,13 +53,16 @@ export interface RepliesRepository {
     },
   ): Promise<void>;
 
-  findReplyById(db: DatabaseExecutor, replyId: string): Promise<any | null>;
+  findReplyById(
+    db: DatabaseExecutor,
+    replyId: string,
+  ): Promise<ReplyRowWithAuthor | null>;
 
   listRepliesByThreadId(
     db: DatabaseExecutor,
     threadId: string,
     options: ListLearningRepliesQuery & { pageCursor?: DiscussionListCursor },
-  ): Promise<any[]>;
+  ): Promise<ReplyRowWithAuthor[]>;
 
   countRepliesByThreadId(
     db: DatabaseExecutor,
@@ -49,7 +80,7 @@ export interface RepliesRepository {
   setStatus(
     db: DatabaseExecutor,
     replyId: string,
-    status: "active" | "hidden" | "deleted",
+    status: InteractionStatus,
   ): Promise<void>;
 
   setAcceptedStatus(
@@ -119,7 +150,7 @@ export function createRepliesRepository(): RepliesRepository {
         .where("r.id", "=", replyId)
         .executeTakeFirst();
 
-      return row ?? null;
+      return (row as ReplyRowWithAuthor | undefined) ?? null;
     },
 
     async listRepliesByThreadId(db, threadId, options) {
@@ -174,12 +205,14 @@ export function createRepliesRepository(): RepliesRepository {
         );
       }
 
-      return query
+      const rows = await query
         .orderBy("r.is_accepted", "desc")
         .orderBy("r.created_at", "asc")
         .orderBy("r.id", "asc")
         .limit(options.limit + 1)
         .execute();
+
+      return rows as ReplyRowWithAuthor[];
     },
 
     async countRepliesByThreadId(db, threadId) {
@@ -193,7 +226,12 @@ export function createRepliesRepository(): RepliesRepository {
     },
 
     async updateReply(db, replyId, updates) {
-      const updateData: Record<string, any> = {
+      const updateData: {
+        updated_at: Date;
+        content?: string;
+        plain_text?: string;
+        timestamp_seconds?: number | null;
+      } = {
         updated_at: new Date(),
       };
       if (updates.content !== undefined) updateData.content = updates.content;

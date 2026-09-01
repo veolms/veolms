@@ -2,6 +2,7 @@ import type { DatabaseExecutor } from "@veolms/database";
 import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
+import { DiscussionErrors } from "./discussion.errors.ts";
 
 export interface DiscussionActor {
   userId: string;
@@ -118,63 +119,51 @@ export function createDiscussionAccess(): DiscussionAccess {
     async assertCanAccessCourse(db, actor, courseId) {
       const allowed = await canAccessCourse(db, actor, courseId);
       if (!allowed) {
-        throw httpError(
-          403,
-          "COURSE_ACCESS_DENIED",
-          "You do not have access to this course.",
-        );
+        throw DiscussionErrors.courseAccessDenied();
       }
     },
 
     async assertCanAccessThreadCourse(db, actor, courseId) {
       const allowed = await canAccessCourse(db, actor, courseId);
       if (!allowed) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+        throw DiscussionErrors.notFound("Discussion thread");
       }
     },
 
     async assertCanAccessThread(db, actor, thread) {
       const allowed = await canAccessCourse(db, actor, thread.courseId);
       if (!allowed) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+        throw DiscussionErrors.notFound("Discussion thread");
       }
 
       const isOwner = thread.userId === actor.userId;
       if (thread.visibility === "private" && !isOwner) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+        throw DiscussionErrors.notFound("Discussion thread");
       }
 
       if (thread.status === "hidden" || thread.status === "deleted") {
         const staff = await canModerateCourse(db, actor, thread.courseId);
         if (!staff) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw DiscussionErrors.notFound("Discussion thread");
         }
       }
     },
 
     assertThreadIsActive(thread) {
       if (thread.status && thread.status !== "active") {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+        throw DiscussionErrors.notFound("Discussion thread");
       }
     },
 
     assertReplyIsActive(reply) {
       if (reply.status && reply.status !== "active") {
-        throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+        throw DiscussionErrors.notFound("Reply");
       }
     },
 
     assertThreadNotLocked(thread) {
       if (thread.isLocked) {
-        throw httpError(
-          400,
-          "THREAD_LOCKED",
-          "This discussion thread is locked and cannot receive modifications or new replies",
-        );
+        throw DiscussionErrors.threadLocked();
       }
     },
 
@@ -197,10 +186,9 @@ export function createDiscussionAccess(): DiscussionAccess {
         .executeTakeFirst();
 
       if (activeSuspension) {
-        throw httpError(
-          403,
-          "PARTICIPATION_SUSPENDED",
-          `Your participation for ${activeSuspension.scope} is suspended. Reason: ${activeSuspension.reason}`,
+        throw DiscussionErrors.suspended(
+          activeSuspension.reason,
+          activeSuspension.scope,
         );
       }
     },
