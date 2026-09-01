@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from "react";
 import {
@@ -23,8 +24,19 @@ import { useCurrentUser, useLogout } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
-import { getCoursePlayerLaunchPath } from "../learning/coursePlayerNavigation";
+import {
+  getCoursePlayerLaunchPath,
+  getCoursePlayerReturnPath,
+  getCoursePlayerSession,
+} from "../learning/coursePlayerNavigation";
 import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
+import {
+  PersistentLearningPlayerHost,
+  type LearningPlayerPresentation,
+  type LessonPlayerMinimizeGestureState,
+  type PersistentLearningPlayerRegistration,
+  type RegisterPersistentLearningPlayer,
+} from "../learning/player";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -64,8 +76,59 @@ export interface AcademyOutletContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
   navigateTo: NavigateTo;
+  onLearningPlayerMinimizeGestureChange: (
+    state: LessonPlayerMinimizeGestureState,
+  ) => void;
+  onMiniPlayerRestoreReady: () => void;
   openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
+  registerPersistentPlayer: RegisterPersistentLearningPlayer;
 }
+
+interface LearningBackgroundSurface {
+  courseSlug?: string;
+  discussionTab?: string;
+  page: string;
+  section?: string;
+  settingsTab?: string;
+}
+
+const resolveLearningBackgroundSurface = (
+  returnPath: string,
+): LearningBackgroundSurface => {
+  try {
+    const url = new URL(returnPath, "https://procodrr.local");
+    const pathname = normalizeNavigationPath(url.pathname);
+    const overviewMatch = /^\/courses\/([^/]+)\/overview$/.exec(pathname);
+    if (overviewMatch?.[1]) {
+      return {
+        courseSlug: decodeURIComponent(overviewMatch[1]),
+        page: "course-overview",
+        section: "Courses",
+      };
+    }
+    if (pathname === "/" || pathname === "/home") return { page: "home" };
+    if (pathname === "/wishlist") {
+      return { page: "courses", section: "Wishlist" };
+    }
+    if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+      return {
+        page: "settings",
+        section: "Settings",
+        settingsTab: pathname.split("/").filter(Boolean)[1] ?? "profile",
+      };
+    }
+    if (pathname.startsWith("/discussions")) {
+      return {
+        discussionTab: pathname.split("/").filter(Boolean)[1] ?? "q-and-a",
+        page: "workspace",
+        section: "Discussions",
+      };
+    }
+  } catch {
+    // Fall back to the catalogue for an invalid or retired return path.
+  }
+  return { page: "courses", section: "Courses" };
+};
 
 const isSettingsPath = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
@@ -131,6 +194,17 @@ export default function AcademyLayout() {
     getLearningMiniPlayerSnapshot,
     getLearningMiniPlayerServerSnapshot,
   );
+  const [learningBackgroundMounted, setLearningBackgroundMounted] =
+    useState(false);
+  const [persistentPlayer, setPersistentPlayer] =
+    useState<PersistentLearningPlayerRegistration | null>(null);
+  const [playerPresentation, setPlayerPresentation] =
+    useState<LearningPlayerPresentation>("full");
+  const persistentPlayerRef =
+    useRef<PersistentLearningPlayerRegistration | null>(null);
+  const playerPresentationRef = useRef<LearningPlayerPresentation>("full");
+  const persistentRegistrationTokenRef = useRef<symbol | null>(null);
+  const learningBackgroundMountedRef = useRef(false);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
   const { data: authUser } = useCurrentUser();
@@ -284,6 +358,11 @@ export default function AcademyLayout() {
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
       const courseRouteKey = getCourseRouteKey(course);
+      const activePlayer = persistentPlayerRef.current;
+      if (activePlayer?.courseRouteKey === courseRouteKey) {
+        navigateTo(activePlayer.lessonPath, { exact: true });
+        return;
+      }
       navigateTo(
         `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`,
       );
@@ -291,22 +370,117 @@ export default function AcademyLayout() {
     [navigateTo],
   );
 
+  const registerPersistentPlayer =
+    useCallback<RegisterPersistentLearningPlayer>((registration) => {
+      const token = Symbol("persistent-learning-player-registration");
+      persistentRegistrationTokenRef.current = token;
+      persistentPlayerRef.current = registration;
+      setPersistentPlayer(registration);
+      playerPresentationRef.current = "full";
+      setPlayerPresentation("full");
+      if (getLearningMiniPlayerSnapshot()) {
+        closeLearningMiniPlayerSession();
+      }
+
+      return () => {
+        queueMicrotask(() => {
+          if (persistentRegistrationTokenRef.current !== token) return;
+          const current = persistentPlayerRef.current;
+          if (!current) return;
+          const detachedPlayer = { ...current, anchor: null };
+          persistentPlayerRef.current = detachedPlayer;
+          setPersistentPlayer(detachedPlayer);
+          if (playerPresentationRef.current === "full") {
+            playerPresentationRef.current = "mini";
+            setPlayerPresentation("mini");
+          }
+        });
+      };
+    }, []);
+
   const openLearningMiniPlayer = useCallback(
-    (session: LearningMiniPlayerSession) =>
-      openLearningMiniPlayerSession(session),
-    [],
+    (session: LearningMiniPlayerSession) => {
+      playerPresentationRef.current = "mini";
+      setPlayerPresentation("mini");
+      openLearningMiniPlayerSession(session);
+      navigateTo(session.returnPath, { exact: true });
+    },
+    [navigateTo],
   );
 
   const closeLearningMiniPlayer = useCallback(() => {
+    persistentRegistrationTokenRef.current = null;
+    persistentPlayerRef.current = null;
+    setPersistentPlayer(null);
     closeLearningMiniPlayerSession();
   }, []);
 
+  const handleLearningPlayerMinimizeGestureChange = useCallback(
+    (state: LessonPlayerMinimizeGestureState) => {
+      const revealProgress = Math.min(
+        1,
+        Math.max(0, (state.progress - 0.2) / 0.3),
+      );
+      const settling =
+        state.phase === "settling-back" || state.phase === "settling-mini";
+      document.documentElement.style.setProperty(
+        "--learning-background-reveal-duration",
+        settling ? "200ms" : "0ms",
+      );
+      document.documentElement.style.setProperty(
+        "--learning-background-reveal",
+        String(revealProgress),
+      );
+
+      if (state.progress >= 0.2 && !learningBackgroundMountedRef.current) {
+        learningBackgroundMountedRef.current = true;
+        setLearningBackgroundMounted(true);
+      }
+
+      if (state.phase === "idle" && learningBackgroundMountedRef.current) {
+        learningBackgroundMountedRef.current = false;
+        setLearningBackgroundMounted(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      document.documentElement.style.removeProperty(
+        "--learning-background-reveal",
+      );
+      document.documentElement.style.removeProperty(
+        "--learning-background-reveal-duration",
+      );
+    },
+    [],
+  );
+
   const restoreLearningMiniPlayer = useCallback(() => {
-    if (!learningMiniPlayer) return;
-    const lessonPath = learningMiniPlayer.lessonPath;
-    closeLearningMiniPlayer();
+    const lessonPath =
+      persistentPlayerRef.current?.lessonPath ?? learningMiniPlayer?.lessonPath;
+    if (!lessonPath) return;
+    if (persistentPlayerRef.current) {
+      playerPresentationRef.current = "full";
+      setPlayerPresentation("full");
+    }
     navigateTo(lessonPath, { exact: true });
-  }, [closeLearningMiniPlayer, learningMiniPlayer, navigateTo]);
+  }, [learningMiniPlayer, navigateTo]);
+
+  const activeLearningReturnPath =
+    route.kind === "learning"
+      ? (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+        getCoursePlayerReturnPath(location.search)
+      : null;
+  const learningBackground =
+    route.kind === "learning" &&
+    learningBackgroundMounted &&
+    activeLearningReturnPath
+      ? {
+          ...resolveLearningBackgroundSurface(activeLearningReturnPath),
+        }
+      : null;
 
   return (
     <AcademyRouteGuard>
@@ -316,6 +490,7 @@ export default function AcademyLayout() {
         settingsTab={route.settingsTab}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
+        learningBackground={learningBackground}
         onNavigatePage={navigateTo}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
@@ -328,7 +503,11 @@ export default function AcademyLayout() {
                       mobileBottomNavigation,
                       mobileBottomNavigationHidden,
                       navigateTo,
+                      onLearningPlayerMinimizeGestureChange:
+                        handleLearningPlayerMinimizeGestureChange,
+                      onMiniPlayerRestoreReady: closeLearningMiniPlayer,
                       openLearningMiniPlayer,
+                      registerPersistentPlayer,
                     } satisfies AcademyOutletContext
                   }
                 />
@@ -336,7 +515,14 @@ export default function AcademyLayout() {
             : null
         }
       />
-      {learningMiniPlayer ? (
+      {persistentPlayer ? (
+        <PersistentLearningPlayerHost
+          player={persistentPlayer}
+          presentation={playerPresentation}
+          onClose={closeLearningMiniPlayer}
+          onRestore={restoreLearningMiniPlayer}
+        />
+      ) : learningMiniPlayer ? (
         <LearningMiniPlayer
           session={learningMiniPlayer}
           onClose={closeLearningMiniPlayer}

@@ -2,7 +2,10 @@ import { useEffect, type CSSProperties } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
-import { PLAYER_FEEDBACK_DURATION_MS } from "./feedbackTiming";
+import {
+  MOBILE_SEEK_IDLE_DELAY_MS,
+  PLAYER_FEEDBACK_DURATION_MS,
+} from "./feedbackTiming";
 
 export function PlayerHud() {
   const controller = usePlayerController();
@@ -11,10 +14,11 @@ export function PlayerHud() {
 
   useEffect(() => {
     if (!hud) return undefined;
-    const timer = setTimeout(
-      () => controller.clearHud(hud.id),
-      PLAYER_FEEDBACK_DURATION_MS,
-    );
+    const durationMs =
+      hud.variant === "mobile-seek"
+        ? MOBILE_SEEK_IDLE_DELAY_MS
+        : PLAYER_FEEDBACK_DURATION_MS;
+    const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
     return () => clearTimeout(timer);
   }, [controller, hud]);
 

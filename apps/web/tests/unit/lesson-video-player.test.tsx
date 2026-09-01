@@ -20,12 +20,17 @@ import { FakeVideoEngine } from "@veolms/video-player/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CourseVideo } from "../../src/learning/courseContent.js";
 import { LessonVideoPlayer } from "../../src/learning/player/LessonVideoPlayer.js";
-import { lessonPlayerStorageKeys } from "../../src/learning/player/lessonPlayerPersistence.js";
+import { registerLearningMiniPlayerRuntime } from "../../src/learning/player/learningMiniPlayerStore.js";
+import {
+  lessonPlayerStorageKeys,
+  writeMiniPlayerRestore,
+} from "../../src/learning/player/lessonPlayerPersistence.js";
 import { LEARNING_PREFERENCES_KEY } from "../../src/settings/settingsPreferences.js";
 
 afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 const englishCaptions: VideoTextTrack = {
@@ -109,6 +114,41 @@ function playerProps(media: CourseVideo, engine: RecordingFakeVideoEngine) {
 }
 
 describe("LessonVideoPlayer adapter", () => {
+  it("keeps one live media element when switching between full and mini presentation", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const pause = vi.spyOn(engine, "pause");
+    const destroy = vi.spyOn(engine, "destroy");
+    const props = playerProps(firstMedia, engine);
+    const { container, rerender } = render(
+      <LessonVideoPlayer {...props} presentation="full" />,
+    );
+
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    const mediaElement = container.querySelector("video");
+    expect(mediaElement).not.toBeNull();
+
+    rerender(
+      <LessonVideoPlayer
+        {...props}
+        presentation="mini"
+        onMiniClose={vi.fn()}
+        onMiniRestore={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector("video")).toBe(mediaElement);
+    expect(engine.loadCalls).toHaveLength(1);
+    expect(pause).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+
+    rerender(<LessonVideoPlayer {...props} presentation="full" />);
+
+    expect(container.querySelector("video")).toBe(mediaElement);
+    expect(engine.loadCalls).toHaveLength(1);
+    expect(pause).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
   it("applies the saved video-player theme to the package root", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     localStorage.setItem(
@@ -209,10 +249,12 @@ describe("LessonVideoPlayer adapter", () => {
         "bg-(--video-player-control-surface)",
       );
       expect(openButton).toHaveClass("!text-[13px]");
-      const arrow = openButton.querySelector("svg");
-      expect(arrow).toHaveAttribute("width", "15");
-      expect(arrow).toHaveAttribute("height", "15");
-      expect(arrow).toHaveClass("rotate-0");
+      const arrow = openButton.querySelector<HTMLElement>(
+        ".learning-curriculum__section-arrow",
+      );
+      expect(arrow).not.toHaveClass("is-open");
+      expect(arrow?.querySelector("svg")).toHaveAttribute("width", "15");
+      expect(arrow?.querySelector("svg")).toHaveAttribute("height", "15");
       expect(
         openButton.closest('[data-mobile-player-corner="fullscreen"]'),
       ).toHaveClass("z-60");
@@ -231,7 +273,22 @@ describe("LessonVideoPlayer adapter", () => {
         name: "Close lessons",
       });
       expect(closeButton).toHaveAttribute("aria-expanded", "true");
-      expect(closeButton.querySelector("svg")).toHaveClass("-rotate-180");
+      expect(
+        closeButton.querySelector(".learning-curriculum__section-arrow"),
+      ).toBe(arrow);
+      expect(arrow).toHaveClass("is-open");
+
+      rerender(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          courseLessonsOpen={false}
+          onCourseLessonsToggle={onCourseLessonsToggle}
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: "Open lessons" }),
+      ).toContainElement(arrow);
+      expect(arrow).not.toHaveClass("is-open");
     },
   );
 
@@ -271,17 +328,23 @@ describe("LessonVideoPlayer adapter", () => {
     expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
+    expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
+    expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
 
     tapEmptySpace();
     expect(player).toHaveAttribute("data-controls-visible", "false");
     expect(controls).toHaveAttribute("inert");
     expect(centralControls).toHaveAttribute("inert");
+    expect(controls).toHaveClass("[&_*]:!pointer-events-none");
+    expect(centralControls).toHaveClass("[&_*]:!pointer-events-none");
     expect(play).not.toHaveBeenCalled();
 
     tapEmptySpace();
     expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
+    expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
+    expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(play).not.toHaveBeenCalled();
   });
 
@@ -464,8 +527,12 @@ describe("LessonVideoPlayer adapter", () => {
 
   it("minimizes from a downward touch swipe on phones", async () => {
     const engine = new RecordingFakeVideoEngine(90);
+    const play = vi.spyOn(engine, "play");
     const onMinimize = vi.fn();
+    const onMinimizeGestureChange = vi.fn();
     const originalMatchMedia = window.matchMedia;
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: query === "(max-width: 640px)",
       media: query,
@@ -478,12 +545,17 @@ describe("LessonVideoPlayer adapter", () => {
         return false;
       },
     })) as typeof window.matchMedia;
+    Object.defineProperties(window, {
+      innerHeight: { configurable: true, value: 915 },
+      innerWidth: { configurable: true, value: 412 },
+    });
 
     try {
-      render(
+      const { container, rerender } = render(
         <LessonVideoPlayer
           {...playerProps(firstMedia, engine)}
           onMinimize={onMinimize}
+          onMinimizeGestureChange={onMinimizeGestureChange}
         />,
       );
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
@@ -494,31 +566,84 @@ describe("LessonVideoPlayer adapter", () => {
         name: "Lesson video player for Designing for real users",
       });
       const shell = player.parentElement!;
+      const centralPlay = container.querySelector<HTMLElement>(
+        '[data-player-control-cluster="mobile-play"] [data-player-control]',
+      );
+      expect(centralPlay).not.toBeNull();
       Object.defineProperties(shell, {
         hasPointerCapture: { value: () => true },
         releasePointerCapture: { value: vi.fn() },
         setPointerCapture: { value: vi.fn() },
       });
+      vi.spyOn(shell, "getBoundingClientRect").mockReturnValue({
+        bottom: 232,
+        height: 232,
+        left: 0,
+        right: 412,
+        top: 0,
+        width: 412,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      vi.useFakeTimers();
 
-      fireEvent.pointerDown(shell, {
+      fireEvent.pointerDown(centralPlay!, {
         clientX: 180,
         clientY: 30,
         pointerId: 7,
         pointerType: "touch",
       });
-      fireEvent.pointerMove(shell, {
+      fireEvent.pointerMove(centralPlay!, {
         clientX: 184,
-        clientY: 132,
+        clientY: 330,
         pointerId: 7,
         pointerType: "touch",
       });
-      fireEvent.pointerUp(shell, {
-        clientX: 184,
-        clientY: 132,
-        pointerId: 7,
-        pointerType: "touch",
-      });
+      const forwardTransform = shell.style.transform;
+      expect(forwardTransform).toMatch(/translate3d\(.+px, .+px, 0\) scale\(/);
+      const forwardGesture = onMinimizeGestureChange.mock.lastCall?.[0];
+      expect(forwardGesture).toEqual(
+        expect.objectContaining({ offsetY: 300, phase: "dragging" }),
+      );
+      expect(onMinimize).not.toHaveBeenCalled();
 
+      fireEvent.pointerMove(centralPlay!, {
+        clientX: 182,
+        clientY: 130,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      const reversedTransform = shell.style.transform;
+      const readTranslateY = (transform: string) =>
+        Number(/translate3d\([^,]+,\s*([\d.]+)px/.exec(transform)?.[1] ?? 0);
+      expect(readTranslateY(reversedTransform)).toBeLessThan(
+        readTranslateY(forwardTransform),
+      );
+      expect(onMinimizeGestureChange.mock.lastCall?.[0]).toEqual(
+        expect.objectContaining({ offsetY: 100, phase: "dragging" }),
+      );
+      expect(onMinimize).not.toHaveBeenCalled();
+
+      fireEvent.pointerMove(centralPlay!, {
+        clientX: 184,
+        clientY: 460,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(centralPlay!, {
+        clientX: 184,
+        clientY: 460,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      const playCallsBeforeCompatibilityClick = play.mock.calls.length;
+      fireEvent.click(centralPlay!);
+      expect(play).toHaveBeenCalledTimes(playCallsBeforeCompatibilityClick);
+
+      expect(shell.style.transform).toContain("scale(0.8200)");
+      expect(onMinimize).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(180));
       expect(onMinimize).toHaveBeenCalledWith(
         expect.objectContaining({
           lessonTitle: "Designing for real users",
@@ -528,9 +653,221 @@ describe("LessonVideoPlayer adapter", () => {
           }),
         }),
       );
+
+      rerender(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          onMinimize={onMinimize}
+          onMinimizeGestureChange={onMinimizeGestureChange}
+          presentation="mini"
+        />,
+      );
+      rerender(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          onMinimize={onMinimize}
+          onMinimizeGestureChange={onMinimizeGestureChange}
+          presentation="full"
+        />,
+      );
+
+      expect(shell.style.transform).toBe("");
+      expect(onMinimizeGestureChange.mock.lastCall?.[0]).toEqual(
+        expect.objectContaining({ offsetY: 0, phase: "idle", progress: 0 }),
+      );
     } finally {
       window.matchMedia = originalMatchMedia;
+      Object.defineProperties(window, {
+        innerHeight: { configurable: true, value: originalInnerHeight },
+        innerWidth: { configurable: true, value: originalInnerWidth },
+      });
     }
+  });
+
+  it("keeps repeated partial minimize swipes from becoming a one-finger pinch", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const onMinimize = vi.fn();
+    const originalMatchMedia = window.matchMedia;
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 640px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+    Object.defineProperties(window, {
+      innerHeight: { configurable: true, value: 915 },
+      innerWidth: { configurable: true, value: 412 },
+    });
+
+    try {
+      const { container } = render(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          onMinimize={onMinimize}
+        />,
+      );
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+      vi.useFakeTimers();
+
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      const shell = player.parentElement!;
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video")!;
+      let captureTarget: HTMLElement | null = null;
+      const installPointerCapture = (element: HTMLElement) => {
+        Object.assign(element, {
+          hasPointerCapture: vi.fn(() => captureTarget === element),
+          releasePointerCapture: vi.fn(() => {
+            if (captureTarget === element) captureTarget = null;
+          }),
+          setPointerCapture: vi.fn(() => {
+            captureTarget = element;
+          }),
+        });
+      };
+      installPointerCapture(shell);
+      installPointerCapture(surface);
+      vi.spyOn(shell, "getBoundingClientRect").mockReturnValue({
+        bottom: 232,
+        height: 232,
+        left: 0,
+        right: 412,
+        top: 0,
+        width: 412,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 180,
+        clientY: 30,
+        isPrimary: true,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 180,
+        clientY: 100,
+        isPrimary: true,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      expect(captureTarget).toBe(shell);
+      fireEvent.pointerUp(captureTarget!, {
+        clientX: 180,
+        clientY: 100,
+        isPrimary: true,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(220));
+      expect(onMinimize).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 180,
+        clientY: 130,
+        isPrimary: true,
+        pointerId: 8,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 180,
+        clientY: 230,
+        isPrimary: true,
+        pointerId: 8,
+        pointerType: "touch",
+      });
+
+      expect(captureTarget).toBe(shell);
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+      expect(media).toHaveAttribute("data-player-zoom-active", "false");
+      expect(
+        screen.queryByRole("button", { name: /Reset video zoom/ }),
+      ).not.toBeInTheDocument();
+      expect(onMinimize).not.toHaveBeenCalled();
+
+      fireEvent.pointerCancel(surface, {
+        clientX: 180,
+        clientY: 230,
+        isPrimary: true,
+        pointerId: 8,
+        pointerType: "touch",
+      });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+      Object.defineProperties(window, {
+        innerHeight: { configurable: true, value: originalInnerHeight },
+        innerWidth: { configurable: true, value: originalInnerWidth },
+      });
+    }
+  });
+
+  it("does not persist internal handoff muting when the media element echoes the change", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const onMinimize = vi.fn();
+    const { container } = render(
+      <LessonVideoPlayer
+        {...playerProps(firstMedia, engine)}
+        onMinimize={onMinimize}
+      />,
+    );
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    const mutedPreferenceBeforeHandoff = localStorage.getItem(
+      lessonPlayerStorageKeys.muted,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimize video" }));
+    const request = onMinimize.mock.calls[0]?.[0] as
+      { preparePlaybackHandoff?: () => void } | undefined;
+    expect(request?.preparePlaybackHandoff).toBeTypeOf("function");
+
+    act(() => {
+      request?.preparePlaybackHandoff?.();
+      // Browsers echo the programmatic muted assignment with a native
+      // volumechange after the engine's synchronous notification.
+      engine.setMuted(true);
+    });
+
+    expect(localStorage.getItem(lessonPlayerStorageKeys.muted)).toBe(
+      mutedPreferenceBeforeHandoff,
+    );
+    expect(localStorage.getItem(lessonPlayerStorageKeys.muted)).not.toBe(
+      "true",
+    );
+    expect(container.querySelector("video")).toBeInTheDocument();
+  });
+
+  it("exposes a mobile mute control so a saved muted state is recoverable", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    localStorage.setItem(lessonPlayerStorageKeys.muted, "true");
+    const { container } = render(
+      <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
+    );
+    await waitFor(() => expect(engine.getSnapshot().muted).toBe(true));
+
+    const mobileVolumeControl = container.querySelector<HTMLElement>(
+      "[data-mobile-volume-control]",
+    );
+    expect(mobileVolumeControl).toHaveClass("sm:hidden");
+    fireEvent.click(
+      within(mobileVolumeControl!).getByRole("button", { name: "Unmute" }),
+    );
+
+    await waitFor(() => expect(engine.getSnapshot().muted).toBe(false));
+    expect(localStorage.getItem(lessonPlayerStorageKeys.muted)).toBe("false");
   });
 
   it("keeps pinch zoom inside the video instead of triggering mobile minimize", async () => {
@@ -554,17 +891,31 @@ describe("LessonVideoPlayer adapter", () => {
       const { container } = render(
         <LessonVideoPlayer
           {...playerProps(firstMedia, engine)}
+          canGoNext
           onMinimize={onMinimize}
         />,
       );
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+      vi.useFakeTimers();
       const player = screen.getByRole("region", {
         name: "Lesson video player for Designing for real users",
       });
+      const shell = container.querySelector<HTMLElement>(".video-shell");
       const surface = screen.getByRole("button", {
         name: "Play or pause video; tap to show controls",
       });
+      const centralPlay = container.querySelector<HTMLElement>(
+        '[data-player-control-cluster="mobile-play"] [data-player-control]',
+      );
+      const centralNext = container.querySelector<HTMLElement>(
+        '[data-player-control-cluster="mobile-next"] [data-player-control]',
+      );
       const media = container.querySelector("video");
+      expect(centralPlay).not.toBeNull();
+      expect(centralNext).not.toBeNull();
+      Object.assign(shell!, {
+        hasPointerCapture: vi.fn(() => false),
+      });
       vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
         bottom: 225,
         height: 225,
@@ -581,31 +932,31 @@ describe("LessonVideoPlayer adapter", () => {
         videoWidth: { configurable: true, value: 1_600 },
       });
 
-      fireEvent.pointerDown(surface, {
+      fireEvent.pointerDown(centralPlay!, {
         clientX: 150,
         clientY: 110,
         pointerId: 1,
         pointerType: "touch",
       });
-      fireEvent.pointerDown(surface, {
+      fireEvent.pointerDown(centralNext!, {
         clientX: 250,
         clientY: 110,
         pointerId: 2,
         pointerType: "touch",
       });
-      fireEvent.pointerMove(surface, {
+      fireEvent.pointerMove(centralNext!, {
         clientX: 350,
         clientY: 110,
         pointerId: 2,
         pointerType: "touch",
       });
-      fireEvent.pointerUp(surface, {
+      fireEvent.pointerUp(centralNext!, {
         clientX: 350,
         clientY: 110,
         pointerId: 2,
         pointerType: "touch",
       });
-      fireEvent.pointerUp(surface, {
+      fireEvent.pointerUp(centralPlay!, {
         clientX: 150,
         clientY: 110,
         pointerId: 1,
@@ -614,7 +965,34 @@ describe("LessonVideoPlayer adapter", () => {
 
       expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
       expect(onMinimize).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 110,
+        pointerId: 3,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 200,
+        clientY: 110,
+        pointerId: 3,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(301));
+
+      const playerActions = container.querySelector<HTMLElement>(
+        '[data-player-control-cluster="player-actions"]',
+      );
+      const resetZoom = within(playerActions!).getByRole("button", {
+        name: "Reset video zoom from 2× to 1×",
+      });
+      const autoplay = within(playerActions!).getByRole("switch", {
+        name: "Autoplay next lesson",
+      });
+      expect(playerActions?.firstElementChild).toBe(resetZoom);
+      expect(resetZoom.nextElementSibling).toBe(autoplay);
     } finally {
+      vi.useRealTimers();
       window.matchMedia = originalMatchMedia;
     }
   });
@@ -900,6 +1278,15 @@ describe("LessonVideoPlayer adapter", () => {
       pointerType: "touch",
     });
     expect(timeline.parentElement).toHaveClass(
+      "max-sm:[&_[role=slider]]:translate-y-[25%]",
+      "max-sm:[&_[data-timeline-visual]]:-translate-y-[25%]",
+    );
+    expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
+      "pointer-events-none",
+      "absolute",
+      "inset-0",
+    );
+    expect(timeline.parentElement).toHaveClass(
       "max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]",
       "max-sm:[&_[data-timeline-track]]:!h-0.75",
     );
@@ -1142,6 +1529,52 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engine.loadCalls[0]?.source.startTime).toBe(50);
     expect(engine.getSnapshot().currentTime).toBe(50);
     await waitFor(() => expect(onProgressChange).toHaveBeenCalledWith(25));
+  });
+
+  it("keeps the mini player live until restored playback is unbuffered and playing", async () => {
+    const engine = new RecordingFakeVideoEngine(200);
+    const setMuted = vi.spyOn(engine, "setMuted");
+    const setVolume = vi.spyOn(engine, "setVolume");
+    const preparePlaybackHandoff = vi.fn();
+    const onMiniPlayerRestoreReady = vi.fn();
+    const playback = {
+      currentTime: 57,
+      muted: false,
+      playbackRate: 1.5,
+      playing: true,
+      volume: 0.65,
+    };
+    writeMiniPlayerRestore(firstMedia.fileName, true);
+    const unregisterRuntime = registerLearningMiniPlayerRuntime({
+      getPlaybackSnapshot: () => playback,
+      mediaKey: firstMedia.fileName,
+      preparePlaybackHandoff,
+    });
+
+    render(
+      <LessonVideoPlayer
+        {...playerProps(firstMedia, engine)}
+        onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
+      />,
+    );
+
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    await waitFor(() =>
+      expect(onMiniPlayerRestoreReady).toHaveBeenCalledOnce(),
+    );
+    expect(engine.getSnapshot()).toMatchObject({
+      buffering: false,
+      currentTime: 57,
+      playing: true,
+    });
+    expect(setVolume).toHaveBeenLastCalledWith(0.65);
+    expect(setMuted).toHaveBeenLastCalledWith(false);
+    expect(preparePlaybackHandoff).toHaveBeenCalledOnce();
+    expect(setMuted.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      preparePlaybackHandoff.mock.invocationCallOrder[0]!,
+    );
+
+    unregisterRuntime();
   });
 
   it("restores an enabled caption preference after changing lessons", async () => {

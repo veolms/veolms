@@ -110,6 +110,7 @@ export interface PlayerThemeTokens {
   controlShadow: string;
   controlRadius: string;
   menuSurface: string;
+  menuSolidSurface: string;
   menuText: string;
   menuTextMuted: string;
   menuBorder: string;
@@ -280,6 +281,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       controlShadow: "0 5px 16px rgb(0 0 0 / 0.28)",
       controlRadius: "999px",
       menuSurface: "rgb(11 11 13 / 0.88)",
+      menuSolidSurface: "rgb(11 11 13)",
       menuText: "#ffffff",
       menuTextMuted: "rgb(255 255 255 / 0.68)",
       menuBorder: "rgb(255 255 255 / 0.14)",
@@ -309,6 +311,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       controlShadow: "0 8px 24px rgb(15 8 35 / 0.4)",
       controlRadius: "14px",
       menuSurface: "rgb(24 16 43 / 0.94)",
+      menuSolidSurface: "rgb(24 16 43)",
       menuText: "#f5f3ff",
       menuTextMuted: "rgb(221 214 254 / 0.7)",
       menuBorder: "rgb(196 181 253 / 0.28)",
@@ -337,6 +340,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       controlShadow: "0 6px 18px rgb(0 0 0 / 0.24)",
       controlRadius: "9px",
       menuSurface: "rgb(248 250 252 / 0.97)",
+      menuSolidSurface: "rgb(248 250 252)",
       menuText: "#0f172a",
       menuTextMuted: "rgb(51 65 85 / 0.75)",
       menuBorder: "rgb(148 163 184 / 0.42)",
@@ -408,6 +412,7 @@ export function getPlayerThemeStyle(
     "--video-player-control-shadow": tokens.controlShadow,
     "--video-player-control-radius": tokens.controlRadius,
     "--video-player-menu-surface": tokens.menuSurface,
+    "--video-player-menu-solid-surface": tokens.menuSolidSurface,
     "--video-player-menu-text": tokens.menuText,
     "--video-player-menu-text-muted": tokens.menuTextMuted,
     "--video-player-menu-border": tokens.menuBorder,

@@ -177,44 +177,50 @@ export function Timeline({
         }}
       >
         <div
-          data-timeline-track=""
-          className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
+          aria-hidden="true"
+          data-timeline-visual=""
+          className="pointer-events-none absolute inset-0"
         >
-          {bufferedRanges.map((range) => (
+          <div
+            data-timeline-track=""
+            className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
+          >
+            {bufferedRanges.map((range) => (
+              <span
+                key={`${range.start}-${range.end}`}
+                data-timeline-buffered-range=""
+                className="absolute inset-y-0 rounded-full bg-white/45"
+                style={{
+                  left: `${timeToPositionPercent(range.start, duration)}%`,
+                  width: `${timeToPositionPercent(range.end - range.start, duration)}%`,
+                }}
+              />
+            ))}
             <span
-              key={`${range.start}-${range.end}`}
-              data-timeline-buffered-range=""
-              className="absolute inset-y-0 rounded-full bg-white/45"
+              data-timeline-progress=""
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          {chapterDivisions.map((chapter) => (
+            <span
+              key={chapter.id}
+              aria-hidden="true"
+              className="absolute top-1/2 z-10 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950/90"
               style={{
-                left: `${timeToPositionPercent(range.start, duration)}%`,
-                width: `${timeToPositionPercent(range.end - range.start, duration)}%`,
+                left: `${timeToPositionPercent(chapter.startTime, duration)}%`,
               }}
             />
           ))}
+
           <span
-            data-timeline-progress=""
-            className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
-            style={{ width: `${progress}%` }}
+            aria-hidden="true"
+            data-timeline-thumb=""
+            className="absolute top-1/2 z-20 size-3 -translate-x-1/2 -translate-y-1/2 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
+            style={{ left: `${progress}%` }}
           />
         </div>
-
-        {chapterDivisions.map((chapter) => (
-          <span
-            key={chapter.id}
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 z-10 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950/90"
-            style={{
-              left: `${timeToPositionPercent(chapter.startTime, duration)}%`,
-            }}
-          />
-        ))}
-
-        <span
-          aria-hidden="true"
-          data-timeline-thumb=""
-          className="pointer-events-none absolute top-1/2 z-20 size-3 -translate-x-1/2 -translate-y-1/2 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
-          style={{ left: `${progress}%` }}
-        />
       </div>
 
       {positionedMarkers.map((marker) => (

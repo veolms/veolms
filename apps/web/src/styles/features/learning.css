@@ -70,6 +70,11 @@
   isolation: isolate;
 }
 
+.learning-workspace__player-wrap:has([data-learning-player-anchor]) {
+  background: transparent;
+  box-shadow: none;
+}
+
 .learning-workspace__player-wrap .youtube-player,
 .learning-workspace__curriculum-column .learning-curriculum {
   border-radius: 0;

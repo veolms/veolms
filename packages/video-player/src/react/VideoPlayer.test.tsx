@@ -389,11 +389,16 @@ describe("VideoPlayer integration", () => {
         },
       ],
     });
-    const renderRoot = (nextSource: VideoSource, startTime: number) => (
+    const renderRoot = (
+      nextSource: VideoSource,
+      startTime: number,
+      autoPlay = false,
+    ) => (
       <PlayerRoot
         source={nextSource}
         loadOptions={{ startTime, mimeType: "video/mp4" }}
         engineFactory={() => engine}
+        autoPlay={autoPlay}
       >
         <PlayerMedia />
       </PlayerRoot>
@@ -403,6 +408,10 @@ describe("VideoPlayer integration", () => {
     await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
 
     rerender(renderRoot(createSource(), 4));
+    await act(async () => Promise.resolve());
+    expect(load).toHaveBeenCalledTimes(1);
+
+    rerender(renderRoot(createSource(), 4, true));
     await act(async () => Promise.resolve());
     expect(load).toHaveBeenCalledTimes(1);
 
@@ -763,7 +772,17 @@ describe("VideoPlayer integration", () => {
 
         act(() => {
           vi.advanceTimersByTime(100);
-          tap(75);
+          fireEvent.pointerDown(surface, {
+            clientX: 75,
+            pointerId: 1,
+            pointerType: "touch",
+          });
+        });
+        expect(player).toHaveAttribute("data-controls-visible", "false");
+        fireEvent.pointerUp(surface, {
+          clientX: 75,
+          pointerId: 1,
+          pointerType: "touch",
         });
         expect(seek).toHaveBeenLastCalledWith(70);
         expect(screen.getByText("+40")).toBeVisible();
@@ -785,8 +804,9 @@ describe("VideoPlayer integration", () => {
           container.querySelector('[data-player-mobile-seek-icon="backward"]'),
         ).toHaveClass("rotate-180");
 
-        act(() => vi.advanceTimersByTime(849));
+        act(() => vi.advanceTimersByTime(1_499));
         expect(screen.getByText("−20")).toBeVisible();
+        expect(player).toHaveAttribute("data-controls-visible", "false");
         act(() => vi.advanceTimersByTime(1));
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
         expect(player).toHaveAttribute("data-controls-visible", "true");
@@ -917,7 +937,11 @@ describe("VideoPlayer integration", () => {
 
       expect(player).toHaveAttribute("data-controls-visible", "false");
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.200");
-      expect(screen.getByLabelText("Video zoom 1.2×")).toBeVisible();
+      expect(
+        screen.getByRole("button", {
+          name: "Reset video zoom from 1.2× to 1×",
+        }),
+      ).toHaveClass("text-xs");
       expect(play).not.toHaveBeenCalled();
 
       act(() => vi.advanceTimersByTime(100));
@@ -927,19 +951,34 @@ describe("VideoPlayer integration", () => {
         pointerId: 2,
         pointerType: "touch",
       });
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
+      fireEvent.pointerMove(surface, {
+        clientX: 190,
+        clientY: 170,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
+      expect(media?.style.transform).toContain("translate3d(50px, 0px, 0)");
       fireEvent.pointerUp(surface, {
-        clientX: 150,
-        clientY: 150,
+        clientX: 190,
+        clientY: 170,
         pointerId: 1,
         pointerType: "touch",
       });
 
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
-      expect(screen.getByLabelText("Video zoom 1.33×")).toBeVisible();
+      expect(
+        screen.getByRole("button", {
+          name: "Reset video zoom from 1.33× to 1×",
+        }),
+      ).toHaveAttribute("data-player-zoom-indicator", "feedback");
 
       act(() => vi.advanceTimersByTime(1_800));
       expect(
-        screen.queryByLabelText("Video zoom 1.33×"),
+        screen.queryByRole("button", {
+          name: "Reset video zoom from 1.33× to 1×",
+        }),
       ).not.toBeInTheDocument();
 
       fireEvent.pointerDown(surface, {
@@ -956,10 +995,11 @@ describe("VideoPlayer integration", () => {
       });
       act(() => vi.advanceTimersByTime(301));
       expect(player).toHaveAttribute("data-controls-visible", "true");
-      expect(screen.getByLabelText("Video zoom 1.33×")).toHaveAttribute(
-        "data-player-zoom-indicator",
-        "control",
-      );
+      expect(
+        screen.getByRole("button", {
+          name: "Reset video zoom from 1.33× to 1×",
+        }),
+      ).toHaveAttribute("data-player-zoom-indicator", "control");
 
       fireEvent.pointerDown(surface, {
         clientX: 200,
@@ -973,12 +1013,158 @@ describe("VideoPlayer integration", () => {
         pointerId: 4,
         pointerType: "touch",
       });
-      expect(media?.style.transform).toContain("translate3d(50px, 0px, 0)");
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
       expect(player).toHaveAttribute("data-controls-visible", "false");
       fireEvent.pointerUp(surface, {
         clientX: 240,
         clientY: 150,
         pointerId: 4,
+        pointerType: "touch",
+      });
+
+      const feedbackReset = screen.getByRole("button", {
+        name: "Reset video zoom from 1.33× to 1×",
+      });
+      expect(feedbackReset).toHaveAttribute(
+        "data-player-controls-reveal",
+        "delayed",
+      );
+      fireEvent.pointerDown(feedbackReset, {
+        clientX: 380,
+        clientY: 20,
+        pointerId: 5,
+        pointerType: "touch",
+      });
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      fireEvent.pointerUp(feedbackReset, {
+        clientX: 380,
+        clientY: 20,
+        pointerId: 5,
+        pointerType: "touch",
+      });
+      fireEvent.click(feedbackReset);
+
+      expect(feedbackReset).not.toBeInTheDocument();
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+      expect(media?.style.transform).toContain("translate3d(0px, 0px, 0)");
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      act(() => vi.advanceTimersByTime(999));
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      act(() => vi.advanceTimersByTime(1));
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("does not reuse an abandoned touch pointer as a second pinch finger", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+
+      fireEvent.pointerDown(surface, {
+        clientX: 180,
+        clientY: 100,
+        isPrimary: true,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 180,
+        clientY: 140,
+        isPrimary: true,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 180,
+        clientY: 240,
+        isPrimary: true,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+      expect(media).toHaveAttribute("data-player-zoom-active", "false");
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(
+        screen.queryByRole("button", { name: /Reset video zoom/ }),
+      ).not.toBeInTheDocument();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("leaves pinch gestures for a parent surface when content zoom is disabled", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const parentPointerMove = vi.fn();
+
+    try {
+      const { container } = render(
+        <div onPointerMove={parentPointerMove}>
+          <VideoPlayer
+            source={source}
+            engineFactory={() => engine}
+            zoomEnabled={false}
+          />
+        </div>,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const player = screen.getByRole("region", { name: "Video player" });
+      const media = container.querySelector("video");
+
+      fireEvent.pointerDown(player, {
+        clientX: 150,
+        clientY: 150,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      fireEvent.pointerDown(player, {
+        clientX: 250,
+        clientY: 150,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(player, {
+        clientX: 300,
+        clientY: 150,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+
+      expect(player).toHaveAttribute("data-player-zoom-enabled", "false");
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+      expect(parentPointerMove).toHaveBeenCalledOnce();
+      expect(
+        screen.queryByRole("button", { name: /Reset video zoom/ }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.pointerUp(player, {
+        clientX: 300,
+        clientY: 150,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(player, {
+        clientX: 150,
+        clientY: 150,
+        pointerId: 1,
         pointerType: "touch",
       });
     } finally {
@@ -1033,13 +1219,113 @@ describe("VideoPlayer integration", () => {
 
       expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
       expect(player).toHaveAttribute("data-controls-visible", "false");
-      expect(screen.getByLabelText("Video zoom 2×")).toBeVisible();
+      expect(
+        screen.getByRole("button", {
+          name: "Reset video zoom from 2× to 1×",
+        }),
+      ).toHaveAttribute("data-player-zoom-indicator", "feedback");
 
       fireEvent.touchEnd(surface, {
-        changedTouches: [first, second],
+        changedTouches: [second],
+        touches: [first],
+      });
+      fireEvent.touchMove(surface, {
+        changedTouches: [{ ...first, clientX: 190, clientY: 140 }],
+        touches: [{ ...first, clientX: 190, clientY: 140 }],
+      });
+      expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
+      expect(media?.style.transform).toContain("translate3d(90px, 32.5px, 0)");
+      fireEvent.touchEnd(surface, {
+        changedTouches: [{ ...first, clientX: 190, clientY: 140 }],
         touches: [],
       });
       expect(media).toHaveAttribute("data-player-zoom-active", "false");
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("starts a pinch when either touch begins on a player control", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const player = screen.getByRole("region", { name: "Video player" });
+      const playControl = screen.getByRole("button", { name: "Play video" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 300,
+        height: 300,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      Object.defineProperties(media!, {
+        videoHeight: { configurable: true, value: 900 },
+        videoWidth: { configurable: true, value: 1_600 },
+      });
+      vi.useFakeTimers();
+
+      fireEvent.pointerDown(playControl, {
+        clientX: 150,
+        clientY: 150,
+        pointerId: 11,
+        pointerType: "touch",
+      });
+      fireEvent.pointerDown(surface, {
+        clientX: 250,
+        clientY: 150,
+        pointerId: 12,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 270,
+        clientY: 150,
+        pointerId: 12,
+        pointerType: "touch",
+      });
+
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.200");
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(play).not.toHaveBeenCalled();
+
+      fireEvent.pointerUp(surface, {
+        clientX: 270,
+        clientY: 150,
+        pointerId: 12,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(playControl, {
+        clientX: 150,
+        clientY: 150,
+        pointerId: 11,
+        pointerType: "touch",
+      });
+      fireEvent.click(playControl);
+      expect(play).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(91));
+      await act(async () => {
+        fireEvent.click(playControl);
+        await Promise.resolve();
+      });
+      expect(play).toHaveBeenCalledOnce();
     } finally {
       restoreMatchMedia();
     }

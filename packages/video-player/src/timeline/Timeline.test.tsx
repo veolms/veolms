@@ -31,6 +31,11 @@ describe("Timeline", () => {
     );
     expect(container.querySelector("span[style*='width: 25%']")).toBeTruthy();
     expect(container.querySelector("[data-timeline-track]")).toBeTruthy();
+    expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
+      "pointer-events-none",
+      "absolute",
+      "inset-0",
+    );
     expect(
       container.querySelector("[data-timeline-buffered-range]"),
     ).toBeTruthy();

@@ -11,13 +11,13 @@ import {
 } from "react";
 
 const MINI_PLAYER_ASPECT_RATIO = 16 / 9;
-const MINI_PLAYER_MARGIN = 8;
-const MINI_PLAYER_MIN_WIDTH = 192;
-const MINI_PLAYER_MAX_WIDTH = 608;
+const MINI_PLAYER_MARGIN = 12;
+const MINI_PLAYER_MIN_VIEWPORT_RATIO = 0.5;
 const DRAG_START_DISTANCE = 6;
 const DISMISS_DISTANCE = 56;
 const DISMISS_VELOCITY = 0.45;
 const DISMISS_DURATION = 200;
+const SETTLE_DURATION = 240;
 
 interface MiniPlayerLayout {
   left: number;
@@ -37,6 +37,7 @@ interface SinglePointerGesture {
   last: PointerSample;
   pointerId: number;
   start: PointerSample;
+  startedAtBottom: boolean;
   velocityY: number;
 }
 
@@ -47,7 +48,8 @@ interface PinchGesture {
   initialWidth: number;
 }
 
-type MiniPlayerGestureMode = "idle" | "dragging" | "resizing" | "dismissing";
+type MiniPlayerGestureMode =
+  "idle" | "dragging" | "resizing" | "settling" | "dismissing";
 
 interface ViewportBounds {
   height: number;
@@ -69,16 +71,39 @@ const getViewportBounds = (): ViewportBounds => {
   };
 };
 
+const getSettledBottomEdge = (viewport: ViewportBounds) => {
+  const viewportBottom = viewport.top + viewport.height;
+  const mobileNavigation = document.querySelector<HTMLElement>(
+    ".mobile-bottom-nav:not(.is-scroll-hidden)",
+  );
+  const navigationRect = mobileNavigation?.getBoundingClientRect();
+  if (
+    navigationRect &&
+    navigationRect.height > 0 &&
+    navigationRect.top < viewportBottom &&
+    navigationRect.bottom > viewport.top
+  ) {
+    return navigationRect.top - MINI_PLAYER_MARGIN;
+  }
+  return viewportBottom - MINI_PLAYER_MARGIN;
+};
+
+const getWidthBounds = (viewport: ViewportBounds) => {
+  const maximumWidth = Math.max(1, viewport.width - MINI_PLAYER_MARGIN * 2);
+  return {
+    maximumWidth,
+    minimumWidth: Math.min(
+      viewport.width * MINI_PLAYER_MIN_VIEWPORT_RATIO,
+      maximumWidth,
+    ),
+  };
+};
+
 const clampLayout = (
   layout: MiniPlayerLayout,
   viewport = getViewportBounds(),
 ): MiniPlayerLayout => {
-  const availableWidth = Math.max(1, viewport.width - MINI_PLAYER_MARGIN * 2);
-  const minimumWidth = Math.min(MINI_PLAYER_MIN_WIDTH, availableWidth);
-  const maximumWidth = Math.max(
-    minimumWidth,
-    Math.min(MINI_PLAYER_MAX_WIDTH, availableWidth),
-  );
+  const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
   const width = clamp(layout.width, minimumWidth, maximumWidth);
   const height = width / MINI_PLAYER_ASPECT_RATIO;
   const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
@@ -89,7 +114,7 @@ const clampLayout = (
   const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
   const maximumTop = Math.max(
     minimumTop,
-    viewport.top + viewport.height - MINI_PLAYER_MARGIN - height,
+    getSettledBottomEdge(viewport) - height,
   );
 
   return {
@@ -97,6 +122,60 @@ const clampLayout = (
     top: clamp(layout.top, minimumTop, maximumTop),
     width,
   };
+};
+
+const getNearestCornerLayout = (
+  layout: MiniPlayerLayout,
+  viewport = getViewportBounds(),
+): MiniPlayerLayout => {
+  const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
+  const width = clamp(layout.width, minimumWidth, maximumWidth);
+  const height = width / MINI_PLAYER_ASPECT_RATIO;
+  const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
+  const maximumLeft = Math.max(
+    minimumLeft,
+    viewport.left + viewport.width - MINI_PLAYER_MARGIN - width,
+  );
+  const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
+  const maximumTop = Math.max(
+    minimumTop,
+    getSettledBottomEdge(viewport) - height,
+  );
+
+  return {
+    left:
+      Math.abs(layout.left - minimumLeft) <= Math.abs(layout.left - maximumLeft)
+        ? minimumLeft
+        : maximumLeft,
+    top:
+      Math.abs(layout.top - minimumTop) <= Math.abs(layout.top - maximumTop)
+        ? minimumTop
+        : maximumTop,
+    width,
+  };
+};
+
+const getDownmostLayout = (
+  layout: MiniPlayerLayout,
+  viewport = getViewportBounds(),
+): MiniPlayerLayout => {
+  const settledLayout = clampLayout(layout, viewport);
+  const height = settledLayout.width / MINI_PLAYER_ASPECT_RATIO;
+  return {
+    ...settledLayout,
+    top: Math.max(
+      viewport.top + MINI_PLAYER_MARGIN,
+      getSettledBottomEdge(viewport) - height,
+    ),
+  };
+};
+
+const isAtDownmostPosition = (layout: MiniPlayerLayout) => {
+  const downmostLayout = getDownmostLayout(layout);
+  return (
+    Math.abs(layout.top - downmostLayout.top) <= 1 &&
+    Math.abs(layout.width - downmostLayout.width) <= 1
+  );
 };
 
 const distanceBetween = (first: PointerSample, second: PointerSample) =>
@@ -119,6 +198,7 @@ const getEventSample = (
 export function useLearningMiniPlayerGestures(
   containerRef: RefObject<HTMLElement | null>,
   onDismiss: () => void,
+  enabled = true,
 ) {
   const [layout, setLayout] = useState<MiniPlayerLayout | null>(null);
   const [mode, setMode] = useState<MiniPlayerGestureMode>("idle");
@@ -129,8 +209,11 @@ export function useLearningMiniPlayerGestures(
   const singleGestureRef = useRef<SinglePointerGesture | null>(null);
   const pinchGestureRef = useRef<PinchGesture | null>(null);
   const suppressClickRef = useRef(false);
+  const needsSettleRef = useRef(false);
+  const settleCandidateRef = useRef<MiniPlayerLayout | null>(null);
   const suppressClickTimerRef = useRef<number | null>(null);
   const dismissTimerRef = useRef<number | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
 
   const updateMode = useCallback((nextMode: MiniPlayerGestureMode) => {
     modeRef.current = nextMode;
@@ -138,11 +221,51 @@ export function useLearningMiniPlayerGestures(
   }, []);
 
   const commitLayout = useCallback((nextLayout: MiniPlayerLayout) => {
-    const clampedLayout = clampLayout(nextLayout);
-    layoutRef.current = clampedLayout;
-    setLayout(clampedLayout);
-    return clampedLayout;
+    const cornerLayout = getNearestCornerLayout(nextLayout);
+    layoutRef.current = cornerLayout;
+    setLayout(cornerLayout);
+    return cornerLayout;
   }, []);
+
+  const showLiveLayout = useCallback((nextLayout: MiniPlayerLayout) => {
+    layoutRef.current = nextLayout;
+    setLayout(nextLayout);
+    return nextLayout;
+  }, []);
+
+  const settleLayout = useCallback(
+    (nextLayout: MiniPlayerLayout) => {
+      const settledLayout = getNearestCornerLayout(nextLayout);
+      const visibleLayout = layoutRef.current ?? nextLayout;
+      const shouldAnimate =
+        Math.abs(settledLayout.left - visibleLayout.left) > 0.5 ||
+        Math.abs(settledLayout.top - visibleLayout.top) > 0.5 ||
+        Math.abs(settledLayout.width - visibleLayout.width) > 0.5;
+
+      if (settleTimerRef.current !== null) {
+        window.clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      showLiveLayout(settledLayout);
+      needsSettleRef.current = false;
+      settleCandidateRef.current = null;
+
+      if (
+        shouldAnimate &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        updateMode("settling");
+        settleTimerRef.current = window.setTimeout(() => {
+          settleTimerRef.current = null;
+          updateMode("idle");
+        }, SETTLE_DURATION);
+      } else {
+        updateMode("idle");
+      }
+      return settledLayout;
+    },
+    [showLiveLayout, updateMode],
+  );
 
   const measureLayout = useCallback(() => {
     if (layoutRef.current) return layoutRef.current;
@@ -160,16 +283,18 @@ export function useLearningMiniPlayerGestures(
       top:
         rect && rect.height > 0
           ? rect.top
-          : viewport.top + viewport.height - 84 - height,
+          : getSettledBottomEdge(viewport) - height,
       width,
     });
   }, [commitLayout, containerRef]);
 
   useLayoutEffect(() => {
+    if (!enabled) return;
     measureLayout();
-  }, [measureLayout]);
+  }, [enabled, measureLayout]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const handleViewportResize = () => {
       if (layoutRef.current) commitLayout(layoutRef.current);
     };
@@ -182,7 +307,7 @@ export function useLearningMiniPlayerGestures(
       viewport?.removeEventListener("resize", handleViewportResize);
       viewport?.removeEventListener("scroll", handleViewportResize);
     };
-  }, [commitLayout]);
+  }, [commitLayout, enabled]);
 
   useEffect(
     () => () => {
@@ -192,17 +317,22 @@ export function useLearningMiniPlayerGestures(
       if (dismissTimerRef.current !== null) {
         window.clearTimeout(dismissTimerRef.current);
       }
+      if (settleTimerRef.current !== null) {
+        window.clearTimeout(settleTimerRef.current);
+      }
     },
     [],
   );
 
   const startSingleGesture = useCallback(
     (sample: PointerSample) => {
+      const initialLayout = measureLayout();
       singleGestureRef.current = {
-        initialLayout: measureLayout(),
+        initialLayout,
         last: sample,
         pointerId: sample.id,
         start: sample,
+        startedAtBottom: isAtDownmostPosition(initialLayout),
         velocityY: 0,
       };
     },
@@ -227,6 +357,8 @@ export function useLearningMiniPlayerGestures(
     };
     singleGestureRef.current = null;
     suppressClickRef.current = true;
+    needsSettleRef.current = true;
+    settleCandidateRef.current = currentLayout;
     updateMode("resizing");
   }, [measureLayout, updateMode]);
 
@@ -253,28 +385,54 @@ export function useLearningMiniPlayerGestures(
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      if (!enabled) return;
       if (modeRef.current === "dismissing") return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
 
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch {
-        // Pointer capture is an enhancement; document-level pointer delivery remains usable.
+      if (settleTimerRef.current !== null) {
+        window.clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      if (modeRef.current === "settling") {
+        const visibleRect = containerRef.current?.getBoundingClientRect();
+        if (visibleRect && visibleRect.width > 0) {
+          showLiveLayout({
+            left: visibleRect.left,
+            top: visibleRect.top,
+            width: visibleRect.width,
+          });
+        }
+        updateMode("idle");
       }
 
       const sample = getEventSample(event);
       pointersRef.current.set(event.pointerId, sample);
       if (pointersRef.current.size >= 2) {
+        for (const pointerId of pointersRef.current.keys()) {
+          try {
+            event.currentTarget.setPointerCapture(pointerId);
+          } catch {
+            // Capture is an enhancement; document-level pointer delivery remains usable.
+          }
+        }
         startPinchGesture();
       } else {
         startSingleGesture(sample);
       }
     },
-    [startPinchGesture, startSingleGesture],
+    [
+      containerRef,
+      enabled,
+      showLiveLayout,
+      startPinchGesture,
+      startSingleGesture,
+      updateMode,
+    ],
   );
 
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      if (!enabled) return;
       if (!pointersRef.current.has(event.pointerId)) return;
       const sample = getEventSample(event);
       pointersRef.current.set(event.pointerId, sample);
@@ -287,10 +445,20 @@ export function useLearningMiniPlayerGestures(
         if (!pinch || !first || !second) return;
 
         const scale = distanceBetween(first, second) / pinch.initialDistance;
-        const width = pinch.initialWidth * scale;
+        const viewport = getViewportBounds();
+        const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
+        const width = Math.max(minimumWidth, pinch.initialWidth * scale);
         const height = width / MINI_PLAYER_ASPECT_RATIO;
         const midpoint = midpointBetween(first, second);
-        commitLayout({
+        const settledWidth = Math.min(width, maximumWidth);
+        settleCandidateRef.current = {
+          left: midpoint.x - pinch.anchorX * settledWidth,
+          top:
+            midpoint.y -
+            pinch.anchorY * (settledWidth / MINI_PLAYER_ASPECT_RATIO),
+          width: settledWidth,
+        };
+        showLiveLayout({
           left: midpoint.x - pinch.anchorX * width,
           top: midpoint.y - pinch.anchorY * height,
           width,
@@ -318,16 +486,30 @@ export function useLearningMiniPlayerGestures(
         return;
       }
 
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture after the drag threshold so stationary taps keep their button target.
+      }
       event.preventDefault();
       suppressClickRef.current = true;
+      needsSettleRef.current = true;
       updateMode("dragging");
-      commitLayout({
+      const nextLayout = {
         left: single.initialLayout.left + deltaX,
         top: single.initialLayout.top + deltaY,
         width: single.initialLayout.width,
-      });
+      };
+      settleCandidateRef.current = nextLayout;
+      showLiveLayout(nextLayout);
     },
-    [commitLayout, startPinchGesture, startSingleGesture, updateMode],
+    [
+      enabled,
+      showLiveLayout,
+      startPinchGesture,
+      startSingleGesture,
+      updateMode,
+    ],
   );
 
   const finishPointer = useCallback(
@@ -345,26 +527,32 @@ export function useLearningMiniPlayerGestures(
         const deltaY = sample.y - single.start.y;
         const duration = Math.max(1, sample.time - single.start.time);
         const velocityY = Math.max(single.velocityY, deltaY / duration);
-        commitLayout({
+        const nextLayout = {
           left: single.initialLayout.left + deltaX,
           top: single.initialLayout.top + deltaY,
           width: single.initialLayout.width,
-        });
+        };
+        settleCandidateRef.current = nextLayout;
+        showLiveLayout(nextLayout);
 
         const directPointer =
           event.pointerType === "touch" || event.pointerType === "pen";
-        const downwardFlick =
+        const downwardSwipe =
           !cancelled &&
           directPointer &&
-          deltaY >= DISMISS_DISTANCE &&
           Math.abs(deltaX) <= deltaY * 1.25 + 32 &&
-          velocityY >= DISMISS_VELOCITY;
-        if (downwardFlick) {
-          pointersRef.current.clear();
-          singleGestureRef.current = null;
-          pinchGestureRef.current = null;
-          dismiss();
-          return;
+          (deltaY >= DISMISS_DISTANCE ||
+            (deltaY >= DRAG_START_DISTANCE && velocityY >= DISMISS_VELOCITY));
+        if (downwardSwipe) {
+          if (single.startedAtBottom) {
+            pointersRef.current.clear();
+            singleGestureRef.current = null;
+            pinchGestureRef.current = null;
+            settleCandidateRef.current = null;
+            dismiss();
+            return;
+          }
+          settleCandidateRef.current = getDownmostLayout(nextLayout);
         }
       }
 
@@ -388,14 +576,20 @@ export function useLearningMiniPlayerGestures(
       if (pointersRef.current.size === 0) {
         singleGestureRef.current = null;
         pinchGestureRef.current = null;
-        updateMode("idle");
+        const currentLayout = layoutRef.current;
+        if (needsSettleRef.current && currentLayout) {
+          settleLayout(settleCandidateRef.current ?? currentLayout);
+        } else {
+          updateMode("idle");
+        }
         scheduleClickRelease();
       }
     },
     [
-      commitLayout,
       dismiss,
       scheduleClickRelease,
+      settleLayout,
+      showLiveLayout,
       startSingleGesture,
       updateMode,
     ],
@@ -430,6 +624,12 @@ export function useLearningMiniPlayerGestures(
         right: "auto",
         top: layout.top,
         width: layout.width,
+        ...(mode === "settling"
+          ? {
+              transition:
+                "left 240ms cubic-bezier(0.16, 1, 0.3, 1), top 240ms cubic-bezier(0.16, 1, 0.3, 1), width 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+            }
+          : undefined),
         ...(mode === "dismissing"
           ? {
               opacity: 0,

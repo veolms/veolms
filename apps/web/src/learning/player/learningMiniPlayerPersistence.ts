@@ -28,7 +28,13 @@ export function readLearningMiniPlayerSession(
       storage.removeItem(LEARNING_MINI_PLAYER_STORAGE_KEY);
       return null;
     }
-    return session as LearningMiniPlayerSession;
+    return {
+      ...session,
+      volume:
+        typeof session.volume === "number" && Number.isFinite(session.volume)
+          ? session.volume
+          : 1,
+    } as LearningMiniPlayerSession;
   } catch {
     storage.removeItem(LEARNING_MINI_PLAYER_STORAGE_KEY);
     return null;

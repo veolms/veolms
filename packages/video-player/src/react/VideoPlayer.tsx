@@ -95,6 +95,8 @@ export interface VideoPlayerProps extends Omit<
   mediaClassName?: string;
   ariaLabel?: string;
   lockLandscapeOnFullscreen?: boolean;
+  /** Enables pinch-to-zoom and panning of the video content. */
+  zoomEnabled?: boolean;
 }
 
 interface ScreenOrientationWithLock {
@@ -161,6 +163,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       style,
       theaterMode = false,
       theme = "youtube",
+      zoomEnabled = true,
       ...outerProps
     },
     ref,
@@ -290,12 +293,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           theaterMode={theaterMode}
           onEvent={handleEvent}
           theme={theme}
+          zoomEnabled={zoomEnabled}
           style={playerThemeStyle}
           role="region"
           aria-label={ariaLabel}
           tabIndex={0}
           className={classNames(
-            "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
+            "youtube-player group relative z-10 aspect-video w-full touch-none overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
             theaterMode &&
               "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
             playerClassName,
@@ -333,7 +337,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             emptyTapBehavior={emptyTapBehavior}
             seekIntervalSeconds={seekIntervalSeconds}
           />
-          <ZoomLevelIndicator variant="feedback" />
+          {zoomEnabled ? <ZoomLevelIndicator variant="feedback" /> : null}
           {overlays}
           {centralControl === false
             ? null

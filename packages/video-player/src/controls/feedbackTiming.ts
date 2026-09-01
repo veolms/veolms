@@ -1,1 +1,2 @@
 export const PLAYER_FEEDBACK_DURATION_MS = 850;
+export const MOBILE_SEEK_IDLE_DELAY_MS = 1_500;

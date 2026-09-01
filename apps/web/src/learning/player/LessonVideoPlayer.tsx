@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
   type VideoPlayerEvent,
@@ -25,6 +18,10 @@ import {
 } from "./LessonPlayerControls";
 import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
 import {
+  getLearningMiniPlayerRuntimeSnapshot,
+  prepareLearningMiniPlayerPlaybackHandoff,
+} from "./learningMiniPlayerStore";
+import {
   consumeMiniPlayerRestore,
   lessonPlayerStorageKeys,
   readAmbientPreference,
@@ -37,8 +34,14 @@ import {
   writeResumePosition,
 } from "./lessonPlayerPersistence";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { MiniPlayerControls } from "./MiniPlayerControls";
+import {
+  useLessonPlayerMinimizeGesture,
+  type LessonPlayerMinimizeGestureState,
+} from "./useLessonPlayerMinimizeGesture";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
+const MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS = 0.35;
 const LESSON_PLAYER_SHORTCUTS = {
   seekBackwardLarge: false,
   seekForwardLarge: false,
@@ -61,7 +64,12 @@ export interface LessonVideoPlayerProps {
   onGoPrevious?: () => void;
   onLessonEnded?: () => void;
   onMinimize?: (request: LearningMiniPlayerRequest) => void;
+  onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
+  onMiniPlayerRestoreReady?: () => void;
+  onMiniClose?: () => void;
+  onMiniRestore?: () => void;
   onProgressChange?: (progress: number) => void;
+  presentation?: "full" | "mini";
   resumePersistenceKey?: string;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
@@ -83,20 +91,21 @@ export function LessonVideoPlayer({
   onGoPrevious = () => undefined,
   onLessonEnded,
   onMinimize,
+  onMinimizeGestureChange,
+  onMiniPlayerRestoreReady,
+  onMiniClose,
+  onMiniRestore,
   onTheaterToggle,
   resumePersistenceKey,
   theaterMode,
+  presentation = "full",
 }: LessonVideoPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
-  const swipeStartRef = useRef<{
-    pointerId: number;
-    x: number;
-    y: number;
-  } | null>(null);
   const latestPositionRef = useRef(0);
   const lastPersistedAtRef = useRef<number | null>(null);
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
+  const handoffMutingRef = useRef(false);
   // Keep the server and first client render deterministic, then restore the
   // device preference after hydration just like the legacy lesson player.
   const [muted, setMuted] = useState(false);
@@ -105,12 +114,13 @@ export function LessonVideoPlayer({
     LEARNING_SEEK_INTERVAL_DEFAULT,
   );
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const [swipeOffset, setSwipeOffset] = useState(0);
   const playerTheme = useLearningPlayerTheme();
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
   const restoreAutoplayRef = useRef(consumeMiniPlayerRestore(mediaKey));
+  const restoreFramePendingRef = useRef(false);
+  const restoreResyncAttemptedRef = useRef(false);
   requestedMediaKeyRef.current = mediaKey;
 
   const source = useMemo<VideoSource>(() => {
@@ -158,6 +168,73 @@ export function LessonVideoPlayer({
     lastPersistedAtRef.current = now;
   }, []);
 
+  const finishMiniPlayerRestore = useCallback(() => {
+    if (restoreAutoplayRef.current === null) return;
+    const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
+    playerRef.current?.setVolume(
+      livePlayback?.volume ??
+        playerRef.current?.getSnapshot().media.volume ??
+        1,
+    );
+    playerRef.current?.setMuted(livePlayback?.muted ?? muted);
+    prepareLearningMiniPlayerPlaybackHandoff(mediaKey);
+    restoreAutoplayRef.current = null;
+    restoreFramePendingRef.current = false;
+    restoreResyncAttemptedRef.current = false;
+    onMiniPlayerRestoreReady?.();
+  }, [mediaKey, muted, onMiniPlayerRestoreReady]);
+
+  const finishMiniPlayerRestoreAfterPresentedFrame = useCallback(() => {
+    if (restoreAutoplayRef.current === null || restoreFramePendingRef.current) {
+      return;
+    }
+    const player = playerRef.current;
+    if (!player) return;
+
+    restoreFramePendingRef.current = true;
+    void player.waitForPresentedFrame().then(() => {
+      restoreFramePendingRef.current = false;
+      if (restoreAutoplayRef.current === null) return;
+      const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
+      const restoredPlayback = player.getSnapshot().media;
+      if (
+        restoreAutoplayRef.current === true &&
+        livePlayback &&
+        Math.abs(livePlayback.currentTime - restoredPlayback.currentTime) >
+          MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS
+      ) {
+        player.seekTo(livePlayback.currentTime);
+        return;
+      }
+      finishMiniPlayerRestore();
+    });
+  }, [finishMiniPlayerRestore, mediaKey]);
+
+  const tryFinishPlayingMiniPlayerRestore = useCallback(() => {
+    if (restoreAutoplayRef.current !== true) return;
+    const playerSnapshot = playerRef.current?.getSnapshot().media;
+    if (
+      !playerSnapshot?.playing ||
+      playerSnapshot.buffering ||
+      playerSnapshot.seeking
+    ) {
+      return;
+    }
+
+    const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
+    if (
+      livePlayback &&
+      !restoreResyncAttemptedRef.current &&
+      Math.abs(livePlayback.currentTime - playerSnapshot.currentTime) >
+        MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS
+    ) {
+      restoreResyncAttemptedRef.current = true;
+      playerRef.current?.seekTo(livePlayback.currentTime);
+      return;
+    }
+    finishMiniPlayerRestoreAfterPresentedFrame();
+  }, [finishMiniPlayerRestoreAfterPresentedFrame, mediaKey]);
+
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
       if (event.type === "loaded") {
@@ -180,6 +257,17 @@ export function LessonVideoPlayer({
         latestPositionRef.current = clampedPosition;
         lastPersistedAtRef.current = null;
         playerRef.current?.setPlaybackRate(readPlaybackRatePreference());
+        if (restoreAutoplayRef.current !== null) {
+          const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
+          if (livePlayback) {
+            latestPositionRef.current = livePlayback.currentTime;
+            playerRef.current?.seekTo(livePlayback.currentTime);
+            playerRef.current?.setPlaybackRate(livePlayback.playbackRate);
+          }
+          if (restoreAutoplayRef.current === false) {
+            window.setTimeout(finishMiniPlayerRestore, 0);
+          }
+        }
         if (clampedPosition > 0 && actualDuration > 0) {
           onProgressChange?.(
             Math.max(
@@ -202,6 +290,7 @@ export function LessonVideoPlayer({
         if (activeMediaKeyRef.current !== requestedMediaKeyRef.current) return;
         latestPositionRef.current = event.detail.currentTime;
         persistResumePosition();
+        tryFinishPlayingMiniPlayerRestore();
         if (event.detail.duration > 0) {
           onProgressChange?.(
             Math.max(
@@ -213,6 +302,10 @@ export function LessonVideoPlayer({
             ),
           );
         }
+      } else if (event.type === "playing") {
+        tryFinishPlayingMiniPlayerRestore();
+      } else if (event.type === "seeked") {
+        tryFinishPlayingMiniPlayerRestore();
       } else if (event.type === "pause") {
         const snapshot = playerRef.current?.getSnapshot();
         if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
@@ -226,6 +319,9 @@ export function LessonVideoPlayer({
           onLessonEnded?.();
         }
       } else if (event.type === "volumechange") {
+        if (restoreAutoplayRef.current !== null || handoffMutingRef.current) {
+          return;
+        }
         setMuted(event.detail.muted);
         if (preferencesReadyRef.current) {
           writeMutedPreference(event.detail.muted);
@@ -236,7 +332,14 @@ export function LessonVideoPlayer({
         captionsEnabledRef.current = event.detail.track !== null;
       }
     },
-    [onLessonEnded, onProgressChange, persistResumePosition],
+    [
+      finishMiniPlayerRestore,
+      mediaKey,
+      onLessonEnded,
+      onProgressChange,
+      persistResumePosition,
+      tryFinishPlayingMiniPlayerRestore,
+    ],
   );
 
   const minimizePlayer = useCallback(() => {
@@ -255,80 +358,30 @@ export function LessonVideoPlayer({
       playbackRate: snapshot?.media.playbackRate ?? 1,
       playing: snapshot?.media.playing ?? false,
       source: { ...source, startTime: currentTime },
+      volume: snapshot?.media.volume ?? 1,
+      getLivePlaybackSnapshot: () => {
+        const liveSnapshot = playerRef.current?.getSnapshot().media;
+        return {
+          currentTime: liveSnapshot?.currentTime ?? latestPositionRef.current,
+          muted: liveSnapshot?.muted ?? muted,
+          playbackRate: liveSnapshot?.playbackRate ?? 1,
+          playing: liveSnapshot?.playing ?? false,
+          volume: liveSnapshot?.volume ?? 1,
+        };
+      },
+      preparePlaybackHandoff: () => {
+        handoffMutingRef.current = true;
+        playerRef.current?.setMuted(true);
+      },
     });
   }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
 
-  const handleSwipePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.defaultPrevented) {
-        swipeStartRef.current = null;
-        setSwipeOffset(0);
-        return;
-      }
-      if (
-        !onMinimize ||
-        event.pointerType === "mouse" ||
-        !window.matchMedia("(max-width: 640px)").matches ||
-        playerRef.current?.getSnapshot().ui.fullscreen
-      ) {
-        return;
-      }
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(
-          "[data-player-control], [role='slider'], [data-video-player-mobile-sheet]",
-        )
-      ) {
-        return;
-      }
-      swipeStartRef.current = {
-        pointerId: event.pointerId,
-        x: event.clientX,
-        y: event.clientY,
-      };
-      const targetUsesPlayerGestureCapture =
-        event.target instanceof Element &&
-        Boolean(event.target.closest("[data-player-zoom-surface]"));
-      if (!targetUsesPlayerGestureCapture) {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
-    },
-    [onMinimize],
-  );
-
-  const handleSwipePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.defaultPrevented) {
-        swipeStartRef.current = null;
-        setSwipeOffset(0);
-        return;
-      }
-      const start = swipeStartRef.current;
-      if (!start || start.pointerId !== event.pointerId) return;
-      const deltaX = event.clientX - start.x;
-      const deltaY = event.clientY - start.y;
-      if (deltaY <= 0 || deltaY < Math.abs(deltaX) * 1.15) return;
-      event.preventDefault();
-      setSwipeOffset(Math.min(132, deltaY));
-    },
-    [],
-  );
-
-  const finishSwipe = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
-      const start = swipeStartRef.current;
-      if (!start || start.pointerId !== event.pointerId) return;
-      swipeStartRef.current = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-      const shouldMinimize = !cancelled && swipeOffset >= 84;
-      setSwipeOffset(0);
-      if (shouldMinimize) minimizePlayer();
-    },
-    [minimizePlayer, swipeOffset],
-  );
+  const minimizeGesture = useLessonPlayerMinimizeGesture({
+    enabled: presentation === "full" && Boolean(onMinimize),
+    fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
+    onCommit: minimizePlayer,
+    onStateChange: onMinimizeGestureChange,
+  });
 
   const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
     setAmbientEnabled(enabled);
@@ -344,6 +397,7 @@ export function LessonVideoPlayer({
 
   useEffect(() => {
     if (!preferencesReady) return;
+    if (restoreAutoplayRef.current !== null) return;
     playerRef.current?.setMuted(muted);
   }, [muted, preferencesReady]);
 
@@ -419,7 +473,9 @@ export function LessonVideoPlayer({
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
-      autoPlay={autoPlayOnMediaChange || restoreAutoplayRef.current}
+      autoPlay={autoPlayOnMediaChange || restoreAutoplayRef.current === true}
+      keyboardEnabled={presentation === "full"}
+      zoomEnabled={presentation === "full"}
       ariaLabel={`Lesson video player for ${lessonTitle}`}
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
@@ -429,50 +485,63 @@ export function LessonVideoPlayer({
       controlsIdleDelay={5_000}
       onEvent={handleEvent}
       lockLandscapeOnFullscreen
-      mediaProps={{ muted }}
-      className="transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none"
-      style={{
-        opacity: swipeOffset > 0 ? Math.max(0.72, 1 - swipeOffset / 520) : 1,
-        touchAction: "pan-x pinch-zoom",
-        transform:
-          swipeOffset > 0
-            ? `translateY(${Math.round(swipeOffset * 0.22)}px) scale(${Math.max(0.93, 1 - swipeOffset / 1800)})`
-            : undefined,
-        transitionDuration: swipeStartRef.current ? "0ms" : undefined,
+      mediaProps={{
+        muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
-      onPointerDown={handleSwipePointerDown}
-      onPointerMove={handleSwipePointerMove}
-      onPointerUp={(event) => finishSwipe(event)}
-      onPointerCancel={(event) => finishSwipe(event, true)}
-      playerClassName="border-0 rounded-[13px] max-sm:overflow-visible"
+      className={
+        presentation === "mini"
+          ? "!rounded-xl"
+          : "transition-[transform,border-radius,box-shadow] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+      }
+      style={presentation === "full" ? minimizeGesture.style : undefined}
+      {...(presentation === "full" ? minimizeGesture.handlers : {})}
+      playerClassName={
+        presentation === "mini"
+          ? "!rounded-xl !shadow-none"
+          : "border-0 rounded-[13px] max-sm:overflow-visible"
+      }
       centralControl={
-        <LessonCentralControls
-          canGoNext={canGoNext}
-          canGoPrevious={canGoPrevious}
-          onGoNext={onGoNext}
-          onGoPrevious={onGoPrevious}
-        />
+        presentation === "mini" ? (
+          false
+        ) : (
+          <LessonCentralControls
+            canGoNext={canGoNext}
+            canGoPrevious={canGoPrevious}
+            onGoNext={onGoNext}
+            onGoPrevious={onGoPrevious}
+          />
+        )
       }
       controls={
-        <LessonPlayerControls
-          ambientEnabled={ambientEnabled}
-          autoplayEnabled={autoplayEnabled}
-          canGoNext={canGoNext}
-          canGoPrevious={canGoPrevious}
-          courseLessonsOpen={courseLessonsOpen}
-          onAmbientEnabledChange={handleAmbientEnabledChange}
-          onAutoplayEnabledChange={onAutoplayEnabledChange}
-          onCourseLessonsToggle={onCourseLessonsToggle}
-          onGoNext={onGoNext}
-          onGoPrevious={onGoPrevious}
-          onMinimize={onMinimize ? minimizePlayer : undefined}
-        />
+        presentation === "mini" ? (
+          <MiniPlayerControls
+            lessonTitle={lessonTitle}
+            onClose={onMiniClose ?? (() => undefined)}
+            onRestore={onMiniRestore ?? (() => undefined)}
+          />
+        ) : (
+          <LessonPlayerControls
+            ambientEnabled={ambientEnabled}
+            autoplayEnabled={autoplayEnabled}
+            canGoNext={canGoNext}
+            canGoPrevious={canGoPrevious}
+            courseLessonsOpen={courseLessonsOpen}
+            onAmbientEnabledChange={handleAmbientEnabledChange}
+            onAutoplayEnabledChange={onAutoplayEnabledChange}
+            onCourseLessonsToggle={onCourseLessonsToggle}
+            onGoNext={onGoNext}
+            onGoPrevious={onGoPrevious}
+            onMinimize={onMinimize ? minimizePlayer : undefined}
+          />
+        )
       }
       overlays={
-        <LessonAmbientProjection
-          enabled={ambientEnabled}
-          theaterMode={theaterMode}
-        />
+        presentation === "full" ? (
+          <LessonAmbientProjection
+            enabled={ambientEnabled}
+            theaterMode={theaterMode}
+          />
+        ) : undefined
       }
     />
   );

@@ -46,12 +46,14 @@ function createTimeRanges(ranges: Array<[number, number]>): TimeRanges {
     length: ranges.length,
     start(index: number): number {
       const range = ranges[index];
-      if (!range) throw new DOMException("Index out of bounds", "IndexSizeError");
+      if (!range)
+        throw new DOMException("Index out of bounds", "IndexSizeError");
       return range[0];
     },
     end(index: number): number {
       const range = ranges[index];
-      if (!range) throw new DOMException("Index out of bounds", "IndexSizeError");
+      if (!range)
+        throw new DOMException("Index out of bounds", "IndexSizeError");
       return range[1];
     },
   };
@@ -111,6 +113,29 @@ describe("NativeVideoEngine", () => {
     expect(media.playbackRate).toBe(1.5);
     expect(() => engine.seek(Number.NaN)).toThrow(VideoEngineError);
     expect(() => engine.setPlaybackRate(0)).toThrow(VideoEngineError);
+  });
+
+  it("deduplicates the browser volumechange echo after programmatic updates", async () => {
+    const media = new FakeMediaElement();
+    const engine = new NativeVideoEngine();
+    const volumeChanges = vi.fn();
+    engine.on("volumechange", volumeChanges);
+    await engine.attach(asMediaElement(media));
+
+    engine.setMuted(true);
+    media.dispatchEvent(new Event("volumechange"));
+    engine.setVolume(0.6);
+    media.dispatchEvent(new Event("volumechange"));
+
+    expect(volumeChanges).toHaveBeenCalledTimes(2);
+    expect(volumeChanges).toHaveBeenNthCalledWith(1, {
+      muted: true,
+      volume: 1,
+    });
+    expect(volumeChanges).toHaveBeenNthCalledWith(2, {
+      muted: true,
+      volume: 0.6,
+    });
   });
 
   it("treats autoplay policy rejection as a paused state, not a media failure", async () => {

@@ -151,6 +151,9 @@ describe("PopoverMenu", () => {
       expect(sheet).toHaveAttribute("data-video-player-mobile-sheet");
       expect(sheet).toHaveClass("border-0");
       expect(
+        sheet.style.getPropertyValue("--video-player-menu-solid-surface"),
+      ).toBe("rgb(11 11 13)");
+      expect(
         document.querySelector("[data-video-player-mobile-sheet-drag-handle]"),
       ).not.toHaveClass("border-b");
       expect(sheet.parentElement).toBe(document.body);

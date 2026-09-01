@@ -30,6 +30,11 @@ import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { LessonVideoPlayer } from "./player";
+import type {
+  LessonPlayerMinimizeGestureState,
+  LessonVideoPlayerProps,
+  RegisterPersistentLearningPlayer,
+} from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
 import {
   readAutoplayPreference,
@@ -81,6 +86,11 @@ const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 const COURSE_CONTENT_DRAWER_QUERY = "(max-width: 1080px)";
 const PHONE_LESSON_DRAWER_QUERY = "(max-width: 640px)";
 const FLOATING_LESSON_DRAWER_WIDTH_KEY = "veolms-floating-curriculum-width";
+const IDLE_PLAYER_MINIMIZE_GESTURE: LessonPlayerMinimizeGestureState = {
+  offsetY: 0,
+  phase: "idle",
+  progress: 0,
+};
 
 const subscribeToCourseContentDrawerViewport = (onStoreChange: () => void) => {
   const media = window.matchMedia(COURSE_CONTENT_DRAWER_QUERY);
@@ -182,6 +192,12 @@ interface LearningWorkspaceProps {
   onOpenCourseOverview: () => void;
   onNavigateBack: () => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
+  onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
+  onMiniPlayerRestoreReady?: () => void;
+  persistentPlayerCourseRouteKey?: string;
+  persistentPlayerLessonPath?: string;
+  persistentPlayerReturnPath?: string;
+  registerPersistentPlayer?: RegisterPersistentLearningPlayer;
 }
 
 interface CurriculumResize {
@@ -243,6 +259,12 @@ export function LearningWorkspace({
   onOpenCourseOverview,
   onNavigateBack,
   onMinimizePlayer,
+  onMinimizeGestureChange,
+  onMiniPlayerRestoreReady,
+  persistentPlayerCourseRouteKey,
+  persistentPlayerLessonPath,
+  persistentPlayerReturnPath,
+  registerPersistentPlayer,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { data: courseOverview } = useCourseOverview(courseSlug, {
@@ -327,6 +349,20 @@ export function LearningWorkspace({
   const { preferences: curriculumTestPreferences } =
     useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
+  const [playerMinimizeGesture, setPlayerMinimizeGesture] = useState(
+    IDLE_PLAYER_MINIMIZE_GESTURE,
+  );
+  const updatePlayerMinimizeGesture = useCallback(
+    (state: LessonPlayerMinimizeGestureState) => {
+      setPlayerMinimizeGesture(state);
+      onMinimizeGestureChange?.(state);
+    },
+    [onMinimizeGestureChange],
+  );
+  useEffect(
+    () => () => onMinimizeGestureChange?.(IDLE_PLAYER_MINIMIZE_GESTURE),
+    [onMinimizeGestureChange],
+  );
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
@@ -582,7 +618,7 @@ export function LearningWorkspace({
     selectedLesson,
   ]);
 
-  const toggleTheaterMode = () => {
+  const toggleTheaterMode = useCallback(() => {
     setLessonDrawer(false);
     setLessonDrawerForcedFloating(false);
     setLessonDrawerViewportBounds(null);
@@ -600,7 +636,7 @@ export function LearningWorkspace({
         });
       });
     }
-  };
+  }, [theaterMode]);
 
   const showLessonDrawer = useCallback(
     (scrollTarget: "current" | "top") => {
@@ -1405,10 +1441,93 @@ export function LearningWorkspace({
   const floatingLessonDrawerSlidingClosed =
     floatingLessonDrawerResizing &&
     floatingLessonDrawerViewportWidth < LESSON_DRAWER_MIN_FLOATING_WIDTH;
+  const playerMinimizeActive = playerMinimizeGesture.phase !== "idle";
+  const playerMinimizeContentProgress = Math.min(
+    1,
+    Math.max(0, (playerMinimizeGesture.progress - 0.2) / 0.3),
+  );
+  const playerMinimizeSettling =
+    playerMinimizeGesture.phase === "settling-back" ||
+    playerMinimizeGesture.phase === "settling-mini";
+  const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
+    () => ({
+      media: getCourseVideoForLesson(currentLesson[0]),
+      lessonTitle: currentLesson[1],
+      theaterMode,
+      onTheaterToggle: toggleTheaterMode,
+      autoPlayOnMediaChange: autoPlayOnLessonChange,
+      autoplayEnabled,
+      canGoNext: nextLessonId !== undefined,
+      canGoPrevious: previousLessonId !== undefined,
+      courseLessonsOpen: lessonDrawer,
+      onAutoplayEnabledChange: updateAutoplayEnabled,
+      onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
+      onGoNext: goToNextLesson,
+      onGoPrevious: goToPreviousLesson,
+      onLessonEnded: handleLessonEnded,
+      onMinimize: onMinimizePlayer,
+      onMinimizeGestureChange: updatePlayerMinimizeGesture,
+      onMiniPlayerRestoreReady,
+      onProgressChange: updateSelectedLessonProgress,
+      resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
+    }),
+    [
+      autoPlayOnLessonChange,
+      autoplayEnabled,
+      coursePersistenceKey,
+      currentLesson,
+      goToNextLesson,
+      goToPreviousLesson,
+      handleLessonEnded,
+      lessonDrawer,
+      nextLessonId,
+      onMiniPlayerRestoreReady,
+      onMinimizePlayer,
+      previousLessonId,
+      selectedLesson,
+      theaterMode,
+      toggleLessonDrawerFromPlayer,
+      toggleTheaterMode,
+      updateAutoplayEnabled,
+      updatePlayerMinimizeGesture,
+      updateSelectedLessonProgress,
+    ],
+  );
+
+  useLayoutEffect(() => {
+    const anchor = playerWrapRef.current;
+    if (
+      !anchor ||
+      !registerPersistentPlayer ||
+      !persistentPlayerCourseRouteKey ||
+      !persistentPlayerLessonPath ||
+      !persistentPlayerReturnPath
+    ) {
+      return undefined;
+    }
+
+    return registerPersistentPlayer({
+      anchor,
+      courseRouteKey: persistentPlayerCourseRouteKey,
+      lessonPath: persistentPlayerLessonPath,
+      mediaKey:
+        lessonPlayerProps.resumePersistenceKey ??
+        lessonPlayerProps.media.fileName,
+      playerProps: lessonPlayerProps,
+      returnPath: persistentPlayerReturnPath,
+    });
+  }, [
+    lessonPlayerProps,
+    persistentPlayerCourseRouteKey,
+    persistentPlayerLessonPath,
+    persistentPlayerReturnPath,
+    registerPersistentPlayer,
+  ]);
 
   return (
     <div
       className={`learning-workspace ${theaterMode ? "is-theater" : ""} ${curriculumResizing ? "is-curriculum-resizing" : ""} ${floatingLessonDrawerResizing ? "is-floating-curriculum-resizing select-none" : ""}`}
+      style={{ background: playerMinimizeActive ? "transparent" : undefined }}
       onPointerDownCapture={startCurriculumScreenSwipe}
       onClickCapture={suppressCurriculumSwipeClick}
     >
@@ -1431,7 +1550,15 @@ export function LearningWorkspace({
         }
       >
         <section className="learning-workspace__lesson-column">
-          <div ref={playerWrapRef} className="learning-workspace__player-wrap">
+          <div
+            ref={playerWrapRef}
+            className="learning-workspace__player-wrap"
+            style={{
+              background: playerMinimizeActive ? "transparent" : undefined,
+              boxShadow: playerMinimizeActive ? "none" : undefined,
+              zIndex: playerMinimizeActive ? 190 : undefined,
+            }}
+          >
             <button
               type="button"
               className="learning-workspace__back max-sm:hidden"
@@ -1466,31 +1593,39 @@ export function LearningWorkspace({
                 />
               </span>
             </button>
-            <LessonVideoPlayer
-              media={getCourseVideoForLesson(currentLesson[0])}
-              lessonTitle={currentLesson[1]}
-              theaterMode={theaterMode}
-              onTheaterToggle={toggleTheaterMode}
-              autoPlayOnMediaChange={autoPlayOnLessonChange}
-              autoplayEnabled={autoplayEnabled}
-              canGoNext={nextLessonId !== undefined}
-              canGoPrevious={previousLessonId !== undefined}
-              courseLessonsOpen={lessonDrawer}
-              onAutoplayEnabledChange={updateAutoplayEnabled}
-              onCourseLessonsToggle={toggleLessonDrawerFromPlayer}
-              onGoNext={goToNextLesson}
-              onGoPrevious={goToPreviousLesson}
-              onLessonEnded={handleLessonEnded}
-              onMinimize={onMinimizePlayer}
-              onProgressChange={updateSelectedLessonProgress}
-              resumePersistenceKey={`${coursePersistenceKey}-lesson-${selectedLesson}`}
-            />
+            {registerPersistentPlayer ? (
+              <div
+                className="pointer-events-none aspect-video w-full bg-transparent"
+                aria-hidden="true"
+                data-learning-player-anchor=""
+              />
+            ) : (
+              <LessonVideoPlayer {...lessonPlayerProps} />
+            )}
           </div>
 
           <article
             className="learning-workspace__lesson-content"
             data-discussion-panel-anchor=""
             aria-labelledby="learning-lesson-title"
+            inert={playerMinimizeActive ? true : undefined}
+            style={{
+              opacity: playerMinimizeActive
+                ? 1 - playerMinimizeContentProgress
+                : undefined,
+              pointerEvents: playerMinimizeActive ? "none" : undefined,
+              transform: playerMinimizeActive
+                ? `translate3d(0, ${Math.round(
+                    playerMinimizeGesture.offsetY,
+                  )}px, 0)`
+                : undefined,
+              transition: playerMinimizeSettling
+                ? "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out"
+                : "none",
+              willChange: playerMinimizeActive
+                ? "transform, opacity"
+                : undefined,
+            }}
           >
             <header>
               <button
@@ -1716,6 +1851,11 @@ export function LearningWorkspace({
               }
               persistenceKey={coursePersistenceKey}
               onClose={closeLessonDrawer}
+              onLessonSearchOpen={
+                phoneLessonDrawer
+                  ? () => setLessonDrawerSnapPoint(1)
+                  : undefined
+              }
               drawerHeroControlProps={
                 phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
               }

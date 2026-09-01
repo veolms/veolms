@@ -116,11 +116,7 @@
 }
 
 [data-video-player-mobile-sheet] {
-  background: color-mix(
-    in srgb,
-    var(--video-player-menu-surface, rgb(11 11 13 / 0.94)) 92%,
-    var(--video-player-accent, #ff7a1a) 8%
-  ) !important;
+  background: var(--video-player-menu-solid-surface, rgb(11 11 13)) !important;
 }
 
 @media (min-width: 40.0625rem) {

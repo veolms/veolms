@@ -27,6 +27,7 @@ describe("player themes", () => {
       const theme = BUILT_IN_PLAYER_THEMES[id];
       expect(theme.id).toBe(id);
       expect(theme.tokens.controlRadius).toBeTruthy();
+      expect(theme.tokens.menuSolidSurface).not.toContain("/");
       expect(theme.icons.play).toBeTypeOf("function");
       expect(theme.icons.settings).toBeTypeOf("function");
       expect(theme.icons.speedDecrease).toBeTypeOf("function");
@@ -85,6 +86,9 @@ describe("player themes", () => {
     expect(theme.icons.play).toBe(CustomPlayIcon);
     expect(theme.icons.pause).toBe(BUILT_IN_PLAYER_THEMES.minimal.icons.pause);
     expect(getPlayerThemeStyle(theme)["--video-player-accent"]).toBe("#22c55e");
+    expect(
+      getPlayerThemeStyle(theme)["--video-player-menu-solid-surface"],
+    ).toBe(BUILT_IN_PLAYER_THEMES.minimal.tokens.menuSolidSurface);
   });
 
   it("applies the selected theme to the root and all default controls", () => {

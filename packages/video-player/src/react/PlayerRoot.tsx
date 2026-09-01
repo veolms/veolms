@@ -30,11 +30,13 @@ import {
 import { PlayerController } from "./PlayerController";
 import type { VideoPlayerEventListener } from "./playerEvents";
 import type { PlayerSnapshot } from "./playerState";
+import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
 
 export type VideoEngineFactory = () => VideoEngine;
 
 export interface VideoPlayerHandle {
   play(): Promise<void>;
+  waitForPresentedFrame(): Promise<void>;
   pause(): void;
   togglePlayback(): Promise<void>;
   reload(): Promise<void>;
@@ -80,6 +82,8 @@ export interface PlayerRootProps extends Omit<
   presentationContainerRef?: RefObject<HTMLElement | null>;
   /** Visual theme for package controls. Custom definitions can replace tokens and icons. */
   theme?: PlayerTheme;
+  /** Enables pinch-to-zoom and one-finger panning of the video content. */
+  zoomEnabled?: boolean;
 }
 
 function assignRef<Value>(
@@ -100,12 +104,22 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       engineFactory,
       loadOptions,
       markers = [],
+      onClickCapture,
       onEvent,
+      onPointerCancelCapture,
+      onPointerDownCapture,
+      onPointerMoveCapture,
+      onPointerUpCapture,
+      onTouchCancelCapture,
+      onTouchEndCapture,
+      onTouchMoveCapture,
+      onTouchStartCapture,
       presentationContainerRef,
       source,
       storyboard = [],
       theaterMode = false,
       theme = "youtube",
+      zoomEnabled = true,
       className,
       style,
       ...containerProps
@@ -117,7 +131,10 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       controllerRef.current = new PlayerController(engineFactory());
     }
     const controller = controllerRef.current;
+    const zoomGestures = usePlayerZoomGestures(controller);
     const lifecycleVersionRef = useRef(0);
+    const autoPlayRef = useRef(autoPlay);
+    autoPlayRef.current = autoPlay;
     const stableSourceRef = useRef(source);
     if (!areVideoSourcesLoadEquivalent(stableSourceRef.current, source)) {
       stableSourceRef.current = source;
@@ -173,6 +190,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       ref,
       () => ({
         play: () => controller.play(),
+        waitForPresentedFrame: () => controller.waitForPresentedFrame(),
         pause: () => controller.pause(),
         togglePlayback: () => controller.togglePlayback(),
         reload: () => controller.reload(),
@@ -223,10 +241,10 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
         .load({
           source: stableSource,
           options: stableLoadOptions,
-          autoPlay,
+          autoPlay: autoPlayRef.current,
         })
         .catch(() => undefined);
-    }, [autoPlay, controller, stableLoadOptions, stableSource]);
+    }, [controller, stableLoadOptions, stableSource]);
 
     const resolvedTheme = resolvePlayerTheme(theme);
     const themeStyle = {
@@ -244,6 +262,104 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
             style={themeStyle}
             data-video-player-root=""
             data-player-theme={resolvedTheme.id}
+            data-player-zoom-enabled={zoomEnabled}
+            onClickCapture={(event) => {
+              const zoomResetRequested =
+                event.target instanceof Element &&
+                event.target.closest("[data-player-zoom-reset]") !== null;
+              if (
+                zoomEnabled &&
+                !zoomResetRequested &&
+                zoomGestures.suppressLegacyTouch()
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
+              onClickCapture?.(event);
+            }}
+            onPointerCancelCapture={(event) => {
+              onPointerCancelCapture?.(event);
+              if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                event.stopPropagation();
+              }
+            }}
+            onPointerDownCapture={(event) => {
+              onPointerDownCapture?.(event);
+              if (
+                zoomEnabled &&
+                !event.defaultPrevented &&
+                zoomGestures.onPointerDown(event)
+              ) {
+                event.stopPropagation();
+              }
+            }}
+            onPointerMoveCapture={(event) => {
+              onPointerMoveCapture?.(event);
+              if (
+                zoomEnabled &&
+                !event.defaultPrevented &&
+                zoomGestures.onPointerMove(event)
+              ) {
+                event.stopPropagation();
+              }
+            }}
+            onPointerUpCapture={(event) => {
+              onPointerUpCapture?.(event);
+              if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                event.stopPropagation();
+              }
+            }}
+            onTouchCancelCapture={(event) => {
+              onTouchCancelCapture?.(event);
+              const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+              if (
+                zoomEnabled &&
+                (handled || zoomGestures.suppressLegacyTouch())
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
+            onTouchEndCapture={(event) => {
+              onTouchEndCapture?.(event);
+              const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+              if (
+                zoomEnabled &&
+                (handled || zoomGestures.suppressLegacyTouch())
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
+            onTouchMoveCapture={(event) => {
+              onTouchMoveCapture?.(event);
+              const handled =
+                zoomEnabled &&
+                !event.defaultPrevented &&
+                zoomGestures.onTouchMove(event);
+              if (
+                zoomEnabled &&
+                (handled || zoomGestures.suppressLegacyTouch())
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
+            onTouchStartCapture={(event) => {
+              onTouchStartCapture?.(event);
+              const handled =
+                zoomEnabled &&
+                !event.defaultPrevented &&
+                zoomGestures.onTouchStart(event);
+              if (
+                zoomEnabled &&
+                (handled || zoomGestures.suppressLegacyTouch())
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
           >
             {children}
           </div>

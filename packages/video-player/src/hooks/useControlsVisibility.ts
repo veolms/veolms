@@ -84,10 +84,16 @@ export function useControlsVisibility({
 
     const controlsMustRemainVisible = () =>
       scrubbing || settingsOpen || controlsLocked || hasKeyboardFocus();
+    const controlsTemporarilySuppressed = () =>
+      temporarySpeedBoost ||
+      controller.getSnapshot().ui.hud?.variant === "mobile-seek";
+    const delaysControlsReveal = (target: EventTarget | null) =>
+      target instanceof Element &&
+      target.closest('[data-player-controls-reveal="delayed"]') !== null;
 
     const scheduleHide = () => {
       clearTimer();
-      if (temporarySpeedBoost) {
+      if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
       }
@@ -124,7 +130,7 @@ export function useControlsVisibility({
       const desktopMousePointer = isDesktopMousePointer(event);
       pointerModeRef.current = desktopMousePointer ? "mouse" : "touch";
       pointerInsideRef.current = desktopMousePointer;
-      if (temporarySpeedBoost) {
+      if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
       }
@@ -138,7 +144,17 @@ export function useControlsVisibility({
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      revealFromPointer(event);
+      if (delaysControlsReveal(event.target)) {
+        inputModeRef.current = "pointer";
+        pointerModeRef.current = isDesktopMousePointer(event)
+          ? "mouse"
+          : "touch";
+        pointerInsideRef.current = false;
+        clearTimer();
+        controller.setControlsVisible(false);
+      } else {
+        revealFromPointer(event);
+      }
       pointerFocusPendingRef.current = true;
       queueMicrotask(() => {
         pointerFocusPendingRef.current = false;
@@ -163,7 +179,7 @@ export function useControlsVisibility({
       inputModeRef.current = "keyboard";
       if (!(event.target instanceof Node) || !root.contains(event.target))
         return;
-      if (temporarySpeedBoost) {
+      if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
       }
@@ -171,9 +187,14 @@ export function useControlsVisibility({
       scheduleHide();
     };
 
-    const handleFocusIn = () => {
+    const handleFocusIn = (event: FocusEvent) => {
       if (!pointerFocusPendingRef.current) inputModeRef.current = "keyboard";
-      if (temporarySpeedBoost) {
+      if (delaysControlsReveal(event.target)) {
+        clearTimer();
+        controller.setControlsVisible(false);
+        return;
+      }
+      if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
       }

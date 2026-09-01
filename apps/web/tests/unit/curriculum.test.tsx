@@ -13,6 +13,7 @@ import {
   createCurriculumSections,
   createLessonsById,
 } from "../../src/learning/courseContent.ts";
+import { useLessonDrawerHeroControl } from "../../src/learning/useLessonDrawerHeroControl.ts";
 
 const testSections = createCurriculumSections(3, 16);
 const testLessonsById = createLessonsById(testSections);
@@ -24,6 +25,25 @@ function TestCurriculum(props: ComponentProps<typeof Curriculum>) {
       lessonsById={testLessonsById}
       {...props}
     />
+  );
+}
+
+function TestDrawerCurriculum(props: ComponentProps<typeof Curriculum>) {
+  const drawerHeroControlProps = useLessonDrawerHeroControl({
+    open: true,
+    expanded: false,
+    onExpand: () => undefined,
+    onCollapse: () => undefined,
+    onClose: () => undefined,
+  });
+
+  return (
+    <div data-slot="drawer-popup">
+      <TestCurriculum
+        {...props}
+        drawerHeroControlProps={drawerHeroControlProps}
+      />
+    </div>
   );
 }
 
@@ -397,13 +417,124 @@ describe("Curriculum", () => {
     }
   }, 30_000);
 
+  it("does not open curriculum actions when a touch long press becomes a drag", async () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <TestDrawerCurriculum
+          persistenceKey="curriculum-long-press-drag"
+          selectedLesson={1}
+          onSelectLesson={vi.fn()}
+          onOpenCourseOverview={vi.fn()}
+          courseTitle="UX Design Fundamentals"
+          courseThumbnail="/course-thumbnail.png"
+        />,
+      );
+
+      const curriculum = screen.getByRole("complementary", {
+        name: "Course curriculum",
+      });
+      const curriculumHero = curriculum.querySelector<HTMLElement>(
+        ".learning-curriculum__hero",
+      );
+      expect(curriculumHero).not.toBeNull();
+
+      fireEvent.touchStart(curriculumHero!, {
+        touches: [{ clientX: 56, clientY: 84 }],
+      });
+      fireEvent.touchMove(curriculumHero!, {
+        touches: [{ clientX: 56, clientY: 108 }],
+      });
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(
+        screen.queryByRole("menu", { name: "Course curriculum actions" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30_000);
+
+  it("moves the drawer with the course card throughout a touch drag", () => {
+    render(
+      <TestDrawerCurriculum
+        persistenceKey="curriculum-live-card-drag"
+        selectedLesson={1}
+        onSelectLesson={vi.fn()}
+        onOpenCourseOverview={vi.fn()}
+        courseTitle="UX Design Fundamentals"
+        courseThumbnail="/course-thumbnail.png"
+      />,
+    );
+
+    const popup = document.querySelector<HTMLElement>(
+      '[data-slot="drawer-popup"]',
+    )!;
+    const curriculumHero = popup.querySelector<HTMLElement>(
+      ".learning-curriculum__hero",
+    )!;
+    vi.spyOn(popup, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 240, 375, 427),
+    );
+
+    fireEvent.touchStart(curriculumHero, {
+      touches: [{ clientX: 56, clientY: 300 }],
+    });
+    fireEvent.touchMove(curriculumHero, {
+      touches: [{ clientX: 56, clientY: 232 }],
+    });
+
+    expect(popup).toHaveAttribute("data-swiping");
+    expect(popup.style.getPropertyValue("--drawer-swipe-movement-y")).toBe(
+      "-68px",
+    );
+
+    fireEvent.touchCancel(curriculumHero);
+    expect(popup).not.toHaveAttribute("data-swiping");
+    expect(popup.style.getPropertyValue("--drawer-swipe-movement-y")).toBe("");
+  });
+
+  it("keeps a course-card tap navigable when drawer gestures are enabled", () => {
+    const onOpenCourseOverview = vi.fn();
+    render(
+      <TestDrawerCurriculum
+        persistenceKey="curriculum-card-tap"
+        selectedLesson={1}
+        onSelectLesson={vi.fn()}
+        onOpenCourseOverview={onOpenCourseOverview}
+        courseTitle="UX Design Fundamentals"
+        courseThumbnail="/course-thumbnail.png"
+      />,
+    );
+
+    const overview = screen.getByRole("button", {
+      name: "View course overview for UX Design Fundamentals",
+    });
+    const curriculumHero = overview.closest<HTMLElement>(
+      ".learning-curriculum__hero",
+    )!;
+    fireEvent.touchStart(curriculumHero, {
+      touches: [{ clientX: 56, clientY: 84 }],
+    });
+    fireEvent.touchEnd(curriculumHero, {
+      changedTouches: [{ clientX: 56, clientY: 84 }],
+      touches: [],
+    });
+    fireEvent.click(overview);
+
+    expect(onOpenCourseOverview).toHaveBeenCalledOnce();
+  });
+
   it("returns the curriculum to the course card when opening lesson search", () => {
+    const onLessonSearchOpen = vi.fn();
+
     render(
       <TestCurriculum
         persistenceKey="curriculum-search-scroll-top"
         selectedLesson={1}
         onSelectLesson={vi.fn()}
         onOpenCourseOverview={vi.fn()}
+        onLessonSearchOpen={onLessonSearchOpen}
         courseTitle="UX Design Fundamentals"
         courseThumbnail="/course-thumbnail.png"
       />,
@@ -416,10 +547,11 @@ describe("Curriculum", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Search lessons" }));
 
+    expect(onLessonSearchOpen).toHaveBeenCalledOnce();
     expect(curriculum.scrollTop).toBe(0);
-    expect(
-      screen.getByRole("searchbox", { name: "Search lessons" }),
-    ).toBeVisible();
+    const searchbox = screen.getByRole("searchbox", { name: "Search lessons" });
+    expect(searchbox).toBeVisible();
+    expect(searchbox).toHaveFocus();
   });
 
   it("returns the curriculum to the course card for a new top request", () => {

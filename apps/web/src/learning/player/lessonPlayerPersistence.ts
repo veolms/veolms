@@ -179,21 +179,21 @@ export function writeMiniPlayerRestore(
 export function consumeMiniPlayerRestore(
   mediaKey: string,
   storage: StorageMutator | null = getSessionStorage(),
-): boolean {
-  if (!storage) return false;
+): boolean | null {
+  if (!storage) return null;
   try {
     const value = storage.getItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
-    if (!value) return false;
+    if (!value) return null;
     const restore = JSON.parse(value) as {
       autoplay?: unknown;
       mediaKey?: unknown;
     };
-    if (restore.mediaKey !== mediaKey) return false;
+    if (restore.mediaKey !== mediaKey) return null;
     storage.removeItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
     return restore.autoplay === true;
   } catch {
     storage.removeItem(PLAYER_MINI_RESTORE_STORAGE_KEY);
-    return false;
+    return null;
   }
 }
 

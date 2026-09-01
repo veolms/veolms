@@ -1,7 +1,4 @@
-import {
-  VideoEngineError,
-  normalizeUnknownError,
-} from "../../core/errors";
+import { VideoEngineError, normalizeUnknownError } from "../../core/errors";
 import type { VideoEngineEventMap } from "../../core/events";
 import {
   cloneVideoEngineSnapshot,
@@ -48,7 +45,8 @@ function mediaErrorToVideoEngineError(
   mediaError: MediaError | null,
 ): VideoEngineError {
   const code = mediaError?.code ?? 0;
-  const message = mediaError?.message || "The browser could not play this media.";
+  const message =
+    mediaError?.message || "The browser could not play this media.";
 
   if (code === 1) {
     return new VideoEngineError({
@@ -134,7 +132,8 @@ export abstract class MediaElementEngineBase implements VideoEngine {
         throw new VideoEngineError({
           category: "ABORTED",
           code: "ATTACH_SUPERSEDED",
-          message: "Media attachment was superseded by a newer lifecycle operation.",
+          message:
+            "Media attachment was superseded by a newer lifecycle operation.",
           fatal: false,
           recoverable: true,
         });
@@ -172,10 +171,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     }
   }
 
-  abstract load(
-    source: VideoSource,
-    options?: VideoLoadOptions,
-  ): Promise<void>;
+  abstract load(source: VideoSource, options?: VideoLoadOptions): Promise<void>;
 
   abstract unload(): Promise<void>;
 
@@ -249,7 +245,10 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     }
 
     const duration = finiteOrZero(media.duration);
-    media.currentTime = Math.max(0, duration > 0 ? Math.min(time, duration) : time);
+    media.currentTime = Math.max(
+      0,
+      duration > 0 ? Math.min(time, duration) : time,
+    );
     this.updateSnapshot({ currentTime: finiteOrZero(media.currentTime) });
     this.#events.emit("timeupdate", {
       currentTime: this.#snapshot.currentTime,
@@ -298,7 +297,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     return {
       browserSupported: typeof HTMLMediaElement !== "undefined",
       adaptiveStreaming: Boolean(nativeHls),
-      drm: typeof navigator !== "undefined" && "requestMediaKeySystemAccess" in navigator,
+      drm:
+        typeof navigator !== "undefined" &&
+        "requestMediaKeySystemAccess" in navigator,
       nativeHls: Boolean(nativeHls),
       pictureInPicture:
         typeof document !== "undefined" &&
@@ -546,7 +547,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
 
   protected async onDetaching(_media: HTMLMediaElement): Promise<void> {}
 
-  protected async onDestroying(_media: HTMLMediaElement | null): Promise<void> {}
+  protected async onDestroying(
+    _media: HTMLMediaElement | null,
+  ): Promise<void> {}
 
   private emitSnapshot(): void {
     this.#events.emit("snapshotchange", this.getSnapshot());
@@ -632,7 +635,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.syncMediaState();
       this.refreshNativeTextTracks();
     });
-    listen("error", () => this.emitError(mediaErrorToVideoEngineError(media.error)));
+    listen("error", () =>
+      this.emitError(mediaErrorToVideoEngineError(media.error)),
+    );
   }
 
   private unbindMediaEvents(media: HTMLMediaElement): void {
@@ -691,10 +696,15 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     if (!media) {
       return;
     }
-    this.updateSnapshot({ volume: media.volume, muted: media.muted });
+    const volume = media.volume;
+    const muted = media.muted;
+    if (this.#snapshot.volume === volume && this.#snapshot.muted === muted) {
+      return;
+    }
+    this.updateSnapshot({ volume, muted });
     this.#events.emit("volumechange", {
-      volume: media.volume,
-      muted: media.muted,
+      volume,
+      muted,
     });
   }
 

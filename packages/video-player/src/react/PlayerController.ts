@@ -275,6 +275,30 @@ export class PlayerController {
     await this.engine.play();
   }
 
+  waitForPresentedFrame(): Promise<void> {
+    const media = this.#media;
+    if (!media) return Promise.resolve();
+
+    if (typeof media.requestVideoFrameCallback === "function") {
+      return new Promise((resolve) => {
+        media.requestVideoFrameCallback(() => resolve());
+      });
+    }
+
+    if (
+      typeof window === "undefined" ||
+      typeof window.requestAnimationFrame !== "function"
+    ) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+  }
+
   pause(): void {
     this.#playRequestGeneration += 1;
     if (!this.isMediaReady()) return;

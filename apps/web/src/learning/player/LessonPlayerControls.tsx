@@ -1,5 +1,6 @@
 import {
   FullscreenButton,
+  MuteButton,
   PlayerIconButton,
   PlayerMenuItem,
   PlayButton,
@@ -77,13 +78,12 @@ function CourseLessonsButton({
         onClick={onToggle}
       >
         <span>Lessons</span>
-        <CaretDown
+        <span
+          className={`learning-curriculum__section-arrow${open ? " is-open" : ""}`}
           aria-hidden="true"
-          size={15}
-          className={`transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
-            open ? "-rotate-180" : "rotate-0"
-          }`}
-        />
+        >
+          <CaretDown size={15} />
+        </span>
       </button>
     </PlayerControlSurface>
   );
@@ -311,7 +311,7 @@ export function LessonPlayerControls({
   return (
     <div
       className={`pointer-events-none absolute inset-0 z-30 text-white transition-opacity duration-200 motion-reduce:transition-none ${
-        visible ? "opacity-100" : "opacity-0"
+        visible ? "opacity-100" : "opacity-0 [&_*]:!pointer-events-none"
       }`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
@@ -343,12 +343,15 @@ export function LessonPlayerControls({
         cluster="player-actions"
         className="pointer-events-auto absolute right-2 top-2 flex h-8 items-center gap-1 rounded-full p-0 max-sm:!bg-transparent max-sm:!shadow-none sm:bottom-2.5 sm:top-auto sm:h-10.5 sm:p-[3px]"
       >
+        <ZoomLevelIndicator />
         <AutoplayToggle
           enabled={autoplayEnabled}
           onEnabledChange={onAutoplayEnabledChange}
         />
-        <ZoomLevelIndicator />
         <CaptionsButton />
+        <span className="inline-flex sm:hidden" data-mobile-volume-control="">
+          <MuteButton className={PLAYER_ICON_PILL_CLASS} iconSize={22} />
+        </span>
         <SettingsMenu
           includePictureInPicture
           mobilePresentation="sheet"
@@ -370,7 +373,7 @@ export function LessonPlayerControls({
         className="pointer-events-auto absolute inset-x-0 bottom-0 z-50 sm:inset-x-3 sm:bottom-13"
       >
         <Timeline
-          className={`max-sm:[&_[role=slider]]:h-5 max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry}`}
+          className={`max-sm:[&_[role=slider]]:h-5 max-sm:[&_[role=slider]]:translate-y-[25%] max-sm:[&_[data-timeline-visual]]:-translate-y-[25%] max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry}`}
         />
       </div>
 
@@ -467,7 +470,7 @@ export function LessonCentralControls({
   return (
     <div
       className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${
-        visible ? "opacity-100" : "opacity-0"
+        visible ? "opacity-100" : "opacity-0 [&_*]:!pointer-events-none"
       }`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}

@@ -41,6 +41,7 @@ export function useLearningPlayerTheme(): PlayerThemeDefinition {
         accent: "var(--accent)",
         accentContrast: "var(--on-accent, #fff)",
         menuSurface: "color-mix(in srgb, var(--surface) 46%, transparent)",
+        menuSolidSurface: "var(--surface)",
         menuText: "var(--text)",
         menuTextMuted: "var(--text-secondary)",
         menuBorder: "transparent",

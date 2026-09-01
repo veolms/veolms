@@ -45,6 +45,7 @@ interface CurriculumProps {
   courseTitle: string;
   courseThumbnail: string;
   onClose?: () => void;
+  onLessonSearchOpen?: () => void;
   focusRequest?: number;
   topRequest?: number;
   persistenceKey: string;
@@ -64,6 +65,7 @@ export function Curriculum({
   courseTitle,
   courseThumbnail,
   onClose,
+  onLessonSearchOpen,
   focusRequest = 0,
   topRequest = 0,
   persistenceKey,
@@ -197,19 +199,20 @@ export function Curriculum({
   };
 
   const openLessonSearch = useCallback(() => {
+    onLessonSearchOpen?.();
     scrollControlRef.current?.scrollToStart();
     setSearchOpen(true);
-  }, [setSearchOpen]);
+  }, [onLessonSearchOpen, setSearchOpen]);
 
   const handleLessonSearchOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
-        openLessonSearch();
+        if (!searchOpen) openLessonSearch();
         return;
       }
       setSearchOpen(false);
     },
-    [openLessonSearch, setSearchOpen],
+    [openLessonSearch, searchOpen, setSearchOpen],
   );
 
   useEffect(() => {

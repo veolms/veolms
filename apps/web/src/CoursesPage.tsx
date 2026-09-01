@@ -225,6 +225,13 @@ interface CoursesPageProps {
   settingsTab?: string;
   discussionTab?: string;
   courseSlug?: string;
+  learningBackground?: {
+    courseSlug?: string;
+    discussionTab?: string;
+    page: string;
+    section?: string;
+    settingsTab?: string;
+  } | null;
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
 }
 
@@ -523,6 +530,7 @@ export function CoursesPage({
   settingsTab = "profile",
   discussionTab = "q-and-a",
   courseSlug,
+  learningBackground = null,
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
@@ -730,7 +738,7 @@ export function CoursesPage({
   const openLogoutConfirm = useCallback(() => {
     setProfileMenu(false);
     setLogoutConfirmOpen(true);
-  }, []);
+  }, [setLogoutConfirmOpen]);
 
   const handleLogout = useCallback(() => {
     void logoutMutation
@@ -2074,7 +2082,7 @@ export function CoursesPage({
     } catch {
       setNotice("Fullscreen is not available in this browser.");
     }
-  }, []);
+  }, [setNotice]);
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -3056,6 +3064,180 @@ export function CoursesPage({
     (item) => item.id === academyTheme,
   );
 
+  const renderPageContent = ({
+    surfaceCourseSlug = courseSlug,
+    surfaceDiscussionTab = discussionTab,
+    surfacePage = page,
+    surfaceSection = requestedSection,
+    surfaceSettingsTab = settingsTab,
+  }: {
+    surfaceCourseSlug?: string;
+    surfaceDiscussionTab?: string;
+    surfacePage?: string;
+    surfaceSection?: string | null;
+    surfaceSettingsTab?: string;
+  } = {}): ReactNode => {
+    const surfaceActiveSection = surfaceSection || activeSection;
+    if (role === "creator" && surfacePage === "home") {
+      return (
+        <CreatorDashboard
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+          academyTheme={appliedAcademyTheme}
+        />
+      );
+    }
+    if (role === "student" && surfacePage === "home") {
+      return (
+        <StudentHome
+          onOpenCourse={onOpenCourse}
+          onNavigatePage={onNavigatePage}
+          studentName={shellProfileDisplayName}
+        />
+      );
+    }
+    if (surfacePage === "settings") {
+      return (
+        <SettingsPage
+          tab={surfaceSettingsTab}
+          role={role}
+          onNavigatePage={onNavigatePage}
+          onExitSettings={onExitSettings}
+          onProfileSaved={(profile) => {
+            setSavedShellProfiles((current) => ({
+              ...current,
+              [role]: profile,
+            }));
+          }}
+          theme={theme}
+          onThemeChange={(next, origin) => {
+            if (next !== theme) themeRevealOriginRef.current = origin ?? null;
+            setTheme(next);
+          }}
+          academyTheme={appliedAcademyTheme}
+          onAcademyThemeChange={changePalette}
+          pageTabColors={pageTabColors}
+          onPageTabColorsChange={setPageTabColors}
+          sidebarPreferences={sidebarPreferences}
+          onSidebarPreferencesChange={setSidebarPreferences}
+          sidebarMode={sidebarMode}
+          onSidebarModeChange={setSidebarMode}
+          navigationItems={navigationItems}
+          navigationVisibleItems={
+            navigationPreferencesReady && !isPublicNavigation
+              ? navigationVisibility[role]
+              : isPublicNavigation
+                ? getDefaultNavigationVisibility(navigationItems)
+                : getInitialNavigationVisibility(role, navigationItems)
+          }
+          onNavigationVisibilityChange={(visibleItems) =>
+            setNavigationVisibility((current) => ({
+              ...current,
+              [role]: visibleItems,
+            }))
+          }
+        />
+      );
+    }
+    if (surfacePage === "workspace") {
+      return (
+        <WorkspacePage
+          section={surfaceActiveSection}
+          role={role}
+          discussionTab={surfaceDiscussionTab}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+          onSignOut={() => {
+            localStorage.removeItem("veolms-role");
+            setRole("student");
+          }}
+        />
+      );
+    }
+    if (surfacePage === "course-create") {
+      return (
+        <Suspense fallback={null}>
+          <CourseCreatePage
+            onNavigatePage={onNavigatePage}
+            bottomNavHidden={mobileBottomNavHidden}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "course-overview") {
+      return (
+        <Suspense fallback={null}>
+          <CourseOverviewPage
+            courseSlug={surfaceCourseSlug}
+            onNavigateCourses={() => onNavigatePage("/courses")}
+            onNavigatePage={onNavigatePage}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "reviews" || surfaceActiveSection === "Reviews") {
+      return (
+        <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
+      return (
+        <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (
+      surfacePage === "order-history" ||
+      surfaceActiveSection === "Order History"
+    ) {
+      return (
+        <OrderHistoryPage
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (
+      surfacePage === "notifications" ||
+      surfaceActiveSection === "Notifications" ||
+      surfaceActiveSection === "Notification"
+    ) {
+      return (
+        <NotificationsPage
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "placeholder") {
+      return <PlaceholderPage section={surfaceActiveSection} role={role} />;
+    }
+    return (
+      <CourseCatalogue
+        activeSection={surfaceActiveSection}
+        role={role}
+        wishlisted={wishlisted}
+        enrollmentFilter={enrollmentFilter}
+        onEnrollmentFilterChange={setEnrollmentFilter}
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        visibleCourses={visibleCourses}
+        onWishlist={toggleWishlist}
+        onOpenCourse={onOpenCourse}
+        courseMenu={courseMenu}
+        setCourseMenu={setCourseMenu}
+        setNotice={setNotice}
+        onNavigatePage={onNavigatePage}
+        onResetCatalogue={resetCatalogue}
+        onDeleteCourse={handleDeleteCourse}
+        onRestoreCourse={handleRestoreCourse}
+      />
+    );
+  };
+
   if (!storedPreferencesReady) return <AppLoadingScreen />;
 
   return (
@@ -3678,152 +3860,39 @@ export function CoursesPage({
           .filter(Boolean)
           .join(" ")}
       >
-        <>
-          {renderMain ? (
-            renderMain({
-              mobileBottomNavigation:
-                compactNavigation && !mobileSidebarNavigationActive,
-              mobileBottomNavigationHidden: mobileBottomNavHidden,
-            })
-          ) : role === "creator" && page === "home" ? (
-            <CreatorDashboard
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-              academyTheme={appliedAcademyTheme}
-            />
-          ) : role === "student" && page === "home" ? (
-            <StudentHome
-              onOpenCourse={onOpenCourse}
-              onNavigatePage={onNavigatePage}
-              studentName={shellProfileDisplayName}
-            />
-          ) : page === "settings" ? (
-            <SettingsPage
-              tab={settingsTab}
-              role={role}
-              onNavigatePage={onNavigatePage}
-              onExitSettings={onExitSettings}
-              onProfileSaved={(profile) => {
-                setSavedShellProfiles((current) => ({
-                  ...current,
-                  [role]: profile,
-                }));
-              }}
-              theme={theme}
-              onThemeChange={(next, origin) => {
-                if (next !== theme) {
-                  themeRevealOriginRef.current = origin ?? null;
-                }
-                setTheme(next);
-              }}
-              academyTheme={appliedAcademyTheme}
-              onAcademyThemeChange={changePalette}
-              pageTabColors={pageTabColors}
-              onPageTabColorsChange={setPageTabColors}
-              sidebarPreferences={sidebarPreferences}
-              onSidebarPreferencesChange={setSidebarPreferences}
-              sidebarMode={sidebarMode}
-              onSidebarModeChange={setSidebarMode}
-              navigationItems={navigationItems}
-              navigationVisibleItems={
-                navigationPreferencesReady && !isPublicNavigation
-                  ? navigationVisibility[role]
-                  : isPublicNavigation
-                    ? getDefaultNavigationVisibility(navigationItems)
-                    : getInitialNavigationVisibility(role, navigationItems)
-              }
-              onNavigationVisibilityChange={(visibleItems) =>
-                setNavigationVisibility((current) => ({
-                  ...current,
-                  [role]: visibleItems,
-                }))
-              }
-            />
-          ) : page === "workspace" ? (
-            <WorkspacePage
-              section={requestedSection || activeSection}
-              role={role}
-              discussionTab={discussionTab}
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-              onSignOut={() => {
-                localStorage.removeItem("veolms-role");
-                setRole("student");
-              }}
-            />
-          ) : page === "course-create" ? (
-            <Suspense fallback={null}>
-              <CourseCreatePage
-                onNavigatePage={onNavigatePage}
-                bottomNavHidden={mobileBottomNavHidden}
-              />
-            </Suspense>
-          ) : page === "course-overview" ? (
-            <Suspense fallback={null}>
-              <CourseOverviewPage
-                courseSlug={courseSlug}
-                onNavigateCourses={() => onNavigatePage("/courses")}
-                onNavigatePage={onNavigatePage}
-              />
-            </Suspense>
-          ) : page === "reviews" ||
-            requestedSection === "Reviews" ||
-            activeSection === "Reviews" ? (
-            <ReviewsPage
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-            />
-          ) : page === "orders" ||
-            requestedSection === "Orders" ||
-            activeSection === "Orders" ? (
-            <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
-          ) : page === "order-history" ||
-            requestedSection === "Order History" ||
-            activeSection === "Order History" ? (
-            <OrderHistoryPage
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-            />
-          ) : page === "notifications" ||
-            requestedSection === "Notifications" ||
-            activeSection === "Notifications" ||
-            requestedSection === "Notification" ||
-            activeSection === "Notification" ? (
-            <NotificationsPage
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-            />
-          ) : page === "placeholder" ? (
-            <PlaceholderPage
-              section={requestedSection || activeSection}
-              role={role}
-            />
-          ) : (
-            <CourseCatalogue
-              activeSection={activeSection}
-              role={role}
-              wishlisted={wishlisted}
-              enrollmentFilter={enrollmentFilter}
-              onEnrollmentFilterChange={setEnrollmentFilter}
-              search={search}
-              onSearchChange={setSearch}
-              sort={sort}
-              onSortChange={setSort}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              visibleCourses={visibleCourses}
-              onWishlist={toggleWishlist}
-              onOpenCourse={onOpenCourse}
-              courseMenu={courseMenu}
-              setCourseMenu={setCourseMenu}
-              setNotice={setNotice}
-              onNavigatePage={onNavigatePage}
-              onResetCatalogue={resetCatalogue}
-              onDeleteCourse={handleDeleteCourse}
-              onRestoreCourse={handleRestoreCourse}
-            />
-          )}
-        </>
+        {renderMain ? (
+          <div className="grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1">
+            {learningBackground ? (
+              <div
+                className={`courses-main min-h-full! opacity-(--learning-background-reveal) transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
+                style={{
+                  transitionDuration:
+                    "var(--learning-background-reveal-duration, 0ms)",
+                }}
+                aria-hidden="true"
+                data-learning-background-surface=""
+                inert
+              >
+                {renderPageContent({
+                  surfaceCourseSlug: learningBackground.courseSlug,
+                  surfaceDiscussionTab: learningBackground.discussionTab,
+                  surfacePage: learningBackground.page,
+                  surfaceSection: learningBackground.section,
+                  surfaceSettingsTab: learningBackground.settingsTab,
+                })}
+              </div>
+            ) : null}
+            <div className="relative z-10 min-h-full">
+              {renderMain({
+                mobileBottomNavigation:
+                  compactNavigation && !mobileSidebarNavigationActive,
+                mobileBottomNavigationHidden: mobileBottomNavHidden,
+              })}
+            </div>
+          </div>
+        ) : (
+          renderPageContent()
+        )}
       </main>
 
       <FloatingScrollbar

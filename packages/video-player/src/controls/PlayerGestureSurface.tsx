@@ -5,9 +5,9 @@ import {
   type PointerEvent,
   type TouchEvent,
 } from "react";
-import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
 import { usePlayerController } from "../react/context";
-import { PLAYER_FEEDBACK_DURATION_MS } from "./feedbackTiming";
+import { usePlayerState } from "../react/usePlayerState";
+import { MOBILE_SEEK_IDLE_DELAY_MS } from "./feedbackTiming";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
 const LONG_PRESS_DELAY_MS = 500;
@@ -53,7 +53,7 @@ export function PlayerGestureSurface({
   seekIntervalSeconds = 10,
 }: PlayerGestureSurfaceProps) {
   const controller = usePlayerController();
-  const zoomGestures = usePlayerZoomGestures(controller);
+  const zoomGestureActive = usePlayerState(({ ui }) => ui.zoom.gestureActive);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,9 +101,7 @@ export function PlayerGestureSurface({
     if (mobileSeekSequenceRef.current === null) return;
     mobileSeekSequenceRef.current = null;
     controller.clearHud();
-    if (controller.getSnapshot().media.paused) {
-      controller.setControlsVisible(true);
-    }
+    controller.setControlsVisible(true);
   }, [clearMobileSeekTimer, controller]);
 
   const applyMobileSeek = useCallback(
@@ -126,7 +124,7 @@ export function PlayerGestureSurface({
       });
       mobileSeekTimerRef.current = setTimeout(
         finishMobileSeekSequence,
-        PLAYER_FEEDBACK_DURATION_MS,
+        MOBILE_SEEK_IDLE_DELAY_MS,
       );
     },
     [
@@ -193,6 +191,10 @@ export function PlayerGestureSurface({
     controller,
     endBoost,
   ]);
+
+  useEffect(() => {
+    if (zoomGestureActive) cancelCompetingGestures();
+  }, [cancelCompetingGestures, zoomGestureActive]);
 
   const getSeekDirection = (element: HTMLButtonElement, clientX: number) => {
     const bounds = element.getBoundingClientRect();
@@ -283,10 +285,6 @@ export function PlayerGestureSurface({
 
   const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    if (zoomGestures.onPointerDown(event)) {
-      cancelCompetingGestures();
-      return;
-    }
     pressDirectionRef.current = getSeekDirection(
       event.currentTarget,
       event.clientX,
@@ -302,26 +300,10 @@ export function PlayerGestureSurface({
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
-    if (zoomGestures.onPointerEnd(event)) {
-      cancelCompetingGestures();
-      return;
-    }
     completePress(pressDirectionRef.current, event.pointerType);
   };
 
-  const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
-    if (!zoomGestures.onPointerMove(event)) return;
-    cancelCompetingGestures();
-  };
-
   const handleTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
-    if (
-      zoomGestures.onTouchStart(event) ||
-      zoomGestures.suppressLegacyTouch()
-    ) {
-      cancelCompetingGestures();
-      return;
-    }
     const touch = event.changedTouches[0] ?? event.touches[0];
     if (!touch) return;
     if (
@@ -344,10 +326,6 @@ export function PlayerGestureSurface({
   };
 
   const handleTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
-    if (zoomGestures.onTouchMove(event) || zoomGestures.suppressLegacyTouch()) {
-      cancelCompetingGestures();
-      return;
-    }
     const gesture = touchGestureRef.current;
     if (!gesture) return;
     const touch = Array.from(event.touches).find(
@@ -365,10 +343,6 @@ export function PlayerGestureSurface({
   };
 
   const handleTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
-    if (zoomGestures.onTouchEnd(event) || zoomGestures.suppressLegacyTouch()) {
-      cancelCompetingGestures();
-      return;
-    }
     const gesture = touchGestureRef.current;
     touchGestureRef.current = null;
     touchPointerDownAtRef.current = Number.NEGATIVE_INFINITY;
@@ -395,10 +369,8 @@ export function PlayerGestureSurface({
       aria-label={surfaceLabel}
       onPointerDownCapture={captureControlsVisibility}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={(event) => {
-        zoomGestures.onPointerEnd(event);
         cancelCompetingGestures();
       }}
       onPointerLeave={(event) => {
@@ -407,8 +379,7 @@ export function PlayerGestureSurface({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={(event) => {
-        zoomGestures.onTouchEnd(event);
+      onTouchCancel={() => {
         touchPointerDownAtRef.current = Number.NEGATIVE_INFINITY;
         cancelCompetingGestures();
       }}

@@ -2,8 +2,8 @@ import {
   useCallback,
   useEffect,
   useRef,
-  type PointerEvent,
-  type TouchEvent,
+  type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
 import type { PlayerController } from "../react/PlayerController";
 import {
@@ -48,12 +48,12 @@ interface PanGesture {
 }
 
 interface ZoomGestureHandlers {
-  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => boolean;
-  onPointerMove: (event: PointerEvent<HTMLButtonElement>) => boolean;
-  onPointerEnd: (event: PointerEvent<HTMLButtonElement>) => boolean;
-  onTouchStart: (event: TouchEvent<HTMLButtonElement>) => boolean;
-  onTouchMove: (event: TouchEvent<HTMLButtonElement>) => boolean;
-  onTouchEnd: (event: TouchEvent<HTMLButtonElement>) => boolean;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => boolean;
+  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => boolean;
+  onPointerEnd: (event: ReactPointerEvent<HTMLElement>) => boolean;
+  onTouchStart: (event: ReactTouchEvent<HTMLElement>) => boolean;
+  onTouchMove: (event: ReactTouchEvent<HTMLElement>) => boolean;
+  onTouchEnd: (event: ReactTouchEvent<HTMLElement>) => boolean;
   suppressLegacyTouch: () => boolean;
 }
 
@@ -65,8 +65,12 @@ function midpoint(first: GesturePoint, second: GesturePoint): GesturePoint {
   return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
 }
 
-function getGeometry(element: HTMLButtonElement): PlayerZoomGeometry {
-  const root = element.parentElement ?? element;
+function getPlayerRoot(element: HTMLElement): HTMLElement {
+  return element.closest<HTMLElement>("[data-video-player-root]") ?? element;
+}
+
+function getGeometry(element: HTMLElement): PlayerZoomGeometry {
+  const root = getPlayerRoot(element);
   const bounds = root.getBoundingClientRect();
   const media = root.querySelector("video");
   return getPlayerZoomGeometry(
@@ -78,10 +82,10 @@ function getGeometry(element: HTMLButtonElement): PlayerZoomGeometry {
 }
 
 function getLocalPoint(
-  element: HTMLButtonElement,
+  element: HTMLElement,
   point: GesturePoint,
 ): GesturePoint {
-  const root = element.parentElement ?? element;
+  const root = getPlayerRoot(element);
   const bounds = root.getBoundingClientRect();
   return { x: point.x - bounds.left, y: point.y - bounds.top };
 }
@@ -117,6 +121,29 @@ export function usePlayerZoomGestures(
     transitionTimerRef.current = null;
   }, []);
 
+  const recoverAbandonedPointerSession = useCallback(() => {
+    const zoomGestureWasActive =
+      pinchRef.current !== null ||
+      Boolean(panRef.current?.active) ||
+      controller.getSnapshot().ui.zoom.gestureActive;
+
+    pointerPointsRef.current.clear();
+    suppressedPointersRef.current.clear();
+    pinchRef.current = null;
+    panRef.current = null;
+    suppressLegacyTouchUntilRef.current = Number.NEGATIVE_INFINITY;
+
+    if (!zoomGestureWasActive) return;
+    clearFeedbackTimer();
+    clearTransitionTimer();
+    controller.setZoomState({
+      feedbackVisible: false,
+      gestureActive: false,
+      transitioning: false,
+    });
+    controller.setControlsVisible(true);
+  }, [clearFeedbackTimer, clearTransitionTimer, controller]);
+
   const beginVisualFeedback = useCallback(() => {
     clearFeedbackTimer();
     clearTransitionTimer();
@@ -145,8 +172,28 @@ export function usePlayerZoomGestures(
     }, ZOOM_TRANSITION_DURATION_MS);
   }, [clearTransitionTimer, controller]);
 
+  const preparePan = useCallback(
+    (element: HTMLElement, pointerId: number, point: GesturePoint) => {
+      const zoom = controller.getSnapshot().ui.zoom;
+      if (zoom.scale <= 1) {
+        panRef.current = null;
+        return;
+      }
+      panRef.current = {
+        active: false,
+        geometry: getGeometry(element),
+        pointerId,
+        startPanX: zoom.panX,
+        startPanY: zoom.panY,
+        startX: point.x,
+        startY: point.y,
+      };
+    },
+    [controller],
+  );
+
   const beginPinch = useCallback(
-    (element: HTMLButtonElement, first: GesturePoint, second: GesturePoint) => {
+    (element: HTMLElement, first: GesturePoint, second: GesturePoint) => {
       const startDistance = distance(first, second);
       if (startDistance <= 0) return false;
       const zoom = controller.getSnapshot().ui.zoom;
@@ -175,7 +222,7 @@ export function usePlayerZoomGestures(
   );
 
   const updatePinch = useCallback(
-    (element: HTMLButtonElement, first: GesturePoint, second: GesturePoint) => {
+    (element: HTMLElement, first: GesturePoint, second: GesturePoint) => {
       const pinch = pinchRef.current;
       if (!pinch) return false;
       const scale = clampPlayerZoom(
@@ -256,12 +303,24 @@ export function usePlayerZoomGestures(
     () => () => {
       clearFeedbackTimer();
       clearTransitionTimer();
+      pointerPointsRef.current.clear();
+      suppressedPointersRef.current.clear();
+      pinchRef.current = null;
+      panRef.current = null;
     },
     [clearFeedbackTimer, clearTransitionTimer],
   );
 
-  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType !== "touch") return false;
+    if (
+      event.isPrimary &&
+      (pointerPointsRef.current.size > 0 ||
+        pinchRef.current !== null ||
+        panRef.current !== null)
+    ) {
+      recoverAbandonedPointerSession();
+    }
     lastPointerEventAtRef.current = Date.now();
     pointerPointsRef.current.set(event.pointerId, {
       x: event.clientX,
@@ -278,20 +337,15 @@ export function usePlayerZoomGestures(
 
     const zoom = controller.getSnapshot().ui.zoom;
     if (zoom.scale > 1) {
-      panRef.current = {
-        active: false,
-        geometry: getGeometry(event.currentTarget),
-        pointerId: event.pointerId,
-        startPanX: zoom.panX,
-        startPanY: zoom.panY,
-        startX: event.clientX,
-        startY: event.clientY,
-      };
+      preparePan(event.currentTarget, event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
     }
     return false;
   };
 
-  const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
     if (!pointerPointsRef.current.has(event.pointerId)) return false;
@@ -333,13 +387,26 @@ export function usePlayerZoomGestures(
     return true;
   };
 
-  const onPointerEnd = (event: PointerEvent<HTMLButtonElement>) => {
+  const onPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
+    const pinchWasActive = pinchRef.current !== null;
     const wasSuppressed = suppressedPointersRef.current.has(event.pointerId);
     pointerPointsRef.current.delete(event.pointerId);
     suppressedPointersRef.current.delete(event.pointerId);
-    if (pinchRef.current || panRef.current?.active) {
+    if (pinchWasActive) {
+      event.preventDefault();
+      finishGesture();
+      const remainingPointer = pointerPointsRef.current.entries().next().value;
+      if (remainingPointer) {
+        preparePan(event.currentTarget, remainingPointer[0], {
+          x: remainingPointer[1].x,
+          y: remainingPointer[1].y,
+        });
+      }
+      return true;
+    }
+    if (panRef.current?.active) {
       event.preventDefault();
       finishGesture();
       return true;
@@ -351,7 +418,7 @@ export function usePlayerZoomGestures(
   const legacyTouchIsPointerBacked = () =>
     Date.now() - lastPointerEventAtRef.current < POINTER_TOUCH_DEDUPE_MS;
 
-  const onTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
+  const onTouchStart = (event: ReactTouchEvent<HTMLElement>) => {
     if (legacyTouchIsPointerBacked()) return false;
     if (event.touches.length >= 2) {
       const first = event.touches[0];
@@ -368,20 +435,15 @@ export function usePlayerZoomGestures(
     const zoom = controller.getSnapshot().ui.zoom;
     const touch = event.touches[0];
     if (zoom.scale > 1 && touch) {
-      panRef.current = {
-        active: false,
-        geometry: getGeometry(event.currentTarget),
-        pointerId: touch.identifier,
-        startPanX: zoom.panX,
-        startPanY: zoom.panY,
-        startX: touch.clientX,
-        startY: touch.clientY,
-      };
+      preparePan(event.currentTarget, touch.identifier, {
+        x: touch.clientX,
+        y: touch.clientY,
+      });
     }
     return false;
   };
 
-  const onTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+  const onTouchMove = (event: ReactTouchEvent<HTMLElement>) => {
     if (legacyTouchIsPointerBacked()) return false;
     if (pinchRef.current && event.touches.length >= 2) {
       const first = event.touches[0];
@@ -425,9 +487,21 @@ export function usePlayerZoomGestures(
     return true;
   };
 
-  const onTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
+  const onTouchEnd = (event: ReactTouchEvent<HTMLElement>) => {
     if (legacyTouchIsPointerBacked()) return false;
-    if (!pinchRef.current && !panRef.current?.active) {
+    if (pinchRef.current) {
+      event.preventDefault();
+      finishGesture();
+      const remainingTouch = event.touches[0];
+      if (remainingTouch) {
+        preparePan(event.currentTarget, remainingTouch.identifier, {
+          x: remainingTouch.clientX,
+          y: remainingTouch.clientY,
+        });
+      }
+      return true;
+    }
+    if (!panRef.current?.active) {
       if (event.touches.length === 0) panRef.current = null;
       return false;
     }
