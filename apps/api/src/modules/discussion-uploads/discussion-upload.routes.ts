@@ -66,37 +66,6 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
     },
     controller.read,
   );
-
-  // Aliases so existing composer clients and markdown with /dev/ URLs keep working.
-  app.post(
-    "/dev/discussion-uploads",
-    {
-      preHandler: permissions.requireAuthenticated,
-      schema: {
-        operationId: "uploadDevelopmentDiscussionAttachment",
-        tags: ["Learning Attachments"],
-        summary: "Upload a discussion image or video (legacy path)",
-        consumes: ["multipart/form-data"],
-        response: uploadResponse,
-      },
-    },
-    controller.upload,
-  );
-
-  app.get(
-    "/dev/discussion-uploads/:fileName",
-    {
-      preHandler: permissions.requireAuthenticated,
-      schema: {
-        operationId: "getDevelopmentDiscussionAttachment",
-        tags: ["Learning Attachments"],
-        summary: "Read a stored discussion attachment (legacy path)",
-        params: z.object({ fileName: fileNameSchema }),
-        response: readResponse,
-      },
-    },
-    controller.read,
-  );
 };
 
 export default discussionUploadRoutes;
