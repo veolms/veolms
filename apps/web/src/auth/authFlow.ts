@@ -388,7 +388,7 @@ export function authFlowReducer(
   }
 
   if (
-    state.status === "verifyingTwoFactor" &&
+    (state.status === "verifyingTwoFactor" || isTwoFactorState(state)) &&
     action.type === "TWO_FACTOR_VERIFIED"
   ) {
     return { status: "authenticated" };

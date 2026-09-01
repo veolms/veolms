@@ -478,36 +478,36 @@ export function CourseCard({
         </div>
 
         <div
-          className="relative z-10 mt-auto flex flex-col gap-3 pt-3"
+          className="relative z-10 mt-auto flex flex-col"
           data-course-card-actions
         >
-          {role === "student" && Boolean(course.pricing) && (
+          {role === "student" && !course.enrolled && Boolean(course.pricing) && (
             <div
-              className="flex items-baseline justify-between border-t border-[color-mix(in_srgb,var(--border)_45%,transparent)] pt-2.5 text-xs text-(--muted)"
+              className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
               data-course-card-pricing
+              aria-label={`Course price ${course.pricing?.price}`}
             >
-              <span className="font-semibold text-(--text)">
+              <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
                 {course.pricing?.price}
-              </span>
-              <div className="flex items-center gap-1.5 text-[0.72rem]">
-                {Boolean(course.pricing?.originalPrice) && (
-                  <span className="line-through">
-                    {course.pricing?.originalPrice}
-                  </span>
-                )}
-                {Boolean(course.pricing?.discount) && (
-                  <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-emerald-400">
-                    {course.pricing?.discount}
-                  </span>
-                )}
-              </div>
+              </strong>
+              {Boolean(course.pricing?.originalPrice) && (
+                <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
+                  {course.pricing?.originalPrice}
+                </span>
+              )}
+              {Boolean(course.pricing?.discount) && (
+                <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
+                  {course.pricing?.discount}
+                </span>
+              )}
             </div>
           )}
 
           {role === "student" && course.enrolled && (
             <div
-              className="flex items-center justify-between gap-3 text-xs"
+              className="mb-4 flex items-center justify-between gap-3 text-xs"
               data-course-card-progress-container
+              aria-label={`${progress}% complete`}
             >
               <span
                 className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-(--track)"

@@ -12,6 +12,7 @@ const shellPhosphorIcons = new Set([
   "Bell",
   "BookOpen",
   "CaretDown",
+  "CaretRight",
   "ChartBar",
   "ChatCircleDots",
   "Check",
@@ -35,6 +36,7 @@ const shellPhosphorIcons = new Set([
   "Student",
   "Sun",
   "Tote",
+  "User",
   "Users",
 ]);
 const homePhosphorIcons = new Set([

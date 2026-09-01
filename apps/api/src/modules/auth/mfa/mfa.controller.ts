@@ -7,6 +7,10 @@ import type {
 import type { FastifyRequest } from "fastify";
 
 import type { AuthContext } from "../shared/auth.context.ts";
+import {
+  presentPasskeyAuthenticationOptions,
+  presentPasskeyRegistrationOptions,
+} from "./mfa.presenters.ts";
 
 export function createMfaController(context: AuthContext) {
   const { mfaService } = context;
@@ -38,9 +42,11 @@ export function createMfaController(context: AuthContext) {
   }
 
   async function registerOptions(request: FastifyRequest) {
-    return mfaService.getPasskeyRegisterOptions(
-      request.user!,
-      request.session!.mfa_verified,
+    return presentPasskeyRegistrationOptions(
+      await mfaService.getPasskeyRegisterOptions(
+        request.user!,
+        request.session!.mfa_verified,
+      ),
     );
   }
 
@@ -55,7 +61,9 @@ export function createMfaController(context: AuthContext) {
   }
 
   async function loginOptions(request: FastifyRequest) {
-    return mfaService.getPasskeyLoginOptions(request.user!.id);
+    return presentPasskeyAuthenticationOptions(
+      await mfaService.getPasskeyLoginOptions(request.user!.id),
+    );
   }
 
   async function loginVerify(

@@ -93,19 +93,19 @@ describe("mobile validation", () => {
 
   it("rejects a number with too few digits", () => {
     expect(validateMobile("987654321", india)).toBe(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
   });
 
   it("rejects a number with too many digits", () => {
     expect(validateMobile("98765432101", india)).toBe(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
   });
 
   it("rejects a number outside India's mobile ranges", () => {
     expect(validateMobile("5876543210", india)).toBe(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
   });
 
@@ -123,10 +123,10 @@ describe("mobile validation", () => {
 
   it("rejects an empty or whitespace-only number", () => {
     expect(validateMobile("", india)).toBe(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
     expect(validateMobile("   ", india)).toBe(
-      "Please enter a valid 10-digit mobile number.",
+      "Please enter a valid 10-digit mobile number for India.",
     );
   });
 
@@ -134,7 +134,16 @@ describe("mobile validation", () => {
     const nineDigitCountry: CountryOption = { ...india, nationalDigits: 9 };
 
     expect(validateMobile("98765432", nineDigitCountry)).toBe(
-      "Please enter a valid mobile number.",
+      "Please enter a valid 9-digit mobile number for India.",
     );
+  });
+
+  it("uses each supported country's configured national number length", () => {
+    for (const country of SUPPORTED_COUNTRIES) {
+      const validPrefix = country.id === "GB" ? "7" : "9";
+      const number = validPrefix.padEnd(country.nationalDigits, "7");
+
+      expect(validateMobile(number, country), country.name).toBeNull();
+    }
   });
 });

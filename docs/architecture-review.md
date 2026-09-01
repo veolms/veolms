@@ -4,23 +4,24 @@
 
 ## 1. Tech Stack Overview
 
-| Layer / Tool | Technology Used | Details |
-| :--- | :--- | :--- |
-| **Monorepo Manager** | `pnpm` (v11.18.0) | Uses workspaces and root `catalog:` for locked dependencies. |
-| **Monorepo Build System** | `Turborepo` (v2.10.8) | Pipeline orchestrator for `dev`, `build`, `typecheck`, `lint`. |
-| **Language & Runtime** | Node.js (v24+) + TypeScript (v6.x) | Native ECMAScript Modules (`"type": "module"`). |
-| **Backend Framework** | `Fastify` (v5.11) | High-performance, plugin-based HTTP server. |
-| **API Autoloading** | `@fastify/autoload` (v6.5) | Auto-discovers and registers `src/modules/**/*.routes.ts`. |
-| **Contract & Schema Validation** | `fastify-type-provider-zod` + `Zod` | Shared Zod schemas compile to OpenAPI 3.0 via `@fastify/swagger`. |
-| **Database & ORM** | `PostgreSQL` + `Kysely` | Type-safe SQL query builder and schema migration runner. |
-| **Authentication & Security** | `@simplewebauthn/server` + Crypto | Passwordless OTP (Email/SMS), TOTP MFA, WebAuthn/Passkeys, signed cookies. |
-| **Frontend Application** | React 19 + React Router + Vite | TailwindCSS, Vitest, Playwright E2E. |
+| Layer / Tool                     | Technology Used                     | Details                                                                    |
+| :------------------------------- | :---------------------------------- | :------------------------------------------------------------------------- |
+| **Monorepo Manager**             | `pnpm` (v11.18.0)                   | Uses workspaces and root `catalog:` for locked dependencies.               |
+| **Monorepo Build System**        | `Turborepo` (v2.10.8)               | Pipeline orchestrator for `dev`, `build`, `typecheck`, `lint`.             |
+| **Language & Runtime**           | Node.js (v24+) + TypeScript (v6.x)  | Native ECMAScript Modules (`"type": "module"`).                            |
+| **Backend Framework**            | `Fastify` (v5.11)                   | High-performance, plugin-based HTTP server.                                |
+| **API Autoloading**              | `@fastify/autoload` (v6.5)          | Auto-discovers and registers `src/modules/**/*.routes.ts`.                 |
+| **Contract & Schema Validation** | `fastify-type-provider-zod` + `Zod` | Shared Zod schemas compile to OpenAPI 3.0 via `@fastify/swagger`.          |
+| **Database & ORM**               | `PostgreSQL` + `Kysely`             | Type-safe SQL query builder and schema migration runner.                   |
+| **Authentication & Security**    | `@simplewebauthn/server` + Crypto   | Passwordless OTP (Email/SMS), TOTP MFA, WebAuthn/Passkeys, signed cookies. |
+| **Frontend Application**         | React 19 + React Router + Vite      | TailwindCSS, Vitest, Playwright E2E.                                       |
 
 ---
 
 ## 2. Current Folder Structures
 
 ### 2.1 Global Monorepo Folder Structure
+
 ```text
 veolms-code/
 ├── apps/
@@ -37,6 +38,7 @@ veolms-code/
 ```
 
 ### 2.2 Current Backend API Structure (`apps/api/src/`)
+
 ```text
 apps/api/src/
 ├── app.ts                       # Fastify application factory & autoload registration
@@ -64,6 +66,7 @@ apps/api/src/
 ```
 
 ### 2.3 Current `src/modules/auth/` Folder Structure
+
 ```text
 src/modules/auth/
 ├── auth.constants.ts            # TTLs, rate limits, role names
@@ -88,7 +91,9 @@ src/modules/auth/
 Currently, the code functions correctly from an operational standpoint, but **architecturally it has severe structural flaws and anti-patterns**:
 
 ### Issue 1: "Fat Routes" with Too Many Responsibilities
+
 In the current code, route files are doing everything at once in a single handler function:
+
 - Declaring OpenAPI Zod schemas.
 - Reading HTTP headers, cookies, IP addresses, and request bodies.
 - Running cryptographic operations (TOTP verification, PKCE generation, constant-time token comparison).
@@ -97,6 +102,7 @@ In the current code, route files are doing everything at once in a single handle
 - Setting HTTP response cookies and formatting JSON responses.
 
 **Result:** Route files are massive and unreadable:
+
 - `mfa.routes.ts` $\rightarrow$ **542 lines**
 - `oauth.routes.ts` $\rightarrow$ **317 lines**
 - `setup.routes.ts` $\rightarrow$ **305 lines**
@@ -105,6 +111,7 @@ In the current code, route files are doing everything at once in a single handle
 ---
 
 ### Issue 2: Routes are Directly Calling Database Models/Repositories (Skipping the Service Layer)
+
 Routes should NEVER touch database queries or transactions. Currently, routes are querying the database directly:
 
 1. **Raw Database Transactions Inside a Route File (`mfa.routes.ts` L130–147):**
@@ -132,8 +139,15 @@ Routes should NEVER touch database queries or transactions. Currently, routes ar
 2. **Direct DB Querying in `session.routes.ts` (L39–42 & L75–79):**
    ```typescript
    // In session.routes.ts - Route handler directly calls repository without any Service
-   const sessions = await repository.listUserSessions(database, request.user!.id);
-   await repository.deleteUserSession(database, request.user!.id, request.params.id);
+   const sessions = await repository.listUserSessions(
+     database,
+     request.user!.id,
+   );
+   await repository.deleteUserSession(
+     database,
+     request.user!.id,
+     request.params.id,
+   );
    ```
 3. **Direct DB Querying in `setup.routes.ts` (L233–242):**
    ```typescript
@@ -144,18 +158,22 @@ Routes should NEVER touch database queries or transactions. Currently, routes ar
 4. **Direct DB Querying in `courses.routes.ts` (L34, L56):**
    ```typescript
    // In courses.routes.ts - Route directly imports database queries
-   app.get("/courses", async () => ({ courses: await listPublishedCourses(database) }));
+   app.get("/courses", async () => ({
+     courses: await listPublishedCourses(database),
+   }));
    ```
 
 ---
 
 ### Issue 3: Interfaces and Types are Scattered Inconsistently
+
 - Types and interfaces are defined randomly across different files (`auth.service.ts`, `setup.routes.ts`, `oauth.provider.ts`, `auth.context.ts`) instead of being centralized in contract/type definitions.
 - For example, signed cookie schemas are declared inline inside route files (`setupSessionSchema` inside `setup.routes.ts`), while user creation inputs are in `auth.service.ts`, and API DTOs are in `@veolms/contracts`.
 
 ---
 
 ### Issue 4: Zero Portability & Untestable Business Logic
+
 - Because business logic (e.g. TOTP activation, session revocation, academy setup locking) is trapped inside Fastify HTTP handler functions, it **cannot be unit-tested without starting a full HTTP server (`app.inject()`)**.
 - If a background job (`media-worker`), a cron task, a CLI script, or a future WebSocket handler needs to revoke a session or verify an account, it cannot reuse the code because it is locked inside an HTTP route handler.
 
@@ -166,6 +184,7 @@ Routes should NEVER touch database queries or transactions. Currently, routes ar
 ### **Direct Answer: The Current Approach is NOT the Best Way and MUST Be Changed.**
 
 ### **Why We Must Change:**
+
 1. **Lack of Consistency:** Right now, there is no standard pattern. Some endpoints call a Service (e.g. `service.sendOtp`), while other endpoints call the database repository directly (e.g. `session.routes.ts`, `setup.routes.ts`), and some run raw database transactions inside the route (`mfa.routes.ts`).
 2. **Violation of Separation of Concerns:** Route files know about SQL queries, database transactions, cryptographic encryption, cookie hashing, and HTTP protocols all at the same time.
 3. **Not Scalable to Millions of Users:** When the platform grows to handle payments, quizzes, reviews, and media streaming, having database calls scattered in route files will lead to duplicate queries, race conditions, un-cacheable data paths, and untracked database mutations.
@@ -217,16 +236,20 @@ We must enforce a strict, consistent 4-layer architecture across all modules:
 ## 6. The Invariant Rules for All Modules
 
 ### Rule 1: NEVER Call the Database / Repository in Routes or Controllers
+
 - Routes and Controllers must **NEVER** import `kysely` or call `repository.*` functions.
 - All database reading and writing must go through the **Service layer**.
 
 ### Rule 2: Controllers Are Strictly HTTP Adapters
+
 - A Controller method must only extract request parameters, pass them to a Service method, set cookies/status codes on the reply, and return the response.
 
 ### Rule 3: Services Must Be 100% HTTP-Agnostic
+
 - A Service method should never know if it was called by an HTTP request, a CLI tool, a background worker, or a unit test. It must receive plain inputs (strings, objects) and return plain outputs.
 
 ### Rule 4: Strict Cross-Module Isolation (No Cross-Module DB Queries)
+
 - **Module A (e.g. `courses` or `discussions`) must NEVER query Module B's (`auth`) database tables or import Module B's repository.**
 - If Module A needs data from Module B, it must call Module B's public **Service** method or listen to an asynchronous domain event.
 
@@ -253,12 +276,12 @@ src/modules/<module-name>/
 
 ## 8. Summary Comparison
 
-| Aspect | Current Way (To Change) | Standard Target Architecture |
-| :--- | :--- | :--- |
+| Aspect                 | Current Way (To Change)                     | Standard Target Architecture                         |
+| :--------------------- | :------------------------------------------ | :--------------------------------------------------- |
 | **Where DB is called** | Routes, Services, and DB packages directly. | **ONLY inside Services $\rightarrow$ Repositories.** |
-| **Route file size** | 300 to 550+ lines per file. | **Under 100 lines (only schemas & routes).** |
-| **Controller layer** | Missing (merged into route files). | **Dedicated `*.controller.ts` files.** |
-| **Service layer** | Inconsistent & bypassed by routes. | **Single source of truth for all business logic.** |
-| **Cross-module calls** | Direct DB queries across tables. | **Strictly via public Service APIs or events.** |
-| **Testability** | Hard (requires full HTTP server). | **Easy (Services unit-tested in isolation).** |
-| **Scalability** | High coupling blocks scaling. | **Clean decoupled architecture ready for millions.** |
+| **Route file size**    | 300 to 550+ lines per file.                 | **Under 100 lines (only schemas & routes).**         |
+| **Controller layer**   | Missing (merged into route files).          | **Dedicated `*.controller.ts` files.**               |
+| **Service layer**      | Inconsistent & bypassed by routes.          | **Single source of truth for all business logic.**   |
+| **Cross-module calls** | Direct DB queries across tables.            | **Strictly via public Service APIs or events.**      |
+| **Testability**        | Hard (requires full HTTP server).           | **Easy (Services unit-tested in isolation).**        |
+| **Scalability**        | High coupling blocks scaling.               | **Clean decoupled architecture ready for millions.** |

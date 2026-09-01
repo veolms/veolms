@@ -13,6 +13,8 @@ export default [
       "**/.turbo/**",
       "**/.tmp/**",
       "pnpm-lock.yaml",
+      "s3-bucket/**",
+      "**/s3-bucket/**",
     ],
   },
   {

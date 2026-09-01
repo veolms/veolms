@@ -1,0 +1,38 @@
+{
+  "name": "@veolms/fleet-provider-aws",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./setup": "./src/setup/index.ts",
+    "./destroy": "./src/setup/destroy.ts",
+    "./build-ami": "./src/setup/build-ami.ts",
+    "./prober": "./src/prober.ts",
+    "./probe-lambda": "./src/probe-lambda.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "build:ami": "node --env-file-if-exists=../../apps/fleet-manager/.env src/setup/build-ami.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/**/*.test.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.1112.0",
+    "@aws-sdk/client-ec2": "^3.750.0",
+    "@aws-sdk/client-iam": "^3.1112.0",
+    "@aws-sdk/client-imagebuilder": "^3.1112.0",
+    "@aws-sdk/client-lambda": "^3.1112.0",
+    "@aws-sdk/client-s3": "^3.1112.0",
+    "@aws-sdk/client-scheduler": "^3.1112.0",
+    "@aws-sdk/client-ssm": "^3.750.0",
+    "@aws-sdk/client-sts": "^3.1112.0",
+    "@aws-sdk/s3-request-presigner": "^3.1113.0",
+    "@veolms/config": "workspace:*",
+    "@veolms/contracts": "workspace:*",
+    "@veolms/fleet-types": "workspace:*",
+    "zod": "catalog:"
+  }
+}

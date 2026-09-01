@@ -49,12 +49,13 @@ export async function deleteUserSession(
   database: Executor,
   userId: string,
   sessionId: string,
-): Promise<void> {
-  await database
+): Promise<boolean> {
+  const result = await database
     .deleteFrom("sessions")
     .where("id", "=", sessionId)
     .where("user_id", "=", userId)
-    .execute();
+    .executeTakeFirst();
+  return Number(result.numDeletedRows) > 0;
 }
 
 export async function deleteOtherUserSessions(

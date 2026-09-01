@@ -19,7 +19,7 @@ async function shutdown(signal: string): Promise<void> {
   const timeoutId = setTimeout(() => {
     app.log.error("Shutdown timeout exceeded. Forcefully terminating process.");
     process.exit(1);
-  }, 10000);
+  }, 2000);
 
   try {
     let shutdownFailed = false;

@@ -1,6 +1,12 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getDefaultLoginMethod,
+  isEmailLoginEnabled,
+  isMethodSwitchVisible,
+  isMobileLoginEnabled,
+} from "../../src/auth/authConfig.ts";
 import LoginRoute from "../../src/routes/login.tsx";
 import { authStore } from "../../src/store/auth.store.ts";
 import { renderWithAppProviders } from "./test-utils.tsx";
@@ -75,7 +81,9 @@ vi.mock("../../src/ThemedSelect.tsx", () => ({
 }));
 
 const submitEmail = async (address: string) => {
-  fireEvent.click(screen.getByRole("tab", { name: "Email" }));
+  if (isMethodSwitchVisible()) {
+    fireEvent.click(screen.getByRole("tab", { name: "Email" }));
+  }
   fireEvent.change(screen.getByLabelText("Email address"), {
     target: { value: address },
   });
@@ -84,6 +92,9 @@ const submitEmail = async (address: string) => {
 };
 
 const submitMobile = async (number: string) => {
+  if (isMethodSwitchVisible()) {
+    fireEvent.click(screen.getByRole("tab", { name: "Mobile" }));
+  }
   fireEvent.change(screen.getByLabelText("Mobile number"), {
     target: { value: number },
   });
@@ -109,6 +120,9 @@ const typeAuthenticatorCode = (code: string) => {
   });
 };
 
+const itWhenEmailLoginIsEnabled = isEmailLoginEnabled() ? it : it.skip;
+const itWhenMobileLoginIsEnabled = isMobileLoginEnabled() ? it : it.skip;
+
 beforeEach(() => {
   authStore.clearAuth();
 });
@@ -120,123 +134,152 @@ describe("the login flow", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Welcome to ProCodrr" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
+    if (getDefaultLoginMethod() === "mobile") {
+      expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
+    } else {
+      expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+    }
     expect(
       screen.getByRole("button", { name: "Continue with Google" }),
     ).toBeInTheDocument();
   });
 
-  it("moves to the code step, which echoes the email and drops the social actions", async () => {
-    renderWithAppProviders(<LoginRoute />);
+  itWhenEmailLoginIsEnabled(
+    "moves to the code step, which echoes the email and drops the social actions",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
 
-    await submitEmail("learner@procodrr.com");
+      await submitEmail("learner@procodrr.com");
 
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Verify your OTP" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("le●●●●●@procodrr.com")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Continue with Google" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("masks the mobile number the code was sent to", async () => {
-    renderWithAppProviders(<LoginRoute />);
-
-    await submitMobile("9876543210");
-
-    expect(screen.getByText("+91 ●●●●● ●●210")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Change mobile number" }),
-    ).toBeInTheDocument();
-  });
-
-  it("returns to the identifier step when the learner changes the email", async () => {
-    renderWithAppProviders(<LoginRoute />);
-
-    await submitEmail("learner@procodrr.com");
-    fireEvent.click(screen.getByRole("button", { name: "Change email" }));
-
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Welcome to ProCodrr" }),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Continue with Google" }),
-    ).toBeInTheDocument();
-  });
-
-  it("asks an email learner for a name once the code is accepted", async () => {
-    renderWithAppProviders(<LoginRoute />);
-
-    await submitEmail("learner@procodrr.com");
-    typeCode("140926");
-
-    expect(await screen.findByLabelText("Your name")).toBeInTheDocument();
-    expect(screen.getByText("le●●●●●@procodrr.com")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("closes the flow once the account is created, having no academy to open yet", async () => {
-    renderWithAppProviders(<LoginRoute />);
-
-    await submitEmail("learner@procodrr.com");
-    typeCode("140926");
-    fireEvent.change(await screen.findByLabelText("Your name"), {
-      target: { value: "Anurag" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
-
-    await waitFor(() =>
       expect(
-        screen.getByRole("region", { name: "Redirecting" }),
-      ).toBeInTheDocument(),
-    );
-  });
+        screen.getByRole("heading", { level: 1, name: "Verify your OTP" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("le●●●●●@procodrr.com")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Continue with Google" }),
+      ).not.toBeInTheDocument();
+    },
+  );
 
-  it("walks a mobile learner through the second factor to the end of the flow", async () => {
-    renderWithAppProviders(<LoginRoute />);
+  itWhenMobileLoginIsEnabled(
+    "masks the mobile number the code was sent to",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
 
-    await submitMobile("9876543210");
-    typeCode("140926");
+      await submitMobile("9876543210");
 
-    expect(
+      expect(screen.getByText("+91 ●●●●● ●●210")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Change mobile number" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  itWhenEmailLoginIsEnabled(
+    "returns to the identifier step when the learner changes the email",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
+
+      await submitEmail("learner@procodrr.com");
+      fireEvent.click(screen.getByRole("button", { name: "Change email" }));
+
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Welcome to ProCodrr" }),
+      ).toBeInTheDocument();
+      if (isMobileLoginEnabled()) {
+        expect(screen.getByLabelText("Mobile number")).toBeInTheDocument();
+      } else {
+        expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+      }
+      expect(
+        screen.getByRole("button", { name: "Continue with Google" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  itWhenEmailLoginIsEnabled(
+    "asks an email learner for a name once the code is accepted",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
+
+      await submitEmail("learner@procodrr.com");
+      typeCode("140926");
+
+      expect(await screen.findByLabelText("Your name")).toBeInTheDocument();
+      expect(screen.getByText("le●●●●●@procodrr.com")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    },
+  );
+
+  itWhenEmailLoginIsEnabled(
+    "closes the flow once the account is created, having no academy to open yet",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
+
+      await submitEmail("learner@procodrr.com");
+      typeCode("140926");
+      fireEvent.change(await screen.findByLabelText("Your name"), {
+        target: { value: "Anurag" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole("region", { name: "Redirecting" }),
+        ).toBeInTheDocument(),
+      );
+    },
+  );
+
+  itWhenMobileLoginIsEnabled(
+    "walks a mobile learner through the second factor to the end of the flow",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
+
+      await submitMobile("9876543210");
+      typeCode("140926");
+
+      expect(
+        await screen.findByRole("heading", {
+          level: 1,
+          name: "Two-factor authentication",
+        }),
+      ).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Use authenticator app instead" }),
+      );
+      typeAuthenticatorCode("184273");
+
+      await waitFor(() =>
+        expect(
+          screen.getByText(/Redirecting to your profile/),
+        ).toBeInTheDocument(),
+      );
+    },
+  );
+
+  itWhenMobileLoginIsEnabled(
+    "ends the flow for a mobile learner straight from the passkey",
+    async () => {
+      renderWithAppProviders(<LoginRoute />);
+
+      await submitMobile("9876543210");
+      typeCode("140926");
       await screen.findByRole("heading", {
         level: 1,
         name: "Two-factor authentication",
-      }),
-    ).toBeInTheDocument();
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: "Continue with passkey" }),
+      );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Use authenticator app instead" }),
-    );
-    typeAuthenticatorCode("184273");
-
-    await waitFor(() =>
-      expect(
-        screen.getByText(/Redirecting to your profile/),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  it("ends the flow for a mobile learner straight from the passkey", async () => {
-    renderWithAppProviders(<LoginRoute />);
-
-    await submitMobile("9876543210");
-    typeCode("140926");
-    await screen.findByRole("heading", {
-      level: 1,
-      name: "Two-factor authentication",
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continue with passkey" }),
-    );
-
-    await waitFor(() =>
-      expect(
-        screen.getByText(/Redirecting to your profile/),
-      ).toBeInTheDocument(),
-    );
-  });
+      await waitFor(() =>
+        expect(
+          screen.getByText(/Redirecting to your profile/),
+        ).toBeInTheDocument(),
+      );
+    },
+  );
 });

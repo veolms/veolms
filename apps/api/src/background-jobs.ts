@@ -36,7 +36,6 @@ export function registerBackgroundJobs(
 ): PaymentEventQueue {
   const paymentWorker = createPaymentWorker({
     database,
-    emailService: services.email,
     logger: app.log,
   });
 

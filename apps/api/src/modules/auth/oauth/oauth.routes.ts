@@ -44,15 +44,11 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "OAuth Login",
         description:
-          "Logs in a user with Google or GitHub OAuth. Fails if user not registered. " +
-          "The authorization code is single-use at the provider, so a failed login " +
-          "cannot be retried against the registration endpoint with the same code.",
+          "Logs in a user with Google or GitHub OAuth, automatically creating an account if not already registered.",
         body: oauthCallbackRequestSchema,
         response: {
           200: jsonResponse("Login successful.", loginResponseSchema),
-          400: errorResponse(
-            "Authentication failed or account does not exist.",
-          ),
+          400: errorResponse("Authentication failed."),
         },
       },
     },

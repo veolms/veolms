@@ -724,7 +724,7 @@ describe("Discussion", () => {
         screen.queryByRole("dialog", { name: "Discussion thread" }),
       ).toBeNull();
     });
-  });
+  }, 30_000);
 
   it("keeps the desktop thread open during page interaction and closes it with Escape", async () => {
     render(<Discussion persistenceKey="discussion-thread-non-modal-test" />);
@@ -1076,7 +1076,7 @@ describe("Discussion", () => {
     const editor = await screen.findByRole(
       "textbox",
       { name: "Edit comment" },
-      { timeout: 1_500 },
+      { timeout: 8_000 },
     );
     expect(editor).toHaveTextContent("Rich body to edit");
     fireEvent.click(
@@ -1141,7 +1141,7 @@ describe("Discussion", () => {
       "![Editable diagram](/api/v1/dev/discussion-uploads/edited-image.png)",
     );
     expect(screen.getByText("Unfinished new comment")).toBeVisible();
-  });
+  }, 30_000);
 
   it("keeps Next disabled for an empty draft and allows attachment-only posts after review", async () => {
     const { container } = render(

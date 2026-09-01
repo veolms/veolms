@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { academyThemes, persistAcademyTheme } from "../themes.ts";
+import {
+  academyThemes,
+  DEFAULT_ACADEMY_THEME,
+  getInitialAcademyTheme,
+  persistAcademyTheme,
+} from "../themes.ts";
 
 export type ThemeDisplayMode = "light" | "dark" | "device";
 
-const AUTH_PALETTE = "midnight";
-
 function readStoredValue(key: string): string | null {
+  if (typeof window === "undefined") return null;
+
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -33,14 +38,45 @@ function readPreviewPalette(): string | null {
   return null;
 }
 
+function readInitialPalette(): string {
+  const previewPalette = readPreviewPalette();
+  if (previewPalette) return previewPalette;
+
+  try {
+    return getInitialAcademyTheme();
+  } catch {
+    return DEFAULT_ACADEMY_THEME;
+  }
+}
+
+function readInitialThemeMode(): ThemeDisplayMode {
+  const storedTheme = readStoredValue("veolms-theme");
+  return storedTheme === "light" ||
+    storedTheme === "dark" ||
+    storedTheme === "device"
+    ? storedTheme
+    : "dark";
+}
+
+function resolveThemeMode(themeMode: ThemeDisplayMode): "light" | "dark" {
+  if (themeMode !== "device" || typeof window === "undefined") {
+    return themeMode === "light" ? "light" : "dark";
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 export function useAuthAppearance() {
-  const [palette, setPaletteState] = useState<string>(() => {
-    return readPreviewPalette() ?? AUTH_PALETTE;
-  });
+  const [palette, setPaletteState] = useState<string>(readInitialPalette);
 
-  const [themeMode, setThemeModeState] = useState<ThemeDisplayMode>("dark");
+  const [themeMode, setThemeModeState] =
+    useState<ThemeDisplayMode>(readInitialThemeMode);
 
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
+    resolveThemeMode(readInitialThemeMode()),
+  );
 
   const setPalette = useCallback((nextPalette: string) => {
     setPaletteState(nextPalette);
@@ -55,9 +91,7 @@ export function useAuthAppearance() {
     } catch {
       // ignore
     }
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const resolved =
-      nextMode === "device" ? (media.matches ? "dark" : "light") : nextMode;
+    const resolved = resolveThemeMode(nextMode);
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.appearance = nextMode;
     setResolvedTheme(resolved);
@@ -76,7 +110,7 @@ export function useAuthAppearance() {
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const applyAppearance = () => {
-      const activePalette = readPreviewPalette() ?? AUTH_PALETTE;
+      const activePalette = readPreviewPalette() ?? palette;
       const activeResolved =
         themeMode === "device" ? (media.matches ? "dark" : "light") : themeMode;
 
