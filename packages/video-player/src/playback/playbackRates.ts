@@ -1,10 +1,8 @@
-export const DEFAULT_PLAYBACK_RATES = [
-  0.5, 0.75, 1, 1.25, 1.5, 1.75, 2,
-] as const;
+export const DEFAULT_PLAYBACK_RATES = [1, 1.25, 1.5, 2, 3] as const;
 
 export const MIN_CUSTOM_PLAYBACK_RATE = 0.25;
-export const MAX_CUSTOM_PLAYBACK_RATE = 4;
-export const CUSTOM_PLAYBACK_RATE_STEP = 0.05;
+export const MAX_CUSTOM_PLAYBACK_RATE = 8;
+export const CUSTOM_PLAYBACK_RATE_STEP = 0.25;
 export const KEYBOARD_PLAYBACK_RATE_STEP = 0.25;
 
 export function getKeyboardPlaybackRate(

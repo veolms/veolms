@@ -12,6 +12,7 @@ import {
   writeMiniPlayerRestore,
   writeResumePosition,
 } from "./lessonPlayerPersistence";
+import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 
 interface MiniPlayerControlsProps {
@@ -64,6 +65,7 @@ export function LearningMiniPlayer({
   onRestore,
 }: LearningMiniPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
+  const miniPlayerRef = useRef<HTMLElement>(null);
   const playerTheme = useLearningPlayerTheme();
   const currentTimeRef = useRef(session.currentTime);
 
@@ -87,6 +89,11 @@ export function LearningMiniPlayer({
     onRestore();
   }, [onRestore, persistCurrentTime, session.mediaKey]);
 
+  const miniPlayerGestures = useLearningMiniPlayerGestures(
+    miniPlayerRef,
+    handleClose,
+  );
+
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
       if (event.type === "timeupdate") {
@@ -107,10 +114,21 @@ export function LearningMiniPlayer({
 
   return (
     <aside
-      className="fixed right-3 z-150 w-[min(82vw,22rem)] overflow-hidden rounded-xl border border-white/14 bg-black shadow-[0_18px_48px_rgba(0,0,0,0.52)] sm:hidden"
-      style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
+      ref={miniPlayerRef}
+      className="fixed right-3 z-150 w-[min(82vw,22rem)] touch-none overflow-hidden rounded-xl border border-white/14 bg-black shadow-[0_18px_48px_rgba(0,0,0,0.52)] select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] sm:hidden motion-reduce:transition-none"
+      style={{
+        bottom: "calc(5.25rem + env(safe-area-inset-bottom))",
+        ...miniPlayerGestures.style,
+      }}
       aria-label={`Mini player for ${session.lessonTitle}`}
+      aria-describedby="learning-mini-player-gesture-help"
+      data-learning-mini-player=""
+      data-mini-player-mode={miniPlayerGestures.mode}
+      {...miniPlayerGestures.gestureProps}
     >
+      <span id="learning-mini-player-gesture-help" className="sr-only">
+        Drag to move, pinch to resize, or swipe down quickly to close.
+      </span>
       <VideoPlayer
         ref={playerRef}
         source={{ ...session.source, startTime: session.currentTime }}

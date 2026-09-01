@@ -67,6 +67,7 @@ export type {
   PlayerSnapshot,
   PlayerUiState,
   PlayerSettingsView,
+  PlayerZoomState,
 } from "./react/playerState";
 export type {
   PlayerPresentationEvent,
@@ -92,6 +93,8 @@ export { TheaterButton } from "./controls/TheaterButton";
 export { PlayerIconButton } from "./controls/PlayerIconButton";
 export { PlaybackFeedback } from "./controls/PlaybackFeedback";
 export type { PlaybackFeedbackProps } from "./controls/PlaybackFeedback";
+export { ZoomLevelIndicator } from "./controls/ZoomLevelIndicator";
+export type { ZoomLevelIndicatorProps } from "./controls/ZoomLevelIndicator";
 export { DefaultControls } from "./controls/DefaultControls";
 export { BufferingIndicator } from "./controls/BufferingIndicator";
 export { ErrorOverlay } from "./controls/ErrorOverlay";

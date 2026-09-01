@@ -3,12 +3,6 @@
    component-local Tailwind utilities. */
 [data-video-player-root] {
   color: var(--video-player-control-text, #fff);
-  --text: var(--video-player-menu-text, #fff);
-  --text-secondary: var(
-    --video-player-menu-text-muted,
-    rgb(255 255 255 / 0.68)
-  );
-  --accent: var(--video-player-accent, #ff7a1a);
 }
 
 [data-video-player-root] .player-control {
@@ -99,26 +93,13 @@
     var(--video-player-control-text) 28%,
     transparent
   ) !important;
-  border-color: color-mix(
-    in srgb,
-    var(--video-player-control-text) 45%,
-    transparent
-  ) !important;
+  border: 0 !important;
 }
 
 [data-video-player-root]
   [role="switch"][aria-checked="true"]
   [data-autoplay-track] {
-  background: color-mix(
-    in srgb,
-    var(--video-player-accent) 72%,
-    var(--video-player-control-surface)
-  ) !important;
-  border-color: color-mix(
-    in srgb,
-    var(--video-player-accent) 72%,
-    var(--video-player-control-text)
-  ) !important;
+  background: rgb(255 255 255 / 0.56) !important;
 }
 
 [data-video-player-root] [data-autoplay-knob] {
@@ -127,18 +108,34 @@
 }
 
 [data-video-player-menu-panel] {
-  border-color: var(
-    --video-player-menu-border,
-    rgb(255 255 255 / 0.14)
-  ) !important;
+  border: 0 !important;
   border-radius: var(--video-player-menu-radius, 14px) !important;
   background: var(--video-player-menu-surface, rgb(11 11 13 / 0.88)) !important;
   color: var(--video-player-menu-text, #fff) !important;
   box-shadow: var(--video-player-menu-shadow, none) !important;
 }
 
+[data-video-player-mobile-sheet] {
+  background: color-mix(
+    in srgb,
+    var(--video-player-menu-surface, rgb(11 11 13 / 0.94)) 92%,
+    var(--video-player-accent, #ff7a1a) 8%
+  ) !important;
+}
+
+@media (min-width: 40.0625rem) {
+  [data-video-player-menu-panel]:not([data-video-player-mobile-sheet]) {
+    background: color-mix(
+      in srgb,
+      var(--video-player-menu-surface, rgb(11 11 13 / 0.88)) 86%,
+      transparent
+    ) !important;
+  }
+}
+
 [data-video-player-menu-panel] .player-menu-row,
-[data-video-player-menu-panel] [role^="menuitem"] {
+[data-video-player-menu-panel]
+  [role^="menuitem"]:not([data-video-player-settings-back]) {
   border-radius: calc(var(--video-player-menu-radius, 14px) - 5px);
 }
 

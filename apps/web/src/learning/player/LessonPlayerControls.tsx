@@ -7,10 +7,12 @@ import {
   TimeDisplay,
   Timeline,
   VolumeControl,
+  ZoomLevelIndicator,
   usePlayerController,
   usePlayerState,
   usePlayerTheme,
 } from "@veolms/video-player";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import type { ReactNode } from "react";
 
 const PLAYER_SURFACE_CLASS =
@@ -19,8 +21,6 @@ const PLAYER_INNER_CONTROL_CLASS =
   "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-(--video-player-control-surface-hover) active:!bg-(--video-player-control-surface-active) focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 const PLAYER_ICON_PILL_CLASS =
   "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)] sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
-const PLAYER_VOLUME_ICON_CLASS =
-  "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-transparent focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 
 function PlayerControlSurface({
   children,
@@ -46,11 +46,47 @@ export interface LessonPlayerControlsProps {
   autoplayEnabled: boolean;
   canGoNext: boolean;
   canGoPrevious: boolean;
+  courseLessonsOpen?: boolean;
   onAmbientEnabledChange: (enabled: boolean) => void;
   onAutoplayEnabledChange: (enabled: boolean) => void;
+  onCourseLessonsToggle?: () => void;
   onGoNext: () => void;
   onGoPrevious: () => void;
   onMinimize?: () => void;
+}
+
+function CourseLessonsButton({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <PlayerControlSurface
+      cluster="course-lessons"
+      className="inline-flex h-9 items-center rounded-full p-0.5"
+    >
+      <button
+        type="button"
+        aria-label={open ? "Close lessons" : "Open lessons"}
+        aria-expanded={open}
+        aria-controls="lesson-drawer-curriculum-scrollport"
+        data-player-control=""
+        className={`${PLAYER_INNER_CONTROL_CLASS} inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 !text-[13px] font-semibold tracking-[0.01em]`}
+        onClick={onToggle}
+      >
+        <span>Lessons</span>
+        <CaretDown
+          aria-hidden="true"
+          size={15}
+          className={`transition-transform duration-240 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+            open ? "-rotate-180" : "rotate-0"
+          }`}
+        />
+      </button>
+    </PlayerControlSurface>
+  );
 }
 
 function AutoplayToggle({
@@ -75,7 +111,7 @@ function AutoplayToggle({
     >
       <span
         aria-hidden="true"
-        className="relative block h-3.5 w-8 rounded-full border border-white/35 bg-black/40 transition-[background-color,border-color] duration-150 sm:h-4 sm:w-9"
+        className="relative block h-3.5 w-8 rounded-full border-0 bg-black/40 transition-colors duration-150 sm:h-4 sm:w-9"
         data-autoplay-track=""
         data-autoplay-track-state={enabled ? "on" : "off"}
       >
@@ -165,14 +201,16 @@ function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
       cluster="time"
       className={
         mobile
-          ? "inline-flex h-9 items-center rounded-full p-0.5"
-          : "inline-flex h-10.5 items-center rounded-full p-[3px]"
+          ? "inline-flex items-center overflow-hidden rounded-full p-0"
+          : "inline-flex h-9.5 items-center rounded-full p-[3px]"
       }
     >
       <TimeDisplay
         interactive
         className={`${PLAYER_INNER_CONTROL_CLASS} ${
-          mobile ? "!h-8 !px-2.5 !text-[11px]" : "!h-9 !px-3 !text-sm"
+          mobile
+            ? "!inline-flex !h-auto !items-center !px-2 !py-1 !text-xs !leading-4"
+            : "!inline-flex !h-8 !items-center !px-3.5 !text-sm"
         }`}
       />
     </PlayerControlSurface>
@@ -191,6 +229,7 @@ function AmbientSettingsItem({
       data-menu-keep-open=""
       label="Ambient mode"
       checked={enabled}
+      highlightChecked={false}
       leading={<AmbientModeIcon enabled={enabled} />}
       trailing={<MenuToggle checked={enabled} />}
       onClick={() => onEnabledChange(!enabled)}
@@ -223,12 +262,12 @@ function MenuToggle({ checked }: { checked: boolean }) {
       data-player-menu-toggle-state={checked ? "on" : "off"}
       className={`relative inline-flex h-5 w-9 rounded-full transition-colors duration-150 ${
         checked
-          ? "bg-[color-mix(in_srgb,var(--accent)_78%,var(--surface))]"
-          : "bg-[color-mix(in_srgb,var(--text)_22%,transparent)]"
+          ? "bg-[color-mix(in_srgb,var(--video-player-accent)_78%,var(--video-player-menu-surface))]"
+          : "bg-[color-mix(in_srgb,var(--video-player-menu-text)_22%,transparent)]"
       }`}
     >
       <span
-        className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-(--surface) shadow-[0_1px_4px_rgba(0,0,0,0.32)] transition-transform duration-150 motion-reduce:transition-none ${
+        className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-(--video-player-menu-text) shadow-[0_1px_4px_rgba(0,0,0,0.32)] transition-transform duration-150 motion-reduce:transition-none ${
           checked ? "translate-x-4" : "translate-x-0"
         }`}
       />
@@ -241,8 +280,10 @@ export function LessonPlayerControls({
   autoplayEnabled,
   canGoNext,
   canGoPrevious,
+  courseLessonsOpen = false,
   onAmbientEnabledChange,
   onAutoplayEnabledChange,
+  onCourseLessonsToggle,
   onGoNext,
   onGoPrevious,
   onMinimize,
@@ -306,6 +347,7 @@ export function LessonPlayerControls({
           enabled={autoplayEnabled}
           onEnabledChange={onAutoplayEnabledChange}
         />
+        <ZoomLevelIndicator />
         <CaptionsButton />
         <SettingsMenu
           includePictureInPicture
@@ -335,7 +377,7 @@ export function LessonPlayerControls({
       <div
         data-mobile-player-corner="time"
         data-preview-obscured={previewTime !== null ? "true" : "false"}
-        className={`pointer-events-auto absolute bottom-2.5 left-2 flex items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 ${
+        className={`pointer-events-auto absolute bottom-2.5 left-2 flex h-10 items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 sm:h-auto ${
           previewTime !== null
             ? "max-sm:pointer-events-none max-sm:opacity-0"
             : "max-sm:opacity-100"
@@ -368,8 +410,8 @@ export function LessonPlayerControls({
           </PlayerControlSurface>
           <VolumeControl
             collapsible
-            className={`${PLAYER_SURFACE_CLASS} h-10.5 !w-11 shrink-0 rounded-full p-[3px] hover:!w-32 hover:bg-(--video-player-control-surface-hover) focus-within:!w-32 focus-within:bg-(--video-player-control-surface-hover)`}
-            muteButtonClassName={PLAYER_VOLUME_ICON_CLASS}
+            className={`${PLAYER_SURFACE_CLASS} h-10.5 !w-10.5 shrink-0 rounded-full p-1 hover:!w-31.5 hover:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:bg-(--video-player-control-surface-hover) [&_.player-volume-slider]:!h-8.5`}
+            muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} !size-8.5`}
           />
           <LessonTimeControl />
         </div>
@@ -378,21 +420,29 @@ export function LessonPlayerControls({
       <div
         data-mobile-player-corner="fullscreen"
         data-preview-obscured={previewTime !== null ? "true" : "false"}
-        className={`pointer-events-auto absolute bottom-2.5 right-2 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${
+        className={`pointer-events-auto absolute bottom-2.5 right-2 z-60 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${
           previewTime !== null
             ? "max-sm:pointer-events-none max-sm:opacity-0"
             : "max-sm:opacity-100"
         }`}
       >
-        <div
-          className="inline-flex size-10 items-center justify-center"
-          data-player-control-cluster="fullscreen"
-        >
-          <FullscreenButton
-            className={`${PLAYER_ICON_PILL_CLASS} !size-10 !bg-transparent !px-0`}
-            iconContainerClassName="pointer-events-none grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow)"
-            iconSize={22}
-          />
+        <div className="inline-flex items-center gap-1.5">
+          {onCourseLessonsToggle ? (
+            <CourseLessonsButton
+              open={courseLessonsOpen}
+              onToggle={onCourseLessonsToggle}
+            />
+          ) : null}
+          <div
+            className="inline-flex size-10 items-center justify-center"
+            data-player-control-cluster="fullscreen"
+          >
+            <FullscreenButton
+              className={`${PLAYER_ICON_PILL_CLASS} !size-10 !bg-transparent !px-0`}
+              iconContainerClassName="pointer-events-none grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow)"
+              iconSize={22}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -426,35 +476,35 @@ export function LessonCentralControls({
       <div className="pointer-events-auto flex items-center gap-6">
         <PlayerControlSurface
           cluster="mobile-previous"
-          className="size-10.5 rounded-full p-0.5"
+          className="grid size-11.5 place-items-center rounded-full !border-0 p-0"
         >
           <LessonNavigationButton
             direction="previous"
             disabled={!canGoPrevious}
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-10`}
-            iconSize={20}
+            className={`${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+            iconSize={22}
             onClick={onGoPrevious}
           />
         </PlayerControlSurface>
         <PlayerControlSurface
           cluster="mobile-play"
-          className="size-14 rounded-full p-0.5"
+          className="grid size-15.5 place-items-center rounded-full !border-0 p-0"
         >
           <PlayButton
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-13`}
+            className={`${PLAYER_INNER_CONTROL_CLASS} !size-15.5`}
             hideControlsOnPlay
-            iconSize={26}
+            iconSize={29}
           />
         </PlayerControlSurface>
         <PlayerControlSurface
           cluster="mobile-next"
-          className="size-10.5 rounded-full p-0.5"
+          className="grid size-11.5 place-items-center rounded-full !border-0 p-0"
         >
           <LessonNavigationButton
             direction="next"
             disabled={!canGoNext}
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-10`}
-            iconSize={20}
+            className={`${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+            iconSize={22}
             onClick={onGoNext}
           />
         </PlayerControlSurface>

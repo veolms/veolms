@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FakeVideoEngine } from "../testing/FakeVideoEngine";
 import type { VideoSource } from "../core/types";
+import { BUILT_IN_PLAYER_THEME_IDS } from "../themes/playerThemes";
 import { PlayerMedia } from "./PlayerMedia";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
 import { VideoPlayer } from "./VideoPlayer";
@@ -28,7 +29,39 @@ function installFinePointerMatchMedia() {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: (query: string) => ({
-      matches: query === "(hover: hover) and (pointer: fine)",
+      matches:
+        query === "(hover: hover) and (pointer: fine)" ||
+        query === "(min-width: 40rem)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }),
+  });
+
+  return () => {
+    if (previousMatchMedia) {
+      Object.defineProperty(window, "matchMedia", previousMatchMedia);
+    } else {
+      Reflect.deleteProperty(window, "matchMedia");
+    }
+  };
+}
+
+function installCompactViewportMatchMedia() {
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(
+    window,
+    "matchMedia",
+  );
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
       media: query,
       onchange: null,
       addEventListener() {},
@@ -194,6 +227,55 @@ describe("VideoPlayer integration", () => {
     fireEvent.keyUp(gestureSurface, { key: " ", code: "Space" });
 
     await waitFor(() => expect(play).toHaveBeenCalledOnce());
+  });
+
+  it("hides controls during a held-Space 2× boost while its elevated label fades independently", async () => {
+    const engine = new FakeVideoEngine();
+    const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
+
+    render(<VideoPlayer source={source} engineFactory={() => engine} />);
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+    const player = screen.getByRole("region", { name: "Video player" });
+    const gestureSurface = screen.getByRole("button", {
+      name: "Play or pause video",
+    });
+    gestureSurface.focus();
+    vi.useFakeTimers();
+
+    fireEvent.keyDown(gestureSurface, {
+      key: " ",
+      code: "Space",
+      repeat: true,
+    });
+
+    expect(setPlaybackRate).toHaveBeenLastCalledWith(2);
+    expect(player).toHaveAttribute("data-controls-visible", "false");
+    expect(screen.getByRole("status")).toHaveAttribute(
+      "data-player-hud-variant",
+      "temporary-speed",
+    );
+    expect(screen.getByText("2× speed")).toHaveClass(
+      "top-[22%]",
+      "left-1/2",
+      "-translate-x-1/2",
+    );
+
+    act(() => vi.advanceTimersByTime(850));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(engine.getSnapshot().playbackRate).toBe(2);
+    expect(player).toHaveAttribute("data-controls-visible", "false");
+
+    fireEvent.keyDown(gestureSurface, {
+      key: " ",
+      code: "Space",
+      repeat: true,
+    });
+    expect(player).toHaveAttribute("data-controls-visible", "false");
+    fireEvent.keyUp(gestureSurface, { key: " ", code: "Space" });
+
+    expect(setPlaybackRate).toHaveBeenLastCalledWith(1);
+    expect(player).toHaveAttribute("data-controls-visible", "true");
   });
 
   it("survives StrictMode effect replay without duplicate loading or leaked ownership", async () => {
@@ -608,62 +690,359 @@ describe("VideoPlayer integration", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("touch double taps either side using the configured seek interval", async () => {
+  it.each(BUILT_IN_PLAYER_THEME_IDS)(
+    "accumulates mobile seek taps with side feedback in the %s theme",
+    async (theme) => {
+      const restoreMatchMedia = installCompactViewportMatchMedia();
+      const engine = new FakeVideoEngine();
+      const seek = vi.spyOn(engine, "seek");
+
+      try {
+        const { container } = render(
+          <VideoPlayer
+            source={source}
+            engineFactory={() => engine}
+            emptyTapBehavior="responsive"
+            seekIntervalSeconds={20}
+            theme={theme}
+          />,
+        );
+
+        await waitFor(() =>
+          expect(engine.getSnapshot().lifecycle).toBe("ready"),
+        );
+        engine.setSnapshot({ currentTime: 30 });
+        const player = screen.getByRole("region", { name: "Video player" });
+        const surface = screen.getByRole("button", {
+          name: "Play or pause video; tap to show controls",
+        });
+        vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+          bottom: 60,
+          height: 60,
+          left: 0,
+          right: 100,
+          top: 0,
+          width: 100,
+          x: 0,
+          y: 0,
+          toJSON: () => undefined,
+        });
+        vi.useFakeTimers();
+
+        const tap = (clientX: number) => {
+          fireEvent.pointerDown(surface, {
+            clientX,
+            pointerId: 1,
+            pointerType: "touch",
+          });
+          fireEvent.pointerUp(surface, {
+            clientX,
+            pointerId: 1,
+            pointerType: "touch",
+          });
+        };
+
+        act(() => {
+          tap(75);
+          vi.advanceTimersByTime(100);
+          tap(75);
+        });
+        expect(seek).toHaveBeenLastCalledWith(50);
+        expect(player).toHaveAttribute("data-controls-visible", "false");
+        expect(screen.getByRole("status")).toHaveAttribute(
+          "data-player-hud-direction",
+          "forward",
+        );
+        expect(screen.getByRole("status")).toHaveAccessibleName(
+          "Seek forward 20 seconds",
+        );
+        expect(screen.getByText("+20")).toBeVisible();
+        expect(
+          container.querySelector('[data-player-mobile-seek-icon="forward"]'),
+        ).toBeInTheDocument();
+
+        act(() => {
+          vi.advanceTimersByTime(100);
+          tap(75);
+        });
+        expect(seek).toHaveBeenLastCalledWith(70);
+        expect(screen.getByText("+40")).toBeVisible();
+
+        act(() => {
+          vi.advanceTimersByTime(100);
+          tap(25);
+        });
+        expect(seek).toHaveBeenLastCalledWith(50);
+        expect(screen.getByRole("status")).toHaveAttribute(
+          "data-player-hud-direction",
+          "backward",
+        );
+        expect(screen.getByRole("status")).toHaveAccessibleName(
+          "Seek backward 20 seconds",
+        );
+        expect(screen.getByText("−20")).toBeVisible();
+        expect(
+          container.querySelector('[data-player-mobile-seek-icon="backward"]'),
+        ).toHaveClass("rotate-180");
+
+        act(() => vi.advanceTimersByTime(849));
+        expect(screen.getByText("−20")).toBeVisible();
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(player).toHaveAttribute("data-controls-visible", "true");
+      } finally {
+        restoreMatchMedia();
+      }
+    },
+  );
+
+  it("accumulates native mobile touch taps without waiting for another pair", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
     const engine = new FakeVideoEngine();
     const seek = vi.spyOn(engine, "seek");
-    render(
-      <VideoPlayer
-        source={source}
-        engineFactory={() => engine}
-        seekIntervalSeconds={20}
-      />,
-    );
 
-    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
-    engine.setSnapshot({ currentTime: 30 });
-    const surface = screen.getByRole("button", { name: "Play or pause video" });
-    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
-      bottom: 60,
-      height: 60,
-      left: 0,
-      right: 100,
-      top: 0,
-      width: 100,
-      x: 0,
-      y: 0,
-      toJSON: () => undefined,
-    });
-    vi.useFakeTimers();
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+          seekIntervalSeconds={10}
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      engine.setSnapshot({ currentTime: 5 });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+        bottom: 60,
+        height: 60,
+        left: 0,
+        right: 100,
+        top: 0,
+        width: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      vi.useFakeTimers();
 
-    const tap = (clientX: number) => {
+      const touchTap = (identifier: number) => {
+        const touch = { clientX: 75, clientY: 30, identifier };
+        fireEvent.touchStart(surface, {
+          changedTouches: [touch],
+          touches: [touch],
+        });
+        fireEvent.touchEnd(surface, {
+          changedTouches: [touch],
+          touches: [],
+        });
+      };
+
+      act(() => {
+        touchTap(1);
+        vi.advanceTimersByTime(100);
+        touchTap(2);
+      });
+      expect(seek).toHaveBeenLastCalledWith(15);
+      expect(screen.getByText("+10")).toBeVisible();
+
+      act(() => {
+        vi.advanceTimersByTime(100);
+        touchTap(3);
+      });
+      expect(seek).toHaveBeenLastCalledWith(25);
+      expect(screen.getByText("+20")).toBeVisible();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("pinch-zooms to fill, pans the zoomed video, and exposes the zoom level with controls", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      expect(media).not.toBeNull();
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 300,
+        height: 300,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      Object.defineProperties(media!, {
+        videoHeight: { configurable: true, value: 900 },
+        videoWidth: { configurable: true, value: 1_600 },
+      });
+      vi.useFakeTimers();
+
       fireEvent.pointerDown(surface, {
-        clientX,
+        clientX: 150,
+        clientY: 150,
         pointerId: 1,
+        pointerType: "touch",
+      });
+      fireEvent.pointerDown(surface, {
+        clientX: 250,
+        clientY: 150,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 270,
+        clientY: 150,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.200");
+      expect(screen.getByLabelText("Video zoom 1.2×")).toBeVisible();
+      expect(play).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(100));
+      fireEvent.pointerUp(surface, {
+        clientX: 270,
+        clientY: 150,
+        pointerId: 2,
         pointerType: "touch",
       });
       fireEvent.pointerUp(surface, {
-        clientX,
+        clientX: 150,
+        clientY: 150,
         pointerId: 1,
         pointerType: "touch",
       });
-    };
 
-    act(() => {
-      tap(75);
-      vi.advanceTimersByTime(100);
-      tap(75);
-    });
-    expect(seek).toHaveBeenLastCalledWith(50);
-    expect(screen.getByText("+20 seconds")).toBeVisible();
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
+      expect(screen.getByLabelText("Video zoom 1.33×")).toBeVisible();
 
-    act(() => {
-      vi.advanceTimersByTime(350);
-      tap(25);
-      vi.advanceTimersByTime(100);
-      tap(25);
-    });
-    expect(seek).toHaveBeenLastCalledWith(30);
-    expect(screen.getByText("−20 seconds")).toBeVisible();
+      act(() => vi.advanceTimersByTime(1_800));
+      expect(
+        screen.queryByLabelText("Video zoom 1.33×"),
+      ).not.toBeInTheDocument();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 3,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 3,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(301));
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(screen.getByLabelText("Video zoom 1.33×")).toHaveAttribute(
+        "data-player-zoom-indicator",
+        "control",
+      );
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 4,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 240,
+        clientY: 150,
+        pointerId: 4,
+        pointerType: "touch",
+      });
+      expect(media?.style.transform).toContain("translate3d(50px, 0px, 0)");
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      fireEvent.pointerUp(surface, {
+        clientX: 240,
+        clientY: 150,
+        pointerId: 4,
+        pointerType: "touch",
+      });
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("supports native touch pinch gestures without pointer events", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 225,
+        height: 225,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      Object.defineProperties(media!, {
+        videoHeight: { configurable: true, value: 900 },
+        videoWidth: { configurable: true, value: 1_600 },
+      });
+
+      const first = { clientX: 150, clientY: 110, identifier: 1 };
+      const second = { clientX: 250, clientY: 110, identifier: 2 };
+      fireEvent.touchStart(surface, {
+        changedTouches: [first, second],
+        touches: [first, second],
+      });
+      fireEvent.touchMove(surface, {
+        changedTouches: [{ ...second, clientX: 350 }],
+        touches: [first, { ...second, clientX: 350 }],
+      });
+
+      expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(screen.getByLabelText("Video zoom 2×")).toBeVisible();
+
+      fireEvent.touchEnd(surface, {
+        changedTouches: [first, second],
+        touches: [],
+      });
+      expect(media).toHaveAttribute("data-player-zoom-active", "false");
+    } finally {
+      restoreMatchMedia();
+    }
   });
 
   it("double-clicks anywhere on desktop to toggle fullscreen without seeking", async () => {
@@ -685,6 +1064,7 @@ describe("VideoPlayer integration", () => {
     const surface = screen.getByRole("button", {
       name: "Play or pause video",
     });
+    expect(surface).not.toHaveAttribute("title");
     vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
       bottom: 60,
       height: 60,
@@ -723,6 +1103,191 @@ describe("VideoPlayer integration", () => {
 
     act(() => vi.advanceTimersByTime(350));
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it("uses empty-space mouse clicks to toggle controls in a compact viewport", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      expect(surface).not.toHaveAttribute("title");
+      vi.useFakeTimers();
+
+      const clickEmptySpace = () => {
+        fireEvent.pointerDown(surface, {
+          clientX: 50,
+          pointerId: 1,
+          pointerType: "mouse",
+        });
+        fireEvent.pointerUp(surface, {
+          clientX: 50,
+          pointerId: 1,
+          pointerType: "mouse",
+        });
+        act(() => vi.advanceTimersByTime(301));
+      };
+
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      clickEmptySpace();
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(play).not.toHaveBeenCalled();
+
+      clickEmptySpace();
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(play).not.toHaveBeenCalled();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("uses touch completion to toggle controls and deduplicates pointer-backed touches", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+    const seek = vi.spyOn(engine, "seek");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+        bottom: 60,
+        height: 60,
+        left: 0,
+        right: 100,
+        top: 0,
+        width: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      vi.useFakeTimers();
+      const touch = { clientX: 50, clientY: 30, identifier: 7 };
+
+      fireEvent.touchStart(surface, {
+        changedTouches: [touch],
+        touches: [touch],
+      });
+      fireEvent.touchEnd(surface, { changedTouches: [touch], touches: [] });
+      act(() => vi.advanceTimersByTime(301));
+
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(play).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 50,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      fireEvent.touchStart(surface, {
+        changedTouches: [touch],
+        touches: [touch],
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 50,
+        pointerId: 7,
+        pointerType: "touch",
+      });
+      fireEvent.touchEnd(surface, { changedTouches: [touch], touches: [] });
+      act(() => vi.advanceTimersByTime(301));
+
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(play).not.toHaveBeenCalled();
+      expect(seek).not.toHaveBeenCalled();
+
+      fireEvent.touchStart(surface, {
+        changedTouches: [touch],
+        touches: [touch],
+      });
+      fireEvent.touchMove(surface, {
+        changedTouches: [{ ...touch, clientY: 50 }],
+        touches: [{ ...touch, clientY: 50 }],
+      });
+      fireEvent.touchEnd(surface, { changedTouches: [touch], touches: [] });
+      act(() => vi.advanceTimersByTime(301));
+
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(play).not.toHaveBeenCalled();
+      expect(seek).not.toHaveBeenCalled();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("keeps a mobile long-press at 2× after the elevated label fades", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const touch = { clientX: 75, clientY: 30, identifier: 17 };
+      vi.useFakeTimers();
+
+      fireEvent.touchStart(surface, {
+        changedTouches: [touch],
+        touches: [touch],
+      });
+      act(() => vi.advanceTimersByTime(500));
+
+      expect(setPlaybackRate).toHaveBeenLastCalledWith(2);
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(screen.getByRole("status")).toHaveAttribute(
+        "data-player-hud-variant",
+        "temporary-speed",
+      );
+      expect(screen.getByText("2× speed")).toHaveClass("top-[22%]");
+
+      act(() => vi.advanceTimersByTime(850));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(engine.getSnapshot().playbackRate).toBe(2);
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+
+      fireEvent.touchEnd(surface, {
+        changedTouches: [touch],
+        touches: [],
+      });
+      expect(setPlaybackRate).toHaveBeenLastCalledWith(1);
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+    } finally {
+      restoreMatchMedia();
+    }
   });
 
   it("uses desktop hover for controls and mouse clicks for playback", async () => {

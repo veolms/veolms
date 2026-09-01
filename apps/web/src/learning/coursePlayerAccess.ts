@@ -2,6 +2,19 @@ import type { CourseOverviewResponse } from "@veolms/contracts";
 
 export const PUBLIC_PREVIEW_LESSON_LIMIT = 2;
 
+export function canPlayCourseLesson(input: {
+  allowGuestLearning: boolean;
+  isAuthenticated: boolean;
+  lessonNumber: number;
+  publicPreviewLessonNumbers: ReadonlySet<number>;
+}): boolean {
+  return (
+    input.allowGuestLearning ||
+    input.isAuthenticated ||
+    input.publicPreviewLessonNumbers.has(input.lessonNumber)
+  );
+}
+
 /**
  * Returns the 1-based lesson numbers that anonymous visitors may play.
  *

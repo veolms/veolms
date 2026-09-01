@@ -125,7 +125,13 @@ describe("LessonVideoPlayer adapter", () => {
       expect(player).toHaveAttribute("data-player-theme", "minimal"),
     );
     expect(player.style.getPropertyValue("--video-player-accent")).toBe(
-      "#f8fafc",
+      "var(--accent)",
+    );
+    expect(player.style.getPropertyValue("--video-player-menu-surface")).toBe(
+      "color-mix(in srgb, var(--surface) 46%, transparent)",
+    );
+    expect(player.style.getPropertyValue("--video-player-menu-text")).toBe(
+      "var(--text)",
     );
   });
 
@@ -160,11 +166,72 @@ describe("LessonVideoPlayer adapter", () => {
       );
       expect(track).toHaveAttribute("data-autoplay-track-state", "on");
       expect(player.style.getPropertyValue("--video-player-accent")).toBe(
-        BUILT_IN_PLAYER_THEMES[themeId].tokens.accent,
+        "var(--accent)",
+      );
+      expect(player.style.getPropertyValue("--video-player-control-text")).toBe(
+        BUILT_IN_PLAYER_THEMES[themeId].tokens.controlText,
       );
 
       fireEvent.click(autoplaySwitch);
       expect(onAutoplayEnabledChange).toHaveBeenCalledWith(false);
+    },
+  );
+
+  it.each(BUILT_IN_PLAYER_THEME_IDS)(
+    "toggles the mobile lessons control in the %s theme",
+    async (themeId) => {
+      const engine = new RecordingFakeVideoEngine(90);
+      const onCourseLessonsToggle = vi.fn();
+      localStorage.setItem(
+        LEARNING_PREFERENCES_KEY,
+        JSON.stringify({ videoPlayerTheme: themeId }),
+      );
+      const { rerender } = render(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          courseLessonsOpen={false}
+          onCourseLessonsToggle={onCourseLessonsToggle}
+        />,
+      );
+
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+      const openButton = screen.getByRole("button", { name: "Open lessons" });
+      const surface = openButton.closest(
+        '[data-player-control-cluster="course-lessons"]',
+      );
+      expect(openButton).toHaveAttribute("aria-expanded", "false");
+      expect(openButton).toHaveAttribute(
+        "aria-controls",
+        "lesson-drawer-curriculum-scrollport",
+      );
+      expect(surface).toHaveClass(
+        "rounded-full",
+        "bg-(--video-player-control-surface)",
+      );
+      expect(openButton).toHaveClass("!text-[13px]");
+      const arrow = openButton.querySelector("svg");
+      expect(arrow).toHaveAttribute("width", "15");
+      expect(arrow).toHaveAttribute("height", "15");
+      expect(arrow).toHaveClass("rotate-0");
+      expect(
+        openButton.closest('[data-mobile-player-corner="fullscreen"]'),
+      ).toHaveClass("z-60");
+
+      fireEvent.click(openButton);
+      expect(onCourseLessonsToggle).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          courseLessonsOpen
+          onCourseLessonsToggle={onCourseLessonsToggle}
+        />,
+      );
+      const closeButton = screen.getByRole("button", {
+        name: "Close lessons",
+      });
+      expect(closeButton).toHaveAttribute("aria-expanded", "true");
+      expect(closeButton.querySelector("svg")).toHaveClass("-rotate-180");
     },
   );
 
@@ -344,7 +411,7 @@ describe("LessonVideoPlayer adapter", () => {
       "w-8",
       "sm:h-4",
       "sm:w-9",
-      "border-white/35",
+      "border-0",
       "bg-black/40",
     );
     expect(autoplayTrack).toHaveAttribute("data-autoplay-track-state", "on");
@@ -369,10 +436,20 @@ describe("LessonVideoPlayer adapter", () => {
     const ambientToggle = ambientSetting.querySelector<HTMLElement>(
       "[data-player-menu-toggle]",
     );
+    const ambientKnob = ambientToggle?.firstElementChild;
     const initialAmbientState = ambientSetting.getAttribute("aria-checked");
     expect(ambientToggle).toHaveAttribute(
       "data-player-menu-toggle-state",
       initialAmbientState === "true" ? "on" : "off",
+    );
+    expect(ambientToggle).toHaveClass(
+      initialAmbientState === "true"
+        ? "bg-[color-mix(in_srgb,var(--video-player-accent)_78%,var(--video-player-menu-surface))]"
+        : "bg-[color-mix(in_srgb,var(--video-player-menu-text)_22%,transparent)]",
+    );
+    expect(ambientKnob).toHaveClass("bg-(--video-player-menu-text)");
+    expect(ambientSetting).not.toHaveClass(
+      "bg-[color-mix(in_srgb,var(--video-player-accent)_14%,transparent)]",
     );
     fireEvent.click(ambientSetting);
     expect(ambientSetting).toHaveAttribute(
@@ -451,6 +528,92 @@ describe("LessonVideoPlayer adapter", () => {
           }),
         }),
       );
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("keeps pinch zoom inside the video instead of triggering mobile minimize", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const onMinimize = vi.fn();
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 640px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          onMinimize={onMinimize}
+        />,
+      );
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 225,
+        height: 225,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      Object.defineProperties(media!, {
+        videoHeight: { configurable: true, value: 900 },
+        videoWidth: { configurable: true, value: 1_600 },
+      });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 150,
+        clientY: 110,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+      fireEvent.pointerDown(surface, {
+        clientX: 250,
+        clientY: 110,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 350,
+        clientY: 110,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 350,
+        clientY: 110,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 150,
+        clientY: 110,
+        pointerId: 1,
+        pointerType: "touch",
+      });
+
+      expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
+      expect(onMinimize).not.toHaveBeenCalled();
     } finally {
       window.matchMedia = originalMatchMedia;
     }
@@ -568,9 +731,7 @@ describe("LessonVideoPlayer adapter", () => {
 
     render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
 
-    await waitFor(() =>
-      expect(engine.getSnapshot().playbackRate).toBe(1.75),
-    );
+    await waitFor(() => expect(engine.getSnapshot().playbackRate).toBe(1.75));
 
     act(() => engine.setPlaybackRate(1.5));
     expect(localStorage.getItem(lessonPlayerStorageKeys.playbackRate)).toBe(
@@ -593,7 +754,7 @@ describe("LessonVideoPlayer adapter", () => {
       name: "Lesson video player for Designing for real users",
     });
     expect(player.style.getPropertyValue("--video-player-accent")).toBe(
-      BUILT_IN_PLAYER_THEMES.youtube.tokens.accent,
+      "var(--accent)",
     );
 
     const navigationCluster = container.querySelector<HTMLElement>(
@@ -622,20 +783,27 @@ describe("LessonVideoPlayer adapter", () => {
     expect(volumeGroup).not.toBeNull();
     expect(volumeGroup).toHaveClass(
       "h-10.5",
-      "!w-11",
-      "p-[3px]",
-      "hover:!w-32",
-      "focus-within:!w-32",
+      "!w-10.5",
+      "p-1",
+      "hover:!w-31.5",
+      "focus-within:!w-31.5",
     );
     expect(volumeGroup?.className).toContain(
       "hover:bg-(--video-player-control-surface-hover)",
     );
     expect(
       within(volumeGroup!).getByRole("slider", { name: "Volume" }),
-    ).toHaveClass("focus-visible:outline-(--video-player-control-text)");
+    ).toHaveClass(
+      "focus-visible:outline-(--video-player-control-text)",
+      "player-volume-slider",
+    );
     expect(
       within(volumeGroup!).getByRole("button", { name: "Mute" }),
-    ).toHaveClass("hover:!bg-transparent");
+    ).toHaveClass(
+      "!size-8.5",
+      "hover:!bg-(--video-player-control-surface-hover)",
+      "active:!bg-(--video-player-control-surface-active)",
+    );
 
     const playerActions = container.querySelector<HTMLElement>(
       '[data-player-control-cluster="player-actions"]',
@@ -777,7 +945,14 @@ describe("LessonVideoPlayer adapter", () => {
     );
     expect(
       container.querySelector('[data-mobile-player-corner="time"]'),
-    ).toHaveClass("bottom-2.5", "left-2", "max-sm:opacity-100");
+    ).toHaveClass(
+      "bottom-2.5",
+      "left-2",
+      "h-10",
+      "items-center",
+      "sm:h-auto",
+      "max-sm:opacity-100",
+    );
     const mobileFullscreenCorner = container.querySelector(
       '[data-mobile-player-corner="fullscreen"]',
     );
@@ -807,14 +982,63 @@ describe("LessonVideoPlayer adapter", () => {
       "width",
       "22",
     );
-    expect(
-      container.querySelector('[data-player-control-cluster="mobile-play"]'),
-    ).toHaveClass("size-14", "p-0.5");
-    expect(
-      container.querySelector(
-        '[data-player-control-cluster="mobile-previous"]',
-      ),
-    ).toHaveClass("size-10.5", "p-0.5");
+    const mobilePlayCluster = container.querySelector(
+      '[data-player-control-cluster="mobile-play"]',
+    );
+    const mobilePreviousCluster = container.querySelector(
+      '[data-player-control-cluster="mobile-previous"]',
+    );
+    const mobileNextCluster = container.querySelector(
+      '[data-player-control-cluster="mobile-next"]',
+    );
+    expect(mobilePlayCluster).toHaveClass(
+      "grid",
+      "size-15.5",
+      "place-items-center",
+      "!border-0",
+      "p-0",
+    );
+    expect(mobilePreviousCluster).toHaveClass(
+      "grid",
+      "size-11.5",
+      "place-items-center",
+      "!border-0",
+      "p-0",
+    );
+    expect(mobileNextCluster).toHaveClass(
+      "grid",
+      "size-11.5",
+      "place-items-center",
+      "!border-0",
+      "p-0",
+    );
+
+    const mobilePlayButton = within(mobilePlayCluster as HTMLElement).getByRole(
+      "button",
+      { name: "Play" },
+    );
+    const mobilePreviousButton = within(
+      mobilePreviousCluster as HTMLElement,
+    ).getByRole("button", { name: "Previous lesson" });
+    const mobileNextButton = within(mobileNextCluster as HTMLElement).getByRole(
+      "button",
+      { name: "Next lesson" },
+    );
+    expect(mobilePlayButton).toHaveClass("!size-15.5", "p-0");
+    expect(mobilePreviousButton).toHaveClass("!size-11.5", "p-0");
+    expect(mobileNextButton).toHaveClass("!size-11.5", "p-0");
+    expect(mobilePlayButton.querySelector("svg")).toHaveAttribute(
+      "width",
+      "29",
+    );
+    expect(mobilePreviousButton.querySelector("svg")).toHaveAttribute(
+      "width",
+      "22",
+    );
+    expect(mobileNextButton.querySelector("svg")).toHaveAttribute(
+      "width",
+      "22",
+    );
     for (const controlName of [
       "Play",
       "Previous lesson",
@@ -832,11 +1056,37 @@ describe("LessonVideoPlayer adapter", () => {
       name: /00:00 elapsed of 01:30\. Show remaining time/,
     });
     expect(timeButtons).toHaveLength(2);
-    fireEvent.click(timeButtons[0]!);
+    const timeClusters = document.querySelectorAll(
+      '[data-player-control-cluster="time"]',
+    );
+    expect(timeClusters).toHaveLength(2);
 
-    expect(timeButtons[0]).toHaveAttribute("aria-pressed", "true");
-    expect(timeButtons[0]).toHaveTextContent("-01:30 / 01:30");
-    expect(timeButtons[0]).toHaveAccessibleName(
+    const mobileTimeCluster = timeClusters[0] as HTMLElement;
+    const desktopTimeCluster = timeClusters[1] as HTMLElement;
+    const mobileTimeButton = within(mobileTimeCluster).getByRole("button");
+    const desktopTimeButton = within(desktopTimeCluster).getByRole("button");
+
+    expect(mobileTimeCluster).toHaveClass(
+      "overflow-hidden",
+      "rounded-full",
+      "p-0",
+    );
+    expect(mobileTimeCluster).not.toHaveClass("h-9", "p-0.5");
+    expect(mobileTimeButton).toHaveClass(
+      "!h-auto",
+      "!px-2",
+      "!py-1",
+      "!text-xs",
+      "!leading-4",
+    );
+    expect(desktopTimeCluster).toHaveClass("h-9.5", "p-[3px]");
+    expect(desktopTimeButton).toHaveClass("!h-8", "!px-3.5", "!text-sm");
+
+    fireEvent.click(mobileTimeButton);
+
+    expect(mobileTimeButton).toHaveAttribute("aria-pressed", "true");
+    expect(mobileTimeButton).toHaveTextContent("-01:30 / 01:30");
+    expect(mobileTimeButton).toHaveAccessibleName(
       "01:30 remaining of 01:30. Show elapsed time",
     );
   });

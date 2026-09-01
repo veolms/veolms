@@ -68,6 +68,7 @@ export function usePlayerKeyboard({
   const registrationRef = useRef<PlayerKeyboardRegistrationHandle | null>(null);
   const rateBeforeBoostRef = useRef<number | null>(null);
   const pausedBeforeBoostRef = useRef(false);
+  const controlsVisibleBeforeBoostRef = useRef(true);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
@@ -115,20 +116,30 @@ export function usePlayerKeyboard({
           });
         },
         beginTemporarySpeedBoost: () => {
-          const media = controller.getSnapshot().media;
+          const snapshot = controller.getSnapshot();
+          const media = snapshot.media;
           rateBeforeBoostRef.current = media.playbackRate;
           pausedBeforeBoostRef.current = media.paused;
+          controlsVisibleBeforeBoostRef.current = snapshot.ui.controlsVisible;
+          controller.setSettingsView("closed");
+          controller.setTemporarySpeedBoost(true);
+          controller.setControlsVisible(false);
           controller.setPlaybackRate(2);
           if (media.paused) void controller.play().catch(() => undefined);
-          controller.showHud("2× speed");
+          controller.showHud("2× speed", { variant: "temporary-speed" });
         },
         endTemporarySpeedBoost: () => {
+          const shouldRestoreControls =
+            pausedBeforeBoostRef.current ||
+            controlsVisibleBeforeBoostRef.current;
           if (rateBeforeBoostRef.current !== null) {
             controller.setPlaybackRate(rateBeforeBoostRef.current);
             rateBeforeBoostRef.current = null;
           }
           if (pausedBeforeBoostRef.current) controller.pause();
           pausedBeforeBoostRef.current = false;
+          controller.setTemporarySpeedBoost(false);
+          controller.setControlsVisible(shouldRestoreControls);
           controller.clearHud();
         },
       },

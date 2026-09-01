@@ -15,7 +15,7 @@ export type PlayerSettingsView =
 
 export interface PlayerHudOptions {
   direction?: -1 | 1;
-  variant?: "default" | "playback-rate";
+  variant?: "default" | "mobile-seek" | "playback-rate" | "temporary-speed";
 }
 
 export interface PlayerHudMessage extends PlayerHudOptions {
@@ -23,9 +23,19 @@ export interface PlayerHudMessage extends PlayerHudOptions {
   text: string;
 }
 
+export interface PlayerZoomState {
+  scale: number;
+  panX: number;
+  panY: number;
+  gestureActive: boolean;
+  feedbackVisible: boolean;
+  transitioning: boolean;
+}
+
 export interface PlayerUiState {
   controlsVisible: boolean;
   controlsLocked: boolean;
+  temporarySpeedBoost: boolean;
   settingsView: PlayerSettingsView;
   scrubbing: boolean;
   previewTime: number | null;
@@ -33,6 +43,7 @@ export interface PlayerUiState {
   pictureInPicture: boolean;
   theater: boolean;
   hud: PlayerHudMessage | null;
+  zoom: PlayerZoomState;
 }
 
 export interface PlayerSnapshot {
@@ -49,6 +60,7 @@ export function createInitialPlayerUiState(): PlayerUiState {
   return {
     controlsVisible: true,
     controlsLocked: false,
+    temporarySpeedBoost: false,
     settingsView: "closed",
     scrubbing: false,
     previewTime: null,
@@ -56,5 +68,17 @@ export function createInitialPlayerUiState(): PlayerUiState {
     pictureInPicture: false,
     theater: false,
     hud: null,
+    zoom: createInitialPlayerZoomState(),
+  };
+}
+
+export function createInitialPlayerZoomState(): PlayerZoomState {
+  return {
+    scale: 1,
+    panX: 0,
+    panY: 0,
+    gestureActive: false,
+    feedbackVisible: false,
+    transitioning: false,
   };
 }

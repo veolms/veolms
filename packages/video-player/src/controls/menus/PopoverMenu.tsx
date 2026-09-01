@@ -1,6 +1,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -54,12 +55,13 @@ const triggerClass =
   "player-menu-trigger inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-[background-color,border-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm";
 
 const panelClass =
-  "absolute z-70 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border border-[color-mix(in_srgb,var(--text,#fff)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface,#0b0b0b)_78%,transparent)] p-1.5 text-(--text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] backdrop-blur-md focus:outline-none";
+  "absolute z-70 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border-0 bg-[color-mix(in_srgb,var(--video-player-menu-surface,rgb(11_11_13_/_0.88))_78%,transparent)] p-1.5 text-(--video-player-menu-text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] focus:outline-none";
 
 const mobileSheetPanelClass =
-  "fixed inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-t border-[color-mix(in_srgb,var(--text,#fff)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface,#0b0b0b)_86%,transparent)] text-(--text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] backdrop-blur-md focus:outline-none";
+  "fixed inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
 
 const mobileSheetQuery = "(max-width: 640px)";
+const mobileSheetDismissDistance = 72;
 
 const subscribeToMobileSheetViewport = (onStoreChange: () => void) => {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
@@ -92,14 +94,19 @@ export function PopoverMenu({
   triggerClassName,
 }: PopoverMenuProps) {
   const theme = usePlayerTheme();
-  const CloseIcon = theme.icons.close;
   const generatedId = useId();
   const menuId = `video-player-menu-${generatedId.replaceAll(":", "")}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const initialFocusRef = useRef<InitialFocus>("selected");
+  const mobileSheetDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+  } | null>(null);
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
+  const [mobileSheetDragging, setMobileSheetDragging] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
   const mobileSheetViewport = useSyncExternalStore(
@@ -155,7 +162,7 @@ export function PopoverMenu({
   }, [getItems, isMobileSheet, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isMobileSheet) return;
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (
@@ -163,14 +170,13 @@ export function PopoverMenu({
         !rootRef.current?.contains(target) &&
         !panelRef.current?.contains(target)
       ) {
-        if (isMobileSheet) closeAndRestoreFocus();
-        else closeMenu();
+        closeMenu();
       }
     };
     document.addEventListener("pointerdown", handlePointerDown, true);
     return () =>
       document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [closeAndRestoreFocus, closeMenu, isMobileSheet, isOpen]);
+  }, [closeMenu, isMobileSheet, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !isMobileSheet) return undefined;
@@ -183,6 +189,9 @@ export function PopoverMenu({
 
   const openWithFocus = (focus: InitialFocus) => {
     initialFocusRef.current = focus;
+    mobileSheetDragRef.current = null;
+    setMobileSheetDragOffset(0);
+    setMobileSheetDragging(false);
     setOpen(true);
   };
 
@@ -245,6 +254,44 @@ export function PopoverMenu({
     }
   };
 
+  const handleMobileSheetDragStart = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    mobileSheetDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+    };
+    setMobileSheetDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleMobileSheetDragMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const drag = mobileSheetDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setMobileSheetDragOffset(Math.max(0, event.clientY - drag.startY));
+  };
+
+  const finishMobileSheetDrag = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    cancelled = false,
+  ) => {
+    const drag = mobileSheetDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    mobileSheetDragRef.current = null;
+    setMobileSheetDragging(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    const dragDistance = Math.max(0, event.clientY - drag.startY);
+    if (!cancelled && dragDistance >= mobileSheetDismissDistance) {
+      closeAndRestoreFocus();
+      return;
+    }
+    setMobileSheetDragOffset(0);
+  };
+
   const positionClass = classNames(
     side === "top" ? "bottom-full mb-2" : "top-full mt-2",
     align === "start" ? "left-0" : "right-0",
@@ -262,7 +309,15 @@ export function PopoverMenu({
       data-video-player-mobile-sheet={isMobileSheet ? "" : undefined}
       data-video-player-menu-panel=""
       data-player-theme={theme.id}
-      style={getPlayerThemeStyle(theme)}
+      style={{
+        ...getPlayerThemeStyle(theme),
+        transform:
+          isMobileSheet && mobileSheetDragOffset > 0
+            ? `translate3d(0, ${mobileSheetDragOffset}px, 0)`
+            : undefined,
+        transitionDuration:
+          isMobileSheet && mobileSheetDragging ? "0ms" : undefined,
+      }}
       className={classNames(
         isMobileSheet
           ? mobileSheetPanelClass
@@ -273,21 +328,24 @@ export function PopoverMenu({
       onKeyDown={handleMenuKeyDown}
     >
       {isMobileSheet ? (
-        <div className="flex min-h-14 shrink-0 items-center justify-between border-b border-[color-mix(in_srgb,var(--text,#fff)_10%,transparent)] px-4">
+        <div
+          data-video-player-mobile-sheet-drag-handle=""
+          className="flex min-h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 px-4 pb-3 pt-2 active:cursor-grabbing"
+          onPointerDown={handleMobileSheetDragStart}
+          onPointerMove={handleMobileSheetDragMove}
+          onPointerUp={finishMobileSheetDrag}
+          onPointerCancel={(event) => finishMobileSheetDrag(event, true)}
+        >
+          <span
+            aria-hidden="true"
+            className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_34%,transparent)]"
+          />
           <div
             id={`${menuId}-title`}
-            className="text-base font-semibold text-(--text)"
+            className="w-full text-center text-base font-semibold text-(--video-player-menu-text)"
           >
             {resolvedMenuLabel}
           </div>
-          <button
-            type="button"
-            className="grid size-11 shrink-0 place-items-center rounded-full text-(--text-secondary) transition-colors hover:bg-[color-mix(in_srgb,var(--text,#fff)_10%,transparent)] hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--text)"
-            aria-label={`Close ${resolvedMenuLabel.toLowerCase()}`}
-            onClick={closeAndRestoreFocus}
-          >
-            <CloseIcon size={20} />
-          </button>
         </div>
       ) : null}
       {isMobileSheet ? (
@@ -314,7 +372,8 @@ export function PopoverMenu({
             <div
               aria-hidden="true"
               data-video-player-mobile-sheet-backdrop=""
-              className="fixed inset-0 z-170 bg-black/60"
+              className="fixed inset-0 z-170 bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none"
+              onPointerDown={closeAndRestoreFocus}
             />
             {panel}
           </>,
@@ -335,9 +394,15 @@ export function PopoverMenu({
         aria-expanded={isOpen}
         aria-haspopup={isMobileSheet ? "dialog" : "menu"}
         aria-label={label}
+        data-player-control=""
         disabled={disabled}
         onClick={() => {
           initialFocusRef.current = "selected";
+          if (!isOpen) {
+            mobileSheetDragRef.current = null;
+            setMobileSheetDragOffset(0);
+            setMobileSheetDragging(false);
+          }
           setOpen(!isOpen);
         }}
         onKeyDown={handleTriggerKeyDown}

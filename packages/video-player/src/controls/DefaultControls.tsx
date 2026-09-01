@@ -8,6 +8,7 @@ import { SettingsMenu } from "./SettingsMenu";
 import { TheaterButton } from "./TheaterButton";
 import { TimeDisplay } from "./TimeDisplay";
 import { VolumeControl } from "./VolumeControl";
+import { ZoomLevelIndicator } from "./ZoomLevelIndicator";
 
 export interface DefaultControlsProps {
   onToggleTheater?: () => void;
@@ -42,6 +43,7 @@ export function DefaultControls({
         <TimeDisplay />
         <span className="min-w-0 flex-1" />
         {trailingControls}
+        <ZoomLevelIndicator />
         <SettingsMenu
           includePictureInPicture={pictureInPicturePlacement === "settings"}
           mobilePresentation={settingsMobilePresentation}

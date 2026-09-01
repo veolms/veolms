@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import { formatMediaTime } from "../accessibility/formatMediaTime";
-import {
-  DEFAULT_PLAYBACK_RATES,
-  formatPlaybackRate,
-  playbackRatesMatch,
-} from "../playback/playbackRates";
+import { formatPlaybackRate } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
@@ -90,6 +86,7 @@ export function SettingsMenu({
       mobilePresentation={mobilePresentation}
       align="end"
       side="top"
+      panelClassName="!backdrop-blur-none"
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
@@ -107,13 +104,19 @@ export function SettingsMenu({
       }
     >
       {({ close }) => (
-        <div className="min-w-60 [&_button]:min-h-11 sm:[&_button]:min-h-10">
+        <div
+          className={`[&_button]:min-h-11 sm:[&_button]:min-h-10 ${
+            view === "playback-rate" ? "min-w-72" : "min-w-60"
+          }`}
+        >
           {view !== "main" ? (
             <button
               type="button"
               role="menuitem"
               tabIndex={-1}
-              className="mb-1 flex min-h-10 w-full items-center gap-2 border-b border-[color-mix(in_srgb,var(--text,#fff)_10%,transparent)] px-3 pb-2 text-left text-sm font-semibold text-(--text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--text)"
+              data-menu-keep-open=""
+              data-video-player-settings-back=""
+              className="-mx-2 mb-1 flex min-h-10 w-[calc(100%+1rem)] items-center gap-2 rounded-none border-b border-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] px-5 pb-2 text-left text-sm font-semibold text-(--video-player-menu-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:-mx-1.5 sm:w-[calc(100%+0.75rem)] sm:px-4.5"
               onClick={() => openView("main")}
             >
               <BackIcon size={18} />
@@ -231,25 +234,10 @@ export function SettingsMenu({
           ) : null}
 
           {view === "playback-rate" ? (
-            <>
-              <div role="none" className="grid grid-cols-2 gap-1">
-                {DEFAULT_PLAYBACK_RATES.map((rate) => (
-                  <PlayerMenuItem
-                    key={rate}
-                    label={rate === 1 ? "Normal" : formatPlaybackRate(rate)}
-                    selected={playbackRatesMatch(rate, media.playbackRate)}
-                    onClick={() => {
-                      controller.setPlaybackRate(rate);
-                      close();
-                    }}
-                  />
-                ))}
-              </div>
-              <PlaybackRateSlider
-                playbackRate={media.playbackRate}
-                onRateChange={(rate) => controller.setPlaybackRate(rate)}
-              />
-            </>
+            <PlaybackRateSlider
+              playbackRate={media.playbackRate}
+              onRateChange={(rate) => controller.setPlaybackRate(rate)}
+            />
           ) : null}
 
           {view === "audio"

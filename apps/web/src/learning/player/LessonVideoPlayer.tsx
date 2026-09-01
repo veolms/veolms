@@ -54,7 +54,9 @@ export interface LessonVideoPlayerProps {
   autoplayEnabled?: boolean;
   canGoNext?: boolean;
   canGoPrevious?: boolean;
+  courseLessonsOpen?: boolean;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
+  onCourseLessonsToggle?: () => void;
   onGoNext?: () => void;
   onGoPrevious?: () => void;
   onLessonEnded?: () => void;
@@ -70,11 +72,13 @@ export function LessonVideoPlayer({
   autoplayEnabled = true,
   canGoNext = false,
   canGoPrevious = false,
+  courseLessonsOpen = false,
   engineFactory,
   lessonTitle,
   media,
   onProgressChange,
   onAutoplayEnabledChange = () => undefined,
+  onCourseLessonsToggle,
   onGoNext = () => undefined,
   onGoPrevious = () => undefined,
   onLessonEnded,
@@ -256,6 +260,11 @@ export function LessonVideoPlayer({
 
   const handleSwipePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.defaultPrevented) {
+        swipeStartRef.current = null;
+        setSwipeOffset(0);
+        return;
+      }
       if (
         !onMinimize ||
         event.pointerType === "mouse" ||
@@ -278,13 +287,23 @@ export function LessonVideoPlayer({
         x: event.clientX,
         y: event.clientY,
       };
-      event.currentTarget.setPointerCapture(event.pointerId);
+      const targetUsesPlayerGestureCapture =
+        event.target instanceof Element &&
+        Boolean(event.target.closest("[data-player-zoom-surface]"));
+      if (!targetUsesPlayerGestureCapture) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
     },
     [onMinimize],
   );
 
   const handleSwipePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.defaultPrevented) {
+        swipeStartRef.current = null;
+        setSwipeOffset(0);
+        return;
+      }
       const start = swipeStartRef.current;
       if (!start || start.pointerId !== event.pointerId) return;
       const deltaX = event.clientX - start.x;
@@ -440,8 +459,10 @@ export function LessonVideoPlayer({
           autoplayEnabled={autoplayEnabled}
           canGoNext={canGoNext}
           canGoPrevious={canGoPrevious}
+          courseLessonsOpen={courseLessonsOpen}
           onAmbientEnabledChange={handleAmbientEnabledChange}
           onAutoplayEnabledChange={onAutoplayEnabledChange}
+          onCourseLessonsToggle={onCourseLessonsToggle}
           onGoNext={onGoNext}
           onGoPrevious={onGoPrevious}
           onMinimize={onMinimize ? minimizePlayer : undefined}

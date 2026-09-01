@@ -45,14 +45,30 @@ describe("SettingsMenu playback speed", () => {
 
     expect(openIcon).toHaveAttribute("data-settings-icon-state", "open");
     expect(openIcon).toHaveStyle({ transform: "rotate(90deg)" });
+    expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
+      "!backdrop-blur-none",
+    );
+    expect(
+      screen.getByRole("menu", { name: "Video settings" }),
+    ).not.toHaveClass("backdrop-blur-md");
   });
 
-  it("includes the 1.75× preset", () => {
+  it("offers exactly the compact quick-speed presets", () => {
     const { setPlaybackRate } = renderPlaybackRateSettings();
+    const presets = screen.getAllByRole("menuitemradio");
 
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "1.75×" }));
+    expect(presets.map((preset) => preset.getAttribute("aria-label"))).toEqual([
+      "1×",
+      "1.25×",
+      "1.5×",
+      "2×",
+      "3×",
+    ]);
+    expect(screen.getByText("Normal")).toBeVisible();
 
-    expect(setPlaybackRate).toHaveBeenCalledWith(1.75);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
+
+    expect(setPlaybackRate).toHaveBeenCalledWith(3);
   });
 
   it("omits captions from the main menu when captions have a quick control", () => {
@@ -63,20 +79,59 @@ describe("SettingsMenu playback speed", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("offers an accessible 0.25×–4× custom speed slider", () => {
+  it.each([
+    ["quality", "Quality"],
+    ["playback-rate", "Playback speed"],
+  ] as const)(
+    "returns from the %s submenu without closing settings",
+    (settingsView, label) => {
+      const { setSettingsView } = renderPlaybackRateSettings(settingsView);
+      const backButton = screen.getByRole("menuitem", { name: label });
+
+      expect(backButton).toHaveAttribute("data-menu-keep-open");
+      expect(backButton).toHaveAttribute("data-video-player-settings-back");
+      expect(backButton).toHaveClass(
+        "-mx-2",
+        "w-[calc(100%+1rem)]",
+        "rounded-none",
+        "sm:-mx-1.5",
+        "sm:w-[calc(100%+0.75rem)]",
+      );
+
+      fireEvent.click(backButton);
+
+      expect(setSettingsView).toHaveBeenCalledOnce();
+      expect(setSettingsView).toHaveBeenCalledWith("main");
+    },
+  );
+
+  it("offers an accessible 0.25×–8× custom speed slider and step buttons", () => {
     const { setPlaybackRate } = renderPlaybackRateSettings();
     const slider = screen.getByRole("slider", {
       name: "Custom playback speed",
     });
 
     expect(slider).toHaveAttribute("min", "0.25");
-    expect(slider).toHaveAttribute("max", "4");
-    expect(slider).toHaveAttribute("step", "0.05");
+    expect(slider).toHaveAttribute("max", "8");
+    expect(slider).toHaveAttribute("step", "0.25");
     expect(slider).toHaveAttribute("aria-valuetext", "1.25×");
+    expect(screen.getByText("1.25×", { selector: "output" })).toBeVisible();
 
-    fireEvent.change(slider, { target: { value: "3.35" } });
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: "Decrease playback speed by 0.25×",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: "Increase playback speed by 0.25×",
+      }),
+    );
+    fireEvent.change(slider, { target: { value: "7.25" } });
 
-    expect(setPlaybackRate).toHaveBeenCalledWith(3.35);
+    expect(setPlaybackRate).toHaveBeenNthCalledWith(1, 1);
+    expect(setPlaybackRate).toHaveBeenNthCalledWith(2, 1.5);
+    expect(setPlaybackRate).toHaveBeenNthCalledWith(3, 7.25);
     expect(screen.getByRole("menu", { name: "Video settings" })).toBeVisible();
   });
 
@@ -145,11 +200,13 @@ function renderPlaybackRateSettings(
     markers: [],
   };
   const setPlaybackRate = vi.fn<(rate: number) => void>();
+  const setSettingsView =
+    vi.fn<(view: PlayerSnapshot["ui"]["settingsView"]) => void>();
   const controller = {
     getSnapshot: () => snapshot,
     subscribe: () => () => undefined,
     setPlaybackRate,
-    setSettingsView: vi.fn(),
+    setSettingsView,
   } as unknown as PlayerController;
 
   const { unmount } = render(
@@ -158,5 +215,5 @@ function renderPlaybackRateSettings(
     </PlayerControllerContext.Provider>,
   );
 
-  return { setPlaybackRate, unmount };
+  return { setPlaybackRate, setSettingsView, unmount };
 }

@@ -18,9 +18,11 @@ import {
 } from "./playerEvents";
 import {
   createInitialPlayerUiState,
+  createInitialPlayerZoomState,
   type PlayerHudOptions,
   type PlayerSettingsView,
   type PlayerSnapshot,
+  type PlayerZoomState,
 } from "./playerState";
 
 type SnapshotListener = () => void;
@@ -252,6 +254,7 @@ export class PlayerController {
     autoPlay = false,
   }: PlayerLoadRequest): Promise<void> {
     this.assertActive();
+    this.resetZoom();
     const generation = ++this.#loadGeneration;
     await this.waitForMedia();
     if (generation !== this.#loadGeneration || this.#destroyed) return;
@@ -410,6 +413,10 @@ export class PlayerController {
     this.updateUi({ controlsLocked });
   }
 
+  setTemporarySpeedBoost(temporarySpeedBoost: boolean): void {
+    this.updateUi({ temporarySpeedBoost });
+  }
+
   setSettingsView(settingsView: PlayerSettingsView): void {
     this.updateUi({ settingsView, controlsVisible: true });
   }
@@ -420,6 +427,26 @@ export class PlayerController {
 
   setPreviewTime(previewTime: number | null): void {
     this.updateUi({ previewTime });
+  }
+
+  setZoomState(update: Partial<PlayerZoomState>): void {
+    const zoom = { ...this.#snapshot.ui.zoom, ...update };
+    const current = this.#snapshot.ui.zoom;
+    if (
+      zoom.scale === current.scale &&
+      zoom.panX === current.panX &&
+      zoom.panY === current.panY &&
+      zoom.gestureActive === current.gestureActive &&
+      zoom.feedbackVisible === current.feedbackVisible &&
+      zoom.transitioning === current.transitioning
+    ) {
+      return;
+    }
+    this.updateUi({ zoom });
+  }
+
+  resetZoom(): void {
+    this.updateUi({ zoom: createInitialPlayerZoomState() });
   }
 
   setTheaterMode(active: boolean): void {

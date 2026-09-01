@@ -19,6 +19,54 @@ export function PlayerHud() {
   }, [controller, hud]);
 
   if (!hud) return null;
+  if (hud.variant === "mobile-seek" && hud.direction) {
+    const Icon = icons.disclosure;
+    const backward = hud.direction < 0;
+
+    return (
+      <div
+        key={hud.id}
+        aria-label={`Seek ${backward ? "backward" : "forward"} ${hud.text.replace(/[+−]/u, "")} seconds`}
+        aria-atomic="true"
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30 sm:hidden"
+        data-player-hud-direction={backward ? "backward" : "forward"}
+        data-player-hud-variant="mobile-seek"
+        role="status"
+      >
+        <div
+          className={`absolute inset-y-0 flex w-[34%] items-center justify-center ${
+            backward ? "left-0" : "right-0"
+          }`}
+          aria-hidden="true"
+        >
+          <span
+            className="flex animate-[video-player-hud_850ms_cubic-bezier(0.16,1,0.3,1)_forwards] items-center gap-4 text-2xl leading-none font-semibold tabular-nums text-(--video-player-control-text) drop-shadow-[0_2px_5px_rgb(0_0_0/0.9)] motion-reduce:animate-none"
+            data-player-mobile-seek-feedback=""
+            data-player-mobile-seek-total={hud.text}
+          >
+            {backward ? (
+              <Icon
+                active
+                className="size-8 rotate-180"
+                data-player-mobile-seek-icon="backward"
+                size={32}
+              />
+            ) : null}
+            <span>{hud.text}</span>
+            {!backward ? (
+              <Icon
+                active
+                className="size-8"
+                data-player-mobile-seek-icon="forward"
+                size={32}
+              />
+            ) : null}
+          </span>
+        </div>
+      </div>
+    );
+  }
   if (hud.variant === "playback-rate" && hud.direction) {
     const Icon = hud.direction < 0 ? icons.speedDecrease : icons.speedIncrease;
     const durationStyle = {
@@ -66,6 +114,22 @@ export function PlayerHud() {
             />
           </span>
         </div>
+      </div>
+    );
+  }
+  if (hud.variant === "temporary-speed") {
+    return (
+      <div
+        key={hud.id}
+        aria-atomic="true"
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30"
+        data-player-hud-variant="temporary-speed"
+        role="status"
+      >
+        <span className="absolute top-[22%] left-1/2 -translate-x-1/2 animate-[video-player-hud_850ms_ease-out_forwards] rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2 text-sm font-semibold whitespace-nowrap text-(--video-player-control-text) shadow-(--video-player-control-shadow) motion-reduce:animate-none">
+          {hud.text}
+        </span>
       </div>
     );
   }

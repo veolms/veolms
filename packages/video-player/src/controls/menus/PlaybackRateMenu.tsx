@@ -1,14 +1,12 @@
 import {
   DEFAULT_PLAYBACK_RATES,
   formatPlaybackRate,
-  playbackRatesMatch,
 } from "../../playback/playbackRates";
 import { usePlayerController } from "../../react/context";
 import { usePlayerState } from "../../react/usePlayerState";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { PlaybackRateSlider } from "../PlaybackRateSlider";
 import { MenuTriggerContent } from "./MenuTriggerContent";
-import { PlayerMenuItem } from "./PlayerMenuItem";
 import { PopoverMenu } from "./PopoverMenu";
 import type { PlayerMenuCommonProps } from "./menuTypes";
 
@@ -61,28 +59,14 @@ export function PlaybackRateMenu({
       defaultOpen={defaultOpen}
       onOpenChange={onOpenChange}
     >
-      <>
-        <div role="none" className="grid grid-cols-2 gap-1">
-          {normalizedRates.map((rate) => (
-            <PlayerMenuItem
-              key={rate}
-              label={formatPlaybackRate(rate)}
-              selected={playbackRatesMatch(rate, playbackRate)}
-              onClick={() => {
-                controller.setPlaybackRate(rate);
-                onRateChange?.(rate);
-              }}
-            />
-          ))}
-        </div>
-        <PlaybackRateSlider
-          playbackRate={playbackRate}
-          onRateChange={(rate) => {
-            controller.setPlaybackRate(rate);
-            onRateChange?.(rate);
-          }}
-        />
-      </>
+      <PlaybackRateSlider
+        playbackRate={playbackRate}
+        quickRates={normalizedRates}
+        onRateChange={(rate) => {
+          controller.setPlaybackRate(rate);
+          onRateChange?.(rate);
+        }}
+      />
     </PopoverMenu>
   );
 }

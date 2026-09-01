@@ -3,6 +3,7 @@ import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+const DESKTOP_VIEW_QUERY = "(min-width: 40rem)";
 
 type PlayerPointerMode = "mouse" | "touch";
 type PlayerInputMode = "keyboard" | "pointer";
@@ -24,22 +25,30 @@ export function useControlsVisibility({
   const pointerFocusPendingRef = useRef(false);
   const initializedPointerModeRef = useRef(false);
   const previousPausedRef = useRef(true);
-  const { controlsLocked, controlsVisible, paused, scrubbing, settingsOpen } =
-    usePlayerState(
-      ({ media, ui }) => ({
-        controlsLocked: ui.controlsLocked,
-        controlsVisible: ui.controlsVisible,
-        paused: media.paused,
-        scrubbing: ui.scrubbing,
-        settingsOpen: ui.settingsView !== "closed",
-      }),
-      (left, right) =>
-        left.controlsLocked === right.controlsLocked &&
-        left.controlsVisible === right.controlsVisible &&
-        left.paused === right.paused &&
-        left.scrubbing === right.scrubbing &&
-        left.settingsOpen === right.settingsOpen,
-    );
+  const {
+    controlsLocked,
+    controlsVisible,
+    paused,
+    scrubbing,
+    settingsOpen,
+    temporarySpeedBoost,
+  } = usePlayerState(
+    ({ media, ui }) => ({
+      controlsLocked: ui.controlsLocked,
+      controlsVisible: ui.controlsVisible,
+      paused: media.paused,
+      scrubbing: ui.scrubbing,
+      settingsOpen: ui.settingsView !== "closed",
+      temporarySpeedBoost: ui.temporarySpeedBoost,
+    }),
+    (left, right) =>
+      left.controlsLocked === right.controlsLocked &&
+      left.controlsVisible === right.controlsVisible &&
+      left.paused === right.paused &&
+      left.scrubbing === right.scrubbing &&
+      left.settingsOpen === right.settingsOpen &&
+      left.temporarySpeedBoost === right.temporarySpeedBoost,
+  );
 
   useEffect(() => {
     const root = rootRef.current;
@@ -49,8 +58,16 @@ export function useControlsVisibility({
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia(FINE_POINTER_QUERY)
         : null;
+    const desktopViewQuery =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia(DESKTOP_VIEW_QUERY)
+        : null;
+    const usesDesktopPointer = () =>
+      (desktopViewQuery?.matches ?? true) && (pointerQuery?.matches ?? false);
+    const isDesktopMousePointer = (event: PointerEvent) =>
+      event.pointerType === "mouse" && (desktopViewQuery?.matches ?? true);
     if (!initializedPointerModeRef.current) {
-      pointerModeRef.current = pointerQuery?.matches ? "mouse" : "touch";
+      pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
       initializedPointerModeRef.current = true;
       previousPausedRef.current = paused;
     }
@@ -70,6 +87,10 @@ export function useControlsVisibility({
 
     const scheduleHide = () => {
       clearTimer();
+      if (temporarySpeedBoost) {
+        controller.setControlsVisible(false);
+        return;
+      }
       if (controlsMustRemainVisible()) {
         controller.setControlsVisible(true);
         return;
@@ -100,15 +121,19 @@ export function useControlsVisibility({
 
     const revealFromPointer = (event: PointerEvent) => {
       inputModeRef.current = "pointer";
-      pointerModeRef.current =
-        event.pointerType === "mouse" ? "mouse" : "touch";
-      if (event.pointerType === "mouse") pointerInsideRef.current = true;
+      const desktopMousePointer = isDesktopMousePointer(event);
+      pointerModeRef.current = desktopMousePointer ? "mouse" : "touch";
+      pointerInsideRef.current = desktopMousePointer;
+      if (temporarySpeedBoost) {
+        controller.setControlsVisible(false);
+        return;
+      }
       controller.setControlsVisible(true);
       scheduleHide();
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") return;
+      if (!isDesktopMousePointer(event)) return;
       revealFromPointer(event);
     };
 
@@ -121,12 +146,12 @@ export function useControlsVisibility({
     };
 
     const handlePointerEnter = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") return;
+      if (!isDesktopMousePointer(event)) return;
       revealFromPointer(event);
     };
 
     const handlePointerLeave = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") return;
+      if (!isDesktopMousePointer(event)) return;
       pointerInsideRef.current = false;
       clearTimer();
       if (settingsOpen) controller.setSettingsView("closed");
@@ -138,12 +163,20 @@ export function useControlsVisibility({
       inputModeRef.current = "keyboard";
       if (!(event.target instanceof Node) || !root.contains(event.target))
         return;
+      if (temporarySpeedBoost) {
+        controller.setControlsVisible(false);
+        return;
+      }
       controller.setControlsVisible(true);
       scheduleHide();
     };
 
     const handleFocusIn = () => {
       if (!pointerFocusPendingRef.current) inputModeRef.current = "keyboard";
+      if (temporarySpeedBoost) {
+        controller.setControlsVisible(false);
+        return;
+      }
       controller.setControlsVisible(true);
       scheduleHide();
     };
@@ -154,11 +187,12 @@ export function useControlsVisibility({
       scheduleHide();
     };
 
-    const handlePointerCapabilityChange = (event: MediaQueryListEvent) => {
-      pointerModeRef.current = event.matches ? "mouse" : "touch";
+    const handlePointerCapabilityChange = () => {
+      const desktopPointer = usesDesktopPointer();
+      pointerModeRef.current = desktopPointer ? "mouse" : "touch";
       pointerInsideRef.current = false;
       clearTimer();
-      if (event.matches) controller.setControlsVisible(false);
+      if (desktopPointer) controller.setControlsVisible(false);
       else if (paused) controller.setControlsVisible(true);
       else scheduleHide();
     };
@@ -189,6 +223,7 @@ export function useControlsVisibility({
     root.addEventListener("focusout", handleFocusOut);
     document.addEventListener("keydown", handleDocumentKeyDown, true);
     pointerQuery?.addEventListener("change", handlePointerCapabilityChange);
+    desktopViewQuery?.addEventListener("change", handlePointerCapabilityChange);
 
     return () => {
       clearTimer();
@@ -203,6 +238,10 @@ export function useControlsVisibility({
         "change",
         handlePointerCapabilityChange,
       );
+      desktopViewQuery?.removeEventListener(
+        "change",
+        handlePointerCapabilityChange,
+      );
     };
   }, [
     controller,
@@ -213,5 +252,6 @@ export function useControlsVisibility({
     rootRef,
     scrubbing,
     settingsOpen,
+    temporarySpeedBoost,
   ]);
 }

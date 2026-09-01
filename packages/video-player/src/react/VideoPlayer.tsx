@@ -17,6 +17,7 @@ import { ErrorOverlay } from "../controls/ErrorOverlay";
 import { PlayerGestureSurface } from "../controls/PlayerGestureSurface";
 import { PlayerHud } from "../controls/PlayerHud";
 import { PlaybackFeedback } from "../controls/PlaybackFeedback";
+import { ZoomLevelIndicator } from "../controls/ZoomLevelIndicator";
 import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoSource } from "../core/types";
 import { NativeVideoEngine } from "../engines/native/NativeVideoEngine";
@@ -27,9 +28,10 @@ import type {
   StoryboardSource,
 } from "./PlayerMetadataBridge";
 import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
-import { PlayerMedia, type PlayerMediaProps } from "./PlayerMedia";
+import type { PlayerMediaProps } from "./PlayerMedia";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
+import { PlayerZoomMedia } from "./PlayerZoomMedia";
 import type {
   VideoPlayerEvent,
   VideoPlayerEventListener,
@@ -317,7 +319,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             storyboardLoader={storyboardLoader}
             onStoryboardError={onStoryboardError}
           />
-          <PlayerMedia
+          <PlayerZoomMedia
             {...mediaProps}
             poster={resolvedPoster}
             playsInline={mediaProps?.playsInline ?? true}
@@ -331,6 +333,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             emptyTapBehavior={emptyTapBehavior}
             seekIntervalSeconds={seekIntervalSeconds}
           />
+          <ZoomLevelIndicator variant="feedback" />
           {overlays}
           {centralControl === false
             ? null

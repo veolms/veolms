@@ -27,6 +27,7 @@ import {
 import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScrollbar";
 import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
+import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { LessonVideoPlayer } from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
@@ -41,7 +42,10 @@ import {
 } from "./courseContent";
 import { Curriculum } from "./Curriculum";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
-import { getPublicPreviewLessonNumbers } from "./coursePlayerAccess";
+import {
+  canPlayCourseLesson,
+  getPublicPreviewLessonNumbers,
+} from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { Discussion } from "./Discussion";
@@ -255,7 +259,12 @@ export function LearningWorkspace({
   const firstPublicPreviewLessonId = publicPreviewLessonNumbers[0] ?? 1;
   const isLessonAvailable = useCallback(
     (lessonNumber: number) =>
-      isAuthenticated || publicPreviewLessonSet.has(lessonNumber),
+      canPlayCourseLesson({
+        allowGuestLearning: ALLOW_GUEST_LEARNING,
+        isAuthenticated,
+        lessonNumber,
+        publicPreviewLessonNumbers: publicPreviewLessonSet,
+      }),
     [isAuthenticated, publicPreviewLessonSet],
   );
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
@@ -303,6 +312,11 @@ export function LearningWorkspace({
     [lessonDrawerCollapsedSnapPoint],
   );
   const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
+  const [lessonDrawerFocusRequest, setLessonDrawerFocusRequest] = useState(0);
+  const [lessonDrawerTopRequest, setLessonDrawerTopRequest] = useState(0);
+  const [lessonDrawerScrollTarget, setLessonDrawerScrollTarget] = useState<
+    "current" | "top"
+  >("current");
   const [curriculumWidth, setCurriculumWidth] = useState(
     getInitialCurriculumWidth,
   );
@@ -588,40 +602,68 @@ export function LearningWorkspace({
     }
   };
 
-  const openLessonDrawer = useCallback(() => {
-    setLessonDrawerForcedFloating(false);
-    if (!isCourseContentDrawerLayout()) {
-      setCurriculumCollapsed(false);
-    }
-    setCurriculumFocusRequest((request) => request + 1);
-    if (!isCourseContentDrawerLayout()) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    if (phoneLessonDrawer) {
-      const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
-      setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
-      setLessonDrawerSnapPoint(collapsedSnapPoint);
-    }
-    setLessonDrawerViewportBounds(
-      getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-    );
-    setLessonDrawer(true);
-  }, [
-    getLessonDrawerCollapsedSnapPoint,
-    getLessonDrawerViewportBounds,
-    floatingLessonDrawerWidth,
-    isCourseContentDrawerLayout,
-    phoneLessonDrawer,
-  ]);
+  const showLessonDrawer = useCallback(
+    (scrollTarget: "current" | "top") => {
+      setLessonDrawerForcedFloating(false);
+      if (!isCourseContentDrawerLayout()) {
+        setCurriculumCollapsed(false);
+        if (scrollTarget === "current") {
+          setCurriculumFocusRequest((request) => request + 1);
+        }
+        return;
+      }
+
+      setLessonDrawerScrollTarget(scrollTarget);
+      if (scrollTarget === "current") {
+        setLessonDrawerFocusRequest((request) => request + 1);
+      } else {
+        setLessonDrawerTopRequest((request) => request + 1);
+      }
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+      if (phoneLessonDrawer) {
+        const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
+        setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
+        setLessonDrawerSnapPoint(collapsedSnapPoint);
+      }
+      setLessonDrawerViewportBounds(
+        getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
+      );
+      setLessonDrawer(true);
+    },
+    [
+      getLessonDrawerCollapsedSnapPoint,
+      getLessonDrawerViewportBounds,
+      floatingLessonDrawerWidth,
+      isCourseContentDrawerLayout,
+      phoneLessonDrawer,
+    ],
+  );
+
+  const openLessonDrawer = useCallback(
+    () => showLessonDrawer("current"),
+    [showLessonDrawer],
+  );
+
+  const openLessonDrawerAtTop = useCallback(
+    () => showLessonDrawer("top"),
+    [showLessonDrawer],
+  );
 
   const closeLessonDrawer = useCallback(() => {
     setLessonDrawer(false);
     setLessonDrawerForcedFloating(false);
   }, []);
 
+  const toggleLessonDrawerFromPlayer = useCallback(() => {
+    if (lessonDrawer) closeLessonDrawer();
+    else openLessonDrawerAtTop();
+  }, [closeLessonDrawer, lessonDrawer, openLessonDrawerAtTop]);
+
   const openFloatingLessonDrawer = useCallback(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     setCurriculumCollapsed(true);
-    setCurriculumFocusRequest((request) => request + 1);
+    setLessonDrawerScrollTarget("current");
+    setLessonDrawerFocusRequest((request) => request + 1);
     setLessonDrawerForcedFloating(true);
     if (phoneLessonDrawer) {
       const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
@@ -1433,7 +1475,9 @@ export function LearningWorkspace({
               autoplayEnabled={autoplayEnabled}
               canGoNext={nextLessonId !== undefined}
               canGoPrevious={previousLessonId !== undefined}
+              courseLessonsOpen={lessonDrawer}
               onAutoplayEnabledChange={updateAutoplayEnabled}
+              onCourseLessonsToggle={toggleLessonDrawerFromPlayer}
               onGoNext={goToNextLesson}
               onGoPrevious={goToPreviousLesson}
               onLessonEnded={handleLessonEnded}
@@ -1542,8 +1586,7 @@ export function LearningWorkspace({
         key={phoneLessonDrawer ? "phone-course-lessons" : "side-course-lessons"}
         open={lessonDrawer}
         onOpenChange={(open) => {
-          if (open) openLessonDrawer();
-          else closeLessonDrawer();
+          if (!open) closeLessonDrawer();
         }}
         onOpenChangeComplete={(open) => {
           if (!open) {
@@ -1663,7 +1706,14 @@ export function LearningWorkspace({
               onOpenCourseOverview={onOpenCourseOverview}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
-              focusRequest={curriculumFocusRequest}
+              focusRequest={
+                lessonDrawerScrollTarget === "current"
+                  ? lessonDrawerFocusRequest
+                  : 0
+              }
+              topRequest={
+                lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0
+              }
               persistenceKey={coursePersistenceKey}
               onClose={closeLessonDrawer}
               drawerHeroControlProps={

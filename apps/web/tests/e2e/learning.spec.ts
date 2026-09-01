@@ -2385,6 +2385,56 @@ test("mobile lesson search reuses the compact expandable search contract", async
   await expect(search).toBeFocused();
 });
 
+test("mobile player lessons control opens the curriculum at the course overview", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  const lessonsButton = page.locator(
+    'button[data-player-control][aria-controls="lesson-drawer-curriculum-scrollport"]',
+  );
+  const player = page.locator(".learning-workspace__player-wrap");
+  await expect(lessonsButton).toBeVisible();
+  await expect(lessonsButton).toHaveAttribute("aria-expanded", "false");
+  await lessonsButton.click();
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const curriculum = dialog.getByRole("complementary", {
+    name: "Course curriculum",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(lessonsButton).toHaveAttribute("aria-expanded", "true");
+  await expect(lessonsButton.locator("svg")).toHaveClass(/-rotate-180/);
+  await expect(
+    curriculum.getByRole("heading", {
+      name: "Complete Backend with Node.js",
+    }),
+  ).toBeVisible();
+  await expect
+    .poll(() => curriculum.evaluate((element) => element.scrollTop))
+    .toBe(0);
+  await expect
+    .poll(async () => {
+      const [dialogBounds, playerBounds] = await Promise.all([
+        dialog.boundingBox(),
+        player.boundingBox(),
+      ]);
+      if (!dialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
+      return Math.abs(dialogBounds.y - (playerBounds.y + playerBounds.height));
+    })
+    .toBeLessThanOrEqual(1);
+
+  await page.mouse.click(2, 2);
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Open lessons" }),
+  ).toHaveAttribute("aria-expanded", "false");
+});
+
 test("mobile lesson drawer closes with Escape and returns focus", async ({
   page,
 }) => {

@@ -39,6 +39,10 @@ describe("PopoverMenu", () => {
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
 
     const menu = screen.getByRole("menu", { name: "Options" });
+    expect(menu).toHaveClass("border-0");
+    expect(menu).toHaveClass("text-(--video-player-menu-text)");
+    expect(menu).not.toHaveClass("backdrop-blur-md");
+    expect(menu).toHaveAttribute("data-video-player-menu-panel");
     const first = within(menu).getByRole("menuitem", { name: "First" });
     const second = within(menu).getByRole("menuitemradio", { name: "Second" });
     const third = within(menu).getByRole("menuitem", { name: "Third" });
@@ -145,10 +149,18 @@ describe("PopoverMenu", () => {
 
       const sheet = screen.getByRole("dialog", { name: "Video settings" });
       expect(sheet).toHaveAttribute("data-video-player-mobile-sheet");
+      expect(sheet).toHaveClass("border-0");
+      expect(
+        document.querySelector("[data-video-player-mobile-sheet-drag-handle]"),
+      ).not.toHaveClass("border-b");
       expect(sheet.parentElement).toBe(document.body);
+      expect(trigger).toHaveAttribute("data-player-control");
       expect(
         screen.getByRole("menu", { name: "Video settings" }),
       ).toBeVisible();
+      expect(
+        screen.queryByRole("button", { name: /close video settings/i }),
+      ).not.toBeInTheDocument();
       expect(document.body.style.overflow).toBe("hidden");
 
       fireEvent.pointerDown(
@@ -165,6 +177,66 @@ describe("PopoverMenu", () => {
       });
     }
   });
+
+  it("dismisses the phone bottom sheet with a downward drag", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 640px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      render(
+        <PopoverMenu
+          label="Settings"
+          menuLabel="Video settings"
+          mobilePresentation="sheet"
+          trigger="Settings"
+        >
+          <PlayerMenuItem label="Quality" />
+        </PopoverMenu>,
+      );
+
+      const trigger = screen.getByRole("button", { name: "Settings" });
+      fireEvent.click(trigger);
+      const handle = document.querySelector(
+        "[data-video-player-mobile-sheet-drag-handle]",
+      )!;
+
+      fireEvent.pointerDown(handle, {
+        pointerId: 1,
+        clientY: 100,
+      });
+      fireEvent.pointerMove(handle, {
+        pointerId: 1,
+        clientY: 190,
+      });
+      expect(
+        screen.getByRole("dialog", { name: "Video settings" }),
+      ).toHaveStyle({ transform: "translate3d(0, 90px, 0)" });
+      fireEvent.pointerUp(handle, {
+        pointerId: 1,
+        clientY: 190,
+      });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });
 
 describe("controller-backed player menus", () => {
@@ -173,8 +245,8 @@ describe("controller-backed player menus", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Playback speed, 1.25×" }),
     );
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "1.75×" }));
-    expect(actions.setPlaybackRate).toHaveBeenCalledWith(1.75);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
+    expect(actions.setPlaybackRate).toHaveBeenCalledWith(3);
   });
 
   it("sets a custom playback speed without closing the menu", () => {
@@ -187,11 +259,11 @@ describe("controller-backed player menus", () => {
       name: "Custom playback speed",
     });
     expect(slider).toHaveAttribute("min", "0.25");
-    expect(slider).toHaveAttribute("max", "4");
-    expect(slider).toHaveAttribute("step", "0.05");
-    fireEvent.change(slider, { target: { value: "3.25" } });
+    expect(slider).toHaveAttribute("max", "8");
+    expect(slider).toHaveAttribute("step", "0.25");
+    fireEvent.change(slider, { target: { value: "7.25" } });
 
-    expect(actions.setPlaybackRate).toHaveBeenCalledWith(3.25);
+    expect(actions.setPlaybackRate).toHaveBeenCalledWith(7.25);
     expect(screen.getByRole("menu", { name: "Playback speed" })).toBeVisible();
   });
 

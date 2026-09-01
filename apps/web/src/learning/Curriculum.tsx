@@ -46,6 +46,7 @@ interface CurriculumProps {
   courseThumbnail: string;
   onClose?: () => void;
   focusRequest?: number;
+  topRequest?: number;
   persistenceKey: string;
   isLessonAvailable?: (lessonNumber: number) => boolean;
   scrollportId?: string;
@@ -64,6 +65,7 @@ export function Curriculum({
   courseThumbnail,
   onClose,
   focusRequest = 0,
+  topRequest = 0,
   persistenceKey,
   isLessonAvailable,
   scrollportId,
@@ -90,6 +92,7 @@ export function Curriculum({
   const curriculumRef = useRef<HTMLElement>(null);
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
+  const handledTopRequestRef = useRef(0);
   const currentSection =
     sections.find((section) =>
       section.lessons.some(([number]) => number === selectedLesson),
@@ -248,6 +251,27 @@ export function Curriculum({
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
     };
   }, [focusRequest, currentSection.id]);
+
+  useEffect(() => {
+    if (!topRequest || topRequest === handledTopRequestRef.current)
+      return undefined;
+
+    handledTopRequestRef.current = topRequest;
+    setSearchOpen(false);
+
+    let firstFrame: number;
+    let secondFrame: number | undefined;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        scrollControlRef.current?.scrollToStart();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [setSearchOpen, topRequest]);
 
   return (
     <ContextMenu>

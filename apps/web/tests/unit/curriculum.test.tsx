@@ -421,4 +421,27 @@ describe("Curriculum", () => {
       screen.getByRole("searchbox", { name: "Search lessons" }),
     ).toBeVisible();
   });
+
+  it("returns the curriculum to the course card for a new top request", () => {
+    const props = {
+      persistenceKey: "curriculum-drawer-top",
+      selectedLesson: 15,
+      onSelectLesson: vi.fn(),
+      onOpenCourseOverview: vi.fn(),
+      courseTitle: "UX Design Fundamentals",
+      courseThumbnail: "/course-thumbnail.png",
+    };
+    const { rerender } = render(<TestCurriculum {...props} topRequest={0} />);
+    const curriculum = screen.getByRole("complementary", {
+      name: "Course curriculum",
+    });
+    curriculum.scrollTop = 420;
+
+    rerender(<TestCurriculum {...props} topRequest={1} />);
+
+    expect(curriculum.scrollTop).toBe(0);
+    expect(
+      screen.getByRole("heading", { name: "UX Design Fundamentals" }),
+    ).toBeInTheDocument();
+  });
 });
