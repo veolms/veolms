@@ -6,6 +6,12 @@ import type {
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
 import { sql } from "kysely";
+import {
+  authorRoleSql,
+  createdAtIdDescSql,
+  type DiscussionListCursor,
+  normalizeThreadSort,
+} from "../shared/discussion.utils.ts";
 
 export interface ThreadsRepository {
   createThread(
@@ -34,8 +40,18 @@ export interface ThreadsRepository {
       academyId: string;
       currentUserId?: string;
       accessibleCourseIds?: readonly string[];
+      pageCursor?: DiscussionListCursor;
     },
   ): Promise<any[]>;
+
+  countThreads(
+    db: DatabaseExecutor,
+    options: ListLearningThreadsQuery & {
+      academyId: string;
+      currentUserId?: string;
+      accessibleCourseIds?: readonly string[];
+    },
+  ): Promise<number>;
 
   updateThread(
     db: DatabaseExecutor,
@@ -74,6 +90,154 @@ export interface ThreadsRepository {
     threadId: string,
     status: "active" | "hidden" | "deleted",
   ): Promise<void>;
+}
+
+function applyThreadFilters(query: any, options: any): any {
+  query = query
+    .where("t.status", "=", "active")
+    .where("t.academy_id", "=", options.academyId);
+
+  if (options.courseId) {
+    query = query.where("t.course_id", "=", options.courseId);
+  } else if (
+    options.accessibleCourseIds &&
+    options.accessibleCourseIds.length > 0
+  ) {
+    query = query.where("t.course_id", "in", [...options.accessibleCourseIds]);
+  }
+
+  if (options.lessonId) {
+    query = query.where("t.lesson_id", "=", options.lessonId);
+  }
+
+  if (options.kind && options.kind !== "all") {
+    const normalizedKind = options.kind === "qna" ? "question" : options.kind;
+    query = query.where("t.kind", "=", normalizedKind);
+  }
+
+  if (options.mine || options.sort === "me") {
+    if (options.currentUserId) {
+      query = query.where("t.user_id", "=", options.currentUserId);
+    } else {
+      query = query.where(sql<boolean>`1 = 0`);
+    }
+  } else if (options.currentUserId) {
+    if (options.visibility === "private") {
+      query = query
+        .where("t.visibility", "=", "private")
+        .where("t.user_id", "=", options.currentUserId);
+    } else if (options.visibility === "unlisted") {
+      query = query
+        .where("t.visibility", "=", "unlisted")
+        .where("t.user_id", "=", options.currentUserId);
+    } else if (options.visibility === "public") {
+      query = query.where("t.visibility", "=", "public");
+    } else {
+      query = query.where((eb: any) =>
+        eb.or([
+          eb("t.visibility", "=", "public"),
+          eb.and([
+            eb("t.visibility", "in", ["private", "unlisted"]),
+            eb("t.user_id", "=", options.currentUserId),
+          ]),
+        ]),
+      );
+    }
+  } else {
+    query = query.where("t.visibility", "=", "public");
+  }
+
+  if (options.search) {
+    const searchPattern = `%${options.search.toLowerCase()}%`;
+    query = query.where((eb: any) =>
+      eb.or([
+        eb(sql`lower(t.title)`, "like", searchPattern),
+        eb(sql`lower(t.plain_text)`, "like", searchPattern),
+      ]),
+    );
+  }
+
+  if (options.status === "answered") {
+    query = query.where("t.replies_count", ">", 0);
+  } else if (options.status === "solved") {
+    query = query.where("t.accepted_answer_id", "is not", null);
+  } else if (options.status === "open") {
+    query = query
+      .where("t.replies_count", "=", 0)
+      .where("t.accepted_answer_id", "is", null);
+  } else if (options.status === "mentioned") {
+    if (!options.currentUserId) {
+      query = query.where(sql<boolean>`1 = 0`);
+    } else {
+      query = query.where((eb: any) =>
+        eb.or([
+          eb.exists(
+            eb
+              .selectFrom("learning_mentions as m")
+              .select(sql`1`.as("one"))
+              .whereRef("m.source_id", "=", "t.id")
+              .where("m.source_type", "=", "thread")
+              .where("m.mentioned_user_id", "=", options.currentUserId),
+          ),
+          eb.exists(
+            eb
+              .selectFrom("learning_mentions as m")
+              .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
+              .select(sql`1`.as("one"))
+              .whereRef("lr.thread_id", "=", "t.id")
+              .where("m.source_type", "=", "reply")
+              .where("m.mentioned_user_id", "=", options.currentUserId),
+          ),
+        ]),
+      );
+    }
+  }
+
+  return query;
+}
+
+function applyThreadCursor(query: any, options: any): any {
+  const cursor = options.pageCursor as DiscussionListCursor | undefined;
+  if (!cursor) return query;
+  const sort = normalizeThreadSort(options.sort);
+  if (sort === "activity" && cursor.updatedAt) {
+    return query.where(
+      sql<boolean>`(
+        t.updated_at < ${cursor.updatedAt}
+        or (t.updated_at = ${cursor.updatedAt} and t.id < ${cursor.id}::uuid)
+      )`,
+    );
+  }
+  if (sort === "replies" && cursor.repliesCount !== undefined) {
+    return query.where(
+      sql<boolean>`(
+        t.replies_count < ${cursor.repliesCount}
+        or (t.replies_count = ${cursor.repliesCount} and t.created_at < ${cursor.createdAt})
+        or (
+          t.replies_count = ${cursor.repliesCount}
+          and t.created_at = ${cursor.createdAt}
+          and t.id < ${cursor.id}::uuid
+        )
+      )`,
+    );
+  }
+  if (sort === "popular" && cursor.engagement !== undefined) {
+    return query.where(
+      sql<boolean>`(
+        (t.likes_count + t.replies_count) < ${cursor.engagement}
+        or (
+          (t.likes_count + t.replies_count) = ${cursor.engagement}
+          and t.created_at < ${cursor.createdAt}
+        )
+        or (
+          (t.likes_count + t.replies_count) = ${cursor.engagement}
+          and t.created_at = ${cursor.createdAt}
+          and t.id < ${cursor.id}::uuid
+        )
+      )`,
+    );
+  }
+  return query.where(createdAtIdDescSql("t", cursor));
 }
 
 export function createThreadsRepository(): ThreadsRepository {
@@ -127,6 +291,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
+          authorRoleSql("t.user_id"),
         ])
         .where("t.id", "=", threadId)
         .executeTakeFirst();
@@ -160,85 +325,11 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
-        ])
-        .where("t.status", "=", "active")
-        .where("t.academy_id", "=", options.academyId);
-
-      if (options.courseId) {
-        query = query.where("t.course_id", "=", options.courseId);
-      } else if (
-        options.accessibleCourseIds &&
-        options.accessibleCourseIds.length > 0
-      ) {
-        query = query.where("t.course_id", "in", [
-          ...options.accessibleCourseIds,
+          authorRoleSql("t.user_id"),
         ]);
-      }
 
-      if (options.lessonId) {
-        query = query.where("t.lesson_id", "=", options.lessonId);
-      }
-
-      if (options.kind && options.kind !== "all") {
-        const normalizedKind =
-          options.kind === "qna" ? "question" : options.kind;
-        query = query.where("t.kind", "=", normalizedKind);
-      }
-
-      // Visibility and ownership rules
-      if (options.mine || options.sort === "me") {
-        if (options.currentUserId) {
-          query = query.where("t.user_id", "=", options.currentUserId);
-        } else {
-          // Unauthenticated caller filtering by mine returns empty set
-          query = query.where(sql<boolean>`1 = 0`);
-        }
-      } else if (options.currentUserId) {
-        if (options.visibility === "private") {
-          query = query
-            .where("t.visibility", "=", "private")
-            .where("t.user_id", "=", options.currentUserId);
-        } else if (options.visibility === "unlisted") {
-          query = query
-            .where("t.visibility", "=", "unlisted")
-            .where("t.user_id", "=", options.currentUserId);
-        } else if (options.visibility === "public") {
-          query = query.where("t.visibility", "=", "public");
-        } else {
-          // Return public items, or user's own items (including unlisted and private)
-          query = query.where((eb) =>
-            eb.or([
-              eb("t.visibility", "=", "public"),
-              eb.and([
-                eb("t.visibility", "in", ["private", "unlisted"]),
-                eb("t.user_id", "=", options.currentUserId!),
-              ]),
-            ]),
-          );
-        }
-      } else {
-        query = query.where("t.visibility", "=", "public");
-      }
-
-      if (options.search) {
-        const searchPattern = `%${options.search.toLowerCase()}%`;
-        query = query.where((eb) =>
-          eb.or([
-            eb(sql`lower(t.title)`, "like", searchPattern),
-            eb(sql`lower(t.plain_text)`, "like", searchPattern),
-          ]),
-        );
-      }
-
-      if (options.status === "answered") {
-        query = query.where("t.replies_count", ">", 0);
-      } else if (options.status === "solved") {
-        query = query.where("t.accepted_answer_id", "is not", null);
-      } else if (options.status === "open") {
-        query = query
-          .where("t.replies_count", "=", 0)
-          .where("t.accepted_answer_id", "is", null);
-      }
+      query = applyThreadFilters(query, options);
+      query = applyThreadCursor(query, options);
 
       if (options.sort === "highest_engagement" || options.sort === "popular") {
         query = query
@@ -246,19 +337,29 @@ export function createThreadsRepository(): ThreadsRepository {
             sql`(${sql.ref("t.likes_count")} + ${sql.ref("t.replies_count")})`,
             "desc",
           )
-          .orderBy("t.created_at", "desc");
+          .orderBy("t.created_at", "desc")
+          .orderBy("t.id", "desc");
       } else if (options.sort === "replies") {
         query = query
           .orderBy("t.replies_count", "desc")
-          .orderBy("t.created_at", "desc");
+          .orderBy("t.created_at", "desc")
+          .orderBy("t.id", "desc");
       } else if (options.sort === "activity") {
-        query = query.orderBy("t.updated_at", "desc");
+        query = query.orderBy("t.updated_at", "desc").orderBy("t.id", "desc");
       } else {
-        // "latest", "recent", "me", default
-        query = query.orderBy("t.created_at", "desc");
+        query = query.orderBy("t.created_at", "desc").orderBy("t.id", "desc");
       }
 
-      return query.limit(options.limit).execute();
+      return query.limit(options.limit + 1).execute();
+    },
+
+    async countThreads(db, options) {
+      let query = db.selectFrom("learning_threads as t");
+      query = applyThreadFilters(query, options);
+      const row = await query
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
     },
 
     async updateThread(db, threadId, updates) {

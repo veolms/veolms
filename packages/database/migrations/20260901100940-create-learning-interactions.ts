@@ -256,6 +256,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("tags", sql`text[]`, (column) =>
       column.notNull().defaultTo(sql`ARRAY[]::text[]`),
     )
+    .addColumn("visibility", "text", (column) =>
+      column
+        .notNull()
+        .defaultTo("private")
+        .check(sql`visibility IN ('public', 'unlisted', 'private')`),
+    )
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -357,11 +363,11 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .execute();
 
-  await database.schema
-    .createIndex("idx_learning_reports_unique_pending")
-    .on("learning_reports")
-    .columns(["reporter_id", "target_type", "target_id", "status"])
-    .execute();
+  await sql`
+    create unique index idx_learning_reports_unique_pending
+    on learning_reports (reporter_id, target_type, target_id)
+    where status = 'pending'
+  `.execute(database);
 
   // 10. learning_suspensions
   await database.schema

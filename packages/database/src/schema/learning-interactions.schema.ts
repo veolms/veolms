@@ -4,11 +4,7 @@ export type DiscussionEntryKind = "comment" | "question" | "note";
 export type DiscussionVisibility = "public" | "unlisted" | "private";
 export type InteractionStatus = "active" | "hidden" | "deleted";
 export type EngagementTargetType = "thread" | "reply";
-export type AttachmentKind =
-  | "image"
-  | "screenshot"
-  | "code"
-  | "document";
+export type AttachmentKind = "image" | "screenshot" | "code" | "document";
 export type AttachmentTargetType = "thread" | "reply";
 export type AttachmentStatus = "uploading" | "ready" | "rejected" | "deleted";
 export type ReportReason =
@@ -18,11 +14,7 @@ export type ReportReason =
   | "misinformation"
   | "copyright"
   | "other";
-export type ReportStatus =
-  | "pending"
-  | "reviewed"
-  | "dismissed"
-  | "actioned";
+export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
 export type SuspensionScope = "commenting" | "qa" | "all";
 
 export interface LearningThreadTable {
@@ -104,6 +96,7 @@ export interface LearningNoteTable {
   content: string;
   plain_text: string;
   tags: Generated<string[]>;
+  visibility: Generated<DiscussionVisibility>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

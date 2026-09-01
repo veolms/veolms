@@ -111,7 +111,31 @@ export async function syncMentionsAndNotify(
   }
 
   mentionedIds.delete(input.actorUserId);
-  if (mentionedIds.size === 0) return;
+
+  const existing = await db
+    .selectFrom("learning_mentions")
+    .select(["id", "mentioned_user_id"])
+    .where("source_type", "=", input.sourceType)
+    .where("source_id", "=", input.sourceId)
+    .execute();
+
+  const keepIds = mentionedIds;
+  const removedIds = existing
+    .filter((row) => !keepIds.has(row.mentioned_user_id))
+    .map((row) => row.id);
+  const alreadyMentioned = new Set(
+    existing.map((row) => row.mentioned_user_id),
+  );
+  const addedIds = [...keepIds].filter((id) => !alreadyMentioned.has(id));
+
+  if (removedIds.length > 0) {
+    await db
+      .deleteFrom("learning_mentions")
+      .where("id", "in", removedIds)
+      .execute();
+  }
+
+  if (addedIds.length === 0) return;
 
   const actorName = await resolveActorName(db, input.actorUserId);
   const context = mentionContext(
@@ -120,7 +144,7 @@ export async function syncMentionsAndNotify(
   const deepLink = await resolveDeepLink(db, input.courseId, input.threadId);
   const occurredAt = new Date();
 
-  for (const mentionedUserId of mentionedIds) {
+  for (const mentionedUserId of addedIds) {
     const inserted = await db
       .insertInto("learning_mentions")
       .values({
@@ -142,7 +166,7 @@ export async function syncMentionsAndNotify(
     await outbox.publish(db, {
       type: "user.mentioned",
       version: 1,
-      dedupeKey: `user.mentioned:${input.sourceType}:${input.sourceId}:${mentionedUserId}`,
+      dedupeKey: `user.mentioned:${input.sourceType}:${input.sourceId}:${mentionedUserId}:${inserted.id}`,
       occurredAt,
       payload: {
         recipientUserId: mentionedUserId,

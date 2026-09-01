@@ -198,6 +198,26 @@ export function createAttachmentsService(
         );
       }
 
+      if (existing.status === "rejected" || existing.status === "deleted") {
+        throw httpError(
+          400,
+          "UPLOAD_NOT_COMPLETABLE",
+          "This attachment can no longer be marked ready",
+        );
+      }
+
+      if (!existing.fileUrl || existing.fileSize <= 0) {
+        throw httpError(
+          400,
+          "UPLOAD_INCOMPLETE",
+          "Upload has no file data yet",
+        );
+      }
+
+      if (existing.status === "ready") {
+        return existing;
+      }
+
       await db
         .updateTable("learning_attachments")
         .set({
@@ -214,7 +234,14 @@ export function createAttachmentsService(
         db,
         attachmentId,
       );
-      return completed!;
+      if (!completed) {
+        throw httpError(
+          500,
+          "UPLOAD_FAILED",
+          "Failed to finalize attachment upload",
+        );
+      }
+      return completed;
     },
 
     async processUpload(db, userId, file) {

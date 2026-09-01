@@ -7,6 +7,12 @@ import type {
   ReportStatus,
   SuspensionScope,
 } from "@veolms/contracts";
+import { sql } from "kysely";
+import {
+  authorRoleSql,
+  createdAtIdDescSql,
+  type DiscussionListCursor,
+} from "../shared/discussion.utils.ts";
 
 export interface ModerationRepository {
   createReport(
@@ -31,8 +37,13 @@ export interface ModerationRepository {
 
   listReports(
     db: DatabaseExecutor,
-    options: ListReportsQuery,
+    options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<any[]>;
+
+  countReports(
+    db: DatabaseExecutor,
+    options: ListReportsQuery,
+  ): Promise<number>;
 
   updateReportStatus(
     db: DatabaseExecutor,
@@ -86,8 +97,24 @@ export interface ModerationRepository {
   listAuditLogs(
     db: DatabaseExecutor,
     academyId: string,
-    options: ListAuditLogsQuery,
+    options: ListAuditLogsQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<any[]>;
+}
+
+function applyReportFilters(query: any, options: ListReportsQuery) {
+  if (options.courseId) {
+    query = query.where("rep.course_id", "=", options.courseId);
+  }
+
+  if (options.status) {
+    query = query.where("rep.status", "=", options.status);
+  }
+
+  if (options.targetType) {
+    query = query.where("rep.target_type", "=", options.targetType);
+  }
+
+  return query;
 }
 
 export function createModerationRepository(): ModerationRepository {
@@ -139,27 +166,40 @@ export function createModerationRepository(): ModerationRepository {
           "u.display_name as reporterName",
           "u.username as reporterUsername",
           "u.email as reporterEmail",
+          authorRoleSql("rep.reporter_id"),
         ]);
 
-      if (options.courseId) {
-        query = query.where("rep.course_id", "=", options.courseId);
-      }
+      query = applyReportFilters(query, options);
 
-      if (options.status) {
-        query = query.where("rep.status", "=", options.status);
-      }
-
-      if (options.targetType) {
-        query = query.where("rep.target_type", "=", options.targetType);
+      if (options.pageCursor) {
+        query = query.where(createdAtIdDescSql("rep", options.pageCursor));
       }
 
       return query
         .orderBy("rep.created_at", "desc")
-        .limit(options.limit)
+        .orderBy("rep.id", "desc")
+        .limit(options.limit + 1)
         .execute();
     },
 
-    async updateReportStatus(db, reportId, status, reviewedByUserId, actionTaken) {
+    async countReports(db, options) {
+      let query = db
+        .selectFrom("learning_reports as rep")
+        .select(sql<number>`count(*)::int`.as("count"));
+
+      query = applyReportFilters(query, options);
+
+      const row = await query.executeTakeFirst();
+      return Number(row?.count ?? 0);
+    },
+
+    async updateReportStatus(
+      db,
+      reportId,
+      status,
+      reviewedByUserId,
+      actionTaken,
+    ) {
       await db
         .updateTable("learning_reports")
         .set({
@@ -221,10 +261,7 @@ export function createModerationRepository(): ModerationRepository {
 
       if (courseId) {
         query = query.where((eb) =>
-          eb.or([
-            eb("course_id", "is", null),
-            eb("course_id", "=", courseId),
-          ]),
+          eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]),
         );
       }
 
@@ -266,6 +303,7 @@ export function createModerationRepository(): ModerationRepository {
           "u.display_name as actorName",
           "u.username as actorUsername",
           "u.email as actorEmail",
+          authorRoleSql("a.actor_user_id"),
         ])
         .where("a.academy_id", "=", academyId);
 
@@ -285,9 +323,14 @@ export function createModerationRepository(): ModerationRepository {
         query = query.where("a.action", "=", options.action);
       }
 
+      if (options.pageCursor) {
+        query = query.where(createdAtIdDescSql("a", options.pageCursor));
+      }
+
       return query
         .orderBy("a.created_at", "desc")
-        .limit(options.limit)
+        .orderBy("a.id", "desc")
+        .limit(options.limit + 1)
         .execute();
     },
   };

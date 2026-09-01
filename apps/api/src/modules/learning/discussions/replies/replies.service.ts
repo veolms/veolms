@@ -13,7 +13,14 @@ import {
   syncMentionsAndNotify,
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
-import { extractPlainText } from "../shared/discussion.utils.ts";
+import {
+  decodeDiscussionCursor,
+  encodeDiscussionCursor,
+  extractPlainText,
+  mapAuthorRole,
+  takePage,
+  toDate,
+} from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
   type DiscussionActor,
@@ -110,8 +117,8 @@ export function createRepliesService({
         username: (row.authorUsername || row.authorEmail || "user").split(
           "@",
         )[0],
-        avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
-        role: "Student",
+        avatarUrl: null,
+        role: mapAuthorRole(row.authorRole),
       },
       content: row.content,
       plainText: row.plainText,
@@ -269,11 +276,19 @@ export function createRepliesService({
 
       await courseAccess.assertCanAccessThread(db, actor, thread);
 
-      const rows = await repliesRepo.listRepliesByThreadId(db, threadId, query);
+      const pageCursor = decodeDiscussionCursor(query.cursor);
+      const [rows, totalCount] = await Promise.all([
+        repliesRepo.listRepliesByThreadId(db, threadId, {
+          ...query,
+          pageCursor,
+        }),
+        repliesRepo.countRepliesByThreadId(db, threadId),
+      ]);
+      const { page, hasMore } = takePage(rows, query.limit);
 
       let likedReplyIds = new Set<string>();
-      if (rows.length > 0) {
-        const replyIds = rows.map((r) => r.id);
+      if (page.length > 0) {
+        const replyIds = page.map((r) => r.id);
         const likes = await db
           .selectFrom("learning_likes")
           .select("target_id")
@@ -285,14 +300,22 @@ export function createRepliesService({
         likedReplyIds = new Set(likes.map((l) => l.target_id));
       }
 
-      const replies = rows.map((r) =>
+      const replies = page.map((r) =>
         mapReplyRow(r, actor.userId, [], likedReplyIds),
       );
 
+      const last = page.at(-1);
       return {
         replies,
-        nextCursor: null,
-        totalCount: replies.length,
+        nextCursor:
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.id,
+                createdAt: toDate(last.createdAt),
+                isAccepted: Boolean(last.isAccepted),
+              })
+            : null,
+        totalCount,
       };
     },
 
@@ -345,6 +368,7 @@ export function createRepliesService({
             sourceId: replyId,
             actorUserId: actor.userId,
             content: updates.content,
+            extraUserIds: reply.replyToUserId ? [reply.replyToUserId] : [],
             courseId: thread.courseId,
             threadId: reply.threadId,
             plainText,
@@ -403,76 +427,82 @@ export function createRepliesService({
     },
 
     async acceptReply(db, replyId, accepted, actor) {
-      const reply = await repliesRepo.findReplyById(db, replyId);
-      if (!reply) {
-        throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
-      }
+      return withWriteTransaction(db, async (trx) => {
+        const reply = await repliesRepo.findReplyById(trx, replyId);
+        if (!reply) {
+          throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+        }
 
-      const thread = await threadsRepo.findThreadById(db, reply.threadId);
-      if (!thread) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
-      }
-      await courseAccess.assertCanAccessThread(db, actor, thread);
-      courseAccess.assertThreadIsActive(thread);
-      courseAccess.assertReplyIsActive(reply);
-      await courseAccess.assertNotSuspended(
-        db,
-        actor.userId,
-        thread.courseId,
-        thread.kind,
-      );
-
-      if (thread.kind !== "question") {
-        throw httpError(
-          400,
-          "NOT_A_QUESTION",
-          "Only Q&A questions can have accepted answers",
+        const thread = await threadsRepo.findThreadById(trx, reply.threadId);
+        if (!thread) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+        await courseAccess.assertCanAccessThread(trx, actor, thread);
+        courseAccess.assertThreadIsActive(thread);
+        courseAccess.assertReplyIsActive(reply);
+        await courseAccess.assertNotSuspended(
+          trx,
+          actor.userId,
+          thread.courseId,
+          thread.kind,
         );
-      }
 
-      if (reply.threadId !== thread.id) {
-        throw httpError(
-          400,
-          "INVALID_REPLY",
-          "The answer does not belong to this question thread",
-        );
-      }
-
-      const canStaffModerate = await courseAccess.canModerateCourse(
-        db,
-        actor,
-        thread.courseId,
-      );
-      if (thread.userId !== actor.userId && !canStaffModerate) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "Only the question author or a course owner/administrator can mark an answer as accepted",
-        );
-      }
-
-      if (accepted) {
-        if (thread.acceptedAnswerId && thread.acceptedAnswerId !== replyId) {
-          await repliesRepo.setAcceptedStatus(
-            db,
-            thread.acceptedAnswerId,
-            false,
+        if (thread.kind !== "question") {
+          throw httpError(
+            400,
+            "NOT_A_QUESTION",
+            "Only Q&A questions can have accepted answers",
           );
         }
 
-        await repliesRepo.setAcceptedStatus(db, replyId, true);
-        await threadsRepo.setAcceptedAnswer(db, thread.id, replyId);
+        if (reply.threadId !== thread.id) {
+          throw httpError(
+            400,
+            "INVALID_REPLY",
+            "The answer does not belong to this question thread",
+          );
+        }
 
-        return {
-          replyId,
-          threadId: thread.id,
-          isAccepted: true,
-          acceptedAnswerId: replyId,
-        };
-      } else {
-        await repliesRepo.setAcceptedStatus(db, replyId, false);
+        const canStaffModerate = await courseAccess.canModerateCourse(
+          trx,
+          actor,
+          thread.courseId,
+        );
+        if (thread.userId !== actor.userId && !canStaffModerate) {
+          throw httpError(
+            403,
+            "FORBIDDEN",
+            "Only the question author or a course owner/administrator can mark an answer as accepted",
+          );
+        }
+
+        if (accepted) {
+          if (thread.acceptedAnswerId && thread.acceptedAnswerId !== replyId) {
+            await repliesRepo.setAcceptedStatus(
+              trx,
+              thread.acceptedAnswerId,
+              false,
+            );
+          }
+
+          await repliesRepo.setAcceptedStatus(trx, replyId, true);
+          await threadsRepo.setAcceptedAnswer(trx, thread.id, replyId);
+
+          return {
+            replyId,
+            threadId: thread.id,
+            isAccepted: true,
+            acceptedAnswerId: replyId,
+          };
+        }
+
+        await repliesRepo.setAcceptedStatus(trx, replyId, false);
         if (thread.acceptedAnswerId === replyId) {
-          await threadsRepo.setAcceptedAnswer(db, thread.id, null);
+          await threadsRepo.setAcceptedAnswer(trx, thread.id, null);
         }
 
         return {
@@ -481,7 +511,7 @@ export function createRepliesService({
           isAccepted: false,
           acceptedAnswerId: null,
         };
-      }
+      });
     },
   };
 }

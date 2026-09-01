@@ -19,6 +19,14 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import {
+  decodeDiscussionCursor,
+  encodeDiscussionCursor,
+  mapAuthorRole,
+  resolveAcademyId,
+  takePage,
+  toDate,
+} from "../shared/discussion.utils.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { ModerationRepository } from "./moderation.repository.ts";
@@ -88,14 +96,6 @@ export function createModerationService({
 }): ModerationService {
   const courseAccess = createDiscussionAccess();
 
-  async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db
-      .selectFrom("academy")
-      .select("id")
-      .executeTakeFirst();
-    return academy?.id || "00000000-0000-0000-0000-000000000000";
-  }
-
   async function assertModerationScope(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -143,15 +143,31 @@ export function createModerationService({
       }
 
       const id = crypto.randomUUID();
-      await moderationRepo.createReport(db, {
-        id,
-        reporterId,
-        targetType: input.targetType,
-        targetId: input.targetId,
-        courseId: input.courseId || null,
-        reason: input.reason,
-        details: input.details,
-      });
+      try {
+        await moderationRepo.createReport(db, {
+          id,
+          reporterId,
+          targetType: input.targetType,
+          targetId: input.targetId,
+          courseId: input.courseId || null,
+          reason: input.reason,
+          details: input.details,
+        });
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: unknown }).code === "23505"
+        ) {
+          throw httpError(
+            400,
+            "DUPLICATE_REPORT",
+            "You already have a pending report for this item. Our moderation team is reviewing it.",
+          );
+        }
+        throw error;
+      }
 
       return { message: "Report submitted successfully." };
     },
@@ -162,8 +178,13 @@ export function createModerationService({
         actor,
         scope === "course" ? query.courseId : null,
       );
-      const rows = await moderationRepo.listReports(db, query);
-      const reports: LearningReport[] = rows.map((r) => ({
+      const pageCursor = decodeDiscussionCursor(query.cursor);
+      const [rows, totalCount] = await Promise.all([
+        moderationRepo.listReports(db, { ...query, pageCursor }),
+        moderationRepo.countReports(db, query),
+      ]);
+      const { page, hasMore } = takePage(rows, query.limit);
+      const reports: LearningReport[] = page.map((r) => ({
         id: r.id,
         reporterId: r.reporterId,
         reporter: {
@@ -172,7 +193,7 @@ export function createModerationService({
           username:
             r.reporterUsername || (r.reporterEmail || "user").split("@")[0],
           avatarUrl: null,
-          role: "Student",
+          role: mapAuthorRole(r.authorRole),
         },
         targetType: r.targetType,
         targetId: r.targetId,
@@ -192,10 +213,17 @@ export function createModerationService({
             : String(r.updatedAt),
       }));
 
+      const last = page.at(-1);
       return {
         reports,
-        nextCursor: null,
-        totalCount: reports.length,
+        nextCursor:
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.id,
+                createdAt: toDate(last.createdAt),
+              })
+            : null,
+        totalCount,
       };
     },
 
@@ -257,17 +285,9 @@ export function createModerationService({
       }
 
       if (input.action === "hide") {
-        await db
-          .updateTable("learning_replies")
-          .set({ status: "hidden", updated_at: new Date() })
-          .where("id", "=", replyId)
-          .execute();
+        await repliesRepo.setStatus(db, replyId, "hidden");
       } else if (input.action === "unhide") {
-        await db
-          .updateTable("learning_replies")
-          .set({ status: "active", updated_at: new Date() })
-          .where("id", "=", replyId)
-          .execute();
+        await repliesRepo.setStatus(db, replyId, "active");
       } else if (input.action === "delete") {
         const deleted = await repliesRepo.deleteReply(db, replyId);
         if (deleted) {
@@ -378,8 +398,13 @@ export function createModerationService({
         scope === "course" ? query.courseId : null,
       );
       const academyId = await resolveAcademyId(db);
-      const rows = await moderationRepo.listAuditLogs(db, academyId, query);
-      const logs: LearningAuditLog[] = rows.map((r) => ({
+      const pageCursor = decodeDiscussionCursor(query.cursor);
+      const rows = await moderationRepo.listAuditLogs(db, academyId, {
+        ...query,
+        pageCursor,
+      });
+      const { page, hasMore } = takePage(rows, query.limit);
+      const logs: LearningAuditLog[] = page.map((r) => ({
         id: r.id,
         academyId: r.academyId,
         courseId: r.courseId ?? null,
@@ -391,7 +416,7 @@ export function createModerationService({
               username:
                 r.actorUsername || (r.actorEmail || "staff").split("@")[0],
               avatarUrl: null,
-              role: "Admin",
+              role: mapAuthorRole(r.authorRole),
             }
           : undefined,
         action: r.action,
@@ -408,9 +433,16 @@ export function createModerationService({
             : String(r.createdAt),
       }));
 
+      const last = page.at(-1);
       return {
         logs,
-        nextCursor: null,
+        nextCursor:
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.id,
+                createdAt: toDate(last.createdAt),
+              })
+            : null,
       };
     },
   };

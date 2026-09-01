@@ -13,7 +13,16 @@ import {
   syncMentionsAndNotify,
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
-import { extractPlainText } from "../shared/discussion.utils.ts";
+import {
+  decodeDiscussionCursor,
+  encodeDiscussionCursor,
+  extractPlainText,
+  mapAuthorRole,
+  normalizeThreadSort,
+  resolveAcademyId,
+  takePage,
+  toDate,
+} from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
   type DiscussionActor,
@@ -89,14 +98,6 @@ export function createThreadsService(
   const outbox = createDiscussionOutbox();
   const courseAccess = createDiscussionAccess();
 
-  async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db
-      .selectFrom("academy")
-      .select("id")
-      .executeTakeFirst();
-    return academy?.id || "00000000-0000-0000-0000-000000000000";
-  }
-
   function mapThreadRow(
     row: any,
     currentUserId?: string,
@@ -130,8 +131,8 @@ export function createThreadsService(
         username: (row.authorUsername || row.authorEmail || "user").split(
           "@",
         )[0],
-        avatarUrl: `/assets/${row.userId.charCodeAt(0) % 2 === 0 ? "sofia" : "ethan"}-avatar-160.webp`,
-        role: "Student",
+        avatarUrl: null,
+        role: mapAuthorRole(row.authorRole),
       },
       kind: row.kind,
       title: row.title ?? null,
@@ -379,20 +380,37 @@ export function createThreadsService(
       }
 
       const academyId = await resolveAcademyId(db);
-      const rows = await threadsRepo.listThreads(db, {
+      const sort = normalizeThreadSort(query.sort);
+      const pageCursor = decodeDiscussionCursor(query.cursor);
+      if (pageCursor?.sort && pageCursor.sort !== sort) {
+        throw httpError(
+          400,
+          "INVALID_CURSOR",
+          "The pagination cursor does not match the current sort.",
+        );
+      }
+
+      const listOptions = {
         ...query,
         academyId,
+        pageCursor,
         ...(accessibleCourseIds && accessibleCourseIds !== "all"
           ? { accessibleCourseIds }
           : {}),
-      });
+      };
+
+      const [rows, totalCount] = await Promise.all([
+        threadsRepo.listThreads(db, listOptions),
+        threadsRepo.countThreads(db, listOptions),
+      ]);
+      const { page, hasMore } = takePage(rows, query.limit);
 
       let likedThreadIds = new Set<string>();
       let bookmarkedThreadIds = new Set<string>();
       let followedThreadIds = new Set<string>();
 
-      if (query.currentUserId && rows.length > 0) {
-        const threadIds = rows.map((r) => r.id);
+      if (query.currentUserId && page.length > 0) {
+        const threadIds = page.map((r) => r.id);
         const [likes, bookmarks, follows] = await Promise.all([
           db
             .selectFrom("learning_likes")
@@ -420,7 +438,7 @@ export function createThreadsService(
         followedThreadIds = new Set(follows.map((f) => f.thread_id));
       }
 
-      const threads = rows.map((row) =>
+      const threads = page.map((row) =>
         mapThreadRow(row, query.currentUserId, [], {
           likedThreadIds,
           bookmarkedThreadIds,
@@ -428,10 +446,24 @@ export function createThreadsService(
         }),
       );
 
+      const last = page.at(-1);
+      let nextCursor: string | null = null;
+      if (hasMore && last) {
+        nextCursor = encodeDiscussionCursor({
+          id: last.id,
+          createdAt: toDate(last.createdAt),
+          sort,
+          updatedAt: last.updatedAt ? toDate(last.updatedAt) : undefined,
+          repliesCount: Number(last.repliesCount || 0),
+          engagement:
+            Number(last.likesCount || 0) + Number(last.repliesCount || 0),
+        });
+      }
+
       return {
         threads,
-        nextCursor: null,
-        totalCount: threads.length,
+        nextCursor,
+        totalCount,
       };
     },
 

@@ -4,6 +4,10 @@ import type {
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
 import { sql } from "kysely";
+import {
+  authorRoleSql,
+  type DiscussionListCursor,
+} from "../shared/discussion.utils.ts";
 
 export interface RepliesRepository {
   createReply(
@@ -26,8 +30,13 @@ export interface RepliesRepository {
   listRepliesByThreadId(
     db: DatabaseExecutor,
     threadId: string,
-    options: ListLearningRepliesQuery,
+    options: ListLearningRepliesQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<any[]>;
+
+  countRepliesByThreadId(
+    db: DatabaseExecutor,
+    threadId: string,
+  ): Promise<number>;
 
   updateReply(
     db: DatabaseExecutor,
@@ -36,6 +45,12 @@ export interface RepliesRepository {
   ): Promise<void>;
 
   deleteReply(db: DatabaseExecutor, replyId: string): Promise<boolean>;
+
+  setStatus(
+    db: DatabaseExecutor,
+    replyId: string,
+    status: "active" | "hidden" | "deleted",
+  ): Promise<void>;
 
   setAcceptedStatus(
     db: DatabaseExecutor,
@@ -96,6 +111,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
+          authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",
           "ru.display_name as replyToDisplayName",
           "rr.plain_text as replyToContent",
@@ -107,7 +123,7 @@ export function createRepliesRepository(): RepliesRepository {
     },
 
     async listRepliesByThreadId(db, threadId, options) {
-      return db
+      let query = db
         .selectFrom("learning_replies as r")
         .innerJoin("users as u", "u.id", "r.user_id")
         .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
@@ -130,16 +146,50 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.email as authorEmail",
+          authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",
           "ru.display_name as replyToDisplayName",
           "rr.plain_text as replyToContent",
         ])
         .where("r.thread_id", "=", threadId)
-        .where("r.status", "=", "active")
+        .where("r.status", "=", "active");
+
+      if (options.pageCursor) {
+        const cursor = options.pageCursor;
+        const accepted = cursor.isAccepted === true;
+        query = query.where(
+          sql<boolean>`(
+            (
+              r.is_accepted = ${accepted}
+              and (
+                r.created_at > ${cursor.createdAt}
+                or (
+                  r.created_at = ${cursor.createdAt}
+                  and r.id > ${cursor.id}::uuid
+                )
+              )
+            )
+            or r.is_accepted < ${accepted}
+          )`,
+        );
+      }
+
+      return query
         .orderBy("r.is_accepted", "desc")
         .orderBy("r.created_at", "asc")
-        .limit(options.limit)
+        .orderBy("r.id", "asc")
+        .limit(options.limit + 1)
         .execute();
+    },
+
+    async countRepliesByThreadId(db, threadId) {
+      const row = await db
+        .selectFrom("learning_replies")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("thread_id", "=", threadId)
+        .where("status", "=", "active")
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
     },
 
     async updateReply(db, replyId, updates) {
@@ -170,6 +220,17 @@ export function createRepliesRepository(): RepliesRepository {
         .where("status", "!=", "deleted")
         .executeTakeFirst();
       return Number(result.numUpdatedRows) > 0;
+    },
+
+    async setStatus(db, replyId, status) {
+      await db
+        .updateTable("learning_replies")
+        .set({
+          status,
+          updated_at: new Date(),
+        })
+        .where("id", "=", replyId)
+        .execute();
     },
 
     async setAcceptedStatus(db, replyId, isAccepted) {

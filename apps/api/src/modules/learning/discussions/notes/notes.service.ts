@@ -9,7 +9,14 @@ import type {
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
-import { extractPlainText } from "../shared/discussion.utils.ts";
+import {
+  decodeDiscussionCursor,
+  encodeDiscussionCursor,
+  extractPlainText,
+  resolveAcademyId,
+  takePage,
+  toDate,
+} from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
   type DiscussionActor,
@@ -67,14 +74,6 @@ export interface NotesService {
 export function createNotesService(notesRepo: NotesRepository): NotesService {
   const courseAccess = createDiscussionAccess();
 
-  async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-    const academy = await db
-      .selectFrom("academy")
-      .select("id")
-      .executeTakeFirst();
-    return academy?.id || "00000000-0000-0000-0000-000000000000";
-  }
-
   function mapNoteRow(row: any): LearningNote {
     return {
       id: row.id,
@@ -110,6 +109,12 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           ? row.updatedAt.toISOString()
           : String(row.updatedAt),
     };
+  }
+
+  function assertOwnNote(note: { userId: string } | null, userId: string) {
+    if (!note || note.userId !== userId) {
+      throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
+    }
   }
 
   return {
@@ -161,6 +166,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         content: input.content,
         plainText,
         tags: input.tags || [],
+        visibility: input.visibility ?? "private",
       });
 
       const created = await notesRepo.findNoteById(db, id);
@@ -177,29 +183,30 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
     async getNote(db, noteId, userId) {
       const note = await notesRepo.findNoteById(db, noteId);
-      if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
-      }
-
-      if (note.userId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You do not have access to this note",
-        );
-      }
-
+      assertOwnNote(note, userId);
       return mapNoteRow(note);
     },
 
     async listNotes(db, userId, query) {
-      const rows = await notesRepo.listNotes(db, userId, query);
-      const notes = rows.map(mapNoteRow);
+      const pageCursor = decodeDiscussionCursor(query.cursor);
+      const [rows, totalCount] = await Promise.all([
+        notesRepo.listNotes(db, userId, { ...query, pageCursor }),
+        notesRepo.countNotes(db, userId, query),
+      ]);
+      const { page, hasMore } = takePage(rows, query.limit);
+      const notes = page.map(mapNoteRow);
+      const last = page.at(-1);
 
       return {
         notes,
-        nextCursor: null,
-        totalCount: notes.length,
+        nextCursor:
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.id,
+                createdAt: toDate(last.createdAt),
+              })
+            : null,
+        totalCount,
       };
     },
 
@@ -286,17 +293,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
     async updateNote(db, noteId, userId, updates) {
       const note = await notesRepo.findNoteById(db, noteId);
-      if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
-      }
-
-      if (note.userId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You do not have access to this note",
-        );
-      }
+      assertOwnNote(note, userId);
 
       const plainText = updates.content
         ? extractPlainText(updates.content)
@@ -312,18 +309,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
     async deleteNote(db, noteId, userId) {
       const note = await notesRepo.findNoteById(db, noteId);
-      if (!note) {
-        throw httpError(404, "NOTE_NOT_FOUND", "Private note not found");
-      }
-
-      if (note.userId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You do not have access to this note",
-        );
-      }
-
+      assertOwnNote(note, userId);
       await notesRepo.deleteNote(db, noteId);
     },
   };
