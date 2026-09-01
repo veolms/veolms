@@ -345,7 +345,9 @@ function getDiscussionHighlighter() {
 }
 
 function fallbackTokens(code: string): HighlightedToken[][] {
-  return code.split("\n").map((line) => [{ content: line }]);
+  return code
+    .split("\n")
+    .map((line) => [{ content: line, color: "currentColor" }]);
 }
 
 function useResolvedCodeTheme() {
