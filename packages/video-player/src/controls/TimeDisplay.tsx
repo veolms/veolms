@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatMediaTime } from "../accessibility/formatMediaTime";
 import { usePlayerState } from "../react/usePlayerState";
 import { classNames } from "../utils/classNames";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export interface TimeDisplayProps {
   className?: string;
@@ -13,6 +14,7 @@ export function TimeDisplay({
   interactive = false,
 }: TimeDisplayProps = {}) {
   const [showRemaining, setShowRemaining] = useState(false);
+  const mobileInteraction = usePlayerMobileInteraction();
   const { currentTime, duration } = usePlayerState(
     ({ media }) => ({
       currentTime: media.currentTime,
@@ -31,6 +33,7 @@ export function TimeDisplay({
     : `${currentLabel} / ${durationLabel}`;
   const displayClassName = classNames(
     "select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-(--video-player-control-text) focus-visible:outline-(--video-player-control-text) sm:text-sm",
+    mobileInteraction && "!text-xs",
     className,
   );
 
@@ -60,7 +63,7 @@ export function TimeDisplay({
       title={showRemaining ? "Show elapsed time" : "Show remaining time"}
       onClick={() => setShowRemaining((remaining) => !remaining)}
     >
-      <span>{displayValue}</span>
+      <span className="relative z-10">{displayValue}</span>
     </button>
   );
 }

@@ -12,12 +12,10 @@ const AMBIENT_FRAME_INTERVAL_MS = 480;
 
 export interface LessonAmbientProjectionProps {
   enabled: boolean;
-  theaterMode: boolean;
 }
 
 export function LessonAmbientProjection({
   enabled,
-  theaterMode,
 }: LessonAmbientProjectionProps) {
   const anchorRef = useRef<HTMLSpanElement>(null);
   const inlineCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -63,48 +61,6 @@ export function LessonAmbientProjection({
   }, [getShell]);
 
   useEffect(() => {
-    const shell = getShell();
-    const canvas = shellCanvasRef.current;
-    if (!portalHost || !shell || !canvas) return undefined;
-
-    let animationFrame = 0;
-    const syncProjectionBounds = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        const bounds = shell.getBoundingClientRect();
-        canvas.style.left = `${bounds.left}px`;
-        canvas.style.top = `${bounds.top}px`;
-        canvas.style.width = `${bounds.width}px`;
-        canvas.style.height = `${bounds.height}px`;
-      });
-    };
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(syncProjectionBounds);
-    const scrollport = shell.closest(".courses-main");
-
-    resizeObserver?.observe(shell);
-    scrollport?.addEventListener("scroll", syncProjectionBounds, {
-      passive: true,
-    });
-    window.addEventListener("resize", syncProjectionBounds, { passive: true });
-    window.visualViewport?.addEventListener("resize", syncProjectionBounds);
-    syncProjectionBounds();
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      resizeObserver?.disconnect();
-      scrollport?.removeEventListener("scroll", syncProjectionBounds);
-      window.removeEventListener("resize", syncProjectionBounds);
-      window.visualViewport?.removeEventListener(
-        "resize",
-        syncProjectionBounds,
-      );
-    };
-  }, [getShell, portalHost, theaterMode]);
-
-  useEffect(() => {
     if (!enabled) return undefined;
     const video = getShell()?.querySelector("video");
     paintFrame();
@@ -146,7 +102,7 @@ export function LessonAmbientProjection({
               ref={shellCanvasRef}
               aria-hidden="true"
               data-ambient-shell-projection
-              className={`ambient-canvas ambient-canvas--shell ${visible ? "ambient-canvas--visible" : ""}`}
+              className={`ambient-canvas ambient-canvas--shell ambient-canvas--learning-shell ${visible ? "ambient-canvas--visible" : ""}`}
             />,
             portalHost,
           )
@@ -157,7 +113,7 @@ export function LessonAmbientProjection({
               ref={inlineCanvasRef}
               aria-hidden="true"
               data-ambient-inline-projection
-              className={`ambient-canvas ${visible ? "ambient-canvas--visible" : ""}`}
+              className={`ambient-canvas max-[820px]:transform-none! ${visible ? "ambient-canvas--visible" : ""}`}
             />,
             shellHost,
           )

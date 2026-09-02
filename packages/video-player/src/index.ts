@@ -69,6 +69,8 @@ export type {
   PlayerSettingsView,
   PlayerZoomState,
 } from "./react/playerState";
+export { usePlayerMobileInteraction } from "./react/PlayerInteractionMode";
+export type { PlayerInteractionMode } from "./react/PlayerInteractionMode";
 export type {
   PlayerPresentationEvent,
   VideoPlayerEvent,

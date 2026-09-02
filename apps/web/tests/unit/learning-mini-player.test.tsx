@@ -494,7 +494,7 @@ describe("LearningMiniPlayer gestures", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("keeps a stationary touch tap targeted at the restore control", () => {
+  it("restores from the first stationary touch without waiting for a compatibility click", () => {
     const { miniPlayer, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
       name: "Return to Career Opportunities",
@@ -514,12 +514,55 @@ describe("LearningMiniPlayer gestures", () => {
       pointerId: 23,
       pointerType: "touch",
     });
-    expect(onRestore).not.toHaveBeenCalled();
-
-    fireEvent.click(restoreButton);
 
     expect(miniPlayer.setPointerCapture).not.toHaveBeenCalled();
     expect(onRestore).toHaveBeenCalledOnce();
+
+    fireEvent.click(restoreButton);
+    expect(onRestore).toHaveBeenCalledOnce();
+  });
+
+  it("does not turn stationary play or close touches into restore gestures", () => {
+    const { onClose, onRestore } = renderMiniPlayer();
+    const playButton = screen.getByRole("button", { name: "Play" });
+    const closeButton = screen.getByRole("button", {
+      name: "Close mini player",
+    });
+
+    fireEvent.pointerDown(playButton, {
+      clientX: 320,
+      clientY: 470,
+      isPrimary: true,
+      pointerId: 31,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(playButton, {
+      clientX: 320,
+      clientY: 470,
+      isPrimary: true,
+      pointerId: 31,
+      pointerType: "touch",
+    });
+    fireEvent.pointerDown(closeButton, {
+      clientX: 580,
+      clientY: 470,
+      isPrimary: true,
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(closeButton, {
+      clientX: 580,
+      clientY: 470,
+      isPrimary: true,
+      pointerId: 32,
+      pointerType: "touch",
+    });
+
+    expect(onRestore).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("captures touch only after dragging and suppresses the restore click", () => {

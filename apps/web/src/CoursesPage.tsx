@@ -17,6 +17,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
+  Ref,
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
@@ -232,6 +233,7 @@ interface CoursesPageProps {
     section?: string;
     settingsTab?: string;
   } | null;
+  learningMotionStageRef?: Ref<HTMLDivElement>;
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
 }
 
@@ -531,6 +533,7 @@ export function CoursesPage({
   discussionTab = "q-and-a",
   courseSlug,
   learningBackground = null,
+  learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
@@ -698,14 +701,21 @@ export function CoursesPage({
     [role, userRoles],
   );
   const logoutMutation = useLogout();
+  const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const { data: publishedCoursesData } = useCourses({
-    enabled: role === "student",
+    enabled: shouldLoadCourseSurface && role === "student",
   });
   const { data: myCoursesData } = useMyCourses({
-    enabled: role === "creator" && enrollmentFilter !== "bin",
+    enabled:
+      shouldLoadCourseSurface &&
+      role === "creator" &&
+      enrollmentFilter !== "bin",
   });
   const { data: deletedCoursesData } = useDeletedCourses(undefined, {
-    enabled: role === "creator" && enrollmentFilter === "bin",
+    enabled:
+      shouldLoadCourseSurface &&
+      role === "creator" &&
+      enrollmentFilter === "bin",
   });
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
@@ -3077,7 +3087,8 @@ export function CoursesPage({
     surfaceSection?: string | null;
     surfaceSettingsTab?: string;
   } = {}): ReactNode => {
-    const surfaceActiveSection = surfaceSection || activeSection;
+    const surfaceActiveSection =
+      surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
     if (role === "creator" && surfacePage === "home") {
       return (
         <CreatorDashboard
@@ -3846,7 +3857,7 @@ export function CoursesPage({
         className={[
           "courses-main",
           renderMain
-            ? "courses-main--learning"
+            ? "courses-main--learning overflow-x-clip!"
             : page !== "courses"
               ? "student-surface-main"
               : "",
@@ -3860,12 +3871,22 @@ export function CoursesPage({
           .filter(Boolean)
           .join(" ")}
       >
-        {renderMain ? (
-          <div className="grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1">
-            {learningBackground ? (
+        <div
+          ref={learningMotionStageRef}
+          className={
+            renderMain
+              ? "grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1"
+              : "contents"
+          }
+          data-learning-motion-stage={renderMain ? "" : undefined}
+        >
+          {renderMain ? (
+            learningBackground ? (
               <div
-                className={`courses-main min-h-full! opacity-(--learning-background-reveal) transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
+                className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                 style={{
+                  contain: "strict",
+                  opacity: "var(--learning-background-reveal, 0)",
                   transitionDuration:
                     "var(--learning-background-reveal-duration, 0ms)",
                 }}
@@ -3881,18 +3902,20 @@ export function CoursesPage({
                   surfaceSettingsTab: learningBackground.settingsTab,
                 })}
               </div>
-            ) : null}
-            <div className="relative z-10 min-h-full">
+            ) : null
+          ) : (
+            <div className="contents">{renderPageContent()}</div>
+          )}
+          {renderMain ? (
+            <div className="relative min-h-full">
               {renderMain({
                 mobileBottomNavigation:
                   compactNavigation && !mobileSidebarNavigationActive,
                 mobileBottomNavigationHidden: mobileBottomNavHidden,
               })}
             </div>
-          </div>
-        ) : (
-          renderPageContent()
-        )}
+          ) : null}
+        </div>
       </main>
 
       <FloatingScrollbar

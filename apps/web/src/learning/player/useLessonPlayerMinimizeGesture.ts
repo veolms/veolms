@@ -1,25 +1,28 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import {
+  LEARNING_PLAYER_MOTION_DURATION_MS,
+  LEARNING_PLAYER_MOTION_EASING,
+  clampLearningPlayerValue as clamp,
+  clearLearningPlayerMinimizeMotionStyles,
+  getDefaultLearningMiniPlayerLayout,
+} from "./learningPlayerMotion";
 
 const PHONE_VIEWPORT_QUERY = "(max-width: 640px)";
 const ACTIVATION_DISTANCE = 8;
 const DIRECTION_RATIO = 1.15;
-const MINI_PLAYER_MAX_WIDTH = 22 * 16;
-const MINI_PLAYER_VIEWPORT_WIDTH = 0.82;
-const MINI_PLAYER_RIGHT_GUTTER = 12;
-const MINI_PLAYER_BOTTOM_GUTTER = 84;
 const COMMIT_PROGRESS = 0.5;
 const FLING_PROGRESS = 0.18;
 const FLING_VELOCITY = 0.85;
-const SETTLE_TO_MINI_MS = 180;
-const SETTLE_BACK_MS = 220;
+const SETTLE_FALLBACK_BUFFER_MS = 80;
 
 export type LessonPlayerMinimizeGesturePhase =
   "idle" | "dragging" | "settling-back" | "settling-mini";
@@ -41,6 +44,7 @@ interface ActiveGesture extends GestureGeometry {
   captureTarget: HTMLElement;
   lastTimestamp: number;
   lastY: number;
+  motionTarget: HTMLElement;
   pointerId: number;
   startX: number;
   startY: number;
@@ -50,8 +54,12 @@ interface ActiveGesture extends GestureGeometry {
 interface UseLessonPlayerMinimizeGestureOptions {
   enabled: boolean;
   fullscreen: () => boolean;
+  motionTarget?: () => HTMLElement | null;
   onCommit: () => void;
+  onGestureStart?: () => void;
+  onSettlingMiniPress?: () => void;
   onStateChange?: (state: LessonPlayerMinimizeGestureState) => void;
+  preserveTerminalStateOnDisable?: boolean;
 }
 
 const IDLE_STATE: LessonPlayerMinimizeGestureState = {
@@ -60,37 +68,24 @@ const IDLE_STATE: LessonPlayerMinimizeGestureState = {
   progress: 0,
 };
 
-const clamp = (value: number, minimum: number, maximum: number) =>
-  Math.min(maximum, Math.max(minimum, value));
+const DEFAULT_GEOMETRY: GestureGeometry = {
+  targetScale: 1,
+  targetX: 0,
+  targetY: 1,
+};
 
 const getGeometry = (element: HTMLElement): GestureGeometry => {
   const bounds = element.getBoundingClientRect();
   const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
   const startWidth = bounds.width || viewportWidth;
-  const startHeight = bounds.height || startWidth * (9 / 16);
   const startLeft = Number.isFinite(bounds.left) ? bounds.left : 0;
   const startTop = Number.isFinite(bounds.top) ? bounds.top : 0;
-  const finalWidth = Math.min(
-    startWidth,
-    MINI_PLAYER_MAX_WIDTH,
-    viewportWidth * MINI_PLAYER_VIEWPORT_WIDTH,
-  );
-  const targetScale = finalWidth / startWidth;
-  const finalHeight = startHeight * targetScale;
-  const finalLeft = Math.max(
-    MINI_PLAYER_RIGHT_GUTTER,
-    viewportWidth - MINI_PLAYER_RIGHT_GUTTER - finalWidth,
-  );
-  const finalTop = Math.max(
-    MINI_PLAYER_RIGHT_GUTTER,
-    viewportHeight - MINI_PLAYER_BOTTOM_GUTTER - finalHeight,
-  );
+  const target = getDefaultLearningMiniPlayerLayout(startWidth);
 
   return {
-    targetScale,
-    targetX: finalLeft - startLeft,
-    targetY: Math.max(1, finalTop - startTop),
+    targetScale: target.width / startWidth,
+    targetX: target.left - startLeft,
+    targetY: Math.max(1, target.top - startTop),
   };
 };
 
@@ -101,47 +96,183 @@ const isExcludedTarget = (target: EventTarget | null) =>
 export function useLessonPlayerMinimizeGesture({
   enabled,
   fullscreen,
+  motionTarget,
   onCommit,
+  onGestureStart,
+  onSettlingMiniPress,
   onStateChange,
+  preserveTerminalStateOnDisable = false,
 }: UseLessonPlayerMinimizeGestureOptions) {
+  const [controlsSuppressed, setControlsSuppressed] = useState(false);
   const activePointerIdsRef = useRef(new Set<number>());
   const clickSuppressionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const currentStateRef = useRef(IDLE_STATE);
+  const frameRef = useRef<number | null>(null);
+  const geometryRef = useRef(DEFAULT_GEOMETRY);
   const gestureRef = useRef<ActiveGesture | null>(null);
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const motionElementRef = useRef<HTMLElement | null>(null);
+  const pendingStateRef = useRef<LessonPlayerMinimizeGestureState | null>(null);
+  const settleCleanupRef = useRef<(() => void) | null>(null);
+  const settleFinishRef = useRef<(() => void) | null>(null);
+  const settlingMiniPressTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const suppressClickRef = useRef(false);
   const commitRef = useRef(onCommit);
-  const [state, setState] = useState(IDLE_STATE);
-  const [geometry, setGeometry] = useState<GestureGeometry>({
-    targetScale: 1,
-    targetX: 0,
-    targetY: 1,
-  });
+  const onGestureStartRef = useRef(onGestureStart);
+  const onSettlingMiniPressRef = useRef(onSettlingMiniPress);
+  const onStateChangeRef = useRef(onStateChange);
   commitRef.current = onCommit;
+  onGestureStartRef.current = onGestureStart;
+  onSettlingMiniPressRef.current = onSettlingMiniPress;
+  onStateChangeRef.current = onStateChange;
 
-  const clearSettleTimer = useCallback(() => {
-    if (settleTimerRef.current === null) return;
-    clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = null;
+  const applyState = useCallback(
+    (nextState: LessonPlayerMinimizeGestureState) => {
+      const element = motionElementRef.current;
+      currentStateRef.current = nextState;
+      if (nextState.phase === "idle") setControlsSuppressed(false);
+      if (!element) {
+        onStateChangeRef.current?.(nextState);
+        return;
+      }
+
+      if (nextState.phase === "idle") {
+        clearLearningPlayerMinimizeMotionStyles(element);
+        onStateChangeRef.current?.(nextState);
+        return;
+      }
+
+      const geometry = geometryRef.current;
+      const scale =
+        1 - (1 - geometry.targetScale) * clamp(nextState.progress, 0, 1);
+      element.dataset.learningPlayerMotionPhase = nextState.phase;
+      element.style.borderRadius = "13px";
+      element.style.overflow = "hidden";
+      element.style.transform = `translate3d(${(
+        geometry.targetX * nextState.progress
+      ).toFixed(
+        3,
+      )}px, ${nextState.offsetY.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
+      element.style.transformOrigin = "top left";
+      element.style.transitionDuration =
+        nextState.phase === "dragging"
+          ? "0ms"
+          : `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`;
+      element.style.transitionProperty = "transform";
+      element.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
+      element.style.willChange = "transform";
+      element.style.zIndex = "190";
+      onStateChangeRef.current?.(nextState);
+    },
+    [],
+  );
+
+  const flushPendingState = useCallback(() => {
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    const pendingState = pendingStateRef.current;
+    pendingStateRef.current = null;
+    if (pendingState) applyState(pendingState);
+  }, [applyState]);
+
+  const scheduleState = useCallback(
+    (nextState: LessonPlayerMinimizeGestureState) => {
+      pendingStateRef.current = nextState;
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        const pendingState = pendingStateRef.current;
+        pendingStateRef.current = null;
+        if (pendingState) applyState(pendingState);
+      });
+    },
+    [applyState],
+  );
+
+  const clearSettle = useCallback(() => {
+    settleCleanupRef.current?.();
+    settleCleanupRef.current = null;
+    settleFinishRef.current = null;
   }, []);
 
+  const settleTo = useCallback(
+    (nextState: LessonPlayerMinimizeGestureState, onSettled: () => void) => {
+      clearSettle();
+      flushPendingState();
+      const element = motionElementRef.current;
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      if (!element || reducedMotion) {
+        applyState(nextState);
+        onSettled();
+        return;
+      }
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        settleCleanupRef.current = null;
+        settleFinishRef.current = null;
+        onSettled();
+      };
+      const handleTransitionEnd = (event: TransitionEvent) => {
+        if (event.target === element && event.propertyName === "transform") {
+          finish();
+        }
+      };
+      const timeout = window.setTimeout(
+        finish,
+        LEARNING_PLAYER_MOTION_DURATION_MS + SETTLE_FALLBACK_BUFFER_MS,
+      );
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        element.removeEventListener("transitionend", handleTransitionEnd);
+      };
+      settleCleanupRef.current = cleanup;
+      settleFinishRef.current = finish;
+      element.addEventListener("transitionend", handleTransitionEnd);
+      scheduleState(nextState);
+    },
+    [applyState, clearSettle, flushPendingState, scheduleState],
+  );
+
   const settleBack = useCallback(() => {
-    clearSettleTimer();
-    setState((current) => ({
-      offsetY: 0,
-      phase: current.phase === "idle" ? "idle" : "settling-back",
-      progress: 0,
-    }));
-    settleTimerRef.current = setTimeout(() => {
-      settleTimerRef.current = null;
-      setState(IDLE_STATE);
-    }, SETTLE_BACK_MS);
-  }, [clearSettleTimer]);
+    const current = pendingStateRef.current ?? currentStateRef.current;
+    if (current.phase === "idle") return;
+    settleTo({ offsetY: 0, phase: "settling-back", progress: 0 }, () =>
+      applyState(IDLE_STATE),
+    );
+  }, [applyState, settleTo]);
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      clearSettleTimer();
+      const finishActiveSettle = settleFinishRef.current;
+      if (finishActiveSettle) {
+        const settlingPhase =
+          pendingStateRef.current?.phase ?? currentStateRef.current.phase;
+        finishActiveSettle();
+        gestureRef.current = null;
+        if (settlingPhase === "settling-mini") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (settlingMiniPressTimerRef.current !== null) {
+            clearTimeout(settlingMiniPressTimerRef.current);
+          }
+          settlingMiniPressTimerRef.current = setTimeout(() => {
+            settlingMiniPressTimerRef.current = null;
+            onSettlingMiniPressRef.current?.();
+          }, 0);
+          return;
+        }
+      }
       if (
         event.defaultPrevented ||
         !enabled ||
@@ -177,22 +308,26 @@ export function useLessonPlayerMinimizeGesture({
         return;
       }
 
-      const nextGeometry = getGeometry(event.currentTarget);
+      onGestureStartRef.current?.();
+      const nextMotionTarget = motionTarget?.() ?? event.currentTarget;
+      const nextGeometry = getGeometry(nextMotionTarget);
       const timestamp = event.timeStamp || performance.now();
+      motionElementRef.current = nextMotionTarget;
+      geometryRef.current = nextGeometry;
       gestureRef.current = {
         ...nextGeometry,
         active: false,
         captureTarget: event.currentTarget,
         lastTimestamp: timestamp,
         lastY: event.clientY,
+        motionTarget: nextMotionTarget,
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         velocityY: 0,
       };
-      setGeometry(nextGeometry);
     },
-    [clearSettleTimer, enabled, fullscreen, settleBack],
+    [enabled, fullscreen, motionTarget, settleBack],
   );
 
   const handlePointerMove = useCallback(
@@ -221,6 +356,7 @@ export function useLessonPlayerMinimizeGesture({
         }
 
         gesture.active = true;
+        setControlsSuppressed(true);
         suppressClickRef.current = true;
         try {
           gesture.captureTarget.setPointerCapture?.(event.pointerId);
@@ -244,13 +380,13 @@ export function useLessonPlayerMinimizeGesture({
       gesture.lastTimestamp = timestamp;
 
       const offsetY = clamp(deltaY, 0, gesture.targetY);
-      setState({
+      scheduleState({
         offsetY,
         phase: "dragging",
         progress: clamp(offsetY / gesture.targetY, 0, 1),
       });
     },
-    [settleBack],
+    [scheduleState, settleBack],
   );
 
   const finishGesture = useCallback(
@@ -271,6 +407,9 @@ export function useLessonPlayerMinimizeGesture({
       if (clickSuppressionTimerRef.current !== null) {
         clearTimeout(clickSuppressionTimerRef.current);
       }
+      if (settlingMiniPressTimerRef.current !== null) {
+        clearTimeout(settlingMiniPressTimerRef.current);
+      }
       clickSuppressionTimerRef.current = setTimeout(() => {
         clickSuppressionTimerRef.current = null;
         suppressClickRef.current = false;
@@ -290,31 +429,23 @@ export function useLessonPlayerMinimizeGesture({
         return;
       }
 
-      clearSettleTimer();
-      setState({
-        offsetY: gesture.targetY,
-        phase: "settling-mini",
-        progress: 1,
-      });
-      const reducedMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      if (reducedMotion) {
-        commitRef.current();
-        return;
-      }
-      settleTimerRef.current = setTimeout(() => {
-        settleTimerRef.current = null;
-        commitRef.current();
-      }, SETTLE_TO_MINI_MS);
+      settleTo(
+        {
+          offsetY: gesture.targetY,
+          phase: "settling-mini",
+          progress: 1,
+        },
+        () => commitRef.current(),
+      );
     },
-    [clearSettleTimer, settleBack],
+    [settleBack, settleTo],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (enabled) return;
 
-    clearSettleTimer();
+    clearSettle();
+    flushPendingState();
     if (clickSuppressionTimerRef.current !== null) {
       clearTimeout(clickSuppressionTimerRef.current);
       clickSuppressionTimerRef.current = null;
@@ -331,58 +462,50 @@ export function useLessonPlayerMinimizeGesture({
     }
     activePointerIdsRef.current.clear();
     gestureRef.current = null;
+    setControlsSuppressed(false);
     suppressClickRef.current = false;
-    setState((current) =>
-      current.phase === "idle" &&
-      current.offsetY === 0 &&
-      current.progress === 0
-        ? current
-        : IDLE_STATE,
-    );
-  }, [clearSettleTimer, enabled]);
-
-  useEffect(() => onStateChange?.(state), [onStateChange, state]);
+    pendingStateRef.current = null;
+    if (preserveTerminalStateOnDisable) {
+      currentStateRef.current = IDLE_STATE;
+      const element = motionElementRef.current;
+      if (element) clearLearningPlayerMinimizeMotionStyles(element);
+      return;
+    }
+    applyState(IDLE_STATE);
+  }, [
+    applyState,
+    clearSettle,
+    enabled,
+    flushPendingState,
+    preserveTerminalStateOnDisable,
+  ]);
 
   useEffect(
     () => () => {
-      clearSettleTimer();
+      clearSettle();
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
       if (clickSuppressionTimerRef.current !== null) {
         clearTimeout(clickSuppressionTimerRef.current);
       }
+      if (settlingMiniPressTimerRef.current !== null) {
+        clearTimeout(settlingMiniPressTimerRef.current);
+      }
+      const element = motionElementRef.current;
+      if (element) clearLearningPlayerMinimizeMotionStyles(element);
       activePointerIdsRef.current.clear();
       gestureRef.current = null;
     },
-    [clearSettleTimer],
+    [clearSettle],
   );
 
-  const scale = 1 - (1 - geometry.targetScale) * state.progress;
   const style: CSSProperties = {
-    borderRadius:
-      state.progress > 0 ? `${13 + state.progress * 7}px` : undefined,
-    boxShadow:
-      state.progress > 0
-        ? `0 ${Math.round(10 + state.progress * 12)}px ${Math.round(
-            28 + state.progress * 22,
-          )}px rgb(0 0 0 / ${0.2 + state.progress * 0.22})`
-        : undefined,
-    overflow: state.phase === "idle" ? undefined : "hidden",
     touchAction: "pan-x pinch-zoom",
-    transform:
-      state.phase === "idle"
-        ? undefined
-        : `translate3d(${Math.round(
-            geometry.targetX * state.progress,
-          )}px, ${Math.round(state.offsetY)}px, 0) scale(${scale.toFixed(4)})`,
-    transformOrigin: "top left",
-    transitionDuration: state.phase === "dragging" ? "0ms" : undefined,
-    willChange:
-      state.phase === "idle"
-        ? undefined
-        : "transform, border-radius, box-shadow",
   };
 
   return {
-    active: state.phase !== "idle",
+    controlsSuppressed,
     handlers: {
       onClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
         if (!suppressClickRef.current) return;
@@ -401,7 +524,6 @@ export function useLessonPlayerMinimizeGesture({
       onPointerUpCapture: (event: ReactPointerEvent<HTMLDivElement>) =>
         finishGesture(event),
     },
-    state,
     style,
   };
 }

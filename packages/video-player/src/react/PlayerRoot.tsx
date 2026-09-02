@@ -31,6 +31,11 @@ import { PlayerController } from "./PlayerController";
 import type { VideoPlayerEventListener } from "./playerEvents";
 import type { PlayerSnapshot } from "./playerState";
 import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
+import {
+  PlayerInteractionModeProvider,
+  useResolvedPlayerMobileInteraction,
+  type PlayerInteractionMode,
+} from "./PlayerInteractionMode";
 
 export type VideoEngineFactory = () => VideoEngine;
 
@@ -84,6 +89,8 @@ export interface PlayerRootProps extends Omit<
   theme?: PlayerTheme;
   /** Enables pinch-to-zoom and one-finger panning of the video content. */
   zoomEnabled?: boolean;
+  /** Keeps touch-first controls and gestures stable across viewport rotation. */
+  interactionMode?: PlayerInteractionMode;
 }
 
 function assignRef<Value>(
@@ -103,6 +110,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       containerRef,
       engineFactory,
       loadOptions,
+      interactionMode = "responsive",
       markers = [],
       onClickCapture,
       onEvent,
@@ -131,7 +139,10 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       controllerRef.current = new PlayerController(engineFactory());
     }
     const controller = controllerRef.current;
+    const mobileInteraction =
+      useResolvedPlayerMobileInteraction(interactionMode);
     const zoomGestures = usePlayerZoomGestures(controller);
+    const controlsHiddenAtPointerDownRef = useRef(false);
     const lifecycleVersionRef = useRef(0);
     const autoPlayRef = useRef(autoPlay);
     autoPlayRef.current = autoPlay;
@@ -255,114 +266,145 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     return (
       <PlayerThemeProvider theme={resolvedTheme}>
         <PlayerControllerContext.Provider value={controller}>
-          <div
-            {...containerProps}
-            ref={setContainer}
-            className={classNames(resolvedTheme.className, className)}
-            style={themeStyle}
-            data-video-player-root=""
-            data-player-theme={resolvedTheme.id}
-            data-player-zoom-enabled={zoomEnabled}
-            onClickCapture={(event) => {
-              const zoomResetRequested =
-                event.target instanceof Element &&
-                event.target.closest("[data-player-zoom-reset]") !== null;
-              if (
-                zoomEnabled &&
-                !zoomResetRequested &&
-                zoomGestures.suppressLegacyTouch()
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
+          <PlayerInteractionModeProvider mobile={mobileInteraction}>
+            <div
+              {...containerProps}
+              ref={setContainer}
+              className={classNames(resolvedTheme.className, className)}
+              style={themeStyle}
+              data-video-player-root=""
+              data-player-theme={resolvedTheme.id}
+              data-player-mobile-interaction={
+                mobileInteraction ? "true" : "false"
               }
-              onClickCapture?.(event);
-            }}
-            onPointerCancelCapture={(event) => {
-              onPointerCancelCapture?.(event);
-              if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
-                event.stopPropagation();
-              }
-            }}
-            onPointerDownCapture={(event) => {
-              onPointerDownCapture?.(event);
-              if (
-                zoomEnabled &&
-                !event.defaultPrevented &&
-                zoomGestures.onPointerDown(event)
-              ) {
-                event.stopPropagation();
-              }
-            }}
-            onPointerMoveCapture={(event) => {
-              onPointerMoveCapture?.(event);
-              if (
-                zoomEnabled &&
-                !event.defaultPrevented &&
-                zoomGestures.onPointerMove(event)
-              ) {
-                event.stopPropagation();
-              }
-            }}
-            onPointerUpCapture={(event) => {
-              onPointerUpCapture?.(event);
-              if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
-                event.stopPropagation();
-              }
-            }}
-            onTouchCancelCapture={(event) => {
-              onTouchCancelCapture?.(event);
-              const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
-              if (
-                zoomEnabled &&
-                (handled || zoomGestures.suppressLegacyTouch())
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            }}
-            onTouchEndCapture={(event) => {
-              onTouchEndCapture?.(event);
-              const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
-              if (
-                zoomEnabled &&
-                (handled || zoomGestures.suppressLegacyTouch())
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            }}
-            onTouchMoveCapture={(event) => {
-              onTouchMoveCapture?.(event);
-              const handled =
-                zoomEnabled &&
-                !event.defaultPrevented &&
-                zoomGestures.onTouchMove(event);
-              if (
-                zoomEnabled &&
-                (handled || zoomGestures.suppressLegacyTouch())
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            }}
-            onTouchStartCapture={(event) => {
-              onTouchStartCapture?.(event);
-              const handled =
-                zoomEnabled &&
-                !event.defaultPrevented &&
-                zoomGestures.onTouchStart(event);
-              if (
-                zoomEnabled &&
-                (handled || zoomGestures.suppressLegacyTouch())
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            }}
-          >
-            {children}
-          </div>
+              data-player-zoom-enabled={zoomEnabled}
+              onClickCapture={(event) => {
+                const controlLayerRequested =
+                  event.target instanceof Element
+                    ? event.target.closest("[data-video-player-control-layer]")
+                    : null;
+                const zoomResetRequested =
+                  event.target instanceof Element &&
+                  event.target.closest("[data-player-zoom-reset]") !== null;
+                const pointerStartedWithHiddenControls =
+                  controlsHiddenAtPointerDownRef.current &&
+                  controlLayerRequested !== null &&
+                  !zoomResetRequested &&
+                  event.detail > 0;
+                controlsHiddenAtPointerDownRef.current = false;
+                const hiddenControlsRequested =
+                  !zoomResetRequested &&
+                  controlLayerRequested?.getAttribute("aria-hidden") === "true";
+                if (
+                  pointerStartedWithHiddenControls ||
+                  hiddenControlsRequested
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  controller.setSettingsView("closed");
+                  controller.setControlsVisible(true);
+                  return;
+                }
+                if (
+                  zoomEnabled &&
+                  !zoomResetRequested &&
+                  zoomGestures.suppressLegacyTouch()
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return;
+                }
+                onClickCapture?.(event);
+              }}
+              onPointerCancelCapture={(event) => {
+                controlsHiddenAtPointerDownRef.current = false;
+                onPointerCancelCapture?.(event);
+                if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                  event.stopPropagation();
+                }
+              }}
+              onPointerDownCapture={(event) => {
+                controlsHiddenAtPointerDownRef.current =
+                  !controller.getSnapshot().ui.controlsVisible;
+                onPointerDownCapture?.(event);
+                if (
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  zoomGestures.onPointerDown(event)
+                ) {
+                  event.stopPropagation();
+                }
+              }}
+              onPointerMoveCapture={(event) => {
+                onPointerMoveCapture?.(event);
+                if (
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  zoomGestures.onPointerMove(event)
+                ) {
+                  event.stopPropagation();
+                }
+              }}
+              onPointerUpCapture={(event) => {
+                onPointerUpCapture?.(event);
+                if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                  event.stopPropagation();
+                }
+              }}
+              onTouchCancelCapture={(event) => {
+                onTouchCancelCapture?.(event);
+                const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+                if (
+                  zoomEnabled &&
+                  (handled || zoomGestures.suppressLegacyTouch())
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+              onTouchEndCapture={(event) => {
+                onTouchEndCapture?.(event);
+                const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+                if (
+                  zoomEnabled &&
+                  (handled || zoomGestures.suppressLegacyTouch())
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+              onTouchMoveCapture={(event) => {
+                onTouchMoveCapture?.(event);
+                const handled =
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  zoomGestures.onTouchMove(event);
+                if (
+                  zoomEnabled &&
+                  (handled || zoomGestures.suppressLegacyTouch())
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+              onTouchStartCapture={(event) => {
+                onTouchStartCapture?.(event);
+                const handled =
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  zoomGestures.onTouchStart(event);
+                if (
+                  zoomEnabled &&
+                  (handled || zoomGestures.suppressLegacyTouch())
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+            >
+              {children}
+            </div>
+          </PlayerInteractionModeProvider>
         </PlayerControllerContext.Provider>
       </PlayerThemeProvider>
     );

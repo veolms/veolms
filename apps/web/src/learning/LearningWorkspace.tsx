@@ -349,22 +349,49 @@ export function LearningWorkspace({
   const { preferences: curriculumTestPreferences } =
     useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
-  const [playerMinimizeGesture, setPlayerMinimizeGesture] = useState(
-    IDLE_PLAYER_MINIMIZE_GESTURE,
-  );
+  const mainRef = useRef<HTMLElement>(null);
+  const playerWrapRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const lessonContentRef = useRef<HTMLElement>(null);
+  const playerMinimizeActiveRef = useRef(false);
   const updatePlayerMinimizeGesture = useCallback(
     (state: LessonPlayerMinimizeGestureState) => {
-      setPlayerMinimizeGesture(state);
+      const active = state.phase !== "idle";
+      if (playerMinimizeActiveRef.current !== active) {
+        playerMinimizeActiveRef.current = active;
+        const workspace = workspaceRef.current;
+        const playerWrap = playerWrapRef.current;
+        const lessonContent = lessonContentRef.current;
+        if (active) {
+          workspace?.style.setProperty("background", "transparent");
+          playerWrap?.style.setProperty("background", "transparent");
+          playerWrap?.style.setProperty("box-shadow", "none");
+          playerWrap?.style.setProperty("z-index", "190");
+          if (lessonContent) {
+            lessonContent.inert = true;
+            lessonContent.style.pointerEvents = "none";
+            lessonContent.style.willChange = "transform, opacity";
+          }
+        } else {
+          workspace?.style.removeProperty("background");
+          playerWrap?.style.removeProperty("background");
+          playerWrap?.style.removeProperty("box-shadow");
+          playerWrap?.style.removeProperty("z-index");
+          if (lessonContent) {
+            lessonContent.inert = false;
+            lessonContent.style.removeProperty("pointer-events");
+            lessonContent.style.removeProperty("will-change");
+          }
+        }
+      }
       onMinimizeGestureChange?.(state);
     },
     [onMinimizeGestureChange],
   );
   useEffect(
-    () => () => onMinimizeGestureChange?.(IDLE_PLAYER_MINIMIZE_GESTURE),
-    [onMinimizeGestureChange],
+    () => () => updatePlayerMinimizeGesture(IDLE_PLAYER_MINIMIZE_GESTURE),
+    [updatePlayerMinimizeGesture],
   );
-  const mainRef = useRef<HTMLElement>(null);
-  const playerWrapRef = useRef<HTMLDivElement>(null);
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
   const curriculumScrollportRef = useRef<HTMLElement>(null);
   const lessonDrawerSurfaceRef = useRef<HTMLDivElement>(null);
@@ -1441,14 +1468,6 @@ export function LearningWorkspace({
   const floatingLessonDrawerSlidingClosed =
     floatingLessonDrawerResizing &&
     floatingLessonDrawerViewportWidth < LESSON_DRAWER_MIN_FLOATING_WIDTH;
-  const playerMinimizeActive = playerMinimizeGesture.phase !== "idle";
-  const playerMinimizeContentProgress = Math.min(
-    1,
-    Math.max(0, (playerMinimizeGesture.progress - 0.2) / 0.3),
-  );
-  const playerMinimizeSettling =
-    playerMinimizeGesture.phase === "settling-back" ||
-    playerMinimizeGesture.phase === "settling-mini";
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
@@ -1526,8 +1545,8 @@ export function LearningWorkspace({
 
   return (
     <div
+      ref={workspaceRef}
       className={`learning-workspace ${theaterMode ? "is-theater" : ""} ${curriculumResizing ? "is-curriculum-resizing" : ""} ${floatingLessonDrawerResizing ? "is-floating-curriculum-resizing select-none" : ""}`}
-      style={{ background: playerMinimizeActive ? "transparent" : undefined }}
       onPointerDownCapture={startCurriculumScreenSwipe}
       onClickCapture={suppressCurriculumSwipeClick}
     >
@@ -1550,15 +1569,7 @@ export function LearningWorkspace({
         }
       >
         <section className="learning-workspace__lesson-column">
-          <div
-            ref={playerWrapRef}
-            className="learning-workspace__player-wrap"
-            style={{
-              background: playerMinimizeActive ? "transparent" : undefined,
-              boxShadow: playerMinimizeActive ? "none" : undefined,
-              zIndex: playerMinimizeActive ? 190 : undefined,
-            }}
-          >
+          <div ref={playerWrapRef} className="learning-workspace__player-wrap">
             <button
               type="button"
               className="learning-workspace__back max-sm:hidden"
@@ -1605,26 +1616,17 @@ export function LearningWorkspace({
           </div>
 
           <article
+            ref={lessonContentRef}
             className="learning-workspace__lesson-content"
             data-discussion-panel-anchor=""
+            data-learning-lesson-content=""
             aria-labelledby="learning-lesson-title"
-            inert={playerMinimizeActive ? true : undefined}
             style={{
-              opacity: playerMinimizeActive
-                ? 1 - playerMinimizeContentProgress
-                : undefined,
-              pointerEvents: playerMinimizeActive ? "none" : undefined,
-              transform: playerMinimizeActive
-                ? `translate3d(0, ${Math.round(
-                    playerMinimizeGesture.offsetY,
-                  )}px, 0)`
-                : undefined,
-              transition: playerMinimizeSettling
-                ? "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out"
-                : "none",
-              willChange: playerMinimizeActive
-                ? "transform, opacity"
-                : undefined,
+              opacity: "var(--learning-player-content-opacity, 1)",
+              transform:
+                "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
+              transition:
+                "transform var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           >
             <header>

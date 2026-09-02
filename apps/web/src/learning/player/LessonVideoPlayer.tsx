@@ -64,7 +64,9 @@ export interface LessonVideoPlayerProps {
   onGoPrevious?: () => void;
   onLessonEnded?: () => void;
   onMinimize?: (request: LearningMiniPlayerRequest) => void;
+  onMinimizeGestureStart?: () => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
+  minimizeMotionTarget?: () => HTMLElement | null;
   onMiniPlayerRestoreReady?: () => void;
   onMiniClose?: () => void;
   onMiniRestore?: () => void;
@@ -91,7 +93,9 @@ export function LessonVideoPlayer({
   onGoPrevious = () => undefined,
   onLessonEnded,
   onMinimize,
+  onMinimizeGestureStart,
   onMinimizeGestureChange,
+  minimizeMotionTarget,
   onMiniPlayerRestoreReady,
   onMiniClose,
   onMiniRestore,
@@ -379,8 +383,12 @@ export function LessonVideoPlayer({
   const minimizeGesture = useLessonPlayerMinimizeGesture({
     enabled: presentation === "full" && Boolean(onMinimize),
     fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
+    motionTarget: minimizeMotionTarget,
     onCommit: minimizePlayer,
+    onGestureStart: onMinimizeGestureStart,
+    onSettlingMiniPress: onMiniRestore,
     onStateChange: onMinimizeGestureChange,
+    preserveTerminalStateOnDisable: presentation === "mini",
   });
 
   const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
@@ -488,17 +496,17 @@ export function LessonVideoPlayer({
       mediaProps={{
         muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
-      className={
-        presentation === "mini"
-          ? "!rounded-xl"
-          : "transition-[transform,border-radius,box-shadow] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+      className={presentation === "mini" ? "!rounded-xl" : undefined}
+      data-learning-player-controls-suppressed={
+        minimizeGesture.controlsSuppressed ? "" : undefined
       }
+      data-learning-player-motion-surface=""
       style={presentation === "full" ? minimizeGesture.style : undefined}
       {...(presentation === "full" ? minimizeGesture.handlers : {})}
       playerClassName={
         presentation === "mini"
           ? "!rounded-xl !shadow-none"
-          : "border-0 rounded-[13px] max-sm:overflow-visible"
+          : "border-0 !rounded-none"
       }
       centralControl={
         presentation === "mini" ? (
@@ -507,6 +515,7 @@ export function LessonVideoPlayer({
           <LessonCentralControls
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
+            controlsSuppressed={minimizeGesture.controlsSuppressed}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
           />
@@ -525,6 +534,7 @@ export function LessonVideoPlayer({
             autoplayEnabled={autoplayEnabled}
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
+            controlsSuppressed={minimizeGesture.controlsSuppressed}
             courseLessonsOpen={courseLessonsOpen}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
@@ -536,13 +546,11 @@ export function LessonVideoPlayer({
         )
       }
       overlays={
-        presentation === "full" ? (
-          <LessonAmbientProjection
-            enabled={ambientEnabled}
-            theaterMode={theaterMode}
-          />
+        presentation === "full" && !minimizeGesture.controlsSuppressed ? (
+          <LessonAmbientProjection enabled={ambientEnabled} />
         ) : undefined
       }
+      playbackFeedback={minimizeGesture.controlsSuppressed ? false : undefined}
     />
   );
 }

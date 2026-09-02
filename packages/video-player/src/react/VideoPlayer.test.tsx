@@ -83,6 +83,39 @@ function installCompactViewportMatchMedia() {
   };
 }
 
+function installLandscapeTouchMatchMedia() {
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(
+    window,
+    "matchMedia",
+  );
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches:
+        query === "(min-width: 40rem)" ||
+        query === "(max-height: 40rem)" ||
+        query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }),
+  });
+
+  return () => {
+    if (previousMatchMedia) {
+      Object.defineProperty(window, "matchMedia", previousMatchMedia);
+    } else {
+      Reflect.deleteProperty(window, "matchMedia");
+    }
+  };
+}
+
 const source = {
   id: "lesson-1",
   src: "/lesson.mp4",
@@ -120,9 +153,11 @@ describe("VideoPlayer integration", () => {
     expect(playSurface).toHaveClass(
       "size-20",
       "lg:size-22",
-      "bg-(--video-player-control-surface)",
-      "backdrop-blur-sm",
+      "border-0",
+      "bg-transparent",
+      "shadow-none",
     );
+    expect(playSurface).not.toHaveClass("backdrop-blur-sm");
     expect(playSurface).toHaveAttribute(
       "data-playback-feedback-duration",
       "850",
@@ -1391,6 +1426,71 @@ describe("VideoPlayer integration", () => {
     expect(play).not.toHaveBeenCalled();
   });
 
+  it("keeps mobile double-tap seeking in coarse-pointer landscape", async () => {
+    const restoreMatchMedia = installLandscapeTouchMatchMedia();
+    const engine = new FakeVideoEngine();
+    const seek = vi.spyOn(engine, "seek");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+          seekIntervalSeconds={10}
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      engine.setSnapshot({ currentTime: 20 });
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+        bottom: 360,
+        height: 360,
+        left: 0,
+        right: 800,
+        top: 0,
+        width: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      vi.useFakeTimers();
+
+      const tap = () => {
+        fireEvent.pointerDown(surface, {
+          clientX: 650,
+          pointerId: 5,
+          pointerType: "touch",
+        });
+        fireEvent.pointerUp(surface, {
+          clientX: 650,
+          pointerId: 5,
+          pointerType: "touch",
+        });
+      };
+
+      act(() => {
+        tap();
+        vi.advanceTimersByTime(100);
+        tap();
+      });
+
+      expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(seek).toHaveBeenLastCalledWith(30);
+      expect(screen.getByRole("status")).toHaveAttribute(
+        "data-player-hud-variant",
+        "mobile-seek",
+      );
+      expect(screen.getByText("+10")).toBeVisible();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
   it("uses empty-space mouse clicks to toggle controls in a compact viewport", async () => {
     const restoreMatchMedia = installCompactViewportMatchMedia();
     const engine = new FakeVideoEngine();
@@ -1410,6 +1510,10 @@ describe("VideoPlayer integration", () => {
       const surface = screen.getByRole("button", {
         name: "Play or pause video; tap to show controls",
       });
+      const playButton = screen.getByRole("button", { name: "Play" });
+      const controls = document.querySelector<HTMLElement>(
+        "[data-video-player-controls]",
+      );
       expect(surface).not.toHaveAttribute("title");
       vi.useFakeTimers();
 
@@ -1430,7 +1534,28 @@ describe("VideoPlayer integration", () => {
       expect(player).toHaveAttribute("data-controls-visible", "true");
       clickEmptySpace();
       expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(controls).toHaveAttribute("inert");
+      expect(controls).toHaveClass("invisible", "pointer-events-none");
       expect(play).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(playButton, {
+        clientX: 50,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      fireEvent.pointerUp(playButton, {
+        clientX: 50,
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      fireEvent.click(playButton, { detail: 1 });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(controls).not.toHaveAttribute("inert");
+      expect(play).not.toHaveBeenCalled();
+
+      clickEmptySpace();
+      expect(player).toHaveAttribute("data-controls-visible", "false");
 
       clickEmptySpace();
       expect(player).toHaveAttribute("data-controls-visible", "true");
@@ -1593,6 +1718,8 @@ describe("VideoPlayer integration", () => {
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
       const player = screen.getByRole("region", { name: "Video player" });
+      const playerPointerSurface = player.closest<HTMLElement>(".video-shell");
+      expect(playerPointerSurface).not.toBeNull();
       const surface = screen.getByRole("button", {
         name: "Play or pause video; tap to show controls",
       });
@@ -1600,7 +1727,7 @@ describe("VideoPlayer integration", () => {
         expect(player).toHaveAttribute("data-controls-visible", "false"),
       );
 
-      fireEvent.pointerEnter(player, { pointerType: "mouse" });
+      fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "true");
 
       vi.useFakeTimers();
@@ -1620,21 +1747,19 @@ describe("VideoPlayer integration", () => {
       });
       expect(play).toHaveBeenCalledOnce();
 
-      act(() => vi.advanceTimersByTime(4_999));
+      act(() => vi.advanceTimersByTime(5_100));
       expect(player).toHaveAttribute("data-controls-visible", "true");
-      act(() => vi.advanceTimersByTime(1));
-      expect(player).toHaveAttribute("data-controls-visible", "false");
 
       fireEvent.pointerMove(player, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "true");
-      fireEvent.pointerLeave(player, { pointerType: "mouse" });
+      fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "false");
 
       act(() => engine.pause());
-      fireEvent.pointerEnter(player, { pointerType: "mouse" });
+      fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
       act(() => vi.advanceTimersByTime(5_100));
       expect(player).toHaveAttribute("data-controls-visible", "true");
-      fireEvent.pointerLeave(player, { pointerType: "mouse" });
+      fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "false");
     } finally {
       restoreMatchMedia();

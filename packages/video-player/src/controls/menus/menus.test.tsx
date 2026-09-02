@@ -15,6 +15,7 @@ import {
   createInitialPlayerUiState,
   type PlayerSnapshot,
 } from "../../react/playerState";
+import { PlayerInteractionModeProvider } from "../../react/PlayerInteractionMode";
 import { AudioTrackMenu } from "./AudioTrackMenu";
 import { CaptionsMenu } from "./CaptionsMenu";
 import { ChaptersMenu } from "./ChaptersMenu";
@@ -134,14 +135,16 @@ describe("PopoverMenu", () => {
 
     try {
       render(
-        <PopoverMenu
-          label="Settings"
-          menuLabel="Video settings"
-          mobilePresentation="sheet"
-          trigger="Settings"
-        >
-          <PlayerMenuItem label="Quality" />
-        </PopoverMenu>,
+        <PlayerInteractionModeProvider mobile>
+          <PopoverMenu
+            label="Settings"
+            menuLabel="Video settings"
+            mobilePresentation="sheet"
+            trigger="Settings"
+          >
+            <PlayerMenuItem label="Quality" />
+          </PopoverMenu>
+        </PlayerInteractionModeProvider>,
       );
 
       const trigger = screen.getByRole("button", { name: "Settings" });
@@ -198,14 +201,16 @@ describe("PopoverMenu", () => {
 
     try {
       render(
-        <PopoverMenu
-          label="Settings"
-          menuLabel="Video settings"
-          mobilePresentation="sheet"
-          trigger="Settings"
-        >
-          <PlayerMenuItem label="Quality" />
-        </PopoverMenu>,
+        <PlayerInteractionModeProvider mobile>
+          <PopoverMenu
+            label="Settings"
+            menuLabel="Video settings"
+            mobilePresentation="sheet"
+            trigger="Settings"
+          >
+            <PlayerMenuItem label="Quality" />
+          </PopoverMenu>
+        </PlayerInteractionModeProvider>,
       );
 
       const trigger = screen.getByRole("button", { name: "Settings" });

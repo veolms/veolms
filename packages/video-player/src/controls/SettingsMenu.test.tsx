@@ -46,11 +46,9 @@ describe("SettingsMenu playback speed", () => {
     expect(openIcon).toHaveAttribute("data-settings-icon-state", "open");
     expect(openIcon).toHaveStyle({ transform: "rotate(90deg)" });
     expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
-      "!backdrop-blur-none",
+      "backdrop-blur-sm",
+      "!mb-8",
     );
-    expect(
-      screen.getByRole("menu", { name: "Video settings" }),
-    ).not.toHaveClass("backdrop-blur-md");
   });
 
   it("offers exactly the compact quick-speed presets", () => {
@@ -71,17 +69,37 @@ describe("SettingsMenu playback speed", () => {
     expect(setPlaybackRate).toHaveBeenCalledWith(3);
   });
 
-  it("omits captions from the main menu when captions have a quick control", () => {
-    renderPlaybackRateSettings("main");
+  it("opens captions from the main settings menu", () => {
+    const { setSettingsView } = renderPlaybackRateSettings("main");
+    const captionsItem = screen.getByRole("menuitem", {
+      name: "Captions Off",
+    });
 
     expect(
-      screen.queryByRole("menuitem", { name: /^Captions\b/ }),
-    ).not.toBeInTheDocument();
+      captionsItem.querySelector('[data-caption-icon-state="outline"]'),
+    ).not.toBeNull();
+
+    fireEvent.click(captionsItem);
+
+    expect(setSettingsView).toHaveBeenCalledWith("captions");
+  });
+
+  it("selects a caption track from the captions submenu", () => {
+    const { selectTextTrack } = renderPlaybackRateSettings("captions");
+
+    expect(screen.getByRole("menuitemradio", { name: "Off" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "English en" }));
+
+    expect(selectTextTrack).toHaveBeenCalledWith("captions-en");
   });
 
   it.each([
     ["quality", "Quality"],
     ["playback-rate", "Playback speed"],
+    ["captions", "Captions"],
   ] as const)(
     "returns from the %s submenu without closing settings",
     (settingsView, label) => {
@@ -182,6 +200,16 @@ function renderPlaybackRateSettings(
     media: {
       ...createInitialVideoEngineSnapshot(),
       playbackRate: 1.25,
+      textTracks: [
+        {
+          id: "captions-en",
+          label: "English",
+          language: "en",
+          active: false,
+          kind: "captions",
+          roles: [],
+        },
+      ],
     },
     capabilities: {
       browserSupported: true,
@@ -200,10 +228,12 @@ function renderPlaybackRateSettings(
     markers: [],
   };
   const setPlaybackRate = vi.fn<(rate: number) => void>();
+  const selectTextTrack = vi.fn<(trackId: string | null) => void>();
   const setSettingsView =
     vi.fn<(view: PlayerSnapshot["ui"]["settingsView"]) => void>();
   const controller = {
     getSnapshot: () => snapshot,
+    selectTextTrack,
     subscribe: () => () => undefined,
     setPlaybackRate,
     setSettingsView,
@@ -215,5 +245,5 @@ function renderPlaybackRateSettings(
     </PlayerControllerContext.Provider>,
   );
 
-  return { setPlaybackRate, setSettingsView, unmount };
+  return { selectTextTrack, setPlaybackRate, setSettingsView, unmount };
 }

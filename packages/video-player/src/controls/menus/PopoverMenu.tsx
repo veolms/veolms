@@ -9,13 +9,13 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
 import { getPlayerThemeStyle } from "../../themes/playerThemes";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
+import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
 
 export type PopoverMenuSide = "top" | "bottom";
 export type PopoverMenuAlign = "start" | "end";
@@ -60,22 +60,7 @@ const panelClass =
 const mobileSheetPanelClass =
   "fixed inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
 
-const mobileSheetQuery = "(max-width: 640px)";
 const mobileSheetDismissDistance = 72;
-
-const subscribeToMobileSheetViewport = (onStoreChange: () => void) => {
-  if (typeof window === "undefined" || !window.matchMedia) return () => {};
-  const mediaQuery = window.matchMedia(mobileSheetQuery);
-  mediaQuery.addEventListener?.("change", onStoreChange);
-  return () => mediaQuery.removeEventListener?.("change", onStoreChange);
-};
-
-const getMobileSheetViewportSnapshot = () =>
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia(mobileSheetQuery).matches;
-
-const getMobileSheetViewportServerSnapshot = () => false;
 
 export function PopoverMenu({
   align = "end",
@@ -94,6 +79,7 @@ export function PopoverMenu({
   triggerClassName,
 }: PopoverMenuProps) {
   const theme = usePlayerTheme();
+  const mobileInteraction = usePlayerMobileInteraction();
   const generatedId = useId();
   const menuId = `video-player-menu-${generatedId.replaceAll(":", "")}`;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -109,12 +95,7 @@ export function PopoverMenu({
   const [mobileSheetDragging, setMobileSheetDragging] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
-  const mobileSheetViewport = useSyncExternalStore(
-    subscribeToMobileSheetViewport,
-    getMobileSheetViewportSnapshot,
-    getMobileSheetViewportServerSnapshot,
-  );
-  const isMobileSheet = mobilePresentation === "sheet" && mobileSheetViewport;
+  const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
 
   const setOpen = useCallback(
     (nextOpen: boolean) => {
@@ -389,7 +370,11 @@ export function PopoverMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={classNames(triggerClass, triggerClassName)}
+        className={classNames(
+          triggerClass,
+          mobileInteraction && "!text-xs",
+          triggerClassName,
+        )}
         aria-controls={isOpen ? menuId : undefined}
         aria-expanded={isOpen}
         aria-haspopup={isMobileSheet ? "dialog" : "menu"}

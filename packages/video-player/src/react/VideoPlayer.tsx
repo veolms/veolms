@@ -39,6 +39,7 @@ import type {
 import { classNames } from "../utils/classNames";
 import type { TimelineMarker } from "../timeline/timelineMath";
 import type { PlayerTheme } from "../themes/playerThemes";
+import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 
 export interface VideoPlayerProgress {
   currentTime: number;
@@ -97,6 +98,8 @@ export interface VideoPlayerProps extends Omit<
   lockLandscapeOnFullscreen?: boolean;
   /** Enables pinch-to-zoom and panning of the video content. */
   zoomEnabled?: boolean;
+  /** Forces a touch-first or desktop interaction model when responsive detection is unsuitable. */
+  interactionMode?: PlayerInteractionMode;
 }
 
 interface ScreenOrientationWithLock {
@@ -140,6 +143,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       emptyTapBehavior = "toggle-playback",
       keyboardEnabled = true,
       lockLandscapeOnFullscreen = false,
+      interactionMode = "responsive",
       manualChapters,
       markers = [],
       mediaClassName,
@@ -293,6 +297,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           theaterMode={theaterMode}
           onEvent={handleEvent}
           theme={theme}
+          interactionMode={interactionMode}
           zoomEnabled={zoomEnabled}
           style={playerThemeStyle}
           role="region"

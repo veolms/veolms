@@ -10,6 +10,7 @@ import {
   type PopoverMenuMobilePresentation,
 } from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const SETTINGS_OPEN_TURN_DEGREES = 60;
 
@@ -28,10 +29,12 @@ export function SettingsMenu({
   triggerClassName,
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
+  const mobileInteraction = usePlayerMobileInteraction();
   const theme = usePlayerTheme();
   const {
     audio: AudioIcon,
     back: BackIcon,
+    captions: CaptionsIcon,
     chapters: ChaptersIcon,
     disclosure: DisclosureIcon,
     pictureInPicture: PictureInPictureIcon,
@@ -73,6 +76,11 @@ export function SettingsMenu({
       ?.label ??
     media.audioTracks[0]?.label ??
     "Default";
+  const activeTextTrack =
+    media.textTracks.find((item) => item.id === media.selectedTextTrackId) ??
+    media.textTracks.find((item) => item.active);
+  const captionsLabel =
+    activeTextTrack?.label || activeTextTrack?.language || "Off";
 
   const openView = (next: typeof view) => controller.setSettingsView(next);
   const settingsOpen = view !== "closed";
@@ -86,7 +94,7 @@ export function SettingsMenu({
       mobilePresentation={mobilePresentation}
       align="end"
       side="top"
-      panelClassName="!backdrop-blur-none"
+      panelClassName={mobileInteraction ? undefined : "backdrop-blur-sm !mb-8"}
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
@@ -95,7 +103,7 @@ export function SettingsMenu({
           data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
           data-settings-icon-state={settingsOpen ? "open" : "closed"}
           size={22}
-          className="origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none"
+          className={`origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
           style={{
             transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
           }}
@@ -106,8 +114,8 @@ export function SettingsMenu({
       {({ close }) => (
         <div
           className={`[&_button]:min-h-11 sm:[&_button]:min-h-10 ${
-            view === "playback-rate" ? "min-w-72" : "min-w-60"
-          }`}
+            mobileInteraction ? "[&_button]:!min-h-11" : ""
+          } ${view === "playback-rate" ? "min-w-72" : "min-w-60"}`}
         >
           {view !== "main" ? (
             <button
@@ -116,7 +124,9 @@ export function SettingsMenu({
               tabIndex={-1}
               data-menu-keep-open=""
               data-video-player-settings-back=""
-              className="-mx-2 mb-1 flex min-h-10 w-[calc(100%+1rem)] items-center gap-2 rounded-none border-b border-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] px-5 pb-2 text-left text-sm font-semibold text-(--video-player-menu-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:-mx-1.5 sm:w-[calc(100%+0.75rem)] sm:px-4.5"
+              className={`-mx-2 mb-1 flex min-h-10 w-[calc(100%+1rem)] items-center gap-2 rounded-none border-b border-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] px-5 pb-2 text-left text-sm font-semibold text-(--video-player-menu-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:-mx-1.5 sm:w-[calc(100%+0.75rem)] sm:px-4.5 ${
+                mobileInteraction ? "!-mx-2 !w-[calc(100%+1rem)] !px-5" : ""
+              }`}
               onClick={() => openView("main")}
             >
               <BackIcon size={18} />
@@ -124,9 +134,11 @@ export function SettingsMenu({
                 ? "Playback speed"
                 : view === "quality"
                   ? "Quality"
-                  : view === "audio"
-                    ? "Audio"
-                    : "Chapters"}
+                  : view === "captions"
+                    ? "Captions"
+                    : view === "audio"
+                      ? "Audio"
+                      : "Chapters"}
             </button>
           ) : null}
 
@@ -148,6 +160,25 @@ export function SettingsMenu({
                 trailing={<DisclosureIcon size={17} />}
                 onClick={() => openView("playback-rate")}
               />
+              {media.textTracks.length > 0 ? (
+                <PlayerMenuItem
+                  data-menu-keep-open=""
+                  aria-label={`Captions ${captionsLabel}`}
+                  label="Captions"
+                  description={captionsLabel}
+                  leading={
+                    <CaptionsIcon
+                      data-caption-icon-state={
+                        activeTextTrack ? "filled" : "outline"
+                      }
+                      size={19}
+                      active={Boolean(activeTextTrack)}
+                    />
+                  }
+                  trailing={<DisclosureIcon size={17} />}
+                  onClick={() => openView("captions")}
+                />
+              ) : null}
               {media.audioTracks.length > 1 ? (
                 <PlayerMenuItem
                   data-menu-keep-open=""
@@ -238,6 +269,36 @@ export function SettingsMenu({
               playbackRate={media.playbackRate}
               onRateChange={(rate) => controller.setPlaybackRate(rate)}
             />
+          ) : null}
+
+          {view === "captions" ? (
+            <>
+              <PlayerMenuItem
+                label="Off"
+                selected={!activeTextTrack}
+                onClick={() => {
+                  controller.selectTextTrack(null);
+                  close();
+                }}
+              />
+              {media.textTracks.map((track) => (
+                <PlayerMenuItem
+                  key={track.id}
+                  aria-label={
+                    track.language
+                      ? `${track.label || "Caption track"} ${track.language}`
+                      : track.label || "Caption track"
+                  }
+                  label={track.label || track.language || "Caption track"}
+                  description={track.language || undefined}
+                  selected={track.id === activeTextTrack?.id}
+                  onClick={() => {
+                    controller.selectTextTrack(track.id);
+                    close();
+                  }}
+                />
+              ))}
+            </>
           ) : null}
 
           {view === "audio"

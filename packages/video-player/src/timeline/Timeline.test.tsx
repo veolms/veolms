@@ -19,7 +19,7 @@ describe("Timeline", () => {
     const slider = screen.getByRole("slider", { name: "Video timeline" });
     expect(slider).toHaveAttribute("aria-valuenow", "30");
     expect(slider).toHaveAttribute("aria-valuemax", "120");
-    expect(slider).toHaveAttribute("aria-valuetext", "00:30 of 02:00");
+    expect(slider).toHaveAttribute("aria-valuetext", "0:30 of 2:00");
 
     const marker = screen.getByRole("button", { name: "Quiz checkpoint" });
     expect(marker).toHaveStyle({ left: "75%" });
@@ -130,7 +130,7 @@ describe("Timeline", () => {
       "bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]",
     );
     expect(preview?.firstElementChild).toHaveClass("px-2.5", "py-1.5");
-    expect(preview).toHaveTextContent("00:45");
+    expect(preview).toHaveTextContent("0:45");
   });
 
   it("clears the preview when a touch seek ends", () => {

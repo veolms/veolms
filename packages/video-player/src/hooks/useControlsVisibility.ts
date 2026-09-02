@@ -1,9 +1,9 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
-const DESKTOP_VIEW_QUERY = "(min-width: 40rem)";
 
 type PlayerPointerMode = "mouse" | "touch";
 type PlayerInputMode = "keyboard" | "pointer";
@@ -18,6 +18,7 @@ export function useControlsVisibility({
   rootRef,
 }: UseControlsVisibilityOptions): void {
   const controller = usePlayerController();
+  const mobileInteraction = usePlayerMobileInteraction();
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerModeRef = useRef<PlayerPointerMode>("touch");
   const pointerInsideRef = useRef(false);
@@ -53,20 +54,17 @@ export function useControlsVisibility({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return undefined;
+    const pointerRoot = root.closest<HTMLElement>(".video-shell") ?? root;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia(FINE_POINTER_QUERY)
         : null;
-    const desktopViewQuery =
-      typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia(DESKTOP_VIEW_QUERY)
-        : null;
     const usesDesktopPointer = () =>
-      (desktopViewQuery?.matches ?? true) && (pointerQuery?.matches ?? false);
+      !mobileInteraction && (pointerQuery?.matches ?? false);
     const isDesktopMousePointer = (event: PointerEvent) =>
-      event.pointerType === "mouse" && (desktopViewQuery?.matches ?? true);
-    if (!initializedPointerModeRef.current) {
+      event.pointerType === "mouse" && !mobileInteraction;
+    if (!initializedPointerModeRef.current || mobileInteraction) {
       pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
       initializedPointerModeRef.current = true;
       previousPausedRef.current = paused;
@@ -107,10 +105,8 @@ export function useControlsVisibility({
           controller.setControlsVisible(false);
           return;
         }
-        if (paused) {
-          controller.setControlsVisible(true);
-          return;
-        }
+        controller.setControlsVisible(true);
+        return;
       } else if (paused) {
         return;
       }
@@ -170,7 +166,10 @@ export function useControlsVisibility({
       if (!isDesktopMousePointer(event)) return;
       pointerInsideRef.current = false;
       clearTimer();
-      if (settingsOpen) controller.setSettingsView("closed");
+      if (settingsOpen) {
+        controller.setControlsVisible(true);
+        return;
+      }
       if (scrubbing || controlsLocked || hasKeyboardFocus()) return;
       controller.setControlsVisible(false);
     };
@@ -232,34 +231,33 @@ export function useControlsVisibility({
       controller.setControlsVisible(false);
     }
 
-    root.addEventListener("pointermove", handlePointerMove, { passive: true });
-    root.addEventListener("pointerdown", handlePointerDown, { passive: true });
-    root.addEventListener("pointerenter", handlePointerEnter, {
+    pointerRoot.addEventListener("pointermove", handlePointerMove, {
       passive: true,
     });
-    root.addEventListener("pointerleave", handlePointerLeave, {
+    pointerRoot.addEventListener("pointerdown", handlePointerDown, {
+      passive: true,
+    });
+    pointerRoot.addEventListener("pointerenter", handlePointerEnter, {
+      passive: true,
+    });
+    pointerRoot.addEventListener("pointerleave", handlePointerLeave, {
       passive: true,
     });
     root.addEventListener("focusin", handleFocusIn);
     root.addEventListener("focusout", handleFocusOut);
     document.addEventListener("keydown", handleDocumentKeyDown, true);
     pointerQuery?.addEventListener("change", handlePointerCapabilityChange);
-    desktopViewQuery?.addEventListener("change", handlePointerCapabilityChange);
 
     return () => {
       clearTimer();
-      root.removeEventListener("pointermove", handlePointerMove);
-      root.removeEventListener("pointerdown", handlePointerDown);
-      root.removeEventListener("pointerenter", handlePointerEnter);
-      root.removeEventListener("pointerleave", handlePointerLeave);
+      pointerRoot.removeEventListener("pointermove", handlePointerMove);
+      pointerRoot.removeEventListener("pointerdown", handlePointerDown);
+      pointerRoot.removeEventListener("pointerenter", handlePointerEnter);
+      pointerRoot.removeEventListener("pointerleave", handlePointerLeave);
       root.removeEventListener("focusin", handleFocusIn);
       root.removeEventListener("focusout", handleFocusOut);
       document.removeEventListener("keydown", handleDocumentKeyDown, true);
       pointerQuery?.removeEventListener(
-        "change",
-        handlePointerCapabilityChange,
-      );
-      desktopViewQuery?.removeEventListener(
         "change",
         handlePointerCapabilityChange,
       );
@@ -269,6 +267,7 @@ export function useControlsVisibility({
     controlsLocked,
     controlsVisible,
     idleDelay,
+    mobileInteraction,
     paused,
     rootRef,
     scrubbing,

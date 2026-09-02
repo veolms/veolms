@@ -7,13 +7,13 @@ import {
 } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 import { MOBILE_SEEK_IDLE_DELAY_MS } from "./feedbackTiming";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
 const LONG_PRESS_DELAY_MS = 500;
 const TOUCH_COMPLETION_DEDUPE_MS = 75;
 const TOUCH_MOVE_TOLERANCE_PX = 12;
-const DESKTOP_VIEW_QUERY = "(min-width: 40rem)";
 
 type SeekDirection = -1 | 1;
 
@@ -27,24 +27,13 @@ export interface PlayerGestureSurfaceProps {
   seekIntervalSeconds?: number;
 }
 
-function isDesktopView(pointerType: string): boolean {
-  if (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function"
-  ) {
-    return window.matchMedia(DESKTOP_VIEW_QUERY).matches;
-  }
-
-  return pointerType === "mouse";
-}
-
 function shouldToggleControls(
   emptyTapBehavior: PlayerGestureSurfaceProps["emptyTapBehavior"],
-  pointerType: string,
+  mobileInteraction: boolean,
 ): boolean {
   return (
     emptyTapBehavior === "toggle-controls" ||
-    (emptyTapBehavior === "responsive" && !isDesktopView(pointerType))
+    (emptyTapBehavior === "responsive" && mobileInteraction)
   );
 }
 
@@ -53,6 +42,7 @@ export function PlayerGestureSurface({
   seekIntervalSeconds = 10,
 }: PlayerGestureSurfaceProps) {
   const controller = usePlayerController();
+  const mobileInteraction = usePlayerMobileInteraction();
   const zoomGestureActive = usePlayerState(({ ui }) => ui.zoom.gestureActive);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,7 +197,7 @@ export function PlayerGestureSurface({
       singleTapTimerRef.current = setTimeout(() => {
         singleTapTimerRef.current = null;
         lastTapRef.current = null;
-        if (shouldToggleControls(emptyTapBehavior, pointerType)) {
+        if (shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
           const shouldShowControls = !controlsVisibleBeforePressRef.current;
           if (!shouldShowControls) controller.setSettingsView("closed");
           controller.setControlsVisible(shouldShowControls);
@@ -216,7 +206,7 @@ export function PlayerGestureSurface({
         void controller.togglePlayback().catch(() => undefined);
       }, DOUBLE_TAP_WINDOW_MS);
     },
-    [controller, emptyTapBehavior],
+    [controller, emptyTapBehavior, mobileInteraction],
   );
 
   const captureControlsVisibility = () => {
@@ -242,7 +232,7 @@ export function PlayerGestureSurface({
       return;
     }
 
-    if (mobileSeekSequenceRef.current !== null && !isDesktopView(pointerType)) {
+    if (mobileSeekSequenceRef.current !== null && mobileInteraction) {
       clearSingleTapTimer();
       lastTapRef.current = null;
       applyMobileSeek(direction);
@@ -254,7 +244,7 @@ export function PlayerGestureSurface({
       lastTap !== null &&
       lastTap.pointerType === pointerType &&
       timestamp - lastTap.timestamp <= DOUBLE_TAP_WINDOW_MS;
-    const desktopDoubleTap = isDoubleTapWindow && isDesktopView(pointerType);
+    const desktopDoubleTap = isDoubleTapWindow && !mobileInteraction;
     const mobileSeekDoubleTap =
       isDoubleTapWindow &&
       !desktopDoubleTap &&
@@ -276,7 +266,7 @@ export function PlayerGestureSurface({
 
     if (lastTap !== null) {
       clearSingleTapTimer();
-      if (!shouldToggleControls(emptyTapBehavior, pointerType)) {
+      if (!shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
         void controller.togglePlayback().catch(() => undefined);
       }
     }

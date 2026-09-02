@@ -3693,7 +3693,7 @@ test("custom player controls, timeline preview and seek, fullscreen shell, and a
       reachesPastMainInlineStart: true,
       reachesPastMainBlockStart: true,
       pointerEvents: "none",
-      position: "fixed",
+      position: "absolute",
     });
 });
 

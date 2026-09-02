@@ -76,6 +76,10 @@
 }
 
 @media (min-width: 821px) {
+  .courses-main.courses-main--learning {
+    position: relative;
+  }
+
   :root[data-content-layout="framed"],
   :root[data-content-layout="framed"] body {
     height: 100%;

@@ -89,6 +89,8 @@ export function LearningMiniPlayer({
   const miniPlayerGestures = useLearningMiniPlayerGestures(
     miniPlayerRef,
     handleClose,
+    true,
+    handleRestore,
   );
 
   const finishPreparation = useCallback(() => {

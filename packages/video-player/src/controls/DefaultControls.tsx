@@ -9,6 +9,7 @@ import { TheaterButton } from "./TheaterButton";
 import { TimeDisplay } from "./TimeDisplay";
 import { VolumeControl } from "./VolumeControl";
 import { ZoomLevelIndicator } from "./ZoomLevelIndicator";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export interface DefaultControlsProps {
   onToggleTheater?: () => void;
@@ -26,17 +27,26 @@ export function DefaultControls({
   trailingControls,
 }: DefaultControlsProps) {
   const controlsVisible = usePlayerState(({ ui }) => ui.controlsVisible);
+  const mobileInteraction = usePlayerMobileInteraction();
 
   return (
     <div
       className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-2 pb-2 pt-14 text-white transition-opacity duration-200 motion-reduce:transition-none sm:px-3 sm:pb-3 ${
-        controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
+        mobileInteraction ? "!px-2 !pb-2" : ""
+      } ${
+        controlsVisible
+          ? "visible opacity-100"
+          : "invisible pointer-events-none opacity-0"
       }`}
       data-video-player-controls=""
+      data-video-player-control-layer=""
       aria-hidden={!controlsVisible}
+      inert={controlsVisible ? undefined : true}
     >
       <Timeline />
-      <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+      <div
+        className={`flex min-w-0 items-center gap-0.5 sm:gap-1 ${mobileInteraction ? "!gap-0.5" : ""}`}
+      >
         {leadingControls}
         <PlayButton />
         <VolumeControl />

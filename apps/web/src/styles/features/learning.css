@@ -67,12 +67,51 @@
 
 .learning-workspace__player-wrap {
   position: relative;
-  isolation: isolate;
 }
 
 .learning-workspace__player-wrap:has([data-learning-player-anchor]) {
+  pointer-events: none;
   background: transparent;
   box-shadow: none;
+}
+
+[data-learning-player-anchor] {
+  anchor-name: --learning-persistent-player-slot;
+}
+
+.learning-persistent-player--full {
+  position: absolute;
+  position-anchor: --learning-persistent-player-slot;
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width);
+  height: anchor-size(height);
+}
+
+.learning-persistent-player--full .video-shell {
+  anchor-name: --learning-ambient-video-shell;
+}
+
+.ambient-canvas--shell.ambient-canvas--learning-shell {
+  position: absolute;
+  position-anchor: --learning-ambient-video-shell;
+  inset: auto;
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width);
+  height: anchor-size(height);
+}
+
+/* Large blurred projections are expensive to resample while either desktop
+   split is moving. The video remains live; only its decorative glow yields
+   until the pointer is released, then the existing opacity transition returns. */
+.courses-app--resizing .learning-persistent-player--full .ambient-canvas,
+.courses-app:has(.learning-workspace.is-curriculum-resizing)
+  .learning-persistent-player--full
+  .ambient-canvas {
+  opacity: 0;
+  filter: none;
+  transition: none;
 }
 
 .learning-workspace__player-wrap .youtube-player,
@@ -82,7 +121,7 @@
 
 .learning-workspace__back {
   position: absolute;
-  z-index: 2;
+  z-index: 40;
   top: 20px;
   left: 20px;
   display: inline-flex;
@@ -106,6 +145,8 @@
 }
 
 .learning-workspace__player-wrap:hover .learning-workspace__back,
+.courses-app:has(.learning-persistent-player--full:hover)
+  .learning-workspace__back,
 .learning-workspace__back:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -123,7 +164,7 @@
 
 .learning-workspace__curriculum-toggle {
   position: absolute;
-  z-index: 3;
+  z-index: 40;
   top: 20px;
   right: 0;
   display: inline-grid;
@@ -148,6 +189,8 @@
 }
 
 .learning-workspace__player-wrap:hover .learning-workspace__curriculum-toggle,
+.courses-app:has(.learning-persistent-player--full:hover)
+  .learning-workspace__curriculum-toggle,
 .learning-workspace__curriculum-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -182,6 +225,14 @@
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__back,
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
+    .learning-workspace__curriculum-toggle,
+  .courses-app:has(
+      .learning-persistent-player--full .youtube-player[data-playing="true"]
+    )
+    .learning-workspace__back,
+  .courses-app:has(
+      .learning-persistent-player--full .youtube-player[data-playing="true"]
+    )
     .learning-workspace__curriculum-toggle {
     opacity: 0;
     pointer-events: none;
@@ -191,6 +242,14 @@
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__back,
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
+    .learning-workspace__curriculum-toggle,
+  .courses-app:has(
+      .learning-persistent-player--full .youtube-player[data-playing="false"]
+    )
+    .learning-workspace__back,
+  .courses-app:has(
+      .learning-persistent-player--full .youtube-player[data-playing="false"]
+    )
     .learning-workspace__curriculum-toggle,
   .learning-workspace__back:focus-visible,
   .learning-workspace__curriculum-toggle:focus-visible {
@@ -268,6 +327,7 @@
 
 .learning-workspace__curriculum-column {
   position: sticky;
+  z-index: 40;
   top: 0;
   align-self: start;
   height: 100vh;
@@ -961,6 +1021,24 @@
 .learning-discussion__composer-prompt {
   font-size: 14px;
   line-height: 20px;
+}
+
+[data-learning-motion-stage][data-learning-player-motion]
+  [data-learning-mobile-composer-layer]
+  [data-learning-mobile-composer-surface],
+[data-learning-motion-stage][data-learning-player-restoring]
+  [data-learning-mobile-composer-layer]
+  [data-learning-mobile-composer-surface] {
+  pointer-events: none;
+}
+
+[data-learning-player-controls-suppressed]
+  [data-player-zoom-indicator="feedback"],
+[data-learning-player-controls-suppressed] [data-player-hud-variant],
+[data-learning-player-controls-suppressed] [data-playback-feedback-surface] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (min-width: 640px) {

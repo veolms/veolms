@@ -6,9 +6,11 @@ import {
   MOBILE_SEEK_IDLE_DELAY_MS,
   PLAYER_FEEDBACK_DURATION_MS,
 } from "./feedbackTiming";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export function PlayerHud() {
   const controller = usePlayerController();
+  const mobileInteraction = usePlayerMobileInteraction();
   const hud = usePlayerState(({ ui }) => ui.hud);
   const { icons } = usePlayerTheme();
 
@@ -24,6 +26,7 @@ export function PlayerHud() {
 
   if (!hud) return null;
   if (hud.variant === "mobile-seek" && hud.direction) {
+    if (!mobileInteraction) return null;
     const Icon = icons.disclosure;
     const backward = hud.direction < 0;
 
@@ -33,7 +36,7 @@ export function PlayerHud() {
         aria-label={`Seek ${backward ? "backward" : "forward"} ${hud.text.replace(/[+−]/u, "")} seconds`}
         aria-atomic="true"
         aria-live="polite"
-        className="pointer-events-none absolute inset-0 z-30 sm:hidden"
+        className="pointer-events-none absolute inset-0 z-30"
         data-player-hud-direction={backward ? "backward" : "forward"}
         data-player-hud-variant="mobile-seek"
         role="status"
@@ -72,6 +75,7 @@ export function PlayerHud() {
     );
   }
   if (hud.variant === "playback-rate" && hud.direction) {
+    if (mobileInteraction) return null;
     const Icon = hud.direction < 0 ? icons.speedDecrease : icons.speedIncrease;
     const durationStyle = {
       "--video-player-playback-feedback-duration": `${PLAYER_FEEDBACK_DURATION_MS}ms`,
@@ -82,7 +86,7 @@ export function PlayerHud() {
         key={hud.id}
         aria-atomic="true"
         aria-live="polite"
-        className="pointer-events-none absolute inset-0 z-30 hidden sm:block"
+        className="pointer-events-none absolute inset-0 z-30"
         data-player-hud-variant="playback-rate"
         role="status"
       >

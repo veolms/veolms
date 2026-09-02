@@ -10,6 +10,7 @@ import {
   playbackRatesMatch,
 } from "../playback/playbackRates";
 import { classNames } from "../utils/classNames";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export interface PlaybackRateSliderProps {
   playbackRate: number;
@@ -23,6 +24,7 @@ export function PlaybackRateSlider({
   quickRates = DEFAULT_PLAYBACK_RATES,
 }: PlaybackRateSliderProps) {
   const sliderId = useId();
+  const mobileInteraction = usePlayerMobileInteraction();
   const sliderValue = Math.min(
     MAX_CUSTOM_PLAYBACK_RATE,
     Math.max(MIN_CUSTOM_PLAYBACK_RATE, playbackRate),
@@ -78,7 +80,7 @@ export function PlaybackRateSlider({
           aria-label={`Decrease playback speed by ${formatPlaybackRate(CUSTOM_PLAYBACK_RATE_STEP)}`}
           aria-disabled={sliderValue <= MIN_CUSTOM_PLAYBACK_RATE || undefined}
           disabled={sliderValue <= MIN_CUSTOM_PLAYBACK_RATE}
-          className="grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9"
+          className={`grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9 ${mobileInteraction ? "!size-11 !min-h-11" : ""}`}
           onClick={() => changeByStep(-1)}
         >
           <Minus aria-hidden="true" size={18} weight="bold" />
@@ -111,7 +113,7 @@ export function PlaybackRateSlider({
           aria-label={`Increase playback speed by ${formatPlaybackRate(CUSTOM_PLAYBACK_RATE_STEP)}`}
           aria-disabled={sliderValue >= MAX_CUSTOM_PLAYBACK_RATE || undefined}
           disabled={sliderValue >= MAX_CUSTOM_PLAYBACK_RATE}
-          className="grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9"
+          className={`grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9 ${mobileInteraction ? "!size-11 !min-h-11" : ""}`}
           onClick={() => changeByStep(1)}
         >
           <Plus aria-hidden="true" size={18} weight="bold" />
@@ -129,6 +131,7 @@ export function PlaybackRateSlider({
               aria-label={formatPlaybackRate(rate)}
               className={classNames(
                 "h-11 !min-h-11 w-full min-w-0 rounded-full px-1 text-xs font-semibold tabular-nums text-(--video-player-menu-text) transition-[background-color,color] duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:h-8 sm:!min-h-8",
+                mobileInteraction && "!h-11 !min-h-11",
                 playbackRatesMatch(rate, playbackRate)
                   ? "bg-(--video-player-accent) text-(--video-player-accent-contrast)"
                   : "bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)]",

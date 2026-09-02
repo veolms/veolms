@@ -9,32 +9,46 @@ import {
   Timeline,
   VolumeControl,
   ZoomLevelIndicator,
-  usePlayerController,
+  usePlayerMobileInteraction,
   usePlayerState,
   usePlayerTheme,
 } from "@veolms/video-player";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const PLAYER_SURFACE_CLASS =
   "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
 const PLAYER_INNER_CONTROL_CLASS =
   "!rounded-full !bg-transparent transition-colors duration-150 ease-out hover:!bg-(--video-player-control-surface-hover) active:!bg-(--video-player-control-surface-active) focus-visible:!bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)";
 const PLAYER_ICON_PILL_CLASS =
-  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)] sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
+  "!h-8 !w-auto !rounded-full !bg-transparent !px-2 !shadow-none drop-shadow-none transition-colors duration-150 ease-out hover:!bg-transparent active:!bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:!h-9 sm:!bg-transparent sm:!px-3 sm:hover:!bg-(--video-player-control-surface-hover) sm:active:!bg-(--video-player-control-surface-active) sm:focus-visible:!bg-(--video-player-control-surface-hover)";
+const MOBILE_INVISIBLE_HIT_SURFACE_CLASS =
+  "[&&&]:!bg-transparent [&&&:hover]:!bg-transparent [&&&:active]:!bg-transparent [&&&:focus-visible]:!bg-transparent [&&&[aria-pressed=true]]:!bg-transparent";
+const MOBILE_TEXT_PILL_HIT_CLASS = `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} isolate !rounded-full !bg-transparent transition-colors duration-150 ease-out before:pointer-events-none before:absolute before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!bg-transparent hover:before:bg-(--video-player-control-surface-hover) active:!bg-transparent active:before:bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)`;
+
+function getPlayerIconPillClass(mobileInteraction: boolean): string {
+  return `${PLAYER_ICON_PILL_CLASS} ${
+    mobileInteraction
+      ? `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} sm:!h-8 sm:!bg-transparent sm:!px-2 sm:hover:!bg-transparent sm:focus-visible:!bg-transparent`
+      : ""
+  }`;
+}
 
 function PlayerControlSurface({
+  blurred = false,
   children,
   className,
   cluster,
 }: {
+  blurred?: boolean;
   children: ReactNode;
   className: string;
   cluster?: string;
 }) {
   return (
     <div
-      className={`${PLAYER_SURFACE_CLASS} ${className}`}
+      className={`${PLAYER_SURFACE_CLASS} ${blurred ? "backdrop-blur-sm" : ""} ${className}`}
       data-player-control-cluster={cluster}
     >
       {children}
@@ -47,6 +61,7 @@ export interface LessonPlayerControlsProps {
   autoplayEnabled: boolean;
   canGoNext: boolean;
   canGoPrevious: boolean;
+  controlsSuppressed?: boolean;
   courseLessonsOpen?: boolean;
   onAmbientEnabledChange: (enabled: boolean) => void;
   onAutoplayEnabledChange: (enabled: boolean) => void;
@@ -64,36 +79,34 @@ function CourseLessonsButton({
   onToggle: () => void;
 }) {
   return (
-    <PlayerControlSurface
-      cluster="course-lessons"
-      className="inline-flex h-9 items-center rounded-full p-0.5"
+    <button
+      type="button"
+      aria-label={open ? "Close lessons" : "Open lessons"}
+      aria-expanded={open}
+      aria-controls="lesson-drawer-curriculum-scrollport"
+      data-player-control=""
+      data-player-control-hit-area="course-lessons"
+      className={`${MOBILE_TEXT_PILL_HIT_CLASS} relative inline-flex h-9 items-center gap-1.5 px-3 !text-xs leading-4 font-semibold tracking-[0.01em] before:inset-x-0.5 before:inset-y-1.5`}
+      onClick={onToggle}
     >
-      <button
-        type="button"
-        aria-label={open ? "Close lessons" : "Open lessons"}
-        aria-expanded={open}
-        aria-controls="lesson-drawer-curriculum-scrollport"
-        data-player-control=""
-        className={`${PLAYER_INNER_CONTROL_CLASS} inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 !text-[13px] font-semibold tracking-[0.01em]`}
-        onClick={onToggle}
+      <span className="relative z-10">Lessons</span>
+      <span
+        className={`learning-curriculum__section-arrow relative z-10${open ? " is-open" : ""}`}
+        aria-hidden="true"
       >
-        <span>Lessons</span>
-        <span
-          className={`learning-curriculum__section-arrow${open ? " is-open" : ""}`}
-          aria-hidden="true"
-        >
-          <CaretDown size={15} />
-        </span>
-      </button>
-    </PlayerControlSurface>
+        <CaretDown size={15} />
+      </span>
+    </button>
   );
 }
 
 function AutoplayToggle({
   enabled,
+  mobileInteraction,
   onEnabledChange,
 }: {
   enabled: boolean;
+  mobileInteraction: boolean;
   onEnabledChange: (enabled: boolean) => void;
 }) {
   const { icons } = usePlayerTheme();
@@ -106,62 +119,31 @@ function AutoplayToggle({
       aria-label="Autoplay next lesson"
       title={enabled ? "Autoplay is on" : "Autoplay is off"}
       data-player-control=""
-      className={`group/autoplay relative inline-flex h-8 w-auto shrink-0 items-center justify-center px-2 text-white !shadow-none drop-shadow-none max-sm:hover:!bg-transparent max-sm:active:!bg-white/14 max-sm:focus-visible:!bg-transparent sm:h-9 sm:px-3 ${PLAYER_INNER_CONTROL_CLASS}`}
+      className={`group/autoplay relative inline-flex h-8 w-auto shrink-0 items-center justify-center px-2 text-white !shadow-none drop-shadow-none max-sm:hover:!bg-transparent max-sm:active:!bg-white/14 max-sm:focus-visible:!bg-transparent sm:h-9 sm:px-3 ${PLAYER_INNER_CONTROL_CLASS} ${mobileInteraction ? "sm:!h-8 sm:!px-2 sm:hover:!bg-transparent sm:active:!bg-white/14 sm:focus-visible:!bg-transparent" : ""}`}
       onClick={() => onEnabledChange(!enabled)}
     >
       <span
         aria-hidden="true"
-        className="relative block h-3.5 w-8 rounded-full border-0 bg-black/40 transition-colors duration-150 sm:h-4 sm:w-9"
+        className={`relative block h-3.5 w-8 rounded-full border-0 bg-black/40 transition-colors duration-150 sm:h-4 sm:w-9 ${mobileInteraction ? "sm:!h-3.5 sm:!w-8" : ""}`}
         data-autoplay-track=""
         data-autoplay-track-state={enabled ? "on" : "off"}
       >
         <span
-          className={`absolute top-1/2 grid size-4.5 -translate-y-1/2 place-items-center rounded-full shadow-[0_1px_5px_rgba(0,0,0,0.38)] transition-[left,background-color,color] sm:size-5 ${
+          className={`absolute top-1/2 grid size-4.5 -translate-y-1/2 place-items-center rounded-full shadow-[0_1px_5px_rgba(0,0,0,0.38)] transition-[left,background-color,color] sm:size-5 ${mobileInteraction ? "sm:!size-4.5" : ""} ${
             enabled
-              ? "left-3.5 bg-white text-black sm:left-4.5"
+              ? `left-3.5 bg-white text-black sm:left-4.5 ${mobileInteraction ? "sm:!left-3.5" : ""}`
               : "-left-0.5 bg-white/42 text-white"
           }`}
           data-autoplay-knob=""
         >
-          <Icon size={11} active={enabled} className="sm:size-3" />
+          <Icon
+            size={11}
+            active={enabled}
+            className={mobileInteraction ? "sm:!size-2.75" : "sm:size-3"}
+          />
         </span>
       </span>
     </button>
-  );
-}
-
-function CaptionsButton() {
-  const controller = usePlayerController();
-  const { selectedTextTrackId, textTracks } = usePlayerState(
-    ({ media }) => ({
-      selectedTextTrackId: media.selectedTextTrackId,
-      textTracks: media.textTracks,
-    }),
-    (left, right) =>
-      left.selectedTextTrackId === right.selectedTextTrackId &&
-      left.textTracks === right.textTracks,
-  );
-  const enabled = selectedTextTrackId !== null;
-  const CaptionsIcon = usePlayerTheme().icons.captions;
-
-  return (
-    <PlayerIconButton
-      label={enabled ? "Turn captions off" : "Turn captions on"}
-      pressed={enabled}
-      disabled={textTracks.length === 0}
-      className={PLAYER_ICON_PILL_CLASS}
-      icon={
-        <CaptionsIcon
-          data-caption-icon-state={enabled ? "filled" : "outline"}
-          size={26}
-          active={enabled}
-          className="max-sm:size-5.5"
-        />
-      }
-      onClick={() =>
-        controller.selectTextTrack(enabled ? null : (textTracks[0]?.id ?? null))
-      }
-    />
   );
 }
 
@@ -196,22 +178,29 @@ function LessonNavigationButton({
 }
 
 function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
+  if (mobile) {
+    return (
+      <div
+        className="inline-flex h-10 items-center"
+        data-player-control-hit-area="time"
+      >
+        <TimeDisplay
+          interactive
+          className={`${MOBILE_TEXT_PILL_HIT_CLASS} !relative !inline-flex !h-10 !items-center !px-3 !py-0 !text-xs !leading-4 before:inset-x-0.5 before:inset-y-2`}
+        />
+      </div>
+    );
+  }
+
   return (
     <PlayerControlSurface
+      blurred
       cluster="time"
-      className={
-        mobile
-          ? "inline-flex items-center overflow-hidden rounded-full p-0"
-          : "inline-flex h-9.5 items-center rounded-full p-[3px]"
-      }
+      className="inline-flex h-9.5 items-center rounded-full p-[3px]"
     >
       <TimeDisplay
         interactive
-        className={`${PLAYER_INNER_CONTROL_CLASS} ${
-          mobile
-            ? "!inline-flex !h-auto !items-center !px-2 !py-1 !text-xs !leading-4"
-            : "!inline-flex !h-8 !items-center !px-3.5 !text-sm"
-        }`}
+        className={`${PLAYER_INNER_CONTROL_CLASS} !inline-flex !h-8 !items-center !px-3.5 !text-sm`}
       />
     </PlayerControlSurface>
   );
@@ -280,6 +269,7 @@ export function LessonPlayerControls({
   autoplayEnabled,
   canGoNext,
   canGoPrevious,
+  controlsSuppressed = false,
   courseLessonsOpen = false,
   onAmbientEnabledChange,
   onAutoplayEnabledChange,
@@ -288,163 +278,224 @@ export function LessonPlayerControls({
   onGoPrevious,
   onMinimize,
 }: LessonPlayerControlsProps) {
+  const timelineAnchorRef = useRef<HTMLSpanElement>(null);
+  const [timelineHost, setTimelineHost] = useState<HTMLElement | null>(null);
   const MinimizeIcon = usePlayerTheme().icons.minimize;
-  const { controlsVisible, previewTime, scrubbing, settingsOpen } =
+  const mobileInteraction = usePlayerMobileInteraction();
+  const { controlsVisible, fullscreen, previewTime, scrubbing, settingsOpen } =
     usePlayerState(
       ({ ui }) => ({
         controlsVisible: ui.controlsVisible,
+        fullscreen: ui.fullscreen,
         previewTime: ui.previewTime,
         scrubbing: ui.scrubbing,
         settingsOpen: ui.settingsView !== "closed",
       }),
       (left, right) =>
         left.controlsVisible === right.controlsVisible &&
+        left.fullscreen === right.fullscreen &&
         left.previewTime === right.previewTime &&
         left.scrubbing === right.scrubbing &&
         left.settingsOpen === right.settingsOpen,
     );
-  const visible = controlsVisible || settingsOpen;
+  const visible = !controlsSuppressed && (controlsVisible || settingsOpen);
+  const mobileFullscreen = mobileInteraction && fullscreen;
   const mobileTimelineGeometry = scrubbing
     ? "max-sm:[&_[data-timeline-track]]:!h-0.75 max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]"
     : "max-sm:[&_[data-timeline-track]]:!h-0.5 max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1px)]";
+  const forcedMobileTimelineGeometry = mobileInteraction
+    ? scrubbing
+      ? "[&_[data-timeline-track]]:!h-0.75 [&_[data-timeline-thumb]]:!top-[calc(100%-1.5px)]"
+      : "[&_[data-timeline-track]]:!h-0.5 [&_[data-timeline-thumb]]:!top-[calc(100%-1px)]"
+    : "";
+
+  useLayoutEffect(() => {
+    setTimelineHost(
+      timelineAnchorRef.current?.closest<HTMLElement>(".video-shell") ?? null,
+    );
+  }, []);
+
+  const timelineLayer = (
+    <div
+      data-player-timeline-wrap=""
+      data-player-timeline-layer=""
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-70 max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-13 ${visible ? "visible opacity-100" : "invisible opacity-0 [&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? "!left-1/2 !right-auto !bottom-10 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-10 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!px-3" : "!z-170 sm:!inset-x-0 sm:!bottom-0") : ""}`}
+      aria-hidden={visible ? undefined : true}
+      inert={visible ? undefined : true}
+    >
+      <Timeline
+        className={`pointer-events-none [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-9 max-sm:[&_[role=slider]]:translate-y-full max-sm:[&_[data-timeline-visual]]:-translate-y-full max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-9 [&_[role=slider]]:!translate-y-full [&_[data-timeline-visual]]:!-translate-y-full [&_[data-video-player-preview]]:!bottom-3.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!bottom-0 [&_[data-timeline-track]]:!top-auto [&_[data-timeline-track]]:!translate-y-0 [&_[data-timeline-track]]:!rounded-none" : ""}`}
+      />
+    </div>
+  );
 
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-30 text-white transition-opacity duration-200 motion-reduce:transition-none ${
-        visible ? "opacity-100" : "opacity-0 [&_*]:!pointer-events-none"
+      className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${
+        visible
+          ? "visible opacity-100"
+          : `invisible opacity-0 [&_*]:!pointer-events-none ${
+              controlsSuppressed ? "transition-none" : ""
+            }`
       }`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
+      data-video-player-control-layer=""
       data-lesson-player-controls=""
     >
+      <span ref={timelineAnchorRef} hidden />
+      {timelineHost ? createPortal(timelineLayer, timelineHost) : null}
       <div
-        aria-hidden="true"
-        data-mobile-player-vignette="top"
-        className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(180deg,color-mix(in_srgb,#05070b_50%,var(--accent)_4%)_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_58%,transparent_100%)] sm:hidden"
-      />
-      <div
-        aria-hidden="true"
-        data-mobile-player-vignette="bottom"
-        className="absolute inset-x-0 bottom-0 h-18 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_42%,color-mix(in_srgb,#05070b_54%,var(--accent)_4%)_100%)] sm:hidden"
-      />
-
-      {onMinimize ? (
-        <div className="pointer-events-auto absolute left-2 top-2 sm:hidden">
-          <PlayerIconButton
-            label="Minimize video"
-            className="!size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none"
-            icon={<MinimizeIcon size={22} />}
-            onClick={onMinimize}
-          />
-        </div>
-      ) : null}
-
-      <PlayerControlSurface
-        cluster="player-actions"
-        className="pointer-events-auto absolute right-2 top-2 flex h-8 items-center gap-1 rounded-full p-0 max-sm:!bg-transparent max-sm:!shadow-none sm:bottom-2.5 sm:top-auto sm:h-10.5 sm:p-[3px]"
+        className={
+          mobileFullscreen
+            ? "absolute inset-y-0 left-1/2 w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+            : "absolute inset-0"
+        }
+        data-player-control-frame=""
+        data-player-mobile-fullscreen-frame={
+          mobileFullscreen ? "true" : undefined
+        }
       >
-        <ZoomLevelIndicator />
-        <AutoplayToggle
-          enabled={autoplayEnabled}
-          onEnabledChange={onAutoplayEnabledChange}
+        <div
+          aria-hidden="true"
+          data-mobile-player-vignette="top"
+          className={`absolute inset-x-0 top-0 h-16 bg-[linear-gradient(180deg,color-mix(in_srgb,#05070b_50%,var(--accent)_4%)_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_58%,transparent_100%)] sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
         />
-        <CaptionsButton />
-        <span className="inline-flex sm:hidden" data-mobile-volume-control="">
-          <MuteButton className={PLAYER_ICON_PILL_CLASS} iconSize={22} />
-        </span>
-        <SettingsMenu
-          includePictureInPicture
-          mobilePresentation="sheet"
-          triggerClassName={PLAYER_ICON_PILL_CLASS}
-          extraMainItems={
-            <AmbientSettingsItem
-              enabled={ambientEnabled}
-              onEnabledChange={onAmbientEnabledChange}
-            />
-          }
+        <div
+          aria-hidden="true"
+          data-mobile-player-vignette="bottom"
+          className={`absolute inset-x-0 bottom-0 h-18 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_42%,color-mix(in_srgb,#05070b_54%,var(--accent)_4%)_100%)] sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
         />
-        <span className="hidden sm:inline-flex">
-          <FullscreenButton className={PLAYER_ICON_PILL_CLASS} iconSize={24} />
-        </span>
-      </PlayerControlSurface>
 
-      <div
-        data-player-timeline-wrap=""
-        className="pointer-events-auto absolute inset-x-0 bottom-0 z-50 sm:inset-x-3 sm:bottom-13"
-      >
-        <Timeline
-          className={`max-sm:[&_[role=slider]]:h-5 max-sm:[&_[role=slider]]:translate-y-[25%] max-sm:[&_[data-timeline-visual]]:-translate-y-[25%] max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry}`}
-        />
-      </div>
-
-      <div
-        data-mobile-player-corner="time"
-        data-preview-obscured={previewTime !== null ? "true" : "false"}
-        className={`pointer-events-auto absolute bottom-2.5 left-2 flex h-10 items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 sm:h-auto ${
-          previewTime !== null
-            ? "max-sm:pointer-events-none max-sm:opacity-0"
-            : "max-sm:opacity-100"
-        }`}
-      >
-        <div className="sm:hidden">
-          <LessonTimeControl mobile />
-        </div>
-        <div className="hidden items-center gap-2 sm:flex">
-          <PlayerControlSurface
-            cluster="playback"
-            className="inline-flex size-10.5 items-center justify-center rounded-full p-[3px]"
-          >
-            <PlayButton className={PLAYER_INNER_CONTROL_CLASS} iconSize={23} />
-          </PlayerControlSurface>
-          <PlayerControlSurface
-            cluster="lesson-navigation"
-            className="inline-flex h-10.5 items-center rounded-full p-[3px]"
-          >
-            <LessonNavigationButton
-              direction="previous"
-              disabled={!canGoPrevious}
-              onClick={onGoPrevious}
-            />
-            <LessonNavigationButton
-              direction="next"
-              disabled={!canGoNext}
-              onClick={onGoNext}
-            />
-          </PlayerControlSurface>
-          <VolumeControl
-            collapsible
-            className={`${PLAYER_SURFACE_CLASS} h-10.5 !w-10.5 shrink-0 rounded-full p-1 hover:!w-31.5 hover:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:bg-(--video-player-control-surface-hover) [&_.player-volume-slider]:!h-8.5`}
-            muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} !size-8.5`}
-          />
-          <LessonTimeControl />
-        </div>
-      </div>
-
-      <div
-        data-mobile-player-corner="fullscreen"
-        data-preview-obscured={previewTime !== null ? "true" : "false"}
-        className={`pointer-events-auto absolute bottom-2.5 right-2 z-60 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${
-          previewTime !== null
-            ? "max-sm:pointer-events-none max-sm:opacity-0"
-            : "max-sm:opacity-100"
-        }`}
-      >
-        <div className="inline-flex items-center gap-1.5">
-          {onCourseLessonsToggle ? (
-            <CourseLessonsButton
-              open={courseLessonsOpen}
-              onToggle={onCourseLessonsToggle}
-            />
-          ) : null}
+        {onMinimize ? (
           <div
-            className="inline-flex size-10 items-center justify-center"
-            data-player-control-cluster="fullscreen"
+            className={`pointer-events-auto absolute left-2 top-2 sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
           >
-            <FullscreenButton
-              className={`${PLAYER_ICON_PILL_CLASS} !size-10 !bg-transparent !px-0`}
-              iconContainerClassName="pointer-events-none grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow)"
+            <PlayerIconButton
+              label="Minimize video"
+              className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
+              icon={<MinimizeIcon size={22} />}
+              onClick={onMinimize}
+            />
+          </div>
+        ) : null}
+
+        <PlayerControlSurface
+          cluster="player-actions"
+          className={`pointer-events-auto absolute right-2 top-2 flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:bottom-2.5 sm:top-auto sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!top-2 sm:!bottom-auto sm:!h-8 sm:!p-0 sm:before:hidden" : ""}`}
+        >
+          <ZoomLevelIndicator />
+          <AutoplayToggle
+            enabled={autoplayEnabled}
+            mobileInteraction={mobileInteraction}
+            onEnabledChange={onAutoplayEnabledChange}
+          />
+          <span
+            className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+            data-mobile-volume-control=""
+          >
+            <MuteButton
+              className={getPlayerIconPillClass(mobileInteraction)}
               iconSize={22}
             />
+          </span>
+          <SettingsMenu
+            includePictureInPicture
+            mobilePresentation="sheet"
+            triggerClassName={getPlayerIconPillClass(mobileInteraction)}
+            extraMainItems={
+              <AmbientSettingsItem
+                enabled={ambientEnabled}
+                onEnabledChange={onAmbientEnabledChange}
+              />
+            }
+          />
+          <span
+            className={`hidden sm:inline-flex ${mobileInteraction ? "sm:!hidden" : ""}`}
+          >
+            <FullscreenButton
+              className={getPlayerIconPillClass(mobileInteraction)}
+              iconSize={24}
+            />
+          </span>
+        </PlayerControlSurface>
+
+        <div
+          data-mobile-player-corner="time"
+          data-preview-obscured={previewTime !== null ? "true" : "false"}
+          className={`pointer-events-auto absolute bottom-2.5 left-2 flex h-10 items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 sm:h-auto ${mobileInteraction ? `sm:!right-auto sm:!h-10 ${mobileFullscreen ? "!bottom-15 !left-3 sm:!bottom-15 sm:!left-3" : "sm:!left-2"}` : ""} ${
+            previewTime !== null
+              ? `max-sm:pointer-events-none max-sm:opacity-0 ${mobileInteraction ? "sm:!pointer-events-none sm:!opacity-0" : ""}`
+              : "max-sm:opacity-100"
+          }`}
+        >
+          <div className={`sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}>
+            <LessonTimeControl mobile />
+          </div>
+          <div
+            className={`hidden items-center gap-2 sm:flex ${mobileInteraction ? "sm:!hidden" : ""}`}
+          >
+            <PlayerControlSurface
+              blurred
+              cluster="playback"
+              className="inline-flex size-10.5 items-center justify-center rounded-full p-[3px]"
+            >
+              <PlayButton
+                className={PLAYER_INNER_CONTROL_CLASS}
+                iconSize={23}
+              />
+            </PlayerControlSurface>
+            <PlayerControlSurface
+              blurred
+              cluster="lesson-navigation"
+              className="inline-flex h-10.5 items-center rounded-full p-[3px]"
+            >
+              <LessonNavigationButton
+                direction="previous"
+                disabled={!canGoPrevious}
+                onClick={onGoPrevious}
+              />
+              <LessonNavigationButton
+                direction="next"
+                disabled={!canGoNext}
+                onClick={onGoNext}
+              />
+            </PlayerControlSurface>
+            <VolumeControl
+              collapsible
+              className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 backdrop-blur-sm before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!w-31.5 hover:before:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
+              muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
+            />
+            <LessonTimeControl />
+          </div>
+        </div>
+
+        <div
+          data-mobile-player-corner="fullscreen"
+          data-preview-obscured={previewTime !== null ? "true" : "false"}
+          className={`pointer-events-auto absolute bottom-2.5 right-2 z-60 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${mobileInteraction ? `sm:!block ${mobileFullscreen ? "!bottom-15 !right-3 sm:!bottom-15 sm:!right-3" : ""}` : ""} ${
+            previewTime !== null
+              ? `max-sm:pointer-events-none max-sm:opacity-0 ${mobileInteraction ? "sm:!pointer-events-none sm:!opacity-0" : ""}`
+              : "max-sm:opacity-100"
+          }`}
+        >
+          <div className="inline-flex items-center gap-1.5">
+            {onCourseLessonsToggle ? (
+              <CourseLessonsButton
+                open={courseLessonsOpen}
+                onToggle={onCourseLessonsToggle}
+              />
+            ) : null}
+            <div
+              className="inline-flex size-10 items-center justify-center"
+              data-player-control-hit-area="fullscreen"
+            >
+              <FullscreenButton
+                className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_ICON_PILL_CLASS} group/fullscreen !size-10 !bg-transparent !px-0`}
+                iconContainerClassName="pointer-events-none relative z-10 grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow) backdrop-blur-sm transition-colors duration-150 ease-out group-hover/fullscreen:bg-(--video-player-control-surface-hover) group-active/fullscreen:bg-(--video-player-control-surface-active) group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)"
+                iconSize={20}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -455,6 +506,7 @@ export function LessonPlayerControls({
 export interface LessonCentralControlsProps {
   canGoNext: boolean;
   canGoPrevious: boolean;
+  controlsSuppressed?: boolean;
   onGoNext: () => void;
   onGoPrevious: () => void;
 }
@@ -462,51 +514,59 @@ export interface LessonCentralControlsProps {
 export function LessonCentralControls({
   canGoNext,
   canGoPrevious,
+  controlsSuppressed = false,
   onGoNext,
   onGoPrevious,
 }: LessonCentralControlsProps) {
-  const visible = usePlayerState(({ ui }) => ui.controlsVisible);
+  const controlsVisible = usePlayerState(({ ui }) => ui.controlsVisible);
+  const mobileInteraction = usePlayerMobileInteraction();
+  const visible = !controlsSuppressed && controlsVisible;
 
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${
-        visible ? "opacity-100" : "opacity-0 [&_*]:!pointer-events-none"
+      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${mobileInteraction ? "sm:!grid" : ""} ${
+        visible
+          ? "visible opacity-100"
+          : `invisible opacity-0 [&_*]:!pointer-events-none ${
+              controlsSuppressed ? "transition-none" : ""
+            }`
       }`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
+      data-video-player-control-layer=""
       data-lesson-central-controls=""
     >
       <div className="pointer-events-auto flex items-center gap-6">
         <PlayerControlSurface
           cluster="mobile-previous"
-          className="grid size-11.5 place-items-center rounded-full !border-0 p-0"
+          className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
         >
           <LessonNavigationButton
             direction="previous"
             disabled={!canGoPrevious}
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
             iconSize={22}
             onClick={onGoPrevious}
           />
         </PlayerControlSurface>
         <PlayerControlSurface
           cluster="mobile-play"
-          className="grid size-15.5 place-items-center rounded-full !border-0 p-0"
+          className="grid size-15.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
         >
           <PlayButton
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-15.5`}
+            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-15.5`}
             hideControlsOnPlay
             iconSize={29}
           />
         </PlayerControlSurface>
         <PlayerControlSurface
           cluster="mobile-next"
-          className="grid size-11.5 place-items-center rounded-full !border-0 p-0"
+          className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
         >
           <LessonNavigationButton
             direction="next"
             disabled={!canGoNext}
-            className={`${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
             iconSize={22}
             onClick={onGoNext}
           />

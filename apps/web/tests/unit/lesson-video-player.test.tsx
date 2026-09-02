@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useState } from "react";
 import {
   BUILT_IN_PLAYER_THEME_IDS,
   BUILT_IN_PLAYER_THEMES,
@@ -236,19 +237,24 @@ describe("LessonVideoPlayer adapter", () => {
 
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
       const openButton = screen.getByRole("button", { name: "Open lessons" });
-      const surface = openButton.closest(
-        '[data-player-control-cluster="course-lessons"]',
-      );
       expect(openButton).toHaveAttribute("aria-expanded", "false");
       expect(openButton).toHaveAttribute(
         "aria-controls",
         "lesson-drawer-curriculum-scrollport",
       );
-      expect(surface).toHaveClass(
-        "rounded-full",
-        "bg-(--video-player-control-surface)",
+      expect(openButton).toHaveAttribute(
+        "data-player-control-hit-area",
+        "course-lessons",
       );
-      expect(openButton).toHaveClass("!text-[13px]");
+      expect(openButton).toHaveClass(
+        "h-9",
+        "px-3",
+        "!text-xs",
+        "leading-4",
+        "before:inset-x-0.5",
+        "before:inset-y-1.5",
+        "before:backdrop-blur-sm",
+      );
       const arrow = openButton.querySelector<HTMLElement>(
         ".learning-curriculum__section-arrow",
       );
@@ -311,6 +317,12 @@ describe("LessonVideoPlayer adapter", () => {
     const centralControls = document.querySelector<HTMLElement>(
       '[data-lesson-central-controls=""]',
     );
+    const timelineLayer = document.querySelector<HTMLElement>(
+      '[data-player-timeline-layer=""]',
+    );
+    const centralPlay = document.querySelector<HTMLElement>(
+      '[data-player-control-cluster="mobile-play"] [data-player-control]',
+    );
     const tapEmptySpace = () => {
       fireEvent.pointerDown(gestureSurface, {
         clientX: 100,
@@ -328,6 +340,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
+    expect(timelineLayer).not.toHaveAttribute("inert");
     expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
 
@@ -335,14 +348,39 @@ describe("LessonVideoPlayer adapter", () => {
     expect(player).toHaveAttribute("data-controls-visible", "false");
     expect(controls).toHaveAttribute("inert");
     expect(centralControls).toHaveAttribute("inert");
-    expect(controls).toHaveClass("[&_*]:!pointer-events-none");
-    expect(centralControls).toHaveClass("[&_*]:!pointer-events-none");
+    expect(timelineLayer).toHaveAttribute("inert");
+    expect(timelineLayer).toHaveClass("invisible", "pointer-events-none");
+    expect(controls).toHaveClass("invisible", "[&_*]:!pointer-events-none");
+    expect(centralControls).toHaveClass(
+      "invisible",
+      "[&_*]:!pointer-events-none",
+    );
     expect(play).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(centralPlay!, {
+      clientX: 100,
+      pointerId: 2,
+      pointerType: "touch",
+    });
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+    fireEvent.pointerUp(centralPlay!, {
+      clientX: 100,
+      pointerId: 2,
+      pointerType: "touch",
+    });
+    fireEvent.click(centralPlay!, { detail: 1 });
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+    expect(play).not.toHaveBeenCalled();
+
+    tapEmptySpace();
+    expect(player).toHaveAttribute("data-controls-visible", "false");
 
     tapEmptySpace();
     expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
+    expect(timelineLayer).not.toHaveAttribute("inert");
+    expect(timelineLayer).toHaveClass("visible", "pointer-events-none");
     expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(play).not.toHaveBeenCalled();
@@ -417,33 +455,117 @@ describe("LessonVideoPlayer adapter", () => {
     expect(player).toHaveAttribute("data-controls-visible", "false");
   });
 
-  it("fills the caption badge when captions are enabled", async () => {
+  it("moves captions into settings and selects a caption track", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     engine.setSnapshot({ textTracks: [englishCaptions] });
 
     render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
     await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
 
-    const captionsButton = screen.getByRole("button", {
-      name: "Turn captions on",
-    });
-    expect(captionsButton).toHaveAttribute("aria-pressed", "false");
     expect(
-      captionsButton.querySelector('[data-caption-icon-state="outline"]'),
-    ).toHaveClass("max-sm:size-5.5");
+      screen.queryByRole("button", { name: "Turn captions on" }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(captionsButton);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      document.querySelector('[data-lesson-player-controls=""]'),
+    ).toHaveClass("z-180");
+    const captionsItem = screen.getByRole("menuitem", {
+      name: "Captions Off",
+    });
+    expect(
+      captionsItem.querySelector('[data-caption-icon-state="outline"]'),
+    ).not.toBeNull();
+
+    fireEvent.click(captionsItem);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "English en" }));
 
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Turn captions off" }),
-      ).toHaveAttribute("aria-pressed", "true"),
+      expect(engine.getSnapshot().selectedTextTrackId).toBe(englishCaptions.id),
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(
       screen
-        .getByRole("button", { name: "Turn captions off" })
+        .getByRole("menuitem", { name: "Captions English" })
         .querySelector('[data-caption-icon-state="filled"]'),
     ).not.toBeNull();
+  });
+
+  it("keeps desktop settings and every control visible after pointer leave", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches:
+        query === "(hover: hover) and (pointer: fine)" ||
+        query === "(min-width: 40rem)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
+      );
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      const shell = container.querySelector<HTMLElement>(".video-shell")!;
+      const gestureSurface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const controlLayer = container.querySelector<HTMLElement>(
+        '[data-lesson-player-controls=""]',
+      );
+      const centralControls = container.querySelector<HTMLElement>(
+        '[data-lesson-central-controls=""]',
+      );
+
+      fireEvent.pointerEnter(shell, { pointerType: "mouse" });
+      const settingsButton = within(player).getByRole("button", {
+        name: "Settings",
+      });
+      fireEvent.click(settingsButton);
+      expect(
+        screen.getByRole("menu", { name: "Video settings" }),
+      ).toBeVisible();
+
+      fireEvent.pointerLeave(shell, { pointerType: "mouse" });
+
+      expect(
+        screen.getByRole("menu", { name: "Video settings" }),
+      ).toBeVisible();
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(controlLayer).not.toHaveAttribute("inert");
+      expect(centralControls).not.toHaveAttribute("inert");
+
+      fireEvent.click(settingsButton);
+      expect(
+        screen.queryByRole("menu", { name: "Video settings" }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.pointerEnter(shell, { pointerType: "mouse" });
+      fireEvent.click(within(player).getByRole("button", { name: "Settings" }));
+      expect(
+        screen.getByRole("menu", { name: "Video settings" }),
+      ).toBeVisible();
+
+      fireEvent.pointerDown(gestureSurface, { pointerType: "mouse" });
+      expect(
+        screen.queryByRole("menu", { name: "Video settings" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("keeps autoplay in the player and ambient mode inside settings", () => {
@@ -561,7 +683,14 @@ describe("LessonVideoPlayer adapter", () => {
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
       expect(
         screen.getByRole("button", { name: "Minimize video" }),
-      ).toHaveClass("!size-9", "!bg-transparent");
+      ).toHaveClass(
+        "!size-9",
+        "!bg-transparent",
+        "[&&&]:!bg-transparent",
+        "[&&&:hover]:!bg-transparent",
+        "[&&&:active]:!bg-transparent",
+        "[&&&:focus-visible]:!bg-transparent",
+      );
       const player = screen.getByRole("region", {
         name: "Lesson video player for Designing for real users",
       });
@@ -569,7 +698,15 @@ describe("LessonVideoPlayer adapter", () => {
       const centralPlay = container.querySelector<HTMLElement>(
         '[data-player-control-cluster="mobile-play"] [data-player-control]',
       );
+      const playerControls = container.querySelector<HTMLElement>(
+        "[data-lesson-player-controls]",
+      );
+      const centralControls = container.querySelector<HTMLElement>(
+        "[data-lesson-central-controls]",
+      );
       expect(centralPlay).not.toBeNull();
+      expect(playerControls).not.toBeNull();
+      expect(centralControls).not.toBeNull();
       Object.defineProperties(shell, {
         hasPointerCapture: { value: () => true },
         releasePointerCapture: { value: vi.fn() },
@@ -600,8 +737,24 @@ describe("LessonVideoPlayer adapter", () => {
         pointerId: 7,
         pointerType: "touch",
       });
+      act(() => vi.advanceTimersByTime(16));
       const forwardTransform = shell.style.transform;
       expect(forwardTransform).toMatch(/translate3d\(.+px, .+px, 0\) scale\(/);
+      expect(shell).toHaveAttribute("data-learning-player-controls-suppressed");
+      expect(playerControls).toHaveAttribute("aria-hidden", "true");
+      expect(playerControls).toHaveAttribute("inert");
+      expect(playerControls).toHaveClass(
+        "invisible",
+        "opacity-0",
+        "transition-none",
+      );
+      expect(centralControls).toHaveAttribute("aria-hidden", "true");
+      expect(centralControls).toHaveAttribute("inert");
+      expect(centralControls).toHaveClass(
+        "invisible",
+        "opacity-0",
+        "transition-none",
+      );
       const forwardGesture = onMinimizeGestureChange.mock.lastCall?.[0];
       expect(forwardGesture).toEqual(
         expect.objectContaining({ offsetY: 300, phase: "dragging" }),
@@ -614,6 +767,7 @@ describe("LessonVideoPlayer adapter", () => {
         pointerId: 7,
         pointerType: "touch",
       });
+      act(() => vi.advanceTimersByTime(16));
       const reversedTransform = shell.style.transform;
       const readTranslateY = (transform: string) =>
         Number(/translate3d\([^,]+,\s*([\d.]+)px/.exec(transform)?.[1] ?? 0);
@@ -640,10 +794,13 @@ describe("LessonVideoPlayer adapter", () => {
       const playCallsBeforeCompatibilityClick = play.mock.calls.length;
       fireEvent.click(centralPlay!);
       expect(play).toHaveBeenCalledTimes(playCallsBeforeCompatibilityClick);
+      act(() => vi.advanceTimersByTime(16));
 
-      expect(shell.style.transform).toContain("scale(0.8200)");
+      expect(shell.style.transform).toContain("scale(0.82000)");
+      expect(playerControls).toHaveAttribute("aria-hidden", "true");
+      expect(centralControls).toHaveAttribute("aria-hidden", "true");
       expect(onMinimize).not.toHaveBeenCalled();
-      act(() => vi.advanceTimersByTime(180));
+      fireEvent.transitionEnd(shell, { propertyName: "transform" });
       expect(onMinimize).toHaveBeenCalledWith(
         expect.objectContaining({
           lessonTitle: "Designing for real users",
@@ -654,6 +811,15 @@ describe("LessonVideoPlayer adapter", () => {
         }),
       );
 
+      const gestureCallsAfterMiniSettled =
+        onMinimizeGestureChange.mock.calls.length;
+      const terminalGesture = onMinimizeGestureChange.mock.lastCall?.[0];
+      expect(terminalGesture).toEqual(
+        expect.objectContaining({
+          phase: "settling-mini",
+          progress: 1,
+        }),
+      );
       rerender(
         <LessonVideoPlayer
           {...playerProps(firstMedia, engine)}
@@ -662,6 +828,23 @@ describe("LessonVideoPlayer adapter", () => {
           presentation="mini"
         />,
       );
+      expect(onMinimizeGestureChange).toHaveBeenCalledTimes(
+        gestureCallsAfterMiniSettled,
+      );
+      expect(
+        container.querySelector("[data-lesson-player-controls]"),
+      ).toBeNull();
+      expect(
+        container.querySelector("[data-lesson-central-controls]"),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", {
+          name: "Return to Designing for real users",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Close mini player" }),
+      ).toBeInTheDocument();
       rerender(
         <LessonVideoPlayer
           {...playerProps(firstMedia, engine)}
@@ -672,9 +855,146 @@ describe("LessonVideoPlayer adapter", () => {
       );
 
       expect(shell.style.transform).toBe("");
-      expect(onMinimizeGestureChange.mock.lastCall?.[0]).toEqual(
-        expect.objectContaining({ offsetY: 0, phase: "idle", progress: 0 }),
+      expect(shell).not.toHaveAttribute(
+        "data-learning-player-controls-suppressed",
       );
+      expect(onMinimizeGestureChange.mock.lastCall?.[0]).toBe(terminalGesture);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+      Object.defineProperties(window, {
+        innerHeight: { configurable: true, value: originalInnerHeight },
+        innerWidth: { configurable: true, value: originalInnerWidth },
+      });
+    }
+  });
+
+  it("restores immediately when the mini endpoint is pressed before settle completes", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const onMinimize = vi.fn();
+    const onMiniRestore = vi.fn();
+    const originalMatchMedia = window.matchMedia;
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 640px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+    Object.defineProperties(window, {
+      innerHeight: { configurable: true, value: 915 },
+      innerWidth: { configurable: true, value: 412 },
+    });
+
+    try {
+      function ImmediateRestoreHarness() {
+        const [presentation, setPresentation] = useState<"full" | "mini">(
+          "full",
+        );
+        return (
+          <LessonVideoPlayer
+            {...playerProps(firstMedia, engine)}
+            onMinimize={(request) => {
+              onMinimize(request);
+              setPresentation("mini");
+            }}
+            onMiniRestore={() => {
+              onMiniRestore();
+              setPresentation("full");
+            }}
+            presentation={presentation}
+          />
+        );
+      }
+
+      render(<ImmediateRestoreHarness />);
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+      vi.useFakeTimers();
+
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      const shell = player.parentElement!;
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      Object.defineProperties(shell, {
+        hasPointerCapture: { value: () => true },
+        releasePointerCapture: { value: vi.fn() },
+        setPointerCapture: { value: vi.fn() },
+      });
+      vi.spyOn(shell, "getBoundingClientRect").mockReturnValue({
+        bottom: 232,
+        height: 232,
+        left: 0,
+        right: 412,
+        top: 0,
+        width: 412,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 190,
+        clientY: 30,
+        isPrimary: true,
+        pointerId: 21,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 192,
+        clientY: 460,
+        isPrimary: true,
+        pointerId: 21,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 192,
+        clientY: 460,
+        isPrimary: true,
+        pointerId: 21,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(16));
+
+      expect(shell.style.transform).toContain("scale(0.82000)");
+      expect(onMinimize).not.toHaveBeenCalled();
+      expect(onMiniRestore).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 250,
+        clientY: 730,
+        isPrimary: true,
+        pointerId: 22,
+        pointerType: "touch",
+      });
+
+      expect(onMinimize).toHaveBeenCalledTimes(1);
+      expect(onMiniRestore).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("button", {
+          name: "Return to Designing for real users",
+        }),
+      ).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(0));
+
+      expect(onMiniRestore).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole("button", { name: "Minimize video" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", {
+          name: "Return to Designing for real users",
+        }),
+      ).not.toBeInTheDocument();
     } finally {
       window.matchMedia = originalMatchMedia;
       Object.defineProperties(window, {
@@ -1057,7 +1377,8 @@ describe("LessonVideoPlayer adapter", () => {
     const player = container.querySelector<HTMLElement>(".youtube-player");
     expect(shell).not.toBeNull();
     expect(player).not.toBeNull();
-    expect(player).toHaveClass("max-sm:overflow-visible");
+    expect(player).toHaveClass("!rounded-none");
+    expect(player).not.toHaveClass("max-sm:overflow-visible");
 
     await waitFor(() => {
       const projection = container.querySelector<HTMLCanvasElement>(
@@ -1067,6 +1388,7 @@ describe("LessonVideoPlayer adapter", () => {
       expect(projection?.parentElement).toBe(shell);
       expect(player?.contains(projection)).toBe(false);
       expect(projection).toHaveAttribute("aria-hidden", "true");
+      expect(projection).toHaveClass("max-[820px]:transform-none!");
     });
   });
 
@@ -1139,7 +1461,11 @@ describe("LessonVideoPlayer adapter", () => {
       '[data-player-control-cluster="lesson-navigation"]',
     );
     expect(navigationCluster).not.toBeNull();
-    expect(navigationCluster).toHaveClass("h-10.5", "p-[3px]");
+    expect(navigationCluster).toHaveClass(
+      "h-10.5",
+      "p-[3px]",
+      "backdrop-blur-sm",
+    );
     const previousButton = within(navigationCluster!).getByRole("button", {
       name: "Previous lesson",
     });
@@ -1160,14 +1486,23 @@ describe("LessonVideoPlayer adapter", () => {
     );
     expect(volumeGroup).not.toBeNull();
     expect(volumeGroup).toHaveClass(
+      "relative",
+      "isolate",
       "h-10.5",
       "!w-10.5",
       "p-1",
+      "backdrop-blur-sm",
+      "before:bg-transparent",
       "hover:!w-31.5",
+      "hover:before:bg-(--video-player-control-surface-hover)",
       "focus-within:!w-31.5",
+      "focus-within:before:bg-(--video-player-control-surface-hover)",
+      "[&>*]:relative",
+      "[&>*]:z-10",
     );
-    expect(volumeGroup?.className).toContain(
+    expect(volumeGroup).not.toHaveClass(
       "hover:bg-(--video-player-control-surface-hover)",
+      "focus-within:bg-(--video-player-control-surface-hover)",
     );
     expect(
       within(volumeGroup!).getByRole("slider", { name: "Volume" }),
@@ -1181,6 +1516,10 @@ describe("LessonVideoPlayer adapter", () => {
       "!size-8.5",
       "hover:!bg-(--video-player-control-surface-hover)",
       "active:!bg-(--video-player-control-surface-active)",
+      "[&&&:hover]:!bg-transparent",
+      "[&&&:active]:!bg-transparent",
+      "[&&&:focus-visible]:!bg-transparent",
+      "[&&&[aria-pressed=true]]:!bg-transparent",
     );
 
     const playerActions = container.querySelector<HTMLElement>(
@@ -1204,11 +1543,18 @@ describe("LessonVideoPlayer adapter", () => {
       "h-8",
       "gap-1",
       "p-0",
-      "max-sm:!bg-transparent",
-      "max-sm:!shadow-none",
+      "!bg-transparent",
+      "!shadow-none",
+      "before:bg-(--video-player-control-surface)",
+      "before:shadow-(--video-player-control-shadow)",
+      "before:backdrop-blur-sm",
+      "max-sm:before:hidden",
+      "[&>*]:relative",
+      "[&>*]:z-10",
       "sm:h-10.5",
       "sm:p-[3px]",
     );
+    expect(playerActions).not.toHaveClass("backdrop-blur-sm");
     expect(
       within(playerActions!).getByRole("switch", {
         name: "Autoplay next lesson",
@@ -1220,11 +1566,7 @@ describe("LessonVideoPlayer adapter", () => {
       "max-sm:active:!bg-white/14",
       "sm:px-3",
     );
-    for (const controlName of [
-      "Turn captions on",
-      "Settings",
-      "Toggle fullscreen",
-    ]) {
+    for (const controlName of ["Settings", "Toggle fullscreen"]) {
       expect(
         within(playerActions!).getByRole("button", { name: controlName }),
       ).toHaveClass(
@@ -1239,15 +1581,25 @@ describe("LessonVideoPlayer adapter", () => {
         "active:!bg-(--video-player-control-surface-active)",
         "focus-visible:outline-(--video-player-control-text)",
         "sm:!h-9",
-        "sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)]",
+        "sm:!bg-transparent",
         "sm:!px-3",
         "sm:hover:!bg-(--video-player-control-surface-hover)",
+      );
+      expect(
+        within(playerActions!).getByRole("button", { name: controlName }),
+      ).not.toHaveClass(
+        "sm:!bg-[color-mix(in_srgb,var(--video-player-control-text)_4%,transparent)]",
       );
     }
     const timeline = screen.getByRole("slider", {
       name: "Video timeline",
     });
+    expect(timeline.closest(".video-shell")).not.toBeNull();
+    expect(timeline.closest("[data-video-player-root]")).toBeNull();
     expect(timeline.parentElement).toHaveClass(
+      "pointer-events-none",
+      "[&_[role=slider]]:pointer-events-auto",
+      "max-sm:[&_[role=slider]]:h-9",
       "max-sm:[&_[data-timeline-buffered-range]]:rounded-none",
       "max-sm:[&_[data-timeline-progress]]:rounded-none",
       "max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1px)]",
@@ -1257,8 +1609,8 @@ describe("LessonVideoPlayer adapter", () => {
       "max-sm:[&_[data-timeline-track]]:rounded-none",
     );
     vi.spyOn(timeline, "getBoundingClientRect").mockReturnValue({
-      bottom: 20,
-      height: 20,
+      bottom: 36,
+      height: 36,
       left: 0,
       right: 200,
       top: 0,
@@ -1278,8 +1630,8 @@ describe("LessonVideoPlayer adapter", () => {
       pointerType: "touch",
     });
     expect(timeline.parentElement).toHaveClass(
-      "max-sm:[&_[role=slider]]:translate-y-[25%]",
-      "max-sm:[&_[data-timeline-visual]]:-translate-y-[25%]",
+      "max-sm:[&_[role=slider]]:translate-y-full",
+      "max-sm:[&_[data-timeline-visual]]:-translate-y-full",
     );
     expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
       "pointer-events-none",
@@ -1326,7 +1678,9 @@ describe("LessonVideoPlayer adapter", () => {
     ).toHaveClass(
       "inset-x-0",
       "bottom-0",
-      "z-50",
+      "z-70",
+      "max-sm:z-170",
+      "pointer-events-none",
       "sm:inset-x-3",
       "sm:bottom-13",
     );
@@ -1348,6 +1702,18 @@ describe("LessonVideoPlayer adapter", () => {
       "right-2",
       "max-sm:opacity-100",
     );
+    const mobileFullscreenHitArea = mobileFullscreenCorner?.querySelector(
+      '[data-player-control-hit-area="fullscreen"]',
+    );
+    expect(mobileFullscreenHitArea).toHaveClass(
+      "inline-flex",
+      "size-10",
+      "items-center",
+      "justify-center",
+    );
+    expect(mobileFullscreenHitArea).not.toHaveAttribute(
+      "data-player-control-cluster",
+    );
     const mobileFullscreenButton = within(
       mobileFullscreenCorner as HTMLElement,
     ).getByRole("button", { name: "Toggle fullscreen" });
@@ -1355,6 +1721,12 @@ describe("LessonVideoPlayer adapter", () => {
       "!size-10",
       "!bg-transparent",
       "!px-0",
+      "[&&&]:!bg-transparent",
+      "[&&&:hover]:!bg-transparent",
+      "[&&&:active]:!bg-transparent",
+      "[&&&:focus-visible]:!bg-transparent",
+      "[&&&[aria-pressed=true]]:!bg-transparent",
+      "group/fullscreen",
     );
     const mobileFullscreenSurface = mobileFullscreenButton.querySelector(
       '[data-fullscreen-visual-surface=""]',
@@ -1362,12 +1734,19 @@ describe("LessonVideoPlayer adapter", () => {
     expect(mobileFullscreenSurface).toHaveClass(
       "size-7",
       "place-items-center",
+      "relative",
+      "z-10",
       "rounded-full",
       "bg-(--video-player-control-surface)",
+      "shadow-(--video-player-control-shadow)",
+      "backdrop-blur-sm",
+      "group-hover/fullscreen:bg-(--video-player-control-surface-hover)",
+      "group-active/fullscreen:bg-(--video-player-control-surface-active)",
+      "group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)",
     );
     expect(mobileFullscreenSurface?.querySelector("svg")).toHaveAttribute(
       "width",
-      "22",
+      "20",
     );
     const mobilePlayCluster = container.querySelector(
       '[data-player-control-cluster="mobile-play"]',
@@ -1383,21 +1762,30 @@ describe("LessonVideoPlayer adapter", () => {
       "size-15.5",
       "place-items-center",
       "!border-0",
+      "bg-(--video-player-control-surface)",
       "p-0",
+      "shadow-(--video-player-control-shadow)",
+      "backdrop-blur-none",
     );
     expect(mobilePreviousCluster).toHaveClass(
       "grid",
       "size-11.5",
       "place-items-center",
       "!border-0",
+      "bg-(--video-player-control-surface)",
       "p-0",
+      "shadow-(--video-player-control-shadow)",
+      "backdrop-blur-none",
     );
     expect(mobileNextCluster).toHaveClass(
       "grid",
       "size-11.5",
       "place-items-center",
       "!border-0",
+      "bg-(--video-player-control-surface)",
       "p-0",
+      "shadow-(--video-player-control-shadow)",
+      "backdrop-blur-none",
     );
 
     const mobilePlayButton = within(mobilePlayCluster as HTMLElement).getByRole(
@@ -1411,9 +1799,20 @@ describe("LessonVideoPlayer adapter", () => {
       "button",
       { name: "Next lesson" },
     );
-    expect(mobilePlayButton).toHaveClass("!size-15.5", "p-0");
-    expect(mobilePreviousButton).toHaveClass("!size-11.5", "p-0");
-    expect(mobileNextButton).toHaveClass("!size-11.5", "p-0");
+    for (const [button, sizeClass] of [
+      [mobilePlayButton, "!size-15.5"],
+      [mobilePreviousButton, "!size-11.5"],
+      [mobileNextButton, "!size-11.5"],
+    ] as const) {
+      expect(button).toHaveClass(
+        sizeClass,
+        "p-0",
+        "[&&&]:!bg-transparent",
+        "[&&&:hover]:!bg-transparent",
+        "[&&&:active]:!bg-transparent",
+        "[&&&:focus-visible]:!bg-transparent",
+      );
+    }
     expect(mobilePlayButton.querySelector("svg")).toHaveAttribute(
       "width",
       "29",
@@ -1440,42 +1839,172 @@ describe("LessonVideoPlayer adapter", () => {
     }
 
     const timeButtons = screen.getAllByRole("button", {
-      name: /00:00 elapsed of 01:30\. Show remaining time/,
+      name: /0:00 elapsed of 1:30\. Show remaining time/,
     });
     expect(timeButtons).toHaveLength(2);
-    const timeClusters = document.querySelectorAll(
+    const mobileTimeHitArea = document.querySelector<HTMLElement>(
+      '[data-player-control-hit-area="time"]',
+    );
+    const desktopTimeCluster = document.querySelector<HTMLElement>(
       '[data-player-control-cluster="time"]',
     );
-    expect(timeClusters).toHaveLength(2);
 
-    const mobileTimeCluster = timeClusters[0] as HTMLElement;
-    const desktopTimeCluster = timeClusters[1] as HTMLElement;
-    const mobileTimeButton = within(mobileTimeCluster).getByRole("button");
-    const desktopTimeButton = within(desktopTimeCluster).getByRole("button");
+    const mobileTimeButton = within(mobileTimeHitArea!).getByRole("button");
+    const desktopTimeButton = within(desktopTimeCluster!).getByRole("button");
 
-    expect(mobileTimeCluster).toHaveClass(
-      "overflow-hidden",
-      "rounded-full",
-      "p-0",
-    );
-    expect(mobileTimeCluster).not.toHaveClass("h-9", "p-0.5");
+    expect(mobileTimeHitArea).toHaveClass("h-10", "items-center");
     expect(mobileTimeButton).toHaveClass(
-      "!h-auto",
-      "!px-2",
-      "!py-1",
+      "!h-10",
+      "!px-3",
+      "!py-0",
       "!text-xs",
       "!leading-4",
+      "before:inset-x-0.5",
+      "before:inset-y-2",
+      "before:backdrop-blur-sm",
+      "[&&&]:!bg-transparent",
+      "[&&&:hover]:!bg-transparent",
+      "[&&&:active]:!bg-transparent",
+      "[&&&:focus-visible]:!bg-transparent",
+      "[&&&[aria-pressed=true]]:!bg-transparent",
     );
-    expect(desktopTimeCluster).toHaveClass("h-9.5", "p-[3px]");
+    expect(mobilePreviousCluster).not.toHaveClass("backdrop-blur-sm");
+    expect(mobileNextCluster).not.toHaveClass("backdrop-blur-sm");
+    expect(desktopTimeCluster).toHaveClass(
+      "h-9.5",
+      "p-[3px]",
+      "backdrop-blur-sm",
+    );
     expect(desktopTimeButton).toHaveClass("!h-8", "!px-3.5", "!text-sm");
 
     fireEvent.click(mobileTimeButton);
 
     expect(mobileTimeButton).toHaveAttribute("aria-pressed", "true");
-    expect(mobileTimeButton).toHaveTextContent("-01:30 / 01:30");
+    expect(mobileTimeButton).toHaveTextContent("-1:30 / 1:30");
     expect(mobileTimeButton).toHaveAccessibleName(
-      "01:30 remaining of 01:30. Show elapsed time",
+      "1:30 remaining of 1:30. Show elapsed time",
     );
+  });
+
+  it("keeps the mobile control layout and settings sheet in phone landscape", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const originalMatchMedia = window.matchMedia;
+    const originalFullscreenElement = Object.getOwnPropertyDescriptor(
+      document,
+      "fullscreenElement",
+    );
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches:
+        query === "(min-width: 40rem)" ||
+        query === "(max-height: 40rem)" ||
+        query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          canGoNext
+          canGoPrevious
+        />,
+      );
+      await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+      const player = screen.getByRole("region", {
+        name: "Lesson video player for Designing for real users",
+      });
+      expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(
+        container.querySelector('[data-lesson-central-controls=""]'),
+      ).toHaveClass("sm:!grid");
+      expect(
+        container.querySelector('[data-mobile-player-vignette="top"]'),
+      ).toHaveClass("sm:!block");
+      expect(
+        container.querySelector('[data-mobile-volume-control=""]'),
+      ).toHaveClass("sm:!inline-flex");
+      expect(
+        container.querySelector('[data-mobile-player-corner="fullscreen"]'),
+      ).toHaveClass("sm:!block");
+      expect(
+        container.querySelector(
+          '[data-player-control-cluster="player-actions"]',
+        ),
+      ).toHaveClass("!bg-transparent", "!shadow-none", "sm:before:hidden");
+
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      expect(
+        document.querySelector('[data-video-player-mobile-sheet=""]'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+
+      const shell = container.querySelector<HTMLElement>(".video-shell");
+      fullscreenElement = shell;
+      act(() => document.dispatchEvent(new Event("fullscreenchange")));
+
+      const controlFrame = await waitFor(() => {
+        const frame = container.querySelector<HTMLElement>(
+          '[data-player-control-frame=""]',
+        );
+        expect(frame).toHaveAttribute(
+          "data-player-mobile-fullscreen-frame",
+          "true",
+        );
+        return frame!;
+      });
+      expect(controlFrame).toHaveClass(
+        "left-1/2",
+        "-translate-x-1/2",
+        "w-[min(100%,calc(100dvh*16/9))]",
+      );
+      expect(
+        container.querySelector('[data-player-timeline-wrap=""]'),
+      ).toHaveClass(
+        "!left-1/2",
+        "!right-auto",
+        "!bottom-10",
+        "!w-[min(100%,calc(100dvh*16/9))]",
+        "!-translate-x-1/2",
+        "!px-3",
+        "sm:!left-1/2",
+        "sm:!right-auto",
+        "sm:!bottom-10",
+        "sm:!w-[min(100%,calc(100dvh*16/9))]",
+        "sm:!-translate-x-1/2",
+        "sm:!px-3",
+      );
+      expect(
+        container.querySelector('[data-mobile-player-corner="time"]'),
+      ).toHaveClass("!bottom-15", "!left-3", "sm:!bottom-15", "sm:!left-3");
+      expect(
+        container.querySelector('[data-mobile-player-corner="fullscreen"]'),
+      ).toHaveClass("!bottom-15", "!right-3", "sm:!bottom-15", "sm:!right-3");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+      if (originalFullscreenElement) {
+        Object.defineProperty(
+          document,
+          "fullscreenElement",
+          originalFullscreenElement,
+        );
+      } else {
+        Reflect.deleteProperty(document, "fullscreenElement");
+      }
+    }
   });
 
   it("navigates lessons with Shift+N and Shift+P outside editing controls", () => {

@@ -22,6 +22,7 @@ export function MiniPlayerControls({
         type="button"
         className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
         aria-label={`Return to ${lessonTitle}`}
+        data-learning-mini-player-restore=""
         onClick={onRestore}
       />
       <div className="absolute left-1 top-1 z-20">
