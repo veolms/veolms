@@ -27,7 +27,6 @@
     "db:migrate": "pnpm --filter @veolms/database migrate",
     "db:seed": "pnpm --filter @veolms/database seed",
     "db:reset": "pnpm --filter @veolms/database reset",
-    "fleet:run": "pnpm --filter @veolms/fleet-manager run",
     "fleet:cli": "pnpm --filter @veolms/fleet-manager cli",
     "fleet:provider": "pnpm --filter @veolms/fleet-manager provider",
     "fleet:infra": "pnpm --filter @veolms/fleet-manager infra",
