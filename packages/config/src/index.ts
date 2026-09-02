@@ -34,12 +34,27 @@ const serverConfigSchema = z.object({
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
   API_PUBLIC_URL: z.string().optional(),
+  TRUST_PROXY: z
+    .string()
+    .default("false")
+    .transform((val) => {
+      const trimmed = val.trim().toLowerCase();
+      if (trimmed === "true") return true;
+      if (trimmed === "false") return false;
+      const num = Number(trimmed);
+      if (!Number.isNaN(num)) return num;
+      if (trimmed.includes(",")) {
+        return trimmed.split(",").map((s) => s.trim());
+      }
+      return val.trim();
+    }),
 
   // Auth Configs
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters")
     .default("default_session_secret_at_least_32_chars_long"),
+  SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   MFA_ENCRYPTION_KEY: z
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")

@@ -130,7 +130,11 @@ export function createOauthService({
   async function login(
     provider: OauthProviderName,
     profile: OauthProfile,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
     let user: SessionUser | undefined =
       await authService.findUserByOauthAccount(
@@ -175,7 +179,11 @@ export function createOauthService({
   async function register(
     request: OauthRegisterRequest,
     profile: OauthProfile,
-    requestMeta: { ip: string; userAgent: string | null },
+    requestMeta: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
     const provider: OauthProviderName = request.provider;
 

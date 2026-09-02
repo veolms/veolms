@@ -50,7 +50,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
   async function establishSession(
     user: SessionUser,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ): Promise<EstablishedSession> {
     const roles = await userRepository.listUserRoleNames(database, user.id);
     const mfa = await resolveMfaState(
@@ -59,16 +63,41 @@ export function createSessionService({ database }: SessionServiceOptions) {
     );
 
     const token = generateRandomToken();
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    const mfaVerified = !mfa.mfaRequired;
+
+    // Check if the client supplied an active, unexpired session belonging to this same user
+    if (request.existingSessionToken) {
+      const existingSession = await sessionRepository.findActiveSession(
+        database,
+        hashToken(request.existingSessionToken),
+      );
+
+      if (existingSession && existingSession.user_id === user.id) {
+        // Reuse the existing session record and rotate its token
+        await sessionRepository.rotateSession(database, existingSession.id, {
+          tokenHash,
+          ipAddress: request.ip,
+          userAgent: request.userAgent,
+          mfaVerified,
+          expiresAt,
+        });
+
+        return { token, sessionId: existingSession.id, mfa };
+      }
+    }
+
     const sessionId = crypto.randomUUID();
 
     await sessionRepository.insertSession(database, {
       id: sessionId,
       userId: user.id,
-      tokenHash: hashToken(token),
+      tokenHash,
       ipAddress: request.ip,
       userAgent: request.userAgent,
-      mfaVerified: !mfa.mfaRequired,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      mfaVerified,
+      expiresAt,
     });
 
     return { token, sessionId, mfa };
@@ -79,7 +108,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     sessionId: string,
   ): Promise<void> {
     await sessionRepository.markSessionMfaVerified(database, sessionId);
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       sessionId,
@@ -87,7 +116,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
   }
 
   async function logout(sessionId: string): Promise<void> {
-    await sessionRepository.deleteSession(database, sessionId);
+    await sessionRepository.revokeSession(database, sessionId);
   }
 
   async function listSessions(userId: string) {
@@ -99,7 +128,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     sessionId: string,
   ): Promise<void> {
     await database.transaction().execute(async (trx) => {
-      const revoked = await sessionRepository.deleteUserSession(
+      const revoked = await sessionRepository.revokeUserSession(
         trx,
         userId,
         sessionId,
@@ -119,11 +148,16 @@ export function createSessionService({ database }: SessionServiceOptions) {
     userId: string,
     currentSessionId: string,
   ): Promise<void> {
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       currentSessionId,
     );
+  }
+
+  async function purgeOldSessions(cutoffDays = 30): Promise<number> {
+    const cutoffDate = new Date(Date.now() - cutoffDays * 24 * 60 * 60 * 1000);
+    return sessionRepository.purgeOldSessions(database, cutoffDate);
   }
 
   async function authenticate(
@@ -193,6 +227,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     listSessions,
     revokeSession,
     revokeOtherSessions,
+    purgeOldSessions,
     authenticate,
   };
 }

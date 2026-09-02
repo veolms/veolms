@@ -41,6 +41,7 @@ export async function createApp({
 }: CreateAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
+    trustProxy: config.TRUST_PROXY,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
   });
 
