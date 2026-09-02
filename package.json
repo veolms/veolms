@@ -13,6 +13,7 @@
     "preview:web:device": "pnpm --filter @veolms/web preview:device",
     "dev:api": "pnpm --filter @veolms/api dev",
     "purge:course-deletions": "pnpm --filter @veolms/api purge:course-deletions",
+    "notifications:process": "pnpm --filter @veolms/api notifications:process",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",
@@ -47,7 +48,8 @@
     "fleet:queue:trigger": "pnpm --filter @veolms/fleet-manager queue:trigger",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "migration:create": "pnpm --filter @veolms/database migration:create"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

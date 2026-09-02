@@ -897,25 +897,74 @@
       no-repeat;
   }
 
-  /* Theme-adaptive blend overlay that selectively re-tints only the illustration's glowing elements */
-  .auth-brand-panel__illustration-slot::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: var(--accent);
-    mix-blend-mode: hue;
-    opacity: 0.85;
-    pointer-events: none;
-    transition: background-color 200ms ease;
+  /* The artwork is a black-backed WebP. Lighten knocks the black out against
+     the dark card so the 3D cluster floats without a colored rectangle. */
+  :root[data-theme="dark"] .auth-brand-panel__illustration-slot {
+    mix-blend-mode: lighten;
   }
 
-  /* Palette-tailored adjustments: monochrome Veo Onyx / Codex */
   :root[data-palette="codex"] .auth-brand-panel__illustration-slot {
-    filter: saturate(0.18) brightness(1.05);
+    filter: grayscale(1) brightness(1.08) contrast(1.05);
   }
 
-  :root[data-palette="codex"] .auth-brand-panel__illustration-slot::after {
-    display: none;
+  :root[data-palette="ocean"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(188deg) saturate(3) brightness(1.1);
+  }
+
+  :root[data-palette="midnight"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(187deg) saturate(3) brightness(1.0);
+  }
+
+  :root[data-palette="graphite"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(216deg) saturate(3) brightness(1.1);
+  }
+
+  :root[data-palette="violet"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(-18deg) saturate(2.8) brightness(1.1);
+  }
+
+  :root[data-palette="ember"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(-12deg) saturate(3.5) brightness(1.15);
+  }
+
+  :root[data-palette="sunlit"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(7deg) saturate(3.5) brightness(1.2);
+  }
+
+  :root[data-palette="grove"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(102deg) saturate(3.2) brightness(1.1);
+  }
+
+  :root[data-palette="rose"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(-53deg) saturate(3.2) brightness(1.1);
+  }
+
+  :root[data-palette="signal"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(-49deg) saturate(3.8) brightness(1.05);
+  }
+
+  :root[data-palette="barbie"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(-68deg) saturate(3.5) brightness(1.1);
+  }
+
+  :root[data-palette="aurora"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(136deg) saturate(3) brightness(1.1);
+  }
+
+  :root[data-palette="brainwave"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(171deg) saturate(3.5) brightness(1.1);
+  }
+
+  :root[data-palette="lilac"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(229deg) saturate(3) brightness(1.15);
+  }
+
+  :root[data-palette="champagne"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(3deg) saturate(2) brightness(1.15);
+  }
+
+  :root[data-palette="lime"] .auth-brand-panel__illustration-slot {
+    filter: sepia(1) hue-rotate(45deg) saturate(3.5) brightness(1.15);
   }
 
   .auth-otp-form__destination {

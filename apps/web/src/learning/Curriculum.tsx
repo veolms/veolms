@@ -47,6 +47,7 @@ interface CurriculumProps {
   onClose?: () => void;
   focusRequest?: number;
   persistenceKey: string;
+  isLessonAvailable?: (lessonNumber: number) => boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
   drawerHeroControlProps?: LessonDrawerHeroControlProps;
@@ -64,6 +65,7 @@ export function Curriculum({
   onClose,
   focusRequest = 0,
   persistenceKey,
+  isLessonAvailable,
   scrollportId,
   scrollportRef,
   drawerHeroControlProps,
@@ -448,6 +450,7 @@ export function Curriculum({
                       {matchingLessons.map(
                         ([number, title, duration, status]) => {
                           const active = selectedLesson === number;
+                          const available = isLessonAvailable?.(number) ?? true;
                           const progress = getLessonProgress(number, status);
                           const completed =
                             status === "done" ||
@@ -458,11 +461,23 @@ export function Curriculum({
                               type="button"
                               key={number}
                               ref={active ? activeLessonRef : undefined}
+                              disabled={!available}
+                              title={
+                                available
+                                  ? undefined
+                                  : "Log in to watch this lecture"
+                              }
+                              aria-label={
+                                available
+                                  ? undefined
+                                  : `${title} (log in to watch)`
+                              }
                               onClick={() => {
+                                if (!available) return;
                                 onSelectLesson(number);
                                 onClose?.();
                               }}
-                              className={`learning-curriculum__lesson ${active ? "is-active" : ""}`}
+                              className={`learning-curriculum__lesson ${active ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
                             >
                               {completed ? (
                                 <span

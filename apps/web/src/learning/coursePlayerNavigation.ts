@@ -427,6 +427,43 @@ export function getCoursePlayerSession(
   );
 }
 
+/**
+ * Re-key a legacy UUID session after its canonical public slug is known.
+ * This prevents one course from appearing twice in the learning-space list.
+ */
+export function migrateCoursePlayerSessionKey(
+  previousCourseId: string,
+  nextCourseId: string,
+  storage: CoursePlayerStorage | null = getBrowserStorage(),
+): void {
+  if (previousCourseId === nextCourseId) return;
+
+  const state = readCoursePlayerSessionState(storage);
+  const previousSession = state.sessions.find(
+    (session) => session.courseId === previousCourseId,
+  );
+  if (!previousSession) return;
+
+  const migratedSession: CoursePlayerSession = {
+    ...previousSession,
+    courseId: nextCourseId,
+    path: getCoursePlayerPath(
+      nextCourseId,
+      previousSession.origin,
+      previousSession.lessonId,
+      previousSession.returnPath,
+    ),
+    updatedAt: Date.now(),
+  };
+  const remainingSessions = state.sessions.filter(
+    (session) =>
+      session.courseId !== previousCourseId &&
+      session.courseId !== nextCourseId,
+  );
+  remainingSessions.push(migratedSession);
+  persistCoursePlayerSessions(remainingSessions, storage);
+}
+
 export function upsertCoursePlayerSessionFromRoute(
   courseId: string,
   search: string,

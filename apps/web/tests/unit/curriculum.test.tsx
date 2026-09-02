@@ -266,6 +266,34 @@ describe("Curriculum", () => {
     expect(onSelectLesson).toHaveBeenCalledWith(11);
   }, 30_000);
 
+  it("keeps locked lectures visible but prevents anonymous selection", () => {
+    const onSelectLesson = vi.fn();
+
+    render(
+      <TestCurriculum
+        persistenceKey="curriculum-public-preview"
+        selectedLesson={1}
+        onSelectLesson={onSelectLesson}
+        onOpenCourseOverview={vi.fn()}
+        courseTitle="UI/UX Design Mastery"
+        courseThumbnail="/course-thumbnail.png"
+        isLessonAvailable={(lessonNumber) => lessonNumber <= 2}
+      />,
+    );
+
+    const lockedLesson = screen.getByRole("button", {
+      name: /The Design Mindset.*log in to watch/i,
+    });
+    expect(lockedLesson).toBeDisabled();
+    expect(lockedLesson).toHaveAttribute(
+      "title",
+      "Log in to watch this lecture",
+    );
+
+    fireEvent.click(lockedLesson);
+    expect(onSelectLesson).not.toHaveBeenCalled();
+  });
+
   it("offers state-aware curriculum actions from the context menu", async () => {
     render(
       <TestCurriculum

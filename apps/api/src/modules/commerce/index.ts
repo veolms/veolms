@@ -14,10 +14,22 @@ export {
   type CheckoutServiceOptions,
 } from "./checkout/checkout.service.ts";
 export { createCartService, type CartService } from "./cart/cart.service.ts";
-export { createPricingService, type PricingService } from "./pricing/pricing.service.ts";
-export { createCouponService, type CouponService } from "./coupons/coupon.service.ts";
-export { createBundleService, type BundleService } from "./bundles/bundle.service.ts";
-export { createOrderService, type OrderService } from "./orders/order.service.ts";
+export {
+  createPricingService,
+  type PricingService,
+} from "./pricing/pricing.service.ts";
+export {
+  createCouponService,
+  type CouponService,
+} from "./coupons/coupon.service.ts";
+export {
+  createBundleService,
+  type BundleService,
+} from "./bundles/bundle.service.ts";
+export {
+  createOrderService,
+  type OrderService,
+} from "./orders/order.service.ts";
 export {
   createPaymentService,
   type PaymentService,
@@ -27,7 +39,10 @@ export {
   createPaymentReconciliationService,
   type PaymentReconciliationService,
 } from "./payments/payment-reconciliation.service.ts";
-export { createRefundService, type RefundService } from "./refunds/refund.service.ts";
+export {
+  createRefundService,
+  type RefundService,
+} from "./refunds/refund.service.ts";
 export {
   createRefundRequestService,
   type RefundRequestService,
@@ -40,8 +55,18 @@ export {
   createManualPaymentService,
   type ManualPaymentService,
 } from "./payments/manual-payment.service.ts";
-export { createWebhookService, type WebhookService } from "./webhooks/webhook.service.ts";
-export { createInvoiceService, type InvoiceService } from "./invoices/invoice.service.ts";
+export {
+  createWebhookService,
+  type WebhookService,
+} from "./webhooks/webhook.service.ts";
+export {
+  createInvoiceService,
+  type InvoiceService,
+} from "./invoices/invoice.service.ts";
+export {
+  createEnrollmentAudienceService,
+  type EnrollmentAudienceService,
+} from "./enrollments/enrollment-audience.service.ts";
 
 export * from "./shared/commerce.types.ts";
 export { CommerceErrors } from "./shared/commerce.errors.ts";

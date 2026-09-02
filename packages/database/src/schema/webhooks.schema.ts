@@ -25,11 +25,16 @@ export interface CallbackInboxTable {
 
 export interface OutboxEventTable {
   id: string;
-  event_name: string;
-  aggregate_type: string;
-  aggregate_id: string;
+  event_type: string;
+  event_version: Generated<number>;
+  dedupe_key: string;
   payload: Json;
-  processed_at: Date | null;
-  error: string | null;
+  status: Generated<"pending" | "processing" | "processed" | "failed">;
+  attempt_count: Generated<number>;
+  available_at: Generated<Date>;
+  locked_until: Date | null;
+  last_error: string | null;
+  occurred_at: Generated<Date>;
   created_at: Generated<Date>;
+  processed_at: Date | null;
 }

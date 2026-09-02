@@ -1,18 +1,21 @@
 import { waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MFA_CHALLENGE_PATH, resolvePostAuthPath } from "../../src/auth/postAuthNavigation.ts";
+import {
+  MFA_CHALLENGE_PATH,
+  resolvePostAuthPath,
+} from "../../src/auth/postAuthNavigation.ts";
 import { APP_HOME_PATH } from "../../src/routing/routeAccess.ts";
 import AuthCallbackRoute from "../../src/routes/auth-callback.tsx";
+import { authStore } from "../../src/store/auth.store.ts";
 import { renderWithAppProviders } from "./test-utils.tsx";
 
 const navigate = vi.fn();
 const mutateAsync = vi.fn();
 
 vi.mock("react-router", async () => {
-  const actual = await vi.importActual<typeof import("react-router")>(
-    "react-router",
-  );
+  const actual =
+    await vi.importActual<typeof import("react-router")>("react-router");
   return {
     ...actual,
     useNavigate: () => navigate,
@@ -38,6 +41,7 @@ describe("oauth callback", () => {
   beforeEach(() => {
     navigate.mockReset();
     mutateAsync.mockReset();
+    authStore.clearAuth();
     sessionStorage.setItem("veolms_oauth_provider", "google");
   });
 
@@ -57,6 +61,7 @@ describe("oauth callback", () => {
         replace: true,
       });
     });
+    expect(authStore.getState().isAuthenticated).toBe(true);
     expect(navigate).not.toHaveBeenCalledWith(APP_HOME_PATH, {
       replace: true,
     });

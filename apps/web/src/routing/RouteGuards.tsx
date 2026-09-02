@@ -37,7 +37,7 @@ function shouldBlockAcademyRender(
 ): boolean {
   const path = normalizeAppPath(pathname);
 
-  if (access.isSessionReady && isGuestLandingPath(path)) {
+  if (isGuestLandingPath(path)) {
     return true;
   }
 
@@ -63,7 +63,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (access.isSessionReady && isGuestLandingPath(path)) {
+    if (isGuestLandingPath(path)) {
       navigate(APP_HOME_PATH, { replace: true });
       return;
     }
@@ -122,6 +122,13 @@ export function AuthRouteGuard() {
       return;
     }
 
+    if (access.needsMfaChallenge) {
+      if (path !== "/login") {
+        navigate(MFA_CHALLENGE_PATH, { replace: true });
+      }
+      return;
+    }
+
     if (!access.isSessionReady) {
       return;
     }
@@ -132,6 +139,7 @@ export function AuthRouteGuard() {
   }, [
     access.isAuthenticated,
     access.isSessionReady,
+    access.needsMfaChallenge,
     location.pathname,
     navigate,
     path,
@@ -155,6 +163,10 @@ export function AuthRouteGuard() {
   }
 
   if (access.isSessionReady) {
+    return <AppLoadingScreen variant="embedded" />;
+  }
+
+  if (access.needsMfaChallenge && path !== "/login") {
     return <AppLoadingScreen variant="embedded" />;
   }
 

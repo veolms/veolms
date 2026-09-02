@@ -1,7 +1,16 @@
-import { useMemo, useState } from "react";
+import type { NotificationCategory } from "@veolms/contracts";
+import { useDeferredValue, useMemo, useState } from "react";
+
 import {
-  initialNotificationsList,
-  initialRecentMentions,
+  useArchiveNotification,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotificationSummary,
+  useNotifications,
+} from "../services/notifications";
+import {
+  toNotificationItem,
+  toRecentMention,
   type NotificationDateGroup,
   type NotificationItem,
   type NotificationTabId,
@@ -10,10 +19,12 @@ import {
 
 export interface UseNotificationsFilterReturn {
   notifications: readonly NotificationItem[];
-  groupedNotifications: Record<NotificationDateGroup, readonly NotificationItem[]>;
+  groupedNotifications: Record<
+    NotificationDateGroup,
+    readonly NotificationItem[]
+  >;
   recentMentions: readonly RecentMentionItem[];
   totalFilteredCount: number;
-  totalUnreadCount: number;
   activeTab: NotificationTabId;
   setActiveTab: (tab: NotificationTabId) => void;
   searchQuery: string;
@@ -26,22 +37,98 @@ export interface UseNotificationsFilterReturn {
   setSortBy: (sort: string) => void;
   tabCounts: Record<NotificationTabId, number>;
   markAllAsRead: () => void;
-  toggleReadStatus: (id: string) => void;
-  deleteNotification: (id: string) => void;
+  markAsRead: (id: string) => void;
+  archiveNotification: (id: string) => void;
   resetFilters: () => void;
+  isLoading: boolean;
+  isError: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  loadMore: () => void;
+  refetch: () => void;
 }
 
 export function useNotificationsFilter(
   setNotice?: (message: string) => void,
 ): UseNotificationsFilterReturn {
-  const [notificationsList, setNotificationsList] = useState<
-    readonly NotificationItem[]
-  >(initialNotificationsList);
   const [activeTab, setActiveTab] = useState<NotificationTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("latest");
+  const deferredSearch = useDeferredValue(searchQuery.trim());
+
+  const filters = useMemo(() => {
+    const next: {
+      type?: string;
+      category?: NotificationCategory;
+      unread?: boolean;
+      search?: string;
+      limit: number;
+    } = { limit: 25 };
+    if (activeTab === "unread") next.unread = true;
+    if (activeTab === "mentions") next.type = "user.mentioned";
+    if (activeTab === "course-activity") next.category = "learning";
+    if (activeTab === "announcements") next.category = "system";
+    if (categoryFilter !== "all") {
+      next.category = categoryFilter as NotificationCategory;
+    }
+    if (statusFilter === "unread") next.unread = true;
+    if (statusFilter === "read") next.unread = false;
+    if (deferredSearch) next.search = deferredSearch;
+    return next;
+  }, [activeTab, categoryFilter, deferredSearch, statusFilter]);
+
+  const feed = useNotifications(filters);
+  const mentions = useNotifications({ type: "user.mentioned", limit: 3 });
+  const summary = useNotificationSummary();
+  const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
+  const archiveMutation = useArchiveNotification();
+
+  const notifications = useMemo(() => {
+    const items =
+      feed.data?.pages
+        .flatMap((page) => page.items)
+        .map((item) => toNotificationItem(item)) ?? [];
+    if (sortBy === "oldest") return [...items].reverse();
+    if (sortBy === "unread") {
+      return [...items].sort((left, right) =>
+        left.isRead === right.isRead ? 0 : left.isRead ? 1 : -1,
+      );
+    }
+    return items;
+  }, [feed.data, sortBy]);
+
+  const recentMentions = useMemo(
+    () =>
+      mentions.data?.pages
+        .flatMap((page) => page.items)
+        .slice(0, 3)
+        .map((item) => toRecentMention(toNotificationItem(item))) ?? [],
+    [mentions.data],
+  );
+
+  const groupedNotifications = useMemo(() => {
+    const groups: Record<NotificationDateGroup, NotificationItem[]> = {
+      today: [],
+      yesterday: [],
+      earlier: [],
+    };
+    for (const item of notifications) groups[item.dateGroup].push(item);
+    return groups;
+  }, [notifications]);
+
+  const tabCounts = useMemo<Record<NotificationTabId, number>>(
+    () => ({
+      all: summary.data?.totalCount ?? 0,
+      unread: summary.data?.unreadCount ?? 0,
+      mentions: summary.data?.mentionCount ?? 0,
+      "course-activity": summary.data?.learningCount ?? 0,
+      announcements: summary.data?.announcementCount ?? 0,
+    }),
+    [summary.data],
+  );
 
   const resetFilters = () => {
     setActiveTab("all");
@@ -51,146 +138,11 @@ export function useNotificationsFilter(
     setSortBy("latest");
   };
 
-  const markAllAsRead = () => {
-    setNotificationsList((prev) =>
-      prev.map((item) => ({ ...item, isRead: true })),
-    );
-    setNotice?.("All notifications marked as read.");
-  };
-
-  const toggleReadStatus = (id: string) => {
-    setNotificationsList((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, isRead: !item.isRead } : item,
-      ),
-    );
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotificationsList((prev) => prev.filter((item) => item.id !== id));
-    setNotice?.("Notification deleted.");
-  };
-
-  // Live Tab Counts
-  const tabCounts = useMemo(() => {
-    const counts: Record<NotificationTabId, number> = {
-      all: notificationsList.length,
-      unread: 0,
-      mentions: 0,
-      "course-activity": 0,
-      announcements: 0,
-    };
-
-    for (const item of notificationsList) {
-      if (!item.isRead) {
-        counts.unread += 1;
-      }
-      if (item.category === "mention") {
-        counts.mentions += 1;
-      }
-      if (
-        item.category === "course" ||
-        item.category === "assignment" ||
-        item.category === "reply" ||
-        item.category === "reminder" ||
-        item.category === "certificate"
-      ) {
-        counts["course-activity"] += 1;
-      }
-      if (item.category === "announcement" || item.category === "system") {
-        counts.announcements += 1;
-      }
-    }
-
-    return counts;
-  }, [notificationsList]);
-
-  // Filtered Notifications
-  const filteredNotifications = useMemo(() => {
-    let result = [...notificationsList];
-
-    // Filter by Tab
-    if (activeTab === "unread") {
-      result = result.filter((item) => !item.isRead);
-    } else if (activeTab === "mentions") {
-      result = result.filter((item) => item.category === "mention");
-    } else if (activeTab === "course-activity") {
-      result = result.filter(
-        (item) =>
-          item.category === "course" ||
-          item.category === "assignment" ||
-          item.category === "reply" ||
-          item.category === "reminder" ||
-          item.category === "certificate",
-      );
-    } else if (activeTab === "announcements") {
-      result = result.filter(
-        (item) =>
-          item.category === "announcement" || item.category === "system",
-      );
-    }
-
-    // Filter by Category select
-    if (categoryFilter !== "all") {
-      result = result.filter((item) => item.category === categoryFilter);
-    }
-
-    // Filter by Status select
-    if (statusFilter === "unread") {
-      result = result.filter((item) => !item.isRead);
-    } else if (statusFilter === "read") {
-      result = result.filter((item) => item.isRead);
-    }
-
-    // Filter by Search Query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.body.toLowerCase().includes(q) ||
-          (item.authorName && item.authorName.toLowerCase().includes(q)),
-      );
-    }
-
-    // Sorting
-    if (sortBy === "oldest") {
-      result.reverse();
-    } else if (sortBy === "unread") {
-      result.sort((a, b) => (a.isRead === b.isRead ? 0 : a.isRead ? 1 : -1));
-    }
-
-    return result;
-  }, [
-    notificationsList,
-    activeTab,
-    categoryFilter,
-    statusFilter,
-    searchQuery,
-    sortBy,
-  ]);
-
-  // Group by Date
-  const groupedNotifications = useMemo(() => {
-    const groups: Record<NotificationDateGroup, NotificationItem[]> = {
-      today: [],
-      yesterday: [],
-      earlier: [],
-    };
-
-    for (const item of filteredNotifications) {
-      groups[item.dateGroup].push(item);
-    }
-
-    return groups;
-  }, [filteredNotifications]);
-
   return {
-    notifications: filteredNotifications,
+    notifications,
     groupedNotifications,
-    recentMentions: initialRecentMentions,
-    totalFilteredCount: filteredNotifications.length,
-    totalUnreadCount: tabCounts.unread,
+    recentMentions,
+    totalFilteredCount: notifications.length,
     activeTab,
     setActiveTab,
     searchQuery,
@@ -202,9 +154,21 @@ export function useNotificationsFilter(
     sortBy,
     setSortBy,
     tabCounts,
-    markAllAsRead,
-    toggleReadStatus,
-    deleteNotification,
+    markAllAsRead: () =>
+      markAllReadMutation.mutate(undefined, {
+        onSuccess: () => setNotice?.("All notifications marked as read."),
+      }),
+    markAsRead: (id) => markReadMutation.mutate(id),
+    archiveNotification: (id) =>
+      archiveMutation.mutate(id, {
+        onSuccess: () => setNotice?.("Notification archived."),
+      }),
     resetFilters,
+    isLoading: feed.isPending,
+    isError: feed.isError,
+    hasNextPage: Boolean(feed.hasNextPage),
+    isFetchingNextPage: feed.isFetchingNextPage,
+    loadMore: () => void feed.fetchNextPage(),
+    refetch: () => void feed.refetch(),
   };
 }

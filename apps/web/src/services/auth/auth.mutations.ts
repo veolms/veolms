@@ -1,6 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   AuthMessageResponse,
+  CurrentUserResponse,
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
   LoginRequest,
@@ -19,6 +24,29 @@ import { clearStoredProfilePreferences } from "../../settings/profilePreferences
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 
+function persistAuthenticatedSession(
+  queryClient: QueryClient,
+  data: LoginResponse,
+) {
+  const currentUser: NonNullable<CurrentUserResponse> = {
+    id: data.user.id,
+    username: data.user.username,
+    displayName: data.user.displayName,
+    email: data.user.email,
+    phoneNo: data.user.phoneNo,
+    roles: data.user.roles,
+    permissions: data.user.permissions,
+    menus: data.user.menus,
+    mfaVerified: !data.mfaRequired,
+    totpEnabled: data.totpEnabled,
+    passkeyEnabled: data.passkeyEnabled,
+    mfaMandatory: data.mfaMandatory,
+  };
+
+  authStore.setUser(data.user);
+  queryClient.setQueryData(authKeys.me(), currentUser);
+}
+
 export function useSendOtp() {
   return useMutation<AuthMessageResponse, ApiError, OtpSendRequest>({
     mutationFn: (payload) => authService.sendOtp(payload),
@@ -31,10 +59,7 @@ export function useLogin() {
   return useMutation<LoginResponse, ApiError, LoginRequest>({
     mutationFn: (payload) => authService.login(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }
@@ -45,10 +70,7 @@ export function useRegister() {
   return useMutation<LoginResponse, ApiError, RegisterRequest>({
     mutationFn: (payload) => authService.register(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }
@@ -65,10 +87,7 @@ export function useOauthLogin() {
   return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
     mutationFn: (payload) => authService.oauthLogin(payload),
     onSuccess: (data) => {
-      if (!data.mfaRequired) {
-        authStore.setUser(data.user);
-        queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      }
+      persistAuthenticatedSession(queryClient, data);
     },
   });
 }
