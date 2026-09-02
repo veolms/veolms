@@ -21,12 +21,17 @@ export const getCourseBrandColor = (courseSlug: string | undefined) =>
 const courseTitlesBySlug: Record<string, string | undefined> = {
   "ui-ux-design-mastery": "UI/UX Design Mastery",
   "backend-nodejs": "Complete Backend with Node.js",
+  "complete-backend-development-with-nodejs":
+    "Complete Backend Development with Node.js",
   "typescript-course": "The Ultimate TypeScript Course",
+  "ultimate-typescript-course": "The Ultimate TypeScript Course",
   "javascript-course": "The Complete JavaScript Course",
   "figma-ui-essentials": "Figma UI Essentials",
   "mongodb-database-design": "MongoDB & Database Design",
   "aws-cloud-practitioner": "AWS Cloud Practitioner Essentials",
   "building-veolms": "Building VeoLMS: Idea to Production",
+  "building-procodrr-idea-to-production":
+    "Building ProCodrr: Idea to Production",
   "illustrator-designers": "Adobe Illustrator for UI Designers",
   "advanced-react": "Advanced React Development",
   "data-visualization-d3": "Data Visualization with D3.js",
@@ -41,6 +46,8 @@ const courseThumbnailsBySlug: Record<string, string | undefined> = {
   "typescript-course": typescriptCourseThumbnail,
   "javascript-course": javascriptCourseThumbnail,
   "backend-nodejs": nodeCourseThumbnail,
+  "complete-backend-development-with-nodejs": nodeCourseThumbnail,
+  "ultimate-typescript-course": typescriptCourseThumbnail,
   "figma-ui-essentials": figmaCourseThumbnail,
   "mongodb-database-design": mongodbCourseThumbnail,
   "aws-cloud-practitioner": awsCourseThumbnail,

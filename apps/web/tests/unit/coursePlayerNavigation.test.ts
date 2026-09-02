@@ -17,6 +17,7 @@ import {
   getOpenCoursePlayerSessions,
   getPendingCourseCommentDraft,
   getStoredCourseLessonId,
+  migrateCoursePlayerSessionKey,
   postPendingCourseCommentDraft,
   upsertCoursePlayerSessionFromRoute,
 } from "../../src/learning/coursePlayerNavigation";
@@ -165,6 +166,42 @@ describe("course player navigation", () => {
       origin: "wishlist",
       returnPath: "/wishlist",
     });
+  });
+
+  it("migrates a legacy UUID session to its canonical slug without duplicating it", () => {
+    const legacyCourseId = "00000000-0000-4000-8000-000000000001";
+    const courseSlug = "complete-backend-development-with-nodejs";
+    localStorage.setItem(
+      COURSE_PLAYER_SESSIONS_STORAGE_KEY,
+      JSON.stringify([
+        {
+          courseId: legacyCourseId,
+          lessonId: 1,
+          origin: "courses",
+          path: getCoursePlayerPath(legacyCourseId, "courses", 1),
+          returnPath: "/courses",
+          updatedAt: 10,
+        },
+        {
+          courseId: courseSlug,
+          lessonId: 2,
+          origin: "courses",
+          path: getCoursePlayerPath(courseSlug, "courses", 2),
+          returnPath: "/courses",
+          updatedAt: 20,
+        },
+      ]),
+    );
+
+    migrateCoursePlayerSessionKey(legacyCourseId, courseSlug);
+
+    expect(getOpenCoursePlayerSessions()).toHaveLength(1);
+    expect(getCoursePlayerSession(courseSlug)).toMatchObject({
+      courseId: courseSlug,
+      lessonId: 1,
+      path: getCoursePlayerPath(courseSlug, "courses", 1),
+    });
+    expect(getCoursePlayerSession(legacyCourseId)).toBeNull();
   });
 
   it("activates an open session in place without a global active singleton", () => {

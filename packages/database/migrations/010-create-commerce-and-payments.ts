@@ -208,6 +208,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       "order_items_type_valid",
       sql`item_type in ('course', 'bundle')`,
     )
+    .addCheckConstraint(
+      "order_items_reference_valid",
+      sql`(item_type = 'course' AND course_id IS NOT NULL AND bundle_id IS NULL) OR (item_type = 'bundle' AND bundle_id IS NOT NULL AND course_id IS NULL)`,
+    )
     .addCheckConstraint("order_items_unit_price_non_negative", sql`unit_price >= 0`)
     .addCheckConstraint("order_items_discount_non_negative", sql`discount_amount >= 0`)
     .addCheckConstraint("order_items_tax_non_negative", sql`tax_amount >= 0`)
