@@ -32,7 +32,7 @@
     "fleet:infra": "pnpm --filter @veolms/fleet-manager infra",
     "fleet:destroy": "pnpm --filter @veolms/fleet-manager destroy",
     "fleet:build-ami": "pnpm --filter @veolms/fleet-provider-aws build:ami",
-    "fleet:bundle:upload": "pnpm --filter @veolms/fleet-manager bundle:upload",
+    "fleet:build:upload": "pnpm --filter @veolms/fleet-manager build:upload",
     "fleet:queue:trigger": "pnpm --filter @veolms/fleet-manager queue:trigger",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
