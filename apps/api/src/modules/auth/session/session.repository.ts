@@ -130,6 +130,7 @@ export async function rotateSession(
   database: Executor,
   sessionId: string,
   input: {
+    previousTokenHash: string;
     tokenHash: string;
     ipAddress: string | null;
     userAgent: string | null;
@@ -137,9 +138,9 @@ export async function rotateSession(
     expiresAt: Date;
     now?: Date;
   },
-): Promise<void> {
+): Promise<boolean> {
   const now = input.now ?? new Date();
-  await database
+  const result = await database
     .updateTable("sessions")
     .set({
       token_hash: input.tokenHash,
@@ -150,7 +151,12 @@ export async function rotateSession(
       last_used_at: now,
     })
     .where("id", "=", sessionId)
-    .execute();
+    .where("token_hash", "=", input.previousTokenHash)
+    .where("revoked_at", "is", null)
+    .where("expires_at", ">", now)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows) > 0;
 }
 
 export async function purgeOldSessions(

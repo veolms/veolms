@@ -69,22 +69,30 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
     // Check if the client supplied an active, unexpired session belonging to this same user
     if (request.existingSessionToken) {
+      const existingTokenHash = hashToken(request.existingSessionToken);
       const existingSession = await sessionRepository.findActiveSession(
         database,
-        hashToken(request.existingSessionToken),
+        existingTokenHash,
       );
 
       if (existingSession && existingSession.user_id === user.id) {
-        // Reuse the existing session record and rotate its token
-        await sessionRepository.rotateSession(database, existingSession.id, {
-          tokenHash,
-          ipAddress: request.ip,
-          userAgent: request.userAgent,
-          mfaVerified,
-          expiresAt,
-        });
+        // Reuse the existing session record and rotate its token with optimistic concurrency check
+        const rotated = await sessionRepository.rotateSession(
+          database,
+          existingSession.id,
+          {
+            previousTokenHash: existingTokenHash,
+            tokenHash,
+            ipAddress: request.ip,
+            userAgent: request.userAgent,
+            mfaVerified,
+            expiresAt,
+          },
+        );
 
-        return { token, sessionId: existingSession.id, mfa };
+        if (rotated) {
+          return { token, sessionId: existingSession.id, mfa };
+        }
       }
     }
 

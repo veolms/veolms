@@ -42,7 +42,9 @@ const serverConfigSchema = z.object({
       if (trimmed === "true") return true;
       if (trimmed === "false") return false;
       const num = Number(trimmed);
-      if (!Number.isNaN(num)) return num;
+      if (Number.isFinite(num) && Number.isInteger(num) && num > 0) {
+        return num;
+      }
       if (trimmed.includes(",")) {
         return trimmed.split(",").map((s) => s.trim());
       }
