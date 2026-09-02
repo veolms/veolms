@@ -94,7 +94,11 @@ export function createAuthService({
     identifier: string;
     identifierType: IdentifierType;
     code: string;
-    request: { ip: string; userAgent: string | null };
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    };
   }) {
     const user = await findUserByIdentifier(
       input.identifier,
@@ -139,7 +143,11 @@ export function createAuthService({
     phoneCode?: string | undefined;
     username: string;
     displayName: string;
-    request: { ip: string; userAgent: string | null };
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    };
   }) {
     const hasBothChannels = Boolean(input.email && input.phoneNo);
     const existingUsers = hasBothChannels
