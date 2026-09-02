@@ -14,7 +14,13 @@ export type NotificationTemplateKey =
   | "auth.passkey_added"
   | "auth.session_revoked"
   | "user.mentioned"
-  | "certificate.generated";
+  | "certificate.generated"
+  | "discussion.reply_created"
+  | "discussion.answer_accepted"
+  | "moderation.content_moderated"
+  | "moderation.user_suspended"
+  | "moderation.user_unsuspended"
+  | "moderation.report_resolved";
 
 export type NotificationTemplateData = Record<
   string,
