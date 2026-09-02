@@ -26,6 +26,7 @@ export function useControlsVisibility({
   const pointerFocusPendingRef = useRef(false);
   const initializedPointerModeRef = useRef(false);
   const previousPausedRef = useRef(true);
+  const deferredTouchPointersRef = useRef(new Set<number>());
   const {
     controlsLocked,
     controlsVisible,
@@ -55,6 +56,7 @@ export function useControlsVisibility({
     const root = rootRef.current;
     if (!root) return undefined;
     const pointerRoot = root.closest<HTMLElement>(".video-shell") ?? root;
+    const deferredTouchPointers = deferredTouchPointersRef.current;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -141,6 +143,7 @@ export function useControlsVisibility({
 
     const handlePointerDown = (event: PointerEvent) => {
       if (delaysControlsReveal(event.target)) {
+        deferredTouchPointers.delete(event.pointerId);
         inputModeRef.current = "pointer";
         pointerModeRef.current = isDesktopMousePointer(event)
           ? "mouse"
@@ -148,6 +151,19 @@ export function useControlsVisibility({
         pointerInsideRef.current = false;
         clearTimer();
         controller.setControlsVisible(false);
+      } else if (
+        event.pointerType === "touch" &&
+        !controller.getSnapshot().ui.controlsVisible
+      ) {
+        inputModeRef.current = "pointer";
+        pointerModeRef.current = "touch";
+        pointerInsideRef.current = false;
+        clearTimer();
+        if (controlsTemporarilySuppressed()) {
+          controller.setControlsVisible(false);
+        } else {
+          deferredTouchPointers.add(event.pointerId);
+        }
       } else {
         revealFromPointer(event);
       }
@@ -155,6 +171,16 @@ export function useControlsVisibility({
       queueMicrotask(() => {
         pointerFocusPendingRef.current = false;
       });
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!deferredTouchPointers.delete(event.pointerId)) return;
+      if (deferredTouchPointers.size > 0) return;
+      revealFromPointer(event);
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      deferredTouchPointers.delete(event.pointerId);
     };
 
     const handlePointerEnter = (event: PointerEvent) => {
@@ -237,6 +263,12 @@ export function useControlsVisibility({
     pointerRoot.addEventListener("pointerdown", handlePointerDown, {
       passive: true,
     });
+    pointerRoot.addEventListener("pointerup", handlePointerUp, {
+      passive: true,
+    });
+    pointerRoot.addEventListener("pointercancel", handlePointerCancel, {
+      passive: true,
+    });
     pointerRoot.addEventListener("pointerenter", handlePointerEnter, {
       passive: true,
     });
@@ -250,8 +282,11 @@ export function useControlsVisibility({
 
     return () => {
       clearTimer();
+      deferredTouchPointers.clear();
       pointerRoot.removeEventListener("pointermove", handlePointerMove);
       pointerRoot.removeEventListener("pointerdown", handlePointerDown);
+      pointerRoot.removeEventListener("pointerup", handlePointerUp);
+      pointerRoot.removeEventListener("pointercancel", handlePointerCancel);
       pointerRoot.removeEventListener("pointerenter", handlePointerEnter);
       pointerRoot.removeEventListener("pointerleave", handlePointerLeave);
       root.removeEventListener("focusin", handleFocusIn);

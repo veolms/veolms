@@ -366,7 +366,12 @@ export function PopoverMenu({
               aria-hidden="true"
               data-video-player-mobile-sheet-backdrop=""
               className={`${isContainedMobileSheet ? "absolute" : "fixed"} pointer-events-auto inset-0 z-170 bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none`}
-              onPointerDown={closeAndRestoreFocus}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                closeAndRestoreFocus();
+              }}
             />
             {panel}
           </>,

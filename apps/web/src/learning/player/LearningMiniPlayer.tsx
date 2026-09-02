@@ -208,13 +208,14 @@ export function LearningMiniPlayer({
   return (
     <aside
       ref={miniPlayerRef}
-      className="fixed right-3 z-130 w-[82vw] min-w-[50vw] touch-none overflow-hidden rounded-xl bg-black shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[mini-player-preparing]:pointer-events-none data-[mini-player-preparing]:opacity-0 sm:hidden motion-reduce:transition-none"
+      className="fixed right-3 z-130 m-0 w-[min(82vw,22rem)] min-w-50 max-w-[calc(100vw-1.5rem)] touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[mini-player-preparing]:pointer-events-none data-[mini-player-preparing]:opacity-0 motion-reduce:transition-none"
       style={{
         bottom: "calc(70px + env(safe-area-inset-bottom))",
         ...miniPlayerGestures.style,
       }}
       aria-label={`Mini player for ${session.lessonTitle}`}
       aria-describedby="learning-mini-player-gesture-help"
+      popover="manual"
       data-learning-mini-player=""
       data-mini-player-mode={miniPlayerGestures.mode}
       data-mini-player-preparing={preparing || undefined}

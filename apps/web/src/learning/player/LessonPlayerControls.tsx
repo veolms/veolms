@@ -117,7 +117,7 @@ function CourseLessonsButton({
       data-course-lessons-open={sidePanel && open ? "true" : undefined}
       data-player-control=""
       data-player-control-hit-area="course-lessons"
-      className={`${MOBILE_TEXT_PILL_HIT_CLASS} relative inline-flex h-9 items-center gap-1.5 px-3 !text-xs leading-4 font-semibold tracking-[0.01em] before:inset-x-0.5 before:inset-y-1.5 ${
+      className={`${MOBILE_TEXT_PILL_HIT_CLASS} relative inline-flex h-11 items-center gap-1.5 px-4 !text-xs leading-4 font-semibold tracking-[0.01em] before:inset-x-0.5 before:inset-y-1.5 ${
         sidePanel && open
           ? "before:!bg-[color-mix(in_srgb,var(--video-player-control-text)_18%,var(--video-player-control-surface))] hover:before:!bg-[color-mix(in_srgb,var(--video-player-control-text)_24%,var(--video-player-control-surface))] active:before:!bg-[color-mix(in_srgb,var(--video-player-control-text)_28%,var(--video-player-control-surface))]"
           : ""
@@ -216,12 +216,12 @@ function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
   if (mobile) {
     return (
       <div
-        className="inline-flex h-10 items-center"
+        className="inline-flex h-11 items-center"
         data-player-control-hit-area="time"
       >
         <TimeDisplay
           interactive
-          className={`${MOBILE_TEXT_PILL_HIT_CLASS} !relative !inline-flex !h-10 !items-center !px-3 !py-0 !text-xs !leading-4 before:inset-x-0.5 before:inset-y-2`}
+          className={`${MOBILE_TEXT_PILL_HIT_CLASS} !relative !inline-flex !h-11 !items-center !px-4 !py-0 !text-xs !leading-4 before:inset-x-0.5 before:inset-y-1.5`}
         />
       </div>
     );
@@ -262,18 +262,14 @@ function AmbientSettingsItem({
 }
 
 function AmbientModeIcon({ enabled }: { enabled: boolean }) {
-  const AmbientIcon = usePlayerTheme().icons.ambient;
   return (
-    <AmbientIcon
-      size={20}
-      active={enabled}
-      className="overflow-visible"
-      data-ambient-mode-icon=""
-      style={{
-        filter:
-          "drop-shadow(0 0 2px var(--video-player-accent)) drop-shadow(0 2px 5px rgb(0 0 0 / 0.28))",
-      }}
+    <span
       aria-hidden="true"
+      data-ambient-mode-icon=""
+      data-ambient-mode-icon-state={enabled ? "on" : "off"}
+      className={`block h-3 w-4.5 rounded-[2px] border border-current text-white transition-[border-color,box-shadow,color] duration-200 ease-out ${
+        enabled ? "shadow-[0_0_10.5px_rgba(255,255,255,0.72)]" : "shadow-none"
+      }`}
     />
   );
 }
@@ -340,6 +336,9 @@ export function LessonPlayerControls({
     );
   const visible = !controlsSuppressed && (controlsVisible || settingsOpen);
   const mobileFullscreen = mobileInteraction && fullscreen;
+  const persistentProgressVisible =
+    !controlsSuppressed && mobileInteraction && !fullscreen;
+  const timelineDisplayed = visible || persistentProgressVisible;
   const landscapeOrientation = useSyncExternalStore(
     subscribeToLandscapeOrientation,
     getLandscapeOrientationSnapshot,
@@ -388,12 +387,12 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 z-70 max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-13 ${visible ? "visible opacity-100" : "invisible opacity-0 [&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-0 !right-auto !bottom-10 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !px-3 sm:!left-0 sm:!right-auto sm:!bottom-10 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-10 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-10 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-70 max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-13 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-10 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-10 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-10 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-10 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
       <Timeline
-        className={`pointer-events-none [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-9 max-sm:[&_[role=slider]]:translate-y-full max-sm:[&_[data-timeline-visual]]:-translate-y-full max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-9 [&_[role=slider]]:!translate-y-full [&_[data-timeline-visual]]:!-translate-y-full [&_[data-video-player-preview]]:!bottom-3.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!bottom-0 [&_[data-timeline-track]]:!top-auto [&_[data-timeline-track]]:!translate-y-0 [&_[data-timeline-track]]:!rounded-none" : ""}`}
+        className={`pointer-events-none [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-9 max-sm:[&_[role=slider]]:translate-y-[calc(100%-10px)] max-sm:[&_[data-timeline-visual]]:translate-y-[calc(-100%+10px)] max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-9 [&_[role=slider]]:!translate-y-[calc(100%-10px)] [&_[data-timeline-visual]]:!translate-y-[calc(-100%+10px)] [&_[data-video-player-preview]]:!bottom-3.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!bottom-0 [&_[data-timeline-track]]:!top-auto [&_[data-timeline-track]]:!translate-y-0 [&_[data-timeline-track]]:!rounded-none" : ""}`}
       />
     </div>
   );
@@ -402,7 +401,7 @@ export function LessonPlayerControls({
     <div
       data-mobile-player-corner="time"
       data-preview-obscured={previewTime !== null ? "true" : "false"}
-      className={`pointer-events-auto absolute bottom-2.5 left-2 flex h-10 items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 sm:h-auto ${mobileInteraction ? `sm:!right-auto sm:!h-10 ${mobileFullscreen ? "!bottom-15 !left-3 sm:!bottom-15 sm:!left-3" : "sm:!left-2"}` : ""} ${
+      className={`pointer-events-auto absolute bottom-2.5 left-2 flex h-11 items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-58 sm:h-auto ${mobileInteraction ? `sm:!right-auto sm:!h-11 ${mobileFullscreen ? "!bottom-15 !left-3 sm:!bottom-15 sm:!left-3" : "sm:!left-2"}` : ""} ${
         fullscreenCoursePanelVisible ? "!static sm:!static" : ""
       } ${
         previewTime !== null
@@ -474,12 +473,12 @@ export function LessonPlayerControls({
           />
         ) : null}
         <div
-          className="inline-flex size-10 items-center justify-center"
+          className="inline-flex size-11 items-center justify-center"
           data-player-control-hit-area="fullscreen"
         >
           <FullscreenButton
-            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_ICON_PILL_CLASS} group/fullscreen !size-10 !bg-transparent !px-0`}
-            iconContainerClassName="pointer-events-none relative z-10 grid size-7 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow) backdrop-blur-sm transition-colors duration-150 ease-out group-hover/fullscreen:bg-(--video-player-control-surface-hover) group-active/fullscreen:bg-(--video-player-control-surface-active) group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)"
+            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} group/fullscreen !size-11 !rounded-full !bg-transparent !p-0 !shadow-none drop-shadow-none hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent`}
+            iconContainerClassName="pointer-events-none relative z-10 grid size-8 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow) backdrop-blur-sm transition-colors duration-150 ease-out group-hover/fullscreen:bg-(--video-player-control-surface-hover) group-active/fullscreen:bg-(--video-player-control-surface-active) group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)"
             iconSize={20}
           />
         </div>
@@ -487,10 +486,31 @@ export function LessonPlayerControls({
     </div>
   );
 
+  const bottomCornerControlsLayer = (
+    <div
+      data-player-bottom-corner-controls-layer=""
+      className={`pointer-events-none absolute z-180 text-white transition-opacity duration-200 motion-reduce:transition-none ${
+        mobileFullscreen
+          ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+          : "inset-0"
+      } ${
+        visible
+          ? "visible opacity-100"
+          : "invisible opacity-0 [&_*]:!pointer-events-none"
+      }`}
+      style={getPlayerThemeStyle(playerTheme)}
+      aria-hidden={visible ? undefined : true}
+      inert={visible ? undefined : true}
+    >
+      {mobileTimeCorner}
+      {mobileFullscreenCorner}
+    </div>
+  );
+
   const fullscreenBottomControlsLayer = (
     <div
       data-player-fullscreen-bottom-controls=""
-      className={`pointer-events-none absolute bottom-15 left-0 z-180 flex h-10 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-opacity duration-200 motion-reduce:transition-none ${
+      className={`pointer-events-none absolute bottom-15 left-(--learning-fullscreen-video-offset-x) z-180 flex h-11 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-opacity duration-200 motion-reduce:transition-none ${
         visible
           ? "visible opacity-100"
           : "invisible opacity-0 [&_*]:!pointer-events-none"
@@ -522,15 +542,18 @@ export function LessonPlayerControls({
       {timelineHost && fullscreenCoursePanelVisible
         ? createPortal(fullscreenBottomControlsLayer, timelineHost)
         : null}
+      {timelineHost && !fullscreenCoursePanelVisible
+        ? createPortal(bottomCornerControlsLayer, timelineHost)
+        : null}
       {timelineHost && mobileFullscreen
         ? createPortal(
             <div
               aria-hidden="true"
               data-mobile-player-fullscreen-vignette-layer=""
-              className={`pointer-events-none absolute inset-y-0 left-0 z-20 ${
+              className={`pointer-events-none absolute inset-y-0 z-20 ${
                 fullscreenCoursePanelVisible
-                  ? "w-(--learning-fullscreen-video-width)"
-                  : "right-0"
+                  ? "left-(--learning-fullscreen-video-offset-x) w-(--learning-fullscreen-video-width)"
+                  : "left-0 right-0"
               }`}
               style={getPlayerThemeStyle(playerTheme)}
             >
@@ -571,7 +594,7 @@ export function LessonPlayerControls({
 
           {onMinimize ? (
             <div
-              className={`pointer-events-auto absolute left-2 top-2 sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
+              className={`pointer-events-auto absolute left-2 top-2 sm:hidden ${mobileInteraction ? "sm:!block" : ""} ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
             >
               <PlayerIconButton
                 label={
@@ -588,7 +611,7 @@ export function LessonPlayerControls({
 
           <PlayerControlSurface
             cluster="player-actions"
-            className={`pointer-events-auto absolute right-2 top-2 flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:bottom-2.5 sm:top-auto sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!top-2 sm:!bottom-auto sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${fullscreenCoursePanelVisible ? "!right-3 sm:!right-3" : ""}`}
+            className={`pointer-events-auto absolute right-2 top-2 flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:bottom-2.5 sm:top-auto sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!top-2 sm:!bottom-auto sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${mobileFullscreen ? "!left-auto !right-3 sm:!left-auto sm:!right-3" : ""}`}
           >
             <ZoomLevelIndicator className="mr-0.5" />
             <AutoplayToggle
@@ -611,7 +634,7 @@ export function LessonPlayerControls({
               mobileSheetPanelClassName={
                 mobileLandscapeFullscreen
                   ? fullscreenCoursePanelVisible
-                    ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
+                    ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
                     : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
                   : undefined
               }
@@ -636,8 +659,12 @@ export function LessonPlayerControls({
             </span>
           </PlayerControlSurface>
 
-          {!fullscreenCoursePanelVisible ? mobileTimeCorner : null}
-          {!fullscreenCoursePanelVisible ? mobileFullscreenCorner : null}
+          {!timelineHost && !fullscreenCoursePanelVisible
+            ? mobileTimeCorner
+            : null}
+          {!timelineHost && !fullscreenCoursePanelVisible
+            ? mobileFullscreenCorner
+            : null}
         </div>
       </div>
     </>

@@ -8,6 +8,7 @@ import {
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
+import { classNames } from "../utils/classNames";
 import { MOBILE_SEEK_IDLE_DELAY_MS } from "./feedbackTiming";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
@@ -20,6 +21,20 @@ type SeekDirection = -1 | 1;
 interface MobileSeekSequence {
   direction: SeekDirection;
   totalSeconds: number;
+}
+
+interface PausedScrubGesture {
+  duration: number;
+  startTime: number;
+  startX: number;
+  width: number;
+}
+
+interface PointerPressGesture {
+  moved: boolean;
+  pointerId: number;
+  x: number;
+  y: number;
 }
 
 export interface PlayerGestureSurfaceProps {
@@ -55,7 +70,9 @@ export function PlayerGestureSurface({
   const pressDirectionRef = useRef<SeekDirection>(1);
   const boostActiveRef = useRef(false);
   const priorRateRef = useRef(1);
-  const wasPausedRef = useRef(false);
+  const pausedScrubRef = useRef<PausedScrubGesture | null>(null);
+  const pointerPressRef = useRef<PointerPressGesture | null>(null);
+  const pressGeometryRef = useRef({ startX: 0, width: 0 });
   const controlsVisibleBeforePressRef = useRef(true);
   const lastTouchCompletionAtRef = useRef(Number.NEGATIVE_INFINITY);
   const touchPointerDownAtRef = useRef(Number.NEGATIVE_INFINITY);
@@ -125,31 +142,86 @@ export function PlayerGestureSurface({
     ],
   );
 
+  const beginPausedScrub = useCallback(() => {
+    const { media } = controller.getSnapshot();
+    const { startX, width } = pressGeometryRef.current;
+    if (
+      !media.paused ||
+      !Number.isFinite(media.duration) ||
+      media.duration <= 0 ||
+      width <= 0
+    ) {
+      return false;
+    }
+
+    pausedScrubRef.current = {
+      duration: media.duration,
+      startTime: media.currentTime,
+      startX,
+      width,
+    };
+    controller.setSettingsView("closed");
+    controller.setPreviewTime(media.currentTime);
+    controller.setScrubbing(true);
+    return true;
+  }, [controller]);
+
+  const updatePausedScrub = useCallback(
+    (clientX: number) => {
+      const gesture = pausedScrubRef.current;
+      if (!gesture) return false;
+      const deltaTime =
+        ((clientX - gesture.startX) / gesture.width) * gesture.duration;
+      const nextTime = Math.min(
+        gesture.duration,
+        Math.max(0, gesture.startTime + deltaTime),
+      );
+      controller.setPreviewTime(nextTime);
+      controller.seekTo(nextTime);
+      return true;
+    },
+    [controller],
+  );
+
+  const endPausedScrub = useCallback(() => {
+    clearLongPressTimer();
+    if (pausedScrubRef.current === null) return false;
+    pausedScrubRef.current = null;
+    controller.setScrubbing(false);
+    controller.setPreviewTime(null);
+    controller.setControlsVisible(true);
+    return true;
+  }, [clearLongPressTimer, controller]);
+
   const beginBoost = useCallback(() => {
     if (boostActiveRef.current) return;
-    boostActiveRef.current = true;
     const snapshot = controller.getSnapshot();
     const media = snapshot.media;
+    if (media.paused) return;
+    boostActiveRef.current = true;
     priorRateRef.current = media.playbackRate;
-    wasPausedRef.current = media.paused;
     controller.setSettingsView("closed");
     controller.setTemporarySpeedBoost(true);
     controller.setControlsVisible(false);
     controller.setPlaybackRate(2);
-    if (media.paused) void controller.play().catch(() => undefined);
     controller.showHud("2× speed", { variant: "temporary-speed" });
   }, [controller]);
+
+  const beginLongPress = useCallback(() => {
+    if (controller.getSnapshot().media.paused) {
+      beginPausedScrub();
+      return;
+    }
+    beginBoost();
+  }, [beginBoost, beginPausedScrub, controller]);
 
   const endBoost = useCallback(() => {
     clearLongPressTimer();
     if (!boostActiveRef.current) return false;
     boostActiveRef.current = false;
-    const shouldRestoreControls =
-      wasPausedRef.current || controlsVisibleBeforePressRef.current;
     controller.setPlaybackRate(priorRateRef.current);
-    if (wasPausedRef.current) controller.pause();
     controller.setTemporarySpeedBoost(false);
-    controller.setControlsVisible(shouldRestoreControls);
+    controller.setControlsVisible(controlsVisibleBeforePressRef.current);
     controller.clearHud();
     return true;
   }, [clearLongPressTimer, controller]);
@@ -160,9 +232,10 @@ export function PlayerGestureSurface({
       clearMobileSeekTimer();
       lastTapRef.current = null;
       mobileSeekSequenceRef.current = null;
+      endPausedScrub();
       endBoost();
     },
-    [clearMobileSeekTimer, clearSingleTapTimer, endBoost],
+    [clearMobileSeekTimer, clearSingleTapTimer, endBoost, endPausedScrub],
   );
 
   const cancelCompetingGestures = useCallback(() => {
@@ -171,7 +244,9 @@ export function PlayerGestureSurface({
     clearMobileSeekTimer();
     lastTapRef.current = null;
     mobileSeekSequenceRef.current = null;
+    pointerPressRef.current = null;
     touchGestureRef.current = null;
+    endPausedScrub();
     endBoost();
     controller.clearHud();
   }, [
@@ -180,6 +255,7 @@ export function PlayerGestureSurface({
     clearSingleTapTimer,
     controller,
     endBoost,
+    endPausedScrub,
   ]);
 
   useEffect(() => {
@@ -224,6 +300,12 @@ export function PlayerGestureSurface({
     }
     if (pointerType === "touch") {
       lastTouchCompletionAtRef.current = timestamp;
+    }
+
+    if (endPausedScrub()) {
+      clearSingleTapTimer();
+      lastTapRef.current = null;
+      return;
     }
 
     if (endBoost()) {
@@ -273,8 +355,23 @@ export function PlayerGestureSurface({
     scheduleSingleTap(direction, timestamp, pointerType);
   };
 
+  const capturePressGeometry = (
+    element: HTMLButtonElement,
+    clientX: number,
+  ) => {
+    const bounds = element.getBoundingClientRect();
+    pressGeometryRef.current = { startX: clientX, width: bounds.width };
+  };
+
   const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    pointerPressRef.current = {
+      moved: false,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    capturePressGeometry(event.currentTarget, event.clientX);
     pressDirectionRef.current = getSeekDirection(
       event.currentTarget,
       event.clientX,
@@ -283,12 +380,38 @@ export function PlayerGestureSurface({
       touchPointerDownAtRef.current = Date.now();
     }
     clearLongPressTimer();
-    longPressTimerRef.current = setTimeout(beginBoost, LONG_PRESS_DELAY_MS);
+    longPressTimerRef.current = setTimeout(beginLongPress, LONG_PRESS_DELAY_MS);
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const gesture = pointerPressRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (pausedScrubRef.current !== null) {
+      gesture.moved = true;
+      updatePausedScrub(event.clientX);
+      return;
+    }
+    if (
+      Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) <=
+      TOUCH_MOVE_TOLERANCE_PX
+    ) {
+      return;
+    }
+    gesture.moved = true;
+    endBoost();
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    const gesture = pointerPressRef.current;
+    const pausedScrubActive = pausedScrubRef.current !== null;
+    if (pausedScrubActive) updatePausedScrub(event.clientX);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    pointerPressRef.current = null;
+    if (gesture?.moved && !pausedScrubActive) {
+      endBoost();
+      return;
     }
     completePress(pressDirectionRef.current, event.pointerType);
   };
@@ -303,6 +426,7 @@ export function PlayerGestureSurface({
       captureControlsVisibility();
     }
     const direction = getSeekDirection(event.currentTarget, touch.clientX);
+    capturePressGeometry(event.currentTarget, touch.clientX);
     pressDirectionRef.current = direction;
     touchGestureRef.current = {
       direction,
@@ -312,7 +436,7 @@ export function PlayerGestureSurface({
       y: touch.clientY,
     };
     clearLongPressTimer();
-    longPressTimerRef.current = setTimeout(beginBoost, LONG_PRESS_DELAY_MS);
+    longPressTimerRef.current = setTimeout(beginLongPress, LONG_PRESS_DELAY_MS);
   };
 
   const handleTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
@@ -322,6 +446,13 @@ export function PlayerGestureSurface({
       (candidate) => candidate.identifier === gesture.identifier,
     );
     if (!touch) return;
+    if (pausedScrubRef.current !== null) {
+      gesture.moved = true;
+      if (pointerPressRef.current) pointerPressRef.current.moved = true;
+      event.preventDefault();
+      updatePausedScrub(touch.clientX);
+      return;
+    }
     if (
       Math.hypot(touch.clientX - gesture.x, touch.clientY - gesture.y) <=
       TOUCH_MOVE_TOLERANCE_PX
@@ -329,6 +460,7 @@ export function PlayerGestureSurface({
       return;
     }
     gesture.moved = true;
+    if (pointerPressRef.current) pointerPressRef.current.moved = true;
     endBoost();
   };
 
@@ -336,6 +468,14 @@ export function PlayerGestureSurface({
     const gesture = touchGestureRef.current;
     touchGestureRef.current = null;
     touchPointerDownAtRef.current = Number.NEGATIVE_INFINITY;
+    if (pausedScrubRef.current !== null) {
+      const touch = Array.from(event.changedTouches).find(
+        (candidate) => candidate.identifier === gesture?.identifier,
+      );
+      if (touch) updatePausedScrub(touch.clientX);
+      completePress(gesture?.direction ?? pressDirectionRef.current, "touch");
+      return;
+    }
     if (!gesture || gesture.moved) {
       endBoost();
       return;
@@ -355,16 +495,21 @@ export function PlayerGestureSurface({
       type="button"
       data-player-zoom-surface=""
       data-player-shortcut-surface=""
-      className="absolute inset-0 z-0 touch-none cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+      className={classNames(
+        "absolute inset-0 z-0 cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
+        mobileInteraction ? "touch-none" : "touch-pan-y",
+      )}
       aria-label={surfaceLabel}
       onPointerDownCapture={captureControlsVisibility}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={(event) => {
         cancelCompetingGestures();
       }}
       onPointerLeave={(event) => {
-        if (event.pointerType !== "mouse") endBoost();
+        if (event.pointerType === "mouse") return;
+        if (!endPausedScrub()) endBoost();
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}

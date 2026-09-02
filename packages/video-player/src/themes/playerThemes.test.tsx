@@ -140,7 +140,7 @@ describe("player themes", () => {
         screen.getByRole("menu", { name: "Video settings" }),
       ).toBeVisible();
       expect(icon).toHaveStyle({
-        transform: `rotate(${restingRotation + 60}deg)`,
+        transform: `rotate(${restingRotation + 30}deg)`,
       });
 
       fireEvent.click(trigger);

@@ -10,8 +10,8 @@ export const LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS = 0.6;
 export const LEARNING_MINI_PLAYER_ASPECT_RATIO = 16 / 9;
 export const LEARNING_MINI_PLAYER_MARGIN = 12;
 export const LEARNING_MINI_PLAYER_MAX_WIDTH = 22 * 16;
+export const LEARNING_MINI_PLAYER_MIN_WIDTH = 200;
 export const LEARNING_MINI_PLAYER_VIEWPORT_WIDTH = 0.82;
-export const LEARNING_MINI_PLAYER_MIN_VIEWPORT_WIDTH = 0.5;
 
 export interface LearningMiniPlayerLayout {
   left: number;
@@ -177,10 +177,7 @@ export const getLearningMiniPlayerWidthBounds = (
   );
   return {
     maximumWidth,
-    minimumWidth: Math.min(
-      viewport.width * LEARNING_MINI_PLAYER_MIN_VIEWPORT_WIDTH,
-      maximumWidth,
-    ),
+    minimumWidth: Math.min(LEARNING_MINI_PLAYER_MIN_WIDTH, maximumWidth),
   };
 };
 

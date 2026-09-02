@@ -170,10 +170,16 @@ describe("PopoverMenu", () => {
       ).not.toBeInTheDocument();
       expect(document.body.style.overflow).toBe("hidden");
 
-      fireEvent.pointerDown(
-        document.querySelector("[data-video-player-mobile-sheet-backdrop]")!,
-      );
+      const backdrop = document.querySelector(
+        "[data-video-player-mobile-sheet-backdrop]",
+      )!;
+      fireEvent.pointerDown(backdrop);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+      fireEvent.click(backdrop);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
       expect(trigger).toHaveFocus();
       expect(document.body.style.overflow).toBe("");
     } finally {

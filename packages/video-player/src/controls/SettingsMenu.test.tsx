@@ -22,7 +22,7 @@ describe("SettingsMenu playback speed", () => {
     ).toBeTruthy();
   });
 
-  it("centers a notch at rest and turns one notch while open", () => {
+  it("returns to rest when closed and turns 30 degrees while open", () => {
     const { unmount } = renderPlaybackRateSettings("closed");
     const closedIcon = screen
       .getByRole("button", { name: "Settings" })
@@ -32,7 +32,7 @@ describe("SettingsMenu playback speed", () => {
     expect(closedIcon).toHaveStyle({ transform: "rotate(30deg)" });
     expect(closedIcon).toHaveClass(
       "transition-transform",
-      "duration-200",
+      "duration-400",
       "max-sm:size-5",
       "motion-reduce:transition-none",
     );
@@ -44,7 +44,7 @@ describe("SettingsMenu playback speed", () => {
       .querySelector<SVGElement>('[data-settings-icon="gear-six"]');
 
     expect(openIcon).toHaveAttribute("data-settings-icon-state", "open");
-    expect(openIcon).toHaveStyle({ transform: "rotate(90deg)" });
+    expect(openIcon).toHaveStyle({ transform: "rotate(60deg)" });
     expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
       "backdrop-blur-sm",
       "!mb-8",

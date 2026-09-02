@@ -316,7 +316,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           aria-label={ariaLabel}
           tabIndex={0}
           className={classNames(
-            "youtube-player group relative z-10 aspect-video w-full touch-none overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
+            "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
             theaterMode &&
               "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
             playerClassName,

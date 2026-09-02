@@ -4,7 +4,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -500,10 +499,6 @@ export function useLessonPlayerMinimizeGesture({
     [clearSettle],
   );
 
-  const style: CSSProperties = {
-    touchAction: "pan-x pinch-zoom",
-  };
-
   return {
     controlsSuppressed,
     handlers: {
@@ -524,6 +519,5 @@ export function useLessonPlayerMinimizeGesture({
       onPointerUpCapture: (event: ReactPointerEvent<HTMLDivElement>) =>
         finishGesture(event),
     },
-    style,
   };
 }

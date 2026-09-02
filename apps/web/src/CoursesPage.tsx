@@ -38,7 +38,11 @@ import type { LearningCourse } from "./StudentPages";
 import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
-import { subscribeToPointerGestureClaims } from "./gestures/pointerGestureOwnership";
+import {
+  getLearningPlayerSwipeSplitX,
+  isFullLearningPlayerSwipeTarget,
+  subscribeToPointerGestureClaims,
+} from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
@@ -306,6 +310,18 @@ interface PointerPositionEvent {
   preventDefault?: () => void;
 }
 
+interface SidebarScreenSwipeStartEvent {
+  pointerId: number;
+  pointerType: string;
+  isPrimary: boolean;
+  clientX: number;
+  clientY: number;
+  timeStamp: number;
+  target: EventTarget | null;
+  handle: HTMLDivElement;
+  splitX?: number;
+}
+
 interface SidebarTooltip {
   label: string;
   active: boolean;
@@ -459,6 +475,8 @@ const SIDEBAR_SWIPE_EXCLUSION_SELECTOR = [
   ".home-mini-progress",
   ".learning-card-progress",
   ".learning-curriculum__progress-track",
+  "[data-player-control]",
+  "[data-player-menu]",
   "[data-sidebar-swipe-ignore]",
 ].join(",");
 
@@ -730,6 +748,7 @@ export function CoursesPage({
   const shellProfileAvatarUrl =
     (activeUser && savedShellProfile?.avatarDataUrl) || null;
   const profileRef = useRef<HTMLDivElement>(null);
+  const coursesAppRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
   // Pointer-triggered display-mode commits stage their pointer position
@@ -820,6 +839,9 @@ export function CoursesPage({
     );
   };
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
+  const sidebarScreenSwipeStartRef = useRef<
+    ((event: SidebarScreenSwipeStartEvent) => void) | null
+  >(null);
   const sidebarResizeMoveRef = useRef<
     ((event: PointerPositionEvent) => void) | null
   >(null);
@@ -2669,9 +2691,7 @@ export function CoursesPage({
     }
   };
 
-  const startSidebarScreenSwipe = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
+  const startSidebarScreenSwipe = (event: SidebarScreenSwipeStartEvent) => {
     const startsInOpenOverlay =
       sidebarPresentedAsOverlay &&
       edgeSidebarOpen &&
@@ -2688,7 +2708,7 @@ export function CoursesPage({
       (!compactNavigation &&
         !startsInOpenOverlay &&
         renderMain &&
-        event.clientX >= window.innerWidth / 2) ||
+        event.clientX >= (event.splitX ?? window.innerWidth / 2)) ||
       sidebarResizeRef.current ||
       isSidebarSwipeExcludedTarget(event.target) ||
       isFocusedSidebarSwipeInput(event.target)
@@ -2699,7 +2719,7 @@ export function CoursesPage({
       active: false,
       clientX: event.clientX,
       clientY: event.clientY,
-      handle: event.currentTarget,
+      handle: event.handle,
       pointerId: event.pointerId,
       source: startsInOpenOverlay ? "overlay" : "screen",
       timeStamp: event.timeStamp,
@@ -2942,16 +2962,40 @@ export function CoursesPage({
   // Keep the resize alive even when the pointer leaves the narrow handle. The
   // pointer-capture path handles normal interaction; these document listeners
   // make quick drags and releases outside the handle finish predictably too.
+  sidebarScreenSwipeStartRef.current = startSidebarScreenSwipe;
   sidebarResizeMoveRef.current = moveSidebarResize;
   sidebarResizeFinishRef.current = endSidebarResize;
 
   useEffect(() => {
+    const startResizeFromHostedPlayer = (event: PointerEvent) => {
+      const app = coursesAppRef.current;
+      const player = document.querySelector(".learning-workspace__player-wrap");
+      if (
+        !app ||
+        !player ||
+        !isFullLearningPlayerSwipeTarget(event.target, event, player)
+      )
+        return;
+
+      sidebarScreenSwipeStartRef.current?.({
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        isPrimary: event.isPrimary,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        timeStamp: event.timeStamp,
+        target: event.target,
+        handle: app,
+        splitX: getLearningPlayerSwipeSplitX(player),
+      });
+    };
     const continueResize = (event: PointerEvent) =>
       sidebarResizeMoveRef.current?.(event);
     const finishResize = (event: PointerEvent) =>
       sidebarResizeFinishRef.current?.(event);
     const cancelResize = (event: PointerEvent) =>
       sidebarResizeFinishRef.current?.(event, true);
+    window.addEventListener("pointerdown", startResizeFromHostedPlayer, true);
     window.addEventListener("pointermove", continueResize, {
       capture: true,
       passive: false,
@@ -2959,6 +3003,11 @@ export function CoursesPage({
     window.addEventListener("pointerup", finishResize, true);
     window.addEventListener("pointercancel", cancelResize, true);
     return () => {
+      window.removeEventListener(
+        "pointerdown",
+        startResizeFromHostedPlayer,
+        true,
+      );
       window.removeEventListener("pointermove", continueResize, true);
       window.removeEventListener("pointerup", finishResize, true);
       window.removeEventListener("pointercancel", cancelResize, true);
@@ -3253,9 +3302,21 @@ export function CoursesPage({
 
   return (
     <div
+      ref={coursesAppRef}
       className={sidebarClassName}
       suppressHydrationWarning
-      onPointerDownCapture={startSidebarScreenSwipe}
+      onPointerDownCapture={(event) =>
+        startSidebarScreenSwipe({
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+          isPrimary: event.isPrimary,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          timeStamp: event.timeStamp,
+          target: event.target,
+          handle: event.currentTarget,
+        })
+      }
       style={
         {
           "--sidebar-expanded-width": `${sidebarResizePreviewWidth ?? sidebarWidth}px`,
@@ -3274,7 +3335,7 @@ export function CoursesPage({
             />
           )}
           <aside
-            className="courses-sidebar"
+            className="courses-sidebar touch-pan-y"
             data-header-layout={sidebarHeaderLayout}
             aria-label={`${role === "creator" ? "Creator" : "Student"} navigation`}
             aria-hidden={

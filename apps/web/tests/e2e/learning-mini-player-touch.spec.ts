@@ -47,6 +47,12 @@ test("hands off immediately from lesson content to the return page without overl
       const host = document.querySelector<HTMLElement>(
         "[data-learning-persistent-player]",
       );
+      const lessonContent = document.querySelector<HTMLElement>(
+        "[data-learning-lesson-content]",
+      );
+      const lessonContentStyle = lessonContent
+        ? getComputedStyle(lessonContent)
+        : null;
       return {
         background: Number(
           (stage as HTMLElement).style.getPropertyValue(
@@ -58,6 +64,8 @@ test("hands off immediately from lesson content to the return page without overl
             "--learning-player-content-opacity",
           ) || 1,
         ),
+        renderedContentOpacity: Number(lessonContentStyle?.opacity ?? 1),
+        renderedContentTransform: lessonContentStyle?.transform ?? "none",
         motionPhase: host?.dataset.learningPlayerMotionPhase ?? null,
         transform: host?.style.transform ?? "",
         videoBottomProgress:
@@ -86,6 +94,8 @@ test("hands off immediately from lesson content to the return page without overl
   expect(motion.transform).toContain("translate3d");
   expect(motion.videoBottomProgress).toBeLessThan(0.4);
   expect(motion.content).toBeGreaterThan(0);
+  expect(motion.renderedContentOpacity).toBeCloseTo(motion.content, 2);
+  expect(motion.renderedContentTransform).not.toBe("none");
   expect(motion.background).toBe(0);
 
   await moveTo(110);
@@ -93,6 +103,8 @@ test("hands off immediately from lesson content to the return page without overl
   expect(motion.videoBottomProgress).toBeGreaterThan(0.4);
   expect(motion.videoBottomProgress).toBeLessThan(0.6);
   expect(motion.content).toBe(0);
+  expect(motion.renderedContentOpacity).toBe(0);
+  expect(motion.renderedContentTransform).not.toBe("none");
   expect(motion.background).toBeGreaterThan(0);
   expect(motion.background).toBeCloseTo(
     (motion.videoBottomProgress - 0.4) / 0.2,
@@ -113,6 +125,8 @@ test("hands off immediately from lesson content to the return page without overl
   motion = await readMotion();
   expect(motion.videoBottomProgress).toBeLessThan(0.4);
   expect(motion.content).toBeGreaterThan(0);
+  expect(motion.renderedContentOpacity).toBeCloseTo(motion.content, 2);
+  expect(motion.renderedContentTransform).not.toBe("none");
   expect(motion.background).toBe(0);
 
   await cdp.send("Input.dispatchTouchEvent", {

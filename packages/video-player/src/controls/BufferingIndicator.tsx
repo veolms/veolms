@@ -36,40 +36,54 @@ function PlayerBufferingOverlay({ label }: { label: string }) {
 
 function ActiveBufferingIndicator({
   delay,
-  initialLoading,
+  label,
 }: {
   delay: number;
-  initialLoading: boolean;
+  label: string;
 }) {
-  const [visible, setVisible] = useState(initialLoading);
-  const [label] = useState(
-    initialLoading ? "Loading video" : "Buffering video",
-  );
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (visible) return undefined;
-    const timer = setTimeout(
-      () => setVisible(true),
-      initialLoading ? 0 : delay,
-    );
+    const timer = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(timer);
-  }, [delay, initialLoading, visible]);
+  }, [delay]);
 
-  return initialLoading || visible ? (
-    <PlayerBufferingOverlay label={label} />
-  ) : null;
+  return visible ? <PlayerBufferingOverlay label={label} /> : null;
 }
 
-export function BufferingIndicator({ delay = 280 }: BufferingIndicatorProps) {
-  const { buffering, lifecycle } = usePlayerState(
-    ({ media }) => ({ buffering: media.buffering, lifecycle: media.lifecycle }),
-    (left, right) =>
-      left.buffering === right.buffering && left.lifecycle === right.lifecycle,
-  );
-  const initialLoading = lifecycle === "loading";
+const BUFFERED_PLAYBACK_GRACE_SECONDS = 0.25;
 
-  if (!initialLoading && !buffering) return null;
+export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
+  const { buffered, buffering, currentTime, lifecycle, scrubbing } =
+    usePlayerState(
+      (snapshot) => ({
+        buffered: snapshot.media.buffered,
+        buffering: snapshot.media.buffering,
+        currentTime: snapshot.media.currentTime,
+        lifecycle: snapshot.media.lifecycle,
+        scrubbing: snapshot.ui.scrubbing,
+      }),
+      (left, right) =>
+        left.buffered === right.buffered &&
+        left.buffering === right.buffering &&
+        left.currentTime === right.currentTime &&
+        left.lifecycle === right.lifecycle &&
+        left.scrubbing === right.scrubbing,
+    );
+  const initialLoading = lifecycle === "loading";
+  const currentPositionBuffered = buffered.some(
+    (range) =>
+      currentTime >= range.start &&
+      range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
+  );
+  const waitingForMedia =
+    initialLoading || (buffering && !currentPositionBuffered);
+
+  if (scrubbing || !waitingForMedia) return null;
   return (
-    <ActiveBufferingIndicator delay={delay} initialLoading={initialLoading} />
+    <ActiveBufferingIndicator
+      delay={delay}
+      label={initialLoading ? "Loading video" : "Buffering video"}
+    />
   );
 }

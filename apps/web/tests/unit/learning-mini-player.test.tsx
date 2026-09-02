@@ -20,6 +20,20 @@ const videoPlayerMock = vi.hoisted(() => ({
   waitForPresentedFrame: vi.fn<() => Promise<void>>(),
 }));
 
+const popoverLifecycleMock = vi.hoisted(() => ({
+  hide: vi.fn<(element: HTMLElement) => void>(),
+  show: vi.fn<(element: HTMLElement) => void>(),
+}));
+
+const originalHidePopover = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "hidePopover",
+);
+const originalShowPopover = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "showPopover",
+);
+
 vi.mock("@veolms/video-player", async () => {
   const React = await import("react");
   const VideoPlayer = React.forwardRef(
@@ -141,7 +155,7 @@ const miniPlayerRect = {
 function renderMiniPlayer() {
   const onClose = vi.fn();
   const onRestore = vi.fn();
-  render(
+  const { unmount } = render(
     <LearningMiniPlayer
       session={session}
       onClose={onClose}
@@ -156,11 +170,37 @@ function renderMiniPlayer() {
     releasePointerCapture: vi.fn(),
     setPointerCapture: vi.fn(),
   });
-  return { miniPlayer, onClose, onRestore };
+  return { miniPlayer, onClose, onRestore, unmount };
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
+  popoverLifecycleMock.hide.mockReset();
+  popoverLifecycleMock.show.mockReset();
+  Object.defineProperties(HTMLElement.prototype, {
+    hidePopover: {
+      configurable: true,
+      value(this: HTMLElement) {
+        popoverLifecycleMock.hide(this);
+        delete this.dataset.testPopoverOpen;
+      },
+    },
+    showPopover: {
+      configurable: true,
+      value(this: HTMLElement) {
+        if (this.getAttribute("popover") !== "manual") {
+          throw new Error(
+            "A manual popover must be configured before opening.",
+          );
+        }
+        popoverLifecycleMock.show(this);
+        this.dataset.testPopoverOpen = "true";
+        // JSDOM does not implement :popover-open. Removing the attribute here
+        // keeps accessibility queries equivalent to a displayed top-layer node.
+        this.removeAttribute("popover");
+      },
+    },
+  });
   videoPlayerMock.emitPlayingOnPlay = true;
   videoPlayerMock.currentTime = 42;
   videoPlayerMock.onEvent = null;
@@ -215,9 +255,49 @@ afterEach(() => {
   document
     .querySelectorAll(".mobile-bottom-nav")
     .forEach((node) => node.remove());
+  if (originalHidePopover) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "hidePopover",
+      originalHidePopover,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "hidePopover");
+  }
+  if (originalShowPopover) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "showPopover",
+      originalShowPopover,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "showPopover");
+  }
 });
 
 describe("LearningMiniPlayer gestures", () => {
+  it("keeps the mounted mini player in the browser top layer", () => {
+    const { miniPlayer, unmount } = renderMiniPlayer();
+    expect(miniPlayer).toHaveAttribute("data-test-popover-open", "true");
+    expect(popoverLifecycleMock.show).toHaveBeenCalledWith(miniPlayer);
+
+    unmount();
+    expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
+  });
+
+  it("stays visible and compact when minimized above the phone breakpoint", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1280,
+    });
+
+    const { miniPlayer } = renderMiniPlayer();
+
+    expect(miniPlayer).toHaveClass("fixed");
+    expect(miniPlayer).not.toHaveClass("sm:hidden");
+    expect(miniPlayer.style.width).toBe("300px");
+  });
+
   it("keeps the current player active until a prepared frame is presented", async () => {
     videoPlayerMock.emitPlayingOnPlay = false;
     let presentFrame: (() => void) | undefined;
@@ -297,8 +377,8 @@ describe("LearningMiniPlayer gestures", () => {
     });
 
     expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "dragging");
-    expect(miniPlayer.style.left).toBe("147.5px");
-    expect(miniPlayer.style.top).toBe("392.90625px");
+    expect(miniPlayer.style.left).toBe("157px");
+    expect(miniPlayer.style.top).toBe("398.25px");
 
     fireEvent.pointerUp(miniPlayer, {
       clientX: 250,
@@ -308,7 +388,7 @@ describe("LearningMiniPlayer gestures", () => {
     });
     expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
     expect(miniPlayer.style.left).toBe("12px");
-    expect(miniPlayer.style.top).toBe("592.90625px");
+    expect(miniPlayer.style.top).toBe("598.25px");
     fireEvent.click(
       screen.getByRole("button", { name: "Return to Career Opportunities" }),
     );
@@ -320,6 +400,108 @@ describe("LearningMiniPlayer gestures", () => {
       screen.getByRole("button", { name: "Return to Career Opportunities" }),
     );
     expect(onRestore).toHaveBeenCalledOnce();
+  });
+
+  it("flicks upward to the top corner without restoring or resizing", () => {
+    const { miniPlayer, onClose, onRestore } = renderMiniPlayer();
+    const restoreButton = screen.getByRole("button", {
+      name: "Return to Career Opportunities",
+    });
+    const initialWidth = miniPlayer.style.width;
+
+    fireEvent.pointerDown(restoreButton, {
+      clientX: 420,
+      clientY: 640,
+      isPrimary: true,
+      pointerId: 41,
+      pointerType: "touch",
+    });
+    act(() => vi.advanceTimersByTime(20));
+    fireEvent.pointerMove(restoreButton, {
+      clientX: 420,
+      clientY: 600,
+      isPrimary: true,
+      pointerId: 41,
+      pointerType: "touch",
+    });
+    act(() => vi.advanceTimersByTime(10));
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 420,
+      clientY: 600,
+      isPrimary: true,
+      pointerId: 41,
+      pointerType: "touch",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
+    expect(miniPlayer.style.left).toBe("307px");
+    expect(miniPlayer.style.top).toBe("12px");
+    expect(miniPlayer.style.width).toBe(initialWidth);
+    expect(onRestore).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("uses left and right flicks to dock on the matching side", () => {
+    const { miniPlayer, onRestore } = renderMiniPlayer();
+    const restoreButton = screen.getByRole("button", {
+      name: "Return to Career Opportunities",
+    });
+
+    fireEvent.pointerDown(restoreButton, {
+      clientX: 420,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 42,
+      pointerType: "touch",
+    });
+    act(() => vi.advanceTimersByTime(20));
+    fireEvent.pointerMove(restoreButton, {
+      clientX: 380,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 42,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 380,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 42,
+      pointerType: "touch",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
+    expect(miniPlayer.style.left).toBe("12px");
+    expect(miniPlayer.style.top).toBe("598.25px");
+
+    act(() => vi.advanceTimersByTime(240));
+    fireEvent.pointerDown(restoreButton, {
+      clientX: 120,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 43,
+      pointerType: "touch",
+    });
+    act(() => vi.advanceTimersByTime(20));
+    fireEvent.pointerMove(restoreButton, {
+      clientX: 160,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 43,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 160,
+      clientY: 650,
+      isPrimary: true,
+      pointerId: 43,
+      pointerType: "touch",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
+    expect(miniPlayer.style.left).toBe("307px");
+    expect(miniPlayer.style.top).toBe("598.25px");
+    expect(onRestore).not.toHaveBeenCalled();
   });
 
   it("pinches smaller and larger around the gesture midpoint", () => {
@@ -351,7 +533,7 @@ describe("LearningMiniPlayer gestures", () => {
     });
 
     expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "resizing");
-    expect(miniPlayer.style.width).toBe("309.5px");
+    expect(miniPlayer.style.width).toBe("200px");
 
     fireEvent.pointerMove(miniPlayer, {
       clientX: 550,
@@ -359,7 +541,7 @@ describe("LearningMiniPlayer gestures", () => {
       pointerId: 2,
       pointerType: "touch",
     });
-    expect(miniPlayer.style.width).toBe("619px");
+    expect(miniPlayer.style.width).toBe("600px");
 
     fireEvent.pointerUp(miniPlayer, {
       clientX: 550,

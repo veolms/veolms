@@ -40,6 +40,7 @@ import {
   useLessonPlayerMinimizeGesture,
   type LessonPlayerMinimizeGestureState,
 } from "./useLessonPlayerMinimizeGesture";
+import { cn } from "../../lib/utils";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
 const MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS = 0.35;
@@ -48,6 +49,13 @@ const LESSON_PLAYER_SHORTCUTS = {
   seekForwardLarge: false,
   toggleTheaterMode: false,
 } as const;
+
+type FullscreenCoursePanelStyle = CSSProperties & {
+  "--learning-fullscreen-panel-offset-x": string;
+  "--learning-fullscreen-video-offset-x": string;
+  "--learning-fullscreen-video-pane-width": string;
+  "--learning-fullscreen-video-width": string;
+};
 
 export interface LessonVideoPlayerProps {
   media: CourseVideo;
@@ -508,17 +516,17 @@ export function LessonVideoPlayer({
     mobileLandscapeFullscreen &&
     courseLessonsOpen &&
     Boolean(courseLessonsPanel);
-  const playerShellStyle =
-    presentation === "full"
-      ? ({
-          ...minimizeGesture.style,
-          ...(fullscreenCoursePanelActive
-            ? {
-                "--learning-fullscreen-video-width": `${courseLessonsVideoWidthPercent}%`,
-              }
-            : undefined),
-        } as CSSProperties)
-      : undefined;
+  const playerShellStyle = fullscreenCoursePanelActive
+    ? ({
+        "--learning-fullscreen-video-pane-width": `${courseLessonsVideoWidthPercent}dvw`,
+        "--learning-fullscreen-video-width":
+          "min(var(--learning-fullscreen-video-pane-width), calc(100dvh * 16 / 9))",
+        "--learning-fullscreen-panel-offset-x":
+          "max(0px, calc(var(--learning-fullscreen-video-pane-width) - var(--learning-fullscreen-video-width)))",
+        "--learning-fullscreen-video-offset-x":
+          "calc(var(--learning-fullscreen-panel-offset-x) / 2)",
+      } as FullscreenCoursePanelStyle)
+    : undefined;
 
   return (
     <VeoVideoPlayer
@@ -547,13 +555,15 @@ export function LessonVideoPlayer({
       mediaProps={{
         muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
-      className={
+      className={cn(
+        presentation === "full" &&
+          "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
         presentation === "mini"
           ? "!rounded-xl"
           : fullscreenCoursePanelActive
             ? "flex h-full items-center justify-start overflow-hidden bg-black"
-            : undefined
-      }
+            : undefined,
+      )}
       data-learning-player-controls-suppressed={
         minimizeGesture.controlsSuppressed ? "" : undefined
       }
@@ -564,7 +574,7 @@ export function LessonVideoPlayer({
         presentation === "mini"
           ? "!rounded-xl !shadow-none"
           : fullscreenCoursePanelActive
-            ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-[calc(100dvh*16/9)] !shrink-0 !rounded-none !shadow-none"
+            ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none"
             : "border-0 !rounded-none"
       }
       centralControl={

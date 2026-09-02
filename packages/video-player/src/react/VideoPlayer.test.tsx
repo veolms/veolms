@@ -206,11 +206,19 @@ class StartupBufferingFakeVideoEngine extends FakeVideoEngine {
 }
 
 describe("VideoPlayer integration", () => {
-  it("keeps one spinner mounted through startup buffering", async () => {
+  it("delays one spinner through startup and later buffering", async () => {
     const engine = new StartupBufferingFakeVideoEngine();
+    vi.useFakeTimers();
     render(<VideoPlayer source={source} engineFactory={() => engine} />);
 
-    const loadingIndicator = await screen.findByRole("status", {
+    await act(async () => Promise.resolve());
+    expect(engine.getSnapshot().lifecycle).toBe("loading");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    const loadingIndicator = screen.getByRole("status", {
       name: "Loading video",
     });
     expect(loadingIndicator).toHaveClass("z-40");
@@ -228,22 +236,78 @@ describe("VideoPlayer integration", () => {
     ).toHaveAttribute("stroke-linecap", "round");
 
     act(() => engine.finishLoadWhileBuffering());
-    expect(screen.getByRole("status", { name: "Loading video" })).toBe(
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
       loadingIndicator,
     );
 
     act(() => engine.finishBuffering());
-    await waitFor(() =>
-      expect(screen.queryByRole("status")).not.toBeInTheDocument(),
-    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     act(() => engine.startBuffering());
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("status", { name: "Buffering video" }),
-      ).toBeInTheDocument(),
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("status", { name: "Buffering video" }),
+    ).toBeInTheDocument();
+  });
+
+  it("waits until timeline scrubbing ends and skips buffered seeks", async () => {
+    const engine = new FakeVideoEngine();
+    render(<VideoPlayer source={source} engineFactory={() => engine} />);
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+    const timeline = screen.getByRole("slider", { name: "Video timeline" });
+    vi.spyOn(timeline, "getBoundingClientRect").mockReturnValue({
+      bottom: 24,
+      height: 24,
+      left: 0,
+      right: 120,
+      top: 0,
+      width: 120,
+      x: 0,
+      y: 0,
+      toJSON: () => undefined,
+    });
+    Object.assign(timeline, {
+      hasPointerCapture: () => true,
+      releasePointerCapture: vi.fn(),
+      setPointerCapture: vi.fn(),
+    });
+    vi.useFakeTimers();
+
+    act(() => engine.setSnapshot({ buffering: true }));
+    fireEvent.pointerDown(timeline, {
+      clientX: 30,
+      pointerId: 9,
+      pointerType: "mouse",
+    });
+    act(() => vi.advanceTimersByTime(1_500));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    fireEvent.pointerUp(timeline, {
+      clientX: 90,
+      pointerId: 9,
+      pointerType: "mouse",
+    });
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("status", { name: "Buffering video" }),
+    ).toBeInTheDocument();
+
+    act(() =>
+      engine.setSnapshot({
+        buffered: [{ start: 0, end: 120 }],
+        buffering: true,
+        currentTime: 60,
+      }),
     );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_500));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("briefly shows themed desktop feedback for play and pause state changes", async () => {
@@ -961,12 +1025,24 @@ describe("VideoPlayer integration", () => {
           container.querySelector('[data-player-mobile-seek-icon="backward"]'),
         ).toHaveClass("rotate-180");
 
-        act(() => vi.advanceTimersByTime(1_499));
+        act(() => vi.advanceTimersByTime(849));
         expect(screen.getByText("−20")).toBeVisible();
         expect(player).toHaveAttribute("data-controls-visible", "false");
         act(() => vi.advanceTimersByTime(1));
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
         expect(player).toHaveAttribute("data-controls-visible", "true");
+
+        const completedSequenceSeekCount = seek.mock.calls.length;
+        act(() => tap(75));
+        expect(seek).toHaveBeenCalledTimes(completedSequenceSeekCount);
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+        act(() => {
+          vi.advanceTimersByTime(100);
+          tap(75);
+        });
+        expect(seek).toHaveBeenLastCalledWith(70);
+        expect(screen.getByText("+20")).toBeVisible();
       } finally {
         restoreMatchMedia();
       }
@@ -1235,6 +1311,295 @@ describe("VideoPlayer integration", () => {
       expect(player).toHaveAttribute("data-controls-visible", "false");
       act(() => vi.advanceTimersByTime(1));
       expect(player).toHaveAttribute("data-controls-visible", "true");
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("swipes up into fullscreen and down out of it with a bottom-anchored zoom preview", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const originalFullscreenElement = Object.getOwnPropertyDescriptor(
+      document,
+      "fullscreenElement",
+    );
+    const originalExitFullscreen = Object.getOwnPropertyDescriptor(
+      document,
+      "exitFullscreen",
+    );
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    const exitFullscreen = vi.fn(async () => {
+      fullscreenElement = null;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: exitFullscreen,
+    });
+    const engine = new FakeVideoEngine();
+    const handle = createRef<VideoPlayerHandle>();
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          ref={handle}
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+          overlays={
+            <aside data-player-fullscreen-swipe-ignore="">Course lessons</aside>
+          }
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const shell = container.querySelector<HTMLElement>(".video-shell");
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      expect(shell).not.toBeNull();
+      expect(media).not.toBeNull();
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 300,
+        height: 300,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      const requestFullscreen = vi.fn(async () => {
+        fullscreenElement = shell;
+        document.dispatchEvent(new Event("fullscreenchange"));
+      });
+      Object.assign(shell!, { requestFullscreen });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 240,
+        isPrimary: true,
+        pointerId: 31,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 200,
+        clientY: 190,
+        isPrimary: true,
+        pointerId: 31,
+        pointerType: "touch",
+      });
+
+      const enterPreview = handle.current?.getSnapshot().ui.zoom;
+      expect(enterPreview?.scale).toBeCloseTo(1.136, 2);
+      expect(
+        (enterPreview?.panY ?? 0) + ((enterPreview?.scale ?? 1) - 1) * 150,
+      ).toBeCloseTo(0, 5);
+      expect(enterPreview).toMatchObject({
+        feedbackVisible: false,
+        gestureActive: true,
+      });
+      expect(player).toHaveAttribute("data-controls-visible", "false");
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
+        null,
+      );
+
+      fireEvent.pointerUp(surface, {
+        clientX: 200,
+        clientY: 160,
+        isPrimary: true,
+        pointerId: 31,
+        pointerType: "touch",
+      });
+      await waitFor(() => expect(requestFullscreen).toHaveBeenCalledOnce());
+      expect(fullscreenElement).toBe(shell);
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+
+      const courseLessons = screen.getByText("Course lessons");
+      fireEvent.pointerDown(courseLessons, {
+        clientX: 340,
+        clientY: 80,
+        isPrimary: true,
+        pointerId: 33,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(courseLessons, {
+        clientX: 340,
+        clientY: 170,
+        isPrimary: true,
+        pointerId: 33,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(courseLessons, {
+        clientX: 340,
+        clientY: 190,
+        isPrimary: true,
+        pointerId: 33,
+        pointerType: "touch",
+      });
+      expect(exitFullscreen).not.toHaveBeenCalled();
+      expect(fullscreenElement).toBe(shell);
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 80,
+        isPrimary: true,
+        pointerId: 32,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 200,
+        clientY: 140,
+        isPrimary: true,
+        pointerId: 32,
+        pointerType: "touch",
+      });
+
+      const exitPreview = handle.current?.getSnapshot().ui.zoom;
+      expect(exitPreview?.scale).toBeCloseTo(0.864, 2);
+      expect(
+        (exitPreview?.panY ?? 0) + ((exitPreview?.scale ?? 1) - 1) * 150,
+      ).toBeCloseTo(0, 5);
+      expect(exitPreview).toMatchObject({
+        feedbackVisible: false,
+        gestureActive: true,
+      });
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
+        null,
+      );
+
+      fireEvent.pointerUp(surface, {
+        clientX: 200,
+        clientY: 160,
+        isPrimary: true,
+        pointerId: 32,
+        pointerType: "touch",
+      });
+      await waitFor(() => expect(exitFullscreen).toHaveBeenCalledOnce());
+      expect(fullscreenElement).toBeNull();
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+    } finally {
+      restoreMatchMedia();
+      if (originalFullscreenElement) {
+        Object.defineProperty(
+          document,
+          "fullscreenElement",
+          originalFullscreenElement,
+        );
+      } else {
+        Reflect.deleteProperty(document, "fullscreenElement");
+      }
+      if (originalExitFullscreen) {
+        Object.defineProperty(
+          document,
+          "exitFullscreen",
+          originalExitFullscreen,
+        );
+      } else {
+        Reflect.deleteProperty(document, "exitFullscreen");
+      }
+    }
+  });
+
+  it("does not commit fullscreen when a vertical swipe is horizontal or reversed", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+
+    try {
+      const { container } = render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      const shell = container.querySelector<HTMLElement>(".video-shell");
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const media = container.querySelector("video");
+      const requestFullscreen = vi.fn(async () => undefined);
+      Object.assign(shell!, { requestFullscreen });
+      vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
+        bottom: 300,
+        height: 300,
+        left: 0,
+        right: 400,
+        top: 0,
+        width: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 240,
+        isPrimary: true,
+        pointerId: 41,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 280,
+        clientY: 230,
+        isPrimary: true,
+        pointerId: 41,
+        pointerType: "touch",
+      });
+      fireEvent.pointerUp(surface, {
+        clientX: 280,
+        clientY: 230,
+        isPrimary: true,
+        pointerId: 41,
+        pointerType: "touch",
+      });
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+
+      fireEvent.pointerDown(surface, {
+        clientX: 200,
+        clientY: 240,
+        isPrimary: true,
+        pointerId: 42,
+        pointerType: "touch",
+      });
+      fireEvent.pointerMove(surface, {
+        clientX: 200,
+        clientY: 190,
+        isPrimary: true,
+        pointerId: 42,
+        pointerType: "touch",
+      });
+      expect(media).toHaveAttribute("data-player-zoom-active", "true");
+      fireEvent.pointerMove(surface, {
+        clientX: 200,
+        clientY: 260,
+        isPrimary: true,
+        pointerId: 42,
+        pointerType: "touch",
+      });
+      expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
+      fireEvent.pointerUp(surface, {
+        clientX: 200,
+        clientY: 260,
+        isPrimary: true,
+        pointerId: 42,
+        pointerType: "touch",
+      });
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(media).toHaveAttribute("data-player-zoom-active", "false");
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
+        null,
+      );
     } finally {
       restoreMatchMedia();
     }
@@ -1590,7 +1955,14 @@ describe("VideoPlayer integration", () => {
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
       const player = screen.getByRole("region", { name: "Video player" });
+      const gestureSurface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
       expect(player).toHaveAttribute("data-player-mobile-interaction", "false");
+      expect(player).toHaveClass("touch-pan-y");
+      expect(player).not.toHaveClass("touch-none");
+      expect(gestureSurface).toHaveClass("touch-pan-y");
+      expect(gestureSurface).not.toHaveClass("touch-none");
       expect(screen.getByRole("button", { name: "Play video" })).toHaveClass(
         "hidden",
       );
@@ -1620,7 +1992,14 @@ describe("VideoPlayer integration", () => {
 
       const shell = container.querySelector<HTMLElement>(".video-shell");
       const player = screen.getByRole("region", { name: "Video player" });
+      const gestureSurface = screen.getByRole("button", {
+        name: "Play or pause video",
+      });
       expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(player).toHaveClass("touch-none");
+      expect(player).not.toHaveClass("touch-pan-y");
+      expect(gestureSurface).toHaveClass("touch-none");
+      expect(gestureSurface).not.toHaveClass("touch-pan-y");
 
       act(() => {
         fullscreenElement = shell;
@@ -1628,12 +2007,17 @@ describe("VideoPlayer integration", () => {
       });
       act(() => viewport.setMobile(false));
       expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(gestureSurface).toHaveClass("touch-none");
 
       act(() => {
         fullscreenElement = null;
         document.dispatchEvent(new Event("fullscreenchange"));
       });
       expect(player).toHaveAttribute("data-player-mobile-interaction", "false");
+      expect(player).toHaveClass("touch-pan-y");
+      expect(player).not.toHaveClass("touch-none");
+      expect(gestureSurface).toHaveClass("touch-pan-y");
+      expect(gestureSurface).not.toHaveClass("touch-none");
     } finally {
       viewport.restore();
       if (originalFullscreenElement) {
@@ -1672,6 +2056,8 @@ describe("VideoPlayer integration", () => {
         "[data-video-player-controls]",
       );
       expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(surface).toHaveClass("touch-none");
+      expect(surface).not.toHaveClass("touch-pan-y");
       expect(surface).not.toHaveAttribute("title");
       vi.useFakeTimers();
 
@@ -1701,12 +2087,13 @@ describe("VideoPlayer integration", () => {
         pointerId: 2,
         pointerType: "touch",
       });
-      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(player).toHaveAttribute("data-controls-visible", "false");
       fireEvent.pointerUp(playButton, {
         clientX: 50,
         pointerId: 2,
         pointerType: "touch",
       });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
       fireEvent.click(playButton, { detail: 1 });
       expect(player).toHaveAttribute("data-controls-visible", "true");
       expect(controls).not.toHaveAttribute("inert");
@@ -1807,7 +2194,7 @@ describe("VideoPlayer integration", () => {
     }
   });
 
-  it("keeps a mobile long-press at 2× after the elevated label fades", async () => {
+  it("keeps a playing mobile long-press at 2× after the elevated label fades", async () => {
     const restoreMatchMedia = installCompactViewportMatchMedia();
     const engine = new FakeVideoEngine();
     const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
@@ -1821,6 +2208,9 @@ describe("VideoPlayer integration", () => {
         />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      await act(async () => {
+        await engine.play();
+      });
 
       const player = screen.getByRole("region", { name: "Video player" });
       const surface = screen.getByRole("button", {
@@ -1854,6 +2244,89 @@ describe("VideoPlayer integration", () => {
       });
       expect(setPlaybackRate).toHaveBeenLastCalledWith(1);
       expect(player).toHaveAttribute("data-controls-visible", "true");
+    } finally {
+      restoreMatchMedia();
+    }
+  });
+
+  it("turns a paused mobile long-press into bidirectional timeline scrubbing", async () => {
+    const restoreMatchMedia = installCompactViewportMatchMedia();
+    const engine = new FakeVideoEngine();
+    const play = vi.spyOn(engine, "play");
+    const seek = vi.spyOn(engine, "seek");
+    const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
+
+    try {
+      render(
+        <VideoPlayer
+          source={source}
+          engineFactory={() => engine}
+          emptyTapBehavior="responsive"
+        />,
+      );
+      await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+      engine.emitTimeUpdate(60);
+
+      const player = screen.getByRole("region", { name: "Video player" });
+      const surface = screen.getByRole("button", {
+        name: "Play or pause video; tap to show controls",
+      });
+      const timeline = screen.getByRole("slider", { name: "Video timeline" });
+      vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+        bottom: 100,
+        height: 100,
+        left: 0,
+        right: 200,
+        top: 0,
+        width: 200,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      vi.useFakeTimers();
+
+      fireEvent.pointerDown(surface, {
+        clientX: 100,
+        clientY: 50,
+        pointerId: 19,
+        pointerType: "touch",
+      });
+      act(() => vi.advanceTimersByTime(500));
+
+      expect(play).not.toHaveBeenCalled();
+      expect(setPlaybackRate).not.toHaveBeenCalledWith(2);
+      expect(engine.getSnapshot().paused).toBe(true);
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      expect(timeline.parentElement).toHaveAttribute("data-scrubbing", "true");
+
+      fireEvent.pointerMove(surface, {
+        clientX: 150,
+        clientY: 50,
+        pointerId: 19,
+        pointerType: "touch",
+      });
+      expect(seek).toHaveBeenLastCalledWith(90);
+      expect(timeline).toHaveAttribute("aria-valuenow", "90");
+
+      fireEvent.pointerMove(surface, {
+        clientX: 50,
+        clientY: 50,
+        pointerId: 19,
+        pointerType: "touch",
+      });
+      expect(seek).toHaveBeenLastCalledWith(30);
+      expect(timeline).toHaveAttribute("aria-valuenow", "30");
+
+      fireEvent.pointerUp(surface, {
+        clientX: 50,
+        clientY: 50,
+        pointerId: 19,
+        pointerType: "touch",
+      });
+      expect(seek).toHaveBeenLastCalledWith(30);
+      expect(timeline.parentElement).toHaveAttribute("data-scrubbing", "false");
+      expect(engine.getSnapshot().paused).toBe(true);
+      expect(play).not.toHaveBeenCalled();
     } finally {
       restoreMatchMedia();
     }

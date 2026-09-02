@@ -12,7 +12,7 @@ import {
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
-const SETTINGS_OPEN_TURN_DEGREES = 60;
+const SETTINGS_OPEN_TURN_DEGREES = 30;
 
 export interface SettingsMenuProps {
   includePictureInPicture?: boolean;
@@ -109,7 +109,7 @@ export function SettingsMenu({
           data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
           data-settings-icon-state={settingsOpen ? "open" : "closed"}
           size={22}
-          className={`origin-center transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
+          className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
           style={{
             transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
           }}

@@ -95,6 +95,28 @@ describe("Curriculum", () => {
     ).toBeVisible();
   });
 
+  it("accepts a fullscreen-specific bottom clearance for its elastic scroll control", () => {
+    render(
+      <TestCurriculum
+        persistenceKey="fullscreen-scroll-control-clearance"
+        selectedLesson={1}
+        onSelectLesson={vi.fn()}
+        onOpenCourseOverview={vi.fn()}
+        courseTitle="UX Design Fundamentals"
+        courseThumbnail="/course-thumbnail.png"
+        scrollControlBottomClearance="calc(100dvh - 228px)"
+      />,
+    );
+
+    const elasticScroller =
+      document.querySelector<HTMLElement>(".elastic-scroller");
+    expect(
+      elasticScroller?.style.getPropertyValue(
+        "--elastic-scroller-bottom-clearance",
+      ),
+    ).toBe("calc(100dvh - 228px)");
+  });
+
   it("sizes the course title from the curriculum panel width within fixed bounds", () => {
     render(
       <TestCurriculum

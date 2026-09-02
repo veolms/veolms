@@ -16,7 +16,10 @@ import type {
 } from "react";
 import { SidebarToggleIcon } from "../shell/SidebarToggleIcon";
 import {
+  DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
   claimPointerGesture,
+  getLearningPlayerSwipeSplitX,
+  isFullLearningPlayerSwipeTarget,
   subscribeToPointerGestureClaims,
 } from "../gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "../gestures/useSecondPressHold";
@@ -125,6 +128,8 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
   "select",
   '[contenteditable="true"]',
   '[role="slider"]',
+  "[data-player-control]",
+  "[data-player-menu]",
   "[data-sidebar-swipe-ignore]",
   "[data-learning-swipe-ignore]",
 ].join(",");
@@ -138,6 +143,8 @@ const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   "select",
   '[contenteditable="true"]',
   '[role="slider"]',
+  "[data-player-control]",
+  "[data-player-menu]",
 ].join(",");
 
 const isCurriculumSwipeExcludedTarget = (
@@ -248,6 +255,18 @@ interface CurriculumScreenSwipe {
   handle: HTMLDivElement;
 }
 
+interface CurriculumScreenSwipeStartEvent {
+  pointerId: number;
+  pointerType: string;
+  isPrimary: boolean;
+  clientX: number;
+  clientY: number;
+  timeStamp: number;
+  target: EventTarget | null;
+  handle: HTMLDivElement;
+  splitX?: number;
+}
+
 type LearningWorkspaceStyle = CSSProperties & {
   "--learning-curriculum-width": string;
   "--learning-curriculum-expanded-width": string;
@@ -314,6 +333,10 @@ export function LearningWorkspace({
     useState(false);
   const [fullscreenVideoWidthPercent, setFullscreenVideoWidthPercent] =
     useState(FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT);
+  const [
+    fullscreenVideoWidthPreviewPercent,
+    setFullscreenVideoWidthPreviewPercent,
+  ] = useState<number | null>(null);
   const [
     fullscreenCurriculumFocusRequest,
     setFullscreenCurriculumFocusRequest,
@@ -423,6 +446,9 @@ export function LearningWorkspace({
     ((event: PointerEvent, cancelled?: boolean) => void) | null
   >(null);
   const curriculumScreenSwipeRef = useRef<CurriculumScreenSwipe | null>(null);
+  const curriculumScreenSwipeStartRef = useRef<
+    ((event: CurriculumScreenSwipeStartEvent) => void) | null
+  >(null);
 
   useEffect(
     () =>
@@ -767,6 +793,11 @@ export function LearningWorkspace({
     [],
   );
 
+  const closeFullscreenLessonPanel = useCallback(() => {
+    setFullscreenVideoWidthPreviewPercent(null);
+    setFullscreenLessonPanelOpen(false);
+  }, []);
+
   const openFloatingLessonDrawer = useCallback(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     setCurriculumCollapsed(true);
@@ -887,16 +918,16 @@ export function LearningWorkspace({
   ]);
 
   const startCurriculumScreenSwipe = (
-    event: ReactPointerEvent<HTMLDivElement>,
+    event: CurriculumScreenSwipeStartEvent,
   ) => {
     const drawerLayout = isCourseContentDrawerLayout();
     const revealsTabletDrawer = drawerLayout && !phoneLessonDrawer;
+    const target = revealsTabletDrawer ? "lesson-drawer" : "curriculum";
     if (
       (drawerLayout && !revealsTabletDrawer) ||
-      (revealsTabletDrawer && lessonDrawer) ||
       event.pointerType !== "touch" ||
       !event.isPrimary ||
-      event.clientX < window.innerWidth / 2 ||
+      event.clientX < (event.splitX ?? window.innerWidth / 2) ||
       curriculumResizeRef.current ||
       curriculumScreenSwipeRef.current ||
       isCurriculumSwipeExcludedTarget(
@@ -917,10 +948,11 @@ export function LearningWorkspace({
       lastX: event.clientX,
       lastTimestamp: event.timeStamp,
       velocityX: 0,
-      closedAtStart: curriculumCollapsed,
+      closedAtStart:
+        target === "lesson-drawer" ? !lessonDrawer : curriculumCollapsed,
       expandedWidthAtStart: curriculumWidth,
-      target: revealsTabletDrawer ? "lesson-drawer" : "curriculum",
-      handle: event.currentTarget,
+      target,
+      handle: event.handle,
     };
   };
 
@@ -947,12 +979,8 @@ export function LearningWorkspace({
       )
         return;
 
-      const opensClosedCurriculum =
-        swipe.target === "lesson-drawer"
-          ? deltaX < 0
-          : swipe.closedAtStart && deltaX < 0;
-      const closesOpenCurriculum =
-        swipe.target === "curriculum" && !swipe.closedAtStart && deltaX > 0;
+      const opensClosedCurriculum = swipe.closedAtStart && deltaX < 0;
+      const closesOpenCurriculum = !swipe.closedAtStart && deltaX > 0;
       if (!opensClosedCurriculum && !closesOpenCurriculum) {
         curriculumScreenSwipeRef.current = null;
         return;
@@ -1034,23 +1062,48 @@ export function LearningWorkspace({
     if (!shouldCommit) return;
 
     if (swipe.target === "lesson-drawer") {
-      openLessonDrawer();
+      if (swipe.closedAtStart) openLessonDrawer();
+      else closeLessonDrawer();
       return;
     }
 
     setCurriculumCollapsed(!swipe.closedAtStart);
   };
 
+  curriculumScreenSwipeStartRef.current = startCurriculumScreenSwipe;
   curriculumScreenSwipeMoveRef.current = moveCurriculumScreenSwipe;
   curriculumScreenSwipeFinishRef.current = endCurriculumScreenSwipe;
 
   useEffect(() => {
+    const startSwipeFromHostedPlayer = (event: PointerEvent) => {
+      const workspace = workspaceRef.current;
+      const playerAnchor = playerWrapRef.current;
+      if (
+        !workspace ||
+        !playerAnchor ||
+        !isFullLearningPlayerSwipeTarget(event.target, event, playerAnchor)
+      )
+        return;
+
+      curriculumScreenSwipeStartRef.current?.({
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        isPrimary: event.isPrimary,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        timeStamp: event.timeStamp,
+        target: event.target,
+        handle: workspace,
+        splitX: getLearningPlayerSwipeSplitX(playerAnchor),
+      });
+    };
     const continueSwipe = (event: PointerEvent) =>
       curriculumScreenSwipeMoveRef.current?.(event);
     const finishSwipe = (event: PointerEvent) =>
       curriculumScreenSwipeFinishRef.current?.(event);
     const cancelSwipe = (event: PointerEvent) =>
       curriculumScreenSwipeFinishRef.current?.(event, true);
+    window.addEventListener("pointerdown", startSwipeFromHostedPlayer, true);
     window.addEventListener("pointermove", continueSwipe, {
       capture: true,
       passive: false,
@@ -1058,6 +1111,11 @@ export function LearningWorkspace({
     window.addEventListener("pointerup", finishSwipe, true);
     window.addEventListener("pointercancel", cancelSwipe, true);
     return () => {
+      window.removeEventListener(
+        "pointerdown",
+        startSwipeFromHostedPlayer,
+        true,
+      );
       window.removeEventListener("pointermove", continueSwipe, true);
       window.removeEventListener("pointerup", finishSwipe, true);
       window.removeEventListener("pointercancel", cancelSwipe, true);
@@ -1516,17 +1574,22 @@ export function LearningWorkspace({
   const playerCourseLessonsOpen = mobileLandscapeFullscreen
     ? fullscreenLessonPanelOpen
     : lessonDrawer;
+  const fullscreenVideoLayoutWidthPercent =
+    fullscreenVideoWidthPreviewPercent ?? fullscreenVideoWidthPercent;
   const fullscreenCoursePanel = useMemo(
     () => (
       <FullscreenLandscapeCurriculumPanel
+        onClose={closeFullscreenLessonPanel}
         videoWidthPercent={fullscreenVideoWidthPercent}
         onVideoWidthPercentChange={setFullscreenVideoWidthPercent}
+        onVideoWidthPreviewChange={setFullscreenVideoWidthPreviewPercent}
       >
         <Curriculum
           sections={curriculumSections}
           lessonsById={curriculumLessonsById}
           scrollportRef={fullscreenCurriculumScrollportRef}
           scrollportId="learning-fullscreen-course-curriculum-scrollport"
+          scrollControlBottomClearance="calc(100dvh - 228px)"
           selectedLesson={selectedLesson}
           lessonProgress={lessonProgress}
           onSelectLesson={selectLesson}
@@ -1541,6 +1604,7 @@ export function LearningWorkspace({
     ),
     [
       coursePersistenceKey,
+      closeFullscreenLessonPanel,
       courseThumbnail,
       courseTitle,
       curriculumLessonsById,
@@ -1566,7 +1630,7 @@ export function LearningWorkspace({
       canGoPrevious: previousLessonId !== undefined,
       courseLessonsOpen: playerCourseLessonsOpen,
       courseLessonsPanel: fullscreenCoursePanel,
-      courseLessonsVideoWidthPercent: fullscreenVideoWidthPercent,
+      courseLessonsVideoWidthPercent: fullscreenVideoLayoutWidthPercent,
       onAutoplayEnabledChange: updateAutoplayEnabled,
       onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
       onGoNext: goToNextLesson,
@@ -1585,7 +1649,7 @@ export function LearningWorkspace({
       coursePersistenceKey,
       currentLesson,
       fullscreenCoursePanel,
-      fullscreenVideoWidthPercent,
+      fullscreenVideoLayoutWidthPercent,
       goToNextLesson,
       goToPreviousLesson,
       handleLessonEnded,
@@ -1639,7 +1703,18 @@ export function LearningWorkspace({
     <div
       ref={workspaceRef}
       className={`learning-workspace ${theaterMode ? "is-theater" : ""} ${curriculumResizing ? "is-curriculum-resizing" : ""} ${floatingLessonDrawerResizing ? "is-floating-curriculum-resizing select-none" : ""}`}
-      onPointerDownCapture={startCurriculumScreenSwipe}
+      onPointerDownCapture={(event) =>
+        startCurriculumScreenSwipe({
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+          isPrimary: event.isPrimary,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          timeStamp: event.timeStamp,
+          target: event.target,
+          handle: event.currentTarget,
+        })
+      }
       onClickCapture={suppressCurriculumSwipeClick}
     >
       <link
@@ -1837,6 +1912,7 @@ export function LearningWorkspace({
       >
         <DrawerContent
           ref={lessonDrawerSurfaceRef}
+          viewportClassName={DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS}
           aria-label="Course lessons"
           initialFocus
           finalFocus={() => {

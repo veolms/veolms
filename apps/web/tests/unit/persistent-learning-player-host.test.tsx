@@ -47,7 +47,13 @@ vi.mock("../../src/learning/player/useLearningMiniPlayerGestures.js", () => ({
   useLearningMiniPlayerGestures: () => ({
     gestureProps: {},
     mode: "idle",
-    style: {},
+    style: {
+      bottom: "auto",
+      left: 12,
+      right: "auto",
+      top: 654.5,
+      width: 200,
+    },
   }),
 }));
 
@@ -93,8 +99,13 @@ beforeEach(() => {
 });
 
 describe("PersistentLearningPlayerHost", () => {
-  it("renders inside the existing main scrollport so clipping and wheel scrolling stay native", () => {
+  it("forwards tablet wheel scrolling from the player to the main scrollport", () => {
     const player = createRegistration();
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 700,
+    });
     const mainScrollport = document.createElement("main");
     mainScrollport.className = "courses-main courses-main--learning";
     mainScrollport.append(player.anchor!);
@@ -107,34 +118,41 @@ describe("PersistentLearningPlayerHost", () => {
     const wheelListener = vi.fn();
     mainScrollport.addEventListener("wheel", wheelListener);
 
-    const { container, unmount } = render(
-      <PersistentLearningPlayerHost
-        player={player}
-        presentation="full"
-        onClose={vi.fn()}
-        onRestore={vi.fn()}
-      />,
-    );
+    try {
+      const { container, unmount } = render(
+        <PersistentLearningPlayerHost
+          player={player}
+          presentation="full"
+          onClose={vi.fn()}
+          onRestore={vi.fn()}
+        />,
+      );
 
-    const host = mainScrollport.querySelector<HTMLElement>(
-      "[data-learning-persistent-player]",
-    );
-    expect(host).not.toBeNull();
-    expect(container).not.toContainElement(host);
+      const host = mainScrollport.querySelector<HTMLElement>(
+        "[data-learning-persistent-player]",
+      );
+      expect(host).not.toBeNull();
+      expect(container).not.toContainElement(host);
 
-    fireEvent.wheel(screen.getByTestId("persistent-learning-video"), {
-      deltaY: 120,
-    });
-    expect(wheelListener).toHaveBeenCalledOnce();
-    expect(mainScrollport.scrollTop).toBe(120);
+      fireEvent.wheel(screen.getByTestId("persistent-learning-video"), {
+        deltaY: 120,
+      });
+      expect(wheelListener).toHaveBeenCalledOnce();
+      expect(mainScrollport.scrollTop).toBe(120);
 
-    const video = screen.getByTestId("persistent-learning-video");
-    video.setAttribute("data-player-mobile-interaction", "true");
-    fireEvent.wheel(video, { deltaY: 120 });
-    expect(mainScrollport.scrollTop).toBe(120);
+      const video = screen.getByTestId("persistent-learning-video");
+      video.setAttribute("data-player-mobile-interaction", "true");
+      fireEvent.wheel(video, { deltaY: 120 });
+      expect(mainScrollport.scrollTop).toBe(120);
 
-    unmount();
-    mainScrollport.remove();
+      unmount();
+    } finally {
+      mainScrollport.remove();
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalInnerWidth,
+      });
+    }
   });
 
   it("keeps one mounted video while the same registration changes presentation", () => {
@@ -155,6 +173,7 @@ describe("PersistentLearningPlayerHost", () => {
     expect(host).toHaveClass("bg-transparent");
     expect(host).not.toHaveClass("[&_.youtube-player]:rounded-none");
     expect(host).toHaveClass("learning-persistent-player--full");
+    expect(host).toHaveClass("overflow-x-clip", "overflow-y-visible");
     expect(host).not.toHaveClass("fixed");
     expect(host).not.toHaveClass("bg-black");
     expect(host.style.top).toBe("");
@@ -172,6 +191,11 @@ describe("PersistentLearningPlayerHost", () => {
 
     expect(host).toHaveClass("bg-black");
     expect(host).not.toHaveClass("bg-transparent");
+    expect(host).not.toHaveClass("sm:hidden");
+    expect(host).toHaveAttribute("popover", "manual");
+    expect(host.style.left).toBe("12px");
+    expect(host.style.top).toBe("654.5px");
+    expect(host.style.width).toBe("200px");
     expect(screen.getByTestId("persistent-learning-video")).toBe(originalVideo);
     expect(originalVideo).toHaveAttribute("data-presentation", "mini");
     expect(screen.getAllByTestId("persistent-learning-video")).toHaveLength(1);

@@ -52,6 +52,7 @@ interface CurriculumProps {
   isLessonAvailable?: (lessonNumber: number) => boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
+  scrollControlBottomClearance?: number | string;
   drawerHeroControlProps?: LessonDrawerHeroControlProps;
 }
 
@@ -72,6 +73,7 @@ export function Curriculum({
   isLessonAvailable,
   scrollportId,
   scrollportRef,
+  scrollControlBottomClearance,
   drawerHeroControlProps,
 }: CurriculumProps) {
   const [expanded, setExpanded] = useState<number[]>([1, 2]);
@@ -293,6 +295,7 @@ export function Curriculum({
           ariaControls={scrollportId}
           scrollAreaLabel="Curriculum"
           contentRevision={`${selectedLesson}:${activeLessonSearch}:${expanded.join(",")}`}
+          bottomClearance={scrollControlBottomClearance}
         />
         <ContextMenuTrigger
           render={

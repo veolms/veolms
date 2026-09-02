@@ -31,6 +31,7 @@ import { PlayerController } from "./PlayerController";
 import type { VideoPlayerEventListener } from "./playerEvents";
 import type { PlayerSnapshot } from "./playerState";
 import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
+import { usePlayerFullscreenSwipe } from "../hooks/usePlayerFullscreenSwipe";
 import {
   PlayerInteractionModeProvider,
   useResolvedPlayerMobileInteraction,
@@ -60,6 +61,7 @@ export interface VideoPlayerHandle {
   enterPictureInPicture(): Promise<void>;
   exitPictureInPicture(): Promise<void>;
   togglePictureInPicture(): Promise<void>;
+  showControls(): void;
   focus(): void;
   getSnapshot(): PlayerSnapshot;
 }
@@ -141,6 +143,10 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     const controller = controllerRef.current;
     const mobileInteraction =
       useResolvedPlayerMobileInteraction(interactionMode);
+    const fullscreenSwipe = usePlayerFullscreenSwipe(
+      controller,
+      mobileInteraction && zoomEnabled,
+    );
     const zoomGestures = usePlayerZoomGestures(controller);
     const controlsHiddenAtPointerDownRef = useRef(false);
     const lifecycleVersionRef = useRef(0);
@@ -220,6 +226,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
         enterPictureInPicture: () => controller.enterPictureInPicture(),
         exitPictureInPicture: () => controller.exitPictureInPicture(),
         togglePictureInPicture: () => controller.togglePictureInPicture(),
+        showControls: () => controller.setControlsVisible(true),
         focus: () => controller.focus(),
         getSnapshot: () => controller.getSnapshot(),
       }),
@@ -270,7 +277,11 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
             <div
               {...containerProps}
               ref={setContainer}
-              className={classNames(resolvedTheme.className, className)}
+              className={classNames(
+                resolvedTheme.className,
+                mobileInteraction ? "touch-none" : "touch-pan-y",
+                className,
+              )}
               style={themeStyle}
               data-video-player-root=""
               data-player-theme={resolvedTheme.id}
@@ -308,7 +319,8 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
                 if (
                   zoomEnabled &&
                   !zoomResetRequested &&
-                  zoomGestures.suppressLegacyTouch()
+                  (fullscreenSwipe.suppressLegacyTouch() ||
+                    zoomGestures.suppressLegacyTouch())
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -319,7 +331,11 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               onPointerCancelCapture={(event) => {
                 controlsHiddenAtPointerDownRef.current = false;
                 onPointerCancelCapture?.(event);
-                if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                const fullscreenSwipeHandled =
+                  zoomEnabled && fullscreenSwipe.onPointerEnd(event);
+                const zoomHandled =
+                  zoomEnabled && zoomGestures.onPointerEnd(event);
+                if (fullscreenSwipeHandled || zoomHandled) {
                   event.stopPropagation();
                 }
               }}
@@ -327,36 +343,56 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
                 controlsHiddenAtPointerDownRef.current =
                   !controller.getSnapshot().ui.controlsVisible;
                 onPointerDownCapture?.(event);
+                const fullscreenSwipeHandled =
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  fullscreenSwipe.onPointerDown(event);
                 if (
                   zoomEnabled &&
                   !event.defaultPrevented &&
-                  zoomGestures.onPointerDown(event)
+                  (fullscreenSwipeHandled || zoomGestures.onPointerDown(event))
                 ) {
                   event.stopPropagation();
                 }
               }}
               onPointerMoveCapture={(event) => {
                 onPointerMoveCapture?.(event);
-                if (
+                const fullscreenSwipeHandled =
                   zoomEnabled &&
                   !event.defaultPrevented &&
-                  zoomGestures.onPointerMove(event)
-                ) {
+                  fullscreenSwipe.onPointerMove(event);
+                const zoomHandled =
+                  zoomEnabled &&
+                  !fullscreenSwipeHandled &&
+                  !fullscreenSwipe.hasPendingGesture() &&
+                  !event.defaultPrevented &&
+                  zoomGestures.onPointerMove(event);
+                if (zoomEnabled && (fullscreenSwipeHandled || zoomHandled)) {
                   event.stopPropagation();
                 }
               }}
               onPointerUpCapture={(event) => {
                 onPointerUpCapture?.(event);
-                if (zoomEnabled && zoomGestures.onPointerEnd(event)) {
+                const fullscreenSwipeHandled =
+                  zoomEnabled && fullscreenSwipe.onPointerEnd(event);
+                const zoomHandled =
+                  zoomEnabled && zoomGestures.onPointerEnd(event);
+                if (fullscreenSwipeHandled || zoomHandled) {
                   event.stopPropagation();
                 }
               }}
               onTouchCancelCapture={(event) => {
                 onTouchCancelCapture?.(event);
-                const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+                const fullscreenSwipeHandled =
+                  zoomEnabled && fullscreenSwipe.onTouchEnd(event);
+                const zoomHandled =
+                  zoomEnabled && zoomGestures.onTouchEnd(event);
                 if (
                   zoomEnabled &&
-                  (handled || zoomGestures.suppressLegacyTouch())
+                  (fullscreenSwipeHandled ||
+                    zoomHandled ||
+                    fullscreenSwipe.suppressLegacyTouch() ||
+                    zoomGestures.suppressLegacyTouch())
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -364,10 +400,16 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               }}
               onTouchEndCapture={(event) => {
                 onTouchEndCapture?.(event);
-                const handled = zoomEnabled && zoomGestures.onTouchEnd(event);
+                const fullscreenSwipeHandled =
+                  zoomEnabled && fullscreenSwipe.onTouchEnd(event);
+                const zoomHandled =
+                  zoomEnabled && zoomGestures.onTouchEnd(event);
                 if (
                   zoomEnabled &&
-                  (handled || zoomGestures.suppressLegacyTouch())
+                  (fullscreenSwipeHandled ||
+                    zoomHandled ||
+                    fullscreenSwipe.suppressLegacyTouch() ||
+                    zoomGestures.suppressLegacyTouch())
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -375,13 +417,22 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               }}
               onTouchMoveCapture={(event) => {
                 onTouchMoveCapture?.(event);
-                const handled =
+                const fullscreenSwipeHandled =
                   zoomEnabled &&
+                  !event.defaultPrevented &&
+                  fullscreenSwipe.onTouchMove(event);
+                const zoomHandled =
+                  zoomEnabled &&
+                  !fullscreenSwipeHandled &&
+                  !fullscreenSwipe.hasPendingGesture() &&
                   !event.defaultPrevented &&
                   zoomGestures.onTouchMove(event);
                 if (
                   zoomEnabled &&
-                  (handled || zoomGestures.suppressLegacyTouch())
+                  (fullscreenSwipeHandled ||
+                    zoomHandled ||
+                    fullscreenSwipe.suppressLegacyTouch() ||
+                    zoomGestures.suppressLegacyTouch())
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -389,13 +440,20 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               }}
               onTouchStartCapture={(event) => {
                 onTouchStartCapture?.(event);
-                const handled =
+                const fullscreenSwipeHandled =
+                  zoomEnabled &&
+                  !event.defaultPrevented &&
+                  fullscreenSwipe.onTouchStart(event);
+                const zoomHandled =
                   zoomEnabled &&
                   !event.defaultPrevented &&
                   zoomGestures.onTouchStart(event);
                 if (
                   zoomEnabled &&
-                  (handled || zoomGestures.suppressLegacyTouch())
+                  (fullscreenSwipeHandled ||
+                    zoomHandled ||
+                    fullscreenSwipe.suppressLegacyTouch() ||
+                    zoomGestures.suppressLegacyTouch())
                 ) {
                   event.preventDefault();
                   event.stopPropagation();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
+  getLearningMiniPlayerWidthBounds,
 } from "../../src/learning/player/learningPlayerMotion.js";
 
 describe("learning player surface motion", () => {
@@ -62,5 +63,24 @@ describe("learning player surface motion", () => {
     expect(easeLearningPlayerMotionProgress(0)).toBe(0);
     expect(easeLearningPlayerMotionProgress(0.5)).toBeGreaterThan(0.8);
     expect(easeLearningPlayerMotionProgress(1)).toBe(1);
+  });
+
+  it("keeps the mini-player minimum at 200px without changing its maximum", () => {
+    expect(
+      getLearningMiniPlayerWidthBounds({
+        height: 779,
+        left: 0,
+        top: 0,
+        width: 619,
+      }),
+    ).toEqual({ maximumWidth: 595, minimumWidth: 200 });
+    expect(
+      getLearningMiniPlayerWidthBounds({
+        height: 800,
+        left: 0,
+        top: 0,
+        width: 1_280,
+      }),
+    ).toEqual({ maximumWidth: 1_256, minimumWidth: 200 });
   });
 });

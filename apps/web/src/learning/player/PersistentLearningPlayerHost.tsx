@@ -68,7 +68,9 @@ export function PersistentLearningPlayerHost({
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || presentation !== "full") return undefined;
+    if (!host || presentation !== "full") {
+      return undefined;
+    }
 
     const forwardWheelToMainScrollport = (event: WheelEvent) => {
       const scrollport = mainScrollportRef.current;
@@ -77,7 +79,7 @@ export function PersistentLearningPlayerHost({
         event.defaultPrevented ||
         event.ctrlKey ||
         event.deltaY === 0 ||
-        window.innerWidth <= 820 ||
+        window.innerWidth <= 640 ||
         host.querySelector('[data-player-mobile-interaction="true"]')
       ) {
         return;
@@ -210,14 +212,15 @@ export function PersistentLearningPlayerHost({
       ref={hostRef}
       className={
         mini
-          ? "fixed z-130 touch-none overflow-hidden rounded-xl bg-black shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] sm:hidden motion-reduce:transition-none"
-          : "learning-persistent-player--full z-[39] overflow-visible bg-transparent"
+          ? "fixed z-130 m-0 touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+          : "learning-persistent-player--full z-[39] overflow-x-clip overflow-y-visible bg-transparent"
       }
       style={mini ? miniStyle : undefined}
       aria-label={
         mini ? `Mini player for ${player.playerProps.lessonTitle}` : undefined
       }
       aria-describedby={mini ? "learning-mini-player-gesture-help" : undefined}
+      popover={mini ? "manual" : undefined}
       data-learning-persistent-player=""
       data-learning-mini-player={mini ? "" : undefined}
       data-mini-player-mode={mini ? miniPlayer.mode : undefined}

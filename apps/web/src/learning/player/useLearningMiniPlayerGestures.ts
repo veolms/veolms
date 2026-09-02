@@ -23,6 +23,9 @@ import {
 } from "./learningPlayerMotion";
 
 const DRAG_START_DISTANCE = 6;
+const DOCK_FLICK_AXIS_RATIO = 0.6;
+const DOCK_FLICK_MIN_DISTANCE = 18;
+const DOCK_FLICK_VELOCITY = 0.5;
 const DISMISS_DISTANCE = 56;
 const DISMISS_VELOCITY = 0.45;
 const DISMISS_DURATION = 200;
@@ -42,6 +45,7 @@ interface SinglePointerGesture {
   restoreOnRelease: boolean;
   start: PointerSample;
   startedAtBottom: boolean;
+  velocityX: number;
   velocityY: number;
 }
 
@@ -111,6 +115,58 @@ const getNearestCornerLayout = (
   };
 };
 
+const getFlickDirectedCornerLayout = (
+  layout: MiniPlayerLayout,
+  deltaX: number,
+  deltaY: number,
+  velocityX: number,
+  velocityY: number,
+  viewport = getViewportBounds(),
+): MiniPlayerLayout => {
+  const nearestCorner = getNearestCornerLayout(layout, viewport);
+  const peakVelocity = Math.max(Math.abs(velocityX), Math.abs(velocityY));
+  if (peakVelocity < DOCK_FLICK_VELOCITY) return nearestCorner;
+
+  const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
+  const width = clamp(layout.width, minimumWidth, maximumWidth);
+  const height = width / MINI_PLAYER_ASPECT_RATIO;
+  const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
+  const maximumLeft = Math.max(
+    minimumLeft,
+    viewport.left + viewport.width - MINI_PLAYER_MARGIN - width,
+  );
+  const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
+  const maximumTop = Math.max(
+    minimumTop,
+    getSettledBottomEdge(viewport) - height,
+  );
+  const horizontalFlick =
+    Math.abs(deltaX) >= DOCK_FLICK_MIN_DISTANCE &&
+    Math.abs(velocityX) >= DOCK_FLICK_VELOCITY &&
+    Math.abs(velocityX) >= peakVelocity * DOCK_FLICK_AXIS_RATIO;
+  const verticalFlick =
+    Math.abs(deltaY) >= DOCK_FLICK_MIN_DISTANCE &&
+    Math.abs(velocityY) >= DOCK_FLICK_VELOCITY &&
+    Math.abs(velocityY) >= peakVelocity * DOCK_FLICK_AXIS_RATIO;
+
+  return {
+    left: horizontalFlick
+      ? velocityX < 0
+        ? minimumLeft
+        : maximumLeft
+      : nearestCorner.left,
+    top: verticalFlick
+      ? velocityY < 0
+        ? minimumTop
+        : maximumTop
+      : nearestCorner.top,
+    width,
+  };
+};
+
+const getReleaseVelocity = (recent: number, average: number) =>
+  Math.abs(recent) >= DOCK_FLICK_VELOCITY ? recent : average;
+
 const getDownmostLayout = (
   layout: MiniPlayerLayout,
   viewport = getViewportBounds(),
@@ -178,6 +234,28 @@ export function useLearningMiniPlayerGestures(
     modeRef.current = nextMode;
     setMode(nextMode);
   }, []);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!enabled || !container || typeof container.showPopover !== "function") {
+      return undefined;
+    }
+
+    try {
+      container.showPopover();
+    } catch {
+      // Presentation changes can leave the same player open in the top layer.
+    }
+
+    return () => {
+      if (typeof container.hidePopover !== "function") return;
+      try {
+        container.hidePopover();
+      } catch {
+        // Removing the popover attribute can close it before effect cleanup.
+      }
+    };
+  }, [containerRef, enabled]);
 
   const commitLayout = useCallback((nextLayout: MiniPlayerLayout) => {
     const cornerLayout = getNearestCornerLayout(nextLayout);
@@ -314,6 +392,7 @@ export function useLearningMiniPlayerGestures(
         restoreOnRelease,
         start: sample,
         startedAtBottom: isAtDownmostPosition(initialLayout),
+        velocityX: 0,
         velocityY: 0,
       };
     },
@@ -459,7 +538,9 @@ export function useLearningMiniPlayerGestures(
       const deltaX = sample.x - single.start.x;
       const deltaY = sample.y - single.start.y;
       const elapsedSinceLast = Math.max(1, sample.time - single.last.time);
+      const latestVelocityX = (sample.x - single.last.x) / elapsedSinceLast;
       const latestVelocityY = (sample.y - single.last.y) / elapsedSinceLast;
+      single.velocityX = single.velocityX * 0.35 + latestVelocityX * 0.65;
       single.velocityY = single.velocityY * 0.35 + latestVelocityY * 0.65;
       single.last = sample;
 
@@ -517,23 +598,43 @@ export function useLearningMiniPlayerGestures(
         const deltaX = sample.x - single.start.x;
         const deltaY = sample.y - single.start.y;
         const duration = Math.max(1, sample.time - single.start.time);
-        const velocityY = Math.max(single.velocityY, deltaY / duration);
+        const averageVelocityX = deltaX / duration;
+        const averageVelocityY = deltaY / duration;
+        const velocityX = getReleaseVelocity(
+          single.velocityX,
+          averageVelocityX,
+        );
+        const velocityY = getReleaseVelocity(
+          single.velocityY,
+          averageVelocityY,
+        );
         const nextLayout = {
           left: single.initialLayout.left + deltaX,
           top: single.initialLayout.top + deltaY,
           width: single.initialLayout.width,
         };
-        settleCandidateRef.current = nextLayout;
-        showLiveLayout(nextLayout);
-
         const directPointer =
           event.pointerType === "touch" || event.pointerType === "pen";
+        settleCandidateRef.current =
+          cancelled || !directPointer
+            ? nextLayout
+            : getFlickDirectedCornerLayout(
+                nextLayout,
+                deltaX,
+                deltaY,
+                velocityX,
+                velocityY,
+              );
+        showLiveLayout(nextLayout);
+
         const downwardSwipe =
           !cancelled &&
           directPointer &&
           Math.abs(deltaX) <= deltaY * 1.25 + 32 &&
           (deltaY >= DISMISS_DISTANCE ||
-            (deltaY >= DRAG_START_DISTANCE && velocityY >= DISMISS_VELOCITY));
+            (deltaY >= DRAG_START_DISTANCE &&
+              Math.max(single.velocityY, averageVelocityY) >=
+                DISMISS_VELOCITY));
         if (downwardSwipe) {
           if (single.startedAtBottom) {
             pointersRef.current.clear();

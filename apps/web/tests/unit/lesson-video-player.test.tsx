@@ -247,8 +247,8 @@ describe("LessonVideoPlayer adapter", () => {
         "course-lessons",
       );
       expect(openButton).toHaveClass(
-        "h-9",
-        "px-3",
+        "h-11",
+        "px-4",
         "!text-xs",
         "leading-4",
         "before:inset-x-0.5",
@@ -320,6 +320,16 @@ describe("LessonVideoPlayer adapter", () => {
     const timelineLayer = document.querySelector<HTMLElement>(
       '[data-player-timeline-layer=""]',
     );
+    const timeline = screen.getByRole("slider", { name: "Video timeline" });
+    const timelineRoot = timeline.closest<HTMLElement>(
+      "[data-controls-visible]",
+    );
+    const timelineThumb = document.querySelector<HTMLElement>(
+      '[data-timeline-thumb=""]',
+    );
+    const bottomCornerControlsLayer = document.querySelector<HTMLElement>(
+      '[data-player-bottom-corner-controls-layer=""]',
+    );
     const centralPlay = document.querySelector<HTMLElement>(
       '[data-player-control-cluster="mobile-play"] [data-player-control]',
     );
@@ -341,6 +351,17 @@ describe("LessonVideoPlayer adapter", () => {
     expect(controls).not.toHaveAttribute("inert");
     expect(centralControls).not.toHaveAttribute("inert");
     expect(timelineLayer).not.toHaveAttribute("inert");
+    expect(bottomCornerControlsLayer).not.toHaveAttribute("inert");
+    expect(bottomCornerControlsLayer).toHaveClass(
+      "pointer-events-none",
+      "absolute",
+      "inset-0",
+      "z-180",
+    );
+    expect(bottomCornerControlsLayer?.closest(".video-shell")).not.toBeNull();
+    expect(
+      bottomCornerControlsLayer?.closest("[data-video-player-root]"),
+    ).toBeNull();
     expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
 
@@ -349,7 +370,15 @@ describe("LessonVideoPlayer adapter", () => {
     expect(controls).toHaveAttribute("inert");
     expect(centralControls).toHaveAttribute("inert");
     expect(timelineLayer).toHaveAttribute("inert");
-    expect(timelineLayer).toHaveClass("invisible", "pointer-events-none");
+    expect(bottomCornerControlsLayer).toHaveAttribute("inert");
+    expect(timelineLayer).toHaveClass(
+      "visible",
+      "opacity-100",
+      "pointer-events-none",
+      "[&_*]:!pointer-events-none",
+    );
+    expect(timelineRoot).toHaveAttribute("data-controls-visible", "false");
+    expect(timelineThumb).toHaveClass("opacity-0");
     expect(controls).toHaveClass("invisible", "[&_*]:!pointer-events-none");
     expect(centralControls).toHaveClass(
       "invisible",
@@ -362,12 +391,13 @@ describe("LessonVideoPlayer adapter", () => {
       pointerId: 2,
       pointerType: "touch",
     });
-    expect(player).toHaveAttribute("data-controls-visible", "true");
+    expect(player).toHaveAttribute("data-controls-visible", "false");
     fireEvent.pointerUp(centralPlay!, {
       clientX: 100,
       pointerId: 2,
       pointerType: "touch",
     });
+    expect(player).toHaveAttribute("data-controls-visible", "true");
     fireEvent.click(centralPlay!, { detail: 1 });
     expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(play).not.toHaveBeenCalled();
@@ -381,12 +411,13 @@ describe("LessonVideoPlayer adapter", () => {
     expect(centralControls).not.toHaveAttribute("inert");
     expect(timelineLayer).not.toHaveAttribute("inert");
     expect(timelineLayer).toHaveClass("visible", "pointer-events-none");
+    expect(timelineRoot).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(play).not.toHaveBeenCalled();
   });
 
-  it("replaces the central transport controls with a persistent buffering spinner", async () => {
+  it("delays the buffering spinner while central controls remain inert", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const { container } = render(
       <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
@@ -413,8 +444,11 @@ describe("LessonVideoPlayer adapter", () => {
     expect(centralControls).toHaveAttribute("data-player-loading", "true");
     expect(centralControls).toHaveAttribute("inert");
     expect(centralControls).toHaveClass("invisible", "opacity-0");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
-    await act(async () => vi.advanceTimersByTime(280));
+    await act(async () => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTime(1));
     const bufferingIndicator = screen.getByRole("status", {
       name: "Buffering video",
     });
@@ -691,14 +725,40 @@ describe("LessonVideoPlayer adapter", () => {
     expect(ambientSetting).not.toHaveClass(
       "bg-[color-mix(in_srgb,var(--video-player-accent)_14%,transparent)]",
     );
+    const ambientIcon = ambientSetting.querySelector<HTMLElement>(
+      "[data-ambient-mode-icon]",
+    );
+    expect(ambientIcon).toHaveAttribute(
+      "data-ambient-mode-icon-state",
+      initialAmbientState === "true" ? "on" : "off",
+    );
+    expect(ambientIcon).toHaveClass(
+      "h-3",
+      "w-4.5",
+      "border",
+      "border-current",
+      "text-white",
+      initialAmbientState === "true"
+        ? "shadow-[0_0_10.5px_rgba(255,255,255,0.72)]"
+        : "shadow-none",
+    );
+    expect(ambientIcon?.querySelector("svg")).toBeNull();
+    expect(ambientIcon).toBeEmptyDOMElement();
     fireEvent.click(ambientSetting);
     expect(ambientSetting).toHaveAttribute(
       "aria-checked",
       initialAmbientState === "true" ? "false" : "true",
     );
-    expect(
-      ambientSetting.querySelector("[data-ambient-mode-icon]"),
-    ).not.toBeNull();
+    expect(ambientIcon).toHaveAttribute(
+      "data-ambient-mode-icon-state",
+      initialAmbientState === "true" ? "off" : "on",
+    );
+    expect(ambientIcon).toHaveClass("border-current", "text-white");
+    expect(ambientIcon).toHaveClass(
+      initialAmbientState === "true"
+        ? "shadow-none"
+        : "shadow-[0_0_10.5px_rgba(255,255,255,0.72)]",
+    );
     expect(ambientSetting).not.toHaveTextContent(/\b(?:On|Off)\b/);
   });
 
@@ -762,6 +822,11 @@ describe("LessonVideoPlayer adapter", () => {
       expect(centralPlay).not.toBeNull();
       expect(playerControls).not.toBeNull();
       expect(centralControls).not.toBeNull();
+      expect(shell).toHaveClass(
+        "touch-pan-x",
+        "touch-pinch-zoom",
+        "min-[641px]:touch-pan-y",
+      );
       Object.defineProperties(shell, {
         hasPointerCapture: { value: () => true },
         releasePointerCapture: { value: vi.fn() },
@@ -1695,8 +1760,14 @@ describe("LessonVideoPlayer adapter", () => {
       pointerType: "touch",
     });
     expect(timeline.parentElement).toHaveClass(
+      "max-sm:[&_[role=slider]]:translate-y-[calc(100%-10px)]",
+      "max-sm:[&_[data-timeline-visual]]:translate-y-[calc(-100%+10px)]",
+    );
+    expect(timeline.parentElement).not.toHaveClass(
       "max-sm:[&_[role=slider]]:translate-y-full",
       "max-sm:[&_[data-timeline-visual]]:-translate-y-full",
+      "[&_[role=slider]]:!translate-y-full",
+      "[&_[data-timeline-visual]]:!-translate-y-full",
     );
     expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
       "pointer-events-none",
@@ -1754,7 +1825,7 @@ describe("LessonVideoPlayer adapter", () => {
     ).toHaveClass(
       "bottom-2.5",
       "left-2",
-      "h-10",
+      "h-11",
       "items-center",
       "sm:h-auto",
       "max-sm:opacity-100",
@@ -1772,7 +1843,7 @@ describe("LessonVideoPlayer adapter", () => {
     );
     expect(mobileFullscreenHitArea).toHaveClass(
       "inline-flex",
-      "size-10",
+      "size-11",
       "items-center",
       "justify-center",
     );
@@ -1783,9 +1854,9 @@ describe("LessonVideoPlayer adapter", () => {
       mobileFullscreenCorner as HTMLElement,
     ).getByRole("button", { name: "Toggle fullscreen" });
     expect(mobileFullscreenButton).toHaveClass(
-      "!size-10",
+      "!size-11",
       "!bg-transparent",
-      "!px-0",
+      "!p-0",
       "[&&&]:!bg-transparent",
       "[&&&:hover]:!bg-transparent",
       "[&&&:active]:!bg-transparent",
@@ -1797,7 +1868,7 @@ describe("LessonVideoPlayer adapter", () => {
       '[data-fullscreen-visual-surface=""]',
     );
     expect(mobileFullscreenSurface).toHaveClass(
-      "size-7",
+      "size-8",
       "place-items-center",
       "relative",
       "z-10",
@@ -1917,15 +1988,15 @@ describe("LessonVideoPlayer adapter", () => {
     const mobileTimeButton = within(mobileTimeHitArea!).getByRole("button");
     const desktopTimeButton = within(desktopTimeCluster!).getByRole("button");
 
-    expect(mobileTimeHitArea).toHaveClass("h-10", "items-center");
+    expect(mobileTimeHitArea).toHaveClass("h-11", "items-center");
     expect(mobileTimeButton).toHaveClass(
-      "!h-10",
-      "!px-3",
+      "!h-11",
+      "!px-4",
       "!py-0",
       "!text-xs",
       "!leading-4",
       "before:inset-x-0.5",
-      "before:inset-y-2",
+      "before:inset-y-1.5",
       "before:backdrop-blur-sm",
       "[&&&]:!bg-transparent",
       "[&&&:hover]:!bg-transparent",
@@ -2065,9 +2136,12 @@ describe("LessonVideoPlayer adapter", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
       expect(screen.getByRole("dialog").parentElement).toBe(document.body);
-      fireEvent.pointerDown(
-        document.querySelector('[data-video-player-mobile-sheet-backdrop=""]')!,
-      );
+      const phoneSheetBackdrop = document.querySelector(
+        '[data-video-player-mobile-sheet-backdrop=""]',
+      )!;
+      fireEvent.pointerDown(phoneSheetBackdrop);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      fireEvent.click(phoneSheetBackdrop);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
       const shell = container.querySelector<HTMLElement>(".video-shell");
@@ -2186,7 +2260,7 @@ describe("LessonVideoPlayer adapter", () => {
           '[data-video-player-mobile-sheet-backdrop=""]',
         ),
       ).toHaveClass("absolute");
-      fireEvent.pointerDown(
+      fireEvent.click(
         settingsSheetHost.querySelector(
           '[data-video-player-mobile-sheet-backdrop=""]',
         )!,
@@ -2208,11 +2282,33 @@ describe("LessonVideoPlayer adapter", () => {
         "sm:!px-3",
       );
       expect(
+        container.querySelector(
+          '[data-player-bottom-corner-controls-layer=""]',
+        ),
+      ).toHaveClass(
+        "inset-y-0",
+        "left-1/2",
+        "right-auto",
+        "w-[min(100%,calc(100dvh*16/9))]",
+        "max-w-full",
+        "-translate-x-1/2",
+      );
+      expect(
         container.querySelector('[data-mobile-player-corner="time"]'),
       ).toHaveClass("!bottom-15", "!left-3", "sm:!bottom-15", "sm:!left-3");
       expect(
         container.querySelector('[data-mobile-player-corner="fullscreen"]'),
       ).toHaveClass("!bottom-15", "!right-3", "sm:!bottom-15", "sm:!right-3");
+      expect(
+        screen.getByRole("button", {
+          name: "Exit fullscreen and minimize video",
+        }).parentElement,
+      ).toHaveClass("!left-3", "sm:!left-3");
+      expect(
+        container.querySelector(
+          '[data-player-control-cluster="player-actions"]',
+        ),
+      ).toHaveClass("!right-3", "sm:!right-3");
 
       const lessonsButton = screen.getByRole("button", {
         name: "Open lessons",
@@ -2262,21 +2358,35 @@ describe("LessonVideoPlayer adapter", () => {
         "overflow-hidden",
       );
       expect(
+        shell?.style.getPropertyValue("--learning-fullscreen-video-pane-width"),
+      ).toBe("60dvw");
+      expect(
         shell?.style.getPropertyValue("--learning-fullscreen-video-width"),
-      ).toBe("60%");
+      ).toBe(
+        "min(var(--learning-fullscreen-video-pane-width), calc(100dvh * 16 / 9))",
+      );
+      expect(
+        shell?.style.getPropertyValue("--learning-fullscreen-panel-offset-x"),
+      ).toBe(
+        "max(0px, calc(var(--learning-fullscreen-video-pane-width) - var(--learning-fullscreen-video-width)))",
+      );
+      expect(
+        shell?.style.getPropertyValue("--learning-fullscreen-video-offset-x"),
+      ).toBe("calc(var(--learning-fullscreen-panel-offset-x) / 2)");
       expect(player).toHaveClass(
         "!w-(--learning-fullscreen-video-width)",
-        "!max-w-[calc(100dvh*16/9)]",
+        "!max-w-none",
         "!max-h-full",
+        "!translate-x-(--learning-fullscreen-video-offset-x)",
       );
+      expect(controlFrame.closest("[data-video-player-root]")).toBe(player);
       expect(controlFrame).toHaveClass("absolute", "inset-0");
       expect(controlFrame).not.toHaveClass(
         "left-1/2",
-        "-translate-x-1/2",
         "w-(--learning-fullscreen-video-width)",
       );
       expect(fullscreenVignetteLayer).toHaveClass(
-        "left-0",
+        "left-(--learning-fullscreen-video-offset-x)",
         "w-(--learning-fullscreen-video-width)",
       );
       expect(fullscreenVignetteLayer).not.toHaveClass("right-0");
@@ -2284,11 +2394,18 @@ describe("LessonVideoPlayer adapter", () => {
         container.querySelector(
           '[data-player-control-cluster="player-actions"]',
         ),
-      ).toHaveClass("right-2", "top-2", "!right-3", "sm:!right-3");
+      ).toHaveClass(
+        "right-2",
+        "top-2",
+        "!left-auto",
+        "!right-3",
+        "sm:!left-auto",
+        "sm:!right-3",
+      );
       expect(
         container.querySelector('[data-player-timeline-wrap=""]'),
       ).toHaveClass(
-        "!left-0",
+        "!left-(--learning-fullscreen-video-offset-x)",
         "!w-(--learning-fullscreen-video-width)",
         "!translate-x-0",
       );
@@ -2297,7 +2414,8 @@ describe("LessonVideoPlayer adapter", () => {
       );
       expect(fullscreenBottomControls).toHaveClass(
         "bottom-15",
-        "left-0",
+        "left-(--learning-fullscreen-video-offset-x)",
+        "h-11",
         "w-(--learning-fullscreen-video-width)",
         "justify-between",
         "px-3",
@@ -2342,11 +2460,11 @@ describe("LessonVideoPlayer adapter", () => {
         "[&&]:!rounded-b-none",
         "!inset-x-auto",
         "!right-auto",
-        "!left-[calc(var(--learning-fullscreen-video-width)/2)]",
+        "!left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)]",
         "!w-[min(100dvh,var(--learning-fullscreen-video-width))]",
         "!-translate-x-1/2",
       );
-      fireEvent.pointerDown(
+      fireEvent.click(
         settingsSheetHost.querySelector(
           '[data-video-player-mobile-sheet-backdrop=""]',
         )!,
