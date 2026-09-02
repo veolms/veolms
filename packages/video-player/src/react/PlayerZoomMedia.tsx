@@ -1,13 +1,22 @@
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { PlayerMedia, type PlayerMediaProps } from "./PlayerMedia";
 import { usePlayerState } from "./usePlayerState";
 
+export type PlayerZoomOverflowBoundary = "player" | "shell";
+
+export interface PlayerZoomMediaProps extends PlayerMediaProps {
+  overflowBoundary?: PlayerZoomOverflowBoundary;
+}
+
 export function PlayerZoomMedia({
   className,
+  overflowBoundary = "player",
   style,
   ...props
-}: PlayerMediaProps) {
+}: PlayerZoomMediaProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const zoom = usePlayerState(({ ui }) => ui.zoom);
+  const expandedIntoShell = overflowBoundary === "shell" && zoom.scale > 1.001;
   const transform = [
     style?.transform,
     `translate3d(${zoom.panX}px, ${zoom.panY}px, 0) scale(${zoom.scale})`,
@@ -25,10 +34,31 @@ export function PlayerZoomMedia({
       zoom.gestureActive || zoom.scale > 1 ? "transform" : style?.willChange,
   };
 
+  useLayoutEffect(() => {
+    if (overflowBoundary !== "shell") return undefined;
+    const playerRoot = viewportRef.current?.closest<HTMLElement>(
+      "[data-video-player-root]",
+    );
+    if (!playerRoot) return undefined;
+    const previousOverflow = playerRoot.style.overflow;
+
+    if (expandedIntoShell) {
+      playerRoot.style.overflow = "visible";
+      playerRoot.dataset.playerZoomExpanded = "true";
+    }
+
+    return () => {
+      playerRoot.style.overflow = previousOverflow;
+      delete playerRoot.dataset.playerZoomExpanded;
+    };
+  }, [expandedIntoShell, overflowBoundary]);
+
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] bg-black"
+      ref={viewportRef}
+      className={`pointer-events-none absolute inset-0 rounded-[inherit] bg-black ${expandedIntoShell ? "overflow-visible" : "overflow-hidden"}`}
       data-player-zoom-viewport=""
+      data-player-zoom-expanded={expandedIntoShell ? "true" : "false"}
     >
       <PlayerMedia
         {...props}

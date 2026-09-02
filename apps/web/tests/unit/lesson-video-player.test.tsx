@@ -386,6 +386,61 @@ describe("LessonVideoPlayer adapter", () => {
     expect(play).not.toHaveBeenCalled();
   });
 
+  it("replaces the central transport controls with a persistent buffering spinner", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const { container } = render(
+      <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
+    );
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+    vi.useFakeTimers();
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Designing for real users",
+    });
+    const gestureSurface = screen.getByRole("button", {
+      name: "Play or pause video; tap to show controls",
+    });
+    const centralControls = container.querySelector<HTMLElement>(
+      '[data-lesson-central-controls=""]',
+    )!;
+
+    expect(centralControls).not.toHaveAttribute("inert");
+    expect(
+      within(centralControls).getByRole("button", { name: "Play" }),
+    ).toBeVisible();
+
+    act(() => engine.setSnapshot({ buffering: true }));
+    expect(centralControls).toHaveAttribute("data-player-loading", "true");
+    expect(centralControls).toHaveAttribute("inert");
+    expect(centralControls).toHaveClass("invisible", "opacity-0");
+
+    await act(async () => vi.advanceTimersByTime(280));
+    const bufferingIndicator = screen.getByRole("status", {
+      name: "Buffering video",
+    });
+
+    fireEvent.pointerDown(gestureSurface, {
+      clientX: 100,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(gestureSurface, {
+      clientX: 100,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    act(() => vi.advanceTimersByTime(301));
+
+    expect(player).toHaveAttribute("data-controls-visible", "false");
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      bufferingIndicator,
+    );
+
+    act(() => engine.setSnapshot({ buffering: false }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(centralControls).not.toHaveAttribute("data-player-loading");
+  });
+
   it("hides touch controls after center play and reveals them before pause", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const play = vi.spyOn(engine, "play");
@@ -1311,6 +1366,12 @@ describe("LessonVideoPlayer adapter", () => {
       });
       expect(playerActions?.firstElementChild).toBe(resetZoom);
       expect(resetZoom.nextElementSibling).toBe(autoplay);
+      expect(resetZoom).toHaveClass(
+        "mr-0.5",
+        "!size-[34px]",
+        "text-[13px]",
+        "leading-none",
+      );
     } finally {
       vi.useRealTimers();
       window.matchMedia = originalMatchMedia;
@@ -1384,11 +1445,15 @@ describe("LessonVideoPlayer adapter", () => {
       const projection = container.querySelector<HTMLCanvasElement>(
         "[data-ambient-inline-projection]",
       );
+      const overlayHost = container.querySelector(
+        '[data-video-player-shell-overlay-host=""]',
+      );
       expect(projection).not.toBeNull();
-      expect(projection?.parentElement).toBe(shell);
+      expect(projection?.parentElement).toBe(overlayHost);
+      expect(overlayHost?.parentElement).toBe(shell);
       expect(player?.contains(projection)).toBe(false);
       expect(projection).toHaveAttribute("aria-hidden", "true");
-      expect(projection).toHaveClass("max-[820px]:transform-none!");
+      expect(projection).not.toHaveClass("max-[820px]:transform-none!");
     });
   });
 
@@ -1888,25 +1953,61 @@ describe("LessonVideoPlayer adapter", () => {
 
   it("keeps the mobile control layout and settings sheet in phone landscape", async () => {
     const engine = new RecordingFakeVideoEngine(90);
+    const onCourseLessonsToggle = vi.fn();
+    const onMobileLandscapeFullscreenChange = vi.fn();
+    const fullscreenMinimizeSequence: string[] = [];
+    const onMinimize = vi.fn(() => {
+      fullscreenMinimizeSequence.push("minimize");
+    });
     const originalMatchMedia = window.matchMedia;
     const originalFullscreenElement = Object.getOwnPropertyDescriptor(
       document,
       "fullscreenElement",
     );
+    const originalExitFullscreen = Object.getOwnPropertyDescriptor(
+      document,
+      "exitFullscreen",
+    );
+    const widthListeners = new Set<EventListenerOrEventListenerObject>();
+    let narrowViewport = true;
     let fullscreenElement: Element | null = null;
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
       get: () => fullscreenElement,
     });
+    const exitFullscreen = vi.fn(async () => {
+      fullscreenMinimizeSequence.push("exit-fullscreen");
+      fullscreenElement = null;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: exitFullscreen,
+    });
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches:
-        query === "(min-width: 40rem)" ||
+        (query === "(max-width: 640px)" && narrowViewport) ||
         query === "(max-height: 40rem)" ||
-        query === "(pointer: coarse)",
+        query === "(pointer: coarse)" ||
+        query === "(orientation: landscape)",
       media: query,
       onchange: null,
-      addEventListener() {},
-      removeEventListener() {},
+      addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+      ) {
+        if (type === "change" && query === "(max-width: 640px)") {
+          widthListeners.add(listener);
+        }
+      },
+      removeEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+      ) {
+        if (type === "change" && query === "(max-width: 640px)") {
+          widthListeners.delete(listener);
+        }
+      },
       addListener() {},
       removeListener() {},
       dispatchEvent() {
@@ -1915,11 +2016,18 @@ describe("LessonVideoPlayer adapter", () => {
     })) as typeof window.matchMedia;
 
     try {
-      const { container } = render(
+      const { container, rerender } = render(
         <LessonVideoPlayer
           {...playerProps(firstMedia, engine)}
           canGoNext
           canGoPrevious
+          courseLessonsPanel={
+            <aside data-testid="fullscreen-course-panel">Course lessons</aside>
+          }
+          courseLessonsVideoWidthPercent={60}
+          onCourseLessonsToggle={onCourseLessonsToggle}
+          onMinimize={onMinimize}
+          onMobileLandscapeFullscreenChange={onMobileLandscapeFullscreenChange}
         />,
       );
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
@@ -1928,6 +2036,11 @@ describe("LessonVideoPlayer adapter", () => {
         name: "Lesson video player for Designing for real users",
       });
       expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      expect(player).toHaveAttribute(
+        "data-player-zoom-overflow-boundary",
+        "player",
+      );
+      const mediaElement = container.querySelector("video");
       expect(
         container.querySelector('[data-lesson-central-controls=""]'),
       ).toHaveClass("sm:!grid");
@@ -1951,10 +2064,48 @@ describe("LessonVideoPlayer adapter", () => {
         document.querySelector('[data-video-player-mobile-sheet=""]'),
       ).toBeInTheDocument();
       expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+      expect(screen.getByRole("dialog").parentElement).toBe(document.body);
+      fireEvent.pointerDown(
+        document.querySelector('[data-video-player-mobile-sheet-backdrop=""]')!,
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
       const shell = container.querySelector<HTMLElement>(".video-shell");
       fullscreenElement = shell;
       act(() => document.dispatchEvent(new Event("fullscreenchange")));
+      act(() => {
+        narrowViewport = false;
+        const event = new Event("change");
+        for (const listener of widthListeners) {
+          if (typeof listener === "function") listener(event);
+          else listener.handleEvent(event);
+        }
+      });
+      expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
+      await waitFor(() =>
+        expect(player).toHaveAttribute(
+          "data-player-zoom-overflow-boundary",
+          "shell",
+        ),
+      );
+
+      const fullscreenAmbientProjection = await waitFor(() => {
+        const projection = shell?.querySelector<HTMLCanvasElement>(
+          "[data-ambient-shell-projection]",
+        );
+        expect(projection).toBeInTheDocument();
+        return projection!;
+      });
+      expect(fullscreenAmbientProjection.parentElement).toBe(
+        shell?.querySelector('[data-video-player-shell-overlay-host=""]'),
+      );
+      expect(fullscreenAmbientProjection).toHaveAttribute(
+        "data-ambient-projection-scope",
+        "fullscreen",
+      );
+      expect(fullscreenAmbientProjection).toHaveClass(
+        "ambient-canvas--fullscreen-shell",
+      );
 
       const controlFrame = await waitFor(() => {
         const frame = container.querySelector<HTMLElement>(
@@ -1970,6 +2121,75 @@ describe("LessonVideoPlayer adapter", () => {
         "left-1/2",
         "-translate-x-1/2",
         "w-[min(100%,calc(100dvh*16/9))]",
+      );
+      const fullscreenVignetteLayer = await waitFor(() => {
+        const layer = shell?.querySelector<HTMLElement>(
+          '[data-mobile-player-fullscreen-vignette-layer=""]',
+        );
+        expect(layer).toBeInTheDocument();
+        return layer!;
+      });
+      expect(fullscreenVignetteLayer.parentElement).toBe(shell);
+      expect(fullscreenVignetteLayer).toHaveClass(
+        "pointer-events-none",
+        "absolute",
+        "inset-y-0",
+        "left-0",
+        "right-0",
+        "z-20",
+      );
+      expect(
+        controlFrame.querySelector('[data-mobile-player-vignette="top"]'),
+      ).not.toBeInTheDocument();
+      expect(
+        fullscreenVignetteLayer.querySelector(
+          '[data-mobile-player-vignette="top"]',
+        ),
+      ).toHaveClass("inset-x-0", "top-0");
+      expect(
+        fullscreenVignetteLayer.querySelector(
+          '[data-mobile-player-vignette="bottom"]',
+        ),
+      ).toHaveClass("inset-x-0", "bottom-0");
+      const settingsSheetHost = await waitFor(() => {
+        const host = container.querySelector<HTMLDivElement>(
+          '[data-learning-mobile-settings-sheet-host=""]',
+        );
+        expect(host).toBeInTheDocument();
+        return host!;
+      });
+      expect(settingsSheetHost.parentElement).toBe(shell);
+      expect(settingsSheetHost).toHaveClass(
+        "absolute",
+        "inset-0",
+        "z-200",
+        "overflow-hidden",
+      );
+      expect(settingsSheetHost).not.toBe(controlFrame);
+
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      const landscapeSettingsSheet = screen.getByRole("dialog", {
+        name: "Video settings",
+      });
+      expect(landscapeSettingsSheet.parentElement).toBe(settingsSheetHost);
+      expect(landscapeSettingsSheet).toHaveClass(
+        "absolute",
+        "bottom-0",
+        "rounded-t-2xl",
+        "[&&]:!rounded-b-none",
+        "w-full",
+        "mx-auto",
+        "max-w-[100dvh]",
+      );
+      expect(
+        settingsSheetHost.querySelector(
+          '[data-video-player-mobile-sheet-backdrop=""]',
+        ),
+      ).toHaveClass("absolute");
+      fireEvent.pointerDown(
+        settingsSheetHost.querySelector(
+          '[data-video-player-mobile-sheet-backdrop=""]',
+        )!,
       );
       expect(
         container.querySelector('[data-player-timeline-wrap=""]'),
@@ -1993,6 +2213,157 @@ describe("LessonVideoPlayer adapter", () => {
       expect(
         container.querySelector('[data-mobile-player-corner="fullscreen"]'),
       ).toHaveClass("!bottom-15", "!right-3", "sm:!bottom-15", "sm:!right-3");
+
+      const lessonsButton = screen.getByRole("button", {
+        name: "Open lessons",
+      });
+      expect(lessonsButton).toHaveAttribute(
+        "aria-controls",
+        "learning-fullscreen-course-curriculum-scrollport",
+      );
+      expect(lessonsButton).toHaveAttribute(
+        "data-course-lessons-presentation",
+        "side",
+      );
+      await waitFor(() =>
+        expect(onMobileLandscapeFullscreenChange).toHaveBeenLastCalledWith(
+          true,
+        ),
+      );
+
+      fireEvent.click(lessonsButton);
+      expect(onCourseLessonsToggle).toHaveBeenCalledWith("side");
+
+      rerender(
+        <LessonVideoPlayer
+          {...playerProps(firstMedia, engine)}
+          canGoNext
+          canGoPrevious
+          courseLessonsOpen
+          courseLessonsPanel={
+            <aside data-testid="fullscreen-course-panel">Course lessons</aside>
+          }
+          courseLessonsVideoWidthPercent={60}
+          onCourseLessonsToggle={onCourseLessonsToggle}
+          onMinimize={onMinimize}
+          onMobileLandscapeFullscreenChange={onMobileLandscapeFullscreenChange}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("fullscreen-course-panel"),
+        ).toBeInTheDocument(),
+      );
+      expect(shell).toHaveClass(
+        "flex",
+        "h-full",
+        "items-center",
+        "overflow-hidden",
+      );
+      expect(
+        shell?.style.getPropertyValue("--learning-fullscreen-video-width"),
+      ).toBe("60%");
+      expect(player).toHaveClass(
+        "!w-(--learning-fullscreen-video-width)",
+        "!max-w-[calc(100dvh*16/9)]",
+        "!max-h-full",
+      );
+      expect(controlFrame).toHaveClass("absolute", "inset-0");
+      expect(controlFrame).not.toHaveClass(
+        "left-1/2",
+        "-translate-x-1/2",
+        "w-(--learning-fullscreen-video-width)",
+      );
+      expect(fullscreenVignetteLayer).toHaveClass(
+        "left-0",
+        "w-(--learning-fullscreen-video-width)",
+      );
+      expect(fullscreenVignetteLayer).not.toHaveClass("right-0");
+      expect(
+        container.querySelector(
+          '[data-player-control-cluster="player-actions"]',
+        ),
+      ).toHaveClass("right-2", "top-2", "!right-3", "sm:!right-3");
+      expect(
+        container.querySelector('[data-player-timeline-wrap=""]'),
+      ).toHaveClass(
+        "!left-0",
+        "!w-(--learning-fullscreen-video-width)",
+        "!translate-x-0",
+      );
+      const fullscreenBottomControls = container.querySelector<HTMLElement>(
+        '[data-player-fullscreen-bottom-controls=""]',
+      );
+      expect(fullscreenBottomControls).toHaveClass(
+        "bottom-15",
+        "left-0",
+        "w-(--learning-fullscreen-video-width)",
+        "justify-between",
+        "px-3",
+      );
+      const fullscreenTimeCorner = container.querySelector<HTMLElement>(
+        '[data-mobile-player-corner="time"]',
+      );
+      const fullscreenActionCorner = container.querySelector<HTMLElement>(
+        '[data-mobile-player-corner="fullscreen"]',
+      );
+      expect(fullscreenTimeCorner?.parentElement).toBe(
+        fullscreenBottomControls,
+      );
+      expect(fullscreenActionCorner?.parentElement).toBe(
+        fullscreenBottomControls,
+      );
+      expect(fullscreenTimeCorner).toHaveClass("!static", "sm:!static");
+      expect(fullscreenActionCorner).toHaveClass("!static", "sm:!static");
+
+      const closeLessonsButton = screen.getByRole("button", {
+        name: "Close lessons",
+      });
+      expect(closeLessonsButton).toHaveAttribute(
+        "data-course-lessons-open",
+        "true",
+      );
+      expect(closeLessonsButton).toHaveClass(
+        "before:!bg-[color-mix(in_srgb,var(--video-player-control-text)_18%,var(--video-player-control-surface))]",
+      );
+      expect(
+        closeLessonsButton.querySelector(".learning-curriculum__section-arrow"),
+      ).not.toHaveClass("is-open");
+
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      const splitViewSettingsSheet = screen.getByRole("dialog", {
+        name: "Video settings",
+      });
+      expect(splitViewSettingsSheet.parentElement).toBe(settingsSheetHost);
+      expect(splitViewSettingsSheet).toHaveClass(
+        "bottom-0",
+        "rounded-t-2xl",
+        "[&&]:!rounded-b-none",
+        "!inset-x-auto",
+        "!right-auto",
+        "!left-[calc(var(--learning-fullscreen-video-width)/2)]",
+        "!w-[min(100dvh,var(--learning-fullscreen-video-width))]",
+        "!-translate-x-1/2",
+      );
+      fireEvent.pointerDown(
+        settingsSheetHost.querySelector(
+          '[data-video-player-mobile-sheet-backdrop=""]',
+        )!,
+      );
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Exit fullscreen and minimize video",
+        }),
+      );
+      await waitFor(() => expect(exitFullscreen).toHaveBeenCalledOnce());
+      await waitFor(() => expect(onMinimize).toHaveBeenCalledOnce());
+      expect(fullscreenMinimizeSequence).toEqual([
+        "exit-fullscreen",
+        "minimize",
+      ]);
+      expect(container.querySelector("video")).toBe(mediaElement);
+      expect(engine.loadCalls).toHaveLength(1);
     } finally {
       window.matchMedia = originalMatchMedia;
       if (originalFullscreenElement) {
@@ -2003,6 +2374,15 @@ describe("LessonVideoPlayer adapter", () => {
         );
       } else {
         Reflect.deleteProperty(document, "fullscreenElement");
+      }
+      if (originalExitFullscreen) {
+        Object.defineProperty(
+          document,
+          "exitFullscreen",
+          originalExitFullscreen,
+        );
+      } else {
+        Reflect.deleteProperty(document, "exitFullscreen");
       }
     }
   });
@@ -2107,21 +2487,19 @@ describe("LessonVideoPlayer adapter", () => {
   });
 
   it("restores an enabled caption preference after changing lessons", async () => {
-    const firstEngine = new RecordingFakeVideoEngine(180);
-    const secondEngine = new RecordingFakeVideoEngine(180);
-    firstEngine.setSnapshot({ textTracks: [englishCaptions] });
-    secondEngine.setSnapshot({ textTracks: [englishCaptions] });
-    const engines = [firstEngine, secondEngine];
-    const engineFactory = vi.fn(() => engines.shift()!);
+    const engine = new RecordingFakeVideoEngine(180);
+    engine.setSnapshot({ textTracks: [englishCaptions] });
+    const engineFactory = vi.fn(() => engine);
     const props = {
-      ...playerProps(firstMedia, firstEngine),
+      ...playerProps(firstMedia, engine),
       engineFactory,
     };
-    const { rerender } = render(<LessonVideoPlayer {...props} />);
-    await waitFor(() => expect(firstEngine.loadCalls).toHaveLength(1));
+    const { container, rerender } = render(<LessonVideoPlayer {...props} />);
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    const fullscreenShell = container.querySelector(".video-shell");
 
-    act(() => firstEngine.selectTextTrack(englishCaptions.id));
-    expect(firstEngine.selectedTextTrackIds).toEqual([englishCaptions.id]);
+    act(() => engine.selectTextTrack(englishCaptions.id));
+    expect(engine.selectedTextTrackIds).toEqual([englishCaptions.id]);
 
     rerender(
       <LessonVideoPlayer
@@ -2131,15 +2509,17 @@ describe("LessonVideoPlayer adapter", () => {
       />,
     );
 
-    await waitFor(() => expect(secondEngine.loadCalls).toHaveLength(1));
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(2));
     await waitFor(() =>
-      expect(secondEngine.selectedTextTrackIds).toEqual([englishCaptions.id]),
+      expect(engine.selectedTextTrackIds).toEqual([
+        englishCaptions.id,
+        englishCaptions.id,
+      ]),
     );
-    await waitFor(() =>
-      expect(firstEngine.getSnapshot().lifecycle).toBe("destroyed"),
-    );
-    expect(engineFactory).toHaveBeenCalledTimes(2);
-    expect(secondEngine.loadCalls[0]?.source).toMatchObject({
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".video-shell")).toBe(fullscreenShell);
+    expect(engine.getSnapshot().lifecycle).not.toBe("destroyed");
+    expect(engine.loadCalls[1]?.source).toMatchObject({
       id: "lesson-two.mp4",
       src: "/course-hls/lesson-two/master.m3u8",
       metadata: { title: "The design mindset" },

@@ -32,6 +32,10 @@ export interface PopoverMenuProps {
   children: ReactNode | ((context: PopoverMenuRenderContext) => ReactNode);
   menuLabel?: string;
   mobilePresentation?: PopoverMenuMobilePresentation;
+  /** Optional fullscreen-local host for a mobile sheet. Defaults to document.body. */
+  mobileSheetPortalTarget?: HTMLElement | null;
+  /** Classes applied only when the mobile sheet presentation is active. */
+  mobileSheetPanelClassName?: string;
   className?: string;
   triggerClassName?: string;
   panelClassName?: string;
@@ -58,7 +62,7 @@ const panelClass =
   "absolute z-70 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border-0 bg-[color-mix(in_srgb,var(--video-player-menu-surface,rgb(11_11_13_/_0.88))_78%,transparent)] p-1.5 text-(--video-player-menu-text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] focus:outline-none";
 
 const mobileSheetPanelClass =
-  "fixed inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
+  "pointer-events-auto inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
 
 const mobileSheetDismissDistance = 72;
 
@@ -71,6 +75,8 @@ export function PopoverMenu({
   label,
   menuLabel,
   mobilePresentation = "popover",
+  mobileSheetPanelClassName,
+  mobileSheetPortalTarget,
   onOpenChange,
   open: controlledOpen,
   panelClassName,
@@ -96,6 +102,8 @@ export function PopoverMenu({
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
   const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
+  const isContainedMobileSheet =
+    isMobileSheet && Boolean(mobileSheetPortalTarget);
 
   const setOpen = useCallback(
     (nextOpen: boolean) => {
@@ -301,7 +309,11 @@ export function PopoverMenu({
       }}
       className={classNames(
         isMobileSheet
-          ? mobileSheetPanelClass
+          ? classNames(
+              mobileSheetPanelClass,
+              isContainedMobileSheet ? "absolute" : "fixed",
+              mobileSheetPanelClassName,
+            )
           : classNames(panelClass, positionClass),
         panelClassName,
       )}
@@ -353,12 +365,12 @@ export function PopoverMenu({
             <div
               aria-hidden="true"
               data-video-player-mobile-sheet-backdrop=""
-              className="fixed inset-0 z-170 bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none"
+              className={`${isContainedMobileSheet ? "absolute" : "fixed"} pointer-events-auto inset-0 z-170 bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none`}
               onPointerDown={closeAndRestoreFocus}
             />
             {panel}
           </>,
-          document.body,
+          mobileSheetPortalTarget ?? document.body,
         )
       : panel;
 

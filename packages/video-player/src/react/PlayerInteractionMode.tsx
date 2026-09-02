@@ -7,48 +7,107 @@ import {
 
 export type PlayerInteractionMode = "desktop" | "mobile" | "responsive";
 
-const DESKTOP_WIDTH_QUERY = "(min-width: 40rem)";
-const PHONE_HEIGHT_QUERY = "(max-height: 40rem)";
-const COARSE_POINTER_QUERY = "(pointer: coarse)";
+const MOBILE_WIDTH_QUERY = "(max-width: 640px)";
 
 const PlayerMobileInteractionContext = createContext(false);
+const responsiveModeListeners = new Set<() => void>();
+let responsiveModeListening = false;
+let responsiveModeMediaQuery: MediaQueryList | null = null;
+let windowedMobileMode = false;
+let fullscreenModeActive = false;
+let fullscreenMobileMode = false;
 
 function getResponsiveMobileSnapshot(): boolean {
   if (typeof window === "undefined") return false;
   if (typeof window.matchMedia !== "function") {
-    return Math.min(window.innerWidth, window.innerHeight) < 640;
+    return window.innerWidth <= 640;
   }
+  return window.matchMedia(MOBILE_WIDTH_QUERY).matches;
+}
 
-  const narrowViewport = !window.matchMedia(DESKTOP_WIDTH_QUERY).matches;
-  const landscapePhone =
-    window.matchMedia(PHONE_HEIGHT_QUERY).matches &&
-    window.matchMedia(COARSE_POINTER_QUERY).matches;
-  return narrowViewport || landscapePhone;
+function getFullscreenActive(): boolean {
+  if (typeof document === "undefined") return false;
+  const webkitDocument = document as Document & {
+    webkitFullscreenElement?: Element | null;
+  };
+  return Boolean(
+    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement,
+  );
+}
+
+function getResponsiveModeStoreSnapshot(): boolean {
+  if (!responsiveModeListening) return getResponsiveMobileSnapshot();
+  return fullscreenModeActive ? fullscreenMobileMode : windowedMobileMode;
+}
+
+function updateResponsiveModeStore(): void {
+  const previousMode = getResponsiveModeStoreSnapshot();
+  const fullscreenActive = getFullscreenActive();
+
+  if (fullscreenActive) {
+    if (!fullscreenModeActive) fullscreenMobileMode = windowedMobileMode;
+  } else {
+    windowedMobileMode = getResponsiveMobileSnapshot();
+  }
+  fullscreenModeActive = fullscreenActive;
+
+  if (getResponsiveModeStoreSnapshot() === previousMode) return;
+  for (const listener of responsiveModeListeners) listener();
+}
+
+function startResponsiveModeStore(): void {
+  windowedMobileMode = getResponsiveMobileSnapshot();
+  fullscreenModeActive = getFullscreenActive();
+  fullscreenMobileMode = windowedMobileMode;
+  responsiveModeMediaQuery =
+    typeof window.matchMedia === "function"
+      ? window.matchMedia(MOBILE_WIDTH_QUERY)
+      : null;
+  responsiveModeMediaQuery?.addEventListener?.(
+    "change",
+    updateResponsiveModeStore,
+  );
+  window.visualViewport?.addEventListener("resize", updateResponsiveModeStore);
+  window.addEventListener("resize", updateResponsiveModeStore);
+  window.addEventListener("orientationchange", updateResponsiveModeStore);
+  document.addEventListener("fullscreenchange", updateResponsiveModeStore);
+  document.addEventListener(
+    "webkitfullscreenchange",
+    updateResponsiveModeStore,
+  );
+  responsiveModeListening = true;
+}
+
+function stopResponsiveModeStore(): void {
+  responsiveModeMediaQuery?.removeEventListener?.(
+    "change",
+    updateResponsiveModeStore,
+  );
+  window.visualViewport?.removeEventListener(
+    "resize",
+    updateResponsiveModeStore,
+  );
+  window.removeEventListener("resize", updateResponsiveModeStore);
+  window.removeEventListener("orientationchange", updateResponsiveModeStore);
+  document.removeEventListener("fullscreenchange", updateResponsiveModeStore);
+  document.removeEventListener(
+    "webkitfullscreenchange",
+    updateResponsiveModeStore,
+  );
+  responsiveModeMediaQuery = null;
+  responsiveModeListening = false;
 }
 
 function subscribeToResponsiveMobileMode(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => undefined;
-
-  const mediaQueries =
-    typeof window.matchMedia === "function"
-      ? [
-          window.matchMedia(DESKTOP_WIDTH_QUERY),
-          window.matchMedia(PHONE_HEIGHT_QUERY),
-          window.matchMedia(COARSE_POINTER_QUERY),
-        ]
-      : [];
-  for (const mediaQuery of mediaQueries) {
-    mediaQuery.addEventListener?.("change", onStoreChange);
-  }
-  window.visualViewport?.addEventListener("resize", onStoreChange);
-  window.addEventListener("orientationchange", onStoreChange);
+  responsiveModeListeners.add(onStoreChange);
+  if (!responsiveModeListening) startResponsiveModeStore();
 
   return () => {
-    for (const mediaQuery of mediaQueries) {
-      mediaQuery.removeEventListener?.("change", onStoreChange);
+    responsiveModeListeners.delete(onStoreChange);
+    if (responsiveModeListeners.size === 0 && responsiveModeListening) {
+      stopResponsiveModeStore();
     }
-    window.visualViewport?.removeEventListener("resize", onStoreChange);
-    window.removeEventListener("orientationchange", onStoreChange);
   };
 }
 
@@ -57,7 +116,7 @@ export function useResolvedPlayerMobileInteraction(
 ): boolean {
   const responsiveMobile = useSyncExternalStore(
     subscribeToResponsiveMobileMode,
-    getResponsiveMobileSnapshot,
+    getResponsiveModeStoreSnapshot,
     () => false,
   );
   if (mode === "mobile") return true;

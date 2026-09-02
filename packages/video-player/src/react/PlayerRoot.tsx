@@ -89,7 +89,7 @@ export interface PlayerRootProps extends Omit<
   theme?: PlayerTheme;
   /** Enables pinch-to-zoom and one-finger panning of the video content. */
   zoomEnabled?: boolean;
-  /** Keeps touch-first controls and gestures stable across viewport rotation. */
+  /** Selects controls by windowed width and keeps that choice stable in fullscreen. */
   interactionMode?: PlayerInteractionMode;
 }
 

@@ -102,6 +102,17 @@
   height: anchor-size(height);
 }
 
+/* Native fullscreen only paints descendants of the fullscreen element. Keep
+   its ambient projection inside the video shell and give it a non-anchor
+   geometry so Android browsers do not depend on anchor positioning support. */
+[data-video-player-shell-overlay-host] > .ambient-canvas--fullscreen-shell {
+  position: absolute;
+  position-anchor: auto;
+  inset: 1%;
+  width: 98%;
+  height: 98%;
+}
+
 /* Large blurred projections are expensive to resample while either desktop
    split is moving. The video remains live; only its decorative glow yields
    until the pointer is released, then the existing opacity transition returns. */
@@ -1353,7 +1364,7 @@
   }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 640px) and (orientation: portrait) {
   .learning-workspace__player-wrap {
     position: sticky;
     z-index: 40;
@@ -1361,7 +1372,9 @@
     background: var(--canvas);
     box-shadow: 0 10px 24px color-mix(in srgb, var(--canvas) 48%, transparent);
   }
+}
 
+@media (min-width: 641px) and (max-width: 840px) {
   .learning-supplemental-panel {
     padding-top: 11px;
   }

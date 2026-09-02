@@ -3864,8 +3864,8 @@ export function CoursesPage({
           !renderMain && page === "settings" ? "courses-main--settings" : "",
           mobileSidebarNavigationActive
             ? renderMain
-              ? "max-[820px]:pb-0!"
-              : "max-[820px]:pb-4!"
+              ? "max-[640px]:pb-0!"
+              : "max-[640px]:pb-4!"
             : "",
         ]
           .filter(Boolean)

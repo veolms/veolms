@@ -92,6 +92,7 @@ export function Curriculum({
   const currentSectionRef = useRef<HTMLElement>(null);
   const lessonListRef = useRef<HTMLDivElement>(null);
   const curriculumRef = useRef<HTMLElement>(null);
+  const contextMenuPortalHostRef = useRef<HTMLElement | null>(null);
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
   const handledTopRequestRef = useRef(0);
@@ -112,6 +113,8 @@ export function Curriculum({
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
       curriculumRef.current = node;
+      contextMenuPortalHostRef.current =
+        node?.closest<HTMLElement>(".video-shell") ?? null;
       if (scrollportRef) scrollportRef.current = node;
     },
     [scrollportRef],
@@ -569,7 +572,10 @@ export function Curriculum({
         </div>
       </aside>
 
-      <ContextMenuContent aria-label="Course curriculum actions">
+      <ContextMenuContent
+        aria-label="Course curriculum actions"
+        portalContainer={contextMenuPortalHostRef}
+      >
         <ContextMenuGroup>
           <ContextMenuLabel>Curriculum actions</ContextMenuLabel>
           {!allSectionsExpanded && (

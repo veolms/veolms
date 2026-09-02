@@ -382,6 +382,42 @@ describe("Curriculum", () => {
     ).not.toBeInTheDocument();
   }, 30_000);
 
+  it("keeps curriculum actions inside a fullscreen-capable video shell", async () => {
+    const { container } = render(
+      <div className="video-shell">
+        <TestCurriculum
+          persistenceKey="fullscreen-curriculum-context-menu"
+          selectedLesson={1}
+          onSelectLesson={vi.fn()}
+          onOpenCourseOverview={vi.fn()}
+          courseTitle="UX Design Fundamentals"
+          courseThumbnail="/course-thumbnail.png"
+        />
+      </div>,
+    );
+
+    const shell = container.querySelector(".video-shell");
+    const curriculumHero = screen
+      .getByRole("complementary", { name: "Course curriculum" })
+      .querySelector<HTMLElement>(".learning-curriculum__hero");
+    expect(shell).not.toBeNull();
+    expect(curriculumHero).not.toBeNull();
+
+    fireEvent.contextMenu(curriculumHero!, { clientX: 48, clientY: 72 });
+    const expandAll = await screen.findByRole("menuitem", {
+      name: "Expand all sections",
+    });
+    const portal = expandAll.closest('[data-slot="context-menu-portal"]');
+    expect(portal?.parentElement).toBe(shell);
+
+    fireEvent.click(expandAll);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("menuitem", { name: "Expand all sections" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it("opens curriculum actions after a touch long press", async () => {
     vi.useFakeTimers();
     try {

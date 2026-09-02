@@ -31,7 +31,10 @@ import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
 import type { PlayerMediaProps } from "./PlayerMedia";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
-import { PlayerZoomMedia } from "./PlayerZoomMedia";
+import {
+  PlayerZoomMedia,
+  type PlayerZoomOverflowBoundary,
+} from "./PlayerZoomMedia";
 import type {
   VideoPlayerEvent,
   VideoPlayerEventListener,
@@ -98,7 +101,9 @@ export interface VideoPlayerProps extends Omit<
   lockLandscapeOnFullscreen?: boolean;
   /** Enables pinch-to-zoom and panning of the video content. */
   zoomEnabled?: boolean;
-  /** Forces a touch-first or desktop interaction model when responsive detection is unsuitable. */
+  /** Chooses whether zoom remains clipped to the player or may fill its shell. */
+  zoomOverflowBoundary?: PlayerZoomOverflowBoundary;
+  /** Overrides the width-based responsive interaction model when needed. */
   interactionMode?: PlayerInteractionMode;
 }
 
@@ -168,6 +173,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
+      zoomOverflowBoundary = "player",
       ...outerProps
     },
     ref,
@@ -286,6 +292,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         )}
         style={rootStyle}
       >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+          data-video-player-shell-overlay-host=""
+        />
         <PlayerRoot
           ref={ref}
           containerRef={playerRootRef}
@@ -299,6 +310,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           theme={theme}
           interactionMode={interactionMode}
           zoomEnabled={zoomEnabled}
+          data-player-zoom-overflow-boundary={zoomOverflowBoundary}
           style={playerThemeStyle}
           role="region"
           aria-label={ariaLabel}
@@ -330,6 +342,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           />
           <PlayerZoomMedia
             {...mediaProps}
+            overflowBoundary={zoomOverflowBoundary}
             poster={resolvedPoster}
             playsInline={mediaProps?.playsInline ?? true}
             className={classNames(

@@ -160,6 +160,7 @@ describe("PopoverMenu", () => {
         document.querySelector("[data-video-player-mobile-sheet-drag-handle]"),
       ).not.toHaveClass("border-b");
       expect(sheet.parentElement).toBe(document.body);
+      expect(sheet).toHaveClass("fixed");
       expect(trigger).toHaveAttribute("data-player-control");
       expect(
         screen.getByRole("menu", { name: "Video settings" }),
@@ -176,6 +177,65 @@ describe("PopoverMenu", () => {
       expect(trigger).toHaveFocus();
       expect(document.body.style.overflow).toBe("");
     } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
+
+  it("can contain a mobile sheet inside a fullscreen-local overlay host", () => {
+    const originalMatchMedia = window.matchMedia;
+    const portalTarget = document.createElement("div");
+    document.body.append(portalTarget);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 640px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      render(
+        <PlayerInteractionModeProvider mobile>
+          <PopoverMenu
+            label="Settings"
+            menuLabel="Video settings"
+            mobilePresentation="sheet"
+            mobileSheetPortalTarget={portalTarget}
+            mobileSheetPanelClassName="mx-auto max-w-[100dvh]"
+            trigger="Settings"
+          >
+            <PlayerMenuItem label="Quality" />
+          </PopoverMenu>
+        </PlayerInteractionModeProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+      const sheet = screen.getByRole("dialog", { name: "Video settings" });
+      const backdrop = portalTarget.querySelector(
+        '[data-video-player-mobile-sheet-backdrop=""]',
+      );
+      expect(sheet.parentElement).toBe(portalTarget);
+      expect(sheet).toHaveClass(
+        "absolute",
+        "w-full",
+        "mx-auto",
+        "max-w-[100dvh]",
+      );
+      expect(sheet).not.toHaveClass("fixed");
+      expect(backdrop?.parentElement).toBe(portalTarget);
+      expect(backdrop).toHaveClass("absolute", "pointer-events-auto");
+    } finally {
+      portalTarget.remove();
       Object.defineProperty(window, "matchMedia", {
         configurable: true,
         writable: true,

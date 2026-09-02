@@ -46,6 +46,10 @@ import {
   getCourseVideoForLesson,
 } from "./courseContent";
 import { Curriculum } from "./Curriculum";
+import {
+  FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
+  FullscreenLandscapeCurriculumPanel,
+} from "./FullscreenLandscapeCurriculumPanel";
 import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
 import {
   canPlayCourseLesson,
@@ -304,6 +308,16 @@ export function LearningWorkspace({
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
+  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
+    useState(false);
+  const [fullscreenLessonPanelOpen, setFullscreenLessonPanelOpen] =
+    useState(false);
+  const [fullscreenVideoWidthPercent, setFullscreenVideoWidthPercent] =
+    useState(FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT);
+  const [
+    fullscreenCurriculumFocusRequest,
+    setFullscreenCurriculumFocusRequest,
+  ] = useState(0);
   const [lessonDrawerForcedFloating, setLessonDrawerForcedFloating] =
     useState(false);
   const [lessonDrawerSnapPoint, setLessonDrawerSnapPoint] = useState<
@@ -394,6 +408,7 @@ export function LearningWorkspace({
   );
   const lessonTriggerRef = useRef<HTMLButtonElement>(null);
   const curriculumScrollportRef = useRef<HTMLElement>(null);
+  const fullscreenCurriculumScrollportRef = useRef<HTMLElement>(null);
   const lessonDrawerSurfaceRef = useRef<HTMLDivElement>(null);
   const lessonDrawerScrollportRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -474,7 +489,9 @@ export function LearningWorkspace({
     const playerWrap = playerWrapRef.current;
     if (!main || !playerWrap) return undefined;
 
-    const stickyCompactLayout = window.matchMedia("(max-width: 840px)");
+    const stickyCompactLayout = window.matchMedia(
+      "(max-width: 640px) and (orientation: portrait)",
+    );
     let frame: number | null = null;
     const observer =
       typeof ResizeObserver === "undefined"
@@ -667,6 +684,7 @@ export function LearningWorkspace({
 
   const showLessonDrawer = useCallback(
     (scrollTarget: "current" | "top") => {
+      setFullscreenLessonPanelOpen(false);
       setLessonDrawerForcedFloating(false);
       if (!isCourseContentDrawerLayout()) {
         setCurriculumCollapsed(false);
@@ -717,10 +735,37 @@ export function LearningWorkspace({
     setLessonDrawerForcedFloating(false);
   }, []);
 
-  const toggleLessonDrawerFromPlayer = useCallback(() => {
-    if (lessonDrawer) closeLessonDrawer();
-    else openLessonDrawerAtTop();
-  }, [closeLessonDrawer, lessonDrawer, openLessonDrawerAtTop]);
+  const toggleLessonDrawerFromPlayer = useCallback(
+    (presentation: "drawer" | "side") => {
+      if (presentation === "side") {
+        setLessonDrawer(false);
+        setLessonDrawerForcedFloating(false);
+        if (!fullscreenLessonPanelOpen) {
+          setFullscreenCurriculumFocusRequest((request) => request + 1);
+        }
+        setFullscreenLessonPanelOpen(!fullscreenLessonPanelOpen);
+        return;
+      }
+
+      setFullscreenLessonPanelOpen(false);
+      if (lessonDrawer) closeLessonDrawer();
+      else openLessonDrawerAtTop();
+    },
+    [
+      closeLessonDrawer,
+      fullscreenLessonPanelOpen,
+      lessonDrawer,
+      openLessonDrawerAtTop,
+    ],
+  );
+
+  const handleMobileLandscapeFullscreenChange = useCallback(
+    (active: boolean) => {
+      setMobileLandscapeFullscreen(active);
+      if (!active) setFullscreenLessonPanelOpen(false);
+    },
+    [],
+  );
 
   const openFloatingLessonDrawer = useCallback(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -1468,6 +1513,47 @@ export function LearningWorkspace({
   const floatingLessonDrawerSlidingClosed =
     floatingLessonDrawerResizing &&
     floatingLessonDrawerViewportWidth < LESSON_DRAWER_MIN_FLOATING_WIDTH;
+  const playerCourseLessonsOpen = mobileLandscapeFullscreen
+    ? fullscreenLessonPanelOpen
+    : lessonDrawer;
+  const fullscreenCoursePanel = useMemo(
+    () => (
+      <FullscreenLandscapeCurriculumPanel
+        videoWidthPercent={fullscreenVideoWidthPercent}
+        onVideoWidthPercentChange={setFullscreenVideoWidthPercent}
+      >
+        <Curriculum
+          sections={curriculumSections}
+          lessonsById={curriculumLessonsById}
+          scrollportRef={fullscreenCurriculumScrollportRef}
+          scrollportId="learning-fullscreen-course-curriculum-scrollport"
+          selectedLesson={selectedLesson}
+          lessonProgress={lessonProgress}
+          onSelectLesson={selectLesson}
+          isLessonAvailable={isLessonAvailable}
+          onOpenCourseOverview={onOpenCourseOverview}
+          courseTitle={courseTitle}
+          courseThumbnail={courseThumbnail}
+          focusRequest={fullscreenCurriculumFocusRequest}
+          persistenceKey={coursePersistenceKey}
+        />
+      </FullscreenLandscapeCurriculumPanel>
+    ),
+    [
+      coursePersistenceKey,
+      courseThumbnail,
+      courseTitle,
+      curriculumLessonsById,
+      curriculumSections,
+      fullscreenCurriculumFocusRequest,
+      fullscreenVideoWidthPercent,
+      isLessonAvailable,
+      lessonProgress,
+      onOpenCourseOverview,
+      selectLesson,
+      selectedLesson,
+    ],
+  );
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
@@ -1478,7 +1564,9 @@ export function LearningWorkspace({
       autoplayEnabled,
       canGoNext: nextLessonId !== undefined,
       canGoPrevious: previousLessonId !== undefined,
-      courseLessonsOpen: lessonDrawer,
+      courseLessonsOpen: playerCourseLessonsOpen,
+      courseLessonsPanel: fullscreenCoursePanel,
+      courseLessonsVideoWidthPercent: fullscreenVideoWidthPercent,
       onAutoplayEnabledChange: updateAutoplayEnabled,
       onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
       onGoNext: goToNextLesson,
@@ -1487,6 +1575,7 @@ export function LearningWorkspace({
       onMinimize: onMinimizePlayer,
       onMinimizeGestureChange: updatePlayerMinimizeGesture,
       onMiniPlayerRestoreReady,
+      onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
       onProgressChange: updateSelectedLessonProgress,
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
     }),
@@ -1495,14 +1584,17 @@ export function LearningWorkspace({
       autoplayEnabled,
       coursePersistenceKey,
       currentLesson,
+      fullscreenCoursePanel,
+      fullscreenVideoWidthPercent,
       goToNextLesson,
       goToPreviousLesson,
       handleLessonEnded,
-      lessonDrawer,
+      handleMobileLandscapeFullscreenChange,
       nextLessonId,
       onMiniPlayerRestoreReady,
       onMinimizePlayer,
       previousLessonId,
+      playerCourseLessonsOpen,
       selectedLesson,
       theaterMode,
       toggleLessonDrawerFromPlayer,

@@ -1,39 +1,63 @@
 import { useEffect, useState } from "react";
 import { usePlayerState } from "../react/usePlayerState";
-import { usePlayerTheme } from "../themes/PlayerThemeContext";
 
 export interface BufferingIndicatorProps {
   delay?: number;
 }
 
 function PlayerBufferingOverlay({ label }: { label: string }) {
-  const BufferingIcon = usePlayerTheme().icons.buffering;
-
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-20 grid place-items-center"
+      className="pointer-events-none absolute inset-0 z-40 grid place-items-center"
       role="status"
       aria-label={label}
+      data-video-player-buffering-overlay=""
     >
-      <span className="grid size-14 place-items-center rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)">
-        <BufferingIcon
-          size={30}
-          className="animate-spin motion-reduce:animate-none"
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 48 48"
+        className="video-player-buffering-spinner size-12 overflow-visible text-(--video-player-control-text)"
+        data-video-player-buffering-spinner=""
+      >
+        <circle
+          cx="24"
+          cy="24"
+          r="20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          className="video-player-buffering-spinner__arc"
         />
-      </span>
+      </svg>
     </div>
   );
 }
 
-function DelayedBufferingIndicator({ delay }: { delay: number }) {
-  const [visible, setVisible] = useState(false);
+function ActiveBufferingIndicator({
+  delay,
+  initialLoading,
+}: {
+  delay: number;
+  initialLoading: boolean;
+}) {
+  const [visible, setVisible] = useState(initialLoading);
+  const [label] = useState(
+    initialLoading ? "Loading video" : "Buffering video",
+  );
 
   useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), delay);
+    if (visible) return undefined;
+    const timer = setTimeout(
+      () => setVisible(true),
+      initialLoading ? 0 : delay,
+    );
     return () => clearTimeout(timer);
-  }, [delay]);
+  }, [delay, initialLoading, visible]);
 
-  return visible ? <PlayerBufferingOverlay label="Buffering video" /> : null;
+  return initialLoading || visible ? (
+    <PlayerBufferingOverlay label={label} />
+  ) : null;
 }
 
 export function BufferingIndicator({ delay = 280 }: BufferingIndicatorProps) {
@@ -44,7 +68,8 @@ export function BufferingIndicator({ delay = 280 }: BufferingIndicatorProps) {
   );
   const initialLoading = lifecycle === "loading";
 
-  if (initialLoading) return <PlayerBufferingOverlay label="Loading video" />;
-  if (!buffering) return null;
-  return <DelayedBufferingIndicator delay={delay} />;
+  if (!initialLoading && !buffering) return null;
+  return (
+    <ActiveBufferingIndicator delay={delay} initialLoading={initialLoading} />
+  );
 }

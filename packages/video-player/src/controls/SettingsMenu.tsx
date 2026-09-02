@@ -17,6 +17,8 @@ const SETTINGS_OPEN_TURN_DEGREES = 60;
 export interface SettingsMenuProps {
   includePictureInPicture?: boolean;
   mobilePresentation?: PopoverMenuMobilePresentation;
+  mobileSheetPanelClassName?: string;
+  mobileSheetPortalTarget?: HTMLElement | null;
   /** Application-specific settings appended to the main settings view. */
   extraMainItems?: ReactNode;
   triggerClassName?: string;
@@ -26,6 +28,8 @@ export function SettingsMenu({
   extraMainItems,
   includePictureInPicture = false,
   mobilePresentation = "popover",
+  mobileSheetPanelClassName,
+  mobileSheetPortalTarget,
   triggerClassName,
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
@@ -92,6 +96,8 @@ export function SettingsMenu({
       label="Settings"
       menuLabel="Video settings"
       mobilePresentation={mobilePresentation}
+      mobileSheetPanelClassName={mobileSheetPanelClassName}
+      mobileSheetPortalTarget={mobileSheetPortalTarget}
       align="end"
       side="top"
       panelClassName={mobileInteraction ? undefined : "backdrop-blur-sm !mb-8"}

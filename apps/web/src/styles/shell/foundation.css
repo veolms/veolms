@@ -61,7 +61,7 @@
   border-radius: 18px;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 640px) {
   .courses-main {
     --application-page-block-start: 20px;
     --application-page-inline-gutter: 15px;
@@ -75,7 +75,7 @@
   }
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-main.courses-main--learning {
     position: relative;
   }

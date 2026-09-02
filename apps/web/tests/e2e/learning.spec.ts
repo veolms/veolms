@@ -1915,10 +1915,10 @@ test("mobile supplemental tabs clear sticky spacing in the natural layout", asyn
   }
 });
 
-test("lesson playback switches to the mobile sticky stack at 840px", async ({
+test("lesson playback stays in the scrolling layout above 640px", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 840, height: 779 });
+  await page.setViewportSize({ width: 820, height: 779 });
   await openApp(
     page,
     "/learn/backend-nodejs/career-opportunities-15?from=courses",
@@ -1926,92 +1926,46 @@ test("lesson playback switches to the mobile sticky stack at 840px", async ({
 
   const player = page.locator(".learning-workspace__player-wrap");
   const discussionHeader = page.locator(".learning-discussion__header");
-  const firstComment = page.locator(".learning-comment-card").first();
   const scrollport = page.locator("#courses-main-scrollport");
-  const initialCommentTop = await firstComment.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
+  const initialPlayerTop = (await player.boundingBox())!.y;
 
-  await expect(player).toHaveCSS("position", "sticky");
-  await expect(discussionHeader).toHaveCSS("position", "sticky");
+  await expect(player).toHaveCSS("position", "relative");
+  await expect(discussionHeader).toHaveCSS("position", "static");
   await scrollport.evaluate((element) => element.scrollTo(0, 360));
 
   await expect
     .poll(() => scrollport.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(100);
   await expect
-    .poll(async () => {
-      const [playerBounds, scrollportBounds] = await Promise.all([
-        player.boundingBox(),
-        scrollport.boundingBox(),
-      ]);
-      if (!playerBounds || !scrollportBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(playerBounds.y - scrollportBounds.y);
-    })
-    .toBeLessThanOrEqual(1);
-  await expect
-    .poll(async () => {
-      const [playerBounds, discussionBounds] = await Promise.all([
-        player.boundingBox(),
-        discussionHeader.boundingBox(),
-      ]);
-      if (!playerBounds || !discussionBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(
-        discussionBounds.y - (playerBounds.y + playerBounds.height),
-      );
-    })
-    .toBeLessThanOrEqual(2);
-  await expect
-    .poll(
-      async () =>
-        (await firstComment.boundingBox())?.y ?? Number.POSITIVE_INFINITY,
-    )
-    .toBeLessThan(initialCommentTop - 40);
-  const tabletPositionBefore = {
-    scrollTop: await scrollport.evaluate((element) => element.scrollTop),
-    playerTop: (await player.boundingBox())!.y,
-    discussionTop: (await discussionHeader.boundingBox())!.y,
-  };
+    .poll(async () => (await player.boundingBox())?.y ?? initialPlayerTop)
+    .toBeLessThan(initialPlayerTop - 100);
+});
 
-  await page.getByRole("tab", { name: "Notes" }).click();
-  const tabletNotesHeading = page.getByRole("heading", {
-    name: "Your lesson notes",
+test("640px landscape keeps the lesson video in normal scroll flow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  const player = page.locator(".learning-workspace__player-wrap");
+  const navigation = page.getByRole("navigation", {
+    name: "Student mobile navigation",
   });
-  await expect(tabletNotesHeading).toBeVisible();
-  expect(await scrollport.evaluate((element) => element.scrollTop)).toBeCloseTo(
-    tabletPositionBefore.scrollTop,
-    0,
-  );
-  expect((await player.boundingBox())!.y).toBeCloseTo(
-    tabletPositionBefore.playerTop,
-    0,
-  );
-  expect((await discussionHeader.boundingBox())!.y).toBeCloseTo(
-    tabletPositionBefore.discussionTop,
-    0,
-  );
-  await expect
-    .poll(async () => {
-      const [playerBounds, discussionBounds, notesBounds] = await Promise.all([
-        player.boundingBox(),
-        discussionHeader.boundingBox(),
-        tabletNotesHeading.locator("..").boundingBox(),
-      ]);
-      if (!playerBounds || !discussionBounds || !notesBounds) {
-        return Number.POSITIVE_INFINITY;
-      }
-      return Math.max(
-        Math.abs(discussionBounds.y - (playerBounds.y + playerBounds.height)),
-        Math.abs(
-          notesBounds.y - (discussionBounds.y + discussionBounds.height + 12),
-        ),
-      );
-    })
-    .toBeLessThanOrEqual(2);
 
-  await page.setViewportSize({ width: 841, height: 779 });
+  await expect(navigation).toBeVisible();
   await expect(player).toHaveCSS("position", "relative");
-  await expect(discussionHeader).toHaveCSS("position", "static");
+
+  const initialPlayerTop = (await player.boundingBox())!.y;
+  await page.evaluate(() => window.scrollTo(0, 260));
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(100);
+  await expect
+    .poll(async () => (await player.boundingBox())?.y ?? initialPlayerTop)
+    .toBeLessThan(initialPlayerTop - 100);
 });
 
 test("compact lesson video reaches every available parent edge", async ({
@@ -3646,7 +3600,10 @@ test("custom player controls, timeline preview and seek, fullscreen shell, and a
         const playerStyle = player ? getComputedStyle(player) : null;
         const videoStyle = video ? getComputedStyle(video) : null;
         return {
-          parentIsShell: canvas.parentElement === shell,
+          parentIsShellOverlay:
+            canvas.parentElement?.matches(
+              '[data-video-player-shell-overlay-host=""]',
+            ) && canvas.parentElement.parentElement === shell,
           outsideForegroundPlayer: player ? !player.contains(canvas) : false,
           canvasPosition: canvasStyle.position,
           canvasPointerEvents: canvasStyle.pointerEvents,
@@ -3657,7 +3614,7 @@ test("custom player controls, timeline preview and seek, fullscreen shell, and a
       }),
     )
     .toEqual({
-      parentIsShell: true,
+      parentIsShellOverlay: true,
       outsideForegroundPlayer: true,
       canvasPosition: "absolute",
       canvasPointerEvents: "none",

@@ -21,14 +21,20 @@ export function LessonAmbientProjection({
   const inlineCanvasRef = useRef<HTMLCanvasElement>(null);
   const shellCanvasRef = useRef<HTMLCanvasElement>(null);
   const [shellHost, setShellHost] = useState<HTMLElement | null>(null);
+  const [shellOverlayHost, setShellOverlayHost] = useState<HTMLElement | null>(
+    null,
+  );
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
-  const { error, playing } = usePlayerState(
-    ({ media }) => ({
+  const { error, fullscreen, playing } = usePlayerState(
+    ({ media, ui }) => ({
       error: Boolean(media.error),
+      fullscreen: ui.fullscreen,
       playing: media.playing,
     }),
     (left, right) =>
-      left.error === right.error && left.playing === right.playing,
+      left.error === right.error &&
+      left.fullscreen === right.fullscreen &&
+      left.playing === right.playing,
   );
 
   const getShell = useCallback(
@@ -57,6 +63,11 @@ export function LessonAmbientProjection({
   useLayoutEffect(() => {
     const shell = getShell();
     setShellHost(shell);
+    setShellOverlayHost(
+      shell?.querySelector<HTMLElement>(
+        '[data-video-player-shell-overlay-host=""]',
+      ) ?? null,
+    );
     setPortalHost(shell?.closest<HTMLElement>(".courses-app") ?? null);
   }, [getShell]);
 
@@ -96,26 +107,38 @@ export function LessonAmbientProjection({
   return (
     <>
       <span ref={anchorRef} hidden />
-      {portalHost
+      {!fullscreen && portalHost
         ? createPortal(
             <canvas
               ref={shellCanvasRef}
               aria-hidden="true"
               data-ambient-shell-projection
+              data-ambient-projection-scope="app"
               className={`ambient-canvas ambient-canvas--shell ambient-canvas--learning-shell ${visible ? "ambient-canvas--visible" : ""}`}
             />,
             portalHost,
           )
         : null}
-      {shellHost
+      {shellOverlayHost
         ? createPortal(
-            <canvas
-              ref={inlineCanvasRef}
-              aria-hidden="true"
-              data-ambient-inline-projection
-              className={`ambient-canvas max-[820px]:transform-none! ${visible ? "ambient-canvas--visible" : ""}`}
-            />,
-            shellHost,
+            <>
+              {fullscreen ? (
+                <canvas
+                  ref={shellCanvasRef}
+                  aria-hidden="true"
+                  data-ambient-shell-projection
+                  data-ambient-projection-scope="fullscreen"
+                  className={`ambient-canvas ambient-canvas--shell ambient-canvas--learning-shell ambient-canvas--fullscreen-shell ${visible ? "ambient-canvas--visible" : ""}`}
+                />
+              ) : null}
+              <canvas
+                ref={inlineCanvasRef}
+                aria-hidden="true"
+                data-ambient-inline-projection
+                className={`ambient-canvas ${visible ? "ambient-canvas--visible" : ""}`}
+              />
+            </>,
+            shellOverlayHost,
           )
         : null}
     </>

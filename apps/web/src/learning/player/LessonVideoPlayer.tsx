@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
   type VideoPlayerEvent,
@@ -58,8 +59,10 @@ export interface LessonVideoPlayerProps {
   canGoNext?: boolean;
   canGoPrevious?: boolean;
   courseLessonsOpen?: boolean;
+  courseLessonsPanel?: ReactNode;
+  courseLessonsVideoWidthPercent?: number;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
-  onCourseLessonsToggle?: () => void;
+  onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
   onGoNext?: () => void;
   onGoPrevious?: () => void;
   onLessonEnded?: () => void;
@@ -70,6 +73,7 @@ export interface LessonVideoPlayerProps {
   onMiniPlayerRestoreReady?: () => void;
   onMiniClose?: () => void;
   onMiniRestore?: () => void;
+  onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
   presentation?: "full" | "mini";
   resumePersistenceKey?: string;
@@ -83,6 +87,8 @@ export function LessonVideoPlayer({
   canGoNext = false,
   canGoPrevious = false,
   courseLessonsOpen = false,
+  courseLessonsPanel,
+  courseLessonsVideoWidthPercent = 60,
   engineFactory,
   lessonTitle,
   media,
@@ -99,6 +105,7 @@ export function LessonVideoPlayer({
   onMiniPlayerRestoreReady,
   onMiniClose,
   onMiniRestore,
+  onMobileLandscapeFullscreenChange,
   onTheaterToggle,
   resumePersistenceKey,
   theaterMode,
@@ -118,6 +125,8 @@ export function LessonVideoPlayer({
     LEARNING_SEEK_INTERVAL_DEFAULT,
   );
   const [preferencesReady, setPreferencesReady] = useState(false);
+  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
+    useState(false);
   const playerTheme = useLearningPlayerTheme();
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
@@ -380,6 +389,19 @@ export function LessonVideoPlayer({
     });
   }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
 
+  const minimizePlayerFromControl = useCallback(async () => {
+    if (!onMinimize) return;
+    const player = playerRef.current;
+    if (player?.getSnapshot().ui.fullscreen) {
+      try {
+        await player.exitFullscreen();
+      } catch {
+        return;
+      }
+    }
+    minimizePlayer();
+  }, [minimizePlayer, onMinimize]);
+
   const minimizeGesture = useLessonPlayerMinimizeGesture({
     enabled: presentation === "full" && Boolean(onMinimize),
     fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
@@ -395,6 +417,14 @@ export function LessonVideoPlayer({
     setAmbientEnabled(enabled);
     writeAmbientPreference(enabled);
   }, []);
+
+  const handleMobileLandscapeFullscreenChange = useCallback(
+    (active: boolean) => {
+      setMobileLandscapeFullscreen(active);
+      onMobileLandscapeFullscreenChange?.(active);
+    },
+    [onMobileLandscapeFullscreenChange],
+  );
 
   const handleTheaterModeChange = useCallback(
     (active: boolean) => {
@@ -473,9 +503,25 @@ export function LessonVideoPlayer({
       window.removeEventListener("keydown", handleLessonNavigationShortcut);
   }, [canGoNext, canGoPrevious, onGoNext, onGoPrevious]);
 
+  const fullscreenCoursePanelActive =
+    presentation === "full" &&
+    mobileLandscapeFullscreen &&
+    courseLessonsOpen &&
+    Boolean(courseLessonsPanel);
+  const playerShellStyle =
+    presentation === "full"
+      ? ({
+          ...minimizeGesture.style,
+          ...(fullscreenCoursePanelActive
+            ? {
+                "--learning-fullscreen-video-width": `${courseLessonsVideoWidthPercent}%`,
+              }
+            : undefined),
+        } as CSSProperties)
+      : undefined;
+
   return (
     <VeoVideoPlayer
-      key={mediaKey}
       ref={playerRef}
       source={source}
       theme={playerTheme}
@@ -484,6 +530,11 @@ export function LessonVideoPlayer({
       autoPlay={autoPlayOnMediaChange || restoreAutoplayRef.current === true}
       keyboardEnabled={presentation === "full"}
       zoomEnabled={presentation === "full"}
+      zoomOverflowBoundary={
+        presentation === "full" && mobileLandscapeFullscreen
+          ? "shell"
+          : "player"
+      }
       ariaLabel={`Lesson video player for ${lessonTitle}`}
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
@@ -496,17 +547,25 @@ export function LessonVideoPlayer({
       mediaProps={{
         muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
-      className={presentation === "mini" ? "!rounded-xl" : undefined}
+      className={
+        presentation === "mini"
+          ? "!rounded-xl"
+          : fullscreenCoursePanelActive
+            ? "flex h-full items-center justify-start overflow-hidden bg-black"
+            : undefined
+      }
       data-learning-player-controls-suppressed={
         minimizeGesture.controlsSuppressed ? "" : undefined
       }
       data-learning-player-motion-surface=""
-      style={presentation === "full" ? minimizeGesture.style : undefined}
+      style={playerShellStyle}
       {...(presentation === "full" ? minimizeGesture.handlers : {})}
       playerClassName={
         presentation === "mini"
           ? "!rounded-xl !shadow-none"
-          : "border-0 !rounded-none"
+          : fullscreenCoursePanelActive
+            ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-[calc(100dvh*16/9)] !shrink-0 !rounded-none !shadow-none"
+            : "border-0 !rounded-none"
       }
       centralControl={
         presentation === "mini" ? (
@@ -536,12 +595,16 @@ export function LessonVideoPlayer({
             canGoPrevious={canGoPrevious}
             controlsSuppressed={minimizeGesture.controlsSuppressed}
             courseLessonsOpen={courseLessonsOpen}
+            courseLessonsPanel={courseLessonsPanel}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
-            onMinimize={onMinimize ? minimizePlayer : undefined}
+            onMinimize={onMinimize ? minimizePlayerFromControl : undefined}
+            onMobileLandscapeFullscreenChange={
+              handleMobileLandscapeFullscreenChange
+            }
           />
         )
       }
