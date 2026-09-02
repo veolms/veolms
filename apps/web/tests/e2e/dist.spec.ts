@@ -121,9 +121,15 @@ test("compiled client serves direct routes and bundled course artwork", async ({
   expect(browserErrors).toEqual([]);
 });
 
-test("compiled learning route keeps the deployment-provided course-media URL contract", async ({
+test("compiled learning route loads the same-origin adaptive HLS manifest", async ({
   page,
 }) => {
+  const manifestRequest = page.waitForRequest((request) =>
+    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(request.url()),
+  );
+  const manifestResponse = page.waitForResponse((response) =>
+    /\/course-hls\/[a-z0-9-]+\/master\.m3u8(?:\?.*)?$/.test(response.url()),
+  );
   await openApp(page, "/learn/typescript-course");
   await expect(
     page.getByRole("heading", {
@@ -133,10 +139,12 @@ test("compiled learning route keeps the deployment-provided course-media URL con
   ).toBeVisible();
   const player = page.getByRole("region", { name: /Lesson video player/ });
   await expect(player).toBeVisible();
-  const video = player.locator("video");
-  const mediaSource = await video.getAttribute("src");
-  expect(mediaSource).not.toBeNull();
-  const mediaUrl = new URL(mediaSource!, page.url());
-  expect(mediaUrl.pathname).toMatch(/\/course-videos\/.+\.mp4$/);
-  expect(mediaUrl.pathname).toContain("%20");
+  const mediaUrl = new URL((await manifestRequest).url());
+  expect(mediaUrl.pathname).toMatch(/\/course-hls\/[a-z0-9-]+\/master\.m3u8$/);
+  const mediaResponse = await manifestResponse;
+  expect(mediaResponse.ok()).toBe(true);
+  expect(mediaResponse.headers()["content-type"]).toMatch(
+    /application\/(?:vnd\.apple\.)?mpegurl/i,
+  );
+  expect(await mediaResponse.text()).toContain("#EXTM3U");
 });

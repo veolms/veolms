@@ -6,6 +6,10 @@ export const APP_HOME_PATH = "/courses";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
+// Temporary product flag: keep lessons accessible while the login flow is disabled.
+// Set this to false to restore authentication for learning routes.
+export const ALLOW_GUEST_LEARNING = true;
+
 const AUTH_FLOW_PATHS = new Set([
   LOGIN_PATH,
   "/register",
@@ -36,8 +40,24 @@ export function isCoursesPublicPath(pathname: string): boolean {
   return /^\/courses\/[^/]+\/overview$/.test(path);
 }
 
+export function isLearningPath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+
+  if (/^\/learn\/[^/]+(?:\/[^/]+)?$/.test(path)) {
+    return true;
+  }
+
+  return (
+    path !== "/courses/create" && /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path)
+  );
+}
+
 export function isPublicAcademyPath(pathname: string): boolean {
-  return isSettingsPath(pathname) || isCoursesPublicPath(pathname);
+  return (
+    isSettingsPath(pathname) ||
+    isCoursesPublicPath(pathname) ||
+    (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
+  );
 }
 
 export function isGuestLandingPath(pathname: string): boolean {

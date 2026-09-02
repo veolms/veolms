@@ -3755,6 +3755,52 @@ test.describe("wide touch tablet navigation", () => {
     deviceScaleFactor: 2,
   });
 
+  test("swipes the sidebar from empty surface space", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("veolms-sidebar-mode", "expanded");
+      window.localStorage.setItem("veolms-sidebar-width", "252");
+    });
+    await openApp(page, "/notifications");
+
+    const app = page.locator(".courses-app");
+    const sidebar = page.locator(".courses-sidebar");
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveCSS("touch-action", "pan-y");
+
+    const emptySidebarPoint = await sidebar.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const point = {
+        x: bounds.left + bounds.width / 2,
+        y: bounds.bottom - 6,
+      };
+      const target = document.elementFromPoint(point.x, point.y);
+      if (
+        target instanceof Element &&
+        target.closest("button, a, input, select, textarea, [role='separator']")
+      ) {
+        throw new Error("Expected the sidebar bottom padding to be empty");
+      }
+      return point;
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [emptySidebarPoint],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: emptySidebarPoint.x - 96, y: emptySidebarPoint.y }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+
+    await expect(app).toHaveClass(/courses-app--collapsed/);
+    await expectStoredValue(page, "veolms-sidebar-mode", "collapsed");
+  });
+
   test("tracks the touch sidebar rail continuously and settles after release", async ({
     page,
   }) => {

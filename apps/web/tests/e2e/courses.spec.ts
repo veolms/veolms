@@ -7,6 +7,22 @@ test.beforeEach(async ({ page }) => {
   await openApp(page, "/courses");
 });
 
+test("bottom navigation starts at the 640px phone breakpoint", async ({
+  page,
+}) => {
+  const navigation = page.getByRole("navigation", {
+    name: "Student mobile navigation",
+  });
+
+  await page.setViewportSize({ width: 641, height: 844 });
+  await expect(navigation).toHaveCount(0);
+  await expect(page.locator(".courses-sidebar")).toBeVisible();
+
+  await page.setViewportSize({ width: 640, height: 844 });
+  await expect(navigation).toBeVisible();
+  await expect(page.locator(".courses-sidebar")).toBeHidden();
+});
+
 test("browser back closes an ordinary popup before course navigation", async ({
   page,
 }) => {

@@ -45,11 +45,14 @@ interface CurriculumProps {
   courseTitle: string;
   courseThumbnail: string;
   onClose?: () => void;
+  onLessonSearchOpen?: () => void;
   focusRequest?: number;
+  topRequest?: number;
   persistenceKey: string;
   isLessonAvailable?: (lessonNumber: number) => boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
+  scrollControlBottomClearance?: number | string;
   drawerHeroControlProps?: LessonDrawerHeroControlProps;
 }
 
@@ -63,11 +66,14 @@ export function Curriculum({
   courseTitle,
   courseThumbnail,
   onClose,
+  onLessonSearchOpen,
   focusRequest = 0,
+  topRequest = 0,
   persistenceKey,
   isLessonAvailable,
   scrollportId,
   scrollportRef,
+  scrollControlBottomClearance,
   drawerHeroControlProps,
 }: CurriculumProps) {
   const [expanded, setExpanded] = useState<number[]>([1, 2]);
@@ -88,8 +94,10 @@ export function Curriculum({
   const currentSectionRef = useRef<HTMLElement>(null);
   const lessonListRef = useRef<HTMLDivElement>(null);
   const curriculumRef = useRef<HTMLElement>(null);
+  const contextMenuPortalHostRef = useRef<HTMLElement | null>(null);
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
+  const handledTopRequestRef = useRef(0);
   const currentSection =
     sections.find((section) =>
       section.lessons.some(([number]) => number === selectedLesson),
@@ -107,6 +115,8 @@ export function Curriculum({
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
       curriculumRef.current = node;
+      contextMenuPortalHostRef.current =
+        node?.closest<HTMLElement>(".video-shell") ?? null;
       if (scrollportRef) scrollportRef.current = node;
     },
     [scrollportRef],
@@ -194,19 +204,20 @@ export function Curriculum({
   };
 
   const openLessonSearch = useCallback(() => {
+    onLessonSearchOpen?.();
     scrollControlRef.current?.scrollToStart();
     setSearchOpen(true);
-  }, [setSearchOpen]);
+  }, [onLessonSearchOpen, setSearchOpen]);
 
   const handleLessonSearchOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
-        openLessonSearch();
+        if (!searchOpen) openLessonSearch();
         return;
       }
       setSearchOpen(false);
     },
-    [openLessonSearch, setSearchOpen],
+    [openLessonSearch, searchOpen, setSearchOpen],
   );
 
   useEffect(() => {
@@ -249,6 +260,27 @@ export function Curriculum({
     };
   }, [focusRequest, currentSection.id]);
 
+  useEffect(() => {
+    if (!topRequest || topRequest === handledTopRequestRef.current)
+      return undefined;
+
+    handledTopRequestRef.current = topRequest;
+    setSearchOpen(false);
+
+    let firstFrame: number;
+    let secondFrame: number | undefined;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        scrollControlRef.current?.scrollToStart();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [setSearchOpen, topRequest]);
+
   return (
     <ContextMenu>
       <aside
@@ -263,6 +295,7 @@ export function Curriculum({
           ariaControls={scrollportId}
           scrollAreaLabel="Curriculum"
           contentRevision={`${selectedLesson}:${activeLessonSearch}:${expanded.join(",")}`}
+          bottomClearance={scrollControlBottomClearance}
         />
         <ContextMenuTrigger
           render={
@@ -542,7 +575,10 @@ export function Curriculum({
         </div>
       </aside>
 
-      <ContextMenuContent aria-label="Course curriculum actions">
+      <ContextMenuContent
+        aria-label="Course curriculum actions"
+        portalContainer={contextMenuPortalHostRef}
+      >
         <ContextMenuGroup>
           <ContextMenuLabel>Curriculum actions</ContextMenuLabel>
           {!allSectionsExpanded && (
