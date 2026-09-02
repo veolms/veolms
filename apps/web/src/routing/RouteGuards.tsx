@@ -16,8 +16,10 @@ import {
   isGuestLandingPath,
   normalizeAppPath,
   requiresAcademyAuth,
+  resolveAcademyLandingDestination,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
+  shouldBlockAcademyRender,
 } from "./routeAccess";
 
 function useSessionAccess() {
@@ -29,27 +31,6 @@ function useSessionAccess() {
     access,
     pending: isPending && !isFetched,
   };
-}
-
-function shouldBlockAcademyRender(
-  pathname: string,
-  access: ReturnType<typeof resolveSessionAccess>,
-): boolean {
-  const path = normalizeAppPath(pathname);
-
-  if (isGuestLandingPath(path)) {
-    return true;
-  }
-
-  if (!requiresAcademyAuth(path)) {
-    return false;
-  }
-
-  if (!access.isAuthenticated) {
-    return true;
-  }
-
-  return access.needsMfaChallenge;
 }
 
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
@@ -64,20 +45,18 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (isGuestLandingPath(path)) {
-      navigate(APP_HOME_PATH, { replace: true });
-      return;
-    }
-
-    if (!requiresAcademyAuth(path)) {
+      navigate(resolveAcademyLandingDestination(access), { replace: true });
       return;
     }
 
     if (!access.isAuthenticated) {
-      navigate(APP_HOME_PATH, { replace: true });
+      if (requiresAcademyAuth(path)) {
+        navigate(APP_HOME_PATH, { replace: true });
+      }
       return;
     }
 
-    if (access.needsMfaChallenge) {
+    if (access.needsMfaChallenge && path !== "/logout") {
       navigate(MFA_CHALLENGE_PATH, { replace: true });
     }
   }, [

@@ -1,3 +1,4 @@
+import type { LearningSpaceSession } from "@veolms/contracts";
 import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
 
 export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
@@ -14,6 +15,8 @@ export interface CoursePlayerSession {
   path: string;
   returnPath: string;
   updatedAt: number;
+  courseTitle?: string;
+  lessonTitle?: string | null;
 }
 
 export interface PendingCourseCommentDraft {
@@ -404,6 +407,35 @@ export function getOpenCoursePlayerSessions(
   return readCoursePlayerSessionState(storage).sessions;
 }
 
+/**
+ * Adapts the server's canonical UUID-based session to the existing player
+ * route model, which intentionally uses readable course slugs and numeric
+ * lesson positions in the URL.
+ */
+export function mapLearningSpaceSessionToCoursePlayerSession(
+  session: LearningSpaceSession,
+): CoursePlayerSession {
+  const lessonId = session.lessonNumber ?? 1;
+  const updatedAt = Date.parse(session.updatedAt);
+  const returnPath =
+    session.returnPath || getCoursePlayerParentPath(session.origin);
+  return {
+    courseId: session.courseSlug,
+    lessonId,
+    origin: session.origin,
+    path: getCoursePlayerPath(
+      session.courseSlug,
+      session.origin,
+      lessonId,
+      returnPath,
+    ),
+    returnPath,
+    updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+    courseTitle: session.courseTitle,
+    lessonTitle: session.lessonTitle,
+  };
+}
+
 export function getMostRecentCoursePlayerSession(
   sessions: readonly CoursePlayerSession[] = getOpenCoursePlayerSessions(),
 ): CoursePlayerSession | null {
@@ -538,6 +570,25 @@ export function closeCoursePlayerSession(
   );
   persistCoursePlayerSessions(remainingSessions, storage);
   return getMostRecentCoursePlayerSession(remainingSessions);
+}
+
+/**
+ * Explicitly remove the browser fallback when an account signs out. Server
+ * sessions are account-scoped, so retaining this legacy global collection
+ * across logout could make another account see the previous user's courses.
+ */
+export function clearCoursePlayerSessions(
+  storage: CoursePlayerStorage | null = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY);
+    storage.removeItem(LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY);
+    removeLegacyCoursePlayerDestinations(storage);
+    notifyCoursePlayerSessionChange();
+  } catch {
+    // Storage is an optional fallback and may be unavailable in private mode.
+  }
 }
 
 export function getCoursePlayerBackLabel(

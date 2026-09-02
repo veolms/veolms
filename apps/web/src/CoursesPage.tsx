@@ -28,7 +28,7 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { ToastNotification } from "./ToastNotification";
+import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import { UserIcon as User } from "@phosphor-icons/react/User";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
@@ -59,7 +59,7 @@ import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
-import { useCurrentUser, useLogout } from "./services/auth";
+import { useCurrentUser, useSignOut } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
 import {
   useCourses,
@@ -68,6 +68,11 @@ import {
   useMyCourses,
   useRestoreCourse,
 } from "./services/courses";
+import {
+  useCloseLearningSpaceSession,
+  useLearningSpaceSessions,
+  useUpsertLearningSpaceSession,
+} from "./services/learning-space";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -83,8 +88,9 @@ import {
   getPublicNavigationItems,
   getNavigationDestination,
   getNavigationIconColor,
-  hasNavigationMenu,
+  getNavigationPreferenceStorageKey,
   getVisibleOrderedNavigation,
+  ensureRequiredNavigationVisibility,
   resolveShellNavigation,
 } from "./shell/navigation";
 import type { NavigationItemWithMetadata } from "./shell/navigation";
@@ -92,6 +98,7 @@ import {
   getUserRoles,
   getVisibleWorkspaceRoles,
   resolveWorkspaceRole,
+  getWorkspaceRoleStorageKey,
 } from "./shell/workspaceRole";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -143,11 +150,6 @@ import {
   PAGE_TAB_COLORS_KEY,
   readPageTabColors,
 } from "./settings/settingsPreferences";
-import {
-  clearStoredProfilePreferences,
-  getStoredProfilePreferences,
-} from "./settings/profilePreferences";
-import type { ProfilePreferences } from "./settings/profilePreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
@@ -165,6 +167,7 @@ import {
   COURSE_PLAYER_SESSIONS_STORAGE_KEY,
   closeCoursePlayerSession,
   getOpenCoursePlayerSessions,
+  mapLearningSpaceSessionToCoursePlayerSession,
 } from "./learning/coursePlayerNavigation";
 import type { CoursePlayerSession } from "./learning/coursePlayerNavigation";
 import { LearningSpace } from "./learning-space/LearningSpace";
@@ -527,9 +530,6 @@ export function CoursesPage({
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
   const publicNavigationItems = getPublicNavigationItems();
-  const [savedShellProfiles, setSavedShellProfiles] = useState<
-    Record<CourseRole, ProfilePreferences | null>
-  >({ student: null, creator: null });
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [sidebarResizing, setSidebarResizing] = useState(false);
@@ -653,7 +653,7 @@ export function CoursesPage({
     number | string | null
   >(MOBILE_DRAWER_INITIAL_SNAP_POINT);
   const [mobileBottomNavHidden, setMobileBottomNavHidden] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<ToastMessage | null>(null);
   const [hydratedNavigationKey, setHydratedNavigationKey] = useState<
     string | null
   >(null);
@@ -664,10 +664,27 @@ export function CoursesPage({
   );
   const shortcutPlatform = useShortcutPlatform();
   useGlobalSearchShortcut(shortcutPlatform);
-  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
+  const {
+    data: authUser,
+    isError: authUserError,
+    isFetched: authUserFetched,
+  } = useCurrentUser();
   const storeUser = useAuthStore((s) => s.user);
-  const activeUser = authUser || storeUser;
+  // Once `/auth/me` has completed, its null result must win over any
+  // in-memory login snapshot. Before that, the snapshot is useful only for
+  // same-page navigation after login; it is never persisted across reloads.
+  const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const learningSpaceSessionsQuery = useLearningSpaceSessions({
+    userId: activeUser?.id,
+    enabled: isAuthenticated,
+  });
+  const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
+    activeUser?.id,
+  );
+  const closeLearningSpaceSession = useCloseLearningSpaceSession(
+    activeUser?.id,
+  );
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(activeUser?.menus),
     [activeUser?.menus],
@@ -681,15 +698,12 @@ export function CoursesPage({
         .join("|"),
     [navigationItems],
   );
-  const shouldRenderLearningSpace = Boolean(
-    activeUser && hasNavigationMenu(activeUser.menus, "Learning Space"),
-  );
   const userRoles = getUserRoles(activeUser);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
   );
-  const logoutMutation = useLogout();
+  const { isPending: isSigningOut, signOut } = useSignOut();
   const { data: publishedCoursesData } = useCourses({
     enabled: role === "student",
   });
@@ -705,12 +719,9 @@ export function CoursesPage({
     () => new Set(),
   );
 
-  const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
-    activeUser?.displayName ??
-    (role === "creator" ? "Anurag Singh" : "Ashi Singh");
-  const shellProfileAvatarUrl =
-    (activeUser && savedShellProfile?.avatarDataUrl) || null;
+    activeUser?.displayName?.trim() || "Your name";
+  const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const profileRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
@@ -730,18 +741,7 @@ export function CoursesPage({
   const openLogoutConfirm = useCallback(() => {
     setProfileMenu(false);
     setLogoutConfirmOpen(true);
-  }, []);
-
-  const handleLogout = useCallback(() => {
-    void logoutMutation
-      .mutateAsync()
-      .catch(() => undefined)
-      .finally(() => {
-        clearStoredProfilePreferences();
-        setSavedShellProfiles({ student: null, creator: null });
-        window.location.href = "/";
-      });
-  }, [logoutMutation]);
+  }, [setLogoutConfirmOpen]);
 
   useBackDismiss({
     open: profileMenu,
@@ -842,13 +842,6 @@ export function CoursesPage({
 
   useEffect(() => {
     try {
-      const storedRole = localStorage.getItem("veolms-role");
-      setRole(storedRole === "creator" ? "creator" : "student");
-      setSavedShellProfiles({
-        student: getStoredProfilePreferences("student"),
-        creator: getStoredProfilePreferences("creator"),
-      });
-
       const storedSidebarMode = localStorage.getItem("veolms-sidebar-mode");
       const legacySidebarCollapsed = localStorage.getItem(
         "veolms-sidebar-collapsed",
@@ -903,10 +896,18 @@ export function CoursesPage({
   }, []);
 
   const navigationHydrationKey = [
-    activeUser ? "authenticated" : "guest",
+    activeUser ? `authenticated:${activeUser.id}` : "guest",
     role,
     navigationSignature,
   ].join(":");
+
+  useEffect(() => {
+    if (!storedPreferencesReady || !authUserFetched) return;
+    const storedRole = localStorage.getItem(
+      getWorkspaceRoleStorageKey(activeUser?.id),
+    );
+    setRole(storedRole === "creator" ? "creator" : "student");
+  }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -917,13 +918,13 @@ export function CoursesPage({
       ...current,
       [role]: isPublicNavigation
         ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems),
+        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
     }));
     setNavigationVisibility((current) => ({
       ...current,
       [role]: isPublicNavigation
         ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems),
+        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
     }));
     setHydratedNavigationKey(navigationHydrationKey);
   }, [
@@ -1169,7 +1170,7 @@ export function CoursesPage({
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
-        `veolms-navigation-order-${roleName}`,
+        getNavigationPreferenceStorageKey("order", roleName, activeUser?.id),
         JSON.stringify(order),
       );
     });
@@ -1179,6 +1180,7 @@ export function CoursesPage({
     navigationHydrationKey,
     navigationOrders,
     storedPreferencesReady,
+    activeUser?.id,
   ]);
 
   useEffect(() => {
@@ -1187,7 +1189,11 @@ export function CoursesPage({
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
-        `veolms-navigation-visibility-${roleName}`,
+        getNavigationPreferenceStorageKey(
+          "visibility",
+          roleName,
+          activeUser?.id,
+        ),
         JSON.stringify(visibleItems),
       );
     });
@@ -1197,6 +1203,7 @@ export function CoursesPage({
     navigationHydrationKey,
     navigationVisibility,
     storedPreferencesReady,
+    activeUser?.id,
   ]);
 
   useEffect(() => {
@@ -1207,8 +1214,8 @@ export function CoursesPage({
   }, [role, userRoles]);
 
   useEffect(() => {
-    if (!storedPreferencesReady) return;
-    localStorage.setItem("veolms-role", role);
+    if (!storedPreferencesReady || !authUserFetched) return;
+    localStorage.setItem(getWorkspaceRoleStorageKey(activeUser?.id), role);
     setCourseMenu(null);
     setEnrollmentFilter("all");
     setStatusFilter("all");
@@ -1217,7 +1224,14 @@ export function CoursesPage({
     else if (requestedSection) setActiveSection(requestedSection);
     else if (page === "courses") setActiveSection("Courses");
     else setActiveSection("Courses");
-  }, [page, requestedSection, role, storedPreferencesReady]);
+  }, [
+    activeUser?.id,
+    authUserFetched,
+    page,
+    requestedSection,
+    role,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -1526,12 +1540,12 @@ export function CoursesPage({
       ? navigationOrders[role]
       : isPublicNavigation
         ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems),
+        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[role]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems),
+        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
     navigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
@@ -1568,11 +1582,10 @@ export function CoursesPage({
       const apiCourses = (publishedCoursesData?.courses || []).map(
         adaptCourseSummaryToCatalogueCourse,
       );
-      const existingIds = new Set(apiCourses.map((c) => c.id));
-      const nonConflictingMockCourses = courses.filter(
-        (c) => !existingIds.has(c.id),
-      );
-      return [...apiCourses, ...nonConflictingMockCourses];
+      // Use one catalogue source at a time. The local catalogue is the
+      // intentional fallback for an empty API response; merging both sources
+      // creates duplicate-looking courses with incompatible IDs.
+      return apiCourses.length > 0 ? apiCourses : [...courses];
     }
     if (enrollmentFilter === "bin") {
       const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
@@ -1599,6 +1612,19 @@ export function CoursesPage({
     publishedCoursesData?.courses,
     role,
   ]);
+
+  // Authenticated Learning Space entries must be backed by a real API course.
+  // Legacy/demo IDs such as "backend-nodejs" are valid for the local player,
+  // but the backend cannot resolve them as course UUIDs or slugs.
+  const apiCourseKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const course of allCourses) {
+      if (!course.isApi) continue;
+      keys.add(course.id);
+      if (course.slug) keys.add(course.slug);
+    }
+    return keys;
+  }, [allCourses]);
 
   const handleDeleteCourse = async (course: Course) => {
     const isMock = !course.id.match(
@@ -1711,9 +1737,13 @@ export function CoursesPage({
     item?: NavigationItemWithMetadata,
   ) => {
     setEdgeSidebarOpen(false);
-    dismissMobileMenuThen(() =>
-      onNavigatePage?.(getNavigationDestination(item ?? label)),
-    );
+    dismissMobileMenuThen(() => {
+      if (label === "Learning Space") {
+        setLearningSpaceExpanded(true);
+        return;
+      }
+      onNavigatePage?.(getNavigationDestination(item ?? label));
+    });
   };
 
   const reorderNavigation = (
@@ -1725,10 +1755,11 @@ export function CoursesPage({
     setNavigationOrders((current) => {
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
-          ? current[role] || getInitialNavigationOrder(role, navigationItems)
+          ? current[role] ||
+            getInitialNavigationOrder(role, navigationItems, activeUser?.id)
           : isPublicNavigation
             ? getDefaultNavigationOrder(navigationItems)
-            : getInitialNavigationOrder(role, navigationItems);
+            : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -1748,10 +1779,10 @@ export function CoursesPage({
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
         ? navigationOrders[role] ||
-          getInitialNavigationOrder(role, navigationItems)
+          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
         : isPublicNavigation
           ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(role, navigationItems);
+          : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -2074,7 +2105,7 @@ export function CoursesPage({
     } catch {
       setNotice("Fullscreen is not available in this browser.");
     }
-  }, []);
+  }, [setNotice]);
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -3022,25 +3053,73 @@ export function CoursesPage({
     }
   };
 
-  const learningSessions = getOpenCoursePlayerSessions();
+  const hasBackendCourses = (publishedCoursesData?.courses.length ?? 0) > 0;
+  const learningSessions = (() => {
+    if (
+      isAuthenticated &&
+      hasBackendCourses &&
+      learningSpaceSessionsQuery.isSuccess &&
+      learningSpaceSessionsQuery.data
+    ) {
+      // Once the authenticated request has completed, the server is the
+      // source of truth. Do not merge stale anonymous/local sessions here;
+      // they can contain IDs that no longer exist in the API.
+      return learningSpaceSessionsQuery.data.sessions.map(
+        mapLearningSpaceSessionToCoursePlayerSession,
+      );
+    }
+    // When the API catalogue is empty, the visible courses are the local
+    // catalogue, so its local player sessions are the correct source too.
+    if (!isAuthenticated || !hasBackendCourses) {
+      return getOpenCoursePlayerSessions();
+    }
+    // Avoid showing local records while an authenticated backend catalogue or
+    // session request is still loading.
+    return [];
+  })();
   const visibleLearningCourseId = isLearningSurface ? courseSlug : undefined;
   const activateLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const destination =
         activateCoursePlayerSession(session.courseId) || session.path;
+      if (isAuthenticated && apiCourseKeys.has(session.courseId)) {
+        upsertLearningSpaceSession.mutate({
+          courseKey: session.courseId,
+          payload: {
+            lessonKey: String(session.lessonId),
+            origin: session.origin,
+            returnPath: session.returnPath,
+          },
+        });
+      }
       onNavigatePage(destination);
     },
-    [onNavigatePage],
+    [
+      apiCourseKeys,
+      isAuthenticated,
+      onNavigatePage,
+      upsertLearningSpaceSession,
+    ],
   );
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
         isLearningSurface && courseSlug === session.courseId;
       const nextSession = closeCoursePlayerSession(session.courseId);
+      if (isAuthenticated && apiCourseKeys.has(session.courseId)) {
+        closeLearningSpaceSession.mutate({ courseKey: session.courseId });
+      }
       if (!closesVisibleSession) return;
       onNavigatePage(nextSession?.path || session.returnPath);
     },
-    [courseSlug, isLearningSurface, onNavigatePage],
+    [
+      closeLearningSpaceSession,
+      courseSlug,
+      apiCourseKeys,
+      isAuthenticated,
+      isLearningSurface,
+      onNavigatePage,
+    ],
   );
 
   const mobileNavigation = getMobilePrimaryNavigation(role, navigation);
@@ -3217,6 +3296,13 @@ export function CoursesPage({
               {navigation.map((item, navigationIndex) => {
                 const [label, Icon] = item;
                 const active = isNavigationItemActive(item);
+                const navigationShortcutIndex =
+                  navigation
+                    .slice(0, navigationIndex)
+                    .filter(
+                      ([navigationLabel]) =>
+                        navigationLabel !== "Learning Space",
+                    ).length + 1;
                 const displayLabel = label;
                 const accessibleLabel = [
                   displayLabel,
@@ -3226,25 +3312,28 @@ export function CoursesPage({
                 ]
                   .filter(Boolean)
                   .join(", ");
+                if (label === "Learning Space") {
+                  return (
+                    <LearningSpace
+                      key={label}
+                      sessions={learningSessions}
+                      activeCourseId={visibleLearningCourseId}
+                      expanded={learningSpaceExpanded}
+                      mobile={mobileSidebarNavigationActive}
+                      mobileNavigationPlacement="sidebar"
+                      collapsedSidebar={sidebarCollapsed}
+                      iconColor={getNavigationIconColor(
+                        "Learning Space",
+                        sidebarPreferences,
+                      )}
+                      onExpandedChange={setLearningSpaceExpanded}
+                      onActivate={activateLearningSession}
+                      onClose={closeLearningSession}
+                    />
+                  );
+                }
                 return (
                   <Fragment key={label}>
-                    {shouldRenderLearningSpace &&
-                      !compactNavigation &&
-                      label === "Settings" && (
-                        <LearningSpace
-                          sessions={learningSessions}
-                          activeCourseId={visibleLearningCourseId}
-                          expanded={learningSpaceExpanded}
-                          collapsedSidebar={sidebarCollapsed}
-                          iconColor={getNavigationIconColor(
-                            "Learning Space",
-                            sidebarPreferences,
-                          )}
-                          onExpandedChange={setLearningSpaceExpanded}
-                          onActivate={activateLearningSession}
-                          onClose={closeLearningSession}
-                        />
-                      )}
                     <button
                       type="button"
                       className={active ? "is-active" : ""}
@@ -3260,8 +3349,8 @@ export function CoursesPage({
                       aria-current={active ? "page" : undefined}
                       aria-keyshortcuts={
                         label === "Settings"
-                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Alt+ArrowUp Alt+ArrowDown`
-                          : `${navigationIndex + 1} Alt+ArrowUp Alt+ArrowDown`
+                          ? `${navigationShortcutIndex} ${primaryShortcutModifier}+Comma Alt+ArrowUp Alt+ArrowDown`
+                          : `${navigationShortcutIndex} Alt+ArrowUp Alt+ArrowDown`
                       }
                       data-navigation-label={label}
                       data-sortable="true"
@@ -3309,7 +3398,7 @@ export function CoursesPage({
                           keys={
                             label === "Settings"
                               ? settingsShortcutKeys
-                              : [String(navigationIndex + 1)]
+                              : [String(navigationShortcutIndex)]
                           }
                         />
                       )}
@@ -3317,44 +3406,9 @@ export function CoursesPage({
                         <b>{wishlisted.size}</b>
                       )}
                     </button>
-                    {shouldRenderLearningSpace &&
-                      mobileSidebarNavigationActive &&
-                      label === "Courses" && (
-                        <LearningSpace
-                          sessions={learningSessions}
-                          activeCourseId={visibleLearningCourseId}
-                          expanded={learningSpaceExpanded}
-                          mobile
-                          mobileNavigationPlacement="sidebar"
-                          iconColor={getNavigationIconColor(
-                            "Learning Space",
-                            sidebarPreferences,
-                          )}
-                          onExpandedChange={setLearningSpaceExpanded}
-                          onActivate={activateLearningSession}
-                          onClose={closeLearningSession}
-                        />
-                      )}
                   </Fragment>
                 );
               })}
-              {shouldRenderLearningSpace &&
-                !compactNavigation &&
-                !navigation.some(([label]) => label === "Settings") && (
-                  <LearningSpace
-                    sessions={learningSessions}
-                    activeCourseId={visibleLearningCourseId}
-                    expanded={learningSpaceExpanded}
-                    collapsedSidebar={sidebarCollapsed}
-                    iconColor={getNavigationIconColor(
-                      "Learning Space",
-                      sidebarPreferences,
-                    )}
-                    onExpandedChange={setLearningSpaceExpanded}
-                    onActivate={activateLearningSession}
-                    onClose={closeLearningSession}
-                  />
-                )}
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
@@ -3701,14 +3755,10 @@ export function CoursesPage({
             <SettingsPage
               tab={settingsTab}
               role={role}
+              isAuthenticated={isAuthenticated}
               onNavigatePage={onNavigatePage}
               onExitSettings={onExitSettings}
-              onProfileSaved={(profile) => {
-                setSavedShellProfiles((current) => ({
-                  ...current,
-                  [role]: profile,
-                }));
-              }}
+              setNotice={setNotice}
               theme={theme}
               onThemeChange={(next, origin) => {
                 if (next !== theme) {
@@ -3730,12 +3780,19 @@ export function CoursesPage({
                   ? navigationVisibility[role]
                   : isPublicNavigation
                     ? getDefaultNavigationVisibility(navigationItems)
-                    : getInitialNavigationVisibility(role, navigationItems)
+                    : getInitialNavigationVisibility(
+                        role,
+                        navigationItems,
+                        activeUser?.id,
+                      )
               }
               onNavigationVisibilityChange={(visibleItems) =>
                 setNavigationVisibility((current) => ({
                   ...current,
-                  [role]: visibleItems,
+                  [role]: ensureRequiredNavigationVisibility(
+                    visibleItems,
+                    navigationItems,
+                  ),
                 }))
               }
             />
@@ -3747,7 +3804,9 @@ export function CoursesPage({
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
               onSignOut={() => {
-                localStorage.removeItem("veolms-role");
+                localStorage.removeItem(
+                  getWorkspaceRoleStorageKey(activeUser?.id),
+                );
                 setRole("student");
               }}
             />
@@ -3846,6 +3905,24 @@ export function CoursesPage({
             const [label, Icon] = item;
             const active = isNavigationItemActive(item);
             const displayLabel = label;
+            if (label === "Learning Space") {
+              return (
+                <LearningSpace
+                  key={label}
+                  sessions={learningSessions}
+                  activeCourseId={visibleLearningCourseId}
+                  expanded={learningSpaceExpanded}
+                  mobile
+                  iconColor={getNavigationIconColor(
+                    "Learning Space",
+                    sidebarPreferences,
+                  )}
+                  onExpandedChange={setLearningSpaceExpanded}
+                  onActivate={activateLearningSession}
+                  onClose={closeLearningSession}
+                />
+              );
+            }
             return (
               <Fragment key={label}>
                 <button
@@ -3879,21 +3956,6 @@ export function CoursesPage({
                   </span>
                   <small>{displayLabel}</small>
                 </button>
-                {shouldRenderLearningSpace && label === "Courses" && (
-                  <LearningSpace
-                    sessions={learningSessions}
-                    activeCourseId={visibleLearningCourseId}
-                    expanded={learningSpaceExpanded}
-                    mobile
-                    iconColor={getNavigationIconColor(
-                      "Learning Space",
-                      sidebarPreferences,
-                    )}
-                    onExpandedChange={setLearningSpaceExpanded}
-                    onActivate={activateLearningSession}
-                    onClose={closeLearningSession}
-                  />
-                )}
               </Fragment>
             );
           })}
@@ -4295,16 +4357,16 @@ export function CoursesPage({
 
       <LogoutConfirmModal
         isOpen={logoutConfirmOpen}
-        isPending={logoutMutation.isPending}
+        isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={handleLogout}
+        onConfirm={signOut}
       />
 
       {notice && (
         <ToastNotification
           message={notice}
           type="info"
-          onDismiss={() => setNotice("")}
+          onDismiss={() => setNotice(null)}
         />
       )}
     </div>

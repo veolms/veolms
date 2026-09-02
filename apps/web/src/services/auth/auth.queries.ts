@@ -15,9 +15,11 @@ export function useCurrentUser() {
       const profile = await authService.getMe();
 
       if (generation !== authStore.getWriteGeneration()) {
+        // A logout/login write happened while this request was in flight.
+        // Never let the old response restore a signed-out (or previous)
+        // account. The mutation that changed auth state owns the cache now.
         return (
-          queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ??
-          profile
+          queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null
         );
       }
 

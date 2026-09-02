@@ -137,6 +137,12 @@ export function renderNotificationTemplate(
         body: "A signed-in session was revoked from your account.",
       };
       break;
+    case "auth.account_deactivated":
+      inApp = {
+        title: "Account deactivated",
+        body: "Your VeoLMS account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.",
+      };
+      break;
     case "user.mentioned":
       inApp = {
         title: `${stringValue(data, "actorName")} mentioned you`,

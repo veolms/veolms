@@ -70,6 +70,13 @@ export async function deleteOtherUserSessions(
     .execute();
 }
 
+export async function deleteAllUserSessions(
+  database: Executor,
+  userId: string,
+): Promise<void> {
+  await database.deleteFrom("sessions").where("user_id", "=", userId).execute();
+}
+
 export function listUserSessions(database: Executor, userId: string) {
   return database
     .selectFrom("sessions")

@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   APP_HOME_PATH,
+  MFA_CHALLENGE_PATH,
   buildLoginPath,
   isCoursesPublicPath,
   isPublicAcademyPath,
   isSettingsPath,
   requiresAcademyAuth,
   resolveAuthenticatedDestination,
+  resolveAcademyLandingDestination,
   resolveSessionAccess,
+  shouldBlockAcademyRender,
   sanitizeReturnTo,
   shouldRedirectToMfaChallenge,
 } from "../../src/routing/routeAccess.ts";
@@ -76,17 +79,63 @@ describe("route access policy", () => {
     });
   });
 
+  it("blocks pending-MFA sessions on public-looking academy routes", () => {
+    const pendingMfa = resolveSessionAccess({
+      user: {
+        mfaVerified: false,
+        totpEnabled: true,
+        passkeyEnabled: false,
+      },
+      isAuthenticated: true,
+    });
+
+    expect(shouldBlockAcademyRender("/courses", pendingMfa)).toBe(true);
+    expect(shouldBlockAcademyRender("/courses?tab=featured", pendingMfa)).toBe(
+      true,
+    );
+    expect(shouldBlockAcademyRender("/settings/security", pendingMfa)).toBe(
+      true,
+    );
+  });
+
+  it("keeps the public catalogue available to signed-out visitors", () => {
+    expect(
+      shouldBlockAcademyRender("/courses", {
+        isAuthenticated: false,
+        needsMfaChallenge: false,
+        isSessionReady: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips the catalogue hop when the session is already pending MFA", () => {
+    expect(
+      resolveAcademyLandingDestination({
+        isAuthenticated: true,
+        needsMfaChallenge: true,
+        isSessionReady: false,
+      }),
+    ).toBe(MFA_CHALLENGE_PATH);
+    expect(
+      resolveAcademyLandingDestination({
+        isAuthenticated: false,
+        needsMfaChallenge: false,
+        isSessionReady: false,
+      }),
+    ).toBe(APP_HOME_PATH);
+  });
+
   it("sanitizes return targets", () => {
     expect(sanitizeReturnTo("/courses?tab=mine")).toBe("/courses?tab=mine");
     expect(sanitizeReturnTo("/mfa-setup")).toBeNull();
   });
 
-  it("does not bounce public or auth screens to MFA on a 403", () => {
+  it("does not bounce auth screens to MFA on a 403", () => {
     const mfaError = { status: 403, code: "MFA_REQUIRED" };
 
-    expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(false);
+    expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(true);
     expect(shouldRedirectToMfaChallenge("/settings/appearance", mfaError)).toBe(
-      false,
+      true,
     );
     expect(shouldRedirectToMfaChallenge("/", mfaError)).toBe(false);
     expect(shouldRedirectToMfaChallenge("/login", mfaError)).toBe(false);

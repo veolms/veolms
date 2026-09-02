@@ -39,6 +39,40 @@ export const otpVerifyRequestSchema = z
     path: ["email"],
   });
 
+const phoneNumberSchema = z
+  .string()
+  .trim()
+  .min(8, "Phone number is too short")
+  .max(15, "Phone number is too long")
+  .regex(
+    /^\+?[0-9\s().-]+$/,
+    "Phone number can contain digits, spaces, and + ( ) - only",
+  )
+  .meta({ example: "+15551234567" });
+
+export const phoneVerificationSendRequestSchema = z.object({
+  phoneNo: phoneNumberSchema,
+});
+
+export const phoneVerificationVerifyRequestSchema = z.object({
+  phoneNo: phoneNumberSchema,
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
+export const emailVerificationSendRequestSchema = z.strictObject({});
+
+export const emailVerificationVerifyRequestSchema = z.strictObject({
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
 export const registerRequestSchema = z
   .object({
     email: z
@@ -137,15 +171,31 @@ export const authMenuNodeSchema: z.ZodType<AuthMenuNode> = z.lazy(() =>
   }),
 );
 
+const profileFieldSchemas = {
+  avatarDataUrl: z.string().max(3_000_000).nullable().optional(),
+  bio: z.string().max(160).nullable().optional(),
+  emailPublic: z.boolean().optional(),
+  mobilePublic: z.boolean().optional(),
+  linkedinUrl: z.string().max(500).nullable().optional(),
+  linkedinPublic: z.boolean().optional(),
+  githubUrl: z.string().max(500).nullable().optional(),
+  githubPublic: z.boolean().optional(),
+  websiteUrl: z.string().max(500).nullable().optional(),
+  websitePublic: z.boolean().optional(),
+};
+
 export const authUserSchema = z.object({
   id: z.uuid(),
   username: z.string().max(30),
   displayName: z.string().max(100),
   email: z.email().max(255).nullable(),
   phoneNo: z.string().max(15).nullable(),
+  emailVerified: z.boolean().default(false),
+  mobileVerified: z.boolean().default(false),
   roles: z.array(z.string().max(50)).default([]),
   permissions: z.array(z.string().max(50)).default([]),
   menus: z.array(authMenuNodeSchema).default([]),
+  ...profileFieldSchemas,
 });
 
 export const userProfileResponseSchema = z.object({
@@ -154,13 +204,35 @@ export const userProfileResponseSchema = z.object({
   displayName: z.string().max(100),
   email: z.email().max(255).nullable(),
   phoneNo: z.string().max(15).nullable(),
+  emailVerified: z.boolean(),
+  mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
   permissions: z.array(z.string().max(50)),
   menus: z.array(authMenuNodeSchema),
+  ...profileFieldSchemas,
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
   passkeyEnabled: z.boolean(),
   mfaMandatory: z.boolean(),
+});
+
+export const profileUpdateRequestSchema = z.strictObject({
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .max(30, "Username is too long")
+    .regex(
+      /^[a-zA-Z0-9._-]+$/,
+      "Username must contain only letters, numbers, dots, underscores, and hyphens",
+    )
+    .toLowerCase()
+    .optional(),
+  displayName: z
+    .string()
+    .min(1, "Display name is required")
+    .max(100)
+    .optional(),
+  ...profileFieldSchemas,
 });
 
 /** The session may be absent when the client is visiting a public route. */
@@ -214,10 +286,23 @@ export const setupTokenRequestSchema = z.object({
 
 export type OtpSendRequest = z.input<typeof otpSendRequestSchema>;
 export type OtpVerifyRequest = z.input<typeof otpVerifyRequestSchema>;
+export type PhoneVerificationSendRequest = z.input<
+  typeof phoneVerificationSendRequestSchema
+>;
+export type PhoneVerificationVerifyRequest = z.input<
+  typeof phoneVerificationVerifyRequestSchema
+>;
+export type EmailVerificationSendRequest = z.input<
+  typeof emailVerificationSendRequestSchema
+>;
+export type EmailVerificationVerifyRequest = z.input<
+  typeof emailVerificationVerifyRequestSchema
+>;
 export type RegisterRequest = z.input<typeof registerRequestSchema>;
 export type AuthMenuPermission = z.output<typeof authMenuPermissionSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
+export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
 export type CurrentUserResponse = z.output<typeof currentUserResponseSchema>;
 export type CreatorRegisterRequest = z.input<
   typeof creatorRegisterRequestSchema
