@@ -30,6 +30,7 @@
     "fleet:cli": "pnpm --filter @veolms/fleet-manager cli",
     "fleet:provider": "pnpm --filter @veolms/fleet-manager provider",
     "fleet:infra": "pnpm --filter @veolms/fleet-manager infra",
+    "fleet:cicd": "pnpm --filter @veolms/fleet-manager setup:cicd",
     "fleet:destroy": "pnpm --filter @veolms/fleet-manager destroy",
     "fleet:build-ami": "pnpm --filter @veolms/fleet-provider-aws build:ami",
     "fleet:build:upload": "pnpm --filter @veolms/fleet-manager build:upload",
