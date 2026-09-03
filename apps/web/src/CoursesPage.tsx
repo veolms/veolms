@@ -554,7 +554,15 @@ export function CoursesPage({
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
-  const [role, setRole] = useState<CourseRole>("student");
+  const [role, setRole] = useState<CourseRole>(() => {
+    if (typeof window === "undefined") return "student";
+    try {
+      const stored = localStorage.getItem("veolms-role");
+      return stored === "creator" ? "creator" : "student";
+    } catch {
+      return "student";
+    }
+  });
   const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
@@ -718,21 +726,28 @@ export function CoursesPage({
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
   );
+  const effectiveRole = useMemo(
+    () => resolveWorkspaceRole(userRoles, role),
+    [role, userRoles],
+  );
   const logoutMutation = useLogout();
+  const isAuthReady = Boolean(storeUser) || authUserFetched;
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
+  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
+
   const { data: publishedCoursesData } = useCourses({
-    enabled: shouldLoadCourseSurface && role === "student",
+    enabled: shouldQueryCourses && effectiveRole === "student",
   });
   const { data: myCoursesData } = useMyCourses({
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
   const { data: deletedCoursesData } = useDeletedCourses(undefined, {
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      effectiveRole === "creator" &&
       enrollmentFilter === "bin",
   });
   const deleteCourseMutation = useDeleteCourse();
@@ -1598,7 +1613,7 @@ export function CoursesPage({
   }, [compactNavigation, navigation, role, sidebarMode]);
 
   const allCourses = useMemo(() => {
-    if (role !== "creator") {
+    if (effectiveRole !== "creator") {
       return (publishedCoursesData?.courses || []).map(
         adaptCourseSummaryToCatalogueCourse,
       );
@@ -1613,10 +1628,10 @@ export function CoursesPage({
     );
   }, [
     deletedCoursesData?.courses,
+    effectiveRole,
     enrollmentFilter,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
-    role,
   ]);
 
   const handleDeleteCourse = async (course: Course) => {
@@ -1652,7 +1667,7 @@ export function CoursesPage({
       getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
-        role,
+        role: effectiveRole,
         enrollmentFilter,
         statusFilter,
         search,
@@ -1661,8 +1676,8 @@ export function CoursesPage({
     [
       activeSection,
       allCourses,
+      effectiveRole,
       enrollmentFilter,
-      role,
       search,
       sort,
       statusFilter,
