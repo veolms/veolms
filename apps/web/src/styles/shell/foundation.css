@@ -188,7 +188,7 @@
   }
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   :root[data-content-layout="framed"] .courses-main-frame {
     display: block;
     min-width: 0;
@@ -415,7 +415,7 @@
   outline: none;
 }
 
-@media (min-width: 821px) and (any-pointer: coarse) {
+@media (min-width: 641px) and (any-pointer: coarse) {
   .courses-app {
     touch-action: pan-y pinch-zoom;
   }

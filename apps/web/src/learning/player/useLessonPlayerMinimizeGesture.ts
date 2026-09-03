@@ -14,6 +14,7 @@ import {
   clearLearningPlayerMinimizeMotionStyles,
   getDefaultLearningMiniPlayerLayout,
 } from "./learningPlayerMotion";
+import { readMiniPlayerWidthPreference } from "./lessonPlayerPersistence";
 
 const PHONE_VIEWPORT_QUERY = "(max-width: 640px)";
 const ACTIVATION_DISTANCE = 8;
@@ -79,7 +80,11 @@ const getGeometry = (element: HTMLElement): GestureGeometry => {
   const startWidth = bounds.width || viewportWidth;
   const startLeft = Number.isFinite(bounds.left) ? bounds.left : 0;
   const startTop = Number.isFinite(bounds.top) ? bounds.top : 0;
-  const target = getDefaultLearningMiniPlayerLayout(startWidth);
+  const target = getDefaultLearningMiniPlayerLayout(
+    startWidth,
+    undefined,
+    readMiniPlayerWidthPreference() ?? undefined,
+  );
 
   return {
     targetScale: target.width / startWidth,

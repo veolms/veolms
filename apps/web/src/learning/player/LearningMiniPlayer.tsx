@@ -16,6 +16,7 @@ import { registerLearningMiniPlayerRuntime } from "./learningMiniPlayerStore";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
+import { MiniPlayerResizeHandles } from "./MiniPlayerResizeHandles";
 
 const MAX_HANDOFF_DRIFT_SECONDS = 0.35;
 
@@ -222,8 +223,10 @@ export function LearningMiniPlayer({
       {...miniPlayerGestures.gestureProps}
     >
       <span id="learning-mini-player-gesture-help" className="sr-only">
-        Drag to move, pinch to resize, or swipe down quickly to close.
+        Drag to move, resize from an edge, pinch to resize, or swipe down
+        quickly to close.
       </span>
+      <MiniPlayerResizeHandles />
       <VideoPlayer
         ref={playerRef}
         source={{ ...session.source, startTime: session.currentTime }}

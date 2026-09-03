@@ -3,11 +3,13 @@ import {
   lessonPlayerStorageKeys,
   readAmbientPreference,
   readAutoplayPreference,
+  readMiniPlayerWidthPreference,
   readMutedPreference,
   readPlaybackRatePreference,
   readResumePosition,
   writeAmbientPreference,
   writeAutoplayPreference,
+  writeMiniPlayerWidthPreference,
   writeMutedPreference,
   writePlaybackRatePreference,
   writeResumePosition,
@@ -61,6 +63,27 @@ describe("lesson player persistence", () => {
     ).toBe(1);
   });
 
+  it("restores and writes the device-local mini-player width", () => {
+    expect(readMiniPlayerWidthPreference(storageWith({}))).toBeNull();
+    expect(
+      readMiniPlayerWidthPreference(
+        storageWith({ [lessonPlayerStorageKeys.miniPlayerWidth]: "248" }),
+      ),
+    ).toBe(248);
+    expect(
+      readMiniPlayerWidthPreference(
+        storageWith({ [lessonPlayerStorageKeys.miniPlayerWidth]: "invalid" }),
+      ),
+    ).toBeNull();
+
+    const setItem = vi.fn();
+    writeMiniPlayerWidthPreference(248.4, { setItem });
+    expect(setItem).toHaveBeenCalledWith(
+      lessonPlayerStorageKeys.miniPlayerWidth,
+      "248",
+    );
+  });
+
   it("isolates and clamps resume positions by caller-provided media key", () => {
     const mediaKey = "course-a-lesson-7";
     const storage = storageWith({
@@ -86,12 +109,16 @@ describe("lesson player persistence", () => {
     expect(readAmbientPreference(blockedStorage, true)).toBe(false);
     expect(readAutoplayPreference(blockedStorage)).toBe(true);
     expect(readPlaybackRatePreference(blockedStorage)).toBe(1);
+    expect(readMiniPlayerWidthPreference(blockedStorage)).toBeNull();
     expect(readResumePosition("lesson", 90, blockedStorage)).toBe(0);
     expect(() => writeMutedPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAmbientPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAutoplayPreference(true, blockedStorage)).not.toThrow();
     expect(() =>
       writePlaybackRatePreference(1.5, blockedStorage),
+    ).not.toThrow();
+    expect(() =>
+      writeMiniPlayerWidthPreference(240, blockedStorage),
     ).not.toThrow();
     expect(() =>
       writeResumePosition("lesson", 12, blockedStorage),

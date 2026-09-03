@@ -15,6 +15,7 @@ import {
   LEARNING_PLAYER_MOTION_EASING,
 } from "./learningPlayerMotion";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
+import { MiniPlayerResizeHandles } from "./MiniPlayerResizeHandles";
 
 export type LearningPlayerPresentation = "full" | "mini";
 
@@ -228,9 +229,11 @@ export function PersistentLearningPlayerHost({
     >
       {mini ? (
         <span id="learning-mini-player-gesture-help" className="sr-only">
-          Drag to move, pinch to resize, or swipe down quickly to close.
+          Drag to move, resize from an edge, pinch to resize, or swipe down
+          quickly to close.
         </span>
       ) : null}
+      {mini ? <MiniPlayerResizeHandles /> : null}
       <LessonVideoPlayer
         {...player.playerProps}
         minimizeMotionTarget={() => hostRef.current}

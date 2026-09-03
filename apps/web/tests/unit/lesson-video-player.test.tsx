@@ -21,6 +21,7 @@ import { FakeVideoEngine } from "@veolms/video-player/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CourseVideo } from "../../src/learning/courseContent.js";
 import { LessonVideoPlayer } from "../../src/learning/player/LessonVideoPlayer.js";
+import { getDefaultLearningMiniPlayerLayout } from "../../src/learning/player/learningPlayerMotion.js";
 import { registerLearningMiniPlayerRuntime } from "../../src/learning/player/learningMiniPlayerStore.js";
 import {
   lessonPlayerStorageKeys,
@@ -573,7 +574,15 @@ describe("LessonVideoPlayer adapter", () => {
       expect(engine.getSnapshot().selectedTextTrackId).toBe(englishCaptions.id),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+      screen.getByRole("dialog", { name: "Video settings" }),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("menuitemradio", { name: "English en" }),
+      ).toHaveAttribute("aria-checked", "true"),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Captions" }));
     expect(
       screen
         .getByRole("menuitem", { name: "Captions English" })
@@ -916,7 +925,10 @@ describe("LessonVideoPlayer adapter", () => {
       expect(play).toHaveBeenCalledTimes(playCallsBeforeCompatibilityClick);
       act(() => vi.advanceTimersByTime(16));
 
-      expect(shell.style.transform).toContain("scale(0.82000)");
+      const expectedMiniScale = (
+        getDefaultLearningMiniPlayerLayout().width / 412
+      ).toFixed(5);
+      expect(shell.style.transform).toContain(`scale(${expectedMiniScale})`);
       expect(playerControls).toHaveAttribute("aria-hidden", "true");
       expect(centralControls).toHaveAttribute("aria-hidden", "true");
       expect(onMinimize).not.toHaveBeenCalled();
@@ -1084,7 +1096,10 @@ describe("LessonVideoPlayer adapter", () => {
       });
       act(() => vi.advanceTimersByTime(16));
 
-      expect(shell.style.transform).toContain("scale(0.82000)");
+      const expectedMiniScale = (
+        getDefaultLearningMiniPlayerLayout().width / 412
+      ).toFixed(5);
+      expect(shell.style.transform).toContain(`scale(${expectedMiniScale})`);
       expect(onMinimize).not.toHaveBeenCalled();
       expect(onMiniRestore).not.toHaveBeenCalled();
 

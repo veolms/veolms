@@ -9,15 +9,21 @@ export const LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS = 0.6;
 
 export const LEARNING_MINI_PLAYER_ASPECT_RATIO = 16 / 9;
 export const LEARNING_MINI_PLAYER_MARGIN = 12;
-export const LEARNING_MINI_PLAYER_MAX_WIDTH = 22 * 16;
 export const LEARNING_MINI_PLAYER_MIN_WIDTH = 200;
-export const LEARNING_MINI_PLAYER_VIEWPORT_WIDTH = 0.82;
+export const LEARNING_MINI_PLAYER_PHONE_MAX_VIEWPORT_WIDTH = 640;
+export const LEARNING_MINI_PLAYER_DESKTOP_MIN_VIEWPORT_WIDTH = 1024;
+export const LEARNING_MINI_PLAYER_PHONE_WIDTH = 200;
+export const LEARNING_MINI_PLAYER_TABLET_WIDTH = 260;
+export const LEARNING_MINI_PLAYER_DESKTOP_WIDTH = 320;
 
 export interface LearningMiniPlayerLayout {
   left: number;
   top: number;
   width: number;
 }
+
+export type LearningMiniPlayerResizeEdges =
+  "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 
 export interface LearningPlayerViewportBounds {
   height: number;
@@ -181,16 +187,26 @@ export const getLearningMiniPlayerWidthBounds = (
   };
 };
 
+export const getPreferredLearningMiniPlayerWidth = (viewportWidth: number) => {
+  if (viewportWidth <= LEARNING_MINI_PLAYER_PHONE_MAX_VIEWPORT_WIDTH) {
+    return LEARNING_MINI_PLAYER_PHONE_WIDTH;
+  }
+  if (viewportWidth < LEARNING_MINI_PLAYER_DESKTOP_MIN_VIEWPORT_WIDTH) {
+    return LEARNING_MINI_PLAYER_TABLET_WIDTH;
+  }
+  return LEARNING_MINI_PLAYER_DESKTOP_WIDTH;
+};
+
 export const getDefaultLearningMiniPlayerLayout = (
   maximumSourceWidth = Number.POSITIVE_INFINITY,
   viewport = getLearningPlayerViewportBounds(),
+  preferredWidth = getPreferredLearningMiniPlayerWidth(viewport.width),
 ): LearningMiniPlayerLayout => {
-  const { maximumWidth } = getLearningMiniPlayerWidthBounds(viewport);
+  const { maximumWidth, minimumWidth } =
+    getLearningMiniPlayerWidthBounds(viewport);
   const width = Math.min(
     maximumSourceWidth,
-    LEARNING_MINI_PLAYER_MAX_WIDTH,
-    viewport.width * LEARNING_MINI_PLAYER_VIEWPORT_WIDTH,
-    maximumWidth,
+    clampLearningPlayerValue(preferredWidth, minimumWidth, maximumWidth),
   );
   const height = width / LEARNING_MINI_PLAYER_ASPECT_RATIO;
   return {
@@ -199,6 +215,73 @@ export const getDefaultLearningMiniPlayerLayout = (
       viewport.top + LEARNING_MINI_PLAYER_MARGIN,
       getLearningMiniPlayerBottomEdge(viewport) - height,
     ),
+    width,
+  };
+};
+
+export const getLearningMiniPlayerPointerResizeLayout = (
+  initialLayout: LearningMiniPlayerLayout,
+  edges: LearningMiniPlayerResizeEdges,
+  deltaX: number,
+  deltaY: number,
+  viewport = getLearningPlayerViewportBounds(),
+): LearningMiniPlayerLayout => {
+  const horizontalDirection = edges.includes("e")
+    ? 1
+    : edges.includes("w")
+      ? -1
+      : 0;
+  const verticalDirection = edges.includes("s")
+    ? 1
+    : edges.includes("n")
+      ? -1
+      : 0;
+  const aspectAdjustedVerticalDirection =
+    verticalDirection / LEARNING_MINI_PLAYER_ASPECT_RATIO;
+  const widthDelta =
+    horizontalDirection && verticalDirection
+      ? (horizontalDirection * deltaX +
+          aspectAdjustedVerticalDirection * deltaY) /
+        (horizontalDirection * horizontalDirection +
+          aspectAdjustedVerticalDirection * aspectAdjustedVerticalDirection)
+      : horizontalDirection
+        ? horizontalDirection * deltaX
+        : verticalDirection * deltaY * LEARNING_MINI_PLAYER_ASPECT_RATIO;
+  const { maximumWidth, minimumWidth } =
+    getLearningMiniPlayerWidthBounds(viewport);
+  const width = clampLearningPlayerValue(
+    initialLayout.width + widthDelta,
+    minimumWidth,
+    maximumWidth,
+  );
+  const initialHeight = initialLayout.width / LEARNING_MINI_PLAYER_ASPECT_RATIO;
+  const height = width / LEARNING_MINI_PLAYER_ASPECT_RATIO;
+  const initialRight = initialLayout.left + initialLayout.width;
+  const initialBottom = initialLayout.top + initialHeight;
+  const minimumLeft = viewport.left + LEARNING_MINI_PLAYER_MARGIN;
+  const maximumLeft = Math.max(
+    minimumLeft,
+    viewport.left + viewport.width - LEARNING_MINI_PLAYER_MARGIN - width,
+  );
+  const minimumTop = viewport.top + LEARNING_MINI_PLAYER_MARGIN;
+  const maximumTop = Math.max(
+    minimumTop,
+    getLearningMiniPlayerBottomEdge(viewport) - height,
+  );
+  const left = edges.includes("w")
+    ? initialRight - width
+    : edges.includes("e")
+      ? initialLayout.left
+      : initialLayout.left + (initialLayout.width - width) / 2;
+  const top = edges.includes("n")
+    ? initialBottom - height
+    : edges.includes("s")
+      ? initialLayout.top
+      : initialLayout.top + (initialHeight - height) / 2;
+
+  return {
+    left: clampLearningPlayerValue(left, minimumLeft, maximumLeft),
+    top: clampLearningPlayerValue(top, minimumTop, maximumTop),
     width,
   };
 };

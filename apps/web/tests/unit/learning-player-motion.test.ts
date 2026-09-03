@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   easeLearningPlayerMotionProgress,
+  getDefaultLearningMiniPlayerLayout,
   getLearningBackgroundMotionState,
+  getLearningMiniPlayerPointerResizeLayout,
   getLearningMiniPlayerWidthBounds,
 } from "../../src/learning/player/learningPlayerMotion.js";
 
@@ -82,5 +84,77 @@ describe("learning player surface motion", () => {
         width: 1_280,
       }),
     ).toEqual({ maximumWidth: 1_256, minimumWidth: 200 });
+  });
+
+  it.each([
+    [320, 200],
+    [640, 200],
+    [641, 260],
+    [1_023, 260],
+    [1_024, 320],
+    [1_440, 320],
+  ])(
+    "uses a %ipx-wide viewport to select a %ipx mini player",
+    (viewportWidth, expectedWidth) => {
+      expect(
+        getDefaultLearningMiniPlayerLayout(Number.POSITIVE_INFINITY, {
+          height: 900,
+          left: 0,
+          top: 0,
+          width: viewportWidth,
+        }).width,
+      ).toBe(expectedWidth);
+    },
+  );
+
+  it("uses a remembered user width while retaining viewport padding", () => {
+    expect(
+      getDefaultLearningMiniPlayerLayout(
+        Number.POSITIVE_INFINITY,
+        { height: 900, left: 0, top: 0, width: 640 },
+        248,
+      ).width,
+    ).toBe(248);
+    expect(
+      getDefaultLearningMiniPlayerLayout(
+        Number.POSITIVE_INFINITY,
+        { height: 900, left: 0, top: 0, width: 320 },
+        500,
+      ),
+    ).toMatchObject({ left: 12, width: 296 });
+  });
+
+  it.each([
+    ["w", -60, 0, { left: 240, top: 283.125, width: 360 }],
+    ["e", 60, 0, { left: 300, top: 283.125, width: 360 }],
+    ["n", 0, -33.75, { left: 270, top: 266.25, width: 360 }],
+    ["s", 0, 33.75, { left: 270, top: 300, width: 360 }],
+    ["nw", -60, -33.75, { left: 240, top: 266.25, width: 360 }],
+    ["se", 60, 33.75, { left: 300, top: 300, width: 360 }],
+  ] as const)(
+    "resizes from the %s handle while preserving the opposite anchor",
+    (edges, deltaX, deltaY, expectedLayout) => {
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, top: 300, width: 300 },
+          edges,
+          deltaX,
+          deltaY,
+          { height: 800, left: 0, top: 0, width: 1_000 },
+        ),
+      ).toEqual(expectedLayout);
+    },
+  );
+
+  it("keeps pointer resizing inside the viewport padding", () => {
+    expect(
+      getLearningMiniPlayerPointerResizeLayout(
+        { left: 12, top: 12, width: 300 },
+        "nw",
+        -1_000,
+        -1_000,
+        { height: 600, left: 0, top: 0, width: 640 },
+      ),
+    ).toMatchObject({ left: 12, top: 12, width: 616 });
   });
 });

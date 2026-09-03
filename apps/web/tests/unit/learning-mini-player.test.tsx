@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LearningMiniPlayer } from "../../src/learning/player/LearningMiniPlayer.js";
+import { lessonPlayerStorageKeys } from "../../src/learning/player/lessonPlayerPersistence.js";
 import type { LearningMiniPlayerSession } from "../../src/learning/player/learningMiniPlayerTypes.js";
 
 const videoPlayerMock = vi.hoisted(() => ({
@@ -110,6 +111,22 @@ vi.mock("@veolms/video-player", async () => {
         className={className}
         type="button"
         onClick={onClick}
+      />
+    ),
+    Timeline: ({
+      ariaLabel,
+      className,
+      showPreview,
+    }: {
+      ariaLabel?: string;
+      className?: string;
+      showPreview?: boolean;
+    }) => (
+      <div
+        role="slider"
+        aria-label={ariaLabel}
+        className={className}
+        data-show-preview={String(showPreview)}
       />
     ),
     VideoPlayer,
@@ -283,6 +300,68 @@ describe("LearningMiniPlayer gestures", () => {
 
     unmount();
     expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
+  });
+
+  it("provides invisible resize targets for every edge and corner", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    const handles = Array.from(
+      miniPlayer.querySelectorAll<HTMLElement>(
+        "[data-mini-player-resize-handle]",
+      ),
+    );
+
+    expect(
+      handles.map((handle) => handle.dataset.miniPlayerResizeHandle),
+    ).toEqual(["n", "ne", "e", "se", "s", "sw", "w", "nw"]);
+    expect(handles).toHaveLength(8);
+    expect(
+      handles.every((handle) => handle.getAttribute("aria-hidden") === "true"),
+    ).toBe(true);
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "n"),
+    ).toHaveClass("cursor-n-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "se"),
+    ).toHaveClass("cursor-se-resize", "bg-transparent");
+  });
+
+  it("resizes from a mouse edge and remembers the settled width", () => {
+    const { miniPlayer, onRestore } = renderMiniPlayer();
+    const westHandle = miniPlayer.querySelector<HTMLElement>(
+      '[data-mini-player-resize-handle="w"]',
+    );
+    expect(westHandle).not.toBeNull();
+
+    fireEvent.pointerDown(westHandle!, {
+      button: 0,
+      clientX: 307,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+    expect(miniPlayer.setPointerCapture).toHaveBeenCalledWith(51);
+    fireEvent.pointerMove(miniPlayer, {
+      clientX: 247,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "resizing");
+    expect(miniPlayer.style.left).toBe("247px");
+    expect(miniPlayer.style.width).toBe("360px");
+
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 247,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+
+    expect(localStorage.getItem(lessonPlayerStorageKeys.miniPlayerWidth)).toBe(
+      "360",
+    );
+    expect(onRestore).not.toHaveBeenCalled();
   });
 
   it("stays visible and compact when minimized above the phone breakpoint", () => {
@@ -542,6 +621,7 @@ describe("LearningMiniPlayer gestures", () => {
       pointerType: "touch",
     });
     expect(miniPlayer.style.width).toBe("600px");
+    expect(miniPlayer.style.left).toBe("264px");
 
     fireEvent.pointerUp(miniPlayer, {
       clientX: 550,
@@ -558,6 +638,9 @@ describe("LearningMiniPlayer gestures", () => {
     expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
     expect(miniPlayer.style.width).toBe("595px");
     expect(miniPlayer.style.left).toBe("12px");
+    expect(localStorage.getItem(lessonPlayerStorageKeys.miniPlayerWidth)).toBe(
+      "595",
+    );
     expect(onClose).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(240));
@@ -626,6 +709,46 @@ describe("LearningMiniPlayer gestures", () => {
     expect(playButton).toHaveClass("!size-9");
     expect(playButton).toHaveAttribute("data-icon-size", "20");
     expect(closeButton).toHaveClass("!size-9");
+  });
+
+  it("attaches the thin timeline to the bottom on larger viewports", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    const timeline = screen.getByRole("slider", {
+      name: "Mini player timeline",
+    });
+
+    expect(timeline.parentElement).toHaveClass(
+      "absolute",
+      "inset-x-0",
+      "bottom-0",
+      "hidden",
+      "min-[641px]:block",
+    );
+    expect(timeline).toHaveClass(
+      "[&_[data-timeline-track]]:bottom-0",
+      "[&_[data-timeline-track]]:h-0.5",
+      "[&_[data-timeline-track]]:rounded-none",
+    );
+    expect(timeline).toHaveAttribute("data-show-preview", "false");
+    expect(timeline.parentElement).toHaveAttribute(
+      "data-learning-mini-player-gesture-ignore",
+    );
+
+    fireEvent.pointerDown(timeline, {
+      button: 0,
+      clientX: 400,
+      clientY: 610,
+      pointerId: 61,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(miniPlayer, {
+      clientX: 300,
+      clientY: 610,
+      pointerId: 61,
+      pointerType: "mouse",
+    });
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "idle");
+    expect(miniPlayer).toContainElement(timeline);
   });
 
   it("keeps stationary mouse clicks targeted at restore and close controls", () => {

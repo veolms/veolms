@@ -1036,7 +1036,7 @@
   --sidebar-glow-opacity: 0;
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-app {
     isolation: isolate;
   }
@@ -1219,7 +1219,7 @@
   backdrop-filter: blur(var(--sidebar-floating-base-blur)) saturate(1.2);
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   :root[data-content-layout="framed"] .courses-app--hidden .courses-sidebar {
     top: 11px;
     bottom: 9px;
