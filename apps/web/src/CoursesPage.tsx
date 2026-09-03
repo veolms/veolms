@@ -3912,72 +3912,74 @@ export function CoursesPage({
         </div>
       )}
 
-      <main
-        id="courses-main-scrollport"
-        ref={mainScrollportRef}
-        className={[
-          "courses-main",
-          renderMain
-            ? "courses-main--learning overflow-x-clip!"
-            : page !== "courses"
-              ? "student-surface-main"
-              : "",
-          !renderMain && page === "settings" ? "courses-main--settings" : "",
-          mobileSidebarNavigationActive
-            ? renderMain
-              ? "max-[640px]:pb-0!"
-              : "max-[640px]:pb-4!"
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <div
-          ref={learningMotionStageRef}
-          className={
+      <div className="courses-main-frame">
+        <main
+          id="courses-main-scrollport"
+          ref={mainScrollportRef}
+          className={[
+            "courses-main",
             renderMain
-              ? "grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1"
-              : "contents"
-          }
-          data-learning-motion-stage={renderMain ? "" : undefined}
+              ? "courses-main--learning overflow-x-clip!"
+              : page !== "courses"
+                ? "student-surface-main"
+                : "",
+            !renderMain && page === "settings" ? "courses-main--settings" : "",
+            mobileSidebarNavigationActive
+              ? renderMain
+                ? "max-[640px]:pb-0!"
+                : "max-[640px]:pb-4!"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
-          {renderMain ? (
-            learningBackground ? (
-              <div
-                className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
-                style={{
-                  contain: "strict",
-                  opacity: "var(--learning-background-reveal, 0)",
-                  transitionDuration:
-                    "var(--learning-background-reveal-duration, 0ms)",
-                }}
-                aria-hidden="true"
-                data-learning-background-surface=""
-                inert
-              >
-                {renderPageContent({
-                  surfaceCourseSlug: learningBackground.courseSlug,
-                  surfaceDiscussionTab: learningBackground.discussionTab,
-                  surfacePage: learningBackground.page,
-                  surfaceSection: learningBackground.section,
-                  surfaceSettingsTab: learningBackground.settingsTab,
+          <div
+            ref={learningMotionStageRef}
+            className={
+              renderMain
+                ? "grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1"
+                : "contents"
+            }
+            data-learning-motion-stage={renderMain ? "" : undefined}
+          >
+            {renderMain ? (
+              learningBackground ? (
+                <div
+                  className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
+                  style={{
+                    contain: "strict",
+                    opacity: "var(--learning-background-reveal, 0)",
+                    transitionDuration:
+                      "var(--learning-background-reveal-duration, 0ms)",
+                  }}
+                  aria-hidden="true"
+                  data-learning-background-surface=""
+                  inert
+                >
+                  {renderPageContent({
+                    surfaceCourseSlug: learningBackground.courseSlug,
+                    surfaceDiscussionTab: learningBackground.discussionTab,
+                    surfacePage: learningBackground.page,
+                    surfaceSection: learningBackground.section,
+                    surfaceSettingsTab: learningBackground.settingsTab,
+                  })}
+                </div>
+              ) : null
+            ) : (
+              <div className="contents">{renderPageContent()}</div>
+            )}
+            {renderMain ? (
+              <div className="relative min-h-full">
+                {renderMain({
+                  mobileBottomNavigation:
+                    compactNavigation && !mobileSidebarNavigationActive,
+                  mobileBottomNavigationHidden: mobileBottomNavHidden,
                 })}
               </div>
-            ) : null
-          ) : (
-            <div className="contents">{renderPageContent()}</div>
-          )}
-          {renderMain ? (
-            <div className="relative min-h-full">
-              {renderMain({
-                mobileBottomNavigation:
-                  compactNavigation && !mobileSidebarNavigationActive,
-                mobileBottomNavigationHidden: mobileBottomNavHidden,
-              })}
-            </div>
-          ) : null}
-        </div>
-      </main>
+            ) : null}
+          </div>
+        </main>
+      </div>
 
       <FloatingScrollbar
         scrollportRef={mainScrollportRef}

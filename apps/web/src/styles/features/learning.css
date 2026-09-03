@@ -36,7 +36,8 @@
   }
 
   :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
-    .courses-main--learning:has(+ .floating-scrollbar--learning-page.is-visible)
+    .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
+    > .courses-main--learning
     .learning-workspace__main:has(
       .learning-workspace__curriculum-column:not(.is-collapsed)
     ) {
@@ -428,7 +429,8 @@
 
 @media (min-width: 1081px) {
   :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
-    .courses-main--learning:has(+ .floating-scrollbar--learning-page.is-visible)
+    .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
+    > .courses-main--learning
     .learning-curriculum__resize-rail::before {
     width: 2px;
     opacity: 0;
