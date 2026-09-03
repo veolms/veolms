@@ -421,7 +421,8 @@
   background: transparent;
 }
 
-.courses-app--hidden .courses-sidebar {
+.courses-app--hidden .courses-sidebar,
+:root[data-sidebar-state="hidden"] .courses-app .courses-sidebar {
   position: fixed;
   top: 10px;
   bottom: 10px;

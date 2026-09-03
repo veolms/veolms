@@ -8,53 +8,140 @@ test.beforeEach(async ({ page }) => {
 test("first visible shell uses the persisted layout geometry", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+
+  await page.goto("/courses");
   await expect(page.locator(".courses-app")).toBeVisible();
   await page.evaluate(() => {
-    window.localStorage.setItem("veolms-sidebar-mode", "expanded");
+    window.localStorage.setItem("veolms-sidebar-mode", "collapsed");
     window.localStorage.setItem("veolms-sidebar-width", "252");
-    window.localStorage.setItem("veolms-curriculum-width", "300");
+    window.localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ showCollapsedLogo: true }),
+    );
   });
 
   await page.addInitScript(() => {
-    const observer = new MutationObserver(() => {
-      const app = document.querySelector<HTMLElement>(".courses-app");
-      const learningMain = document.querySelector<HTMLElement>(
-        ".learning-workspace__main",
+    requestAnimationFrame(() => {
+      const root = document.documentElement;
+      root.dataset.testFirstSidebarState = root.dataset.sidebarState;
+      root.dataset.testFirstSidebarWidth =
+        root.style.getPropertyValue("--sidebar-width");
+      const isVisible = (element: Element | null) => {
+        if (!(element instanceof HTMLElement)) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          Number(style.opacity) > 0
+        );
+      };
+      root.dataset.testFirstSidebarLogoVisible = String(
+        isVisible(document.querySelector(".courses-logo-clip")),
       );
-
-      if (app && !document.documentElement.dataset.testFirstSidebarWidth) {
-        document.documentElement.dataset.testFirstSidebarWidth =
-          app.style.getPropertyValue("--sidebar-expanded-width");
-      }
-      if (
-        learningMain &&
-        !document.documentElement.dataset.testFirstCurriculumWidth
-      ) {
-        document.documentElement.dataset.testFirstCurriculumWidth =
-          learningMain.style.getPropertyValue("--learning-curriculum-width");
-      }
-      if (
-        document.documentElement.dataset.testFirstSidebarWidth &&
-        document.documentElement.dataset.testFirstCurriculumWidth
-      ) {
-        observer.disconnect();
-      }
+      root.dataset.testFirstSidebarToggleVisible = String(
+        isVisible(document.querySelector(".sidebar-collapse")),
+      );
     });
-    observer.observe(document, { childList: true, subtree: true });
   });
 
-  await page.goto("/learn/typescript-course/the-design-mindset?from=home");
+  await page.goto("/courses");
   await expect(page.locator(".courses-app")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-test-first-sidebar-state",
+    "collapsed",
+  );
   await expect(page.locator("html")).toHaveAttribute(
     "data-test-first-sidebar-width",
     "252px",
   );
   await expect(page.locator("html")).toHaveAttribute(
-    "data-test-first-curriculum-width",
-    "300px",
+    "data-test-first-sidebar-logo-visible",
+    "true",
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-test-first-sidebar-toggle-visible",
+    "false",
   );
   await expect(page.locator("[data-app-loading]")).toHaveCount(0);
+  await expect(page.locator(".courses-app")).toHaveClass(
+    /courses-app--collapsed/,
+  );
+  expect(await page.evaluate(() => window.__VEO_BOOTSTRAP__?.sidebar)).toEqual({
+    mode: "collapsed",
+    width: 252,
+  });
+});
+
+test("each deep-linked settings tab is the only visible static slide", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/notification-preferences", (route) =>
+    route.fulfill({ status: 200, json: { preferences: [] } }),
+  );
+  await page.addInitScript(() => {
+    requestAnimationFrame(() => {
+      const swiper = document.querySelector<HTMLElement>(
+        ".swipeable-tab-panel__swiper",
+      );
+      const swiperRect = swiper?.getBoundingClientRect();
+      if (!swiper || !swiperRect) return;
+      const sampleX = swiperRect.left + Math.min(24, swiperRect.width / 2);
+      const visibleSlides = Array.from(
+        swiper.querySelectorAll<HTMLElement>(".swiper-slide"),
+      ).filter((slide) => {
+        const rect = slide.getBoundingClientRect();
+        return rect.left <= sampleX && rect.right > sampleX;
+      });
+      document.documentElement.dataset.testFirstSettingsHeadings =
+        JSON.stringify(
+          visibleSlides.map(
+            (slide) =>
+              slide.querySelector("h2, h3")?.textContent?.trim() ?? "",
+          ),
+        );
+    });
+  });
+
+  for (const [route, tab, heading] of [
+    ["/settings/appearance", "appearance", "Display mode"],
+    ["/settings/sidebar", "sidebar", "Sidebar header"],
+    ["/settings/learning", "learning", "Playback & Learning"],
+  ] as const) {
+    await page.goto(route);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-test-first-settings-headings",
+      JSON.stringify([heading]),
+    );
+    await expect(page.getByRole("tabpanel")).toHaveAttribute(
+      "data-settings-tab",
+      tab,
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".settings-tab-content .swiper-slide")
+          .evaluateAll((slides) =>
+            slides.filter((slide) => slide.childElementCount > 0).length,
+          ),
+      )
+      .toBe(1);
+    await expect(page.locator("[data-app-loading]")).toHaveCount(0);
+  }
 });
 
 test("compiled client serves direct routes and bundled course artwork", async ({
@@ -66,20 +153,22 @@ test("compiled client serves direct routes and bundled course artwork", async ({
   });
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
-  // Direct URLs intentionally return one stable loading boundary. The real
-  // shell is mounted only after JavaScript restores persisted layout settings,
-  // preventing a prerendered sidebar from shifting after first paint.
+  // Common direct URLs ship the page and deterministic sidebar shell as HTML.
+  // Personalized navigation can enhance that shell after hydration.
   const settingsDocument = await page.request.get("/settings/appearance");
   expect(settingsDocument.ok()).toBe(true);
   const settingsHtml = await settingsDocument.text();
-  expect(settingsHtml).toContain("Loading your workspace");
-  expect(settingsHtml).not.toContain("Display mode");
+  expect(settingsHtml).toContain("Display mode");
+  expect(settingsHtml).toContain("window.__VEO_BOOTSTRAP__");
+  expect(settingsHtml).toContain("Student navigation");
 
   const catalogueDocument = await page.request.get("/courses");
   expect(catalogueDocument.ok()).toBe(true);
   const catalogueHtml = await catalogueDocument.text();
-  expect(catalogueHtml).toBe(settingsHtml);
-  expect(catalogueHtml).not.toContain("UI/UX Design Mastery");
+  expect(catalogueHtml).toContain("UI/UX Design Mastery");
+  expect(catalogueHtml).toContain("window.__VEO_BOOTSTRAP__");
+  expect(catalogueHtml).toContain("Student navigation");
+  expect(catalogueHtml).not.toBe(settingsHtml);
 
   await openApp(page, "/");
   await expect(

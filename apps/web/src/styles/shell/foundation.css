@@ -1,5 +1,6 @@
 :root {
-  --sidebar-expanded-width: 300px;
+  --sidebar-width: 300px;
+  --sidebar-expanded-width: var(--sidebar-width);
 }
 
 .courses-app {
@@ -16,12 +17,14 @@
     var(--app-shell);
 }
 
-.courses-app--collapsed {
+.courses-app--collapsed,
+:root[data-sidebar-state="collapsed"] .courses-app {
   grid-template-columns: 76px minmax(0, 1fr);
   padding-left: 0;
 }
 
-.courses-app--hidden {
+.courses-app--hidden,
+:root[data-sidebar-state="hidden"] .courses-app {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   padding-left: 14px;
@@ -58,6 +61,16 @@
    elsewhere preserves the existing mobile and edge-to-edge shell behavior. */
 .courses-main-frame {
   display: contents;
+  grid-column: 2;
+}
+
+.courses-main-frame > .courses-main {
+  grid-column: 2;
+}
+
+:root[data-sidebar-state="hidden"] .courses-main-frame,
+:root[data-sidebar-state="hidden"] .courses-main-frame > .courses-main {
+  grid-column: 1;
 }
 
 /* The learning workspace owns its inner breathing room; keep the shell flush only on this route. */
@@ -146,11 +159,15 @@
   }
 
   :root[data-content-layout="framed"] .courses-app--collapsed,
+  :root[data-content-layout="framed"][data-sidebar-state="collapsed"]
+    .courses-app,
   :root[data-content-layout="framed"] .courses-app--resizing {
     --main-surface-inline-start: var(--sidebar-resize-preview-width, 76px);
   }
 
-  :root[data-content-layout="framed"] .courses-app--hidden {
+  :root[data-content-layout="framed"] .courses-app--hidden,
+  :root[data-content-layout="framed"][data-sidebar-state="hidden"]
+    .courses-app {
     --main-surface-inline-start: 14px;
   }
 

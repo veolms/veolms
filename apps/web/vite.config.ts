@@ -89,6 +89,15 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ["@tiptap/core", "@tiptap/pm"],
     },
+    ssr: {
+      // The package publishes extensionless internal ESM imports. Bundling it
+      // lets Vite resolve those imports for the build-time SSG renderer.
+      noExternal: [
+        "@atomic-editor/editor",
+        "@phosphor-icons/react",
+        /^@phosphor-icons\/react\//,
+      ],
+    },
     build: {
       rollupOptions: {
         output: {

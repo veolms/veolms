@@ -63,7 +63,6 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
 import {
@@ -99,12 +98,13 @@ import {
   resolveWorkspaceRole,
 } from "./shell/workspaceRole";
 import {
+  SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MIN_WIDTH,
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getDefaultSidebarPreferences,
   getInitialSidebarPreferences,
-  getInitialSidebarWidth,
+  getInitialSidebarShellState,
 } from "./shell/sidebarPreferences";
 import {
   canStartSidebarTouchGesture,
@@ -419,9 +419,6 @@ function SidebarTooltipSurface() {
   );
 }
 
-const isSidebarMode = (value: string | null): value is SidebarMode =>
-  value === "expanded" || value === "collapsed" || value === "hidden";
-
 const procodrrLogoSvg = logoDarkSvg.replace(
   /fill="black"/g,
   'fill="currentColor"',
@@ -559,8 +556,13 @@ export function CoursesPage({
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [initialSidebarShellState] = useState(getInitialSidebarShellState);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
+    initialSidebarShellState.mode,
+  );
+  const [sidebarWidth, setSidebarWidth] = useState(
+    initialSidebarShellState.width,
+  );
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [sidebarResizePreviewWidth, setSidebarResizePreviewWidth] = useState<
     number | null
@@ -889,23 +891,6 @@ export function CoursesPage({
         creator: getStoredProfilePreferences("creator"),
       });
 
-      const storedSidebarMode = localStorage.getItem("veolms-sidebar-mode");
-      const legacySidebarCollapsed = localStorage.getItem(
-        "veolms-sidebar-collapsed",
-      );
-      setSidebarMode(
-        isSidebarMode(storedSidebarMode)
-          ? storedSidebarMode
-          : legacySidebarCollapsed !== null
-            ? legacySidebarCollapsed === "true"
-              ? "collapsed"
-              : "expanded"
-            : getResponsiveSidebarMode(
-                "expanded",
-                window.matchMedia(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY).matches,
-              ),
-      );
-      setSidebarWidth(getInitialSidebarWidth());
       const storedTheme = localStorage.getItem("veolms-theme");
       setTheme(
         storedTheme === "light" ||
@@ -941,6 +926,16 @@ export function CoursesPage({
       setStoredPreferencesReady(true);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.sidebarState = sidebarMode;
+    root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
+    root.style.setProperty("--sidebar-expanded-width", `${sidebarWidth}px`);
+    window.__VEO_BOOTSTRAP__ = {
+      sidebar: { mode: sidebarMode, width: sidebarWidth },
+    };
+  }, [sidebarMode, sidebarWidth]);
 
   const navigationHydrationKey = [
     activeUser ? "authenticated" : "guest",
@@ -1974,8 +1969,20 @@ export function CoursesPage({
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
+  const sidebarLayoutPresentation = getSidebarPresentation(sidebarMode);
+  const sidebarLayoutPresentedAsOverlay =
+    sidebarLayoutPresentation.hidden || compactNavigation;
+  const sidebarLayoutVisuallyCollapsed =
+    sidebarLayoutPresentation.collapsed && !sidebarLayoutPresentedAsOverlay;
+  // Keep the static sidebar's content deterministic through hydration. The
+  // head bootstrap and layout presentation already own its pre-paint geometry;
+  // detailed controls adopt the stored mode after preferences are available.
+  const renderedSidebarMode = storedPreferencesReady ? sidebarMode : "expanded";
+  const renderedSidebarWidth = storedPreferencesReady
+    ? sidebarWidth
+    : SIDEBAR_DEFAULT_WIDTH;
   const { collapsed: sidebarCollapsed, hidden: sidebarHidden } =
-    getSidebarPresentation(sidebarMode);
+    getSidebarPresentation(renderedSidebarMode);
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
   const sidebarVisuallyCollapsed =
     sidebarCollapsed && !sidebarPresentedAsOverlay;
@@ -2502,9 +2509,9 @@ export function CoursesPage({
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
-    sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
-    sidebarPresentedAsOverlay ? "courses-app--hidden" : "",
-    sidebarPresentedAsOverlay && edgeSidebarOpen
+    sidebarLayoutVisuallyCollapsed ? "courses-app--collapsed" : "",
+    sidebarLayoutPresentedAsOverlay ? "courses-app--hidden" : "",
+    sidebarLayoutPresentedAsOverlay && edgeSidebarOpen
       ? "courses-app--edge-open"
       : "",
     sidebarOverlaySwipeOffset !== null ? "courses-app--overlay-swiping" : "",
@@ -3180,7 +3187,7 @@ export function CoursesPage({
           onPageTabColorsChange={setPageTabColors}
           sidebarPreferences={sidebarPreferences}
           onSidebarPreferencesChange={setSidebarPreferences}
-          sidebarMode={sidebarMode}
+          sidebarMode={renderedSidebarMode}
           onSidebarModeChange={setSidebarMode}
           navigationItems={navigationItems}
           navigationVisibleItems={
@@ -3298,8 +3305,6 @@ export function CoursesPage({
     );
   };
 
-  if (!storedPreferencesReady) return <AppLoadingScreen />;
-
   return (
     <div
       ref={coursesAppRef}
@@ -3319,7 +3324,6 @@ export function CoursesPage({
       }
       style={
         {
-          "--sidebar-expanded-width": `${sidebarResizePreviewWidth ?? sidebarWidth}px`,
           "--sidebar-resize-preview-width": `${sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH}px`,
           "--sidebar-overlay-swipe-offset": `${sidebarOverlaySwipeOffset ?? 0}px`,
         } as CSSProperties
@@ -3383,17 +3387,17 @@ export function CoursesPage({
                 aria-valuenow={Math.round(
                   sidebarResizePreviewWidth ??
                     (sidebarPresentedAsOverlay
-                      ? sidebarWidth
+                      ? renderedSidebarWidth
                       : sidebarCollapsed
                         ? SIDEBAR_COLLAPSED_WIDTH
-                        : sidebarWidth),
+                        : renderedSidebarWidth),
                 )}
                 aria-valuetext={
                   sidebarPresentedAsOverlay
-                    ? `${Math.round(sidebarResizePreviewWidth ?? sidebarWidth)} pixel temporary sidebar`
+                    ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
                     : sidebarCollapsed
                       ? "Collapsed sidebar"
-                      : `${Math.round(sidebarWidth)} pixels wide`
+                      : `${Math.round(renderedSidebarWidth)} pixels wide`
                 }
                 tabIndex={0}
                 onKeyDown={handleSidebarResizeKeyDown}
