@@ -9,6 +9,13 @@
   touch-action: pan-y pinch-zoom;
 }
 
+/* Static HTML already marks the route-selected slide as the only accessible
+   one. Let normal layout show only that slide until Swiper takes over. */
+.swipeable-tab-panel__swiper:not([data-slides-ready="true"])
+  .swiper-slide[aria-hidden="true"] {
+  display: none;
+}
+
 .swipeable-tab-panel__swiper.swiper-autoheight,
 .swipeable-tab-panel__swiper.swiper-autoheight .swiper-slide {
   height: auto;

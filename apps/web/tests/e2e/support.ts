@@ -54,6 +54,11 @@ export async function openApp(page: Page, path = "/") {
     timeout: 15_000,
   });
   await expect(page.locator(".courses-app")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-app-hydrated",
+    "true",
+    { timeout: 15_000 },
+  );
   await page.evaluate(async () => {
     await document.fonts?.ready;
     await Promise.all(

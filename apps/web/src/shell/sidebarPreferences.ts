@@ -17,13 +17,18 @@ import {
 } from "../settings/settingsPreferences";
 import type {
   SidebarDockItem,
+  SidebarMode,
   SidebarPreferences,
 } from "../settings/settingsPreferences";
+import {
+  getResponsiveSidebarMode,
+  SIDEBAR_RESPONSIVE_COLLAPSE_QUERY,
+} from "./sidebarVisibility";
 
 export const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_LIMIT = 520;
-const SIDEBAR_DEFAULT_WIDTH = 300;
+export const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
 const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
 const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v2";
@@ -40,6 +45,24 @@ const LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER = [
   "fullscreen",
   "settings",
 ];
+
+export interface SidebarShellState {
+  mode: SidebarMode;
+  width: number;
+}
+
+export interface VeoBootstrapState {
+  sidebar: SidebarShellState;
+}
+
+declare global {
+  interface Window {
+    __VEO_BOOTSTRAP__?: VeoBootstrapState;
+  }
+}
+
+const isSidebarMode = (value: unknown): value is SidebarMode =>
+  value === "expanded" || value === "collapsed" || value === "hidden";
 
 export const clampSidebarMaxWidth = (value: unknown): number => {
   const numericValue = Number(value);
@@ -60,7 +83,9 @@ export const clampSidebarWidth = (
     Math.max(SIDEBAR_MIN_WIDTH, Number(value)),
   );
 
-export const getInitialSidebarWidth = (): number => {
+export const getInitialSidebarWidth = (
+  maxWidth: unknown = SIDEBAR_MAX_WIDTH,
+): number => {
   if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
 
   const rawSavedWidth = localStorage.getItem("veolms-sidebar-width");
@@ -70,9 +95,73 @@ export const getInitialSidebarWidth = (): number => {
 
   const savedWidth = Number(rawSavedWidth);
   return Number.isFinite(savedWidth)
-    ? clampSidebarWidth(savedWidth)
+    ? clampSidebarWidth(savedWidth, maxWidth)
     : SIDEBAR_DEFAULT_WIDTH;
 };
+
+export const getInitialSidebarMode = (): SidebarMode => {
+  if (typeof window === "undefined") return "expanded";
+
+  const storedMode = localStorage.getItem("veolms-sidebar-mode");
+  if (isSidebarMode(storedMode)) return storedMode;
+
+  const legacyCollapsed = localStorage.getItem("veolms-sidebar-collapsed");
+  if (legacyCollapsed !== null) {
+    return legacyCollapsed === "true" ? "collapsed" : "expanded";
+  }
+
+  return getResponsiveSidebarMode(
+    "expanded",
+    window.matchMedia(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY).matches,
+  );
+};
+
+const getStoredSidebarMaxWidth = (): number => {
+  if (
+    localStorage.getItem("veolms-sidebar-max-width-default-version") !==
+    SIDEBAR_MAX_WIDTH_DEFAULT_VERSION
+  ) {
+    return SIDEBAR_MAX_WIDTH;
+  }
+
+  try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem("veolms-sidebar-preferences") || "{}",
+    );
+    return clampSidebarMaxWidth(
+      stored && typeof stored === "object"
+        ? (stored as Record<string, unknown>).sidebarMaxWidth
+        : SIDEBAR_MAX_WIDTH,
+    );
+  } catch {
+    return SIDEBAR_MAX_WIDTH;
+  }
+};
+
+export const getInitialSidebarShellState = (): SidebarShellState => {
+  if (typeof window === "undefined") {
+    return { mode: "expanded", width: SIDEBAR_DEFAULT_WIDTH };
+  }
+
+  const bootstrapState = window.__VEO_BOOTSTRAP__?.sidebar;
+  if (bootstrapState && isSidebarMode(bootstrapState.mode)) {
+    return {
+      mode: bootstrapState.mode,
+      width: clampSidebarWidth(bootstrapState.width, SIDEBAR_MAX_WIDTH_LIMIT),
+    };
+  }
+
+  return {
+    mode: getInitialSidebarMode(),
+    width: getInitialSidebarWidth(getStoredSidebarMaxWidth()),
+  };
+};
+
+export const getSidebarShellBootstrapScript = () =>
+  `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT};let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");const v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s};r.dataset.sidebarState=m;r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px");const c=()=>{const e=document.querySelector(".courses-app");if(!e)return false;e.classList.toggle("courses-app--collapsed",m==="collapsed");e.classList.toggle("courses-app--hidden",m==="hidden");return true};if(!c()&&document.readyState==="loading"){const o=new MutationObserver(()=>{if(c())o.disconnect()});o.observe(document,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>o.disconnect(),{once:true})}})();`;
+
+export const getSidebarPresentationBootstrapScript = () =>
+  `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
 
 export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
   iconStyle: "monochrome",

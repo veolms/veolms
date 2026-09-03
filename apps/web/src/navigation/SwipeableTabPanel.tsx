@@ -99,6 +99,7 @@ interface SwipeableTabPanelProps<T extends string> {
   stateAttribute?: `data-${string}`;
   disabled?: boolean;
   spaceBetween?: number;
+  onSwipeStart?: () => void;
   children: (tab: T, preview: boolean) => ReactNode;
 }
 
@@ -213,6 +214,7 @@ export function SwipeableTabPanel<T extends string>({
   stateAttribute,
   disabled = false,
   spaceBetween,
+  onSwipeStart,
   children,
 }: SwipeableTabPanelProps<T>) {
   const swiperRef = useRef<SwiperInstance | null>(null);
@@ -414,6 +416,7 @@ export function SwipeableTabPanel<T extends string>({
   const dataState = stateAttribute
     ? ({ [stateAttribute]: activeTab } as Record<string, string>)
     : {};
+  const initialSlide = Math.max(0, tabs.indexOf(activeTab));
 
   return (
     <div
@@ -446,10 +449,15 @@ export function SwipeableTabPanel<T extends string>({
         noSwiping
         noSwipingSelector={TAB_SWIPE_NO_SWIPING_SELECTOR}
         threshold={0}
-        onBeforeInit={(swiper) => syncAdjacentSlideSpacing(swiper, spaceBetween)}
+        initialSlide={initialSlide}
+        onBeforeInit={(swiper) => {
+          swiper.el.dataset.slidesReady = "true";
+          syncAdjacentSlideSpacing(swiper, spaceBetween);
+        }}
         onBeforeResize={(swiper) => syncAdjacentSlideSpacing(swiper, spaceBetween)}
         onSwiper={handleSwiperReady}
         onTouchStart={handleTouchStart}
+        onSliderFirstMove={onSwipeStart}
         onTouchEnd={handleTouchEnd}
         onSlideChange={handleSlideChange}
       >

@@ -5,7 +5,7 @@ import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
-import { useEffect, useRef, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
@@ -186,6 +186,8 @@ export function SettingsPage({
   onNavigationVisibilityChange,
 }: SettingsPageProps) {
   const activeTab = normalizeSettingsTab(tab);
+  const activeTabIndex = SETTINGS_TAB_IDS.indexOf(activeTab);
+  const [swipeNeighborsReady, setSwipeNeighborsReady] = useState(false);
   const tabListRef = useRef<HTMLElement>(null);
   const pageProps: SettingsPageProps = {
     tab,
@@ -329,8 +331,15 @@ export function SettingsPage({
         slideClassName="pb-8"
         stateAttribute="data-settings-tab"
         labelledBy={`settings-tab-${activeTab}`}
+        onSwipeStart={() => setSwipeNeighborsReady(true)}
       >
-        {(panelTab) => renderSettingsTab(panelTab)}
+        {(panelTab) =>
+          panelTab === activeTab ||
+          (swipeNeighborsReady &&
+            Math.abs(SETTINGS_TAB_IDS.indexOf(panelTab) - activeTabIndex) === 1)
+            ? renderSettingsTab(panelTab)
+            : null
+        }
       </SwipeableTabPanel>
     </div>
   );

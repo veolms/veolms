@@ -30,6 +30,12 @@ let state: AuthState = {
   isLoading: false,
 };
 
+const serverState: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+};
+
 let writeGeneration = 0;
 
 const listeners = new Set<() => void>();
@@ -110,6 +116,6 @@ export function useAuthStore<T = AuthState>(
   return useSyncExternalStore(
     authStore.subscribe,
     () => selector(authStore.getState()),
-    () => selector(authStore.getState()),
+    () => selector(serverState),
   );
 }
