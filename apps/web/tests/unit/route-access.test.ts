@@ -4,6 +4,7 @@ import {
   MFA_CHALLENGE_PATH,
   buildLoginPath,
   isCoursesPublicPath,
+  isLearningPath,
   isPublicAcademyPath,
   isSettingsPath,
   requiresAcademyAuth,
@@ -16,19 +17,27 @@ import {
 } from "../../src/routing/routeAccess.ts";
 
 describe("route access policy", () => {
-  it("treats courses and settings as public academy routes", () => {
+  it("treats courses, lessons, and settings as public academy routes", () => {
     expect(isCoursesPublicPath("/courses")).toBe(true);
     expect(isCoursesPublicPath("/courses/demo/overview")).toBe(true);
     expect(isCoursesPublicPath("/courses/create")).toBe(false);
+    expect(isLearningPath("/learn/demo")).toBe(true);
+    expect(isLearningPath("/learn/demo/lesson-1")).toBe(true);
+    expect(isLearningPath("/courses/demo")).toBe(true);
+    expect(isLearningPath("/courses/demo/lesson-1")).toBe(true);
+    expect(isLearningPath("/courses/create")).toBe(false);
+    expect(isLearningPath("/learn")).toBe(false);
     expect(isSettingsPath("/settings/security")).toBe(true);
     expect(isPublicAcademyPath("/settings/profile")).toBe(true);
-    expect(isPublicAcademyPath("/learn/demo")).toBe(false);
+    expect(isPublicAcademyPath("/learn/demo")).toBe(true);
   });
 
   it("requires authentication for workspace routes", () => {
     expect(requiresAcademyAuth("/")).toBe(true);
     expect(requiresAcademyAuth("/discussions")).toBe(true);
-    expect(requiresAcademyAuth("/learn/demo")).toBe(true);
+    expect(requiresAcademyAuth("/learn/demo")).toBe(false);
+    expect(requiresAcademyAuth("/courses/demo/lesson-1")).toBe(false);
+    expect(requiresAcademyAuth("/courses/create")).toBe(true);
     expect(requiresAcademyAuth("/courses")).toBe(false);
     expect(requiresAcademyAuth("/settings")).toBe(false);
     expect(requiresAcademyAuth("/logout")).toBe(false);
@@ -133,7 +142,8 @@ describe("route access policy", () => {
   it("does not bounce auth screens to MFA on a 403", () => {
     const mfaError = { status: 403, code: "MFA_REQUIRED" };
 
-    expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(true);
+    expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(false);
+    expect(shouldRedirectToMfaChallenge("/learn/demo", mfaError)).toBe(false);
     expect(shouldRedirectToMfaChallenge("/settings/appearance", mfaError)).toBe(
       true,
     );

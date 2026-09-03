@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
-import type { AccessGrant, AccessGrantSource, AccessGrantStatus } from "@veolms/contracts";
+import type {
+  AccessGrant,
+  AccessGrantSource,
+  AccessGrantStatus,
+} from "@veolms/contracts";
 import * as accessRepo from "./access.repository.ts";
 // access.repository.ts is the module's canonical source for this type — see
 // the comment there for the full history of it having been separately (and,
@@ -30,15 +34,9 @@ export interface AccessService {
     },
   ): Promise<AccessGrant>;
 
-  revokeAccessGrantById(
-    database: Executor,
-    grantId: string,
-  ): Promise<void>;
+  revokeAccessGrantById(database: Executor, grantId: string): Promise<void>;
 
-  listUserGrants(
-    database: Executor,
-    userId: string,
-  ): Promise<AccessGrant[]>;
+  listUserGrants(database: Executor, userId: string): Promise<AccessGrant[]>;
 
   hasActiveAccess(
     database: Executor,
@@ -46,10 +44,12 @@ export interface AccessService {
     courseId: string,
   ): Promise<boolean>;
 
-  revokeAccessForOrder(
+  listActiveUserIdsForCourse(
     database: Executor,
-    orderId: string,
-  ): Promise<void>;
+    courseId: string,
+  ): Promise<string[]>;
+
+  revokeAccessForOrder(database: Executor, orderId: string): Promise<void>;
 
   revokeAccessForOrderCourse(
     database: Executor,
@@ -197,8 +197,20 @@ export function createAccessService(): AccessService {
     const grant = await accessRepo.findAccessGrant(database, userId, courseId);
     if (!grant) return false;
     if (grant.status !== "active") return false;
-    if (grant.valid_until && new Date() > new Date(grant.valid_until)) return false;
+    if (grant.valid_until && new Date() > new Date(grant.valid_until))
+      return false;
     return true;
+  }
+
+  async function listActiveUserIdsForCourse(
+    database: Executor,
+    courseId: string,
+  ): Promise<string[]> {
+    const rows = await accessRepo.listActiveUserIdsForCourse(
+      database,
+      courseId,
+    );
+    return rows;
   }
 
   async function revokeAccessForOrder(
@@ -213,7 +225,11 @@ export function createAccessService(): AccessService {
     orderId: string,
     courseId: string,
   ): Promise<void> {
-    await accessRepo.revokeAccessGrantsForOrderCourse(database, orderId, courseId);
+    await accessRepo.revokeAccessGrantsForOrderCourse(
+      database,
+      orderId,
+      courseId,
+    );
   }
 
   return {
@@ -222,6 +238,7 @@ export function createAccessService(): AccessService {
     revokeAccessGrantById,
     listUserGrants,
     hasActiveAccess,
+    listActiveUserIdsForCourse,
     revokeAccessForOrder,
     revokeAccessForOrderCourse,
   };

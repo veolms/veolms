@@ -18,10 +18,7 @@ export async function findAccessGrant(
     .executeTakeFirst();
 }
 
-export async function listUserAccessGrants(
-  database: Executor,
-  userId: string,
-) {
+export async function listUserAccessGrants(database: Executor, userId: string) {
   return await database
     .selectFrom("access_grants")
     .selectAll()
@@ -118,4 +115,21 @@ export async function revokeAccessGrantsForOrderCourse(
     .where("course_id", "=", courseId)
     .returningAll()
     .execute();
+}
+
+export async function listActiveUserIdsForCourse(
+  database: Executor,
+  courseId: string,
+): Promise<string[]> {
+  const now = new Date();
+  const rows = await database
+    .selectFrom("access_grants")
+    .select("user_id")
+    .where("course_id", "=", courseId)
+    .where("status", "=", "active")
+    .where((eb) =>
+      eb.or([eb("valid_until", "is", null), eb("valid_until", ">", now)]),
+    )
+    .execute();
+  return rows.map((row) => row.user_id);
 }

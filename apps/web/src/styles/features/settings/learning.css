@@ -84,7 +84,8 @@
 }
 
 .settings-learning-select-row,
-.settings-learning-toggle-row {
+.settings-learning-toggle-row,
+.settings-learning-custom-range {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(144px, 176px);
   align-items: center;
@@ -96,19 +97,23 @@
 .settings-learning-select-row + .settings-learning-select-row,
 .settings-learning-toggle-row + .settings-learning-toggle-row,
 .settings-learning-select-row + .settings-learning-toggle-row,
-.settings-learning-toggle-row + .settings-learning-select-row {
+.settings-learning-toggle-row + .settings-learning-select-row,
+.settings-learning-custom-range + .settings-learning-toggle-row,
+.settings-learning-select-row + .settings-learning-custom-range {
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .settings-learning-select-row__copy,
-.settings-learning-toggle-row__copy {
+.settings-learning-toggle-row__copy,
+.settings-learning-custom-range__copy {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
 .settings-learning-select-row__copy strong,
-.settings-learning-toggle-row__copy strong {
+.settings-learning-toggle-row__copy strong,
+.settings-learning-custom-range__copy strong {
   color: var(--text);
   font-size: 0.76rem;
   font-weight: 650;
@@ -116,7 +121,8 @@
 }
 
 .settings-learning-select-row__copy small,
-.settings-learning-toggle-row__copy small {
+.settings-learning-toggle-row__copy small,
+.settings-learning-custom-range__copy small {
   color: var(--muted);
   font-size: 0.66rem;
   line-height: 1.35;
@@ -155,6 +161,22 @@
 
 .settings-learning-toggle-row .settings-toggle {
   justify-self: end;
+}
+
+.settings-learning-custom-range__control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-learning-custom-range__control output {
+  min-width: 38px;
+  color: var(--accent-ink, var(--accent));
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .settings-learning-toggle-row:has(.settings-toggle:not(:disabled)) {
   cursor: pointer;

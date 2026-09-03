@@ -2,7 +2,10 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { CSSProperties } from "react";
 import { memo, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { CoursePlayerSession } from "../learning/coursePlayerNavigation";
+import {
+  getMostRecentCoursePlayerSession,
+  type CoursePlayerSession,
+} from "../learning/coursePlayerNavigation";
 import { LearningSpacePanel } from "./LearningSpacePanel";
 import { useFloatingLearningSpacePanel } from "./useFloatingLearningSpacePanel";
 
@@ -50,6 +53,7 @@ export const LearningSpace = memo(function LearningSpace({
   });
   const active = Boolean(activeCourseId);
   const emptyOpen = !active && sessions.length === 0 && expanded;
+  const mostRecentSession = getMostRecentCoursePlayerSession(sessions);
 
   const dismissPanel = () => {
     floatingPanel.setPinned(false);
@@ -109,14 +113,37 @@ export const LearningSpace = memo(function LearningSpace({
               }
         }
         onBlur={mobile ? undefined : floatingPanel.leaveFocus}
-        onClick={() => {
+        onClick={(event) => {
           if (expanded && active) {
             dismissPanel();
             return;
           }
 
+          const clickPointerType = (event.nativeEvent as PointerEvent)
+            .pointerType;
+          const directPointer = isDirectPointer(
+            clickPointerType || lastPointerTypeRef.current,
+          );
           lastPointerTypeRef.current = null;
-          floatingPanel.openFromClick(false);
+          const transientPopup =
+            Boolean(mostRecentSession) &&
+            !mobile &&
+            !directPointer &&
+            floatingPanel.hoverCapable &&
+            event.detail !== 0;
+          const keepHoverOpenedPanel =
+            expanded &&
+            !active &&
+            !mobile &&
+            !directPointer &&
+            floatingPanel.hoverCapable;
+
+          floatingPanel.openFromClick(
+            keepHoverOpenedPanel ? false : transientPopup,
+          );
+          if (collapsedSidebar && mostRecentSession) {
+            onActivate(mostRecentSession);
+          }
         }}
       >
         {mobile && mobileNavigationPlacement === "bottom" ? (

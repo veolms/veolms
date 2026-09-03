@@ -258,7 +258,8 @@
     border-radius: 11px;
   }
   .settings-learning-select-row,
-  .settings-learning-toggle-row {
+  .settings-learning-toggle-row,
+  .settings-learning-custom-range {
     grid-template-columns: minmax(0, 1fr) minmax(128px, 148px);
     gap: 10px;
   }

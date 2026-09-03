@@ -60,7 +60,13 @@ const dispatchPointerSwipeAt = async (
   await page.evaluate(
     ({ start, distance }) => {
       const target = document.elementFromPoint(start.x, start.y);
-      if (!target) throw new Error("No swipe target found at the test point.");
+      if (!(target instanceof HTMLElement)) {
+        throw new Error("No swipe target found at the test point.");
+      }
+      Object.defineProperties(target, {
+        setPointerCapture: { configurable: true, value: () => undefined },
+        releasePointerCapture: { configurable: true, value: () => undefined },
+      });
       const pointerId = 41;
       const dispatch = (
         eventTarget: EventTarget,
@@ -1078,6 +1084,11 @@ test("desktop screen halves route swipes to the sidebar and curriculum outside l
   page,
 }) => {
   await page.setViewportSize({ width: 1600, height: 779 });
+  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+    route.fulfill({
+      json: { course: { slug: "backend-nodejs" }, sections: [] },
+    }),
+  );
   await openApp(
     page,
     "/learn/backend-nodejs/career-opportunities-15?from=courses",
@@ -1163,6 +1174,96 @@ test("desktop screen halves route swipes to the sidebar and curriculum outside l
   await dispatchPointerSwipeAt(page, await playerSwipePoint("left"), 190);
   await expect(app).not.toHaveClass(/courses-app--collapsed/);
   await expect(main).not.toHaveClass(/is-curriculum-collapsed/);
+});
+
+test("tablet video halves keep both side menus swipeable behind the course drawer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+    route.fulfill({
+      json: { course: { slug: "backend-nodejs" }, sections: [] },
+    }),
+  );
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  const app = page.locator(".courses-app");
+  const player = page.locator(
+    "[data-learning-persistent-player]:not([data-learning-mini-player]) [data-video-player-root]",
+  );
+  const courseDrawer = page.getByRole("dialog", { name: "Course lessons" });
+  const playerSwipePoint = async (
+    side: "left" | "right",
+    avoidOpenDrawer = false,
+  ) => {
+    const bounds = await player.boundingBox();
+    expect(bounds).not.toBeNull();
+    const drawerBounds =
+      avoidOpenDrawer && (await courseDrawer.isVisible())
+        ? await courseDrawer.boundingBox()
+        : null;
+    const visibleLeft = bounds!.x;
+    const visibleRight = Math.min(
+      bounds!.x + bounds!.width,
+      drawerBounds?.x ?? Number.POSITIVE_INFINITY,
+    );
+    const midpoint = visibleLeft + (visibleRight - visibleLeft) / 2;
+    const x =
+      side === "right"
+        ? midpoint + (visibleRight - midpoint) * 0.55
+        : visibleLeft + (midpoint - visibleLeft) * 0.45;
+    expect(x).toBeGreaterThan(bounds!.x);
+    expect(x).toBeLessThan(bounds!.x + bounds!.width);
+    expect(x).toBeLessThan(visibleRight);
+    expect(side === "right" ? x > midpoint : x < midpoint).toBe(true);
+    return { x, y: bounds!.y + bounds!.height * 0.34 };
+  };
+  const swipePlayer = async (
+    side: "left" | "right",
+    deltaX: number,
+    avoidOpenDrawer = false,
+  ) => {
+    await dispatchPointerSwipeAt(
+      page,
+      await playerSwipePoint(side, avoidOpenDrawer),
+      deltaX,
+    );
+  };
+
+  await expect(app).not.toHaveClass(/courses-app--collapsed/);
+  await swipePlayer("left", -190);
+  await expect(app).toHaveClass(/courses-app--collapsed/);
+  await swipePlayer("left", 190);
+  await expect(app).not.toHaveClass(/courses-app--collapsed/);
+
+  await swipePlayer("right", -190);
+  await expect(courseDrawer).toBeVisible();
+  const swipeThroughPoint = await playerSwipePoint("left", true);
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (point) =>
+          document
+            .elementFromPoint(point.x, point.y)
+            ?.classList.contains("drawer-swipe-through-viewport"),
+        swipeThroughPoint,
+      ),
+    )
+    .toBe(true);
+
+  await swipePlayer("left", -190, true);
+  await expect(app).toHaveClass(/courses-app--collapsed/);
+  await expect(courseDrawer).toBeVisible();
+
+  await swipePlayer("left", 190, true);
+  await expect(app).not.toHaveClass(/courses-app--collapsed/);
+  await expect(courseDrawer).toBeVisible();
+
+  await swipePlayer("right", 190, true);
+  await expect(courseDrawer).toBeHidden();
 });
 
 test("discussion surfaces keep swipe clipping outside mobile content gutters", async ({

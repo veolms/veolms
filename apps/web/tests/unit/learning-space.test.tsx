@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LearningSpace } from "../../src/learning-space/LearningSpace";
 import { getCoursePlayerPath } from "../../src/learning/coursePlayerNavigation";
 import type { CoursePlayerSession } from "../../src/learning/coursePlayerNavigation";
@@ -30,6 +30,27 @@ const createSessions = (count: number): CoursePlayerSession[] =>
       updatedAt: index + 1,
     };
   });
+
+const defaultMatchMedia = window.matchMedia;
+
+beforeEach(() => {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  })) as typeof window.matchMedia;
+});
+
+afterEach(() => {
+  window.matchMedia = defaultMatchMedia;
+});
 
 interface RenderLearningSpaceOptions {
   sessions?: CoursePlayerSession[];

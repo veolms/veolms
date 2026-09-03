@@ -5,6 +5,12 @@ import {
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
   coursePublishedEventSchema,
+  discussionAnswerAcceptedEventSchema,
+  discussionReplyCreatedEventSchema,
+  moderationContentModeratedEventSchema,
+  moderationReportResolvedEventSchema,
+  moderationUserSuspendedEventSchema,
+  moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
   paymentFailedEventSchema,
   refundCompletedEventSchema,
@@ -225,6 +231,117 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: `/certificates/${event.certificateId}`,
+      },
+    ];
+  },
+  "discussion.reply_created": async (payload) => {
+    const event = discussionReplyCreatedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "discussion.reply_created",
+        category: "social",
+        templateKey: "discussion.reply_created",
+        templateData: {
+          actorName: event.actorName,
+          threadTitle: event.threadTitle,
+          replySnippet: event.replySnippet,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "discussion.answer_accepted": async (payload) => {
+    const event = discussionAnswerAcceptedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "discussion.answer_accepted",
+        category: "social",
+        templateKey: "discussion.answer_accepted",
+        templateData: {
+          actorName: event.actorName,
+          threadTitle: event.threadTitle,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "moderation.content_moderated": async (payload) => {
+    const event = moderationContentModeratedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "moderation.content_moderated",
+        category: "system",
+        templateKey: "moderation.content_moderated",
+        templateData: {
+          contentType: event.contentType,
+          action: event.action,
+          ...(event.reason ? { reason: event.reason } : {}),
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/discussions",
+      },
+    ];
+  },
+  "moderation.user_suspended": async (payload) => {
+    const event = moderationUserSuspendedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "moderation.user_suspended",
+        category: "system",
+        templateKey: "moderation.user_suspended",
+        templateData: {
+          scope: event.scope,
+          reason: event.reason,
+          ...(event.expiresAt ? { expiresAt: event.expiresAt } : {}),
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/discussions",
+      },
+    ];
+  },
+  "moderation.user_unsuspended": async (payload) => {
+    const event = moderationUserUnsuspendedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "moderation.user_unsuspended",
+        category: "system",
+        templateKey: "moderation.user_unsuspended",
+        templateData: {
+          ...(event.reason ? { reason: event.reason } : {}),
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/discussions",
+      },
+    ];
+  },
+  "moderation.report_resolved": async (payload) => {
+    const event = moderationReportResolvedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "moderation.report_resolved",
+        category: "system",
+        templateKey: "moderation.report_resolved",
+        templateData: {
+          targetType: event.targetType,
+          status: event.status,
+          ...(event.actionTaken ? { actionTaken: event.actionTaken } : {}),
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: "/discussions",
       },
     ];
   },

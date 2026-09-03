@@ -280,6 +280,60 @@ export class S3StorageService {
   }
 
   /**
+   * Uploads an in-memory object. Used by API-proxied uploads that already
+   * have the bytes (discussion attachments) rather than a local file path.
+   */
+  async putObject(
+    key: string,
+    body: Buffer | Readable,
+    contentType: string,
+    contentLength?: number,
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        ContentLength: contentLength,
+      }),
+    );
+  }
+
+  /**
+   * Streams an object for authenticated API serving. Returns null on 404.
+   */
+  async getObject(key: string): Promise<{
+    body: Readable;
+    contentType?: string;
+    contentLength?: number;
+  } | null> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+      const body = response.Body as Readable | undefined;
+      if (!body) return null;
+      return {
+        body,
+        contentType: response.ContentType,
+        contentLength: response.ContentLength,
+      };
+    } catch (error: unknown) {
+      if (
+        error instanceof S3ServiceException &&
+        error.$metadata.httpStatusCode === 404
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Deletes an object from S3.
    */
   async deleteObject(key: string): Promise<void> {
