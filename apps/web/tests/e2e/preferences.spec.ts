@@ -3236,11 +3236,18 @@ test("fixed sidebar stays transparent while the shell glow remains visible", asy
       const sidebarElement =
         document.querySelector<HTMLElement>(".courses-sidebar")!;
       const appElement = document.querySelector<HTMLElement>(".courses-app")!;
-      const mainElement = document.querySelector<HTMLElement>(".courses-main")!;
+      const frameElement = document.querySelector<HTMLElement>(
+        ".courses-main-frame",
+      )!;
+      const mainElement = document.querySelector<HTMLElement>(
+        "#courses-main-scrollport",
+      )!;
       const style = getComputedStyle(sidebarElement);
       const pattern = getComputedStyle(appElement, "::before");
       const bokeh = getComputedStyle(sidebarElement, "::before");
       const bokehBackdrop = getComputedStyle(sidebarElement, "::after");
+      const frame = getComputedStyle(frameElement);
+      const main = getComputedStyle(mainElement);
       return {
         backdropFilter: style.backdropFilter,
         backgroundColor: style.backgroundColor,
@@ -3252,12 +3259,19 @@ test("fixed sidebar stays transparent while the shell glow remains visible", asy
         bokehFilter: bokeh.filter,
         bokehOpacity: bokeh.opacity,
         bokehZIndex: bokeh.zIndex,
+        bokehBackdropContent: bokehBackdrop.content,
         bokehBackdropFilter: bokehBackdrop.backdropFilter,
         bokehBackdropMask:
           bokehBackdrop.maskImage ||
           bokehBackdrop.getPropertyValue("-webkit-mask-image"),
         bokehBackdropZIndex: bokehBackdrop.zIndex,
-        mainZIndex: getComputedStyle(mainElement).zIndex,
+        frameBackgroundColor: frame.backgroundColor,
+        frameBorderRadius: frame.borderRadius,
+        frameOverflow: frame.overflow,
+        frameZIndex: frame.zIndex,
+        mainBackgroundColor: main.backgroundColor,
+        mainBorderRadius: main.borderRadius,
+        mainOverflowY: main.overflowY,
         patternBackground: pattern.backgroundImage,
         patternContent: pattern.content,
         patternFilter: pattern.filter,
@@ -3275,18 +3289,25 @@ test("fixed sidebar stays transparent while the shell glow remains visible", asy
   expect(expandedMaterial.bokehContent).not.toBe("none");
   expect(expandedMaterial.bokehBackground).toContain("118px");
   expect(expandedMaterial.bokehCircleCount).toBe(3);
-  expect(expandedMaterial.bokehFilter).toBe("none");
+  expect(expandedMaterial.bokehFilter).toBe("blur(8px)");
   expect(expandedMaterial.bokehOpacity).toBe("0.195");
   expect(expandedMaterial.bokehZIndex).toBe("-1");
+  expect(expandedMaterial.bokehBackdropContent).toBe("none");
   expect(expandedMaterial.bokehBackdropFilter).toBe("blur(8px) saturate(1.08)");
-  expect(expandedMaterial.bokehBackdropMask).toContain("linear-gradient");
+  expect(expandedMaterial.bokehBackdropMask).toBe("none");
   expect(expandedMaterial.bokehBackdropZIndex).toBe("0");
+  expect(expandedMaterial.frameBackgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(expandedMaterial.frameBorderRadius).toBe("18px");
+  expect(expandedMaterial.frameOverflow).toBe("hidden");
+  expect(expandedMaterial.frameZIndex).toBe("1");
+  expect(expandedMaterial.mainBackgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(expandedMaterial.mainBorderRadius).toBe("0px");
+  expect(expandedMaterial.mainOverflowY).toBe("auto");
   expect(expandedMaterial.patternContent).not.toBe("none");
   expect(expandedMaterial.patternBackground).toContain("720px 420px");
   expect(expandedMaterial.patternFilter).toBe("blur(26px) saturate(1.1)");
   expect(expandedMaterial.patternOpacity).toBe("0.25");
   expect(expandedMaterial.patternPosition).toBe("fixed");
-  expect(expandedMaterial.mainZIndex).toBe("1");
   expect(expandedMaterial.patternZIndex).toBe("0");
   expect(expandedMaterial.sidebarZIndex).toBe("3");
 
@@ -3428,7 +3449,7 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   await expect
     .poll(() =>
       sidebar.evaluate(
-        (element) => getComputedStyle(element, "::after").backdropFilter,
+        (element) => getComputedStyle(element, "::before").filter,
       ),
     )
     .toBe("none");
@@ -3468,10 +3489,10 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   await expect
     .poll(() =>
       sidebar.evaluate(
-        (element) => getComputedStyle(element, "::after").backdropFilter,
+        (element) => getComputedStyle(element, "::before").filter,
       ),
     )
-    .toBe("blur(27px) saturate(1.08)");
+    .toBe("blur(27px)");
 
   const circleMask = await sidebar.evaluate((element) => {
     const style = getComputedStyle(element, "::before");

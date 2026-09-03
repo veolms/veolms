@@ -54,6 +54,12 @@
   box-shadow: var(--application-frame-shadow, var(--card-shadow));
 }
 
+/* The wrapper becomes the painted frame on desktop. Keeping it out of layout
+   elsewhere preserves the existing mobile and edge-to-edge shell behavior. */
+.courses-main-frame {
+  display: contents;
+}
+
 /* The learning workspace owns its inner breathing room; keep the shell flush only on this route. */
 .courses-main.courses-main--learning {
   padding: 0;
@@ -165,6 +171,32 @@
   }
 }
 
+@media (min-width: 821px) {
+  :root[data-content-layout="framed"] .courses-main-frame {
+    display: block;
+    min-width: 0;
+    height: calc(100vh - var(--shell-frame-block-space));
+    height: calc(100dvh - var(--shell-frame-block-space));
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--main-surface);
+    box-shadow: var(--application-frame-shadow, var(--card-shadow));
+  }
+
+  /* Chromium can leak a one-pixel compositor edge when the same rounded box
+     both paints the application surface and owns accelerated scrolling. The
+     frame paints and clips; the existing main element remains the scrollport. */
+  :root[data-content-layout="framed"] .courses-main-frame > .courses-main {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
 .floating-scrollbar {
   position: fixed;
   z-index: 45;
@@ -207,8 +239,9 @@
 }
 
 @media (min-width: 1081px) {
-  .courses-main--learning:has(
-      .learning-workspace:not(.is-theater)
+  .courses-main-frame:has(
+      > .courses-main--learning
+        .learning-workspace:not(.is-theater)
         .learning-workspace__curriculum-column:not(.is-collapsed)
     )
     + .floating-scrollbar--learning-page {
