@@ -3,7 +3,7 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CourseCatalogue } from "../../src/courses/CourseCatalogue.tsx";
 import type { CourseCatalogueProps } from "../../src/courses/CourseCatalogue.tsx";
-import { courses } from "../../src/courses/catalogue.ts";
+import type { Course } from "../../src/courses/catalogue.ts";
 
 vi.mock("../../src/ThemedSelect.tsx", () => ({
   ThemedSelect: ({
@@ -60,6 +60,22 @@ const renderCatalogue = (props: Partial<CourseCatalogueProps> = {}) => {
   return { ...callbacks, ...view };
 };
 
+const sampleCourse: Course = {
+  id: "test-course-id",
+  title: "Test Course Title",
+  description: "Test Course Description",
+  level: "Beginner",
+  category: "Development",
+  sections: 5,
+  lectures: 20,
+  progress: null,
+  enrolled: false,
+  duration: "5h",
+  students: 10,
+  thumbnail: "/test.webp",
+  lifecycleStatus: "published",
+};
+
 describe("CourseCatalogue", () => {
   it("forwards enrollment, search, status, and sort controls to the parent", () => {
     const {
@@ -114,23 +130,22 @@ describe("CourseCatalogue", () => {
   });
 
   it("opens the overview route when a student explores an unenrolled course", () => {
-    const unenrolledCourse = courses.find((course) => !course.enrolled);
-    expect(unenrolledCourse).toBeDefined();
+    const unenrolledCourse = { ...sampleCourse, enrolled: false };
 
     const { onNavigatePage, setNotice } = renderCatalogue({
-      visibleCourses: [unenrolledCourse!],
+      visibleCourses: [unenrolledCourse],
     });
 
     fireEvent.click(screen.getByRole("button", { name: "View Curriculum" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith(
-      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
+      `/courses/${encodeURIComponent(unenrolledCourse.id)}/overview`,
     );
     expect(setNotice).not.toHaveBeenCalled();
   });
 
   it("navigates to course edit page when edit course action is selected", async () => {
-    const target = courses[0]!;
+    const target = sampleCourse;
     const { onNavigatePage } = renderCatalogue({
       role: "creator",
       visibleCourses: [target],
@@ -167,7 +182,21 @@ describe("CourseCatalogue", () => {
   });
 
   it("opens ConfirmDeleteModal on Delete Course action and triggers onDeleteCourse on confirm", async () => {
-    const target = courses[0]!;
+    const target: Course = {
+      id: "test-course-id",
+      title: "Test Course Title",
+      description: "Test Course Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 5,
+      lectures: 20,
+      progress: null,
+      enrolled: false,
+      duration: "5h",
+      students: 10,
+      thumbnail: "/test.webp",
+      lifecycleStatus: "published",
+    };
     const onDeleteCourse = vi.fn().mockResolvedValue(undefined);
     renderCatalogue({
       role: "creator",

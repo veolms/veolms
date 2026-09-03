@@ -49,7 +49,7 @@ import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
-import { courses, getVisibleCourses } from "./courses/catalogue";
+import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -737,9 +737,6 @@ export function CoursesPage({
   });
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
-  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
-    () => new Set(),
-  );
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
@@ -926,10 +923,7 @@ export function CoursesPage({
           Array.isArray(storedWishlist)
             ? storedWishlist.filter(
                 (courseId): courseId is string =>
-                  typeof courseId === "string" &&
-                  courses.some(
-                    (course) => course.id === courseId && !course.enrolled,
-                  ),
+                  typeof courseId === "string" && Boolean(courseId.trim()),
               )
             : [],
         ),
@@ -1605,35 +1599,20 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (role !== "creator") {
-      const apiCourses = (publishedCoursesData?.courses || []).map(
+      return (publishedCoursesData?.courses || []).map(
         adaptCourseSummaryToCatalogueCourse,
       );
-      const existingIds = new Set(apiCourses.map((c) => c.id));
-      const nonConflictingMockCourses = courses.filter(
-        (c) => !existingIds.has(c.id),
-      );
-      return [...apiCourses, ...nonConflictingMockCourses];
     }
     if (enrollmentFilter === "bin") {
-      const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
+      return (deletedCoursesData?.courses || []).map(
         adaptDeletedCourseToCatalogueCourse,
       );
-      const mockDeletedCourses = courses.filter((c) =>
-        deletedMockCourseIds.has(c.id),
-      );
-      return [...apiDeletedCourses, ...mockDeletedCourses];
     }
-    const apiCourses = (myCoursesData?.courses || []).map(
+    return (myCoursesData?.courses || []).map(
       adaptApiCourseToCatalogueCourse,
     );
-    const existingIds = new Set(apiCourses.map((c) => c.id));
-    const nonConflictingMockCourses = courses.filter(
-      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
-    );
-    return [...apiCourses, ...nonConflictingMockCourses];
   }, [
     deletedCoursesData?.courses,
-    deletedMockCourseIds,
     enrollmentFilter,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
@@ -1641,16 +1620,6 @@ export function CoursesPage({
   ]);
 
   const handleDeleteCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
-      setNotice(`${course.title} moved to Bin.`);
-      return;
-    }
-
     try {
       await deleteCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} moved to Bin.`);
@@ -1665,20 +1634,6 @@ export function CoursesPage({
   };
 
   const handleRestoreCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => {
-        const next = new Set(prev);
-        next.delete(course.id);
-        return next;
-      });
-      setNotice(`${course.title} was restored.`);
-      return;
-    }
-
     try {
       await restoreCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} was restored.`);

@@ -1,9 +1,117 @@
 import { describe, expect, it } from "vitest";
-import { courses, getVisibleCourses } from "../../src/courses/catalogue.ts";
+import { getVisibleCourses } from "../../src/courses/catalogue.ts";
 import type {
   Course,
   CourseCatalogueFilters,
 } from "../../src/courses/catalogue.ts";
+
+const testCourses: Course[] = [
+  {
+    id: "backend-nodejs",
+    title: "Complete Backend with Node.js",
+    description: "Build scalable backend applications.",
+    level: "Intermediate",
+    category: "Development",
+    sections: 23,
+    lectures: 600,
+    progress: 80,
+    enrolled: true,
+    duration: "34h 20m",
+    students: 1320,
+    thumbnail: "/nodejs.webp",
+    lifecycleStatus: "published",
+  },
+  {
+    id: "figma-ui-essentials",
+    title: "Figma UI Essentials",
+    description: "Design modern interfaces.",
+    level: "Beginner",
+    category: "Design",
+    sections: 8,
+    lectures: 48,
+    progress: null,
+    enrolled: false,
+    duration: "9h 15m",
+    students: 611,
+    thumbnail: "/figma.webp",
+    lifecycleStatus: "draft",
+  },
+  {
+    id: "typescript-course",
+    title: "The Ultimate TypeScript Course",
+    description: "Master TypeScript.",
+    level: "Intermediate",
+    category: "Development",
+    sections: 24,
+    lectures: 160,
+    progress: 50,
+    enrolled: true,
+    duration: "28h 10m",
+    students: 967,
+    thumbnail: "/typescript.webp",
+    lifecycleStatus: "published",
+  },
+  {
+    id: "javascript-course",
+    title: "The Complete JavaScript Course",
+    description: "Learn modern JavaScript.",
+    level: "Beginner",
+    category: "Development",
+    sections: 20,
+    lectures: 142,
+    progress: 38,
+    enrolled: true,
+    duration: "24h 35m",
+    students: 1584,
+    thumbnail: "/javascript.webp",
+    lifecycleStatus: "draft",
+  },
+  {
+    id: "ui-ux-design-mastery",
+    title: "UI/UX Design Mastery",
+    description: "Learn user-centered design.",
+    level: "Beginner",
+    category: "Design",
+    sections: 7,
+    lectures: 42,
+    progress: 100,
+    enrolled: true,
+    duration: "12h 40m",
+    students: 842,
+    thumbnail: "/ui-ux.webp",
+    lifecycleStatus: "published",
+  },
+  {
+    id: "mongodb-database-design",
+    title: "MongoDB & Database Design",
+    description: "Learn NoSQL with MongoDB.",
+    level: "Beginner",
+    category: "Database",
+    sections: 12,
+    lectures: 68,
+    progress: 0,
+    enrolled: true,
+    duration: "14h 45m",
+    students: 723,
+    thumbnail: "/mongodb.webp",
+    lifecycleStatus: "published",
+  },
+  {
+    id: "aws-cloud-practitioner",
+    title: "AWS Cloud Practitioner Essentials",
+    description: "Understand cloud concepts.",
+    level: "Intermediate",
+    category: "Cloud",
+    sections: 11,
+    lectures: 60,
+    progress: null,
+    enrolled: false,
+    duration: "16h 30m",
+    students: 489,
+    thumbnail: "/aws.webp",
+    lifecycleStatus: "archived",
+  },
+];
 
 const defaultFilters: CourseCatalogueFilters = {
   activeSection: "Courses",
@@ -16,7 +124,7 @@ const defaultFilters: CourseCatalogueFilters = {
 };
 
 const select = (overrides: Partial<CourseCatalogueFilters> = {}) =>
-  getVisibleCourses(courses, { ...defaultFilters, ...overrides });
+  getVisibleCourses(testCourses, { ...defaultFilters, ...overrides });
 
 describe("course catalogue selector", () => {
   it("returns all seven courses with mixed enrollment in the first two cards", () => {
@@ -130,11 +238,11 @@ describe("course catalogue selector", () => {
   });
 
   it("does not mutate the supplied catalogue or its course references", () => {
-    const before = courses.map(({ id }) => id);
+    const before = testCourses.map(({ id }) => id);
     const result = select({ sort: "title" });
 
-    expect(result).not.toBe(courses);
-    expect(result).toContain(courses[0]);
-    expect(courses.map(({ id }) => id)).toEqual(before);
+    expect(result).not.toBe(testCourses);
+    expect(result).toContain(testCourses[0]);
+    expect(testCourses.map(({ id }) => id)).toEqual(before);
   });
 });

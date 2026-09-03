@@ -1,15 +1,13 @@
-import nodeThumbnail from "../assets/course-thumbnails/nodejs-960.webp";
-import javascriptThumbnail from "../assets/course-thumbnails/javascript-960.webp";
-import typescriptThumbnail from "../assets/course-thumbnails/typescript-960.webp";
-import figmaThumbnail from "../assets/course-thumbnails/figma-960.webp";
-import mongodbThumbnail from "../assets/course-thumbnails/mongodb-960.webp";
-import awsThumbnail from "../assets/course-thumbnails/aws-960.webp";
-
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "bin";
+  | "all"
+  | "enrolled"
+  | "not-enrolled"
+  | "published"
+  | "draft"
+  | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"
@@ -72,132 +70,6 @@ export interface CourseCatalogueFilters {
   search: string;
   sort: CourseSort;
 }
-
-export const courses: readonly Course[] = [
-  {
-    id: "backend-nodejs",
-    title: "Complete Backend with Node.js",
-    description:
-      "Build scalable and performant backend applications using Node.js, Express & more.",
-    level: "Intermediate",
-    category: "Development",
-    sections: 23,
-    lectures: 600,
-    progress: 80,
-    enrolled: true,
-    duration: "34h 20m",
-    students: 1320,
-    thumbnail: nodeThumbnail,
-    lifecycleStatus: "published",
-  },
-  {
-    id: "typescript-course",
-    title: "The Ultimate TypeScript Course",
-    description:
-      "Master TypeScript from basics to advanced concepts with real-world projects.",
-    level: "Intermediate",
-    category: "Development",
-    sections: 24,
-    lectures: 160,
-    progress: 50,
-    enrolled: true,
-    duration: "28h 10m",
-    students: 967,
-    thumbnail: typescriptThumbnail,
-    lifecycleStatus: "published",
-  },
-  {
-    id: "javascript-course",
-    title: "The Complete JavaScript Course",
-    description:
-      "Learn modern JavaScript from core language fundamentals to asynchronous application patterns.",
-    level: "Beginner",
-    category: "Development",
-    sections: 20,
-    lectures: 142,
-    progress: 38,
-    enrolled: true,
-    duration: "24h 35m",
-    students: 1584,
-    thumbnail: javascriptThumbnail,
-    lifecycleStatus: "draft",
-  },
-  {
-    id: "ui-ux-design-mastery",
-    title: "UI/UX Design Mastery",
-    description:
-      "Learn user-centered design principles and create stunning, intuitive interfaces.",
-    level: "Beginner",
-    category: "Design",
-    sections: 7,
-    lectures: 42,
-    progress: 100,
-    enrolled: true,
-    duration: "12h 40m",
-    students: 842,
-    thumbnail: "/assets/instructor-poster-960.webp",
-    lifecycleStatus: "published",
-    certificateAvailable: true,
-  },
-  {
-    id: "figma-ui-essentials",
-    title: "Figma UI Essentials",
-    description:
-      "Design modern interfaces, prototypes and collaborate like a pro in Figma.",
-    level: "Beginner",
-    category: "Design",
-    sections: 8,
-    lectures: 48,
-    progress: null,
-    enrolled: false,
-    duration: "9h 15m",
-    students: 611,
-    thumbnail: figmaThumbnail,
-    lifecycleStatus: "draft",
-    pricing: {
-      price: "₹1,499",
-      originalPrice: "₹2,499",
-      discount: "40% off",
-    },
-  },
-  {
-    id: "mongodb-database-design",
-    title: "MongoDB & Database Design",
-    description:
-      "Learn NoSQL with MongoDB and design efficient, scalable database schemas.",
-    level: "Beginner",
-    category: "Database",
-    sections: 12,
-    lectures: 68,
-    progress: 0,
-    enrolled: true,
-    duration: "14h 45m",
-    students: 723,
-    thumbnail: mongodbThumbnail,
-    lifecycleStatus: "published",
-  },
-  {
-    id: "aws-cloud-practitioner",
-    title: "AWS Cloud Practitioner Essentials",
-    description:
-      "Understand cloud concepts and core AWS services with hands-on demos.",
-    level: "Intermediate",
-    category: "Cloud",
-    sections: 11,
-    lectures: 60,
-    progress: null,
-    enrolled: false,
-    duration: "16h 30m",
-    students: 489,
-    thumbnail: awsThumbnail,
-    lifecycleStatus: "archived",
-    pricing: {
-      price: "₹1,999",
-      originalPrice: "₹2,999",
-      discount: "33% off",
-    },
-  },
-];
 
 export function getVisibleCourses(
   catalogue: readonly Course[],
