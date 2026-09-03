@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -220,8 +221,6 @@ export function SwipeableTabPanel<T extends string>({
   const swiperRef = useRef<SwiperInstance | null>(null);
   const onTabChangeRef = useRef(onTabChange);
   const activeTabRef = useRef(activeTab);
-  const headerClickIndexRef = useRef<number | null>(null);
-  const tabPointerTypeRef = useRef<string | null>(null);
   const touchActiveRef = useRef(false);
 
   onTabChangeRef.current = onTabChange;
@@ -255,6 +254,7 @@ export function SwipeableTabPanel<T extends string>({
       if (activeIndex >= 0 && swiper.activeIndex !== activeIndex) {
         swiper.slideTo(activeIndex, 0, false);
       }
+      swiper.el.dataset.slidesReady = "true";
       updateIndicatorForTab(activeTabRef.current);
     },
     [tabs, updateIndicatorForTab],
@@ -269,11 +269,6 @@ export function SwipeableTabPanel<T extends string>({
       updateIndicatorForTab(destination);
       revealTab(destination, "smooth");
       if (destination === activeTabRef.current) return;
-
-      if (headerClickIndexRef.current === swiper.activeIndex) {
-        headerClickIndexRef.current = null;
-        return;
-      }
       onTabChangeRef.current(destination);
     },
     [revealTab, tabs, updateIndicatorForTab],
@@ -307,7 +302,7 @@ export function SwipeableTabPanel<T extends string>({
     const targetIndex = tabs.indexOf(activeTab);
     if (!swiper || targetIndex < 0) return;
     if (swiper.activeIndex !== targetIndex) {
-      swiper.slideTo(targetIndex);
+      swiper.slideTo(targetIndex, 0, false);
     }
     swiper.updateAutoHeight();
     const frame = window.requestAnimationFrame(() => {
@@ -330,57 +325,6 @@ export function SwipeableTabPanel<T extends string>({
     }
     return () => observer.disconnect();
   }, [activeTab]);
-
-  useEffect(() => {
-    const tabList = tabListRef.current;
-    if (!tabList) return undefined;
-
-    const handleTabPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        tabPointerTypeRef.current = null;
-        return;
-      }
-      const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
-      tabPointerTypeRef.current =
-        tabButton && tabList.contains(tabButton) ? event.pointerType : null;
-    };
-
-    const handleTabPointerCancel = () => {
-      tabPointerTypeRef.current = null;
-    };
-
-    const handleTabClick = (event: MouseEvent) => {
-      const pointerType = tabPointerTypeRef.current;
-      tabPointerTypeRef.current = null;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
-      if (!tabButton || !tabList.contains(tabButton)) return;
-      const tab = tabButton.dataset.swipeTabId as T | undefined;
-      const tabIndex = tab ? tabs.indexOf(tab) : -1;
-      const swiper = swiperRef.current;
-      if (tabIndex < 0 || !swiper || swiper.activeIndex === tabIndex) return;
-
-      headerClickIndexRef.current = tabIndex;
-      updateIndicatorForTab(tab!);
-      const animate = pointerType === "touch" || pointerType === "pen";
-      swiper.slideTo(tabIndex, animate ? swiper.params.speed : 0);
-    };
-
-    tabList.addEventListener("pointerdown", handleTabPointerDown, true);
-    tabList.addEventListener("pointercancel", handleTabPointerCancel, true);
-    tabList.addEventListener("click", handleTabClick, true);
-    return () => {
-      tabList.removeEventListener("pointerdown", handleTabPointerDown, true);
-      tabList.removeEventListener(
-        "pointercancel",
-        handleTabPointerCancel,
-        true,
-      );
-      tabList.removeEventListener("click", handleTabClick, true);
-    };
-  }, [tabListRef, tabs, updateIndicatorForTab]);
 
   useEffect(() => {
     const tabList = tabListRef.current;
@@ -440,6 +384,11 @@ export function SwipeableTabPanel<T extends string>({
     >
       <Swiper
         className="swipeable-tab-panel__swiper"
+        style={
+          {
+            "--swipeable-tab-panel-initial-offset": `${initialSlide * -100}%`,
+          } as CSSProperties
+        }
         slidesPerView={1}
         spaceBetween={spaceBetween}
         autoHeight
@@ -451,7 +400,6 @@ export function SwipeableTabPanel<T extends string>({
         threshold={0}
         initialSlide={initialSlide}
         onBeforeInit={(swiper) => {
-          swiper.el.dataset.slidesReady = "true";
           syncAdjacentSlideSpacing(swiper, spaceBetween);
         }}
         onBeforeResize={(swiper) => syncAdjacentSlideSpacing(swiper, spaceBetween)}

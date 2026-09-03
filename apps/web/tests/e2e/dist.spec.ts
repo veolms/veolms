@@ -131,6 +131,10 @@ test("each deep-linked settings tab is the only visible static slide", async ({
       "data-settings-tab",
       tab,
     );
+    await expect(page.getByRole("tabpanel")).toHaveClass(/\bpb-8\b/);
+    await expect(
+      page.locator("#settings-tab-panel .swiper-slide.pb-8"),
+    ).toHaveCount(0);
     await expect
       .poll(() =>
         page
@@ -141,6 +145,165 @@ test("each deep-linked settings tab is the only visible static slide", async ({
       )
       .toBe(1);
     await expect(page.locator("[data-app-loading]")).toHaveCount(0);
+  }
+});
+
+test("desktop settings tab navigation never paints an empty active slide", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await openApp(page, "/settings/profile");
+  await expect(
+    page.getByRole("heading", { name: "Your public profile" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.dataset.testSettingsTransitionFrames = "0";
+    root.dataset.testSettingsBlankFrames = "0";
+
+    document
+      .getElementById("settings-tab-appearance")
+      ?.addEventListener(
+        "click",
+        () => {
+          let frames = 0;
+          const sample = () => {
+            const activeSlide = document.querySelector(
+              "#settings-tab-panel .swiper-slide-active",
+            );
+            frames += 1;
+            root.dataset.testSettingsTransitionFrames = String(frames);
+            if (!activeSlide?.firstElementChild) {
+              root.dataset.testSettingsBlankFrames = String(
+                Number(root.dataset.testSettingsBlankFrames) + 1,
+              );
+            }
+            if (frames < 12) requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        },
+        { capture: true, once: true },
+      );
+  });
+
+  await page
+    .getByRole("tab", { name: "Appearance", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect
+    .poll(() =>
+      page
+        .locator("html")
+        .getAttribute("data-test-settings-transition-frames")
+        .then(Number),
+    )
+    .toBe(12);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-test-settings-blank-frames",
+    "0",
+  );
+});
+
+test("deep-linked settings tabs stay visible throughout hydration", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/notification-preferences", (route) =>
+    route.fulfill({ status: 200, json: { preferences: [] } }),
+  );
+  await page.addInitScript(() => {
+    const sample = () => {
+      const root = document.documentElement;
+      if (!root) {
+        requestAnimationFrame(sample);
+        return;
+      }
+      const swiper = document.querySelector<HTMLElement>(
+        ".swipeable-tab-panel__swiper",
+      );
+      const bounds = swiper?.getBoundingClientRect();
+      if (!swiper || !bounds) {
+        requestAnimationFrame(sample);
+        return;
+      }
+
+      const sampleX = bounds.left + Math.min(24, bounds.width / 2);
+      const visibleSlide = Array.from(
+        swiper.querySelectorAll<HTMLElement>(".swiper-slide"),
+      ).find((slide) => {
+        const slideBounds = slide.getBoundingClientRect();
+        return (
+          slide.firstElementChild !== null &&
+          slideBounds.left <= sampleX &&
+          slideBounds.right > sampleX
+        );
+      });
+      const contentTop =
+        visibleSlide?.firstElementChild?.getBoundingClientRect().top;
+      const contentTops = JSON.parse(
+        root.dataset.testSettingsHydrationContentTops ?? "[]",
+      ) as number[];
+      if (contentTop !== undefined) contentTops.push(contentTop);
+      root.dataset.testSettingsHydrationContentTops =
+        JSON.stringify(contentTops);
+      const frames =
+        Number(root.dataset.testSettingsHydrationFrames ?? "0") + 1;
+      root.dataset.testSettingsHydrationFrames = String(frames);
+      if (!visibleSlide) {
+        root.dataset.testSettingsHydrationBlankFrames = String(
+          Number(root.dataset.testSettingsHydrationBlankFrames ?? "0") + 1,
+        );
+      } else if (!root.dataset.testSettingsHydrationBlankFrames) {
+        root.dataset.testSettingsHydrationBlankFrames = "0";
+      }
+      if (frames < 24) requestAnimationFrame(sample);
+    };
+
+    requestAnimationFrame(sample);
+  });
+
+  for (const route of [
+    "/settings/appearance",
+    "/settings/sidebar",
+    "/settings/learning",
+    "/settings/notifications",
+    "/settings/security",
+    "/settings/account",
+  ]) {
+    await page.goto(route);
+    await expect
+      .poll(() =>
+        page
+          .locator("html")
+          .getAttribute("data-test-settings-hydration-frames")
+          .then(Number),
+      )
+      .toBe(24);
+    await expect(page.locator("html"), route).toHaveAttribute(
+      "data-test-settings-hydration-blank-frames",
+      "0",
+    );
+    const contentTops = JSON.parse(
+      (await page
+        .locator("html")
+        .getAttribute("data-test-settings-hydration-content-tops")) ?? "[]",
+    ) as number[];
+    expect(
+      Math.max(...contentTops) - Math.min(...contentTops),
+      route,
+    ).toBeLessThan(2);
   }
 });
 
