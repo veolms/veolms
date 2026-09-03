@@ -5,6 +5,7 @@ import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { CourseCard } from "./CourseCard";
+import { CourseCardSkeleton } from "./CourseCardSkeleton";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -36,6 +37,7 @@ export interface CourseCatalogueProps {
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
   isAdmin?: boolean;
+  isLoading?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
 }
@@ -44,6 +46,7 @@ export function CourseCatalogue({
   activeSection,
   role,
   isAdmin = false,
+  isLoading = false,
   wishlisted,
   enrollmentFilter,
   onEnrollmentFilterChange,
@@ -220,7 +223,7 @@ export function CourseCatalogue({
                 aria-selected={enrollmentFilter === value}
                 tabIndex={enrollmentFilter === value ? 0 : -1}
                 key={value}
-                className="min-h-9 shrink-0 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-(--text) aria-selected:bg-(--text) aria-selected:text-(--canvas) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_28%,transparent)] aria-selected:hover:bg-(--text) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!"
+                className="min-h-9 shrink-0 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!"
                 onClick={() => onEnrollmentFilterChange(value)}
                 onKeyDown={handleRovingTabKeyDown}
               >
@@ -250,7 +253,15 @@ export function CourseCatalogue({
         </div>
       </div>
 
-      {visibleCourses.length ? (
+      {isLoading ? (
+        <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
+          <div className={gridClasses} data-testid="course-catalogue-skeleton">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CourseCardSkeleton key={i} role={role} />
+            ))}
+          </div>
+        </div>
+      ) : visibleCourses.length ? (
         <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
           <div className={gridClasses}>
             {visibleCourses.map((course, index) => renderCard(course, index))}

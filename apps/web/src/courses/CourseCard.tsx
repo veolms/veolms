@@ -21,22 +21,23 @@ import {
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
+import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
 
 const creatorStatusStyles = {
-  published: "border-emerald-400/25 bg-emerald-500/15 text-emerald-300",
-  draft: "border-amber-400/25 bg-amber-500/15 text-amber-300",
-  archived: "border-violet-400/25 bg-violet-500/15 text-violet-300",
-  bin: "border-rose-400/25 bg-rose-500/15 text-rose-300",
+  published: "course-tag--published",
+  draft: "course-tag--draft",
+  archived: "course-tag--archived",
+  bin: "course-tag--bin",
 } as const;
 
 const studentStatusStyles = {
-  "not-enrolled": "border-fuchsia-400/30 bg-fuchsia-500/15 text-fuchsia-200",
-  "not-started": "border-slate-400/20 bg-slate-500/20 text-slate-200",
-  "in-progress": "border-sky-400/25 bg-sky-500/15 text-sky-300",
-  completed: "border-emerald-400/25 bg-emerald-500/15 text-emerald-300",
+  "not-enrolled": "course-tag--not-enrolled",
+  "not-started": "course-tag--not-started",
+  "in-progress": "course-tag--in-progress",
+  completed: "course-tag--completed",
 } as const;
 
 const getStudentStatus = (course: Course) => {
@@ -176,16 +177,20 @@ export function CourseCard({
         className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)"
         data-course-card-media
       >
-        <img
-          src={course.thumbnail}
-          alt=""
-          className="h-full w-full object-cover"
-          width={960}
-          height={540}
-          loading={imagePriority ? "eager" : "lazy"}
-          fetchPriority={imagePriority ? "high" : "low"}
-          decoding={imagePriority ? "sync" : "async"}
-        />
+        {course.thumbnail ? (
+          <img
+            src={course.thumbnail}
+            alt=""
+            className="h-full w-full object-cover"
+            width={960}
+            height={540}
+            loading={imagePriority ? "eager" : "lazy"}
+            fetchPriority={imagePriority ? "high" : "low"}
+            decoding={imagePriority ? "sync" : "async"}
+          />
+        ) : (
+          <CourseThumbnailPlaceholder />
+        )}
 
         <button
           type="button"
@@ -196,14 +201,14 @@ export function CourseCard({
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
           <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full border-2 border-white bg-slate-950/55 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.32)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
-            <Play size={30} weight="fill" className="translate-x-0.5" />
+            <Play size={30} weight="fill" />
           </span>
         </button>
 
         {role === "creator" ? (
           <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
             <span
-              className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold capitalize ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
+              className={`course-tag ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
               data-course-card-tag
             >
               {isBin || course.deletedAt ? "Deleted" : course.lifecycleStatus}
@@ -213,7 +218,7 @@ export function CourseCard({
           <>
             <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
               <span
-                className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[0.7rem] font-semibold ${studentStatusStyles[studentStatus]}`}
+                className={`course-tag ${studentStatusStyles[studentStatus]}`}
                 data-course-card-tag
               >
                 {getStudentStatusLabel(course)}
