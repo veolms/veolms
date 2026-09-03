@@ -80,6 +80,21 @@
   anchor-name: --learning-persistent-player-slot;
 }
 
+/* The prerendered anchor owns the first painted loading state. Once React
+   installs the persistent player, return the anchor to its transparent shell. */
+.courses-main:has([data-learning-persistent-player])
+  [data-learning-player-anchor] {
+  background: transparent;
+}
+
+.courses-main:has([data-learning-persistent-player])
+  :is(
+    [data-learning-player-initial-loader],
+    [data-learning-player-initial-poster]
+  ) {
+  display: none;
+}
+
 .learning-persistent-player--full {
   position: absolute;
   position-anchor: --learning-persistent-player-slot;

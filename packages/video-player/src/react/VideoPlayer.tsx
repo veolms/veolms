@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type CSSProperties,
   type HTMLAttributes,
   type ReactNode,
@@ -83,6 +84,10 @@ export interface VideoPlayerProps extends Omit<
   /** Action performed by a single pointer tap on empty video space. */
   emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
   controlsIdleDelay?: number;
+  /** Keeps controls pinned until the current source begins playback once. */
+  keepControlsVisibleUntilFirstPlay?: boolean;
+  /** Keeps a player-owned poster visible until the current source plays once. */
+  keepPosterVisibleUntilFirstPlay?: boolean;
   theaterMode?: boolean;
   onTheaterModeChange?: (active: boolean) => void;
   onProgress?: (progress: VideoPlayerProgress) => void;
@@ -149,6 +154,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       keyboardEnabled = true,
       lockLandscapeOnFullscreen = false,
       interactionMode = "responsive",
+      keepControlsVisibleUntilFirstPlay = false,
+      keepPosterVisibleUntilFirstPlay = false,
       manualChapters,
       markers = [],
       mediaClassName,
@@ -182,6 +189,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const presentationContainerRef = useRef<HTMLDivElement | null>(null);
     const orientationLockGenerationRef = useRef(0);
     const orientationLockOwnedRef = useRef(false);
+    const sourceIdentity = `${source.id ?? ""}\u0000${source.src}`;
+    const [playedSourceIdentity, setPlayedSourceIdentity] = useState<
+      string | null
+    >(null);
     const resolvedEngineFactory = useMemo(
       () => engineFactory ?? createEngineFactory(engine),
       [engine, engineFactory],
@@ -239,7 +250,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const handleEvent = useCallback(
       (event: VideoPlayerEvent) => {
         onEvent?.(event);
-        if (event.type === "timeupdate") {
+        if (event.type === "playing") {
+          setPlayedSourceIdentity(sourceIdentity);
+        } else if (event.type === "timeupdate") {
           const duration = event.detail.duration;
           const progress =
             duration > 0 ? (event.detail.currentTime / duration) * 100 : 0;
@@ -268,6 +281,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         onProgress,
         onProgressChange,
         onReady,
+        sourceIdentity,
         syncOrientationForFullscreen,
       ],
     );
@@ -280,6 +294,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ? ({ "--video-player-accent": accentColor } as CSSProperties)
       : undefined;
     const resolvedPoster = poster ?? source.metadata?.poster;
+    const retainedPosterVisible =
+      keepPosterVisibleUntilFirstPlay &&
+      resolvedPoster !== undefined &&
+      playedSourceIdentity !== sourceIdentity;
 
     return (
       <div
@@ -327,6 +345,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             shortcuts={shortcuts}
             keyboardEnabled={keyboardEnabled}
             controlsIdleDelay={controlsIdleDelay}
+            keepControlsVisibleUntilFirstPlay={
+              keepControlsVisibleUntilFirstPlay
+            }
             seekIntervalSeconds={seekIntervalSeconds}
             onToggleTheater={
               onTheaterModeChange ? handleToggleTheater : undefined
@@ -343,7 +364,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           <PlayerZoomMedia
             {...mediaProps}
             overflowBoundary={zoomOverflowBoundary}
-            poster={resolvedPoster}
+            posterOverlaySrc={
+              retainedPosterVisible ? resolvedPoster : undefined
+            }
+            poster={
+              keepPosterVisibleUntilFirstPlay ? undefined : resolvedPoster
+            }
             playsInline={mediaProps?.playsInline ?? true}
             className={classNames(
               "pointer-events-none size-full bg-black object-contain",

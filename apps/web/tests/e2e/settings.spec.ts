@@ -985,6 +985,12 @@ test("sidebar logo stays on one anchor while the rail reveals it", async ({
 test("learning settings save a coherent preference object", async ({
   page,
 }) => {
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/notification-preferences", (route) =>
+    route.fulfill({ status: 200, json: { preferences: [] } }),
+  );
   await openApp(page, "/settings/learning");
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "data-settings-tab",
@@ -1001,6 +1007,9 @@ test("learning settings save a coherent preference object", async ({
   const curriculumScrollbar = page.getByRole("switch", {
     name: "Show course content scrollbar",
   });
+  const startFromBeginning = page.getByRole("switch", {
+    name: "Always start lectures from beginning",
+  });
   const skipInterval = page.getByRole("button", {
     name: "Skip interval: 10 seconds (Default)",
   });
@@ -1008,6 +1017,8 @@ test("learning settings save a coherent preference object", async ({
   await page.getByRole("option", { name: "30 seconds" }).click();
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "true");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "true");
+  await expect(startFromBeginning).toHaveAttribute("aria-checked", "false");
+  await startFromBeginning.click();
   await lessonPageScrollbar.click();
   await curriculumScrollbar.click();
   await expect(page.locator("html")).toHaveAttribute(
@@ -1038,6 +1049,7 @@ test("learning settings save a coherent preference object", async ({
   expect(stored.showLessonPageScrollbar).toBe(false);
   expect(stored.showCurriculumScrollbar).toBe(false);
   expect(stored.seekIntervalSeconds).toBe(30);
+  expect(stored.resumeFromLastPosition).toBe(false);
 
   await page.reload();
   await expect(
@@ -1045,6 +1057,7 @@ test("learning settings save a coherent preference object", async ({
   ).toHaveAttribute("aria-pressed", "true");
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "false");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "false");
+  await expect(startFromBeginning).toHaveAttribute("aria-checked", "true");
   await expect(
     page.getByRole("button", { name: "Skip interval: 30 seconds" }),
   ).toBeVisible();

@@ -2,6 +2,7 @@ import {
   PlayButton,
   PlayerIconButton,
   Timeline,
+  usePlayerState,
   usePlayerTheme,
 } from "@veolms/video-player";
 
@@ -17,8 +18,16 @@ export function MiniPlayerControls({
   onRestore,
 }: MiniPlayerControlsProps) {
   const CloseIcon = usePlayerTheme().icons.close;
+  const ready = usePlayerState(({ media }) => media.lifecycle === "ready");
   return (
-    <div className="absolute inset-0 z-30 bg-linear-to-t from-black/34 via-transparent to-black/30">
+    <div
+      className={`absolute inset-0 z-30 bg-linear-to-t from-black/34 via-transparent to-black/30 ${
+        ready ? "visible opacity-100" : "invisible opacity-0"
+      }`}
+      aria-hidden={ready ? undefined : true}
+      inert={ready ? undefined : true}
+      data-learning-mini-player-controls-ready={ready ? "true" : "false"}
+    >
       <button
         type="button"
         className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"

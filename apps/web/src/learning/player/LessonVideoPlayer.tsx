@@ -146,6 +146,8 @@ export function LessonVideoPlayer({
 
   const source = useMemo<VideoSource>(() => {
     const isHls = /\.m3u8(?:$|[?#])/i.test(media.src);
+    const resumeFromLastPosition =
+      readLearningPreferences().resumeFromLastPosition;
     return {
       id: mediaKey,
       src: media.src,
@@ -154,9 +156,10 @@ export function LessonVideoPlayer({
       // The catalog duration can be stale after an asset replacement. Shaka
       // receives the stored position and the loaded event clamps it against
       // the actual media duration before progress is reported.
-      startTime: readResumePosition(mediaKey),
+      startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
       metadata: {
         duration: media.duration,
+        poster: media.thumbnailSrc,
         title: lessonTitle,
       },
       streaming: isHls ? { abrEnabled: true, bufferBehind: 600 } : undefined,
@@ -170,7 +173,7 @@ export function LessonVideoPlayer({
         },
       ],
     };
-  }, [lessonTitle, media.duration, media.src, mediaKey]);
+  }, [lessonTitle, media.duration, media.src, media.thumbnailSrc, mediaKey]);
 
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;
@@ -550,6 +553,8 @@ export function LessonVideoPlayer({
       seekIntervalSeconds={seekIntervalSeconds}
       emptyTapBehavior="responsive"
       controlsIdleDelay={5_000}
+      keepControlsVisibleUntilFirstPlay
+      keepPosterVisibleUntilFirstPlay
       onEvent={handleEvent}
       lockLandscapeOnFullscreen
       mediaProps={{
