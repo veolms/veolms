@@ -22,6 +22,7 @@ test("profile settings validate, autosave, and retain academy-local identity", a
     "data-settings-tab",
     "profile",
   );
+  await expect(page.getByRole("tabpanel")).not.toHaveAttribute("tabindex");
   await expect(page.getByRole("tab", { name: "Profile" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -171,6 +172,58 @@ test("settings tabs support roving arrow, Home, and End navigation", async ({
   await page.keyboard.press("Home");
   await expect(page).toHaveURL(/\/settings\/profile$/);
   await expect(profileTab).toBeFocused();
+});
+
+test("settings arrow shortcuts cycle without stealing focus", async ({
+  page,
+}) => {
+  await openApp(page, "/settings/profile");
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/\/settings\/account$/);
+  await expect(page.getByRole("tab", { name: "Account" })).not.toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(
+    page.getByRole("tab", { name: "Appearance", exact: true }),
+  ).not.toBeFocused();
+
+  const displayMode = page.getByRole("radio", { name: "Dark" });
+  await displayMode.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/\/settings\/appearance$/);
+
+  await displayMode.evaluate((element) => element.blur());
+  await page.evaluate(() => {
+    for (let index = 0; index < 3; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowRight",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/settings\/notifications$/);
+
+  await page.evaluate(() => {
+    for (let index = 0; index < 2; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowLeft",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/settings\/sidebar$/);
 });
 
 test("creator settings control which sidebar menu items are visible", async ({

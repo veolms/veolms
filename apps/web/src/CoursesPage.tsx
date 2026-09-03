@@ -3518,8 +3518,8 @@ export function CoursesPage({
                       aria-current={active ? "page" : undefined}
                       aria-keyshortcuts={
                         label === "Settings"
-                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Alt+ArrowUp Alt+ArrowDown`
-                          : `${navigationIndex + 1} Alt+ArrowUp Alt+ArrowDown`
+                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
+                          : `${navigationIndex + 1} Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
                       }
                       data-navigation-label={label}
                       data-sortable="true"

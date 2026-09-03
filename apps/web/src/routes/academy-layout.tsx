@@ -63,6 +63,7 @@ import {
   getVisibleOrderedNavigation,
   getNavigationDestination,
   resolveShellNavigation,
+  type NavigationItemWithMetadata,
 } from "../shell/navigation";
 import {
   readApplicationScrollPosition,
@@ -337,14 +338,24 @@ export default function AcademyLayout() {
 
   useEffect(() => {
     const navigateByNumber = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.altKey ||
-        isEditingShortcutTarget(event.target)
-      )
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
         return;
-      const index = getNumberShortcutIndex(event);
-      if (index === null) return;
+
+      const cycleDirection =
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown")
+          ? event.key === "ArrowDown"
+            ? 1
+            : -1
+          : null;
+      const numberIndex =
+        cycleDirection === null && !event.altKey
+          ? getNumberShortcutIndex(event)
+          : null;
+      if (cycleDirection === null && numberIndex === null) return;
 
       const navigationRole = localStorage.getItem("veolms-role") || "student";
       const orderedNavigation = getVisibleOrderedNavigation(
@@ -362,10 +373,58 @@ export default function AcademyLayout() {
             getInitialSidebarPreferences().dockItems,
           ).includes("settings"),
       );
-      const destination = orderedNavigation[index];
+
+      let destination: NavigationItemWithMetadata | undefined;
+      if (cycleDirection !== null) {
+        const cycleNavigation = orderedNavigation.filter(
+          ([label]) => label !== "Logout",
+        );
+        if (cycleNavigation.length === 0) return;
+
+        const currentPath = normalizeNavigationPath(
+          locationPathRef.current.split(/[?#]/)[0] || "/",
+        );
+        let currentIndex = -1;
+        let currentMatchLength = -1;
+        cycleNavigation.forEach((item, index) => {
+          const destinationPath = normalizeNavigationPath(
+            getDestinationPath(getNavigationDestination(item)).split(
+              /[?#]/,
+            )[0] || "/",
+          );
+          const matches =
+            destinationPath === "/"
+              ? currentPath === "/"
+              : currentPath === destinationPath ||
+                currentPath.startsWith(`${destinationPath}/`);
+          if (matches && destinationPath.length > currentMatchLength) {
+            currentIndex = index;
+            currentMatchLength = destinationPath.length;
+          }
+        });
+        const nextIndex =
+          currentIndex < 0
+            ? cycleDirection > 0
+              ? 0
+              : cycleNavigation.length - 1
+            : (currentIndex + cycleDirection + cycleNavigation.length) %
+              cycleNavigation.length;
+        destination = cycleNavigation[nextIndex];
+      } else if (numberIndex !== null) {
+        destination = orderedNavigation[numberIndex];
+      }
       if (!destination) return;
 
       event.preventDefault();
+      if (cycleDirection !== null) {
+        if (numberNavigationTimerRef.current !== null) {
+          window.clearTimeout(numberNavigationTimerRef.current);
+          numberNavigationTimerRef.current = null;
+        }
+        navigateToRef.current(getNavigationDestination(destination));
+        return;
+      }
+
       if (numberNavigationTimerRef.current !== null) {
         window.clearTimeout(numberNavigationTimerRef.current);
       }

@@ -95,23 +95,15 @@ test("each deep-linked settings tab is the only visible static slide", async ({
   );
   await page.addInitScript(() => {
     requestAnimationFrame(() => {
-      const swiper = document.querySelector<HTMLElement>(
-        ".swipeable-tab-panel__swiper",
-      );
-      const swiperRect = swiper?.getBoundingClientRect();
-      if (!swiper || !swiperRect) return;
-      const sampleX = swiperRect.left + Math.min(24, swiperRect.width / 2);
       const visibleSlides = Array.from(
-        swiper.querySelectorAll<HTMLElement>(".swiper-slide"),
-      ).filter((slide) => {
-        const rect = slide.getBoundingClientRect();
-        return rect.left <= sampleX && rect.right > sampleX;
-      });
+        document.querySelectorAll<HTMLElement>(
+          "#settings-tab-panel [data-panel-tab]:not([hidden])",
+        ),
+      );
       document.documentElement.dataset.testFirstSettingsHeadings =
         JSON.stringify(
           visibleSlides.map(
-            (slide) =>
-              slide.querySelector("h2, h3")?.textContent?.trim() ?? "",
+            (slide) => slide.querySelector("h2, h3")?.textContent?.trim() ?? "",
           ),
         );
     });
@@ -133,17 +125,11 @@ test("each deep-linked settings tab is the only visible static slide", async ({
     );
     await expect(page.getByRole("tabpanel")).toHaveClass(/\bpb-8\b/);
     await expect(
-      page.locator("#settings-tab-panel .swiper-slide.pb-8"),
+      page.locator("#settings-tab-panel [data-panel-tab].pb-8"),
     ).toHaveCount(0);
-    await expect
-      .poll(() =>
-        page
-          .locator(".settings-tab-content .swiper-slide")
-          .evaluateAll((slides) =>
-            slides.filter((slide) => slide.childElementCount > 0).length,
-          ),
-      )
-      .toBe(1);
+    await expect(
+      page.locator(".settings-tab-content [data-panel-tab]:not([hidden])"),
+    ).toHaveCount(1);
     await expect(page.locator("[data-app-loading]")).toHaveCount(0);
   }
 });
@@ -161,41 +147,90 @@ test("desktop settings tab navigation never paints an empty active slide", async
   await expect(
     page.getByRole("heading", { name: "Your public profile" }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Appearance", exact: true }).hover();
+  await expect(
+    page.locator('#settings-tab-panel [data-panel-tab="appearance"]'),
+  ).toBeAttached();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
 
   await page.evaluate(() => {
     const root = document.documentElement;
     root.dataset.testSettingsTransitionFrames = "0";
     root.dataset.testSettingsBlankFrames = "0";
 
-    document
-      .getElementById("settings-tab-appearance")
-      ?.addEventListener(
-        "click",
-        () => {
-          let frames = 0;
-          const sample = () => {
-            const activeSlide = document.querySelector(
-              "#settings-tab-panel .swiper-slide-active",
+    window.addEventListener(
+      "click",
+      () => {
+        const startedAt = performance.now();
+        const isReady = () => {
+          const activeSlide = document.querySelector<HTMLElement>(
+            '#settings-tab-panel [data-panel-tab="appearance"]:not([hidden])',
+          );
+          return Boolean(
+            activeSlide?.firstElementChild &&
+            document
+              .getElementById("settings-tab-appearance")
+              ?.getAttribute("aria-selected") === "true",
+          );
+        };
+        queueMicrotask(() => {
+          if (isReady()) {
+            root.dataset.testSettingsLatency = String(
+              performance.now() - startedAt,
             );
-            frames += 1;
-            root.dataset.testSettingsTransitionFrames = String(frames);
-            if (!activeSlide?.firstElementChild) {
-              root.dataset.testSettingsBlankFrames = String(
-                Number(root.dataset.testSettingsBlankFrames) + 1,
-              );
-            }
-            if (frames < 12) requestAnimationFrame(sample);
-          };
-          requestAnimationFrame(sample);
-        },
-        { capture: true, once: true },
-      );
+          }
+        });
+        let frames = 0;
+        const sample = () => {
+          frames += 1;
+          root.dataset.testSettingsTransitionFrames = String(frames);
+          if (!isReady()) {
+            root.dataset.testSettingsBlankFrames = String(
+              Number(root.dataset.testSettingsBlankFrames) + 1,
+            );
+          }
+          if (frames < 12) requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      },
+      { capture: true, once: true },
+    );
   });
 
-  await page
-    .getByRole("tab", { name: "Appearance", exact: true })
-    .click();
+  const appearanceTab = page.getByRole("tab", {
+    name: "Appearance",
+    exact: true,
+  });
+  const appearancePressContent = appearanceTab.locator(
+    ".settings-tab__press-content",
+  );
+  await page.mouse.down();
+  try {
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect
+      .poll(() =>
+        appearancePressContent.evaluate(
+          (content) => getComputedStyle(content).scale,
+        ),
+      )
+      .not.toBe("none");
+    await expect(appearanceTab).toHaveCSS("transform", "none");
+  } finally {
+    await page.mouse.up();
+  }
   await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect
+    .poll(() =>
+      appearancePressContent.evaluate(
+        (content) => getComputedStyle(content).scale,
+      ),
+    )
+    .toBe("none");
   await expect
     .poll(() =>
       page
@@ -208,6 +243,10 @@ test("desktop settings tab navigation never paints an empty active slide", async
     "data-test-settings-blank-frames",
     "0",
   );
+  const latency = Number(
+    await page.locator("html").getAttribute("data-test-settings-latency"),
+  );
+  expect(latency).toBeLessThan(50);
 });
 
 test("deep-linked settings tabs stay visible throughout hydration", async ({
@@ -230,26 +269,15 @@ test("deep-linked settings tabs stay visible throughout hydration", async ({
         requestAnimationFrame(sample);
         return;
       }
-      const swiper = document.querySelector<HTMLElement>(
-        ".swipeable-tab-panel__swiper",
-      );
-      const bounds = swiper?.getBoundingClientRect();
-      if (!swiper || !bounds) {
+      const panel = document.querySelector<HTMLElement>("#settings-tab-panel");
+      if (!panel) {
         requestAnimationFrame(sample);
         return;
       }
 
-      const sampleX = bounds.left + Math.min(24, bounds.width / 2);
-      const visibleSlide = Array.from(
-        swiper.querySelectorAll<HTMLElement>(".swiper-slide"),
-      ).find((slide) => {
-        const slideBounds = slide.getBoundingClientRect();
-        return (
-          slide.firstElementChild !== null &&
-          slideBounds.left <= sampleX &&
-          slideBounds.right > sampleX
-        );
-      });
+      const visibleSlide = panel.querySelector<HTMLElement>(
+        "[data-panel-tab]:not([hidden])",
+      );
       const contentTop =
         visibleSlide?.firstElementChild?.getBoundingClientRect().top;
       const contentTops = JSON.parse(

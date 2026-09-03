@@ -9,15 +9,19 @@
   touch-action: pan-y pinch-zoom;
 }
 
+/* Desktop settings use native hidden panels so click navigation does not pay
+   Swiper's slide-tree reconciliation cost. */
+.swipeable-tab-panel__native-slide {
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline-start: var(--swipeable-tab-panel-inline-start, 0px);
+  padding-inline-end: var(--swipeable-tab-panel-inline-end, 0px);
+}
+
 /* Keep the server-selected slide in view until Swiper has measured the rail
    and written its own transform. The other slides are empty during SSG. */
-.swipeable-tab-panel__swiper:not([data-slides-ready="true"])
-  .swiper-wrapper {
-  transform: translate3d(
-    var(--swipeable-tab-panel-initial-offset, 0%),
-    0,
-    0
-  );
+.swipeable-tab-panel__swiper:not([data-slides-ready="true"]) .swiper-wrapper {
+  transform: translate3d(var(--swipeable-tab-panel-initial-offset, 0%), 0, 0);
 }
 
 .swipeable-tab-panel__swiper.swiper-autoheight,
