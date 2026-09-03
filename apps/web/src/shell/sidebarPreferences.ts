@@ -21,6 +21,7 @@ import type {
   SidebarPreferences,
 } from "../settings/settingsPreferences";
 import {
+  COMPACT_NAVIGATION_QUERY,
   getResponsiveSidebarMode,
   SIDEBAR_RESPONSIVE_COLLAPSE_QUERY,
 } from "./sidebarVisibility";
@@ -53,6 +54,9 @@ export interface SidebarShellState {
 
 export interface VeoBootstrapState {
   sidebar?: SidebarShellState;
+  navigation?: {
+    compact: boolean;
+  };
   learning?: {
     curriculumCollapsed: boolean;
     curriculumWidth: number;
@@ -162,7 +166,7 @@ export const getInitialSidebarShellState = (): SidebarShellState => {
 };
 
 export const getSidebarShellBootstrapScript = () =>
-  `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT};let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");const v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s};r.dataset.sidebarState=m;r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px");const c=()=>{const e=document.querySelector(".courses-app");if(!e)return false;e.classList.toggle("courses-app--collapsed",m==="collapsed");e.classList.toggle("courses-app--hidden",m==="hidden");return true};if(!c()&&document.readyState==="loading"){const o=new MutationObserver(()=>{if(c())o.disconnect()});o.observe(document,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>o.disconnect(),{once:true})}})();`;
+  `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT},q=matchMedia(${JSON.stringify(COMPACT_NAVIGATION_QUERY)}).matches;let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}"),v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s,navigation:{compact:q}};r.dataset.sidebarState=m;r.dataset.navigationLayout=q?"compact":"wide";r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px");const c=()=>{const e=document.querySelector(".courses-app");if(!e)return false;e.classList.toggle("courses-app--collapsed",m==="collapsed");e.classList.toggle("courses-app--hidden",m==="hidden");return true};if(!c()&&document.readyState==="loading"){const o=new MutationObserver(()=>{if(c())o.disconnect()});o.observe(document,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>o.disconnect(),{once:true})}})();`;
 
 export const getSidebarPresentationBootstrapScript = () =>
   `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;

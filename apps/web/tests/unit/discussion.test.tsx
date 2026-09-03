@@ -935,9 +935,7 @@ describe("Discussion", () => {
       }),
     );
 
-    const { container } = render(
-      <Discussion persistenceKey={persistenceKey} />,
-    );
+    render(<Discussion persistenceKey={persistenceKey} />);
     const compactComposer = screen.getByRole("button", {
       name: "Open discussion composer",
     });
@@ -961,7 +959,7 @@ describe("Discussion", () => {
       ).toBeNull();
     });
     expect(
-      container.querySelector("[data-compact-comment-composer]"),
+      screen.getByRole("button", { name: "Open discussion composer" }),
     ).toHaveTextContent("First draft line");
   });
 
@@ -1283,7 +1281,7 @@ describe("Discussion", () => {
   it("keeps the attachment control in the mobile footer without duplicating it over the editor", async () => {
     const originalMatchMedia = window.matchMedia;
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(max-width: 639px)",
+      matches: query === "(max-width: 640px)",
       media: query,
       onchange: null,
       addEventListener() {},
@@ -1403,7 +1401,7 @@ describe("Discussion", () => {
   it("hides the mobile compact composer with the bottom navigation", async () => {
     const originalMatchMedia = window.matchMedia;
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(max-width: 639px)",
+      matches: query === "(max-width: 640px)",
       media: query,
       onchange: null,
       addEventListener() {},
@@ -1458,7 +1456,7 @@ describe("Discussion", () => {
   it("keeps the mobile compact composer viewport-fixed outside transformed lesson content", async () => {
     const originalMatchMedia = window.matchMedia;
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(max-width: 639px)",
+      matches: query === "(max-width: 640px)",
       media: query,
       onchange: null,
       addEventListener() {},

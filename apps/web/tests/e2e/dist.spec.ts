@@ -81,6 +81,102 @@ test("first visible shell uses the persisted layout geometry", async ({
   });
 });
 
+test("static mobile learning shell places navigation and composer before hydration", async ({
+  page,
+}) => {
+  const scriptAssetPattern = /\/assets\/.*\.js(?:\?.*)?$/;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+    route.fulfill({
+      status: 200,
+      json: { course: { slug: "backend-nodejs" }, sections: [] },
+    }),
+  );
+  await page.route("**/course-hls/**", (route) =>
+    route.fulfill({
+      body: "#EXTM3U\n#EXT-X-ENDLIST\n",
+      contentType: "application/vnd.apple.mpegurl",
+      status: 200,
+    }),
+  );
+  await page.route(scriptAssetPattern, (route) =>
+    route.fulfill({
+      body: "",
+      contentType: "text/javascript",
+      status: 200,
+    }),
+  );
+
+  await page.goto("/learn/backend-nodejs/career-opportunities", {
+    waitUntil: "domcontentloaded",
+  });
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-navigation-layout",
+    "compact",
+  );
+  await expect(
+    page.getByRole("navigation", { name: "Student mobile navigation" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("[data-learning-mobile-composer-prerender]"),
+  ).toBeVisible();
+  await expect(page.locator("[data-comment-composer-container]")).toBeHidden();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-app-hydrated",
+    "false",
+  );
+
+  const staticNavigationBox = await page
+    .getByRole("navigation", { name: "Student mobile navigation" })
+    .boundingBox();
+  const staticComposerBox = await page
+    .locator("[data-learning-mobile-composer-prerender]")
+    .boundingBox();
+  const staticFilterBox = await page
+    .getByRole("group", { name: "Filter discussion entries" })
+    .boundingBox();
+  expect(staticNavigationBox).not.toBeNull();
+  expect(staticComposerBox).not.toBeNull();
+  expect(staticFilterBox).not.toBeNull();
+
+  await page.unroute(scriptAssetPattern);
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-app-hydrated",
+    "true",
+  );
+  await expect(
+    page.locator("[data-learning-mobile-composer-prerender]"),
+  ).toBeHidden();
+  const liveComposer = page.getByTestId("mobile-discussion-composer");
+  await expect(liveComposer).toBeVisible();
+  const liveNavigationBox = await page
+    .getByRole("navigation", { name: "Student mobile navigation" })
+    .boundingBox();
+  const liveComposerBox = await liveComposer.boundingBox();
+  const liveFilterBox = await page
+    .getByRole("group", { name: "Filter discussion entries" })
+    .boundingBox();
+  expect(liveNavigationBox).not.toBeNull();
+  expect(liveComposerBox).not.toBeNull();
+  expect(liveFilterBox).not.toBeNull();
+  expect(liveNavigationBox?.y).toBeCloseTo(staticNavigationBox?.y ?? 0, 0);
+  expect(liveComposerBox?.y).toBeCloseTo(staticComposerBox?.y ?? 0, 0);
+  expect(liveFilterBox?.y).toBeCloseTo(staticFilterBox?.y ?? 0, 0);
+  expect(liveComposerBox?.height).toBeCloseTo(
+    staticComposerBox?.height ?? 0,
+    0,
+  );
+});
+
 test("each deep-linked settings tab is the only visible static slide", async ({
   page,
 }) => {

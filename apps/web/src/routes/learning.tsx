@@ -117,9 +117,9 @@ export default function LearningRoute() {
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
       );
-      void navigate(path, { preventScrollReset: true });
+      navigateTo(path, { exact: true });
     },
-    [courseSlug, navigate, origin, routeReturnPath],
+    [courseSlug, navigateTo, origin, routeReturnPath],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;

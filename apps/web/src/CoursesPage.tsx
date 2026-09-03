@@ -1302,6 +1302,9 @@ export function CoursesPage({
     const syncNavigationMode = () => {
       setCompactNavigation(media.matches);
       setCoarseNavigationInput(coarseInput.matches);
+      document.documentElement.dataset.navigationLayout = media.matches
+        ? "compact"
+        : "wide";
     };
     syncNavigationMode();
     media.addEventListener("change", syncNavigationMode);
@@ -3995,7 +3998,7 @@ export function CoursesPage({
         enableHorizontalDrag={Boolean(renderMain)}
       />
 
-      {compactNavigation && !mobileSidebarNavigationActive && (
+      {!mobileSidebarNavigationActive && (
         <nav
           ref={mobileBottomNavRef}
           className={`mobile-bottom-nav${mobileBottomNavHidden ? " is-scroll-hidden" : ""}`}

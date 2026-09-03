@@ -68,6 +68,7 @@ import {
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
+  type ApplicationScrollPosition,
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
@@ -195,13 +196,18 @@ export default function AcademyLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { courseSlug } = useParams();
-  const preservedScrollPositionRef = useRef<{
-    left: number;
-    top: number;
+  const applicationScrollPositionsRef = useRef(
+    new Map<string, ApplicationScrollPosition>(),
+  );
+  const pendingScrollPositionRef = useRef<{
+    destinationPath: string;
+    sourcePath: string;
+    position: ApplicationScrollPosition;
   } | null>(null);
   const locationPathRef = useRef(
     `${location.pathname}${location.search}${location.hash}`,
   );
+  const renderedLocationPathRef = useRef(locationPathRef.current);
   const settingsReturnLocationRef = useRef({
     path: "/",
     left: 0,
@@ -274,16 +280,42 @@ export default function AcademyLayout() {
   }, [location.pathname, location.search, navigate, logoutMutation]);
 
   useLayoutEffect(() => {
-    const position = preservedScrollPositionRef.current;
-    if (!position) return undefined;
-    preservedScrollPositionRef.current = null;
+    const previousPath = renderedLocationPathRef.current;
+    const pending = pendingScrollPositionRef.current;
+    if (previousPath === currentLocationPath && !pending) return;
 
-    scrollApplicationTo({ ...position, behavior: "auto" });
-    const frame = window.requestAnimationFrame(() => {
+    if (previousPath !== currentLocationPath) {
+      if (pending?.sourcePath !== previousPath) {
+        applicationScrollPositionsRef.current.set(
+          previousPath,
+          readApplicationScrollPosition(),
+        );
+      }
+      renderedLocationPathRef.current = currentLocationPath;
+    }
+
+    const position =
+      pending?.destinationPath === currentLocationPath
+        ? pending.position
+        : (applicationScrollPositionsRef.current.get(currentLocationPath) ?? {
+            left: 0,
+            top: 0,
+          });
+    pendingScrollPositionRef.current = null;
+    const restorePosition = () =>
       scrollApplicationTo({ ...position, behavior: "auto" });
-    });
+    restorePosition();
+    const frame = window.requestAnimationFrame(restorePosition);
     return () => window.cancelAnimationFrame(frame);
-  }, [location.pathname]);
+  }, [currentLocationPath]);
+
+  useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
@@ -306,18 +338,25 @@ export default function AcademyLayout() {
         normalizeNavigationPath(path) !==
         normalizeNavigationPath(locationPathRef.current)
       ) {
-        if (options?.preserveScroll) {
-          preservedScrollPositionRef.current = readApplicationScrollPosition();
-        }
+        const sourcePath = locationPathRef.current;
+        const sourcePosition = readApplicationScrollPosition();
+        applicationScrollPositionsRef.current.set(sourcePath, sourcePosition);
+        pendingScrollPositionRef.current = {
+          destinationPath: path,
+          sourcePath,
+          position: options?.preserveScroll
+            ? sourcePosition
+            : (applicationScrollPositionsRef.current.get(path) ?? {
+                left: 0,
+                top: 0,
+              }),
+        };
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
         locationPathRef.current = path;
         void navigate(path, {
-          preventScrollReset: options?.preserveScroll,
+          preventScrollReset: true,
         });
-      }
-      if (!options?.preserveScroll) {
-        scrollApplicationTo({ top: 0, behavior: "auto" });
       }
     },
     [navigate],
@@ -328,9 +367,18 @@ export default function AcademyLayout() {
   }, [navigateTo]);
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
-    preservedScrollPositionRef.current = {
-      left: destination.left,
-      top: destination.top,
+    const sourcePath = locationPathRef.current;
+    applicationScrollPositionsRef.current.set(
+      sourcePath,
+      readApplicationScrollPosition(),
+    );
+    pendingScrollPositionRef.current = {
+      destinationPath: destination.path,
+      sourcePath,
+      position: {
+        left: destination.left,
+        top: destination.top,
+      },
     };
     locationPathRef.current = destination.path;
     void navigate(destination.path, { preventScrollReset: true });

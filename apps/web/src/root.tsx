@@ -54,6 +54,7 @@ export function Layout({ children }: LayoutProps) {
       data-scrollbar-style="theme"
       data-sidebar-menu-elevation="true"
       data-sidebar-state="expanded"
+      data-navigation-layout="wide"
       data-learning-curriculum-state="expanded"
       data-collapsed-tooltips="true"
       data-collapsed-sidebar-logo="true"
