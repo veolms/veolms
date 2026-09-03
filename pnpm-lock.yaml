@@ -138,6 +138,9 @@ importers:
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../../packages/fleet-types
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       kysely:
         specifier: 'catalog:'
         version: 0.29.4
