@@ -7,7 +7,7 @@ import * as webhookRepo from "./webhook.repository.ts";
 export interface PaymentEventQueue {
   enqueue(event: NormalizedPaymentEvent): Promise<string>;
   start?(): void;
-  stop?(): void;
+  stop?(): Promise<void>;
 }
 
 export interface DurablePaymentEventQueueOptions {
@@ -43,6 +43,8 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   private readonly pollIntervalMs: number;
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
+  private isStopped = true;
+  private activePoll: Promise<void> | null = null;
 
   constructor(options: DurablePaymentEventQueueOptions) {
     this.database = options.database;
@@ -55,7 +57,10 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   start(): void {
     if (this.timer) return;
 
-    this.logger?.info("Starting Durable Postgres Payment Event Queue polling worker");
+    this.isStopped = false;
+    this.logger?.info(
+      "Starting Durable Postgres Payment Event Queue polling worker",
+    );
 
     // Trigger initial drain on startup to process any pending webhooks from previous runs
     void this.processPendingEvents();
@@ -67,12 +72,20 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
     this.timer.unref();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
+    this.isStopped = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      this.logger?.info("Stopped Durable Postgres Payment Event Queue polling worker");
+      this.logger?.info(
+        "Stopped Durable Postgres Payment Event Queue polling worker",
+      );
     }
+
+    // The API destroys its shared database only after Fastify's onClose hooks
+    // complete. Wait for an already-running poll so it cannot acquire the
+    // destroyed Kysely driver during a restart or failed listen attempt.
+    await this.activePoll;
   }
 
   async enqueue(event: NormalizedPaymentEvent): Promise<string> {
@@ -81,6 +94,8 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
       { jobId, eventType: event.eventType, provider: event.provider },
       `Enqueued payment event to durable queue: ${event.eventType}`,
     );
+
+    if (this.isStopped) return jobId;
 
     // Kick immediate processing asynchronously so the webhook endpoint can return 200 immediately
     setImmediate(() => {
@@ -91,9 +106,20 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   }
 
   async processPendingEvents(): Promise<void> {
-    if (this.isProcessing) return;
+    if (this.isStopped || this.isProcessing) return;
     this.isProcessing = true;
+    const poll = this.runPendingEvents();
+    this.activePoll = poll;
 
+    try {
+      await poll;
+    } finally {
+      if (this.activePoll === poll) this.activePoll = null;
+      this.isProcessing = false;
+    }
+  }
+
+  private async runPendingEvents(): Promise<void> {
     try {
       // Find unprocessed webhook events
       const pendingEvents = await this.database
@@ -125,7 +151,10 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
           });
 
           // Mark event as processed
-          await webhookRepo.markWebhookEventProcessed(this.database, eventRow.id);
+          await webhookRepo.markWebhookEventProcessed(
+            this.database,
+            eventRow.id,
+          );
           log?.info("Durable webhook event processed successfully");
         } catch (err: unknown) {
           log?.error({ err }, "Error processing durable webhook event");
@@ -139,9 +168,10 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
         }
       }
     } catch (pollErr: unknown) {
-      this.logger?.error({ err: pollErr }, "Failed during payment queue event polling loop");
-    } finally {
-      this.isProcessing = false;
+      this.logger?.error(
+        { err: pollErr },
+        "Failed during payment queue event polling loop",
+      );
     }
   }
 }

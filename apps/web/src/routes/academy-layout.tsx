@@ -21,9 +21,8 @@ import {
   type Course,
   type CourseOpenOptions,
 } from "../courses/catalogue";
-import { useCurrentUser, useLogout } from "../services/auth";
+import { useCurrentUser, useSignOut } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
-import { clearStoredProfilePreferences } from "../settings/profilePreferences";
 import type { LearningCourse } from "../StudentPages";
 import {
   getCoursePlayerLaunchPath,
@@ -55,6 +54,7 @@ import {
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
+import { buildLoginPath } from "../routing/routeAccess";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
@@ -64,6 +64,7 @@ import {
   getNavigationDestination,
   resolveShellNavigation,
 } from "../shell/navigation";
+import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
@@ -236,9 +237,13 @@ export default function AcademyLayout() {
   const restoringPlayerRef = useRef(false);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
-  const { data: authUser } = useCurrentUser();
+  const {
+    data: authUser,
+    isError: authUserError,
+    isFetched: authUserFetched,
+  } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
-  const activeUser = authUser || storeUser;
+  const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(activeUser?.menus),
     [activeUser?.menus],
@@ -251,15 +256,12 @@ export default function AcademyLayout() {
     }
   }, [currentLocationPath]);
 
-  const logoutMutation = useLogout();
+  const { signOut } = useSignOut();
 
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
-      void logoutMutation.mutateAsync().finally(() => {
-        clearStoredProfilePreferences();
-        window.location.href = "/";
-      });
+      signOut();
       return;
     }
     const destination =
@@ -270,7 +272,7 @@ export default function AcademyLayout() {
         : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
-  }, [location.pathname, location.search, navigate, logoutMutation]);
+  }, [location.pathname, location.search, navigate, signOut]);
 
   useLayoutEffect(() => {
     const position = preservedScrollPositionRef.current;
@@ -346,22 +348,34 @@ export default function AcademyLayout() {
       const index = getNumberShortcutIndex(event);
       if (index === null) return;
 
-      const navigationRole = localStorage.getItem("veolms-role") || "student";
+      const navigationRole =
+        localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id)) ||
+        "student";
       const orderedNavigation = getVisibleOrderedNavigation(
         isPublicNavigation
           ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(navigationRole, navigationItems),
+          : getInitialNavigationOrder(
+              navigationRole,
+              navigationItems,
+              activeUser?.id,
+            ),
         isPublicNavigation
           ? getDefaultNavigationVisibility(navigationItems)
-          : getInitialNavigationVisibility(navigationRole, navigationItems),
+          : getInitialNavigationVisibility(
+              navigationRole,
+              navigationItems,
+              activeUser?.id,
+            ),
         navigationItems,
-      ).filter(
-        ([label]) =>
-          label !== "Settings" ||
-          !normalizeSidebarDockItems(
-            getInitialSidebarPreferences().dockItems,
-          ).includes("settings"),
-      );
+      )
+        .filter(
+          ([label]) =>
+            label !== "Settings" ||
+            !normalizeSidebarDockItems(
+              getInitialSidebarPreferences().dockItems,
+            ).includes("settings"),
+        )
+        .filter(([label]) => label !== "Learning Space");
       const destination = orderedNavigation[index];
       if (!destination) return;
 
@@ -387,16 +401,19 @@ export default function AcademyLayout() {
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
       const courseRouteKey = getCourseRouteKey(course);
+      const playerPath = `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
+      if (!activeUser) {
+        navigateTo(buildLoginPath(playerPath), { exact: true });
+        return;
+      }
       const activePlayer = persistentPlayerRef.current;
       if (activePlayer?.courseRouteKey === courseRouteKey) {
         navigateTo(activePlayer.lessonPath, { exact: true });
         return;
       }
-      navigateTo(
-        `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`,
-      );
+      navigateTo(playerPath);
     },
-    [navigateTo],
+    [activeUser, navigateTo],
   );
 
   const registerPersistentPlayer =

@@ -1,35 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
 import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
-import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { useLogout } from "../services/auth";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { useDeactivateAccount, useSignOut } from "../services/auth";
+import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
-import { clearStoredProfilePreferences } from "./profilePreferences";
 import type { ProfileRole } from "./profilePreferences";
 
 export interface AccountSettingsProps {
   role: ProfileRole;
+  isAuthenticated: boolean;
   onNavigatePage?: (page: string) => void;
 }
 
 export function AccountSettings({
   role,
+  isAuthenticated,
   onNavigatePage,
 }: AccountSettingsProps) {
-  const [confirmDeactivation, setConfirmDeactivation] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const logoutMutation = useLogout();
+  const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
+  const { isPending: isSigningOut, signOut } = useSignOut();
+  const deactivateMutation = useDeactivateAccount();
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setLogoutConfirmOpen(false);
+    setDeactivateConfirmOpen(false);
+  }, [isAuthenticated]);
+
+  const deactivateAccount = async () => {
     try {
-      await logoutMutation.mutateAsync();
+      await deactivateMutation.mutateAsync();
+      setDeactivateConfirmOpen(false);
+      window.location.href = "/";
     } catch {
-      // ignore
+      // The dialog remains open and exposes the API error so the user can retry.
     }
-    clearStoredProfilePreferences();
-    window.location.href = "/";
   };
 
   return (
@@ -68,6 +77,7 @@ export function AccountSettings({
           <button
             type="button"
             className="settings-action"
+            disabled={!isAuthenticated}
             onClick={() =>
               onNavigatePage?.(role === "creator" ? "orders" : "order-history")
             }
@@ -106,74 +116,104 @@ export function AccountSettings({
         </div>
       </section>
 
-      <section className="settings-section" aria-labelledby="signout-heading">
-        <header className="settings-section__heading">
-          <SignOut size={20} weight="duotone" />
-          <div>
-            <h3 id="signout-heading">Session</h3>
-            <p>Sign out of your active session on this device.</p>
+      {isAuthenticated && (
+        <section
+          className="settings-section settings-section--danger"
+          aria-labelledby="deactivate-heading"
+        >
+          <header className="settings-section__heading">
+            <Trash size={20} weight="duotone" />
+            <div>
+              <h3 id="deactivate-heading">Deactivate account</h3>
+              <p>Remove access to this account and sign out everywhere.</p>
+            </div>
+          </header>
+          <div className="settings-account-plan">
+            <div>
+              <strong>Deactivate your account</strong>
+              <small>
+                You will be signed out of every device and will not be able to
+                sign in again. We will send a confirmation email.
+              </small>
+            </div>
+            <button
+              type="button"
+              className="settings-action settings-action--danger"
+              onClick={() => {
+                deactivateMutation.reset();
+                setDeactivateConfirmOpen(true);
+              }}
+              disabled={deactivateMutation.isPending}
+            >
+              <Trash size={16} /> Deactivate account
+            </button>
           </div>
-        </header>
-        <div className="settings-account-plan">
-          <div>
-            <strong>Log out</strong>
-            <small>
-              You will need to sign in again with your email or mobile OTP.
-            </small>
-          </div>
-          <button
-            type="button"
-            className="settings-action"
-            onClick={() => setLogoutConfirmOpen(true)}
-          >
-            <SignOut size={16} /> Sign out
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section
-        className="settings-section settings-section--danger"
-        aria-labelledby="deactivate-heading"
-      >
-        <header className="settings-section__heading">
-          <WarningCircle size={20} weight="duotone" />
-          <div>
-            <h3 id="deactivate-heading">Deactivate account</h3>
-            <p>Pause access without immediately deleting your account data.</p>
+      {isAuthenticated && (
+        <section className="settings-section" aria-labelledby="signout-heading">
+          <header className="settings-section__heading">
+            <SignOut size={20} weight="duotone" />
+            <div>
+              <h3 id="signout-heading">Session</h3>
+              <p>Sign out of your active session on this device.</p>
+            </div>
+          </header>
+          <div className="settings-account-plan">
+            <div>
+              <strong>Log out</strong>
+              <small>
+                You will need to sign in again with your email or mobile OTP.
+              </small>
+            </div>
+            <button
+              type="button"
+              className="settings-action"
+              onClick={() => setLogoutConfirmOpen(true)}
+            >
+              <SignOut size={16} /> Sign out
+            </button>
           </div>
-        </header>
-        <div className="settings-account-plan">
-          <div>
-            <strong>Need a break?</strong>
-            <small>
-              You can request deactivation after reviewing the impact on your
-              courses and purchases.
-            </small>
-          </div>
-          <button
-            type="button"
-            className="settings-action settings-action--danger"
-            onClick={() => setConfirmDeactivation((current) => !current)}
-          >
-            <WarningCircle size={16} />
-            {confirmDeactivation ? "Cancel request" : "Review deactivation"}
-          </button>
-        </div>
-        {confirmDeactivation && (
-          <p className="settings-danger-note" role="status">
-            Deactivation is not connected to the server yet. Your account has
-            not been changed.
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
       <LogoutConfirmModal
-        isOpen={logoutConfirmOpen}
-        isPending={logoutMutation.isPending}
+        isOpen={isAuthenticated && logoutConfirmOpen}
+        isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => {
-          void handleLogout();
-        }}
+        onConfirm={signOut}
+      />
+
+      <ConfirmActionModal
+        id="deactivate-account-modal"
+        isOpen={isAuthenticated && deactivateConfirmOpen}
+        isPending={deactivateMutation.isPending}
+        onClose={() => setDeactivateConfirmOpen(false)}
+        onConfirm={() => void deactivateAccount()}
+        icon={Trash}
+        title="Deactivate account?"
+        description={
+          <>
+            <span>
+              This signs you out everywhere and permanently disables access to
+              this account. Your stored account record will be retained as
+              required for platform records.
+            </span>
+            {deactivateMutation.error && (
+              <span
+                className="mt-3 block rounded-lg bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface-strong))] px-3 py-2 text-xs font-semibold text-(--danger)"
+                role="alert"
+              >
+                {deactivateMutation.error.message}
+              </span>
+            )}
+          </>
+        }
+        cancelLabel="Keep my account"
+        confirmLabel="Deactivate account"
+        pendingLabel="Deactivating…"
+        tone="danger"
       />
     </div>
   );

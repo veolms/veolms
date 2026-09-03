@@ -23,18 +23,26 @@ const checkoutRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/checkout/preview",
     {
-      preHandler: [ctx.middleware.authenticate],
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
       schema: {
         operationId: "previewCheckout",
         tags: ["Commerce - Checkout"],
         summary: "Preview checkout calculations",
-        description: "Calculates prices, taxes, and coupon discounts for course or bundle items.",
+        description:
+          "Calculates prices, taxes, and coupon discounts for course or bundle items.",
         body: checkoutPreviewRequestSchema,
         response: {
-          200: jsonResponse("Calculated checkout preview", checkoutPreviewResponseSchema),
+          200: jsonResponse(
+            "Calculated checkout preview",
+            checkoutPreviewResponseSchema,
+          ),
           400: errorResponse("Invalid items or coupon"),
           404: errorResponse("Item not found"),
           409: errorResponse("Item already owned"),
+          403: errorResponse("MFA step-up required."),
         },
       },
     },
@@ -50,10 +58,14 @@ const checkoutRoutes: RoutePlugin = async (app, options) => {
         operationId: "createCheckoutOrder",
         tags: ["Commerce - Checkout"],
         summary: "Create order and initialize payment",
-        description: "Creates an internal  order, records item price snapshots, and initializes the upstream payment order.",
+        description:
+          "Creates an internal  order, records item price snapshots, and initializes the upstream payment order.",
         body: createCheckoutOrderRequestSchema,
         response: {
-          200: jsonResponse("Order created and payment initialized", createCheckoutOrderResponseSchema),
+          200: jsonResponse(
+            "Order created and payment initialized",
+            createCheckoutOrderResponseSchema,
+          ),
           400: errorResponse("Invalid checkout request"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Item not found"),

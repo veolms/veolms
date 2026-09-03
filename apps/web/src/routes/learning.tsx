@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   useLocation,
   useNavigate,
@@ -8,6 +8,7 @@ import {
 import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
 import { resolveLessonIdentifier } from "../learning/courseContent";
+import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerBackLabel,
   getCoursePlayerOrigin,
@@ -19,7 +20,10 @@ import {
   upsertCoursePlayerSessionFromRoute,
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
-import { useCourseOverview } from "../services/courses";
+import { useCurrentUser } from "../services/auth";
+import { useCourseOverview, useCourses } from "../services/courses";
+import { useUpsertLearningSpaceSession } from "../services/learning-space";
+import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 
@@ -47,6 +51,13 @@ export default function LearningRoute() {
     openLearningMiniPlayer,
     registerPersistentPlayer,
   } = useOutletContext<AcademyOutletContext>();
+  const { data: authUser } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
+  const activeUser = authUser || storeUser;
+  const { mutate: upsertLearningSpaceSession } = useUpsertLearningSpaceSession(
+    activeUser?.id,
+  );
+  const lastSyncedSessionRef = useRef<string | null>(null);
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
   const resolvesLegacyCourseId = Boolean(
@@ -55,6 +66,16 @@ export default function LearningRoute() {
   const { data: courseOverview } = useCourseOverview(courseSlug, {
     enabled: resolvesLegacyCourseId,
   });
+  const { data: publishedCoursesData } = useCourses({
+    enabled: Boolean(activeUser),
+  });
+  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
+  const apiCourse = publishedCoursesData?.courses.find(
+    (course) =>
+      course.id === courseSlug ||
+      course.slug === courseSlug ||
+      course.slug === apiCourseSlugForKey,
+  );
   const canonicalCourseSlug = courseOverview?.course.slug;
   const lessonId = courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
@@ -72,13 +93,49 @@ export default function LearningRoute() {
     if (currentPath !== nextPath) {
       void navigate(nextPath, { replace: true });
     }
+
+    // Keep local playback working for demo/legacy routes, but only persist a
+    // session when the course key is known by the API. This prevents stale
+    // local IDs such as "backend-nodejs" from producing COURSE_NOT_FOUND.
+    // A legacy key is eligible for persistence only when the current API
+    // catalogue confirms its mapped course exists. If the API catalogue is
+    // empty, this route belongs to the local/dummy catalogue instead.
+    const resolvedApiCourseKey = apiCourse?.slug ?? canonicalCourseSlug;
+    if (courseSlug && activeUser && resolvedApiCourseKey) {
+      const session = getCoursePlayerSession(courseSlug);
+      const courseKey = resolvedApiCourseKey;
+      const syncKey = [
+        activeUser.id,
+        courseKey,
+        session?.lessonId ?? lessonId,
+        session?.origin ?? origin,
+        session?.returnPath ?? routeReturnPath,
+      ].join(":");
+      if (lastSyncedSessionRef.current !== syncKey) {
+        lastSyncedSessionRef.current = syncKey;
+        upsertLearningSpaceSession({
+          courseKey,
+          payload: {
+            lessonKey: String(session?.lessonId ?? lessonId),
+            origin: session?.origin ?? origin,
+            returnPath: session?.returnPath ?? routeReturnPath,
+          },
+        });
+      }
+    }
   }, [
+    activeUser,
+    apiCourse,
+    apiCourseSlugForKey,
+    canonicalCourseSlug,
     courseSlug,
     lessonId,
     location.pathname,
     location.search,
     navigate,
+    origin,
     routeReturnPath,
+    upsertLearningSpaceSession,
   ]);
 
   // Older saved sessions and shared links may still contain a course UUID.

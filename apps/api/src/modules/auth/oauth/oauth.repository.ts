@@ -11,6 +11,21 @@ export function findUserByOauthAccount(
     .selectAll("users")
     .where("oauth_accounts.provider", "=", provider)
     .where("oauth_accounts.provider_user_id", "=", providerUserId)
+    .where("users.is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+export function findUserByOauthAccountIncludingDeleted(
+  database: Executor,
+  provider: string,
+  providerUserId: string,
+) {
+  return database
+    .selectFrom("users")
+    .innerJoin("oauth_accounts", "oauth_accounts.user_id", "users.id")
+    .selectAll("users")
+    .where("oauth_accounts.provider", "=", provider)
+    .where("oauth_accounts.provider_user_id", "=", providerUserId)
     .executeTakeFirst();
 }
 

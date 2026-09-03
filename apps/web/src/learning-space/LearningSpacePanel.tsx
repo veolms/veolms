@@ -224,9 +224,11 @@ const PlayingIndicator = () => (
 );
 
 const getSessionDetails = (session: CoursePlayerSession) => {
-  const courseTitle = getCourseTitle(session.courseId);
+  const courseTitle = session.courseTitle || getCourseTitle(session.courseId);
   const lectureTitle =
-    lessonsById.get(session.lessonId)?.[1] || `Lecture ${session.lessonId}`;
+    session.lessonTitle ||
+    lessonsById.get(session.lessonId)?.[1] ||
+    `Lecture ${session.lessonId}`;
   const courseSection = sections.find((section) =>
     section.lessons.some(([lessonId]) => lessonId === session.lessonId),
   );
