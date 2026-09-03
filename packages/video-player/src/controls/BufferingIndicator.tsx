@@ -1,8 +1,38 @@
 import { useEffect, useState } from "react";
 import { usePlayerState } from "../react/usePlayerState";
+import { classNames } from "../utils/classNames";
 
 export interface BufferingIndicatorProps {
   delay?: number;
+}
+
+export interface VideoLoadingSpinnerProps {
+  className?: string;
+}
+
+export function VideoLoadingSpinner({ className }: VideoLoadingSpinnerProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 48 48"
+      className={classNames(
+        "video-player-buffering-spinner size-12 overflow-visible",
+        className ?? "text-(--video-player-control-text)",
+      )}
+      data-video-player-buffering-spinner=""
+    >
+      <circle
+        cx="24"
+        cy="24"
+        r="20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        className="video-player-buffering-spinner__arc"
+      />
+    </svg>
+  );
 }
 
 function PlayerBufferingOverlay({ label }: { label: string }) {
@@ -13,23 +43,7 @@ function PlayerBufferingOverlay({ label }: { label: string }) {
       aria-label={label}
       data-video-player-buffering-overlay=""
     >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 48 48"
-        className="video-player-buffering-spinner size-12 overflow-visible text-(--video-player-control-text)"
-        data-video-player-buffering-spinner=""
-      >
-        <circle
-          cx="24"
-          cy="24"
-          r="20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          className="video-player-buffering-spinner__arc"
-        />
-      </svg>
+      <VideoLoadingSpinner />
     </div>
   );
 }
@@ -41,14 +55,17 @@ function ActiveBufferingIndicator({
   delay: number;
   label: string;
 }) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(delay <= 0);
 
   useEffect(() => {
+    if (visible || delay <= 0) return;
     const timer = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(timer);
-  }, [delay]);
+  }, [delay, visible]);
 
-  return visible ? <PlayerBufferingOverlay label={label} /> : null;
+  return visible || delay <= 0 ? (
+    <PlayerBufferingOverlay label={label} />
+  ) : null;
 }
 
 const BUFFERED_PLAYBACK_GRACE_SECONDS = 0.25;
@@ -70,7 +87,11 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
         left.lifecycle === right.lifecycle &&
         left.scrubbing === right.scrubbing,
     );
-  const initialLoading = lifecycle === "loading";
+  const initialLoading =
+    lifecycle === "idle" ||
+    lifecycle === "attached" ||
+    lifecycle === "loading" ||
+    lifecycle === "unloading";
   const currentPositionBuffered = buffered.some(
     (range) =>
       currentTime >= range.start &&
@@ -82,7 +103,7 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
   if (scrubbing || !waitingForMedia) return null;
   return (
     <ActiveBufferingIndicator
-      delay={delay}
+      delay={initialLoading ? 0 : delay}
       label={initialLoading ? "Loading video" : "Buffering video"}
     />
   );

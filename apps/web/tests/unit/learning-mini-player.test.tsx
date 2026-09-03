@@ -133,6 +133,9 @@ vi.mock("@veolms/video-player", async () => {
     usePlayerTheme: () => ({
       icons: { close: () => <svg aria-hidden="true" /> },
     }),
+    usePlayerState: <Selected,>(
+      selector: (snapshot: { media: { lifecycle: "ready" } }) => Selected,
+    ) => selector({ media: { lifecycle: "ready" } }),
   };
 });
 

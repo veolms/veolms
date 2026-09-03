@@ -719,6 +719,10 @@ export const readLearningPreferences = (): LearningPreferences => {
       seekIntervalSeconds: normalizeLearningSeekInterval(
         storedPreferences.seekIntervalSeconds,
       ),
+      resumeFromLastPosition:
+        typeof storedPreferences.resumeFromLastPosition === "boolean"
+          ? storedPreferences.resumeFromLastPosition
+          : LEARNING_PREFERENCE_DEFAULTS.resumeFromLastPosition,
       videoPlayerTheme: normalizeVideoPlayerTheme(
         storedPreferences.videoPlayerTheme,
       ),

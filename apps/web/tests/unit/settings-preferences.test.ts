@@ -321,6 +321,15 @@ describe("learning preference persistence", () => {
     });
   });
 
+  it("ignores an invalid stored resume preference", () => {
+    localStorage.setItem(
+      LEARNING_PREFERENCES_KEY,
+      JSON.stringify({ resumeFromLastPosition: "false" }),
+    );
+
+    expect(readLearningPreferences().resumeFromLastPosition).toBe(true);
+  });
+
   it("normalizes the seek interval to the supported 5–60 second range", () => {
     expect(normalizeLearningSeekInterval(5)).toBe(5);
     expect(normalizeLearningSeekInterval(47.4)).toBe(47);

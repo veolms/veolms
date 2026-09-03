@@ -11,10 +11,12 @@ type PlayerInputMode = "keyboard" | "pointer";
 export interface UseControlsVisibilityOptions {
   rootRef: RefObject<HTMLElement | null>;
   idleDelay?: number;
+  keepVisibleUntilFirstPlay?: boolean;
 }
 
 export function useControlsVisibility({
   idleDelay = 2_200,
+  keepVisibleUntilFirstPlay = false,
   rootRef,
 }: UseControlsVisibilityOptions): void {
   const controller = usePlayerController();
@@ -26,12 +28,16 @@ export function useControlsVisibility({
   const pointerFocusPendingRef = useRef(false);
   const initializedPointerModeRef = useRef(false);
   const previousPausedRef = useRef(true);
+  const activeSourceKeyRef = useRef<string | null>(null);
+  const hasPlayedActiveSourceRef = useRef(false);
   const deferredTouchPointersRef = useRef(new Set<number>());
   const {
     controlsLocked,
     controlsVisible,
     paused,
+    playing,
     scrubbing,
+    sourceKey,
     settingsOpen,
     temporarySpeedBoost,
   } = usePlayerState(
@@ -39,7 +45,9 @@ export function useControlsVisibility({
       controlsLocked: ui.controlsLocked,
       controlsVisible: ui.controlsVisible,
       paused: media.paused,
+      playing: media.playing,
       scrubbing: ui.scrubbing,
+      sourceKey: media.source ? (media.source.id ?? media.source.src) : null,
       settingsOpen: ui.settingsView !== "closed",
       temporarySpeedBoost: ui.temporarySpeedBoost,
     }),
@@ -47,7 +55,9 @@ export function useControlsVisibility({
       left.controlsLocked === right.controlsLocked &&
       left.controlsVisible === right.controlsVisible &&
       left.paused === right.paused &&
+      left.playing === right.playing &&
       left.scrubbing === right.scrubbing &&
+      left.sourceKey === right.sourceKey &&
       left.settingsOpen === right.settingsOpen &&
       left.temporarySpeedBoost === right.temporarySpeedBoost,
   );
@@ -57,6 +67,13 @@ export function useControlsVisibility({
     if (!root) return undefined;
     const pointerRoot = root.closest<HTMLElement>(".video-shell") ?? root;
     const deferredTouchPointers = deferredTouchPointersRef.current;
+    if (activeSourceKeyRef.current !== sourceKey) {
+      activeSourceKeyRef.current = sourceKey;
+      hasPlayedActiveSourceRef.current = false;
+    }
+    if (playing) hasPlayedActiveSourceRef.current = true;
+    const firstPlaybackPending =
+      keepVisibleUntilFirstPlay && !hasPlayedActiveSourceRef.current;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -83,10 +100,15 @@ export function useControlsVisibility({
       root.contains(document.activeElement);
 
     const controlsMustRemainVisible = () =>
-      scrubbing || settingsOpen || controlsLocked || hasKeyboardFocus();
+      firstPlaybackPending ||
+      scrubbing ||
+      settingsOpen ||
+      controlsLocked ||
+      hasKeyboardFocus();
     const controlsTemporarilySuppressed = () =>
-      temporarySpeedBoost ||
-      controller.getSnapshot().ui.hud?.variant === "mobile-seek";
+      !firstPlaybackPending &&
+      (temporarySpeedBoost ||
+        controller.getSnapshot().ui.hud?.variant === "mobile-seek");
     const delaysControlsReveal = (target: EventTarget | null) =>
       target instanceof Element &&
       target.closest('[data-player-controls-reveal="delayed"]') !== null;
@@ -192,11 +214,10 @@ export function useControlsVisibility({
       if (!isDesktopMousePointer(event)) return;
       pointerInsideRef.current = false;
       clearTimer();
-      if (settingsOpen) {
+      if (controlsMustRemainVisible()) {
         controller.setControlsVisible(true);
         return;
       }
-      if (scrubbing || controlsLocked || hasKeyboardFocus()) return;
       controller.setControlsVisible(false);
     };
 
@@ -238,14 +259,18 @@ export function useControlsVisibility({
       pointerModeRef.current = desktopPointer ? "mouse" : "touch";
       pointerInsideRef.current = false;
       clearTimer();
-      if (desktopPointer) controller.setControlsVisible(false);
-      else if (paused) controller.setControlsVisible(true);
+      if (desktopPointer && !controlsMustRemainVisible()) {
+        controller.setControlsVisible(false);
+      } else if (paused) controller.setControlsVisible(true);
       else scheduleHide();
     };
 
     const becamePaused = paused && !previousPausedRef.current;
     previousPausedRef.current = paused;
-    if (becamePaused && pointerModeRef.current === "touch") {
+    if (firstPlaybackPending) {
+      clearTimer();
+      controller.setControlsVisible(true);
+    } else if (becamePaused && pointerModeRef.current === "touch") {
       controller.setControlsVisible(true);
     } else if (controlsVisible) {
       scheduleHide();
@@ -302,10 +327,13 @@ export function useControlsVisibility({
     controlsLocked,
     controlsVisible,
     idleDelay,
+    keepVisibleUntilFirstPlay,
     mobileInteraction,
     paused,
+    playing,
     rootRef,
     scrubbing,
+    sourceKey,
     settingsOpen,
     temporarySpeedBoost,
   ]);

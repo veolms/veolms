@@ -318,26 +318,36 @@ export function LessonPlayerControls({
   const playerTheme = usePlayerTheme();
   const MinimizeIcon = playerTheme.icons.minimize;
   const mobileInteraction = usePlayerMobileInteraction();
-  const { controlsVisible, fullscreen, previewTime, scrubbing, settingsOpen } =
-    usePlayerState(
-      ({ ui }) => ({
-        controlsVisible: ui.controlsVisible,
-        fullscreen: ui.fullscreen,
-        previewTime: ui.previewTime,
-        scrubbing: ui.scrubbing,
-        settingsOpen: ui.settingsView !== "closed",
-      }),
-      (left, right) =>
-        left.controlsVisible === right.controlsVisible &&
-        left.fullscreen === right.fullscreen &&
-        left.previewTime === right.previewTime &&
-        left.scrubbing === right.scrubbing &&
-        left.settingsOpen === right.settingsOpen,
-    );
-  const visible = !controlsSuppressed && (controlsVisible || settingsOpen);
+  const {
+    controlsVisible,
+    fullscreen,
+    lifecycle,
+    previewTime,
+    scrubbing,
+    settingsOpen,
+  } = usePlayerState(
+    ({ media, ui }) => ({
+      controlsVisible: ui.controlsVisible,
+      fullscreen: ui.fullscreen,
+      lifecycle: media.lifecycle,
+      previewTime: ui.previewTime,
+      scrubbing: ui.scrubbing,
+      settingsOpen: ui.settingsView !== "closed",
+    }),
+    (left, right) =>
+      left.controlsVisible === right.controlsVisible &&
+      left.fullscreen === right.fullscreen &&
+      left.lifecycle === right.lifecycle &&
+      left.previewTime === right.previewTime &&
+      left.scrubbing === right.scrubbing &&
+      left.settingsOpen === right.settingsOpen,
+  );
+  const ready = lifecycle === "ready";
+  const visible =
+    ready && !controlsSuppressed && (controlsVisible || settingsOpen);
   const mobileFullscreen = mobileInteraction && fullscreen;
   const persistentProgressVisible =
-    !controlsSuppressed && mobileInteraction && !fullscreen;
+    ready && !controlsSuppressed && mobileInteraction && !fullscreen;
   const timelineDisplayed = visible || persistentProgressVisible;
   const landscapeOrientation = useSyncExternalStore(
     subscribeToLandscapeOrientation,
@@ -698,7 +708,7 @@ export function LessonCentralControls({
       left.lifecycle === right.lifecycle,
   );
   const mobileInteraction = usePlayerMobileInteraction();
-  const loading = lifecycle === "loading" || buffering;
+  const loading = lifecycle !== "ready" || buffering;
   const visible = !controlsSuppressed && !loading && controlsVisible;
 
   return (

@@ -93,16 +93,44 @@ class RecordingFakeVideoEngine extends FakeVideoEngine {
   }
 }
 
+class DeferredLoadFakeVideoEngine extends RecordingFakeVideoEngine {
+  #finishLoad: (() => void) | null = null;
+
+  override async load(
+    source: VideoSource,
+    options?: VideoLoadOptions,
+  ): Promise<void> {
+    this.loadCalls.push({ source, options });
+    this.setSnapshot({
+      lifecycle: "loading",
+      source,
+      currentTime: options?.startTime ?? source.startTime ?? 0,
+      error: null,
+    });
+    await new Promise<void>((resolve) => {
+      this.#finishLoad = resolve;
+    });
+  }
+
+  finishLoad(): void {
+    this.setSnapshot({ lifecycle: "ready" });
+    this.#finishLoad?.();
+    this.#finishLoad = null;
+  }
+}
+
 const firstMedia: CourseVideo = {
   fileName: "lesson-one.mp4",
   duration: 90,
   src: "/course-hls/lesson-one/master.m3u8",
+  thumbnailSrc: "/course-hls/thumbnails/lesson-one.webp",
 };
 
 const secondMedia: CourseVideo = {
   fileName: "lesson-two.mp4",
   duration: 150,
   src: "/course-hls/lesson-two/master.m3u8",
+  thumbnailSrc: "/course-hls/thumbnails/lesson-two.webp",
 };
 
 function playerProps(media: CourseVideo, engine: RecordingFakeVideoEngine) {
@@ -126,6 +154,9 @@ describe("LessonVideoPlayer adapter", () => {
     );
 
     await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    expect(engine.loadCalls[0]?.source.metadata?.poster).toBe(
+      firstMedia.thumbnailSrc,
+    );
     const mediaElement = container.querySelector("video");
     expect(mediaElement).not.toBeNull();
 
@@ -198,7 +229,7 @@ describe("LessonVideoPlayer adapter", () => {
       const player = screen.getByRole("region", {
         name: "Lesson video player for Designing for real users",
       });
-      const autoplaySwitch = screen.getByRole("switch", {
+      const autoplaySwitch = await screen.findByRole("switch", {
         name: "Autoplay next lesson",
       });
       const track = autoplaySwitch.querySelector("[data-autoplay-track]");
@@ -367,6 +398,16 @@ describe("LessonVideoPlayer adapter", () => {
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
 
     tapEmptySpace();
+    expect(player).toHaveAttribute("data-controls-visible", "true");
+    expect(controls).not.toHaveAttribute("inert");
+    expect(centralControls).not.toHaveAttribute("inert");
+    expect(play).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(centralPlay!, { detail: 1 });
+      await Promise.resolve();
+    });
+    expect(play).toHaveBeenCalledOnce();
     expect(player).toHaveAttribute("data-controls-visible", "false");
     expect(controls).toHaveAttribute("inert");
     expect(centralControls).toHaveAttribute("inert");
@@ -385,26 +426,6 @@ describe("LessonVideoPlayer adapter", () => {
       "invisible",
       "[&_*]:!pointer-events-none",
     );
-    expect(play).not.toHaveBeenCalled();
-
-    fireEvent.pointerDown(centralPlay!, {
-      clientX: 100,
-      pointerId: 2,
-      pointerType: "touch",
-    });
-    expect(player).toHaveAttribute("data-controls-visible", "false");
-    fireEvent.pointerUp(centralPlay!, {
-      clientX: 100,
-      pointerId: 2,
-      pointerType: "touch",
-    });
-    expect(player).toHaveAttribute("data-controls-visible", "true");
-    fireEvent.click(centralPlay!, { detail: 1 });
-    expect(player).toHaveAttribute("data-controls-visible", "true");
-    expect(play).not.toHaveBeenCalled();
-
-    tapEmptySpace();
-    expect(player).toHaveAttribute("data-controls-visible", "false");
 
     tapEmptySpace();
     expect(player).toHaveAttribute("data-controls-visible", "true");
@@ -415,7 +436,9 @@ describe("LessonVideoPlayer adapter", () => {
     expect(timelineRoot).toHaveAttribute("data-controls-visible", "true");
     expect(controls).not.toHaveClass("[&_*]:!pointer-events-none");
     expect(centralControls).not.toHaveClass("[&_*]:!pointer-events-none");
-    expect(play).not.toHaveBeenCalled();
+
+    tapEmptySpace();
+    expect(player).toHaveAttribute("data-controls-visible", "false");
   });
 
   it("delays the buffering spinner while central controls remain inert", async () => {
@@ -466,7 +489,7 @@ describe("LessonVideoPlayer adapter", () => {
     });
     act(() => vi.advanceTimersByTime(301));
 
-    expect(player).toHaveAttribute("data-controls-visible", "false");
+    expect(player).toHaveAttribute("data-controls-visible", "true");
     expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
       bufferingIndicator,
     );
@@ -474,6 +497,78 @@ describe("LessonVideoPlayer adapter", () => {
     act(() => engine.setSnapshot({ buffering: false }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(centralControls).not.toHaveAttribute("data-player-loading");
+  });
+
+  it("shows only the loader until the lesson video is ready", async () => {
+    const engine = new DeferredLoadFakeVideoEngine(90);
+    const { container } = render(
+      <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
+    );
+
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    expect(screen.getByRole("status", { name: "Loading video" })).toBeVisible();
+
+    const poster = container.querySelector<HTMLElement>(
+      '[data-video-player-poster-overlay=""]',
+    );
+    const mediaPlane = container.querySelector<HTMLElement>(
+      '[data-player-zoom-media-plane=""]',
+    );
+    expect(poster).toHaveAttribute(
+      "data-video-player-poster-src",
+      firstMedia.thumbnailSrc,
+    );
+    expect(poster?.parentElement).toBe(mediaPlane);
+    expect(mediaPlane?.parentElement).toHaveAttribute(
+      "data-player-zoom-viewport",
+      "",
+    );
+    expect(mediaPlane?.parentElement).toHaveClass("z-0", "isolate");
+    expect(container.querySelector("video")).toHaveClass("invisible");
+    expect(container.querySelector("video")).not.toHaveAttribute("poster");
+
+    const controls = container.querySelector<HTMLElement>(
+      '[data-lesson-player-controls=""]',
+    )!;
+    const centralControls = container.querySelector<HTMLElement>(
+      '[data-lesson-central-controls=""]',
+    )!;
+    const gestureSurface = container.querySelector<HTMLButtonElement>(
+      '[data-player-shortcut-surface=""]',
+    )!;
+    expect(controls).toHaveAttribute("inert");
+    expect(controls).toHaveAttribute("aria-hidden", "true");
+    expect(centralControls).toHaveAttribute("inert");
+    expect(centralControls).toHaveAttribute("data-player-loading", "true");
+    expect(centralControls).toHaveClass("invisible", "opacity-0");
+    expect(gestureSurface).toBeDisabled();
+    expect(gestureSurface).toHaveAttribute("aria-hidden", "true");
+
+    act(() => engine.finishLoad());
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("status", { name: "Loading video" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(controls).not.toHaveAttribute("inert");
+    expect(controls).not.toHaveAttribute("aria-hidden");
+    expect(centralControls).not.toHaveAttribute("inert");
+    expect(centralControls).not.toHaveAttribute("data-player-loading");
+    expect(gestureSurface).toBeEnabled();
+    expect(gestureSurface).not.toHaveAttribute("aria-hidden");
+    expect(
+      within(centralControls).getByRole("button", { name: "Play" }),
+    ).toBeVisible();
+    expect(poster).toBeInTheDocument();
+    expect(centralControls).toHaveClass("z-20");
+    expect(controls).toHaveClass("z-30");
+
+    await act(async () => engine.play());
+    expect(
+      container.querySelector('[data-video-player-poster-overlay=""]'),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector("video")).not.toHaveClass("invisible");
   });
 
   it("hides touch controls after center play and reveals them before pause", async () => {
@@ -666,7 +761,7 @@ describe("LessonVideoPlayer adapter", () => {
     }
   });
 
-  it("keeps autoplay in the player and ambient mode inside settings", () => {
+  it("keeps autoplay in the player and ambient mode inside settings", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const onAutoplayEnabledChange = vi.fn();
 
@@ -678,7 +773,7 @@ describe("LessonVideoPlayer adapter", () => {
       />,
     );
 
-    const autoplaySwitch = screen.getByRole("switch", {
+    const autoplaySwitch = await screen.findByRole("switch", {
       name: "Autoplay next lesson",
     });
     const autoplayTrack = autoplaySwitch.querySelector<HTMLElement>(
@@ -1552,6 +1647,7 @@ describe("LessonVideoPlayer adapter", () => {
         startTime: 0,
         metadata: {
           duration: 90,
+          poster: "/course-hls/thumbnails/lesson-one.webp",
           title: "Designing for real users",
         },
         streaming: { abrEnabled: true, bufferBehind: 600 },
@@ -2571,6 +2667,29 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engine.loadCalls[0]?.source.startTime).toBe(50);
     expect(engine.getSnapshot().currentTime).toBe(50);
     await waitFor(() => expect(onProgressChange).toHaveBeenCalledWith(25));
+  });
+
+  it("starts at 0:00 when the persisted start-from-beginning setting is enabled", async () => {
+    const engine = new RecordingFakeVideoEngine(200);
+    window.localStorage.setItem(
+      lessonPlayerStorageKeys.resume(firstMedia.fileName),
+      "50",
+    );
+    window.localStorage.setItem(
+      LEARNING_PREFERENCES_KEY,
+      JSON.stringify({ resumeFromLastPosition: false }),
+    );
+
+    render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
+
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+    expect(engine.loadCalls[0]?.source.startTime).toBe(0);
+    expect(engine.getSnapshot().currentTime).toBe(0);
+    expect(
+      window.localStorage.getItem(
+        lessonPlayerStorageKeys.resume(firstMedia.fileName),
+      ),
+    ).toBe("50");
   });
 
   it("keeps the mini player live until restored playback is unbuffered and playing", async () => {

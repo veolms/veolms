@@ -1,4 +1,5 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { VideoLoadingSpinner } from "@veolms/video-player";
 import {
   useCallback,
   useEffect,
@@ -1803,10 +1804,28 @@ export function LearningWorkspace({
             </button>
             {registerPersistentPlayer ? (
               <div
-                className="pointer-events-none aspect-video w-full bg-transparent"
+                className="pointer-events-none relative aspect-video w-full overflow-hidden bg-black"
                 aria-hidden="true"
                 data-learning-player-anchor=""
-              />
+              >
+                {lessonPlayerProps.media.thumbnailSrc ? (
+                  <img
+                    src={lessonPlayerProps.media.thumbnailSrc}
+                    alt=""
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    className="absolute inset-0 size-full object-contain"
+                    data-learning-player-initial-poster=""
+                  />
+                ) : null}
+                <div
+                  className="absolute inset-0 grid place-items-center text-white"
+                  data-learning-player-initial-loader=""
+                >
+                  <VideoLoadingSpinner className="text-white" />
+                </div>
+              </div>
             ) : (
               <LessonVideoPlayer {...lessonPlayerProps} />
             )}

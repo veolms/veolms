@@ -3436,15 +3436,27 @@ test("learning comment search stays out of the phone layout", async ({
   ).toBeVisible();
 });
 
-test("lesson video loads directly without a thumbnail poster", async ({
+test("lesson video preloads behind its first-frame thumbnail", async ({
   page,
 }) => {
+  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+    route.fulfill({
+      status: 200,
+      json: { course: { slug: "backend-nodejs" }, sections: [] },
+    }),
+  );
   await openApp(page, "/learn/backend-nodejs/the-design-mindset?from=courses");
 
   const initialPlayer = page.getByRole("region", {
     name: "Lesson video player for The Design Mindset",
   });
   const initialVideo = initialPlayer.locator("video");
+  await expect(
+    page.locator("[data-learning-player-anchor] img"),
+  ).toHaveAttribute(
+    "src",
+    "/course-hls/thumbnails/01-team-introduction-and-product-discussion.webp",
+  );
   await expect
     .poll(() =>
       initialVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
@@ -3455,21 +3467,30 @@ test("lesson video loads directly without a thumbnail poster", async ({
   );
 
   await expect(initialVideo).toHaveAttribute("preload", "auto");
-  await expect(initialVideo).not.toHaveAttribute("poster");
+  await expect(
+    initialPlayer.locator("[data-video-player-poster-overlay]"),
+  ).toHaveAttribute(
+    "data-video-player-poster-src",
+    "/course-hls/thumbnails/01-team-introduction-and-product-discussion.webp",
+  );
 
   await page
     .getByRole("complementary", { name: "Course curriculum" })
     .getByRole("button", { name: /Tools Overview/ })
     .click();
 
-  const nextVideo = page
-    .getByRole("region", {
-      name: "Lesson video player for Tools Overview",
-    })
-    .locator("video");
+  const nextPlayer = page.getByRole("region", {
+    name: "Lesson video player for Tools Overview",
+  });
+  const nextVideo = nextPlayer.locator("video");
 
   await expect(nextVideo).toHaveAttribute("preload", "auto");
-  await expect(nextVideo).not.toHaveAttribute("poster");
+  await expect(
+    nextPlayer.locator("[data-video-player-poster-overlay]"),
+  ).toHaveAttribute(
+    "data-video-player-poster-src",
+    "/course-hls/thumbnails/04-ui-design-system-and-storybook.webp",
+  );
   await expect
     .poll(() =>
       nextVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),

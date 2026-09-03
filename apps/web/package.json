@@ -7,6 +7,7 @@
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
+    "generate:video-thumbnails": "node scripts/generate-course-video-thumbnails.mjs",
     "preview": "node scripts/serve-performance-build.mjs",
     "preview:performance": "node scripts/serve-performance-build.mjs",
     "routes": "react-router routes",

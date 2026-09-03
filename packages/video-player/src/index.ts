@@ -98,7 +98,14 @@ export type { PlaybackFeedbackProps } from "./controls/PlaybackFeedback";
 export { ZoomLevelIndicator } from "./controls/ZoomLevelIndicator";
 export type { ZoomLevelIndicatorProps } from "./controls/ZoomLevelIndicator";
 export { DefaultControls } from "./controls/DefaultControls";
-export { BufferingIndicator } from "./controls/BufferingIndicator";
+export {
+  BufferingIndicator,
+  VideoLoadingSpinner,
+} from "./controls/BufferingIndicator";
+export type {
+  BufferingIndicatorProps,
+  VideoLoadingSpinnerProps,
+} from "./controls/BufferingIndicator";
 export { ErrorOverlay } from "./controls/ErrorOverlay";
 export * from "./controls/menus";
 
