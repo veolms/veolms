@@ -8,7 +8,7 @@ import {
   CourseOverviewSkeleton,
   adaptCourseOverviewResponse,
 } from "../../src/courses/CourseOverviewPage";
-import { courses } from "../../src/courses/catalogue";
+import type { Course } from "../../src/courses/catalogue";
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -23,27 +23,27 @@ function renderWithClient(ui: React.ReactElement) {
   );
 }
 
+const sampleCourse: Course = {
+  id: "test-course-id",
+  slug: "test-course",
+  title: "Test Course Title",
+  description: "Test Course Description",
+  level: "Beginner",
+  category: "Development",
+  sections: 2,
+  lectures: 10,
+  progress: null,
+  enrolled: false,
+  duration: "5h",
+  students: 10,
+  thumbnail: "/test.webp",
+  lifecycleStatus: "published",
+};
+
 describe("CourseOverviewPage", () => {
-  it("renders course details for a valid catalogue course", () => {
-    const target = courses.find((c) => c.id === "ui-ux-design-mastery")!;
-    renderWithClient(
-      <CourseOverviewPage
-        courseSlug={target.id}
-        onNavigateCourses={vi.fn()}
-        onNavigatePage={vi.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByRole("heading", { name: target.title, level: 1 }),
-    ).toBeVisible();
-    expect(screen.getByText(/About this course/i)).toBeVisible();
-    expect(screen.getByText(/Course curriculum/i)).toBeVisible();
-  });
-
   it("renders customCourse data when provided", () => {
     const customCourse = {
-      ...courses[0]!,
+      ...sampleCourse,
       title: "Custom Preview Title",
       description: "Custom Preview Description",
     };
@@ -59,6 +59,8 @@ describe("CourseOverviewPage", () => {
     expect(
       screen.getByRole("heading", { name: "Custom Preview Title", level: 1 }),
     ).toBeVisible();
+    expect(screen.getByText(/About this course/i)).toBeVisible();
+    expect(screen.getByText(/Course curriculum/i)).toBeVisible();
   });
 
   it("renders not-found state when courseSlug is unknown and calls onNavigateCourses", async () => {
@@ -87,9 +89,19 @@ describe("CourseOverviewPage", () => {
   });
 
   it("associates unique aria-controls and panel IDs on section toggles", () => {
-    const target = courses.find((c) => c.id === "ui-ux-design-mastery")!;
     renderWithClient(
-      <CourseOverviewPage courseSlug={target.id} onNavigateCourses={vi.fn()} />,
+      <CourseOverviewPage
+        customCourse={sampleCourse}
+        customSections={[
+          {
+            id: 1,
+            title: "Section 1",
+            progress: "0/1",
+            lessons: [[1, "Lesson 1", "5m", "todo", true]],
+          },
+        ]}
+        onNavigateCourses={vi.fn()}
+      />,
     );
 
     const toggleButtons = screen.getAllByRole("button", { expanded: true });

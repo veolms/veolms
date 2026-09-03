@@ -11,8 +11,7 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
-import { getCourseThumbnail } from "../learning/courseMetadata";
-import typescriptThumbnail from "../assets/course-thumbnails/typescript-960.webp";
+import defaultThumbnail from "../assets/course-thumbnails/typescript-960.webp";
 
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "Self-paced";
@@ -74,10 +73,6 @@ export function formatCoursePricing(
 export function adaptCourseSummaryToCatalogueCourse(
   summary: CourseSummary,
 ): Course {
-  const fallbackThumbnail = summary.slug
-    ? getCourseThumbnail(summary.slug)
-    : typescriptThumbnail;
-
   const validLevel: CourseLevel =
     summary.difficulty === "advanced" || summary.difficulty === "intermediate"
       ? "Intermediate"
@@ -104,7 +99,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     enrolled: false,
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
-    thumbnail: summary.thumbnailUrl || fallbackThumbnail,
+    thumbnail: summary.thumbnailUrl || defaultThumbnail,
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,
@@ -117,9 +112,9 @@ export function adaptCourseSummaryToCatalogueCourse(
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
-  const fallbackThumbnail = apiCourse.slug
-    ? getCourseThumbnail(apiCourse.slug)
-    : typescriptThumbnail;
+  const thumbnail = apiCourse.thumbnailMediaId
+    ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
+    : defaultThumbnail;
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
@@ -145,7 +140,7 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     enrolled: false,
     duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
-    thumbnail: fallbackThumbnail,
+    thumbnail,
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
@@ -160,10 +155,6 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
 export function adaptDeletedCourseToCatalogueCourse(
   deletedCourse: DeletedCourse,
 ): Course {
-  const fallbackThumbnail = deletedCourse.slug
-    ? getCourseThumbnail(deletedCourse.slug)
-    : typescriptThumbnail;
-
   const validStatus: CourseLifecycleStatus =
     deletedCourse.status === "published" ||
     deletedCourse.status === "draft" ||
@@ -184,7 +175,7 @@ export function adaptDeletedCourseToCatalogueCourse(
     enrolled: false,
     duration: "Self-paced",
     students: 0,
-    thumbnail: fallbackThumbnail,
+    thumbnail: defaultThumbnail,
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
     purgeAt: deletedCourse.purgeAt,

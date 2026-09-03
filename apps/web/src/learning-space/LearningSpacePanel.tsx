@@ -12,7 +12,6 @@ import type {
 } from "react";
 import { memo, useEffect, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction } from "../courses/CourseActionMenu";
-import { courses } from "../courses/catalogue";
 import { claimPointerGesture } from "../gestures/pointerGestureOwnership";
 import { lessonsById, sections } from "../learning/courseContent";
 import { getCourseThumbnail, getCourseTitle } from "../learning/courseMetadata";
@@ -83,10 +82,6 @@ interface SessionGesture {
 const LONG_PRESS_DURATION_MS = 520;
 const SWIPE_COMMIT_DISTANCE = 72;
 const SESSION_CLOSE_ANIMATION_MS = 220;
-
-const courseProgressById = new Map(
-  courses.map((course) => [course.id, course.progress ?? 0]),
-);
 
 const openSessionInNewTab = (path: string) => {
   const openedWindow = window.open(path, "_blank", "noopener,noreferrer");
@@ -233,10 +228,7 @@ const getSessionDetails = (session: CoursePlayerSession) => {
   const sectionLabel = courseSection
     ? `Section ${courseSection.id} · ${lectureTitle}`
     : `L${session.lessonId} · ${lectureTitle}`;
-  const progress = Math.max(
-    0,
-    Math.min(100, courseProgressById.get(session.courseId) ?? 0),
-  );
+  const progress = 0;
   return { courseTitle, progress, sectionLabel };
 };
 

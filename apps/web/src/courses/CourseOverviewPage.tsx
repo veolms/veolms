@@ -32,10 +32,7 @@ import {
   type CourseCategory,
   type CourseLifecycleStatus,
 } from "./catalogue";
-import { courses } from "./catalogue";
-import { sections } from "../learning/courseContent";
 import type { CourseSection } from "../learning/courseContent";
-import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
@@ -140,105 +137,6 @@ export function getLanguageLabel(code?: string | null): string | undefined {
   );
 }
 
-// ─── per-course curriculum adapter ──────────────────────────────────────────
-
-function buildFallbackSections(course: Course): CourseSection[] {
-  return Array.from({ length: course.sections }, (_, i) => ({
-    id: i + 1,
-    title: getSectionTitle(course, i),
-    progress: "0/0",
-    lessons: [],
-  }));
-}
-
-export function getSectionTitle(course: Course, index: number): string {
-  const generic = [
-    "Introduction",
-    "Getting Started",
-    "Core Concepts",
-    "Practical Application",
-    "Advanced Topics",
-    "Real-World Projects",
-    "Best Practices",
-    "Testing & Debugging",
-    "Deployment",
-    "Performance Optimization",
-    "Security Considerations",
-    "Scaling & Architecture",
-  ];
-  const words = course.title.split(/\s+/).filter((w) => w.length > 3);
-  const topic = words[0] ?? course.category;
-  const domainSections: Record<string, string[]> = {
-    Development: [
-      "Introduction",
-      `${topic} Fundamentals`,
-      "Environment Setup",
-      "Core APIs",
-      "Building REST APIs",
-      "Database Integration",
-      "Authentication & Security",
-      "Testing Strategies",
-      "Error Handling",
-      "Deployment & CI/CD",
-      "Performance Tuning",
-      "Capstone Project",
-    ],
-    Design: [
-      "Introduction",
-      "Design Thinking",
-      "Research & Discovery",
-      "Wireframing",
-      "Visual Hierarchy",
-      "Typography & Color",
-      "Prototyping",
-      "Usability Testing",
-      "Handoff Workflow",
-      "Portfolio Projects",
-    ],
-    Database: [
-      "Introduction",
-      "Data Modeling",
-      "Query Language",
-      "Indexing & Performance",
-      "Transactions",
-      "Schema Design",
-      "Replication",
-      "Backup & Recovery",
-      "Security",
-      "Real-World Projects",
-    ],
-    Cloud: [
-      "Introduction",
-      "Core Services",
-      "Compute & Networking",
-      "Storage Solutions",
-      "Identity & Access",
-      "Monitoring & Logging",
-      "Serverless",
-      "Cost Optimization",
-      "Security",
-      "Certification Prep",
-    ],
-  };
-  const domain = domainSections[course.category] ?? generic;
-  return domain[index] ?? generic[index] ?? `Section ${index + 1}`;
-}
-
-function getCourseSections(courseSlug: string | undefined): CourseSection[] {
-  if (courseSlug === "ui-ux-design-mastery") return sections;
-  const course = courseSlug
-    ? courses.find((c) => c.id === courseSlug)
-    : undefined;
-  if (!course) return [];
-  return buildFallbackSections(course);
-}
-
-// ─── static per-overview pricing / includes data ────────────────────────────
-
-const DEFAULT_PRICE = "₹1,999";
-const DEFAULT_ORIGINAL_PRICE = "₹2,999";
-const DEFAULT_DISCOUNT = "33% OFF";
-
 export interface CourseInclude {
   icon: typeof BookOpen;
   label: string;
@@ -248,14 +146,6 @@ export interface CourseOverviewPricingProps {
   price?: string;
   originalPrice?: string;
   discount?: string;
-}
-
-function buildIncludes(course: Course): CourseInclude[] {
-  return [
-    { icon: Stack, label: `${course.sections} Sections` },
-    { icon: BookOpen, label: `${course.lectures} Lectures` },
-    { icon: Clock, label: `${course.duration} On-demand content` },
-  ];
 }
 
 // ─── sub-components ──────────────────────────────────────────────────────────
@@ -441,12 +331,9 @@ function CourseHeroSection({
   onNavigatePage,
   isReadOnlyPreview = false,
 }: CourseHeroSectionProps) {
-  const price = pricing?.price ?? DEFAULT_PRICE;
-  const originalPrice =
-    pricing?.originalPrice ??
-    (pricing?.price ? undefined : DEFAULT_ORIGINAL_PRICE);
-  const discount =
-    pricing?.discount ?? (pricing?.price ? undefined : DEFAULT_DISCOUNT);
+  const price = pricing?.price ?? "Free";
+  const originalPrice = pricing?.originalPrice;
+  const discount = pricing?.discount;
   const perksList = inclusions ?? [
     "Full lifetime access",
     "Access on mobile & desktop",
@@ -939,9 +826,7 @@ export function adaptCourseOverviewResponse(
 
   const resolvedThumbnail = c.thumbnailMediaId
     ? `/api/v1/media/${c.thumbnailMediaId}`
-    : c.slug
-      ? getCourseThumbnail(c.slug)
-      : "/assets/instructor-poster.jpg";
+    : "/assets/instructor-poster.jpg";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1251,15 +1136,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const activeAdapted = adaptedFromPreview ?? adaptedFromOverview;
 
-  const course =
-    activeAdapted?.course ??
-    props.customCourse ??
-    (courseSlug
-      ? courses.find(
-          (candidate) =>
-            candidate.id === courseSlug || candidate.slug === courseSlug,
-        )
-      : undefined);
+  const course = activeAdapted?.course ?? props.customCourse;
 
   if (
     isOverviewLoading &&
@@ -1383,9 +1260,7 @@ function CourseOverviewContent({
         : defaultInstructorName;
   const language = adaptedFromPreview?.language ?? customLanguage ?? undefined;
   const courseSections =
-    adaptedFromPreview?.sections ??
-    customSections ??
-    getCourseSections(course.id);
+    adaptedFromPreview?.sections ?? customSections ?? [];
   const activeDescription =
     adaptedFromPreview?.description ?? customDescription;
   const activePricing = adaptedFromPreview?.pricing ?? customPricing;

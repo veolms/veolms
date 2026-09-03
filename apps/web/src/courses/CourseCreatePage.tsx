@@ -99,12 +99,11 @@ import {
 } from "../services/courses";
 import { useIsMutating } from "@tanstack/react-query";
 import type { Category, CourseIncludeItem } from "@veolms/contracts";
-import { CourseOverviewPage, getSectionTitle } from "./CourseOverviewPage";
+import { CourseOverviewPage } from "./CourseOverviewPage";
 import type {
   CourseInclude,
   CourseOverviewPricingProps,
 } from "./CourseOverviewPage";
-import { courses } from "./catalogue";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import { sections as initialCourseSections } from "../learning/courseContent";
 import type { CourseSection, Lesson } from "../learning/courseContent";
@@ -1731,11 +1730,6 @@ export function CourseCreatePage({
     searchParams.get("courseId") ||
     null;
 
-  const targetCourse = useMemo(() => {
-    if (!activeEditId) return null;
-    return courses.find((c) => c.id === activeEditId) ?? null;
-  }, [activeEditId]);
-
   const initialStep =
     parseWizardTab(searchParams.get("tab")) ||
     parseWizardTab(searchParams.get("step")) ||
@@ -2726,91 +2720,10 @@ export function CourseCreatePage({
           return [...mappedServerSections, ...pendingSections];
         });
       }
-    } else if (targetCourse) {
-      setIsPublished(true);
-      setCourseTitle(targetCourse.title);
-      setCourseDescription(targetCourse.description);
-      setThumbnail(targetCourse.thumbnail);
-      const matchedCat = serverCategories.find(
-        (sc) => sc.name.toLowerCase() === targetCourse.category.toLowerCase(),
-      );
-      if (matchedCat) {
-        setCategoryId(matchedCat.id);
-      }
-      const lvl = targetCourse.level.toLowerCase();
-      if (lvl === "beginner" || lvl === "intermediate" || lvl === "advanced") {
-        setDifficultyLevel(lvl);
-      }
-      setPricing({
-        pricingType: "paid",
-        sellingPrice: "",
-        originalPrice: "",
-        currency: "INR",
-      });
-
-      if (targetCourse.id === "ui-ux-design-mastery") {
-        setSections(
-          initialCourseSections.map((s, sIdx) => ({
-            id: `section-${s.id}`,
-            title: s.title,
-            isExpanded: sIdx === 0,
-            lessons: s.lessons.map(([num, title]) => ({
-              id: `lesson-${s.id}-${num}`,
-              title,
-              description: "",
-              contentType: "video" as const,
-              isExpanded: false,
-              isPublished: true,
-              isPreview: false,
-              initialState: {
-                title,
-                description: "",
-                contentType: "video",
-                isPublished: true,
-                isPreview: false,
-              },
-              resources: [],
-            })),
-          })),
-        );
-      } else {
-        const sectionCount = Math.max(1, targetCourse.sections || 1);
-        const generatedSections: CurriculumSectionItem[] = Array.from(
-          { length: sectionCount },
-          (_, i) => {
-            const overviewTitle = `${getSectionTitle(targetCourse, i)} - Overview`;
-            return {
-              id: `section-${i + 1}`,
-              title: getSectionTitle(targetCourse, i),
-              isExpanded: i === 0,
-              lessons: [
-                {
-                  id: `lesson-${i + 1}-1`,
-                  title: overviewTitle,
-                  description: "",
-                  contentType: "video" as const,
-                  isExpanded: false,
-                  isPublished: true,
-                  isPreview: false,
-                  initialState: {
-                    title: overviewTitle,
-                    description: "",
-                    contentType: "video",
-                    isPublished: true,
-                    isPreview: false,
-                  },
-                  resources: [],
-                },
-              ],
-            };
-          },
-        );
-        setSections(generatedSections);
-      }
     } else {
       setIsPublished(false);
     }
-  }, [editorData, targetCourse, serverCategories]);
+  }, [editorData, serverCategories]);
 
   // Extras Inclusions Handlers
   const [draggedInclusionIndex, setDraggedInclusionIndex] = useState<
