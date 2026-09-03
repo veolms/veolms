@@ -1,9 +1,11 @@
 import { useEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
+import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -52,11 +54,13 @@ export function Layout({ children }: LayoutProps) {
       data-scrollbar-style="theme"
       data-sidebar-menu-elevation="true"
       data-sidebar-state="expanded"
+      data-learning-curriculum-state="expanded"
       data-collapsed-tooltips="true"
       data-collapsed-sidebar-logo="true"
       data-active-fill="true"
       data-control-radius="balanced"
       data-app-hydrated="false"
+      data-tab-navigation="false"
       suppressHydrationWarning
     >
       <head>
@@ -76,7 +80,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}`,
+            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}`,
           }}
         />
         <script
@@ -134,9 +138,14 @@ function SessionInitializer({ children }: { children: ReactNode }) {
 
 function HydrationMarker() {
   useEffect(() => {
-    document.documentElement.dataset.appHydrated = "true";
+    const root = document.documentElement;
+    root.dataset.appHydrated = "true";
+    const removeTabFocusListeners = installTabFocusVisibility(root);
+
     return () => {
-      document.documentElement.dataset.appHydrated = "false";
+      removeTabFocusListeners();
+      root.dataset.appHydrated = "false";
+      root.dataset.tabNavigation = "false";
     };
   }, []);
   return null;

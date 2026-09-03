@@ -1,4 +1,5 @@
 import type { Config } from "@react-router/dev/config";
+import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPaths";
 
 const staticApplicationPages = [
   "/courses",
@@ -12,10 +13,19 @@ const staticApplicationPages = [
   "/settings/account",
 ];
 
+const learningPrerenderScope =
+  process.env.VEO_LEARNING_PRERENDER_SCOPE === "first-section"
+    ? "first-section"
+    : "all-lectures";
+
+const staticLearningPages = createLearningPrerenderPaths({
+  scope: learningPrerenderScope,
+});
+
 export default {
   appDirectory: "src",
   prerender: {
-    paths: staticApplicationPages,
+    paths: [...staticApplicationPages, ...staticLearningPages],
     concurrency: 4,
   },
   routeDiscovery: { mode: "initial" },

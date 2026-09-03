@@ -54,6 +54,11 @@ const THREAD_PANEL_MIN_HEIGHT = 360;
 const THREAD_PANEL_PHONE_QUERY = "(max-width: 639px)";
 const THREAD_PANEL_MOBILE_SNAP_RATIO = 0.72;
 const THREAD_PANEL_SLIDE_DURATION = 320;
+const THREAD_PANEL_INITIAL_VIEWPORT: ViewportBounds = {
+  top: 0,
+  height: 768,
+  width: 1024,
+};
 const useThreadPanelLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -1065,7 +1070,9 @@ function useThreadPanelSurfaceBounds(
     (): ThreadPanelSurfaceBounds => getThreadPanelSurfaceBounds(viewport),
     [viewport],
   );
-  const [bounds, setBounds] = useState<ThreadPanelSurfaceBounds>(measure);
+  const [bounds, setBounds] = useState<ThreadPanelSurfaceBounds>(() =>
+    getThreadPanelFallbackSurfaceBounds(viewport),
+  );
 
   useThreadPanelLayoutEffect(() => {
     setBounds(measure());
@@ -1106,14 +1113,10 @@ function useThreadPanelSurfaceBounds(
 function getThreadPanelSurfaceBounds(
   viewport: ViewportBounds,
 ): ThreadPanelSurfaceBounds {
+  const fallbackBounds = getThreadPanelFallbackSurfaceBounds(viewport);
+  if (typeof document === "undefined") return fallbackBounds;
+
   const viewportBottom = viewport.top + viewport.height;
-  const fallbackInset = 14;
-  const fallback: PanelSurfaceRect = {
-    top: viewport.top + fallbackInset,
-    right: viewport.width - fallbackInset,
-    width: Math.max(1, viewport.width - fallbackInset * 2),
-    height: Math.max(1, viewport.height - fallbackInset * 2),
-  };
   const appElement = document.querySelector<HTMLElement>(
     "#courses-main-scrollport",
   );
@@ -1130,7 +1133,7 @@ function getThreadPanelSurfaceBounds(
   );
 
   if (!hasAppRect || !appRect) {
-    return { app: fallback, lesson: fallback };
+    return fallbackBounds;
   }
 
   const appTop = Math.max(viewport.top, appRect.top);
@@ -1162,6 +1165,20 @@ function getThreadPanelSurfaceBounds(
       height: Math.max(1, lessonBottom - lessonTop),
     },
   };
+}
+
+function getThreadPanelFallbackSurfaceBounds(
+  viewport: ViewportBounds,
+): ThreadPanelSurfaceBounds {
+  const fallbackInset = 14;
+  const surface: PanelSurfaceRect = {
+    top: viewport.top + fallbackInset,
+    right: viewport.width - fallbackInset,
+    width: Math.max(1, viewport.width - fallbackInset * 2),
+    height: Math.max(1, viewport.height - fallbackInset * 2),
+  };
+
+  return { app: surface, lesson: surface };
 }
 
 function getInitialPanelWidth() {
@@ -1211,7 +1228,7 @@ function useVisualViewportBounds() {
       ),
     };
   }, []);
-  const [bounds, setBounds] = useState(getBounds);
+  const [bounds, setBounds] = useState(THREAD_PANEL_INITIAL_VIEWPORT);
 
   useEffect(() => {
     let frame = 0;
@@ -1222,6 +1239,7 @@ function useVisualViewportBounds() {
     window.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("scroll", sync);
+    sync();
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", sync);

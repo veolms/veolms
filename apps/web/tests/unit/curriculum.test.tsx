@@ -362,12 +362,32 @@ describe("Curriculum", () => {
     ).not.toBeInTheDocument();
 
     fireEvent.contextMenu(curriculumHero!, { clientX: 48, clientY: 72 });
+    const actionMenu = await screen.findByRole("menu", {
+      name: "Course curriculum actions",
+    });
+    expect(actionMenu).toHaveClass("w-max", "min-w-0");
+    expect(
+      actionMenu.querySelector('[data-slot="context-menu-separator"]'),
+    ).toBeNull();
     expect(
       await screen.findByRole("menuitem", { name: "Expand all sections" }),
     ).toBeVisible();
     expect(
       screen.getByRole("menuitem", { name: "Collapse all sections" }),
     ).toBeVisible();
+    expect(screen.queryByText("Curriculum actions")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "View course overview" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("menuitem", { name: "Go to current section" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Go to current lecture" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Search lectures" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("menuitem", { name: "Expand all sections" }),

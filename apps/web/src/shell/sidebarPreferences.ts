@@ -52,7 +52,11 @@ export interface SidebarShellState {
 }
 
 export interface VeoBootstrapState {
-  sidebar: SidebarShellState;
+  sidebar?: SidebarShellState;
+  learning?: {
+    curriculumCollapsed: boolean;
+    curriculumWidth: number;
+  };
 }
 
 declare global {

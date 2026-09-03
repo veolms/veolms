@@ -933,6 +933,7 @@ export function CoursesPage({
     root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
     root.style.setProperty("--sidebar-expanded-width", `${sidebarWidth}px`);
     window.__VEO_BOOTSTRAP__ = {
+      ...window.__VEO_BOOTSTRAP__,
       sidebar: { mode: sidebarMode, width: sidebarWidth },
     };
   }, [sidebarMode, sidebarWidth]);
