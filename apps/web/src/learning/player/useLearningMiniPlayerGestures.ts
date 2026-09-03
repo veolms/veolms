@@ -16,11 +16,17 @@ import {
   clearLearningPlayerMinimizeMotionStyles,
   getDefaultLearningMiniPlayerLayout,
   getLearningMiniPlayerBottomEdge as getSettledBottomEdge,
+  getLearningMiniPlayerPointerResizeLayout,
   getLearningMiniPlayerWidthBounds as getWidthBounds,
   getLearningPlayerViewportBounds as getViewportBounds,
   type LearningMiniPlayerLayout as MiniPlayerLayout,
+  type LearningMiniPlayerResizeEdges,
   type LearningPlayerViewportBounds as ViewportBounds,
 } from "./learningPlayerMotion";
+import {
+  readMiniPlayerWidthPreference,
+  writeMiniPlayerWidthPreference,
+} from "./lessonPlayerPersistence";
 
 const DRAG_START_DISTANCE = 6;
 const DOCK_FLICK_AXIS_RATIO = 0.6;
@@ -42,6 +48,7 @@ interface SinglePointerGesture {
   initialLayout: MiniPlayerLayout;
   last: PointerSample;
   pointerId: number;
+  resizeEdges: LearningMiniPlayerResizeEdges | null;
   restoreOnRelease: boolean;
   start: PointerSample;
   startedAtBottom: boolean;
@@ -224,11 +231,26 @@ export function useLearningMiniPlayerGestures(
   const suppressClickRef = useRef(false);
   const needsSettleRef = useRef(false);
   const settleCandidateRef = useRef<MiniPlayerLayout | null>(null);
+  const resizedDuringGestureRef = useRef(false);
+  const preferredWidthRef = useRef<number | null | undefined>(undefined);
   const suppressClickTimerRef = useRef<number | null>(null);
   const dismissTimerRef = useRef<number | null>(null);
   const settleTimerRef = useRef<number | null>(null);
   const onRestoreTapRef = useRef(onRestoreTap);
   onRestoreTapRef.current = onRestoreTap;
+  if (preferredWidthRef.current === undefined) {
+    preferredWidthRef.current = readMiniPlayerWidthPreference();
+  }
+
+  const getInitialLayout = useCallback(
+    () =>
+      getDefaultLearningMiniPlayerLayout(
+        Number.POSITIVE_INFINITY,
+        undefined,
+        preferredWidthRef.current ?? undefined,
+      ),
+    [],
+  );
 
   const updateMode = useCallback((nextMode: MiniPlayerGestureMode) => {
     modeRef.current = nextMode;
@@ -307,7 +329,7 @@ export function useLearningMiniPlayerGestures(
   const measureLayout = useCallback(() => {
     if (layoutRef.current) return layoutRef.current;
 
-    const fallback = getDefaultLearningMiniPlayerLayout();
+    const fallback = getInitialLayout();
     const container = containerRef.current;
     if (container?.dataset.learningPlayerMotionPhase) {
       clearLearningPlayerMinimizeMotionStyles(container);
@@ -318,7 +340,7 @@ export function useLearningMiniPlayerGestures(
         ? { left: rect.left, top: rect.top, width: rect.width }
         : fallback,
     );
-  }, [commitLayout, containerRef]);
+  }, [commitLayout, containerRef, getInitialLayout]);
 
   useLayoutEffect(() => {
     if (enabled) {
@@ -337,6 +359,7 @@ export function useLearningMiniPlayerGestures(
     suppressClickRef.current = false;
     needsSettleRef.current = false;
     settleCandidateRef.current = null;
+    resizedDuringGestureRef.current = false;
     if (suppressClickTimerRef.current !== null) {
       window.clearTimeout(suppressClickTimerRef.current);
       suppressClickTimerRef.current = null;
@@ -383,12 +406,17 @@ export function useLearningMiniPlayerGestures(
   );
 
   const startSingleGesture = useCallback(
-    (sample: PointerSample, restoreOnRelease = false) => {
+    (
+      sample: PointerSample,
+      restoreOnRelease = false,
+      resizeEdges: LearningMiniPlayerResizeEdges | null = null,
+    ) => {
       const initialLayout = measureLayout();
       singleGestureRef.current = {
         initialLayout,
         last: sample,
         pointerId: sample.id,
+        resizeEdges,
         restoreOnRelease,
         start: sample,
         startedAtBottom: isAtDownmostPosition(initialLayout),
@@ -418,6 +446,7 @@ export function useLearningMiniPlayerGestures(
     singleGestureRef.current = null;
     suppressClickRef.current = true;
     needsSettleRef.current = true;
+    resizedDuringGestureRef.current = true;
     settleCandidateRef.current = currentLayout;
     updateMode("resizing");
   }, [measureLayout, updateMode]);
@@ -448,6 +477,13 @@ export function useLearningMiniPlayerGestures(
       if (!enabled) return;
       if (modeRef.current === "dismissing") return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-learning-mini-player-gesture-ignore]") !==
+          null
+      ) {
+        return;
+      }
 
       if (settleTimerRef.current !== null) {
         window.clearTimeout(settleTimerRef.current);
@@ -466,6 +502,9 @@ export function useLearningMiniPlayerGestures(
       }
 
       const sample = getEventSample(event);
+      if (pointersRef.current.size === 0) {
+        resizedDuringGestureRef.current = false;
+      }
       pointersRef.current.set(event.pointerId, sample);
       if (pointersRef.current.size >= 2) {
         for (const pointerId of pointersRef.current.keys()) {
@@ -480,7 +519,26 @@ export function useLearningMiniPlayerGestures(
         const restoreTarget =
           event.target instanceof Element &&
           event.target.closest("[data-learning-mini-player-restore]") !== null;
-        startSingleGesture(sample, restoreTarget);
+        const resizeHandle =
+          event.pointerType === "mouse" && event.target instanceof Element
+            ? event.target.closest<HTMLElement>(
+                "[data-mini-player-resize-handle]",
+              )
+            : null;
+        if (resizeHandle) {
+          event.preventDefault();
+          try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          } catch {
+            // Resize handles are narrow, but document delivery remains a fallback.
+          }
+        }
+        startSingleGesture(
+          sample,
+          restoreTarget,
+          (resizeHandle?.dataset.miniPlayerResizeHandle as
+            LearningMiniPlayerResizeEdges | undefined) ?? null,
+        );
       }
     },
     [
@@ -546,6 +604,7 @@ export function useLearningMiniPlayerGestures(
 
       if (
         modeRef.current !== "dragging" &&
+        modeRef.current !== "resizing" &&
         Math.hypot(deltaX, deltaY) < DRAG_START_DISTANCE
       ) {
         return;
@@ -559,6 +618,19 @@ export function useLearningMiniPlayerGestures(
       event.preventDefault();
       suppressClickRef.current = true;
       needsSettleRef.current = true;
+      if (single.resizeEdges) {
+        resizedDuringGestureRef.current = true;
+        updateMode("resizing");
+        const nextLayout = getLearningMiniPlayerPointerResizeLayout(
+          single.initialLayout,
+          single.resizeEdges,
+          deltaX,
+          deltaY,
+        );
+        settleCandidateRef.current = nextLayout;
+        showLiveLayout(nextLayout);
+        return;
+      }
       updateMode("dragging");
       const nextLayout = {
         left: single.initialLayout.left + deltaX,
@@ -656,6 +728,7 @@ export function useLearningMiniPlayerGestures(
         pinchGestureRef.current = null;
         needsSettleRef.current = false;
         settleCandidateRef.current = null;
+        resizedDuringGestureRef.current = false;
         suppressClickRef.current = true;
         updateMode("idle");
         scheduleClickRelease();
@@ -684,8 +757,16 @@ export function useLearningMiniPlayerGestures(
         singleGestureRef.current = null;
         pinchGestureRef.current = null;
         const currentLayout = layoutRef.current;
+        const resizedDuringGesture = resizedDuringGestureRef.current;
+        resizedDuringGestureRef.current = false;
         if (needsSettleRef.current && currentLayout) {
-          settleLayout(settleCandidateRef.current ?? currentLayout);
+          const settledLayout = settleLayout(
+            settleCandidateRef.current ?? currentLayout,
+          );
+          if (resizedDuringGesture && !cancelled) {
+            preferredWidthRef.current = settledLayout.width;
+            writeMiniPlayerWidthPreference(settledLayout.width);
+          }
         } else {
           updateMode("idle");
         }
@@ -724,8 +805,7 @@ export function useLearningMiniPlayerGestures(
     [],
   );
 
-  const visibleLayout =
-    layout ?? (enabled ? getDefaultLearningMiniPlayerLayout() : null);
+  const visibleLayout = layout ?? (enabled ? getInitialLayout() : null);
   const style: CSSProperties = visibleLayout
     ? {
         bottom: "auto",

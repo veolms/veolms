@@ -101,6 +101,7 @@ export function SettingsMenu({
       align="end"
       side="top"
       panelClassName={mobileInteraction ? undefined : "backdrop-blur-sm !mb-8"}
+      closeOnItemSelect={!(mobilePresentation === "sheet" && mobileInteraction)}
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
@@ -117,7 +118,7 @@ export function SettingsMenu({
         />
       }
     >
-      {({ close }) => (
+      {() => (
         <div
           className={`[&_button]:min-h-11 sm:[&_button]:min-h-10 ${
             mobileInteraction ? "[&_button]:!min-h-11" : ""
@@ -227,7 +228,6 @@ export function SettingsMenu({
                   }
                   onClick={() => {
                     void controller.togglePictureInPicture();
-                    close();
                   }}
                 />
               ) : null}
@@ -242,7 +242,6 @@ export function SettingsMenu({
                 selected={media.autoQuality}
                 onClick={() => {
                   controller.selectQuality(null);
-                  close();
                 }}
               />
               {media.qualities
@@ -263,7 +262,6 @@ export function SettingsMenu({
                     }
                     onClick={() => {
                       controller.selectQuality(quality.id);
-                      close();
                     }}
                   />
                 ))}
@@ -284,7 +282,6 @@ export function SettingsMenu({
                 selected={!activeTextTrack}
                 onClick={() => {
                   controller.selectTextTrack(null);
-                  close();
                 }}
               />
               {media.textTracks.map((track) => (
@@ -300,7 +297,6 @@ export function SettingsMenu({
                   selected={track.id === activeTextTrack?.id}
                   onClick={() => {
                     controller.selectTextTrack(track.id);
-                    close();
                   }}
                 />
               ))}
@@ -316,7 +312,6 @@ export function SettingsMenu({
                   selected={track.id === media.selectedAudioTrackId}
                   onClick={() => {
                     controller.selectAudioTrack(track.id);
-                    close();
                   }}
                 />
               ))
@@ -331,7 +326,6 @@ export function SettingsMenu({
                   selected={chapter.id === activeChapterId}
                   onClick={() => {
                     controller.seekTo(chapter.startTime);
-                    close();
                   }}
                 />
               ))

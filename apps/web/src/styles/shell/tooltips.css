@@ -1,6 +1,10 @@
 /* The collapsed rail uses a fixed, directional tooltip so its scroll area
    never clips the label, pointer, or the source control's focus treatment. */
-@media (min-width: 821px) {
+.sidebar-nav-tooltip {
+  display: none;
+}
+
+@media (min-width: 641px) {
   .courses-app--collapsed .courses-nav button:focus-visible {
     outline: none;
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 84%, white);

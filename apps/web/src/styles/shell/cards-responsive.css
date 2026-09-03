@@ -89,7 +89,7 @@
 }
 
 /* Keep the expanded rail and the phone navigation contract authoritative. */
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-app {
     grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
   }

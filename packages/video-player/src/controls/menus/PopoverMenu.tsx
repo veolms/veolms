@@ -44,6 +44,8 @@ export interface PopoverMenuProps {
   disabled?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
+  /** Whether activating a menu item dismisses the menu. */
+  closeOnItemSelect?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -70,6 +72,7 @@ export function PopoverMenu({
   align = "end",
   children,
   className,
+  closeOnItemSelect = true,
   defaultOpen = false,
   disabled = false,
   label,
@@ -238,7 +241,11 @@ export function PopoverMenu({
     const target = event.target;
     if (!(target instanceof Element)) return;
     const item = target.closest<HTMLElement>(menuItemSelector);
-    if (item && !item.hasAttribute("data-menu-keep-open")) {
+    if (
+      closeOnItemSelect &&
+      item &&
+      !item.hasAttribute("data-menu-keep-open")
+    ) {
       closeAndRestoreFocus();
     }
   };

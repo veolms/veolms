@@ -3,6 +3,7 @@ const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
 const PLAYER_AUTOPLAY_STORAGE_KEY = "veolms-player-autoplay";
 const PLAYER_PLAYBACK_RATE_STORAGE_KEY = "veolms-player-playback-rate";
 const PLAYER_MINI_RESTORE_STORAGE_KEY = "veolms-player-mini-restore";
+const PLAYER_MINI_WIDTH_STORAGE_KEY = "veolms-player-mini-width";
 
 interface StorageReader {
   getItem(key: string): string | null;
@@ -37,10 +38,23 @@ const getSessionStorage = (): Storage | null => {
 export const lessonPlayerStorageKeys = {
   ambient: PLAYER_AMBIENT_STORAGE_KEY,
   autoplay: PLAYER_AUTOPLAY_STORAGE_KEY,
+  miniPlayerWidth: PLAYER_MINI_WIDTH_STORAGE_KEY,
   muted: PLAYER_MUTED_STORAGE_KEY,
   playbackRate: PLAYER_PLAYBACK_RATE_STORAGE_KEY,
   resume: (mediaKey: string) => `veolms-watch-${mediaKey}`,
 } as const;
+
+export function readMiniPlayerWidthPreference(
+  storage: StorageReader | null = getBrowserStorage(),
+): number | null {
+  if (!storage) return null;
+  try {
+    const width = Number(storage.getItem(PLAYER_MINI_WIDTH_STORAGE_KEY));
+    return Number.isFinite(width) && width > 0 ? width : null;
+  } catch {
+    return null;
+  }
+}
 
 export function readAutoplayPreference(
   storage: StorageReader | null = getBrowserStorage(),
@@ -136,6 +150,18 @@ export function writePlaybackRatePreference(
     storage?.setItem(PLAYER_PLAYBACK_RATE_STORAGE_KEY, String(playbackRate));
   } catch {
     // Playback remains usable when browser storage is unavailable.
+  }
+}
+
+export function writeMiniPlayerWidthPreference(
+  width: number,
+  storage: StorageWriter | null = getBrowserStorage(),
+): void {
+  if (!Number.isFinite(width) || width <= 0) return;
+  try {
+    storage?.setItem(PLAYER_MINI_WIDTH_STORAGE_KEY, String(Math.round(width)));
+  } catch {
+    // The current mini-player size remains usable when storage is unavailable.
   }
 }
 
