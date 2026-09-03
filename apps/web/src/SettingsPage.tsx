@@ -327,8 +327,7 @@ export function SettingsPage({
         onTabChange={navigateTab}
         tabListRef={tabListRef}
         id="settings-tab-panel"
-        className="settings-tab-content"
-        slideClassName="pb-8"
+        className="settings-tab-content pb-8"
         stateAttribute="data-settings-tab"
         labelledBy={`settings-tab-${activeTab}`}
         onSwipeStart={() => setSwipeNeighborsReady(true)}

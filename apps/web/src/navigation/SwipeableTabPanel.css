@@ -9,11 +9,15 @@
   touch-action: pan-y pinch-zoom;
 }
 
-/* Static HTML already marks the route-selected slide as the only accessible
-   one. Let normal layout show only that slide until Swiper takes over. */
+/* Keep the server-selected slide in view until Swiper has measured the rail
+   and written its own transform. The other slides are empty during SSG. */
 .swipeable-tab-panel__swiper:not([data-slides-ready="true"])
-  .swiper-slide[aria-hidden="true"] {
-  display: none;
+  .swiper-wrapper {
+  transform: translate3d(
+    var(--swipeable-tab-panel-initial-offset, 0%),
+    0,
+    0
+  );
 }
 
 .swipeable-tab-panel__swiper.swiper-autoheight,
@@ -23,7 +27,7 @@
 
 .swipeable-tab-panel__swiper.swiper-autoheight .swiper-wrapper {
   align-items: flex-start;
-  transition-property: transform, height;
+  transition-property: transform;
 }
 
 .swipeable-tab-panel__swiper .swiper-slide {
