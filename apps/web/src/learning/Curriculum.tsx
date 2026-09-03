@@ -3,10 +3,7 @@ import { ArrowsOutLineVerticalIcon as ArrowsOutLineVertical } from "@phosphor-ic
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
-import { CrosshairSimpleIcon as CrosshairSimple } from "@phosphor-icons/react/CrosshairSimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
-import { ListMagnifyingGlassIcon as ListMagnifyingGlass } from "@phosphor-icons/react/ListMagnifyingGlass";
-import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ExpandableSearch } from "../ExpandableSearch";
@@ -15,8 +12,6 @@ import {
   ContextMenuContent,
   ContextMenuGroup,
   ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../components/ui/context-menu";
 import { ElasticScroller } from "../components/elastic-scroller";
@@ -577,10 +572,10 @@ export function Curriculum({
 
       <ContextMenuContent
         aria-label="Course curriculum actions"
+        className="w-max min-w-0"
         portalContainer={contextMenuPortalHostRef}
       >
         <ContextMenuGroup>
-          <ContextMenuLabel>Curriculum actions</ContextMenuLabel>
           {!allSectionsExpanded && (
             <ContextMenuItem onClick={() => setExpanded(sectionIds)}>
               <ArrowsOutLineVertical aria-hidden="true" />
@@ -593,28 +588,6 @@ export function Curriculum({
               Collapse all sections
             </ContextMenuItem>
           )}
-        </ContextMenuGroup>
-        <ContextMenuSeparator />
-        <ContextMenuGroup>
-          <ContextMenuItem
-            onClick={() => revealAndScrollTo("section", currentSection.id)}
-          >
-            <CrosshairSimple aria-hidden="true" />
-            Go to current section
-          </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => revealAndScrollTo("chapter", currentSection.id)}
-          >
-            <Play aria-hidden="true" />
-            Go to current lecture
-          </ContextMenuItem>
-          <ContextMenuItem onClick={openLessonSearch}>
-            <ListMagnifyingGlass aria-hidden="true" />
-            Search lectures
-          </ContextMenuItem>
-        </ContextMenuGroup>
-        <ContextMenuSeparator />
-        <ContextMenuGroup>
           <ContextMenuItem onClick={onOpenCourseOverview}>
             <Eye aria-hidden />
             View course overview

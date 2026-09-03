@@ -61,6 +61,15 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { Discussion } from "./Discussion";
+import {
+  clampLearningCurriculumWidth,
+  CURRICULUM_COLLAPSED_STORAGE_KEY,
+  CURRICULUM_COLLAPSED_WIDTH,
+  CURRICULUM_MAX_WIDTH,
+  CURRICULUM_MIN_WIDTH,
+  CURRICULUM_WIDTH_STORAGE_KEY,
+  getInitialLearningShellState,
+} from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import {
   getSideLessonDrawerBounds,
@@ -77,10 +86,6 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 
-const CURRICULUM_COLLAPSED_WIDTH = 0;
-const CURRICULUM_MIN_WIDTH = 300;
-const CURRICULUM_DEFAULT_WIDTH = 400;
-const CURRICULUM_MAX_WIDTH = 560;
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
 const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
 const LESSON_DRAWER_FALLBACK_SNAP_POINT = 0.72;
@@ -152,24 +157,11 @@ const isCurriculumSwipeExcludedTarget = (
   selector = CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
 ) => target instanceof Element && Boolean(target.closest(selector));
 
-const clampCurriculumWidth = (value: number) =>
-  Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, value));
+const getInitialCurriculumWidth = () =>
+  getInitialLearningShellState().curriculumWidth;
 
-const getInitialCurriculumWidth = () => {
-  if (typeof window === "undefined") return CURRICULUM_DEFAULT_WIDTH;
-
-  try {
-    const storedWidth = window.localStorage.getItem("veolms-curriculum-width");
-    if (storedWidth === null) return CURRICULUM_DEFAULT_WIDTH;
-
-    const savedWidth = Number(storedWidth);
-    return Number.isFinite(savedWidth)
-      ? clampCurriculumWidth(savedWidth)
-      : CURRICULUM_DEFAULT_WIDTH;
-  } catch {
-    return CURRICULUM_DEFAULT_WIDTH;
-  }
-};
+const getInitialCurriculumCollapsed = () =>
+  getInitialLearningShellState().curriculumCollapsed;
 
 const getInitialFloatingLessonDrawerWidth = () => {
   if (typeof window === "undefined")
@@ -379,10 +371,48 @@ export function LearningWorkspace({
   const [curriculumWidth, setCurriculumWidth] = useState(
     getInitialCurriculumWidth,
   );
-  const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
+  const [curriculumCollapsed, setCurriculumCollapsed] = useState(
+    getInitialCurriculumCollapsed,
+  );
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
     useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const state = {
+      curriculumCollapsed,
+      curriculumWidth,
+    };
+    root.dataset.learningCurriculumState = curriculumCollapsed
+      ? "collapsed"
+      : "expanded";
+    root.style.setProperty(
+      "--learning-curriculum-width",
+      `${curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth}px`,
+    );
+    root.style.setProperty(
+      "--learning-curriculum-expanded-width",
+      `${curriculumWidth}px`,
+    );
+    window.__VEO_BOOTSTRAP__ = {
+      ...window.__VEO_BOOTSTRAP__,
+      learning: state,
+    };
+  }, [curriculumCollapsed, curriculumWidth]);
+
+  useEffect(() => {
+    if (courseContentDrawerViewport) return;
+    try {
+      window.localStorage.setItem(
+        CURRICULUM_COLLAPSED_STORAGE_KEY,
+        String(curriculumCollapsed),
+      );
+    } catch {
+      // Course-content toggling remains available without browser storage.
+    }
+  }, [courseContentDrawerViewport, curriculumCollapsed]);
+
   const { preferences: curriculumTestPreferences } =
     useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
@@ -1167,11 +1197,11 @@ export function LearningWorkspace({
   ]);
 
   const commitCurriculumWidth = useCallback((value: number) => {
-    const nextWidth = clampCurriculumWidth(value);
+    const nextWidth = clampLearningCurriculumWidth(value);
     setCurriculumWidth(nextWidth);
     try {
       localStorage.setItem(
-        "veolms-curriculum-width",
+        CURRICULUM_WIDTH_STORAGE_KEY,
         String(Math.round(nextWidth)),
       );
     } catch {

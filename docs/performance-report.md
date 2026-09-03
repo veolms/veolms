@@ -146,19 +146,21 @@ Hot-reload development server:
 pnpm dev:web -- --host 0.0.0.0
 ```
 
-Optimized device preview:
+Optimized network-accessible preview:
 
 ```sh
-pnpm preview:web:device
+pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173
 ```
 
 Repeatable production benchmark:
 
 ```sh
-pnpm --filter @veolms/web build
 pnpm --filter @veolms/web preview:performance
 pnpm --filter @veolms/web benchmark:web-vitals
 ```
+
+The preview command builds all learning lectures before serving. Add
+`-- --first-section` for a faster first-section-only test build.
 
 The local benchmark server models production compression and cache headers but
 cannot model the deployment CDN, TLS handshake, geographic latency, or cache

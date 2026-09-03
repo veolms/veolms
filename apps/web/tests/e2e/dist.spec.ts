@@ -401,6 +401,57 @@ test("compiled client serves direct routes and bundled course artwork", async ({
   expect(browserErrors).toEqual([]);
 });
 
+test("compiled learning document contains the complete static workspace", async ({
+  page,
+}) => {
+  const learningDocument = await page.request.get(
+    "/learn/backend-nodejs/career-opportunities",
+  );
+  expect(learningDocument.ok()).toBe(true);
+
+  const learningHtml = await learningDocument.text();
+  expect(learningHtml).toContain("Career Opportunities");
+  expect(learningHtml).toContain("Great explanation!");
+  expect(learningHtml).toContain("Introduction");
+  expect(learningHtml).toContain("Student navigation");
+  expect(learningHtml).toContain("learning-workspace");
+  expect(learningHtml).not.toContain("Application Error");
+
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
+  );
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+    route.fulfill({
+      status: 200,
+      json: { course: { slug: "backend-nodejs" }, sections: [] },
+    }),
+  );
+  await page.route("**/course-hls/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path.endsWith("master.m3u8")
+      ? "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1280000\nstream.m3u8\n"
+      : "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-ENDLIST\n";
+    await route.fulfill({
+      body,
+      contentType: "application/vnd.apple.mpegurl",
+      status: 200,
+    });
+  });
+  await openApp(page, "/learn/backend-nodejs/career-opportunities");
+  await expect(
+    page.getByRole("heading", { name: "Career Opportunities", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "Student navigation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Lesson discussion" }),
+  ).toBeVisible();
+});
+
 test("compiled learning route loads the same-origin adaptive HLS manifest", async ({
   page,
 }) => {

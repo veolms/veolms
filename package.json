@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web",
     "dev:web": "pnpm --filter @veolms/web dev",
-    "preview:web:device": "pnpm --filter @veolms/web preview:device",
+    "preview:web": "pnpm --filter @veolms/web preview",
+    "preview:web:lan": "pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173",
     "dev:api": "pnpm --filter @veolms/api dev",
     "purge:course-deletions": "pnpm --filter @veolms/api purge:course-deletions",
     "notifications:process": "pnpm --filter @veolms/api notifications:process",
