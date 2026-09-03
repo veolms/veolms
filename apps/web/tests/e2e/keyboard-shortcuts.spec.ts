@@ -33,6 +33,10 @@ test("sidebar shortcut hints and positional navigation stay in sync", async ({
     "aria-keyshortcuts",
     /7 Control\+Comma/,
   );
+  await expect(settings).toHaveAttribute(
+    "aria-keyshortcuts",
+    /Control\+ArrowUp Control\+ArrowDown/,
+  );
 
   await home.focus();
   const focusClearance = await home.evaluate((button) => {
@@ -189,14 +193,46 @@ test("sidebar shortcut hints and positional navigation stay in sync", async ({
   );
   await page.keyboard.press("Alt+1");
   await expect(page).toHaveURL(/\/settings\/profile$/);
-  await expect(page.getByRole("tab", { name: "Profile" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Profile" })).not.toBeFocused();
   await page.keyboard.press("Alt+3");
   await expect(page).toHaveURL(/\/settings\/sidebar$/);
-  await expect(page.getByRole("tab", { name: "Sidebar" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Sidebar" })).not.toBeFocused();
   await expect(page.getByRole("tab", { name: "Sidebar" })).toHaveAttribute(
     "aria-keyshortcuts",
     "Alt+3",
   );
+
+  await page.evaluate(() => {
+    for (let index = 0; index < 2; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          key: "ArrowDown",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/courses$/);
+  await expect(courses).not.toBeFocused();
+
+  await page.evaluate(() => {
+    for (let index = 0; index < 2; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          key: "ArrowUp",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/settings\/sidebar$/);
+  await expect(settings).not.toBeFocused();
 });
 
 test("search shortcut labels and focuses the active search field", async ({
