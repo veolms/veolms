@@ -60,7 +60,7 @@ import {
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
-import { Discussion } from "./Discussion";
+import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -1907,6 +1907,8 @@ export function LearningWorkspace({
           </div>
         </div>
       </main>
+
+      <PrerenderedMobileCommentComposer />
 
       <FloatingScrollbar
         scrollportRef={curriculumScrollportRef}

@@ -74,6 +74,7 @@ describe("sidebar shell bootstrap", () => {
   afterEach(() => {
     delete window.__VEO_BOOTSTRAP__;
     delete document.documentElement.dataset.sidebarState;
+    delete document.documentElement.dataset.navigationLayout;
     delete document.documentElement.dataset.collapsedTooltips;
     delete document.documentElement.dataset.collapsedSidebarLogo;
     delete document.documentElement.dataset.activeFill;
@@ -131,8 +132,10 @@ describe("sidebar shell bootstrap", () => {
 
     expect(window.__VEO_BOOTSTRAP__).toEqual({
       sidebar: { mode: "collapsed", width: 384 },
+      navigation: { compact: true },
     });
     expect(document.documentElement.dataset.sidebarState).toBe("collapsed");
+    expect(document.documentElement.dataset.navigationLayout).toBe("compact");
     expect(
       document.documentElement.style.getPropertyValue("--sidebar-width"),
     ).toBe("384px");

@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -33,6 +34,8 @@ const CURRENT_USER = {
   name: "Ashi Singh",
   avatar: "/assets/sofia-avatar-160.webp",
 };
+
+const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
 
 const initialEntries: Comment[] = [
   {
@@ -655,6 +658,15 @@ function ThreadSurface({
     [mobileComposerCollapsedSnapPoint],
   );
 
+  useLayoutEffect(() => {
+    if (!isPhone) return undefined;
+    const root = document.documentElement;
+    root.dataset.learningMobileComposerReady = "true";
+    return () => {
+      delete root.dataset.learningMobileComposerReady;
+    };
+  }, [isPhone]);
+
   const getMobileComposerViewportGeometry = useCallback(() => {
     const playerBottom = document
       .querySelector<HTMLElement>(".learning-workspace__player-wrap")
@@ -800,7 +812,7 @@ function ThreadSurface({
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className="mt-4 scroll-mt-4"
+          className="mt-4 scroll-mt-4 max-[640px]:hidden"
         >
           {composerMode === "desktop" ? (
             <CommentComposer
@@ -839,7 +851,7 @@ function ThreadSurface({
       <div
         role="group"
         aria-label="Filter discussion entries"
-        className={`learning-discussion__filter-group flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isPhone ? "mt-2" : "mt-5"}`}
+        className="learning-discussion__filter-group mt-5 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] max-[640px]:mt-2 [&::-webkit-scrollbar]:hidden"
       >
         {entryFilters.map(([value, label]) => (
           <button
@@ -972,6 +984,7 @@ function ThreadSurface({
 interface CompactComposerProps {
   draft: DiscussionDraft;
   attachmentCount: number;
+  disabled?: boolean;
   mobile?: boolean;
   onOpen: () => void;
 }
@@ -1030,9 +1043,30 @@ function MobileCompactComposerPortal({
   );
 }
 
+export function PrerenderedMobileCommentComposer() {
+  return (
+    <div
+      data-learning-mobile-composer-prerender
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden min-w-0 max-w-full overflow-x-clip [[data-navigation-layout=compact]_&]:block [[data-learning-mobile-composer-ready=true]_&]:hidden!"
+    >
+      <div className="relative box-border min-w-0 max-w-full overflow-x-clip bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl">
+        <CompactComposer
+          draft={EMPTY_MOBILE_COMPOSER_DRAFT}
+          attachmentCount={0}
+          disabled
+          mobile
+          onOpen={() => undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
 function CompactComposer({
   draft,
   attachmentCount,
+  disabled = false,
   mobile = false,
   onOpen,
 }: CompactComposerProps) {
@@ -1048,6 +1082,8 @@ function CompactComposer({
       type="button"
       data-compact-comment-composer
       aria-label="Open discussion composer"
+      disabled={disabled}
+      tabIndex={disabled ? -1 : undefined}
       onClick={onOpen}
       className={`flex w-full items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] text-left shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_94%,var(--hover))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
     >
@@ -1069,7 +1105,7 @@ function usePhoneComposerLayout() {
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return undefined;
-    const media = window.matchMedia("(max-width: 639px)");
+    const media = window.matchMedia("(max-width: 640px)");
     const sync = () => setIsPhone(media.matches);
     sync();
     media.addEventListener("change", sync);
