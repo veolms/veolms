@@ -35,6 +35,7 @@ export interface CourseCatalogueProps {
   setNotice: (notice: string) => void;
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
+  isAdmin?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
 }
@@ -42,6 +43,7 @@ export interface CourseCatalogueProps {
 export function CourseCatalogue({
   activeSection,
   role,
+  isAdmin = false,
   wishlisted,
   enrollmentFilter,
   onEnrollmentFilterChange,
@@ -71,7 +73,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["published", "Published"],
           ["draft", "Draft"],
-          ["bin", "Bin"],
+          ...(isAdmin ? [["bin", "Bin"] as const] : []),
         ]
       : [
           ["all", "All"],
@@ -228,13 +230,13 @@ export function CourseCatalogue({
           </div>
         </div>
 
-        <div className="hidden grid-cols-2 gap-3 min-[821px]:col-span-2 min-[821px]:grid min-[1080px]:flex min-[1080px]:shrink-0 min-[1080px]:gap-2.5">
+        <div className="hidden min-[821px]:flex min-[821px]:shrink-0 min-[821px]:items-center min-[821px]:gap-2.5">
           <ThemedSelect
             value={sort}
             onValueChange={onSortChange}
             ariaLabel="Sort courses"
             options={sortOptions}
-            triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-42.5!"
+            triggerClassName="h-10! w-42.5! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
           />
           {role === "student" && (
             <ThemedSelect
@@ -242,7 +244,7 @@ export function CourseCatalogue({
               onValueChange={onStatusFilterChange}
               ariaLabel="Filter course status"
               options={statusOptions}
-              triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-35!"
+              triggerClassName="h-10! w-35! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
             />
           )}
         </div>

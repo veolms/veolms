@@ -222,4 +222,31 @@ describe("CourseCatalogue", () => {
     const confirmBtn = screen.getByRole("button", { name: /Hold to Move to Bin/i });
     fireEvent.keyDown(confirmBtn, { key: "Enter" });
   });
+
+  it("renders Bin tab in creator mode when isAdmin is true", () => {
+    renderCatalogue({
+      role: "creator",
+      isAdmin: true,
+    });
+
+    expect(screen.getByRole("tab", { name: "Bin" })).toBeVisible();
+  });
+
+  it("omits Bin tab in creator mode when isAdmin is false or omitted", () => {
+    renderCatalogue({
+      role: "creator",
+      isAdmin: false,
+    });
+
+    expect(screen.queryByRole("tab", { name: "Bin" })).toBeNull();
+  });
+
+  it("omits Bin tab in student mode even if isAdmin is true", () => {
+    renderCatalogue({
+      role: "student",
+      isAdmin: true,
+    });
+
+    expect(screen.queryByRole("tab", { name: "Bin" })).toBeNull();
+  });
 });

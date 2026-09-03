@@ -96,6 +96,7 @@ import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   getUserRoles,
   getVisibleWorkspaceRoles,
+  hasAdminRole,
   resolveWorkspaceRole,
 } from "./shell/workspaceRole";
 import {
@@ -722,6 +723,7 @@ export function CoursesPage({
     activeUser && hasNavigationMenu(activeUser.menus, "Learning Space"),
   );
   const userRoles = getUserRoles(activeUser);
+  const isAdmin = hasAdminRole(userRoles);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
@@ -747,9 +749,19 @@ export function CoursesPage({
   const { data: deletedCoursesData } = useDeletedCourses(undefined, {
     enabled:
       shouldQueryCourses &&
+      isAdmin &&
       effectiveRole === "creator" &&
       enrollmentFilter === "bin",
   });
+
+  useEffect(() => {
+    if (
+      enrollmentFilter === "bin" &&
+      (!isAdmin || effectiveRole !== "creator")
+    ) {
+      setEnrollmentFilter("all");
+    }
+  }, [enrollmentFilter, isAdmin, effectiveRole]);
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
 
@@ -3244,7 +3256,8 @@ export function CoursesPage({
     return (
       <CourseCatalogue
         activeSection={surfaceActiveSection}
-        role={role}
+        role={effectiveRole}
+        isAdmin={isAdmin}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
         onEnrollmentFilterChange={setEnrollmentFilter}

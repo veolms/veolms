@@ -208,14 +208,6 @@ export function CourseCard({
             >
               {isBin || course.deletedAt ? "Deleted" : course.lifecycleStatus}
             </span>
-            {course.isApi && (
-              <span
-                className="inline-flex min-h-7 items-center rounded-lg border border-sky-400/30 bg-sky-500/20 px-2 text-[0.68rem] font-semibold text-sky-200 shadow-sm backdrop-blur-md"
-                data-course-card-api-badge
-              >
-                API Response
-              </span>
-            )}
           </div>
         ) : (
           <>
@@ -226,14 +218,6 @@ export function CourseCard({
               >
                 {getStudentStatusLabel(course)}
               </span>
-              {course.isApi && (
-                <span
-                  className="inline-flex min-h-7 items-center rounded-lg border border-sky-400/30 bg-sky-500/20 px-2 text-[0.68rem] font-semibold text-sky-200 shadow-sm backdrop-blur-md"
-                  data-course-card-api-badge
-                >
-                  API Response
-                </span>
-              )}
             </div>
             {!course.enrolled && (
               <button

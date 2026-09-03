@@ -47,3 +47,13 @@ export function getUserRoles(
     ? user.roles
     : undefined;
 }
+
+export function hasAdminRole(
+  roles: readonly string[] | null | undefined,
+): boolean {
+  if (!roles?.length) {
+    return false;
+  }
+  return roles.some((role) => role.toLowerCase() === "admin");
+}
+
