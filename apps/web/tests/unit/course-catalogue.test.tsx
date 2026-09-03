@@ -249,4 +249,80 @@ describe("CourseCatalogue", () => {
 
     expect(screen.queryByRole("tab", { name: "Bin" })).toBeNull();
   });
+
+  it("renders 6 CourseCardSkeleton items and hides empty state when isLoading is true", () => {
+    renderCatalogue({
+      isLoading: true,
+      visibleCourses: [],
+    });
+
+    const skeletonContainer = screen.getByTestId("course-catalogue-skeleton");
+    expect(skeletonContainer).toBeVisible();
+    expect(screen.getAllByTestId("course-card-skeleton")).toHaveLength(6);
+    expect(screen.queryByText("No courses found")).toBeNull();
+  });
+
+  it("renders empty state when isLoading is false and visibleCourses is empty", () => {
+    renderCatalogue({
+      isLoading: false,
+      visibleCourses: [],
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses found")).toBeVisible();
+  });
+
+  it("renders CourseThumbnailPlaceholder when a course has no thumbnail", () => {
+    const courseWithoutThumbnail: Course = {
+      id: "course-no-thumb",
+      title: "Course Without Thumbnail",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      visibleCourses: [courseWithoutThumbnail],
+    });
+
+    expect(
+      screen.getByTestId("course-thumbnail-placeholder"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders img tag when a course has a valid thumbnail", () => {
+    const courseWithThumbnail: Course = {
+      id: "course-with-thumb",
+      title: "Course With Thumbnail",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "https://example.com/thumb.jpg",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      visibleCourses: [courseWithThumbnail],
+    });
+
+    expect(
+      screen.queryByTestId("course-thumbnail-placeholder"),
+    ).toBeNull();
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://example.com/thumb.jpg");
+  });
 });

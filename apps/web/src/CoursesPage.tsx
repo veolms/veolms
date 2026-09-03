@@ -737,22 +737,39 @@ export function CoursesPage({
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
 
-  const { data: publishedCoursesData } = useCourses({
+  const {
+    data: publishedCoursesData,
+    isPending: isPublishedPending,
+  } = useCourses({
     enabled: shouldQueryCourses && effectiveRole === "student",
   });
-  const { data: myCoursesData } = useMyCourses({
+  const {
+    data: myCoursesData,
+    isPending: isMyCoursesPending,
+  } = useMyCourses({
     enabled:
       shouldQueryCourses &&
       effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
-  const { data: deletedCoursesData } = useDeletedCourses(undefined, {
+  const {
+    data: deletedCoursesData,
+    isPending: isDeletedPending,
+  } = useDeletedCourses(undefined, {
     enabled:
       shouldQueryCourses &&
       isAdmin &&
       effectiveRole === "creator" &&
       enrollmentFilter === "bin",
   });
+
+  const isLoadingCourses =
+    !isAuthReady ||
+    (effectiveRole === "student"
+      ? isPublishedPending
+      : enrollmentFilter === "bin"
+        ? isDeletedPending
+        : isMyCoursesPending);
 
   useEffect(() => {
     if (
@@ -3258,6 +3275,7 @@ export function CoursesPage({
         activeSection={surfaceActiveSection}
         role={effectiveRole}
         isAdmin={isAdmin}
+        isLoading={isLoadingCourses}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
         onEnrollmentFilterChange={setEnrollmentFilter}

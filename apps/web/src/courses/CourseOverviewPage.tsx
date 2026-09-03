@@ -31,7 +31,9 @@ import {
   type CourseLevel,
   type CourseCategory,
   type CourseLifecycleStatus,
+  type CoursePricing,
 } from "./catalogue";
+import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
@@ -443,7 +445,7 @@ function CourseHeroSection({
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Clock size={17} aria-hidden="true" />
-                <span>{course.duration || "0h0m"}</span>
+                <span>{course.duration || "0h 0m"}</span>
               </span>
             </div>
           </div>
@@ -585,11 +587,15 @@ function CourseHeroSection({
           className="group w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0"
           aria-label="Course preview player"
         >
-          <img
-            src={thumbnail}
-            alt={`Preview thumbnail for ${title}`}
-            className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
-          />
+          {thumbnail ? (
+            <img
+              src={thumbnail}
+              alt={`Preview thumbnail for ${title}`}
+              className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
+            />
+          ) : (
+            <CourseThumbnailPlaceholder />
+          )}
           <div className="absolute inset-0 bg-linear-to-b from-black/8 to-black/45 pointer-events-none" />
 
           {/* Center Play Button */}
@@ -826,7 +832,7 @@ export function adaptCourseOverviewResponse(
 
   const resolvedThumbnail = c.thumbnailMediaId
     ? `/api/v1/media/${c.thumbnailMediaId}`
-    : "/assets/instructor-poster.jpg";
+    : "";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -955,7 +961,7 @@ export function adaptPreviewDataToOverview(
     students: 0,
     thumbnail: c.thumbnailMediaId
       ? `/api/v1/media/${c.thumbnailMediaId}`
-      : "/assets/instructor-poster.jpg",
+      : "",
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
@@ -1259,8 +1265,7 @@ function CourseOverviewContent({
         ? customInstructor
         : defaultInstructorName;
   const language = adaptedFromPreview?.language ?? customLanguage ?? undefined;
-  const courseSections =
-    adaptedFromPreview?.sections ?? customSections ?? [];
+  const courseSections = adaptedFromPreview?.sections ?? customSections ?? [];
   const activeDescription =
     adaptedFromPreview?.description ?? customDescription;
   const activePricing = adaptedFromPreview?.pricing ?? customPricing;

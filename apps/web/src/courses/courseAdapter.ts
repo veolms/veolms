@@ -11,10 +11,9 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
-import defaultThumbnail from "../assets/course-thumbnails/typescript-960.webp";
 
 export function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return "Self-paced";
+  if (!seconds || seconds <= 0) return "0h 0m";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
@@ -99,7 +98,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     enrolled: false,
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
-    thumbnail: summary.thumbnailUrl || defaultThumbnail,
+    thumbnail: summary.thumbnailUrl || "",
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,
@@ -114,7 +113,7 @@ export function adaptCourseSummaryToCatalogueCourse(
 export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
   const thumbnail = apiCourse.thumbnailMediaId
     ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
-    : defaultThumbnail;
+    : "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
@@ -173,9 +172,9 @@ export function adaptDeletedCourseToCatalogueCourse(
     lectures: 0,
     progress: null,
     enrolled: false,
-    duration: "Self-paced",
+    duration: "0h 0m",
     students: 0,
-    thumbnail: defaultThumbnail,
+    thumbnail: "",
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
     purgeAt: deletedCourse.purgeAt,
