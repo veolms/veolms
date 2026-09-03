@@ -1808,17 +1808,6 @@ export function LearningWorkspace({
                 aria-hidden="true"
                 data-learning-player-anchor=""
               >
-                {lessonPlayerProps.media.thumbnailSrc ? (
-                  <img
-                    src={lessonPlayerProps.media.thumbnailSrc}
-                    alt=""
-                    loading="eager"
-                    fetchPriority="high"
-                    decoding="async"
-                    className="absolute inset-0 size-full object-contain"
-                    data-learning-player-initial-poster=""
-                  />
-                ) : null}
                 <div
                   className="absolute inset-0 grid place-items-center text-white"
                   data-learning-player-initial-loader=""

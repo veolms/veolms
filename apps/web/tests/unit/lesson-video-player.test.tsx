@@ -154,9 +154,6 @@ describe("LessonVideoPlayer adapter", () => {
     );
 
     await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
-    expect(engine.loadCalls[0]?.source.metadata?.poster).toBe(
-      firstMedia.thumbnailSrc,
-    );
     const mediaElement = container.querySelector("video");
     expect(mediaElement).not.toBeNull();
 
@@ -508,23 +505,17 @@ describe("LessonVideoPlayer adapter", () => {
     await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
     expect(screen.getByRole("status", { name: "Loading video" })).toBeVisible();
 
-    const poster = container.querySelector<HTMLElement>(
-      '[data-video-player-poster-overlay=""]',
-    );
     const mediaPlane = container.querySelector<HTMLElement>(
       '[data-player-zoom-media-plane=""]',
     );
-    expect(poster).toHaveAttribute(
-      "data-video-player-poster-src",
-      firstMedia.thumbnailSrc,
-    );
-    expect(poster?.parentElement).toBe(mediaPlane);
+    expect(
+      container.querySelector('[data-video-player-poster-overlay=""]'),
+    ).not.toBeInTheDocument();
     expect(mediaPlane?.parentElement).toHaveAttribute(
       "data-player-zoom-viewport",
       "",
     );
     expect(mediaPlane?.parentElement).toHaveClass("z-0", "isolate");
-    expect(container.querySelector("video")).toHaveClass("invisible");
     expect(container.querySelector("video")).not.toHaveAttribute("poster");
 
     const controls = container.querySelector<HTMLElement>(
@@ -560,7 +551,6 @@ describe("LessonVideoPlayer adapter", () => {
     expect(
       within(centralControls).getByRole("button", { name: "Play" }),
     ).toBeVisible();
-    expect(poster).toBeInTheDocument();
     expect(centralControls).toHaveClass("z-20");
     expect(controls).toHaveClass("z-30");
 
@@ -1647,7 +1637,6 @@ describe("LessonVideoPlayer adapter", () => {
         startTime: 0,
         metadata: {
           duration: 90,
-          poster: "/course-hls/thumbnails/lesson-one.webp",
           title: "Designing for real users",
         },
         streaming: { abrEnabled: true, bufferBehind: 600 },

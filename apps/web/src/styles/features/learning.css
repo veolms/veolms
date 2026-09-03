@@ -88,10 +88,7 @@
 }
 
 .courses-main:has([data-learning-persistent-player])
-  :is(
-    [data-learning-player-initial-loader],
-    [data-learning-player-initial-poster]
-  ) {
+  [data-learning-player-initial-loader] {
   display: none;
 }
 

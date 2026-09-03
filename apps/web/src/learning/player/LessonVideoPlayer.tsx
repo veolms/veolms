@@ -159,7 +159,6 @@ export function LessonVideoPlayer({
       startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
       metadata: {
         duration: media.duration,
-        poster: media.thumbnailSrc,
         title: lessonTitle,
       },
       streaming: isHls ? { abrEnabled: true, bufferBehind: 600 } : undefined,
@@ -173,7 +172,7 @@ export function LessonVideoPlayer({
         },
       ],
     };
-  }, [lessonTitle, media.duration, media.src, media.thumbnailSrc, mediaKey]);
+  }, [lessonTitle, media.duration, media.src, mediaKey]);
 
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;

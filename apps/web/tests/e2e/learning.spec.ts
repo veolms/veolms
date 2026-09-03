@@ -3436,7 +3436,7 @@ test("learning comment search stays out of the phone layout", async ({
   ).toBeVisible();
 });
 
-test("lesson video preloads behind its first-frame thumbnail", async ({
+test("lesson video preloads without requesting a first-frame thumbnail", async ({
   page,
 }) => {
   await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
@@ -3451,11 +3451,8 @@ test("lesson video preloads behind its first-frame thumbnail", async ({
     name: "Lesson video player for The Design Mindset",
   });
   const initialVideo = initialPlayer.locator("video");
-  await expect(
-    page.locator("[data-learning-player-anchor] img"),
-  ).toHaveAttribute(
-    "src",
-    "/course-hls/thumbnails/01-team-introduction-and-product-discussion.webp",
+  await expect(page.locator("[data-learning-player-anchor] img")).toHaveCount(
+    0,
   );
   await expect
     .poll(() =>
@@ -3469,10 +3466,7 @@ test("lesson video preloads behind its first-frame thumbnail", async ({
   await expect(initialVideo).toHaveAttribute("preload", "auto");
   await expect(
     initialPlayer.locator("[data-video-player-poster-overlay]"),
-  ).toHaveAttribute(
-    "data-video-player-poster-src",
-    "/course-hls/thumbnails/01-team-introduction-and-product-discussion.webp",
-  );
+  ).toHaveCount(0);
 
   await page
     .getByRole("complementary", { name: "Course curriculum" })
@@ -3487,10 +3481,7 @@ test("lesson video preloads behind its first-frame thumbnail", async ({
   await expect(nextVideo).toHaveAttribute("preload", "auto");
   await expect(
     nextPlayer.locator("[data-video-player-poster-overlay]"),
-  ).toHaveAttribute(
-    "data-video-player-poster-src",
-    "/course-hls/thumbnails/04-ui-design-system-and-storybook.webp",
-  );
+  ).toHaveCount(0);
   await expect
     .poll(() =>
       nextVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
