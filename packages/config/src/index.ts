@@ -140,6 +140,11 @@ const serverConfigSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // Android App Links (GET /.well-known/assetlinks.json)
+  ANDROID_APP_PACKAGE_NAME: z.string().optional(),
+  /** Comma-separated list, e.g. "AA:BB:...,11:22:...". Whitespace trimmed per entry. */
+  ANDROID_APP_SHA256_CERT_FINGERPRINTS: z.string().optional(),
 });
 
 const webConfigSchema = z.object({
@@ -179,6 +184,8 @@ const REQUIRED_IN_PRODUCTION: Array<keyof ParsedServerConfig> = [
   "RAZORPAY_KEY_ID",
   "RAZORPAY_KEY_SECRET",
   "RAZORPAY_WEBHOOK_SECRET",
+  "ANDROID_APP_PACKAGE_NAME",
+  "ANDROID_APP_SHA256_CERT_FINGERPRINTS",
 ];
 
 function findMissingRequiredInProduction(parsed: ParsedServerConfig): string[] {
