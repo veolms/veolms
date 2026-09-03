@@ -30,6 +30,8 @@ let state: AuthState = {
   isLoading: false,
 };
 
+let writeGeneration = 0;
+
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -43,7 +45,12 @@ export const authStore = {
     return state;
   },
 
+  getWriteGeneration(): number {
+    return writeGeneration;
+  },
+
   setUser(user: AuthUser | null) {
+    writeGeneration += 1;
     state = {
       ...state,
       user,
@@ -73,6 +80,7 @@ export const authStore = {
   },
 
   clearAuth() {
+    writeGeneration += 1;
     state = {
       user: null,
       isAuthenticated: false,

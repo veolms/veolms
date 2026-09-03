@@ -2,6 +2,7 @@ import { loadServerConfig } from "@veolms/config";
 
 import { createDatabase } from "./client.ts";
 import type { CourseStatus } from "./schema.ts";
+import { seedRolesAndPermissions } from "./seed-rbac.ts";
 
 const courses = [
   {
@@ -37,40 +38,52 @@ const courses = [
 ] as const;
 
 const config = loadServerConfig(process.env);
+export const DEFAULT_SEED_USER = {
+  id: "00000000-0000-4000-8000-000000000001",
+  email: "creator@veolms.org",
+  username: "creator",
+  display_name: "VeoLMS Creator",
+  email_verified_at: new Date(),
+} as const;
+
+export const DEFAULT_SYSTEM_USER_ID = DEFAULT_SEED_USER.id;
+
 const database = createDatabase(config.DATABASE_URL);
 
 try {
+  await seedRolesAndPermissions(database);
 
-  const roles = [
-    {
-      id: "00000000-0000-4000-8000-000000000001",
-      name: "creator",
-      description: "Platform owner and creator",
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000002",
-      name: "student",
-      description: "Enrolled student",
-    },
-  ];
+  // Seed default creator user
+  await database
+    .insertInto("users")
+    .values(DEFAULT_SEED_USER)
+    .onConflict((conflict) =>
+      conflict.column("id").doUpdateSet({
+        email: DEFAULT_SEED_USER.email,
+        username: DEFAULT_SEED_USER.username,
+        display_name: DEFAULT_SEED_USER.display_name,
+        updated_at: new Date(),
+      }),
+    )
+    .execute();
 
-  for (const role of roles) {
-    await database
-      .insertInto("roles")
-      .values(role)
-      .onConflict((conflict) =>
-        conflict.column("name").doUpdateSet({
-          description: role.description,
-          updated_at: new Date(),
-        }),
-      )
-      .execute();
-  }
+  // Assign creator role to the default user
+  await database
+    .insertInto("user_roles")
+    .values({
+      user_id: DEFAULT_SEED_USER.id,
+      role_id: "00000000-0000-4000-8000-000000000001",
+    })
+    .onConflict((conflict) => conflict.doNothing())
+    .execute();
 
   for (const course of courses) {
     await database
       .insertInto("courses")
-      .values(course)
+      .values({
+        ...course,
+        creator_id: DEFAULT_SEED_USER.id,
+      })
       .onConflict((conflict) =>
         conflict.column("id").doUpdateSet({
           slug: course.slug,
@@ -78,13 +91,15 @@ try {
           short_description: course.short_description,
           description: course.description,
           status: course.status,
+          creator_id: DEFAULT_SEED_USER.id,
           updated_at: new Date(),
         }),
       )
       .execute();
   }
 
-  console.info(`Seeded ${roles.length} roles and ${courses.length} published courses.`);
+  console.info(`Seeded ${courses.length} published courses.`);
 } finally {
   await database.destroy();
 }
+

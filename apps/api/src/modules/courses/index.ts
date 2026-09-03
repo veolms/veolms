@@ -28,5 +28,8 @@ export * from "./includes/includes.controller.ts";
 // Lifecycle
 export * from "./lifecycle/lifecycle.service.ts";
 export * from "./lifecycle/lifecycle.controller.ts";
+export * from "./lifecycle/course-deletion.service.ts";
 
-
+// Course Bin
+export * from "./bin/bin.service.ts";
+export * from "./bin/bin.controller.ts";

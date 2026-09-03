@@ -19,8 +19,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../components/ui/context-menu";
-import { ElasticScrollControl } from "../components/elastic-scroll-control";
-import type { ElasticScrollControlHandle } from "../components/elastic-scroll-control";
+import { ElasticScroller } from "../components/elastic-scroller";
+import type { ElasticScrollerHandle } from "../components/elastic-scroller";
 import {
   lessonsById as defaultLessonsById,
   sections as defaultSections,
@@ -31,6 +31,7 @@ import {
   isStoredString,
   useSessionStorageState,
 } from "./useSessionStorageState";
+import type { LessonDrawerHeroControlProps } from "./useLessonDrawerHeroControl";
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 
@@ -44,10 +45,15 @@ interface CurriculumProps {
   courseTitle: string;
   courseThumbnail: string;
   onClose?: () => void;
+  onLessonSearchOpen?: () => void;
   focusRequest?: number;
+  topRequest?: number;
   persistenceKey: string;
+  isLessonAvailable?: (lessonNumber: number) => boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
+  scrollControlBottomClearance?: number | string;
+  drawerHeroControlProps?: LessonDrawerHeroControlProps;
 }
 
 export function Curriculum({
@@ -60,10 +66,15 @@ export function Curriculum({
   courseTitle,
   courseThumbnail,
   onClose,
+  onLessonSearchOpen,
   focusRequest = 0,
+  topRequest = 0,
   persistenceKey,
+  isLessonAvailable,
   scrollportId,
   scrollportRef,
+  scrollControlBottomClearance,
+  drawerHeroControlProps,
 }: CurriculumProps) {
   const [expanded, setExpanded] = useState<number[]>([1, 2]);
   const storageBase = `veolms-learning-${persistenceKey}-curriculum`;
@@ -83,8 +94,10 @@ export function Curriculum({
   const currentSectionRef = useRef<HTMLElement>(null);
   const lessonListRef = useRef<HTMLDivElement>(null);
   const curriculumRef = useRef<HTMLElement>(null);
-  const scrollControlRef = useRef<ElasticScrollControlHandle>(null);
+  const contextMenuPortalHostRef = useRef<HTMLElement | null>(null);
+  const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
+  const handledTopRequestRef = useRef(0);
   const currentSection =
     sections.find((section) =>
       section.lessons.some(([number]) => number === selectedLesson),
@@ -102,6 +115,8 @@ export function Curriculum({
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
       curriculumRef.current = node;
+      contextMenuPortalHostRef.current =
+        node?.closest<HTMLElement>(".video-shell") ?? null;
       if (scrollportRef) scrollportRef.current = node;
     },
     [scrollportRef],
@@ -189,19 +204,20 @@ export function Curriculum({
   };
 
   const openLessonSearch = useCallback(() => {
+    onLessonSearchOpen?.();
     scrollControlRef.current?.scrollToStart();
     setSearchOpen(true);
-  }, [setSearchOpen]);
+  }, [onLessonSearchOpen, setSearchOpen]);
 
   const handleLessonSearchOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
-        openLessonSearch();
+        if (!searchOpen) openLessonSearch();
         return;
       }
       setSearchOpen(false);
     },
-    [openLessonSearch, setSearchOpen],
+    [openLessonSearch, searchOpen, setSearchOpen],
   );
 
   useEffect(() => {
@@ -244,6 +260,27 @@ export function Curriculum({
     };
   }, [focusRequest, currentSection.id]);
 
+  useEffect(() => {
+    if (!topRequest || topRequest === handledTopRequestRef.current)
+      return undefined;
+
+    handledTopRequestRef.current = topRequest;
+    setSearchOpen(false);
+
+    let firstFrame: number;
+    let secondFrame: number | undefined;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        scrollControlRef.current?.scrollToStart();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [setSearchOpen, topRequest]);
+
   return (
     <ContextMenu>
       <aside
@@ -252,16 +289,21 @@ export function Curriculum({
         className="learning-curriculum"
         aria-label="Course curriculum"
       >
-        <ElasticScrollControl
+        <ElasticScroller
           ref={scrollControlRef}
           scrollportRef={curriculumRef}
           ariaControls={scrollportId}
           scrollAreaLabel="Curriculum"
-          borderColor="var(--learning-panel-border)"
           contentRevision={`${selectedLesson}:${activeLessonSearch}:${expanded.join(",")}`}
+          bottomClearance={scrollControlBottomClearance}
         />
         <ContextMenuTrigger
-          render={<div className="learning-curriculum__hero" />}
+          render={
+            <div
+              {...drawerHeroControlProps}
+              className="learning-curriculum__hero"
+            />
+          }
         >
           <img
             src={courseThumbnail}
@@ -409,7 +451,8 @@ export function Curriculum({
                     ? currentSectionRef
                     : undefined
                 }
-                className="learning-curriculum__section"
+                className="learning-curriculum__section relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-(--learning-panel-border) after:content-['']"
+                data-expanded={isOpen}
               >
                 <button
                   type="button"
@@ -440,6 +483,7 @@ export function Curriculum({
                       {matchingLessons.map(
                         ([number, title, duration, status]) => {
                           const active = selectedLesson === number;
+                          const available = isLessonAvailable?.(number) ?? true;
                           const progress = getLessonProgress(number, status);
                           const completed =
                             status === "done" ||
@@ -450,11 +494,23 @@ export function Curriculum({
                               type="button"
                               key={number}
                               ref={active ? activeLessonRef : undefined}
+                              disabled={!available}
+                              title={
+                                available
+                                  ? undefined
+                                  : "Log in to watch this lecture"
+                              }
+                              aria-label={
+                                available
+                                  ? undefined
+                                  : `${title} (log in to watch)`
+                              }
                               onClick={() => {
+                                if (!available) return;
                                 onSelectLesson(number);
                                 onClose?.();
                               }}
-                              className={`learning-curriculum__lesson ${active ? "is-active" : ""}`}
+                              className={`learning-curriculum__lesson ${active ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
                             >
                               {completed ? (
                                 <span
@@ -519,7 +575,10 @@ export function Curriculum({
         </div>
       </aside>
 
-      <ContextMenuContent aria-label="Course curriculum actions">
+      <ContextMenuContent
+        aria-label="Course curriculum actions"
+        portalContainer={contextMenuPortalHostRef}
+      >
         <ContextMenuGroup>
           <ContextMenuLabel>Curriculum actions</ContextMenuLabel>
           {!allSectionsExpanded && (

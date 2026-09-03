@@ -119,10 +119,6 @@ export default function AppearanceAdditionalSettings({
 
   return (
     <>
-      <ReadingModeSettings />
-
-      <ScrollbarSettings />
-
       <section className="settings-section settings-theme-rotation">
         <h2>Theme rotation</h2>
         <div className="settings-row-list">
@@ -195,6 +191,10 @@ export default function AppearanceAdditionalSettings({
           </div>
         )}
       </section>
+
+      <ReadingModeSettings />
+
+      <ScrollbarSettings />
 
       <section className="settings-section">
         <h2>Interface</h2>

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import {
   useLocation,
   useNavigate,
@@ -15,10 +15,16 @@ import {
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
   getStoredCourseLessonId,
+  migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
+import { useCourseOverview } from "../services/courses";
 import type { AcademyOutletContext } from "./academy-layout";
+import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
+
+const COURSE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function meta({ location, params }: Route.MetaArgs) {
   return Object.entries(
@@ -32,9 +38,24 @@ export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { navigateTo } = useOutletContext<AcademyOutletContext>();
+  const {
+    mobileBottomNavigation,
+    mobileBottomNavigationHidden,
+    navigateTo,
+    onLearningPlayerMinimizeGestureChange,
+    onMiniPlayerRestoreReady,
+    openLearningMiniPlayer,
+    registerPersistentPlayer,
+  } = useOutletContext<AcademyOutletContext>();
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
+  const resolvesLegacyCourseId = Boolean(
+    courseSlug && COURSE_ID_PATTERN.test(courseSlug),
+  );
+  const { data: courseOverview } = useCourseOverview(courseSlug, {
+    enabled: resolvesLegacyCourseId,
+  });
+  const canonicalCourseSlug = courseOverview?.course.slug;
   const lessonId = courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
@@ -60,33 +81,98 @@ export default function LearningRoute() {
     routeReturnPath,
   ]);
 
+  // Older saved sessions and shared links may still contain a course UUID.
+  // Resolve it once and keep the public learning URL slug-based.
+  useEffect(() => {
+    if (
+      !courseSlug ||
+      !canonicalCourseSlug ||
+      canonicalCourseSlug === courseSlug
+    )
+      return;
+
+    migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
+    const nextPath = getCoursePlayerPath(
+      canonicalCourseSlug,
+      origin,
+      lessonId,
+      routeReturnPath,
+    );
+    void navigate(nextPath, { replace: true });
+  }, [
+    canonicalCourseSlug,
+    courseSlug,
+    lessonId,
+    navigate,
+    origin,
+    routeReturnPath,
+  ]);
+
+  const selectLesson = useCallback(
+    (nextLessonId: number) => {
+      if (!courseSlug) return;
+      const path = getCoursePlayerPath(
+        courseSlug,
+        origin,
+        nextLessonId,
+        getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
+      );
+      void navigate(path, { preventScrollReset: true });
+    },
+    [courseSlug, navigate, origin, routeReturnPath],
+  );
+  const openCourseOverview = useCallback(() => {
+    if (!courseSlug) return;
+    navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
+  }, [courseSlug, navigateTo]);
+  const navigateBack = useCallback(() => {
+    navigateTo(
+      (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+        routeReturnPath,
+      { exact: true },
+    );
+  }, [courseSlug, navigateTo, routeReturnPath]);
+  const minimizePlayer = useCallback(
+    (request: LearningMiniPlayerRequest) => {
+      const returnPath =
+        (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+        routeReturnPath;
+      openLearningMiniPlayer({
+        ...request,
+        lessonPath: `${location.pathname}${location.search}`,
+        returnPath,
+      });
+    },
+    [
+      courseSlug,
+      location.pathname,
+      location.search,
+      openLearningMiniPlayer,
+      routeReturnPath,
+    ],
+  );
+
   return (
     <LearningWorkspace
       key={courseSlug}
       courseSlug={courseSlug}
       lessonId={lessonId}
+      mobileBottomNavigation={mobileBottomNavigation}
+      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
       backLabel={getCoursePlayerBackLabel(routeReturnPath)}
-      onSelectLesson={(nextLessonId) => {
-        if (!courseSlug) return;
-        const path = getCoursePlayerPath(
-          courseSlug,
-          origin,
-          nextLessonId,
-          getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
-        );
-        void navigate(path, { preventScrollReset: true });
-      }}
-      onOpenCourseOverview={() => {
-        if (!courseSlug) return;
-        navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
-      }}
-      onNavigateBack={() => {
-        navigateTo(
-          (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-            routeReturnPath,
-          { exact: true },
-        );
-      }}
+      onSelectLesson={selectLesson}
+      onOpenCourseOverview={openCourseOverview}
+      onNavigateBack={navigateBack}
+      onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
+      onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
+      persistentPlayerCourseRouteKey={courseSlug}
+      persistentPlayerLessonPath={`${location.pathname}${location.search}`}
+      persistentPlayerReturnPath={
+        (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+        routeReturnPath
+      }
+      registerPersistentPlayer={registerPersistentPlayer}
+      onMinimizePlayer={minimizePlayer}
     />
   );
 }

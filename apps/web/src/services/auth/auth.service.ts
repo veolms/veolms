@@ -1,6 +1,7 @@
 import { api } from "../../lib/api-client";
 import type {
   AuthMessageResponse,
+  CurrentUserResponse,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -13,11 +14,11 @@ import type {
   SessionResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
-  UserProfileResponse,
 } from "@veolms/contracts";
 import {
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
+  sessionResponseSchema,
 } from "@veolms/contracts";
 
 export interface TotpSetupResponse {
@@ -86,14 +87,12 @@ export const authService = {
   verifyPasskeyLogin: (payload: {
     response: unknown;
   }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>(
-      "/auth/passkey/login/verify",
-      payload,
-    );
+    return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
   },
 
-  getSessions: (): Promise<SessionResponse[]> => {
-    return api.get<SessionResponse[]>("/auth/sessions");
+  getSessions: async (): Promise<SessionResponse[]> => {
+    const response = await api.get<unknown>("/auth/sessions");
+    return sessionResponseSchema.array().parse(response);
   },
 
   revokeSession: (id: string): Promise<AuthMessageResponse> => {
@@ -104,8 +103,8 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
   },
 
-  getMe: (): Promise<UserProfileResponse> => {
-    return api.get<UserProfileResponse>("/auth/me");
+  getMe: (): Promise<CurrentUserResponse> => {
+    return api.get<CurrentUserResponse>("/auth/me");
   },
 
   logout: (): Promise<AuthMessageResponse> => {

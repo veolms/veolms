@@ -9,6 +9,9 @@ import {
   type VideoDispatchService,
 } from "./video-dispatch/index.ts";
 
+import type { PaymentGateway } from "@veolms/contracts";
+import { createPaymentGateway } from "../modules/commerce/payments/gateways/gateway.factory.ts";
+
 export * from "./email/index.ts";
 export * from "./sms/index.ts";
 export * from "./video-dispatch/index.ts";
@@ -19,6 +22,7 @@ export interface AppServices {
   sms: SmsService;
   storage: S3StorageService;
   videoDispatch: VideoDispatchService;
+  paymentGateway: PaymentGateway;
 }
 
 export interface CreateServicesOptions {
@@ -111,5 +115,6 @@ export function createServices({
       lambdaName: config.FLEET_MANAGER_LAMBDA_NAME,
       logger,
     }),
+    paymentGateway: createPaymentGateway(config),
   };
 }

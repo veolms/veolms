@@ -72,11 +72,13 @@
 .settings-session-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .settings-session {
   align-items: center;
   min-width: 0;
+  overflow: hidden;
   border-radius: 11px;
   padding: 11px;
   background: var(--surface-strong);
@@ -107,9 +109,28 @@
   font-size: 0.87rem;
 }
 
+.settings-session strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-session small,
 .settings-account-plan small {
   margin-top: 2px;
+}
+
+.settings-session small {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-session em,
+.settings-session .settings-action {
+  flex: 0 0 auto;
 }
 
 .settings-session em {
@@ -318,20 +339,27 @@
   }
 }
 
-@media (max-width: 390px) {
-  .workspace-page__header h1 {
-    font-size: 1.7rem;
-  }
+@media (max-width: 640px) {
   .settings-session {
     align-items: flex-start;
     flex-wrap: wrap;
   }
   .settings-session > span:nth-child(2) {
-    width: calc(100% - 52px);
+    flex: 1 1 calc(100% - 52px);
+    width: auto;
     margin-right: 0;
+  }
+  .settings-session em {
+    margin-left: auto;
   }
   .settings-session .settings-action {
     width: 100%;
+  }
+}
+
+@media (max-width: 390px) {
+  .workspace-page__header h1 {
+    font-size: 1.7rem;
   }
 }
 

@@ -10,6 +10,7 @@ import {
   normalizeSidebarGlowIntensity,
   normalizeSidebarGlowShape,
   normalizeSidebarGlowShapeSize,
+  SIDEBAR_GLOW_INTENSITY_DEFAULT,
 } from "../../src/settings/settingsPreferences.js";
 
 const defaultPreferences = {
@@ -24,11 +25,12 @@ const defaultPreferences = {
   showKeyboardShortcuts: true,
   showCollapsedLabels: true,
   showCollapsedLogo: true,
+  showSidebarOnMobile: false,
   glowPalette: "theme",
   glowShape: "circle",
   glowShapeSize: 100,
   glowBlur: 8,
-  glowIntensity: 50,
+  glowIntensity: SIDEBAR_GLOW_INTENSITY_DEFAULT,
   highlightActive: true,
   elevateMenus: true,
 };
@@ -72,7 +74,9 @@ describe("sidebar glow intensity", () => {
     expect(normalizeSidebarGlowIntensity(100)).toBe(100);
     expect(normalizeSidebarGlowIntensity(-20)).toBe(0);
     expect(normalizeSidebarGlowIntensity(140)).toBe(100);
-    expect(normalizeSidebarGlowIntensity("invalid")).toBe(50);
+    expect(normalizeSidebarGlowIntensity("invalid")).toBe(
+      SIDEBAR_GLOW_INTENSITY_DEFAULT,
+    );
   });
 });
 

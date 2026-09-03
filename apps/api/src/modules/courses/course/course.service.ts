@@ -10,6 +10,8 @@ import type {
 import type {
   CreateCourseRequest,
   UpdateCourseBasicsRequest,
+  CourseSummary,
+  CoursePricingSummary,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
@@ -18,7 +20,11 @@ import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
-import { ADMIN_ROLE, createAuthService, type AuthService } from "../../auth/index.ts";
+import {
+  ADMIN_ROLE,
+  createAuthService,
+  type AuthService,
+} from "../../auth/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
   createCategoryService,
@@ -36,10 +42,11 @@ import {
   createIncludesService,
   type IncludesService,
 } from "../includes/includes.service.ts";
+import { createMediaService, type MediaService } from "../../media/index.ts";
 import {
-  createMediaService,
-  type MediaService,
-} from "../../media/index.ts";
+  createCourseDeletionService,
+  type CourseDeletionService,
+} from "../lifecycle/course-deletion.service.ts";
 
 export interface CourseServiceOptions {
   database: Kysely<Database>;
@@ -50,6 +57,7 @@ export interface CourseServiceOptions {
   configurationService?: ConfigurationService;
   includesService?: IncludesService;
   mediaService?: MediaService;
+  deletionService?: CourseDeletionService;
 }
 
 export function createCourseService({
@@ -61,8 +69,11 @@ export function createCourseService({
   configurationService = createConfigurationService({ database }),
   includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
+  deletionService = createCourseDeletionService({
+    database,
+    storage: services.storage,
+  }),
 }: CourseServiceOptions) {
-
   /**
    * Verifies course existence and owner permissions.
    */
@@ -73,8 +84,60 @@ export function createCourseService({
   /**
    * Lists published courses with optional filtering.
    */
-  async function listPublishedCourses(filters?: { creatorId?: string }) {
-    return await courseRepo.listPublishedCourses(database, filters);
+  async function listPublishedCourses(
+    filters?: { creatorId?: string },
+  ): Promise<CourseSummary[]> {
+    const rows = await courseRepo.listPublishedCourses(database, filters);
+    return rows.map((row) => {
+      const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
+      const totalDurationSeconds =
+        lessonDuration > 0
+          ? lessonDuration
+          : row.estimated_duration && row.estimated_duration > 0
+            ? row.estimated_duration * 60
+            : 0;
+
+      const pricing: CoursePricingSummary = row.pricing_type
+        ? {
+            pricingType: row.pricing_type as "free" | "paid",
+            price: Number(row.price ?? 0),
+            currency: row.currency ?? "INR",
+            salePrice:
+              row.sale_price !== null && row.sale_price !== undefined
+                ? Number(row.sale_price)
+                : null,
+          }
+        : {
+            pricingType: "free",
+            price: 0,
+            currency: "INR",
+            salePrice: null,
+          };
+
+      // Note: No public URL or media serving mechanism currently exists in the codebase.
+      const thumbnailUrl = null;
+
+      const instructorName =
+        row.instructor_alias || row.creator_display_name || null;
+
+      return {
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        shortDescription: row.short_description ?? "",
+        difficulty:
+          (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
+          null,
+        thumbnailUrl,
+        instructorName,
+        categoryName: row.category_name ?? null,
+        totalSections: Number(row.total_sections ?? 0),
+        totalLessons: Number(row.total_lessons ?? 0),
+        totalDurationSeconds,
+        pricing,
+        certificateEnabled: Boolean(row.certificate_enabled ?? false),
+      };
+    });
   }
 
   /**
@@ -130,7 +193,7 @@ export function createCourseService({
     let attempts = 0;
 
     // Check slug collision and append salt if needed
-    while (await courseRepo.findCourseBySlug(database, slug)) {
+    while (await courseRepo.findCourseBySlugIncludingDeleted(database, slug)) {
       attempts++;
       slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
       if (attempts > 5) {
@@ -145,10 +208,7 @@ export function createCourseService({
     const description = data.description ?? null;
     const categoryId = data.categoryId ?? null;
     const difficulty = (data.difficulty ?? data.difficultyLevel ?? null) as
-      | "beginner"
-      | "intermediate"
-      | "advanced"
-      | null;
+      "beginner" | "intermediate" | "advanced" | null;
     const thumbnailMediaId = data.thumbnailMediaId ?? null;
     const trailerMediaId = data.trailerMediaId ?? null;
     const instructorAlias = data.instructorAlias ?? null;
@@ -196,25 +256,41 @@ export function createCourseService({
    */
   async function listMyCourses(creatorId: string) {
     const rows = await courseRepo.listCoursesByCreator(database, creatorId);
-    const courses = rows.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      title: c.title,
-      shortDescription: c.short_description,
-      description: c.description,
-      difficulty: c.difficulty as
-        "beginner" | "intermediate" | "advanced" | null,
-      status: c.status as "draft" | "published" | "archived",
-      creatorId: c.creator_id as string,
-      categoryId: c.category_id,
-      thumbnailMediaId: c.thumbnail_media_id,
-      trailerMediaId: c.trailer_media_id,
-      instructorAlias: c.instructor_alias ?? null,
-      version: c.version,
-      createdAt: c.created_at.toISOString(),
-      updatedAt: c.updated_at.toISOString(),
-      publishedAt: c.published_at?.toISOString() ?? null,
-    }));
+    const courses = rows.map((c) => {
+      const lessonDuration = Number(c.lesson_duration_seconds ?? 0);
+      const totalDurationSeconds =
+        lessonDuration > 0
+          ? lessonDuration
+          : c.estimated_duration && c.estimated_duration > 0
+            ? c.estimated_duration * 60
+            : 0;
+
+      return {
+        id: c.id,
+        slug: c.slug,
+        title: c.title,
+        shortDescription: c.short_description,
+        description: c.description,
+        difficulty: c.difficulty as
+          | "beginner"
+          | "intermediate"
+          | "advanced"
+          | null,
+        status: c.status as "draft" | "published" | "archived",
+        creatorId: c.creator_id as string,
+        categoryId: c.category_id,
+        thumbnailMediaId: c.thumbnail_media_id,
+        trailerMediaId: c.trailer_media_id,
+        instructorAlias: c.instructor_alias ?? null,
+        version: c.version,
+        createdAt: c.created_at.toISOString(),
+        updatedAt: c.updated_at.toISOString(),
+        publishedAt: c.published_at?.toISOString() ?? null,
+        totalSections: Number(c.total_sections ?? 0),
+        totalLessons: Number(c.total_lessons ?? 0),
+        totalDurationSeconds,
+      };
+    });
     return { courses };
   }
 
@@ -304,11 +380,7 @@ export function createCourseService({
         description: updates.description,
         category_id: updates.categoryId ?? updates.category,
         difficulty: (updates.difficulty ?? updates.difficultyLevel) as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null
-          | undefined,
+          "beginner" | "intermediate" | "advanced" | null | undefined,
         thumbnail_media_id: updates.thumbnailMediaId,
         trailer_media_id: updates.trailerMediaId,
         instructor_alias: updates.instructorAlias,
@@ -354,17 +426,12 @@ export function createCourseService({
             ? updates.description
             : course.description,
         difficulty:
-          updates.difficulty !== undefined || updates.difficultyLevel !== undefined
+          updates.difficulty !== undefined ||
+          updates.difficultyLevel !== undefined
             ? ((updates.difficulty ?? updates.difficultyLevel) as
-                | "beginner"
-                | "intermediate"
-                | "advanced"
-                | null)
+                "beginner" | "intermediate" | "advanced" | null)
             : (course.difficulty as
-                | "beginner"
-                | "intermediate"
-                | "advanced"
-                | null),
+                "beginner" | "intermediate" | "advanced" | null),
         status: course.status as "draft" | "published" | "archived",
         creatorId: course.creator_id as string,
         categoryId:
@@ -407,9 +474,8 @@ export function createCourseService({
         includesService.listCourseIncludes(courseId),
       ]);
     const lessonIds = lessons.map((l) => l.id);
-    const resources = await curriculumService.listResourcesForLessons(
-      lessonIds,
-    );
+    const resources =
+      await curriculumService.listResourcesForLessons(lessonIds);
 
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
@@ -548,9 +614,7 @@ export function createCourseService({
       settings,
       includes,
     ] = await Promise.all([
-      course.creator_id
-        ? authService.findUserById(course.creator_id)
-        : null,
+      course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
         ? categoryService.findCategoryById(course.category_id)
         : null,
@@ -720,12 +784,7 @@ export function createCourseService({
    * Soft deletes a course after verifying ownership.
    */
   async function deleteCourse(courseId: string, creatorId: string) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
-
-    const now = new Date();
-    await courseRepo.softDeleteCourse(database, courseId, now);
-
-    return { success: true };
+    return await deletionService.scheduleCourseDeletion(courseId, creatorId);
   }
 
   return {

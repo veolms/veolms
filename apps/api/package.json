@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node --env-file-if-exists=../../.env src/index.ts",
+    "purge:course-deletions": "node --env-file-if-exists=../../.env src/jobs/course-retention.ts",
+    "purge:sessions": "node --env-file-if-exists=../../.env src/jobs/session-retention.ts",
+    "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
@@ -13,6 +16,7 @@
     "@fastify/autoload": "^6.5.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
+    "@fastify/multipart": "10.1.1",
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@simplewebauthn/server": "^13.3.2",

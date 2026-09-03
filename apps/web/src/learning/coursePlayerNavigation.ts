@@ -404,6 +404,18 @@ export function getOpenCoursePlayerSessions(
   return readCoursePlayerSessionState(storage).sessions;
 }
 
+export function getMostRecentCoursePlayerSession(
+  sessions: readonly CoursePlayerSession[] = getOpenCoursePlayerSessions(),
+): CoursePlayerSession | null {
+  return sessions.reduce<CoursePlayerSession | null>(
+    (mostRecent, session) =>
+      !mostRecent || session.updatedAt > mostRecent.updatedAt
+        ? session
+        : mostRecent,
+    null,
+  );
+}
+
 export function getCoursePlayerSession(
   courseId: string,
   storage: CoursePlayerStorage | null = getBrowserStorage(),
@@ -413,6 +425,43 @@ export function getCoursePlayerSession(
       (session) => session.courseId === courseId,
     ) ?? null
   );
+}
+
+/**
+ * Re-key a legacy UUID session after its canonical public slug is known.
+ * This prevents one course from appearing twice in the learning-space list.
+ */
+export function migrateCoursePlayerSessionKey(
+  previousCourseId: string,
+  nextCourseId: string,
+  storage: CoursePlayerStorage | null = getBrowserStorage(),
+): void {
+  if (previousCourseId === nextCourseId) return;
+
+  const state = readCoursePlayerSessionState(storage);
+  const previousSession = state.sessions.find(
+    (session) => session.courseId === previousCourseId,
+  );
+  if (!previousSession) return;
+
+  const migratedSession: CoursePlayerSession = {
+    ...previousSession,
+    courseId: nextCourseId,
+    path: getCoursePlayerPath(
+      nextCourseId,
+      previousSession.origin,
+      previousSession.lessonId,
+      previousSession.returnPath,
+    ),
+    updatedAt: Date.now(),
+  };
+  const remainingSessions = state.sessions.filter(
+    (session) =>
+      session.courseId !== previousCourseId &&
+      session.courseId !== nextCourseId,
+  );
+  remainingSessions.push(migratedSession);
+  persistCoursePlayerSessions(remainingSessions, storage);
 }
 
 export function upsertCoursePlayerSessionFromRoute(
@@ -481,26 +530,14 @@ export function closeCoursePlayerSession(
 ): CoursePlayerSession | null {
   const state = readCoursePlayerSessionState(storage);
   if (!state.sessions.some((session) => session.courseId === courseId)) {
-    return state.sessions.reduce<CoursePlayerSession | null>(
-      (mostRecent, session) =>
-        !mostRecent || session.updatedAt > mostRecent.updatedAt
-          ? session
-          : mostRecent,
-      null,
-    );
+    return getMostRecentCoursePlayerSession(state.sessions);
   }
 
   const remainingSessions = state.sessions.filter(
     (session) => session.courseId !== courseId,
   );
   persistCoursePlayerSessions(remainingSessions, storage);
-  return remainingSessions.reduce<CoursePlayerSession | null>(
-    (mostRecent, session) =>
-      !mostRecent || session.updatedAt > mostRecent.updatedAt
-        ? session
-        : mostRecent,
-    null,
-  );
+  return getMostRecentCoursePlayerSession(remainingSessions);
 }
 
 export function getCoursePlayerBackLabel(

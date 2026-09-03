@@ -13,6 +13,7 @@ import type {
   CourseSort,
   CourseStatusFilter,
 } from "./catalogue";
+import { getCourseRouteKey } from "./catalogue";
 
 export interface CourseCatalogueProps {
   activeSection: string;
@@ -34,6 +35,8 @@ export interface CourseCatalogueProps {
   setNotice: (notice: string) => void;
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
+  onDeleteCourse?: (course: Course) => Promise<void> | void;
+  onRestoreCourse?: (course: Course) => Promise<void> | void;
 }
 
 export function CourseCatalogue({
@@ -56,6 +59,8 @@ export function CourseCatalogue({
   setNotice,
   onNavigatePage,
   onResetCatalogue,
+  onDeleteCourse,
+  onRestoreCourse,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -66,7 +71,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["published", "Published"],
           ["draft", "Draft"],
-          ["archived", "Archived"],
+          ["bin", "Bin"],
         ]
       : [
           ["all", "All"],
@@ -116,7 +121,9 @@ export function CourseCatalogue({
         )
       }
       onExplore={(selected) =>
-        onNavigatePage(`/courses/${encodeURIComponent(selected.id)}/overview`)
+        onNavigatePage(
+          `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
+        )
       }
       onEdit={(selected) =>
         onNavigatePage(
@@ -125,15 +132,22 @@ export function CourseCatalogue({
       }
       onManage={(selected) =>
         onNavigatePage(
-          `/courses/create?edit=${encodeURIComponent(selected.id)}&step=curriculum`,
+          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=curriculum`,
+        )
+      }
+      onPublish={(selected) =>
+        onNavigatePage(
+          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=publish`,
         )
       }
       onDeleteRequested={setPendingDelete}
+      onRestoreRequested={onRestoreCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
       setNotice={setNotice}
       imagePriority={index === 0}
+      isBin={enrollmentFilter === "bin"}
     />
   );
 
@@ -266,16 +280,28 @@ export function CourseCatalogue({
 
       <ConfirmDeleteModal
         isOpen={pendingDelete !== null}
-        title="Delete course?"
+        title="Move course to Bin?"
         message={
           pendingDelete
-            ? `Delete “${pendingDelete.title}” and its course content? This cannot be undone.`
+            ? `Move “${pendingDelete.title}” to the Bin? You can restore it later.`
             : undefined
         }
-        confirmLabel="Delete Course"
+        confirmLabel="Move to Bin"
         holdDurationMs={900}
-        onConfirm={() => {
-          if (pendingDelete) setNotice(`${pendingDelete.title} was deleted.`);
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          const target = pendingDelete;
+          try {
+            if (onDeleteCourse) {
+              await onDeleteCourse(target);
+            } else {
+              setNotice(`${target.title} moved to Bin.`);
+            }
+          } catch {
+            // Failure is handled by onDeleteCourse toast notification
+          } finally {
+            setPendingDelete(null);
+          }
         }}
         onClose={() => setPendingDelete(null)}
       />

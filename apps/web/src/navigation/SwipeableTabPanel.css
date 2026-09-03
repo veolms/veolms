@@ -9,9 +9,21 @@
   touch-action: pan-y pinch-zoom;
 }
 
+.swipeable-tab-panel__swiper.swiper-autoheight,
+.swipeable-tab-panel__swiper.swiper-autoheight .swiper-slide {
+  height: auto;
+}
+
+.swipeable-tab-panel__swiper.swiper-autoheight .swiper-wrapper {
+  align-items: flex-start;
+  transition-property: transform, height;
+}
+
 .swipeable-tab-panel__swiper .swiper-slide {
   min-width: 0;
   box-sizing: border-box;
   padding-inline-start: var(--swipeable-tab-panel-inline-start, 0px);
   padding-inline-end: var(--swipeable-tab-panel-inline-end, 0px);
+  -webkit-user-select: text;
+  user-select: text;
 }

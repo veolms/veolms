@@ -16,6 +16,7 @@ export function createAuthController(context: AuthContext) {
     reply: FastifyReply,
   ) {
     const { identifier, identifierType } = resolveIdentifier(request.body);
+    const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await authService.login({
       identifier,
       identifierType,
@@ -23,6 +24,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        existingSessionToken,
       },
     });
 
@@ -44,6 +46,7 @@ export function createAuthController(context: AuthContext) {
       displayName,
     } = request.body;
     const { identifier, identifierType } = resolveIdentifier(request.body);
+    const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await authService.register({
       identifier,
       identifierType,
@@ -57,6 +60,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        existingSessionToken,
       },
     });
 
@@ -79,7 +83,12 @@ export function createAuthController(context: AuthContext) {
   }
 
   async function me(request: FastifyRequest) {
-    const user = request.user!;
+    const user = request.user;
+    const session = request.session;
+
+    if (!user || !session) {
+      return null;
+    }
 
     return {
       id: user.id,
@@ -89,9 +98,11 @@ export function createAuthController(context: AuthContext) {
       phoneNo: user.phoneNo,
       roles: user.roles,
       permissions: user.permissions,
-      mfaVerified: request.session!.mfa_verified,
+      menus: user.menus,
+      mfaVerified: session.mfa_verified,
       totpEnabled: user.totpEnabled,
       passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
     };
   }
 

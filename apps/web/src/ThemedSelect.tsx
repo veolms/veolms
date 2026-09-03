@@ -2,6 +2,7 @@ import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { XIcon as X } from "@phosphor-icons/react/X";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import {
   useCallback,
   useEffect,
@@ -29,6 +30,12 @@ export type ThemedSelectOption<Value extends string = string> = readonly [
   extra?: ThemedSelectOptionExtra,
 ];
 
+export interface ThemedSelectAction {
+  label: string;
+  icon?: ReactNode;
+  onSelect: () => void;
+}
+
 export interface ThemedSelectProps<Value extends string = string> {
   id?: string;
   value: Value;
@@ -41,6 +48,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   contentClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
+  action?: ThemedSelectAction;
+  compactOnMobile?: boolean;
 }
 
 const joinClasses = (
@@ -49,10 +58,11 @@ const joinClasses = (
 
 interface MenuPosition {
   left: number;
-  top: number;
+  top?: number;
+  bottom?: number;
   width: number;
   maxHeight: number;
-  origin: "top" | "bottom";
+  side: "top" | "bottom";
 }
 
 /**
@@ -72,10 +82,13 @@ export function ThemedSelect<Value extends string>({
   contentClassName = "",
   searchable = false,
   searchPlaceholder = "Search...",
+  action,
+  compactOnMobile = false,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const actionButtonRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,54 +122,61 @@ export function ThemedSelect<Value extends string>({
     });
   }, [options, searchable, searchQuery]);
 
-  const updatePosition = useCallback(() => {
+  const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
-    if (!trigger) return;
+    if (!trigger) return null;
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 12;
     const gap = 6;
     const desiredHeight = Math.min(
       340,
-      Math.max(48, (searchable ? 44 : 0) + filteredOptions.length * 38 + 12),
+      Math.max(
+        48,
+        (searchable ? 44 : 0) +
+          filteredOptions.length * 38 +
+          (action ? 42 : 0) +
+          12,
+      ),
     );
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const spaceAbove = rect.top - viewportPadding;
     const useAbove =
-      spaceBelow < Math.min(desiredHeight, 180) && spaceAbove > spaceBelow;
+      spaceBelow < desiredHeight && spaceAbove > spaceBelow;
     const maxHeight = Math.max(
-      100,
+      80,
       Math.min(desiredHeight, useAbove ? spaceAbove - gap : spaceBelow - gap),
     );
+    const minWidth = searchable ? 180 : 120;
     const width = Math.min(
-      Math.max(rect.width, searchable ? 260 : 120),
+      Math.max(rect.width, minWidth),
       window.innerWidth - viewportPadding * 2,
     );
-    const left = Math.min(
-      Math.max(viewportPadding, rect.left),
-      window.innerWidth - viewportPadding - width,
-    );
-    setPosition({
+    let left = rect.left;
+    if (left + width > window.innerWidth - viewportPadding) {
+      left = Math.max(viewportPadding, rect.right - width);
+    }
+    return {
       left,
-      top: useAbove ? rect.top - gap : rect.bottom + gap,
+      top: useAbove ? undefined : rect.bottom + gap,
+      bottom: useAbove ? window.innerHeight - rect.top + gap : undefined,
       width,
       maxHeight,
-      origin: useAbove ? "bottom" : "top",
-    });
-  }, [filteredOptions.length, searchable]);
+      side: useAbove ? "top" : "bottom",
+    };
+  }, [action, filteredOptions.length, searchable]);
 
   const openMenu = () => {
     if (disabled) return;
     setSearchQuery("");
+    const pos = calculatePosition();
+    setPosition(pos);
     setOpen(true);
     requestAnimationFrame(() => {
-      updatePosition();
-      requestAnimationFrame(() => {
-        if (searchable && searchInputRef.current) {
-          searchInputRef.current.focus();
-        } else {
-          itemRefs.current[selectedIndex]?.focus();
-        }
-      });
+      if (searchable && searchInputRef.current) {
+        searchInputRef.current.focus({ preventScroll: true });
+      } else {
+        itemRefs.current[selectedIndex]?.focus({ preventScroll: true });
+      }
     });
   };
 
@@ -173,8 +193,11 @@ export function ThemedSelect<Value extends string>({
   });
 
   useLayoutEffect(() => {
-    if (open) updatePosition();
-  }, [open, updatePosition]);
+    if (open) {
+      const pos = calculatePosition();
+      if (pos) setPosition(pos);
+    }
+  }, [open, calculatePosition]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -187,7 +210,10 @@ export function ThemedSelect<Value extends string>({
         return;
       closeMenu();
     };
-    const reposition = () => updatePosition();
+    const reposition = () => {
+      const pos = calculatePosition();
+      if (pos) setPosition(pos);
+    };
     document.addEventListener("pointerdown", closeFromOutside, true);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
@@ -196,7 +222,7 @@ export function ThemedSelect<Value extends string>({
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [open, updatePosition]);
+  }, [open, calculatePosition]);
 
   const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
@@ -207,20 +233,35 @@ export function ThemedSelect<Value extends string>({
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const isSearchFocused = document.activeElement === searchInputRef.current;
+    const isActionFocused = document.activeElement === actionButtonRef.current;
     const currentIndex = itemRefs.current.indexOf(
       document.activeElement as HTMLButtonElement,
     );
 
     if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
+      if (event.key === "Escape") event.stopPropagation();
       closeMenu(true);
       return;
     }
 
     if (isSearchFocused) {
-      if (event.key === "ArrowDown" && filteredOptions.length > 0) {
-        event.preventDefault();
-        itemRefs.current[0]?.focus();
+      if (event.key === "ArrowDown") {
+        if (filteredOptions.length > 0) {
+          event.preventDefault();
+          itemRefs.current[0]?.focus();
+        } else if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          event.preventDefault();
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        }
       } else if (event.key === "Enter" && filteredOptions.length === 1) {
         const firstOption = filteredOptions[0];
         if (!firstOption) return;
@@ -231,21 +272,110 @@ export function ThemedSelect<Value extends string>({
       return;
     }
 
+    if (isActionFocused) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (filteredOptions.length > 0) {
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        } else if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        }
+      } else if (event.key === "End") {
+        event.preventDefault();
+        actionButtonRef.current?.focus();
+      }
+      return;
+    }
+
+    if (currentIndex === -1) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[0]?.focus();
+        } else if (action && actionButtonRef.current) {
+          actionButtonRef.current.focus();
+        }
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (action && actionButtonRef.current) {
+          actionButtonRef.current.focus();
+        } else if (filteredOptions.length > 0) {
+          itemRefs.current[filteredOptions.length - 1]?.focus();
+        } else if (searchable && searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+      return;
+    }
+
     let nextIndex: number | null = null;
     if (event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % filteredOptions.length;
+      if (currentIndex === filteredOptions.length - 1) {
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+          return;
+        }
+        if (searchable && searchInputRef.current) {
+          event.preventDefault();
+          searchInputRef.current.focus();
+          return;
+        }
+        nextIndex = 0;
+      } else {
+        nextIndex = (currentIndex + 1) % filteredOptions.length;
+      }
     }
     if (event.key === "ArrowUp") {
-      if (currentIndex === 0 && searchable) {
+      if (currentIndex === 0) {
+        if (searchable && searchInputRef.current) {
+          event.preventDefault();
+          searchInputRef.current.focus();
+          return;
+        }
+        if (action && actionButtonRef.current) {
+          event.preventDefault();
+          actionButtonRef.current.focus();
+          return;
+        }
+        nextIndex = filteredOptions.length - 1;
+      } else {
+        nextIndex =
+          (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
+      }
+    }
+    if (event.key === "Home") {
+      if (searchable && searchInputRef.current) {
         event.preventDefault();
-        searchInputRef.current?.focus();
+        searchInputRef.current.focus();
         return;
       }
-      nextIndex =
-        (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
+      nextIndex = 0;
     }
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = filteredOptions.length - 1;
+    if (event.key === "End") {
+      if (action && actionButtonRef.current) {
+        event.preventDefault();
+        actionButtonRef.current.focus();
+        return;
+      }
+      nextIndex = filteredOptions.length - 1;
+    }
     if (nextIndex === null) return;
     event.preventDefault();
     itemRefs.current[nextIndex]?.focus();
@@ -263,19 +393,33 @@ export function ThemedSelect<Value extends string>({
         aria-expanded={open}
         aria-controls={menuId}
         data-state={open ? "open" : "closed"}
+        data-compact-mobile={compactOnMobile || undefined}
         disabled={disabled}
         onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className="themed-select__trigger-value">
+        <span
+          className={joinClasses(
+            "themed-select__trigger-value",
+            compactOnMobile && "max-sm:justify-center",
+          )}
+        >
           {selectedFlag && (
             <span className="themed-select__trigger-flag" aria-hidden="true">
               {selectedFlag}
             </span>
           )}
-          <span>{selectedLabel}</span>
+          <span className={compactOnMobile ? "max-sm:sr-only" : undefined}>
+            {selectedLabel}
+          </span>
         </span>
-        <span className="themed-select__caret" aria-hidden="true">
+        <span
+          className={joinClasses(
+            "themed-select__caret",
+            compactOnMobile && "max-sm:hidden",
+          )}
+          aria-hidden="true"
+        >
           <CaretDown size={16} weight="bold" />
         </span>
       </button>
@@ -287,6 +431,7 @@ export function ThemedSelect<Value extends string>({
             id={menuId}
             role="listbox"
             aria-label={ariaLabel}
+            data-side={position.side}
             className={joinClasses("themed-select__content", contentClassName)}
             onKeyDown={handleMenuKeyDown}
             style={
@@ -294,15 +439,11 @@ export function ThemedSelect<Value extends string>({
                 position: "fixed",
                 left: position.left,
                 top: position.top,
+                bottom: position.bottom,
                 width: position.width,
                 boxSizing: "border-box",
                 maxHeight: position.maxHeight,
                 overflowY: "auto",
-                transform:
-                  position.origin === "bottom"
-                    ? "translateY(-100%)"
-                    : undefined,
-                transformOrigin: position.origin,
               } as CSSProperties
             }
           >
@@ -388,6 +529,22 @@ export function ThemedSelect<Value extends string>({
                 )
               )}
             </div>
+            {action && (
+              <div className="themed-select__action-wrapper">
+                <button
+                  ref={actionButtonRef}
+                  type="button"
+                  className="themed-select__action-btn"
+                  onClick={() => {
+                    closeMenu(true);
+                    action.onSelect();
+                  }}
+                >
+                  {action.icon ?? <Plus size={14} weight="bold" />}
+                  <span>{action.label}</span>
+                </button>
+              </div>
+            )}
           </div>,
           document.body,
         )}

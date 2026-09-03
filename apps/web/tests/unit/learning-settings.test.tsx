@@ -2,6 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { LearningSettings } from "../../src/settings/LearningSettings.js";
 import { CURRICULUM_TEST_PREFERENCES_KEY } from "../../src/learning/curriculumTestPreferences.js";
+import {
+  CURRICULUM_LECTURE_COUNT_DEFAULT,
+  CURRICULUM_SECTION_COUNT_DEFAULT,
+} from "../../src/learning/curriculumSize.js";
+import { LEARNING_PREFERENCES_KEY } from "../../src/settings/settingsPreferences.js";
 
 describe("LearningSettings curriculum test controls", () => {
   afterEach(() => {
@@ -35,9 +40,57 @@ describe("LearningSettings curriculum test controls", () => {
     ).toHaveTextContent("32 sections · 600 lectures");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset test data" }));
-    expect(sectionInput).toHaveValue(23);
+    expect(sectionInput).toHaveValue(CURRICULUM_SECTION_COUNT_DEFAULT);
     expect(screen.getByRole("spinbutton", { name: "Lectures" })).toHaveValue(
-      600,
+      CURRICULUM_LECTURE_COUNT_DEFAULT,
     );
+  });
+
+  it("saves a custom video skip interval up to one minute", async () => {
+    render(<LearningSettings />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Skip interval: 10 seconds (Default)",
+      }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Custom…" }));
+
+    const slider = screen.getByRole("slider", {
+      name: "Custom skip interval in seconds",
+    });
+    expect(slider).toHaveAttribute("min", "5");
+    expect(slider).toHaveAttribute("max", "60");
+    fireEvent.change(slider, { target: { value: "47" } });
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem("veolms-learning-preferences") || "{}")
+          .seekIntervalSeconds,
+      ).toBe(47),
+    );
+    expect(screen.getByText("47s")).toBeVisible();
+  });
+
+  it("saves a player-only theme without changing the application theme", async () => {
+    render(<LearningSettings />);
+
+    const aurora = await screen.findByRole("radio", {
+      name: "Aurora video player theme",
+    });
+    expect(
+      screen.getByRole("radio", { name: "YouTube video player theme" }),
+    ).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(aurora);
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem(LEARNING_PREFERENCES_KEY) || "{}")
+          .videoPlayerTheme,
+      ).toBe("aurora"),
+    );
+    expect(aurora).toHaveAttribute("aria-checked", "true");
+    expect(document.documentElement).not.toHaveAttribute("data-player-theme");
   });
 });

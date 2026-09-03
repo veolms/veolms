@@ -48,24 +48,26 @@ function getParserEditor(): Editor {
  */
 function preprocessMarkdown(md: string): string {
   if (!md) return "";
-  return md
-    // Decode HTML entities first (Tiptap serializer leftovers)
-    .replace(/&gt;/g, ">")
-    .replace(/&lt;/g, "<")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x60;/g, "`")
-    // Then unescape Markdown backslash escapes
-    .replace(/^\\>\s*/gm, "> ")
-    .replace(/\\>/g, ">")
-    .replace(/\\\[/g, "[")
-    .replace(/\\\]/g, "]")
-    .replace(/\\\*/g, "*")
-    .replace(/\\_/g, "_")
-    .replace(/\\-/g, "-")
-    .replace(/\\#/g, "#")
-    .replace(/\\`/g, "`");
+  return (
+    md
+      // Decode HTML entities first (Tiptap serializer leftovers)
+      .replace(/&gt;/g, ">")
+      .replace(/&lt;/g, "<")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x60;/g, "`")
+      // Then unescape Markdown backslash escapes
+      .replace(/^\\>\s*/gm, "> ")
+      .replace(/\\>/g, ">")
+      .replace(/\\\[/g, "[")
+      .replace(/\\\]/g, "]")
+      .replace(/\\\*/g, "*")
+      .replace(/\\_/g, "_")
+      .replace(/\\-/g, "-")
+      .replace(/\\#/g, "#")
+      .replace(/\\`/g, "`")
+  );
 }
 
 /** Convert a Markdown string → HTML string for the Course Preview card. */
@@ -139,7 +141,11 @@ function wrapSelection(
     selected.startsWith(marker) &&
     selected.endsWith(marker)
   ) {
-    if (marker === "*" && selected.startsWith("**") && selected.endsWith("**")) {
+    if (
+      marker === "*" &&
+      selected.startsWith("**") &&
+      selected.endsWith("**")
+    ) {
       // Bold inside selection, skip unwrapping as italic
     } else {
       const inner = selected.slice(mLen, selected.length - mLen);
@@ -226,7 +232,11 @@ function toggleLinePrefix(
 /**
  * Toggle ordered list numbering on selected lines.
  */
-function toggleOrderedList(value: string, start: number, end: number): EditResult {
+function toggleOrderedList(
+  value: string,
+  start: number,
+  end: number,
+): EditResult {
   const lineStart = value.lastIndexOf("\n", start - 1) + 1;
   const lineEndIdx = value.indexOf("\n", end);
   const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
@@ -275,6 +285,7 @@ export interface RichTextEditorProps {
   placeholder?: string;
   maxLength?: number;
   id?: string;
+  disabled?: boolean;
 }
 
 /** Read the current app theme from the HTML data-theme attribute. */
@@ -288,7 +299,10 @@ function useAppTheme(): "dark" | "light" {
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.dataset.theme !== "light");
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -300,6 +314,7 @@ export function RichTextEditor({
   onChange,
   placeholder = "Add a detailed description...",
   maxLength = 1500,
+  disabled = false,
 }: RichTextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const appTheme = useAppTheme();
@@ -317,7 +332,7 @@ export function RichTextEditor({
     if (clean !== value) {
       onChange(clean);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -377,7 +392,9 @@ export function RichTextEditor({
     value.slice(sel.start - 2, sel.start) === "**" &&
     value.slice(sel.end, sel.end + 2) === "**";
   const isIncludedBold =
-    selected.startsWith("**") && selected.endsWith("**") && selected.length >= 4;
+    selected.startsWith("**") &&
+    selected.endsWith("**") &&
+    selected.length >= 4;
   const isBold = isSurroundedBold || isIncludedBold;
 
   const isSurroundedItalic =
@@ -400,7 +417,9 @@ export function RichTextEditor({
   // -------------------------------------------------------------------------
   // Apply transform - always reads live selection from the DOM ref
   // -------------------------------------------------------------------------
-  const applyTransform = (fn: (v: string, s: number, e: number) => EditResult) => {
+  const applyTransform = (
+    fn: (v: string, s: number, e: number) => EditResult,
+  ) => {
     const ta = textareaRef.current;
     if (!ta) return;
     const s = ta.selectionStart;
@@ -418,11 +437,16 @@ export function RichTextEditor({
   // -------------------------------------------------------------------------
   // Toolbar actions
   // -------------------------------------------------------------------------
-  const handleBold = () => applyTransform((v, s, e) => wrapSelection(v, s, e, "**"));
-  const handleItalic = () => applyTransform((v, s, e) => wrapSelection(v, s, e, "*"));
-  const handleBlockquote = () => applyTransform((v, s, e) => toggleLinePrefix(v, s, e, "> "));
-  const handleBulletList = () => applyTransform((v, s, e) => toggleLinePrefix(v, s, e, "- "));
-  const handleOrderedList = () => applyTransform((v, s, e) => toggleOrderedList(v, s, e));
+  const handleBold = () =>
+    applyTransform((v, s, e) => wrapSelection(v, s, e, "**"));
+  const handleItalic = () =>
+    applyTransform((v, s, e) => wrapSelection(v, s, e, "*"));
+  const handleBlockquote = () =>
+    applyTransform((v, s, e) => toggleLinePrefix(v, s, e, "> "));
+  const handleBulletList = () =>
+    applyTransform((v, s, e) => toggleLinePrefix(v, s, e, "- "));
+  const handleOrderedList = () =>
+    applyTransform((v, s, e) => toggleOrderedList(v, s, e));
   const handleHeadingChange = (heading: string) =>
     applyTransform((v, s) =>
       setHeadingOnLine(v, s, heading as "h1" | "h2" | "normal"),
@@ -440,11 +464,17 @@ export function RichTextEditor({
     const screenPadding = 12;
     const minTopSpace = 260;
     let left = rect.right - popoverWidth;
-    left = Math.max(screenPadding, Math.min(left, window.innerWidth - popoverWidth - screenPadding));
+    left = Math.max(
+      screenPadding,
+      Math.min(left, window.innerWidth - popoverWidth - screenPadding),
+    );
     const top =
       rect.top - margin >= minTopSpace
         ? rect.top - popoverHeight - margin
-        : Math.min(rect.bottom + margin, window.innerHeight - popoverHeight - screenPadding);
+        : Math.min(
+            rect.bottom + margin,
+            window.innerHeight - popoverHeight - screenPadding,
+          );
     setLinkPopoverPos({ top, left });
   };
 
@@ -479,16 +509,24 @@ export function RichTextEditor({
 
   const handleOpenLinkPopover = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (showLinkPopover) { setShowLinkPopover(false); return; }
+    if (showLinkPopover) {
+      setShowLinkPopover(false);
+      return;
+    }
     setLinkUrlInput("");
     setShowLinkPopover(true);
   };
 
   const handleApplyLink = () => {
     const url = linkUrlInput.trim();
-    if (!url) { setShowLinkPopover(false); return; }
+    if (!url) {
+      setShowLinkPopover(false);
+      return;
+    }
     const finalUrl =
-      /^https?:\/\//i.test(url) || url.startsWith("mailto:") ? url : `https://${url}`;
+      /^https?:\/\//i.test(url) || url.startsWith("mailto:")
+        ? url
+        : `https://${url}`;
     // Snapshot selection before the popover closes
     const s = sel.start;
     const e = sel.end;
@@ -518,11 +556,17 @@ export function RichTextEditor({
     const margin = 8;
     const screenPadding = 12;
     let left = rect.right - pickerWidth;
-    left = Math.max(screenPadding, Math.min(left, window.innerWidth - pickerWidth - screenPadding));
+    left = Math.max(
+      screenPadding,
+      Math.min(left, window.innerWidth - pickerWidth - screenPadding),
+    );
     const top =
       rect.top - margin >= pickerHeight + screenPadding
         ? rect.top - pickerHeight - margin
-        : Math.min(rect.bottom + margin, window.innerHeight - pickerHeight - screenPadding);
+        : Math.min(
+            rect.bottom + margin,
+            window.innerHeight - pickerHeight - screenPadding,
+          );
     setEmojiPickerPos({ top, left });
   };
 
@@ -562,12 +606,19 @@ export function RichTextEditor({
     document.body.style.overflow = "hidden";
     const block = (e: WheelEvent | TouchEvent) => {
       const t = e.target as Node;
-      if (!emojiPickerRef.current?.contains(t) && !linkPopoverRef.current?.contains(t)) {
+      if (
+        !emojiPickerRef.current?.contains(t) &&
+        !linkPopoverRef.current?.contains(t)
+      ) {
         e.preventDefault();
       }
     };
-    window.addEventListener("wheel", block as EventListener, { passive: false });
-    window.addEventListener("touchmove", block as EventListener, { passive: false });
+    window.addEventListener("wheel", block as EventListener, {
+      passive: false,
+    });
+    window.addEventListener("touchmove", block as EventListener, {
+      passive: false,
+    });
     return () => {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("wheel", block as EventListener);
@@ -579,21 +630,43 @@ export function RichTextEditor({
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-(--accent)">
+    <div
+      className={`relative border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-visible bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] focus-within:border-(--accent) ${disabled ? "opacity-60 cursor-not-allowed pointer-events-none" : ""}`}
+    >
       <div className="flex items-center flex-wrap gap-1 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-1.5 bg-[color-mix(in_srgb,var(--text)_3%,transparent)] rounded-t-[9px]">
         {/* Heading / Format Selector */}
         <div className="relative inline-flex items-center shrink-0">
           <select
             aria-label="Text format"
             value={currentFormat}
+            disabled={disabled}
             onChange={(e) => handleHeadingChange(e.target.value)}
-            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-(--surface) text-(--text) text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-(--hover) focus:border-(--accent) appearance-none"
+            className="h-7 px-2.5 pr-6 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-md bg-(--surface) text-(--text) text-[0.80rem] font-semibold cursor-pointer outline-none transition-colors hover:bg-(--hover) focus:border-(--accent) appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="normal" className="bg-(--surface) text-(--text)">Normal</option>
-            <option value="h1" className="bg-(--surface) text-(--text)">Heading 1</option>
-            <option value="h2" className="bg-(--surface) text-(--text)">Heading 2</option>
+            <option
+              value="normal"
+              className="bg-(--surface) text-(--text)"
+            >
+              Normal
+            </option>
+            <option
+              value="h1"
+              className="bg-(--surface) text-(--text)"
+            >
+              Heading 1
+            </option>
+            <option
+              value="h2"
+              className="bg-(--surface) text-(--text)"
+            >
+              Heading 2
+            </option>
           </select>
-          <CaretDown size={11} weight="bold" className="absolute right-2 text-(--muted) pointer-events-none" />
+          <CaretDown
+            size={11}
+            weight="bold"
+            className="absolute right-2 text-(--muted) pointer-events-none"
+          />
         </div>
 
         {/* Divider */}
@@ -604,6 +677,7 @@ export function RichTextEditor({
           <button
             type="button"
             title="Bold"
+            disabled={disabled}
             className={`editor-btn ${isBold ? "is-active" : ""}`}
             aria-label="Bold"
             onMouseDown={(e) => e.preventDefault()}
@@ -614,6 +688,7 @@ export function RichTextEditor({
           <button
             type="button"
             title="Italic"
+            disabled={disabled}
             className={`editor-btn ${isItalic ? "is-active" : ""}`}
             aria-label="Italic"
             onMouseDown={(e) => e.preventDefault()}
@@ -631,6 +706,7 @@ export function RichTextEditor({
           <button
             type="button"
             title="Bullet List"
+            disabled={disabled}
             className={`editor-btn ${isBulletList ? "is-active" : ""}`}
             aria-label="Bullet List"
             onMouseDown={(e) => e.preventDefault()}
@@ -641,6 +717,7 @@ export function RichTextEditor({
           <button
             type="button"
             title="Numbered List"
+            disabled={disabled}
             className={`editor-btn ${isOrderedList ? "is-active" : ""}`}
             aria-label="Numbered List"
             onMouseDown={(e) => e.preventDefault()}
@@ -651,6 +728,7 @@ export function RichTextEditor({
           <button
             type="button"
             title="Quote"
+            disabled={disabled}
             className={`editor-btn ${isBlockquote ? "is-active" : ""}`}
             aria-label="Quote"
             onMouseDown={(e) => e.preventDefault()}
@@ -671,6 +749,7 @@ export function RichTextEditor({
               ref={linkBtnRef}
               type="button"
               title="Add Link"
+              disabled={disabled}
               className={`editor-btn ${showLinkPopover ? "is-active" : ""}`}
               aria-label="Add Link"
               onMouseDown={(e) => e.preventDefault()}
@@ -701,8 +780,13 @@ export function RichTextEditor({
                       autoFocus
                       onChange={(e) => setLinkUrlInput(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); handleApplyLink(); }
-                        else if (e.key === "Escape") { e.preventDefault(); setShowLinkPopover(false); }
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleApplyLink();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          setShowLinkPopover(false);
+                        }
                       }}
                     />
                     <div className="course-wizard-link-actions">
@@ -733,50 +817,59 @@ export function RichTextEditor({
               ref={emojiBtnRef}
               type="button"
               title="Emoji"
+              disabled={disabled}
               className={`editor-btn ${showEmojiPicker ? "is-active" : ""}`}
               aria-label="Emoji"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => { e.preventDefault(); setShowEmojiPicker((p) => !p); }}
+              onClick={(e) => {
+                e.preventDefault();
+                setShowEmojiPicker((p) => !p);
+              }}
             >
               <Smiley size={15} />
             </button>
-          {showEmojiPicker &&
-            emojiPickerPos &&
-            createPortal(
-              <div
-                ref={emojiPickerRef}
-                className="course-wizard-emoji-popover"
-                style={{
-                  position: "fixed",
-                  top: `${emojiPickerPos.top}px`,
-                  left: `${emojiPickerPos.left}px`,
-                  zIndex: 99999,
-                }}
-              >
-                <EmojiPicker
-                  onEmojiClick={(emojiData) => {
-                    const ta = textareaRef.current;
-                    const pos = ta ? ta.selectionStart : sel.start;
-                    const newVal = value.slice(0, pos) + emojiData.emoji + value.slice(pos);
-                    onChange(newVal);
-                    setShowEmojiPicker(false);
-                    requestAnimationFrame(() => {
-                      if (!ta) return;
-                      const np = pos + emojiData.emoji.length;
-                      ta.focus();
-                      ta.setSelectionRange(np, np);
-                      setSel({ start: np, end: np });
-                    });
+            {showEmojiPicker &&
+              emojiPickerPos &&
+              createPortal(
+                <div
+                  ref={emojiPickerRef}
+                  className="course-wizard-emoji-popover"
+                  style={{
+                    position: "fixed",
+                    top: `${emojiPickerPos.top}px`,
+                    left: `${emojiPickerPos.left}px`,
+                    zIndex: 99999,
                   }}
-                  theme={appTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
-                  width={320}
-                  height={360}
-                  lazyLoadEmojis
-                  searchPlaceholder="Search emoji…"
-                />
-              </div>,
-              document.body,
-            )}
+                >
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) => {
+                      const ta = textareaRef.current;
+                      const pos = ta ? ta.selectionStart : sel.start;
+                      const newVal =
+                        value.slice(0, pos) +
+                        emojiData.emoji +
+                        value.slice(pos);
+                      onChange(newVal);
+                      setShowEmojiPicker(false);
+                      requestAnimationFrame(() => {
+                        if (!ta) return;
+                        const np = pos + emojiData.emoji.length;
+                        ta.focus();
+                        ta.setSelectionRange(np, np);
+                        setSel({ start: np, end: np });
+                      });
+                    }}
+                    theme={
+                      appTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT
+                    }
+                    width={320}
+                    height={360}
+                    lazyLoadEmojis
+                    searchPlaceholder="Search emoji…"
+                  />
+                </div>,
+                document.body,
+              )}
           </div>
         </div>
       </div>
@@ -786,6 +879,7 @@ export function RichTextEditor({
         ref={textareaRef}
         className="course-wizard-editor__raw-markdown"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         onSelect={syncSel}
         onKeyUp={syncSel}

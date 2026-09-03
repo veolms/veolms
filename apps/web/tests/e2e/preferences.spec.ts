@@ -1580,7 +1580,8 @@ test("role, appearance, and academy palette persist across routes and reloads", 
     .getByRole("button", { name: "Open role and appearance menu" })
     .click({ position: { x: 24, y: 24 } });
   await expect(paletteMenu).toBeHidden();
-  await page.getByRole("menuitemradio", { name: "Creator" }).click();
+  await page.evaluate(() => localStorage.setItem("veolms-role", "creator"));
+  await page.reload();
   await expect(
     page.getByRole("complementary", { name: "Creator navigation" }),
   ).toBeVisible();
@@ -3389,12 +3390,12 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   expect(compactOptionGeometry.previewBackdropFilter).toBe(
     "blur(8px) saturate(1.08)",
   );
-  expect(compactOptionGeometry.previewBokehOpacity).toBe("0.5");
+  expect(compactOptionGeometry.previewBokehOpacity).toBe("0.25");
   await expect(resetGlow).toBeDisabled();
-  await expect(intensity).toHaveValue("50");
+  await expect(intensity).toHaveValue("25");
   await expect(intensity).toHaveAttribute("min", "0");
   await expect(intensity).toHaveAttribute("max", "100");
-  await expect(intensity).toHaveAttribute("aria-valuetext", "50 percent");
+  await expect(intensity).toHaveAttribute("aria-valuetext", "25 percent");
   await expect(blur).toHaveValue("8");
   await expect(blur).toHaveAttribute("min", "0");
   await expect(blur).toHaveAttribute("max", "32");
@@ -3678,7 +3679,7 @@ test("sidebar glow follows the theme, accepts overrides or off, and persists", a
   await expect(circleShape).toHaveAttribute("aria-checked", "true");
   await expect(shapeSize).toHaveValue("100");
   await expect(blur).toHaveValue("8");
-  await expect(intensity).toHaveValue("50");
+  await expect(intensity).toHaveValue("25");
   await expect(resetGlow).toBeDisabled();
   await expect(root).toHaveAttribute("data-sidebar-glow", "theme");
   await expect(root).toHaveAttribute("data-sidebar-glow-shape", "circle");
@@ -3752,6 +3753,52 @@ test.describe("wide touch tablet navigation", () => {
     hasTouch: true,
     viewport: { width: 1180, height: 820 },
     deviceScaleFactor: 2,
+  });
+
+  test("swipes the sidebar from empty surface space", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("veolms-sidebar-mode", "expanded");
+      window.localStorage.setItem("veolms-sidebar-width", "252");
+    });
+    await openApp(page, "/notifications");
+
+    const app = page.locator(".courses-app");
+    const sidebar = page.locator(".courses-sidebar");
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveCSS("touch-action", "pan-y");
+
+    const emptySidebarPoint = await sidebar.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const point = {
+        x: bounds.left + bounds.width / 2,
+        y: bounds.bottom - 6,
+      };
+      const target = document.elementFromPoint(point.x, point.y);
+      if (
+        target instanceof Element &&
+        target.closest("button, a, input, select, textarea, [role='separator']")
+      ) {
+        throw new Error("Expected the sidebar bottom padding to be empty");
+      }
+      return point;
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [emptySidebarPoint],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: emptySidebarPoint.x - 96, y: emptySidebarPoint.y }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+
+    await expect(app).toHaveClass(/courses-app--collapsed/);
+    await expectStoredValue(page, "veolms-sidebar-mode", "collapsed");
   });
 
   test("tracks the touch sidebar rail continuously and settles after release", async ({

@@ -1,4 +1,5 @@
 import type { RecentMentionItem } from "./notificationsData";
+import { AtIcon as At } from "@phosphor-icons/react/At";
 
 export interface RecentMentionsWidgetProps {
   mentions: readonly RecentMentionItem[];
@@ -14,7 +15,7 @@ export function RecentMentionsWidget({
   return (
     <section
       aria-labelledby="recent-mentions-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between">
@@ -28,7 +29,7 @@ export function RecentMentionsWidget({
           <button
             type="button"
             onClick={onViewAll}
-            className="text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
+            className="cursor-pointer text-xs font-semibold text-(--accent) hover:underline"
           >
             View all
           </button>
@@ -37,24 +38,19 @@ export function RecentMentionsWidget({
 
       <div className="mt-4 flex flex-col gap-3">
         {mentions.map((mention) => (
-          <div
+          <button
+            type="button"
             key={mention.id}
             onClick={() => onSelectMention?.(mention)}
-            className="flex items-start gap-3 rounded-xl p-2 transition-colors hover:bg-(--hover) cursor-pointer text-left"
+            className="flex w-full cursor-pointer items-start gap-3 rounded-xl p-2 text-left transition-colors hover:bg-(--hover)"
           >
-            <img
-              src={mention.authorAvatar}
-              alt={mention.authorName}
-              className="h-9 w-9 rounded-full object-cover border border-(--border) bg-(--surface-strong) shrink-0"
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--border) bg-(--surface-strong) text-purple-400">
+              <At size={17} weight="bold" aria-hidden="true" />
+            </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-bold text-xs sm:text-sm text-(--text) truncate">
-                  {mention.authorName}
+                  {mention.title}
                 </span>
                 <span className="text-[11px] text-(--muted) shrink-0">
                   {mention.timestamp}
@@ -64,7 +60,7 @@ export function RecentMentionsWidget({
                 {mention.context}
               </p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </section>

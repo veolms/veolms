@@ -22,6 +22,7 @@ import type {
   SidebarPreferences,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
+import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   normalizeSettingsTab,
   rememberSettingsTab,
@@ -102,6 +103,7 @@ export interface SettingsPageProps {
   onSidebarPreferencesChange: (preferences: SidebarPreferences) => void;
   sidebarMode: SidebarMode;
   onSidebarModeChange: (mode: SidebarMode) => void;
+  navigationItems?: readonly NavigationItemWithMetadata[];
   navigationVisibleItems?: readonly string[];
   onNavigationVisibilityChange?: (visibleItems: string[]) => void;
 }
@@ -141,6 +143,7 @@ function SettingsTabContent({
           academyTheme={pageProps.academyTheme}
           sidebarMode={pageProps.sidebarMode}
           onSidebarModeChange={pageProps.onSidebarModeChange}
+          navigationItems={pageProps.navigationItems}
           role={pageProps.role}
           navigationVisibleItems={pageProps.navigationVisibleItems}
           onNavigationVisibilityChange={pageProps.onNavigationVisibilityChange}
@@ -178,6 +181,7 @@ export function SettingsPage({
   onSidebarPreferencesChange,
   sidebarMode,
   onSidebarModeChange,
+  navigationItems,
   navigationVisibleItems,
   onNavigationVisibilityChange,
 }: SettingsPageProps) {
@@ -199,6 +203,7 @@ export function SettingsPage({
     onSidebarPreferencesChange,
     sidebarMode,
     onSidebarModeChange,
+    navigationItems,
     navigationVisibleItems,
     onNavigationVisibilityChange,
   };
@@ -321,6 +326,7 @@ export function SettingsPage({
         tabListRef={tabListRef}
         id="settings-tab-panel"
         className="settings-tab-content"
+        slideClassName="pb-8"
         stateAttribute="data-settings-tab"
         labelledBy={`settings-tab-${activeTab}`}
       >

@@ -7,6 +7,7 @@ import type {
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { OAUTH_STATE_COOKIE } from "../shared/auth.constants.ts";
+import type { SessionUser } from "../shared/auth.types.ts";
 import { generatePkce, generateRandomToken } from "../shared/auth.utils.ts";
 import {
   fetchOauthProfile,
@@ -129,42 +130,60 @@ export function createOauthService({
   async function login(
     provider: OauthProviderName,
     profile: OauthProfile,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
-    let user = await authService.findUserByOauthAccount(
-      provider,
-      profile.providerUserId,
-    );
-
-    if (!user) {
-      const existingUser = await authService.findVerifiedUserByEmail(
-        profile.email,
+    let user: SessionUser | undefined =
+      await authService.findUserByOauthAccount(
+        provider,
+        profile.providerUserId,
       );
 
-      if (!existingUser) {
-        throw new AppError(
-          400,
-          "REGISTRATION_REQUIRED",
-          "Please register first using your Google or GitHub account.",
-        );
-      }
+    if (!user) {
+      const existingUser =
+        (await authService.findVerifiedUserByEmail(profile.email)) ||
+        (await authService.findUserByIdentifier(profile.email, "email"));
 
-      await authService.linkOauthAccount({
-        userId: existingUser.id,
-        provider,
-        providerUserId: profile.providerUserId,
-      });
-      user = existingUser;
+      if (existingUser) {
+        await authService.linkOauthAccount({
+          userId: existingUser.id,
+          provider,
+          providerUserId: profile.providerUserId,
+        });
+        user = existingUser;
+      } else {
+        const localPart = profile.email.split("@")[0] || "oauth_user";
+        const username = await authService.generateUniqueUsername(
+          profile.username || localPart,
+        );
+        const userId = await authService.createUser({
+          email: profile.email,
+          phoneNo: null,
+          username,
+          displayName: profile.name || localPart,
+          emailVerified: true,
+          oauth: { provider, providerUserId: profile.providerUserId },
+        });
+        user = await authService.requireUser(userId);
+      }
     }
 
     const session = await sessionService.establishSession(user, request);
-    return { user, session };
+    const rbac = await authService.getUserRbac(user.id);
+    return { user: { ...user, ...rbac }, session };
   }
 
   async function register(
     request: OauthRegisterRequest,
     profile: OauthProfile,
-    requestMeta: { ip: string; userAgent: string | null },
+    requestMeta: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
     const provider: OauthProviderName = request.provider;
 
@@ -178,40 +197,41 @@ export function createOauthService({
       );
     }
 
-    const existingUser = await authService.findVerifiedUserByEmail(
-      profile.email,
-    );
+    let user: SessionUser | undefined =
+      (await authService.findVerifiedUserByEmail(profile.email)) ||
+      (await authService.findUserByIdentifier(profile.email, "email"));
 
-    if (existingUser) {
+    let statusCode: 200 | 201 = 200;
+
+    if (user) {
       await authService.linkOauthAccount({
-        userId: existingUser.id,
+        userId: user.id,
         provider,
         providerUserId: profile.providerUserId,
       });
-
-      const session = await sessionService.establishSession(
-        existingUser,
-        requestMeta,
+    } else {
+      statusCode = 201;
+      const localPart = profile.email.split("@")[0] || "oauth_user";
+      const username = await authService.generateUniqueUsername(
+        request.username || profile.username || localPart,
       );
-      return { statusCode: 200 as const, user: existingUser, session };
+      const userId = await authService.createUser({
+        email: profile.email,
+        phoneNo: null,
+        username,
+        displayName: request.displayName || profile.name || localPart,
+        emailVerified: true,
+        oauth: { provider, providerUserId: profile.providerUserId },
+      });
+      user = await authService.requireUser(userId);
     }
 
-    const localPart = profile.email.split("@")[0] || "oauth_user";
-    const username = await authService.generateUniqueUsername(
-      request.username || profile.username || localPart,
+    const session = await sessionService.establishSession(
+      user,
+      requestMeta,
     );
-    const userId = await authService.createUser({
-      email: profile.email,
-      phoneNo: null,
-      username,
-      displayName: request.displayName || profile.name || localPart,
-      emailVerified: true,
-      oauth: { provider, providerUserId: profile.providerUserId },
-    });
-    const user = await authService.requireUser(userId);
-    const session = await sessionService.establishSession(user, requestMeta);
-
-    return { statusCode: 201 as const, user, session };
+    const rbac = await authService.getUserRbac(user.id);
+    return { statusCode, user: { ...user, ...rbac }, session };
   }
 
   return {

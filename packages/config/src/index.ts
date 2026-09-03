@@ -4,6 +4,24 @@ const booleanEnvironmentValueSchema = z
   .enum(["true", "false"])
   .transform((value) => value === "true");
 
+const notificationRetryScheduleSchema = z
+  .string()
+  .default("60,300,1800,7200")
+  .transform((value, context) => {
+    const parsed = value.split(",").map((part) => Number(part.trim()));
+    if (
+      parsed.length === 0 ||
+      parsed.some((item) => !Number.isInteger(item) || item <= 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Expected a comma-separated list of positive integers.",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
 const serverConfigSchema = z.object({
   DATABASE_URL: z
     .string()
@@ -16,12 +34,29 @@ const serverConfigSchema = z.object({
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
   API_PUBLIC_URL: z.string().optional(),
+  TRUST_PROXY: z
+    .string()
+    .default("false")
+    .transform((val) => {
+      const trimmed = val.trim().toLowerCase();
+      if (trimmed === "true") return true;
+      if (trimmed === "false") return false;
+      const num = Number(trimmed);
+      if (Number.isFinite(num) && Number.isInteger(num) && num > 0) {
+        return num;
+      }
+      if (trimmed.includes(",")) {
+        return trimmed.split(",").map((s) => s.trim());
+      }
+      return val.trim();
+    }),
 
   // Auth Configs
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters")
     .default("default_session_secret_at_least_32_chars_long"),
+  SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   MFA_ENCRYPTION_KEY: z
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
@@ -66,6 +101,18 @@ const serverConfigSchema = z.object({
    */
   EMAIL_TRANSPORT: z.enum(["smtp", "console"]).optional(),
 
+  // Notification outbox and email worker
+  NOTIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
+  NOTIFICATION_LEASE_SECONDS: z.coerce.number().int().min(30).default(300),
+  NOTIFICATION_OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  NOTIFICATION_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  NOTIFICATION_RETRY_SECONDS: notificationRetryScheduleSchema,
+  NOTIFICATION_OUTBOX_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(30),
+
   // SMS Delivery
   SMS_PRIMARY_URL: z.string().default("https://api.nexmo.com/v1/messages"),
   SMS_PRIMARY_KEY: z.string().optional(),
@@ -88,6 +135,11 @@ const serverConfigSchema = z.object({
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
   FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
+
+  // Razorpay Gateway
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const webConfigSchema = z.object({
@@ -116,6 +168,24 @@ function findInsecureDefaults(parsed: ParsedServerConfig): string[] {
 }
 
 /**
+ * Config keys with no safe default that must be explicitly set once
+ * deployed. Unlike INSECURE_DEFAULTS these have no fallback value at all
+ * (`.optional()` in the schema) — left unset, callers have historically
+ * papered over the gap with an ad-hoc placeholder instead of failing loudly.
+ * Payment credentials belong here: a missing key must never silently
+ * degrade into fake credentials that fail confusingly at the gateway.
+ */
+const REQUIRED_IN_PRODUCTION: Array<keyof ParsedServerConfig> = [
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_WEBHOOK_SECRET",
+];
+
+function findMissingRequiredInProduction(parsed: ParsedServerConfig): string[] {
+  return REQUIRED_IN_PRODUCTION.filter((key) => !parsed[key]);
+}
+
+/**
  * Falls back to `console` only when nothing is listening for mail anyway: a
  * non-production process still pointing at the default localhost SMTP host.
  * Any explicitly configured host means the operator wants real delivery, so a
@@ -141,12 +211,19 @@ export function loadServerConfig(
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
   const offenders = findInsecureDefaults(parsed);
+  const missingRequired = findMissingRequiredInProduction(parsed);
 
   if (parsed.NODE_ENV === "production") {
     if (offenders.length > 0) {
       throw new Error(
         `Refusing to start in production with default value(s) for: ${offenders.join(", ")}. ` +
           `Set real secrets via environment variables.`,
+      );
+    }
+    if (missingRequired.length > 0) {
+      throw new Error(
+        `Refusing to start in production without required value(s) for: ${missingRequired.join(", ")}. ` +
+          `Set these via environment variables — a payment gateway must never boot with missing credentials.`,
       );
     }
   } else if (offenders.length > 0) {
@@ -163,3 +240,18 @@ export function loadServerConfig(
 export function loadWebConfig(environment: Record<string, string | undefined>) {
   return webConfigSchema.parse(environment);
 }
+
+export {
+  resolveProviderName,
+  fleetManagerConfigSchema,
+  loadFleetManagerConfig,
+  type FleetManagerConfig,
+} from "./fleet-manager.ts";
+
+export {
+  resolveDefaultUploadConcurrency,
+  mediaWorkerConfigSchema,
+  loadMediaWorkerConfig,
+  type DefaultUploadConcurrency,
+  type MediaWorkerConfig,
+} from "./media-worker.ts";

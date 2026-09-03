@@ -1,11 +1,20 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+
+try {
+  process.loadEnvFile(path.join(workspaceRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+
 const root = path.resolve(scriptDirectory, "../build/client");
 const portArgumentIndex = process.argv.indexOf("--port");
 const commandLinePort =
@@ -18,6 +27,20 @@ const host =
   hostArgumentIndex >= 0 && process.argv[hostArgumentIndex + 1]
     ? process.argv[hostArgumentIndex + 1]
     : process.env.HOST || "127.0.0.1";
+const apiTargetArgumentIndex = process.argv.indexOf("--api-target");
+const apiTargetValue =
+  apiTargetArgumentIndex >= 0 && process.argv[apiTargetArgumentIndex + 1]
+    ? process.argv[apiTargetArgumentIndex + 1]
+    : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
+const apiTarget = new URL(apiTargetValue);
+const apiOrigin = apiTarget.origin;
+const mediaTargetArgumentIndex = process.argv.indexOf("--media-target");
+const mediaTargetValue =
+  mediaTargetArgumentIndex >= 0 && process.argv[mediaTargetArgumentIndex + 1]
+    ? process.argv[mediaTargetArgumentIndex + 1]
+    : process.env.VITE_COURSE_MEDIA_BASE_URL || "https://dev.veolms.org";
+const mediaTarget = new URL(mediaTargetValue);
+const mediaOrigin = mediaTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -54,8 +77,83 @@ const resolveRequestPath = async (pathname) => {
   return path.join(root, "index.html");
 };
 
+const proxyRequestToOrigin = (
+  request,
+  response,
+  requestUrl,
+  targetOrigin,
+  unavailableError,
+) => {
+  const targetUrl = new URL(
+    `${requestUrl.pathname}${requestUrl.search}`,
+    targetOrigin,
+  );
+  const sendRequest =
+    targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+  const proxyRequest = sendRequest(
+    targetUrl,
+    {
+      method: request.method,
+      headers: { ...request.headers, host: targetUrl.host },
+    },
+    (proxyResponse) => {
+      response.writeHead(
+        proxyResponse.statusCode || 502,
+        proxyResponse.headers,
+      );
+      proxyResponse.pipe(response);
+    },
+  );
+
+  proxyRequest.on("error", () => {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+
+    response.writeHead(502, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    response.end(
+      JSON.stringify({
+        success: false,
+        statusCode: 502,
+        error: unavailableError,
+      }),
+    );
+  });
+
+  request.on("aborted", () => proxyRequest.destroy());
+  response.on("close", () => {
+    if (!response.writableEnded) proxyRequest.destroy();
+  });
+  request.pipe(proxyRequest);
+};
+
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
+  if (
+    requestUrl.pathname === "/api" ||
+    requestUrl.pathname.startsWith("/api/")
+  ) {
+    proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
+      code: "API_UNAVAILABLE",
+      message: "The preview server could not reach the API.",
+    });
+    return;
+  }
+  if (
+    requestUrl.pathname === "/course-hls" ||
+    requestUrl.pathname.startsWith("/course-hls/")
+  ) {
+    proxyRequestToOrigin(request, response, requestUrl, mediaOrigin, {
+      code: "COURSE_MEDIA_UNAVAILABLE",
+      message: "The preview server could not reach the course media origin.",
+    });
+    return;
+  }
+
   const filePath = await resolveRequestPath(requestUrl.pathname);
   if (!filePath) {
     response.writeHead(400).end("Bad request");

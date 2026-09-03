@@ -4,14 +4,19 @@ import {
   CONTROL_RADIUS_DEFAULT,
   CONTROL_RADIUS_KEY,
   ELEVATED_SURFACES_KEY,
+  ELASTIC_SCROLL_APPEARANCE_DEFAULT,
   applySidebarGlowShapeSize,
   getControlRadiusBootstrapScript,
   getScrollbarBootstrapScript,
   getSurfaceDepthBootstrapScript,
   LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_PREFERENCES_KEY,
+  LEARNING_SEEK_INTERVAL_DEFAULT,
   normalizeControlRadiusCustom,
   normalizeControlRadiusPreset,
+  normalizeElasticScrollAppearance,
+  normalizeLearningSeekInterval,
+  normalizeVideoPlayerTheme,
   normalizePageTabColors,
   normalizeScrollbarStyle,
   normalizeSidebarDockItems,
@@ -24,6 +29,7 @@ import {
   readControlRadiusPreference,
   readLearningPreferences,
   readElevatedSurfaces,
+  readElasticScrollPreferences,
   readPageTabColors,
   readScrollbarStyle,
   SCROLLBAR_STYLE_DEFAULT,
@@ -70,6 +76,20 @@ describe("scrollbar style preference", () => {
     runScrollbarBootstrap();
 
     expect(document.documentElement.dataset.scrollbarStyle).toBe("theme");
+  });
+});
+
+describe("elastic scroller preference", () => {
+  it("defaults to the 2D appearance and normalizes unsupported values", () => {
+    expect(ELASTIC_SCROLL_APPEARANCE_DEFAULT).toBe("2d");
+    expect(readElasticScrollPreferences().appearance).toBe("2d");
+    expect(normalizeElasticScrollAppearance("unsupported")).toBe("2d");
+  });
+
+  it("hydrates the 2D default before React mounts", () => {
+    runScrollbarBootstrap();
+
+    expect(document.documentElement.dataset.elasticScrollAppearance).toBe("2d");
   });
 });
 
@@ -299,6 +319,22 @@ describe("learning preference persistence", () => {
       videoQuality: "1080",
       reminderDays: ["sat", "sun"],
     });
+  });
+
+  it("normalizes the seek interval to the supported 5–60 second range", () => {
+    expect(normalizeLearningSeekInterval(5)).toBe(5);
+    expect(normalizeLearningSeekInterval(47.4)).toBe(47);
+    expect(normalizeLearningSeekInterval(0)).toBe(5);
+    expect(normalizeLearningSeekInterval(90)).toBe(60);
+    expect(normalizeLearningSeekInterval("invalid")).toBe(
+      LEARNING_SEEK_INTERVAL_DEFAULT,
+    );
+  });
+
+  it("defaults unsupported player themes to YouTube", () => {
+    expect(normalizeVideoPlayerTheme("aurora")).toBe("aurora");
+    expect(normalizeVideoPlayerTheme("minimal")).toBe("minimal");
+    expect(normalizeVideoPlayerTheme("unsupported")).toBe("youtube");
   });
 
   it("returns the existing default object for invalid JSON", () => {

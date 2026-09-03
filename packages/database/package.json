@@ -2,13 +2,17 @@
   "name": "@veolms/database",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fleet": "./src/fleet/index.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "migrate": "node --env-file-if-exists=../../.env src/migrate.ts",
     "seed": "node --env-file-if-exists=../../.env src/seed.ts",
-    "reset": "node --env-file-if-exists=../../.env src/reset.ts"
+    "reset": "node --env-file-if-exists=../../.env src/reset.ts",
+    "migration:create": "node ./scripts/create-migration.ts"
   },
   "dependencies": {
     "@veolms/config": "workspace:*",

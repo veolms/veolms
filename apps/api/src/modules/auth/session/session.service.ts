@@ -4,6 +4,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { SESSION_TTL_MS } from "../shared/auth.constants.ts";
+import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
 import type {
   AuthenticatedRequestContext,
   EstablishedSession,
@@ -14,12 +15,14 @@ import * as mfaRepository from "../mfa/mfa.repository.ts";
 import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
 import { generateRandomToken, hashToken } from "../shared/auth.utils.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
 }
 
 export function createSessionService({ database }: SessionServiceOptions) {
+  const outbox = createOutboxService();
   /** Resolves which factors an account actually has enrolled. */
   async function resolveMfaState(
     userId: string,
@@ -47,21 +50,62 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
   async function establishSession(
     user: SessionUser,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ): Promise<EstablishedSession> {
-    const mfa = await resolveMfaState(user.id, Boolean(user.mfa_mandatory));
+    const roles = await userRepository.listUserRoleNames(database, user.id);
+    const mfa = await resolveMfaState(
+      user.id,
+      isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
+    );
 
     const token = generateRandomToken();
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    const mfaVerified = !mfa.mfaRequired;
+
+    // Check if the client supplied an active, unexpired session belonging to this same user
+    if (request.existingSessionToken) {
+      const existingTokenHash = hashToken(request.existingSessionToken);
+      const existingSession = await sessionRepository.findActiveSession(
+        database,
+        existingTokenHash,
+      );
+
+      if (existingSession && existingSession.user_id === user.id) {
+        // Reuse the existing session record and rotate its token with optimistic concurrency check
+        const rotated = await sessionRepository.rotateSession(
+          database,
+          existingSession.id,
+          {
+            previousTokenHash: existingTokenHash,
+            tokenHash,
+            ipAddress: request.ip,
+            userAgent: request.userAgent,
+            mfaVerified,
+            expiresAt,
+          },
+        );
+
+        if (rotated) {
+          return { token, sessionId: existingSession.id, mfa };
+        }
+      }
+    }
+
     const sessionId = crypto.randomUUID();
 
     await sessionRepository.insertSession(database, {
       id: sessionId,
       userId: user.id,
-      tokenHash: hashToken(token),
+      tokenHash,
       ipAddress: request.ip,
       userAgent: request.userAgent,
-      mfaVerified: !mfa.mfaRequired,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      mfaVerified,
+      expiresAt,
     });
 
     return { token, sessionId, mfa };
@@ -72,7 +116,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     sessionId: string,
   ): Promise<void> {
     await sessionRepository.markSessionMfaVerified(database, sessionId);
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       sessionId,
@@ -80,7 +124,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
   }
 
   async function logout(sessionId: string): Promise<void> {
-    await sessionRepository.deleteSession(database, sessionId);
+    await sessionRepository.revokeSession(database, sessionId);
   }
 
   async function listSessions(userId: string) {
@@ -91,18 +135,37 @@ export function createSessionService({ database }: SessionServiceOptions) {
     userId: string,
     sessionId: string,
   ): Promise<void> {
-    await sessionRepository.deleteUserSession(database, userId, sessionId);
+    await database.transaction().execute(async (trx) => {
+      const revoked = await sessionRepository.revokeUserSession(
+        trx,
+        userId,
+        sessionId,
+      );
+      if (!revoked) return;
+      await outbox.publish(trx, {
+        type: "auth.session_revoked",
+        version: 1,
+        dedupeKey: `auth.session_revoked:${sessionId}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId, sessionId },
+      });
+    });
   }
 
   async function revokeOtherSessions(
     userId: string,
     currentSessionId: string,
   ): Promise<void> {
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       currentSessionId,
     );
+  }
+
+  async function purgeOldSessions(cutoffDays = 30): Promise<number> {
+    const cutoffDate = new Date(Date.now() - cutoffDays * 24 * 60 * 60 * 1000);
+    return sessionRepository.purgeOldSessions(database, cutoffDate);
   }
 
   async function authenticate(
@@ -121,10 +184,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const [totpEnabled, roles, permissions, passkeyCount] = await Promise.all([
+    const [totpEnabled, roles, permissions, menus, passkeyCount] = await Promise.all([
       mfaRepository.isTotpEnabled(database, user.id),
       userRepository.listUserRoleNames(database, user.id),
       userRepository.listUserPermissions(database, user.id),
+      userRepository.listUserMenus(database, user.id),
       mfaRepository.countUserPasskeys(database, user.id),
     ]);
 
@@ -143,9 +207,13 @@ export function createSessionService({ database }: SessionServiceOptions) {
         phoneNo: user.phone_no,
         roles,
         permissions,
+        menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
-        mfaMandatory: Boolean(user.mfa_mandatory),
+        mfaMandatory: isMfaMandatoryAccount(
+          Boolean(user.mfa_mandatory),
+          roles,
+        ),
       },
       session: {
         id: session.id,
@@ -167,6 +235,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     listSessions,
     revokeSession,
     revokeOtherSessions,
+    purgeOldSessions,
     authenticate,
   };
 }

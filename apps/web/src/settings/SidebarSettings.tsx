@@ -3,6 +3,7 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { CircleHalfIcon as CircleHalf } from "@phosphor-icons/react/CircleHalf";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsSixVerticalIcon as DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
+import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
@@ -61,8 +62,9 @@ import type {
 } from "./settingsPreferences";
 import {
   getDefaultNavigationVisibility,
-  getNavigationItems,
+  getPublicNavigationItems,
 } from "../shell/navigation";
+import type { NavigationItemWithMetadata } from "../shell/navigation";
 import type { ProfileRole } from "./profilePreferences";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
@@ -200,6 +202,7 @@ export interface SidebarSettingsProps {
   sidebarMode: SidebarMode;
   onSidebarModeChange?: (mode: SidebarMode) => void;
   role?: ProfileRole;
+  navigationItems?: readonly NavigationItemWithMetadata[];
   navigationVisibleItems?: readonly string[];
   onNavigationVisibilityChange?: (visibleItems: string[]) => void;
 }
@@ -211,6 +214,7 @@ export function SidebarSettings({
   sidebarMode,
   onSidebarModeChange,
   role = "student",
+  navigationItems: providedNavigationItems,
   navigationVisibleItems,
   onNavigationVisibilityChange,
 }: SidebarSettingsProps) {
@@ -240,6 +244,7 @@ export function SidebarSettings({
   const showKeyboardShortcuts = preferences.showKeyboardShortcuts !== false;
   const showLabels = preferences.showCollapsedLabels !== false;
   const showCollapsedLogo = preferences.showCollapsedLogo !== false;
+  const showSidebarOnMobile = preferences.showSidebarOnMobile === true;
   const highlightActive = preferences.highlightActive !== false;
   const elevateMenus = preferences.elevateMenus !== false;
   const glowPalette = normalizeSidebarGlow(preferences.glowPalette);
@@ -251,9 +256,9 @@ export function SidebarSettings({
   const glowIntensity = normalizeSidebarGlowIntensity(
     preferences.glowIntensity,
   );
-  const navigationItems = getNavigationItems(role);
+  const navigationItems = providedNavigationItems ?? getPublicNavigationItems();
   const visibleNavigationItems = new Set(
-    navigationVisibleItems ?? getDefaultNavigationVisibility(role),
+    navigationVisibleItems ?? getDefaultNavigationVisibility(navigationItems),
   );
   const glowIsDefault =
     glowPalette === SIDEBAR_GLOW_DEFAULT &&
@@ -1083,6 +1088,17 @@ export function SidebarSettings({
                 checked={elevateMenus}
                 onChange={(value) => update({ elevateMenus: value })}
                 label="Elevate sidebar menus"
+              />
+            </SettingRow>
+            <SettingRow
+              icon={DeviceMobile}
+              label="Show sidebar on mobile"
+              note="Hides the bottom navigation. Swipe right from the left edge to open the sidebar."
+            >
+              <SettingsToggle
+                checked={showSidebarOnMobile}
+                onChange={(value) => update({ showSidebarOnMobile: value })}
+                label="Show sidebar on mobile"
               />
             </SettingRow>
             <SettingRow
