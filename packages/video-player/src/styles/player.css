@@ -43,37 +43,28 @@
 }
 
 @keyframes video-player-buffering-rotate {
+  from {
+    transform: translateZ(0) rotate(0deg);
+  }
+
   to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes video-player-buffering-dash {
-  0% {
-    stroke-dasharray: 1 126;
-    stroke-dashoffset: 0;
-  }
-
-  50% {
-    stroke-dasharray: 90 126;
-    stroke-dashoffset: -35;
-  }
-
-  100% {
-    stroke-dasharray: 90 126;
-    stroke-dashoffset: -124;
+    transform: translateZ(0) rotate(360deg);
   }
 }
 
 .video-player-buffering-spinner {
-  animation: video-player-buffering-rotate 1.4s linear infinite;
-  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.72));
-  transform-origin: center;
+  display: block;
+  animation: video-player-buffering-rotate 0.85s linear infinite;
+  transform: translateZ(0);
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  contain: layout style;
   will-change: transform;
 }
 
 .video-player-buffering-spinner__arc {
-  animation: video-player-buffering-dash 1.4s ease-in-out infinite;
+  stroke-dasharray: 80 126;
+  stroke-dashoffset: 0;
 }
 
 [data-playback-feedback-surface] {
@@ -228,9 +219,9 @@
     transform: none !important;
   }
 
-  .video-player-buffering-spinner,
-  .video-player-buffering-spinner__arc {
+  .video-player-buffering-spinner {
     animation: none !important;
+    transform: none !important;
   }
 
   .video-player-buffering-spinner__arc {

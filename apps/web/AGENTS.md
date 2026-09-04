@@ -118,6 +118,27 @@ Always import DTO request/response types and schemas from `@veolms/contracts`. D
 - Keep feature-specific behavior inside the feature. Move code into shared modules only when it is genuinely reused by multiple features.
 - Prefer explicit component APIs and typed variants over scattered conditional class strings.
 
+### Existing design system and component reuse
+
+VeoLMS already has a visual language and a set of reusable UI pieces. New screens must look and behave like the rest of the product. Do not invent a second design style or rebuild controls that already exist.
+
+Before designing or implementing a new screen:
+
+1. Look at nearby existing screens that solve a similar job (settings, lists, filters, forms, modals, drawers, cards, empty states).
+2. Search shared UI first: `src/components/` (including `src/components/ui/`), `src/icons/`, and feature components that are already the product pattern.
+3. Reuse those components, tokens, spacing, typography, radii, motion, and interaction patterns.
+4. Extend an existing component with a typed variant or optional prop when the need is a small, genuine gap.
+5. Create a new shared component only when no existing one can reasonably express the UI.
+
+Do not:
+
+- Restyle the same control (button, checkbox, input, drawer, modal, icon) with a new look.
+- Duplicate markup or long class lists that already live in a shared component.
+- Introduce a parallel icon, color, or motion language.
+- Make a new screen feel like a different product.
+
+Match existing screens for hierarchy, density, loading/empty/error treatment, and dark mode. Feature-specific layout is fine; a new visual system is not.
+
 ---
 
 ## 3. Tailwind-first Styling
