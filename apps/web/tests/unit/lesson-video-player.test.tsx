@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 import {
-  BUILT_IN_PLAYER_THEME_IDS,
+    BUILT_IN_PLAYER_THEME_IDS,
   BUILT_IN_PLAYER_THEMES,
 } from "@veolms/video-player";
 import type {

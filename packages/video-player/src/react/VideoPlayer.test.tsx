@@ -231,7 +231,7 @@ describe("VideoPlayer integration", () => {
     );
     expect(
       loadingIndicator.querySelector(".video-player-buffering-spinner__arc"),
-    ).toHaveAttribute("stroke-linecap", "round");
+    ).toBeTruthy();
 
     act(() => engine.finishLoadWhileBuffering());
     expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
@@ -283,7 +283,44 @@ describe("VideoPlayer integration", () => {
       document.querySelector('[data-video-player-buffering-spinner=""]'),
     ).toBe(spinner);
 
-    act(() => engine.finishBuffering());
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        lifecycle: "ready",
+        paused: false,
+        playing: false,
+      }),
+    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        paused: false,
+        playing: true,
+      }),
+    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    act(() => vi.advanceTimersByTime(800));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        paused: true,
+        playing: false,
+      }),
+    );
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(
       document.querySelector('[data-video-player-buffering-spinner=""]'),
