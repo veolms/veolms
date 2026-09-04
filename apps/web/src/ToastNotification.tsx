@@ -2,19 +2,40 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   CheckCircle,
   Info,
+  Link,
   WarningCircle,
   XCircle,
   X,
 } from "@phosphor-icons/react";
 
 export type ToastType = "success" | "info" | "warning" | "error";
+export type ToastIcon = "default" | "link";
+
+export interface ToastNotice {
+  message: string;
+  title?: string;
+  type?: ToastType;
+  icon?: ToastIcon;
+}
+
+export type ToastMessage = string | ToastNotice;
 
 export interface ToastNotificationProps {
-  message: string | null;
+  message: ToastMessage | null;
   onDismiss?: () => void;
   duration?: number;
   type?: ToastType;
 }
+
+const normalizeNotice = (
+  message: ToastMessage | null,
+  fallbackType: ToastType,
+): ToastNotice | null => {
+  if (!message) return null;
+  return typeof message === "string"
+    ? { message, type: fallbackType }
+    : { ...message, type: message.type ?? fallbackType };
+};
 
 export function ToastNotification({
   message,
@@ -22,7 +43,9 @@ export function ToastNotification({
   duration = 3200,
   type = "info",
 }: ToastNotificationProps) {
-  const [currentMessage, setCurrentMessage] = useState<string | null>(message);
+  const [currentNotice, setCurrentNotice] = useState<ToastNotice | null>(() =>
+    normalizeNotice(message, type),
+  );
   const [isExiting, setIsExiting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -34,7 +57,7 @@ export function ToastNotification({
   // Handle incoming message changes
   useEffect(() => {
     if (message) {
-      setCurrentMessage(message);
+      setCurrentNotice(normalizeNotice(message, type));
       setIsExiting(false);
       setIsPaused(false);
       remainingTimeRef.current = duration;
@@ -50,7 +73,7 @@ export function ToastNotification({
       timerRef.current = window.setTimeout(() => {
         handleStartExit();
       }, duration);
-    } else if (currentMessage && !isExiting) {
+    } else if (currentNotice && !isExiting) {
       handleStartExit();
     }
 
@@ -58,7 +81,7 @@ export function ToastNotification({
       if (timerRef.current) window.clearTimeout(timerRef.current);
       if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     };
-  }, [message, duration]);
+  }, [message, duration, type]);
 
   const handleStartExit = () => {
     setIsExiting(true);
@@ -66,7 +89,7 @@ export function ToastNotification({
       window.clearTimeout(exitTimerRef.current);
     }
     exitTimerRef.current = window.setTimeout(() => {
-      setCurrentMessage(null);
+      setCurrentNotice(null);
       setIsExiting(false);
       onDismiss?.();
     }, 240); // Matches toastSlideOut duration
@@ -78,7 +101,10 @@ export function ToastNotification({
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       const elapsed = Date.now() - startTimeRef.current;
-      remainingTimeRef.current = Math.max(800, remainingTimeRef.current - elapsed);
+      remainingTimeRef.current = Math.max(
+        800,
+        remainingTimeRef.current - elapsed,
+      );
     }
   };
 
@@ -86,19 +112,25 @@ export function ToastNotification({
     isPausedRef.current = false;
     setIsPaused(false);
     startTimeRef.current = Date.now();
-    if (!isExiting && currentMessage) {
+    if (!isExiting && currentNotice) {
       timerRef.current = window.setTimeout(() => {
         handleStartExit();
       }, remainingTimeRef.current);
     }
   };
 
-  if (!currentMessage) {
+  if (!currentNotice) {
     return null;
   }
 
+  const currentType = currentNotice.type ?? type;
+
   const renderIcon = () => {
-    switch (type) {
+    if (currentNotice.icon === "link") {
+      return <Link size={22} weight="bold" />;
+    }
+
+    switch (currentType) {
       case "success":
         return <CheckCircle size={17} weight="fill" />;
       case "error":
@@ -117,7 +149,7 @@ export function ToastNotification({
 
   return (
     <div
-      className={`toast-notification toast-notification--${type} ${isExiting ? "is-exiting" : ""} ${isPaused ? "is-paused" : ""}`}
+      className={`toast-notification toast-notification--${currentType} ${currentNotice.title ? "is-detailed" : ""} ${isExiting ? "is-exiting" : ""} ${isPaused ? "is-paused" : ""}`}
       style={customStyle}
       role="status"
       aria-live="polite"
@@ -127,7 +159,17 @@ export function ToastNotification({
       <div className="toast-notification__icon-wrap" aria-hidden="true">
         {renderIcon()}
       </div>
-      <div className="toast-notification__message">{currentMessage}</div>
+      {currentNotice.title && (
+        <div className="toast-notification__divider" aria-hidden="true" />
+      )}
+      <div className="toast-notification__content">
+        {currentNotice.title && (
+          <div className="toast-notification__title">{currentNotice.title}</div>
+        )}
+        <div className="toast-notification__message">
+          {currentNotice.message}
+        </div>
+      </div>
       <button
         type="button"
         className="toast-notification__close"

@@ -2,10 +2,7 @@ import type { Generated } from "kysely";
 
 export type OtpIdentifierType = "email" | "phone";
 export type OtpPurpose =
-  | "login"
-  | "registration"
-  | "email_verification"
-  | "phone_verification";
+  "login" | "registration" | "email_verification" | "phone_verification";
 
 export interface AcademyTable {
   id: string;
@@ -21,8 +18,20 @@ export interface UserTable {
   id: string;
   email: string | null;
   phone_no: string | null;
+  phone_verified_at: Date | null;
+  is_deleted: Generated<boolean>;
   username: string;
   display_name: string;
+  avatar_data_url: string | null;
+  bio: string | null;
+  email_public: Generated<boolean>;
+  mobile_public: Generated<boolean>;
+  linkedin_url: string | null;
+  linkedin_public: Generated<boolean>;
+  github_url: string | null;
+  github_public: Generated<boolean>;
+  website_url: string | null;
+  website_public: Generated<boolean>;
   email_verified_at: Date | null;
   mfa_mandatory: Generated<boolean>;
   created_at: Generated<Date>;

@@ -1,5 +1,5 @@
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SidebarSettings } from "../../src/settings/SidebarSettings";
@@ -11,8 +11,7 @@ import type { NavigationItemWithMetadata } from "../../src/shell/navigation";
 
 const navigationFromLabels = (
   labels: readonly string[],
-): NavigationItemWithMetadata[] =>
-  labels.map((label) => [label, SquaresFour]);
+): NavigationItemWithMetadata[] => labels.map((label) => [label, SquaresFour]);
 
 const preferences: SidebarPreferences = {
   iconStyle: "monochrome",
@@ -210,9 +209,7 @@ describe("sidebar settings draft inputs", () => {
   it("updates the sidebar glow shape size through the shared slider", () => {
     const onChange = vi.fn();
     renderSettings(onChange);
-    expect(
-      screen.getByRole("heading", { name: "Size" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Size" })).toBeInTheDocument();
     const slider = screen.getByRole("slider", {
       name: "Sidebar glow shape size",
     });
@@ -355,6 +352,11 @@ describe("sidebar settings draft inputs", () => {
       screen.getByRole("heading", { name: "Sidebar menus" }),
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Sidebar dock" })).toBeVisible();
+    const dockCategory = screen
+      .getByRole("heading", { name: "Sidebar dock" })
+      .closest<HTMLElement>(".settings-sidebar-category-heading");
+    expect(dockCategory).not.toBeNull();
+    const dockCount = within(dockCategory!).getByText("3 visible");
 
     const fixedHeader = screen.getByRole("switch", {
       name: "Fixed collapse control",
@@ -388,7 +390,7 @@ describe("sidebar settings draft inputs", () => {
     });
     expect(readingMode).toBeEnabled();
     expect(readingMode).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("3 visible")).toBeVisible();
+    expect(dockCount).toBeVisible();
 
     expect(
       screen.getByRole("switch", {
@@ -445,7 +447,7 @@ describe("sidebar settings draft inputs", () => {
     expect(settings).toHaveAttribute("aria-checked", "false");
     fireEvent.click(settings);
     expect(settings).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("4 visible")).toBeVisible();
+    expect(dockCount).toHaveTextContent("4 visible");
 
     fireEvent.click(
       readingMode
@@ -453,7 +455,7 @@ describe("sidebar settings draft inputs", () => {
         .querySelector(".settings-row__copy")!,
     );
     expect(readingMode).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText("3 visible")).toBeVisible();
+    expect(dockCount).toHaveTextContent("3 visible");
   });
 
   it("lets creators hide existing sidebar menu items", () => {

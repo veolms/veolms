@@ -8,6 +8,10 @@ import {
 import { APP_HOME_PATH } from "../../src/routing/routeAccess.ts";
 import AuthCallbackRoute from "../../src/routes/auth-callback.tsx";
 import { authStore } from "../../src/store/auth.store.ts";
+import {
+  OAUTH_PROVIDER_STORAGE_KEY,
+  OAUTH_RETURN_TO_STORAGE_KEY,
+} from "../../src/auth/oauthFlow.ts";
 import { renderWithAppProviders } from "./test-utils.tsx";
 
 const navigate = vi.fn();
@@ -42,7 +46,7 @@ describe("oauth callback", () => {
     navigate.mockReset();
     mutateAsync.mockReset();
     authStore.clearAuth();
-    sessionStorage.setItem("veolms_oauth_provider", "google");
+    sessionStorage.setItem(OAUTH_PROVIDER_STORAGE_KEY, "google");
   });
 
   it("sends Google and GitHub straight to MFA when the session still needs it", async () => {
@@ -83,5 +87,32 @@ describe("oauth callback", () => {
         replace: true,
       });
     });
+  });
+
+  it("uses the OAuth login callback to provision a new account", async () => {
+    sessionStorage.setItem(OAUTH_RETURN_TO_STORAGE_KEY, "/learn/course/lesson");
+    mutateAsync.mockResolvedValue({
+      user: loginUser,
+      mfaRequired: false,
+      mfaMandatory: false,
+      totpEnabled: false,
+      passkeyEnabled: false,
+    });
+
+    renderWithAppProviders(<AuthCallbackRoute />, ["/auth/callback"]);
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        provider: "google",
+        code: "oauth-code",
+        state: "abc",
+        redirectUri: `${window.location.origin}/auth/callback`,
+      });
+    });
+    expect(navigate).toHaveBeenCalledWith("/learn/course/lesson", {
+      replace: true,
+    });
+    expect(sessionStorage.getItem(OAUTH_PROVIDER_STORAGE_KEY)).toBeNull();
+    expect(sessionStorage.getItem(OAUTH_RETURN_TO_STORAGE_KEY)).toBeNull();
   });
 });

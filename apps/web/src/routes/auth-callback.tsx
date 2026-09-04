@@ -4,6 +4,12 @@ import { AuthBrandMark } from "../auth/AuthBrandPanel";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
 import { resolvePostAuthPath } from "../auth/postAuthNavigation";
+import {
+  OAUTH_PROVIDER_STORAGE_KEY,
+  OAUTH_RETURN_TO_STORAGE_KEY,
+  clearOauthHandoff,
+  isOauthProvider,
+} from "../auth/oauthFlow";
 import { useOauthLogin } from "../services/auth";
 import { authStore } from "../store/auth.store";
 
@@ -29,12 +35,13 @@ export default function AuthCallbackRoute() {
     if (executedRef.current) return;
     executedRef.current = true;
 
-    const code = searchParams.get("code");
+    const code = searchParams.get("code") ?? searchParams.get("token");
     const state = searchParams.get("state") ?? undefined;
     const error = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
 
     if (error) {
+      clearOauthHandoff();
       setErrorMessage(
         errorDescription || "Authentication was cancelled or failed.",
       );
@@ -42,32 +49,39 @@ export default function AuthCallbackRoute() {
     }
 
     if (!code) {
+      clearOauthHandoff();
       setErrorMessage("No authorization code was returned. Please try again.");
       return;
     }
 
     const redirectUri = `${window.location.origin}/auth/callback`;
-    const storedProvider = sessionStorage.getItem("veolms_oauth_provider") as
-      "google" | "github" | null;
-    const isGithub =
-      searchParams.get("iss")?.includes("github") ||
-      storedProvider === "github";
-    const provider: "google" | "github" = isGithub
-      ? "github"
-      : (storedProvider ?? "google");
+    const storedProvider = sessionStorage.getItem(OAUTH_PROVIDER_STORAGE_KEY);
+    if (!isOauthProvider(storedProvider)) {
+      clearOauthHandoff();
+      setErrorMessage(
+        "We could not identify the OAuth provider. Please restart sign-in.",
+      );
+      return;
+    }
+    const returnTo = sessionStorage.getItem(OAUTH_RETURN_TO_STORAGE_KEY);
 
+    // OAuth login is also the account-provisioning path. The API creates a
+    // missing account or links an existing email account before returning the
+    // authenticated session cookie.
     oauthLoginMutation
       .mutateAsync({
-        provider,
+        provider: storedProvider,
         code,
         state,
         redirectUri,
       })
       .then((response) => {
+        clearOauthHandoff();
         authStore.setUser(response.user);
-        navigate(resolvePostAuthPath(response), { replace: true });
+        navigate(resolvePostAuthPath(response, returnTo), { replace: true });
       })
       .catch((err: unknown) => {
+        clearOauthHandoff();
         const errorObj = err as { message?: string };
         const message =
           errorObj?.message || "Authentication failed. Please try again.";

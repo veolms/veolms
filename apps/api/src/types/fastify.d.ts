@@ -6,8 +6,20 @@ interface AuthenticatedUser {
   username: string;
   name: string; // display name
   displayName: string;
+  avatarDataUrl: string | null;
+  bio: string | null;
+  emailPublic: boolean;
+  mobilePublic: boolean;
+  linkedinUrl: string | null;
+  linkedinPublic: boolean;
+  githubUrl: string | null;
+  githubPublic: boolean;
+  websiteUrl: string | null;
+  websitePublic: boolean;
   email: string | null;
+  emailVerified: boolean;
   phoneNo: string | null;
+  mobileVerified: boolean;
   roles: string[];
   permissions: string[];
   menus: AuthMenuNode[];

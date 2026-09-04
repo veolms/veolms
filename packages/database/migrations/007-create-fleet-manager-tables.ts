@@ -164,3 +164,5 @@ export async function down(database: Kysely<unknown>): Promise<void> {
   await database.schema.dropTable("worker_monitoring").ifExists().execute();
   await database.schema.dropTable("workers").ifExists().execute();
 }
+
+

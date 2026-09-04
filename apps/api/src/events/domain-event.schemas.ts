@@ -55,6 +55,10 @@ export const authSessionRevokedEventSchema = z.strictObject({
   sessionId: z.uuid(),
 });
 
+export const authAccountDeactivatedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+});
+
 export const userMentionedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   actorName: z.string().min(1).max(255),

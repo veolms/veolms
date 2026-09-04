@@ -1,16 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Icon } from "../icons/Icon";
-import { ThemedSelect } from "../ThemedSelect";
-import type { ThemedSelectOption } from "../ThemedSelect";
-import { CountryFlag } from "./CountryFlag";
+import { CountryCodeSelect, getDefaultCountry } from "./CountryCodeSelect";
 import { IdentifierMethodSwitch } from "./IdentifierMethodSwitch";
 import {
-  DEFAULT_COUNTRY_ID,
-  SUPPORTED_COUNTRIES,
-  findCountry,
   normalizeEmail,
-  toNationalDigits,
+  toInternationalPhoneNumber,
   validateEmail,
   validateMobile,
 } from "./identifier";
@@ -23,8 +18,7 @@ import {
 } from "./authConfig";
 
 export type IdentifierSubmission =
-  | { method: "email"; email: string }
-  | { method: "mobile"; phoneNo: string };
+  { method: "email"; email: string } | { method: "mobile"; phoneNo: string };
 
 export interface IdentifierFormProps {
   status: "idle" | "sending";
@@ -32,18 +26,6 @@ export interface IdentifierFormProps {
   forcedMethod?: IdentifierMethod;
   onSubmit: (submission: IdentifierSubmission) => void;
 }
-
-const COUNTRY_OPTIONS: readonly ThemedSelectOption[] = SUPPORTED_COUNTRIES.map(
-  (country) => [
-    country.id,
-    country.dialCode,
-    {
-      flag: <CountryFlag code={country.id} />,
-      label: `${country.name} (${country.dialCode})`,
-      searchKeywords: `${country.name} ${country.dialCode} ${country.id}`,
-    },
-  ],
-);
 
 const EMAIL_FIELD_ID = "auth-identifier-email";
 const MOBILE_FIELD_ID = "auth-identifier-mobile";
@@ -59,23 +41,7 @@ const invalidMark = (
   />
 );
 
-function requireDefaultCountry(): CountryOption {
-  const country = findCountry(DEFAULT_COUNTRY_ID);
-
-  if (!country) {
-    throw new Error("DEFAULT_COUNTRY_ID must name one of SUPPORTED_COUNTRIES.");
-  }
-
-  return country;
-}
-
-const DEFAULT_COUNTRY = requireDefaultCountry();
-
-function toInternational(value: string, country: CountryOption): string {
-  const digits = toNationalDigits(value).slice(-country.nationalDigits);
-
-  return `${country.dialCode}${digits}`;
-}
+const DEFAULT_COUNTRY = getDefaultCountry();
 
 export function IdentifierForm({
   status,
@@ -115,19 +81,18 @@ export function IdentifierForm({
     onSubmit(
       method === "email"
         ? { method: "email", email: normalizeEmail(email) }
-        : { method: "mobile", phoneNo: toInternational(mobile, country) },
+        : {
+            method: "mobile",
+            phoneNo: toInternationalPhoneNumber(mobile, country),
+          },
     );
   };
 
-  const selectCountry = (id: string) => {
-    const next = findCountry(id);
-
-    if (next) {
-      setCountry(next);
-      setInvalidReason(
-        mobile.trim().length > 0 ? validateMobile(mobile, next) : null,
-      );
-    }
+  const selectCountry = (next: CountryOption) => {
+    setCountry(next);
+    setInvalidReason(
+      mobile.trim().length > 0 ? validateMobile(mobile, next) : null,
+    );
   };
 
   const showEmailOnly = forcedMethod
@@ -143,22 +108,31 @@ export function IdentifierForm({
       {showSwitch && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with</p>
-          <IdentifierMethodSwitch method={method} onMethodChange={changeMethod} />
-          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
+          <IdentifierMethodSwitch
+            method={method}
+            onMethodChange={changeMethod}
+          />
+          <p className="auth-form__helper">
+            We&apos;ll send you a one-time code
+          </p>
         </div>
       )}
 
       {showEmailOnly && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with email</p>
-          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
+          <p className="auth-form__helper">
+            We&apos;ll send you a one-time code
+          </p>
         </div>
       )}
 
       {showMobileOnly && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with mobile</p>
-          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
+          <p className="auth-form__helper">
+            We&apos;ll send you a one-time code
+          </p>
         </div>
       )}
 
@@ -202,13 +176,9 @@ export function IdentifierForm({
           </label>
 
           <div className="auth-form__mobile-row">
-            <ThemedSelect
-              ariaLabel="Country code"
+            <CountryCodeSelect
               contentClassName="auth-form__country-menu"
-              onValueChange={selectCountry}
-              options={COUNTRY_OPTIONS}
-              searchable
-              searchPlaceholder="Search country or code..."
+              onCountryChange={selectCountry}
               triggerClassName="auth-form__country"
               value={country.id}
             />

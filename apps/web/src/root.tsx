@@ -4,7 +4,6 @@ import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
-import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
@@ -129,7 +128,10 @@ export const meta = () => [
 ];
 
 export function HydrateFallback() {
-  return <AppLoadingScreen />;
+  // Route loaders decide whether the user belongs in the academy or auth
+  // flow. Keep the build-time SPA fallback neutral so it cannot expose the
+  // wrong screen while that secure session check is in flight.
+  return <div aria-hidden="true" className="fixed inset-0 bg-(--canvas)" />;
 }
 
 function SessionInitializer({ children }: { children: ReactNode }) {

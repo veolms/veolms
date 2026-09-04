@@ -24,6 +24,7 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
   const requireAuthenticated = [
     middleware.authenticate,
     middleware.requireAuthenticated,
+    middleware.requireMfaVerified,
   ];
   const service = createNotificationService({ database: options.database });
   const controller = createNotificationController({ service });

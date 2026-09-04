@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
 });
 
-test("profile settings validate, autosave, and retain academy-local identity", async ({
+test("profile settings do not invent a signed-out identity or autosave drafts", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
@@ -32,103 +32,41 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   const email = page.getByLabel("Email address", { exact: true });
   const photoFile = page.getByLabel("Profile photo file");
 
-  await expect(displayName).toHaveValue("Ashi Singh");
+  await expect(displayName).toHaveValue("");
   await expect(email).toHaveAttribute("readonly", "");
   await expect(photoFile).toHaveAttribute("tabindex", "-1");
-
-  await displayName.fill("");
   await expect(
-    page.getByText("Enter the name you want to use in this academy."),
-  ).toBeVisible();
-  await expect(displayName).toHaveAttribute("aria-invalid", "true");
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
 
   await displayName.fill("Avery Patel");
   await expect(displayName).toHaveValue("Avery Patel");
-
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const value = localStorage.getItem("veolms-profile-student");
-        return value ? JSON.parse(value).displayName : null;
-      }),
-    )
-    .toBe("Avery Patel");
   await expect(
-    page.locator(
-      ".courses-profile__button > span:not(.shell-profile-avatar) strong",
-    ),
-  ).toHaveText("Avery Patel");
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Sign in to edit and save your profile."),
+  ).toBeVisible();
+  await expect(
+    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
+  ).resolves.toBeNull();
+  await expect(page.locator(".courses-profile__login-button")).toContainText(
+    "Login",
+  );
 
   await page.reload();
-  await expect(displayName).toHaveValue("Avery Patel");
-  await expect(
-    page.locator(
-      ".courses-profile__button > span:not(.shell-profile-avatar) strong",
-    ),
-  ).toHaveText("Avery Patel");
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  const mobileNavigation = page.getByRole("navigation", {
-    name: "Student mobile navigation",
-  });
-  await mobileNavigation
-    .getByRole("button", { name: "More navigation options" })
-    .click();
-  const mobileMenu = page.getByRole("dialog", { name: /More/ });
-  const mobileProfile = mobileMenu.locator(".mobile-menu-sheet__profile");
-  const mobileNavigationList = mobileMenu.locator(".mobile-menu-sheet__list");
-  await expect(mobileProfile).toContainText("Avery Patel");
-  await expect(mobileProfile).toHaveAttribute("aria-haspopup", "menu");
-  const navigationListBefore = await mobileNavigationList.boundingBox();
-  await mobileProfile.click();
-  const mobileProfileMenu = page.locator("#mobile-profile-menu");
-  await expect(mobileProfileMenu).toBeVisible();
-  const [profileBounds, profileMenuBounds] = await Promise.all([
-    mobileProfile.boundingBox(),
-    mobileProfileMenu.boundingBox(),
-  ]);
-  expect(profileBounds).not.toBeNull();
-  expect(profileMenuBounds).not.toBeNull();
-  expect(profileMenuBounds!.x).toBeGreaterThan(profileBounds!.x);
-  expect(profileMenuBounds!.width).toBeLessThan(profileBounds!.width);
-  expect(profileMenuBounds!.x + profileMenuBounds!.width).toBeCloseTo(
-    profileBounds!.x + profileBounds!.width,
-    0,
+  await expect(displayName).toHaveValue("");
+  await expect(page.locator(".courses-profile__login-button")).toContainText(
+    "Login",
   );
-  expect(profileMenuBounds!.y).toBeGreaterThanOrEqual(
-    profileBounds!.y + profileBounds!.height,
-  );
-  const navigationListAfter = await mobileNavigationList.boundingBox();
-  expect(navigationListBefore).not.toBeNull();
-  expect(navigationListAfter).not.toBeNull();
-  expect(navigationListAfter!.y).toBeCloseTo(navigationListBefore!.y, 0);
-  await expect(mobileProfileMenu.getByText("Workspace")).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitemradio", { name: "Student" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitem", { name: "Hide sidebar" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitem", { name: "Logout" }),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
 });
 
-test("profile settings preserve an offline draft and recover autosave", async ({
+test("profile settings keep an offline draft local without autosaving it", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
 
   const displayName = page.getByLabel("Display name", { exact: true });
-  const storedNameBeforeDraft = await page.evaluate(() => {
-    const value = localStorage.getItem("veolms-profile-student");
-    return value ? JSON.parse(value).displayName : null;
-  });
-
   await page.context().setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event("offline")));
   await displayName.fill("Offline draft");
@@ -136,22 +74,20 @@ test("profile settings preserve an offline draft and recover autosave", async ({
 
   await page.waitForTimeout(500);
   await expect(
-    page.evaluate(() => {
-      const value = localStorage.getItem("veolms-profile-student");
-      return value ? JSON.parse(value).displayName : null;
-    }),
-  ).resolves.toBe(storedNameBeforeDraft);
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
+  await expect(
+    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
+  ).resolves.toBeNull();
 
   await page.context().setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const value = localStorage.getItem("veolms-profile-student");
-        return value ? JSON.parse(value).displayName : null;
-      }),
-    )
-    .toBe("Offline draft");
+  await expect(
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
+  await expect(
+    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
+  ).resolves.toBeNull();
 });
 
 test("settings tabs support roving arrow, Home, and End navigation", async ({

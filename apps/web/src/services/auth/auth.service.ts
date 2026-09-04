@@ -2,18 +2,24 @@ import { api } from "../../lib/api-client";
 import type {
   AuthMessageResponse,
   CurrentUserResponse,
+  EmailVerificationSendRequest,
+  EmailVerificationVerifyRequest,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
   OauthUrlRequest,
   OauthUrlResponse,
   OtpSendRequest,
+  PhoneVerificationSendRequest,
+  PhoneVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
+  ProfileUpdateRequest,
   RegisterRequest,
   SessionResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
+  UserProfileResponse,
 } from "@veolms/contracts";
 import {
   passkeyAuthenticationOptionsResponseSchema,
@@ -29,6 +35,30 @@ export interface TotpSetupResponse {
 export const authService = {
   sendOtp: (payload: OtpSendRequest): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/otp/send", payload);
+  },
+
+  sendPhoneVerificationOtp: (
+    payload: PhoneVerificationSendRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/me/phone/otp/send", payload);
+  },
+
+  sendEmailVerificationOtp: (
+    payload: EmailVerificationSendRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/me/email/otp/send", payload);
+  },
+
+  verifyPhoneNumber: (
+    payload: PhoneVerificationVerifyRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/me/phone/otp/verify", payload);
+  },
+
+  verifyEmail: (
+    payload: EmailVerificationVerifyRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/me/email/otp/verify", payload);
   },
 
   login: (payload: LoginRequest): Promise<LoginResponse> => {
@@ -103,11 +133,23 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
   },
 
-  getMe: (): Promise<CurrentUserResponse> => {
-    return api.get<CurrentUserResponse>("/auth/me");
+  getMe: async (): Promise<CurrentUserResponse> => {
+    const response = await api.get<CurrentUserResponse>("/auth/me");
+    console.log("[auth/me] response:", JSON.stringify(response, null, 2));
+    return response;
+  },
+
+  updateProfile: (
+    payload: ProfileUpdateRequest,
+  ): Promise<UserProfileResponse> => {
+    return api.patch<UserProfileResponse>("/auth/me", payload);
   },
 
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
+  },
+
+  deactivateAccount: (): Promise<AuthMessageResponse> => {
+    return api.delete<AuthMessageResponse>("/auth/me");
   },
 };

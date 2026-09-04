@@ -6,8 +6,20 @@ import { SecuritySettings } from "../../src/settings/SecuritySettings.tsx";
 import { renderWithAppProviders } from "./test-utils.tsx";
 
 describe("unconnected account settings", () => {
+  it("does not show session controls after the account is logged out", () => {
+    renderWithAppProviders(
+      <AccountSettings role="student" isAuthenticated={false} />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Deactivate account" }),
+    ).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("does not claim that an export request was sent", () => {
-    renderWithAppProviders(<AccountSettings role="student" />);
+    renderWithAppProviders(<AccountSettings role="student" isAuthenticated />);
 
     expect(
       screen.getByRole("button", { name: "Export unavailable" }),
@@ -21,7 +33,7 @@ describe("unconnected account settings", () => {
   });
 
   it("asks for confirmation before signing out", () => {
-    renderWithAppProviders(<AccountSettings role="student" />);
+    renderWithAppProviders(<AccountSettings role="student" isAuthenticated />);
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
@@ -30,6 +42,19 @@ describe("unconnected account settings", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stay signed in" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("asks for confirmation before deactivating the account", () => {
+    renderWithAppProviders(<AccountSettings role="student" isAuthenticated />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate account" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Deactivate account?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Keep my account" }),
+    ).toBeInTheDocument();
   });
 });
 

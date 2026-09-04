@@ -57,14 +57,18 @@ function buildPreferenceMap(preferences: readonly NotificationPreference[]) {
   );
 }
 
-export function NotificationSettings() {
-  const query = useNotificationPreferences();
+export function NotificationSettings({
+  isAuthenticated = true,
+}: {
+  isAuthenticated?: boolean;
+}) {
+  const query = useNotificationPreferences({ enabled: isAuthenticated });
   const update = useUpdateNotificationPreferences();
   const preferenceMap = buildPreferenceMap(query.data?.preferences ?? []);
   const isEnabled = (type: string, channel: NotificationChannel) =>
     preferenceMap.get(preferenceKey(type, channel)) ?? true;
   const isChannelEnabled = (channel: NotificationChannel) =>
-    optionalNotificationTypes.every((type) => isEnabled(type, channel));
+    optionalNotificationTypes.some((type) => isEnabled(type, channel));
   const isGroupEnabled = (types: readonly string[]) =>
     types.every((type) => channels.some((channel) => isEnabled(type, channel)));
   const isSaving = update.isPending;
@@ -74,6 +78,7 @@ export function NotificationSettings() {
     targetChannels: readonly NotificationChannel[],
     enabled: boolean,
   ) => {
+    if (!isAuthenticated) return;
     update.mutate({
       preferences: types.flatMap((notificationType) =>
         targetChannels.map((channel) => ({
@@ -94,11 +99,13 @@ export function NotificationSettings() {
         </div>
         <span className="settings-detail__saved">
           <CheckCircle size={17} weight="fill" />
-          {update.isError
-            ? "Save failed"
-            : isSaving
-              ? "Saving…"
-              : "Saved automatically"}
+          {!isAuthenticated
+            ? "Sign in to manage notifications"
+            : update.isError
+              ? "Save failed"
+              : isSaving
+                ? "Saving…"
+                : "Saved automatically"}
         </span>
       </header>
 
@@ -122,7 +129,7 @@ export function NotificationSettings() {
                 save(optionalNotificationTypes, ["in_app"], enabled)
               }
               label="In-app notifications"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -136,7 +143,7 @@ export function NotificationSettings() {
                 save(optionalNotificationTypes, ["email"], enabled)
               }
               label="Email notifications"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
         </div>
@@ -162,7 +169,7 @@ export function NotificationSettings() {
               checked={isGroupEnabled(courseUpdateTypes)}
               onChange={(enabled) => save(courseUpdateTypes, channels, enabled)}
               label="Course updates"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -174,7 +181,7 @@ export function NotificationSettings() {
               checked={isGroupEnabled(discussionTypes)}
               onChange={(enabled) => save(discussionTypes, channels, enabled)}
               label="Discussion replies"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -186,7 +193,7 @@ export function NotificationSettings() {
               checked={isGroupEnabled(reminderTypes)}
               onChange={(enabled) => save(reminderTypes, channels, enabled)}
               label="Learning reminders"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
           <SettingRow
@@ -198,7 +205,7 @@ export function NotificationSettings() {
               checked={isGroupEnabled(achievementTypes)}
               onChange={(enabled) => save(achievementTypes, channels, enabled)}
               label="Milestones and achievements"
-              disabled={query.isPending || isSaving}
+              disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
         </div>

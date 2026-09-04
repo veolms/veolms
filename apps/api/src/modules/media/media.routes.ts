@@ -21,6 +21,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   const requireAuthenticated = [
     authMiddleware.authenticate,
     authMiddleware.requireAuthenticated,
+    authMiddleware.requireMfaVerified,
   ];
 
   const service = createMediaService({

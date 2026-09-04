@@ -27,44 +27,24 @@ const PROFILE_STORAGE_KEYS: Readonly<Record<ProfileRole, string>> = {
   creator: "veolms-profile-creator",
 };
 
-const PROFILE_DEFAULTS: Readonly<Record<ProfileRole, ProfileIdentity>> = {
-  student: {
-    displayName: "Ashi Singh",
-    email: "ashi.singh@example.com",
-    avatarDataUrl: "/assets/sofia-avatar-160.webp",
-    username: "ashisingh",
-    bio: "Computer science student and aspiring developer.\nBuilding projects, sharing learnings, and helping others grow.",
-    mobileNumber: "+91 98765 43210",
-    mobileVerified: true,
-    mobilePublic: false,
-    emailPublic: false,
-    linkedinUrl: "linkedin.com/in/ashi-singh",
-    linkedinPublic: true,
-    githubUrl: "github.com/ashisingh",
-    githubPublic: true,
-    websitePublic: true,
-    websiteUrl: "ashisingh.dev",
-    roleLabel: "Student",
-  },
-  creator: {
-    displayName: "Anurag Singh",
-    email: "anurag.singh@example.com",
-    avatarDataUrl: "/assets/ethan-avatar-160.webp",
-    username: "anuragdev",
-    bio: "Instructor, builder, and lifelong learner.\nSharing practical lessons for the next generation of developers.",
-    mobileNumber: "+91 98765 43210",
-    mobileVerified: true,
-    mobilePublic: false,
-    emailPublic: false,
-    linkedinUrl: "linkedin.com/in/anurag-singh",
-    linkedinPublic: true,
-    githubUrl: "github.com/anuragdev",
-    githubPublic: true,
-    websitePublic: true,
-    websiteUrl: "anurag.dev",
-    roleLabel: "Instructor",
-  },
-};
+const getEmptyProfileIdentity = (role: ProfileRole): ProfileIdentity => ({
+  displayName: "",
+  email: "",
+  avatarDataUrl: null,
+  username: "",
+  bio: "",
+  mobileNumber: "",
+  mobileVerified: false,
+  mobilePublic: false,
+  emailPublic: false,
+  linkedinUrl: "",
+  linkedinPublic: false,
+  githubUrl: "",
+  githubPublic: false,
+  websitePublic: false,
+  websiteUrl: "",
+  roleLabel: role === "creator" ? "Instructor" : "Student",
+});
 
 const isStoredAvatar = (value: unknown): value is string | null =>
   value === null || typeof value === "string";
@@ -135,85 +115,13 @@ export const getStoredProfilePreferences = (
 };
 
 export const getProfileIdentity = (role: ProfileRole): ProfileIdentity => {
-  const defaults = PROFILE_DEFAULTS[role];
-  if (typeof window === "undefined") return { ...defaults };
-
-  try {
-    const storedValue = window.localStorage.getItem(PROFILE_STORAGE_KEYS[role]);
-    if (!storedValue) return { ...defaults };
-
-    const parsedValue: unknown = JSON.parse(storedValue);
-    if (typeof parsedValue !== "object" || parsedValue === null)
-      return { ...defaults };
-
-    const storedProfile = parsedValue as Partial<ProfilePreferences>;
-    const mobileNumber =
-      typeof storedProfile.mobileNumber === "string"
-        ? storedProfile.mobileNumber
-        : defaults.mobileNumber;
-    return {
-      ...defaults,
-      displayName:
-        typeof storedProfile.displayName === "string" &&
-        storedProfile.displayName.trim()
-          ? storedProfile.displayName
-          : defaults.displayName,
-      avatarDataUrl: isStoredAvatar(storedProfile.avatarDataUrl)
-        ? storedProfile.avatarDataUrl
-        : defaults.avatarDataUrl,
-      username:
-        typeof storedProfile.username === "string"
-          ? storedProfile.username
-          : defaults.username,
-      bio:
-        typeof storedProfile.bio === "string"
-          ? storedProfile.bio
-          : defaults.bio,
-      mobileNumber,
-      mobileVerified: Boolean(
-        mobileNumber && storedProfile.mobileVerified === true,
-      ),
-      mobilePublic:
-        typeof storedProfile.mobilePublic === "boolean"
-          ? storedProfile.mobilePublic
-          : defaults.mobilePublic,
-      emailPublic:
-        typeof storedProfile.emailPublic === "boolean"
-          ? storedProfile.emailPublic
-          : defaults.emailPublic,
-      linkedinUrl:
-        typeof storedProfile.linkedinUrl === "string"
-          ? storedProfile.linkedinUrl
-          : defaults.linkedinUrl,
-      linkedinPublic:
-        typeof storedProfile.linkedinPublic === "boolean"
-          ? storedProfile.linkedinPublic
-          : defaults.linkedinPublic,
-      githubUrl:
-        typeof storedProfile.githubUrl === "string"
-          ? storedProfile.githubUrl
-          : defaults.githubUrl,
-      githubPublic:
-        typeof storedProfile.githubPublic === "boolean"
-          ? storedProfile.githubPublic
-          : defaults.githubPublic,
-      websitePublic:
-        typeof storedProfile.websitePublic === "boolean"
-          ? storedProfile.websitePublic
-          : defaults.websitePublic,
-      websiteUrl:
-        typeof storedProfile.websiteUrl === "string"
-          ? storedProfile.websiteUrl
-          : defaults.websiteUrl,
-    };
-  } catch {
-    return { ...defaults };
-  }
+  // Profile identity is server-owned. This helper remains as an empty-state
+  // factory for settings previews and must never invent a demo account.
+  return getEmptyProfileIdentity(role);
 };
 
-export const getDefaultProfileIdentity = (
-  role: ProfileRole,
-): ProfileIdentity => ({ ...PROFILE_DEFAULTS[role] });
+export const getDefaultProfileIdentity = (role: ProfileRole): ProfileIdentity =>
+  getEmptyProfileIdentity(role);
 
 export const saveProfilePreferences = (
   role: ProfileRole,

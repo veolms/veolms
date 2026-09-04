@@ -45,7 +45,10 @@ async function shutdown(signal: string): Promise<void> {
     app.log.info("Graceful shutdown completed successfully.");
     clearTimeout(timeoutId);
   } catch (error) {
-    app.log.error({ err: error }, "Unexpected error occurred during graceful shutdown.");
+    app.log.error(
+      { err: error },
+      "Unexpected error occurred during graceful shutdown.",
+    );
     process.exit(1);
   }
 }
@@ -60,6 +63,18 @@ try {
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
 } catch (error) {
   app.log.error(error);
+  try {
+    // Background queues are started while the app is being composed. If
+    // listen() fails (for example because another dev server owns the port),
+    // close Fastify first so its onClose hooks stop those queues before the
+    // shared Kysely driver is destroyed.
+    await app.close();
+  } catch (closeError) {
+    app.log.error(
+      { err: closeError },
+      "Failed to close application after listen error",
+    );
+  }
   await database.destroy();
   process.exitCode = 1;
 }

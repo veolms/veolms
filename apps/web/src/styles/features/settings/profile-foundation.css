@@ -192,6 +192,7 @@
 .settings-profile__photo-actions button:focus-visible,
 .settings-profile__security-link:focus-visible,
 .settings-profile__verify-action:focus-visible,
+.settings-profile__inline-verify-action:focus-visible,
 .settings-profile__verification-panel button:focus-visible,
 .settings-profile__secondary-action:focus-visible,
 .settings-profile__primary-action:focus-visible {
@@ -203,6 +204,7 @@
 .settings-profile__photo-actions button:active,
 .settings-profile__security-link:active,
 .settings-profile__verify-action:active,
+.settings-profile__inline-verify-action:active,
 .settings-profile__verification-panel button:active,
 .settings-profile__secondary-action:active,
 .settings-profile__primary-action:active {
@@ -453,7 +455,8 @@
 }
 
 .settings-profile__security-link,
-.settings-profile__verify-action {
+.settings-profile__verify-action,
+.settings-profile__inline-verify-action {
   display: inline-flex;
   min-height: 46px;
   align-items: center;
@@ -550,9 +553,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-top: auto;
-  padding-top: 28px;
-  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  margin-top: 0;
+  padding: 20px 0 8px;
 }
 
 .settings-profile__form-footer p {
@@ -563,10 +565,8 @@
   line-height: 1.45;
 }
 
-.settings-profile__form-footer > div {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.settings-profile__form-footer > button {
+  flex: 0 0 auto;
 }
 
 .settings-profile__primary-action {
@@ -592,7 +592,8 @@
   }
 
   .settings-profile__security-link:hover,
-  .settings-profile__verify-action:hover {
+  .settings-profile__verify-action:hover,
+  .settings-profile__inline-verify-action:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--accent) 18%, var(--surface-strong));
   }

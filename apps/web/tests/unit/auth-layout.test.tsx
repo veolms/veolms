@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import React from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import AuthLayout from "../../src/routes/auth-layout.tsx";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import AuthLayout, {
+  clientLoader as authClientLoader,
+} from "../../src/routes/auth-layout.tsx";
 import RegisterRoute, {
   clientLoader as registerClientLoader,
 } from "../../src/routes/register.tsx";
@@ -17,6 +19,10 @@ import {
   isMobileLoginEnabled,
 } from "../../src/auth/authConfig.ts";
 import LoginRoute, { meta as loginMeta } from "../../src/routes/login.tsx";
+import type { CurrentUserResponse } from "@veolms/contracts";
+import { authService } from "../../src/services/auth";
+import { queryClient } from "../../src/lib/query-client.ts";
+import { authStore } from "../../src/store/auth.store.ts";
 import {
   renderWithAppProviders,
   renderWithQueryClient,
@@ -46,10 +52,16 @@ vi.mock("../../src/services/auth", async () => {
 });
 
 beforeEach(() => {
+  authStore.clearAuth();
+  queryClient.clear();
   currentUserQuery.data = undefined;
   currentUserQuery.isPending = false;
   currentUserQuery.isFetched = true;
   currentUserQuery.isSuccess = false;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("login screen", () => {
@@ -194,6 +206,36 @@ describe("auth layout", () => {
   });
 });
 
+describe("auth session client loader", () => {
+  const runLoader = (url: string) =>
+    authClientLoader({
+      request: new Request(`http://localhost${url}`),
+      params: {},
+    } as Parameters<typeof authClientLoader>[0]);
+
+  it("redirects an authenticated direct visit before the auth layout mounts", async () => {
+    const authenticatedUser = {
+      mfaVerified: true,
+      totpEnabled: false,
+      passkeyEnabled: false,
+      mfaMandatory: false,
+    } as CurrentUserResponse;
+    vi.spyOn(authService, "getMe").mockResolvedValue(authenticatedUser);
+
+    const response = await runLoader("/login");
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(302);
+    expect((response as Response).headers.get("Location")).toBe("/courses");
+  });
+
+  it("keeps the login route available when no session exists", async () => {
+    vi.spyOn(authService, "getMe").mockRejectedValue({ status: 401 });
+
+    expect(await runLoader("/login")).toBeNull();
+  });
+});
+
 describe("register route", () => {
   it("redirects to the single login entry point", () => {
     const response = registerClientLoader();
@@ -235,7 +277,10 @@ describe("auth routes alongside the academy catch-all", () => {
       { initialEntries: [initialEntry] },
     );
 
-    return renderWithQueryClient(<RouterProvider router={router} />);
+    return {
+      router,
+      ...renderWithQueryClient(<RouterProvider router={router} />),
+    };
   };
 
   it("leaves the root path with the academy layout", async () => {
@@ -255,6 +300,25 @@ describe("auth routes alongside the academy catch-all", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText("academy catch-all")).not.toBeInTheDocument();
+  });
+
+  it("redirects an authenticated user away from login before the auth screen paints", () => {
+    currentUserQuery.data = {
+      mfaVerified: true,
+      totpEnabled: false,
+      passkeyEnabled: false,
+      mfaMandatory: false,
+    };
+
+    const { router } = renderAt("/login");
+
+    expect(router.state.location.pathname).toBe("/courses");
+    expect(
+      screen.queryByRole("heading", {
+        level: 1,
+        name: "Welcome to ProCodrr",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("sends /register through to the login screen", async () => {

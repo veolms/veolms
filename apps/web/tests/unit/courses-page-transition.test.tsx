@@ -12,6 +12,10 @@ const courseQueries = vi.hoisted(() => ({
   mine: vi.fn(),
   published: vi.fn(),
 }));
+const learningSpaceMutations = vi.hoisted(() => ({
+  upsert: vi.fn(),
+  close: vi.fn(),
+}));
 
 vi.mock("../../src/courses/CourseCatalogue.js", () => ({
   CourseCatalogue: ({ activeSection }: { activeSection: string }) => {
@@ -29,8 +33,19 @@ vi.mock("../../src/services/auth", async () => {
     ...actual,
     useCurrentUser: () => ({ data: undefined, isFetched: true }),
     useLogout: () => ({ mutateAsync: vi.fn() }),
+    useSignOut: () => ({ isPending: false, signOut: vi.fn() }),
   };
 });
+
+vi.mock("../../src/services/learning-space", () => ({
+  useLearningSpaceSessions: () => ({ data: undefined, isSuccess: false }),
+  useUpsertLearningSpaceSession: () => ({
+    mutate: learningSpaceMutations.upsert,
+  }),
+  useCloseLearningSpaceSession: () => ({
+    mutate: learningSpaceMutations.close,
+  }),
+}));
 
 vi.mock("../../src/services/courses", async () => {
   const actual = await vi.importActual<

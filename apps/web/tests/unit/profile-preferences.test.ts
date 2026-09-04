@@ -9,20 +9,20 @@ import {
 describe("academy-local profile preferences", () => {
   beforeEach(() => localStorage.clear());
 
-  it("keeps role defaults independent", () => {
+  it("does not invent a demo identity for either role", () => {
     expect(getProfileIdentity("student")).toMatchObject({
-      displayName: "Ashi Singh",
+      displayName: "",
       roleLabel: "Student",
-      avatarDataUrl: "/assets/sofia-avatar-160.webp",
+      avatarDataUrl: null,
     });
     expect(getProfileIdentity("creator")).toMatchObject({
-      displayName: "Anurag Singh",
+      displayName: "",
       roleLabel: "Instructor",
-      avatarDataUrl: "/assets/ethan-avatar-160.webp",
+      avatarDataUrl: null,
     });
   });
 
-  it("persists only the editable profile for the selected role", () => {
+  it("ignores legacy browser profile data when building the identity", () => {
     expect(
       saveProfilePreferences("student", {
         displayName: "Avery Patel",
@@ -31,11 +31,10 @@ describe("academy-local profile preferences", () => {
     ).toBe(true);
 
     expect(getProfileIdentity("student")).toMatchObject({
-      displayName: "Avery Patel",
+      displayName: "",
       avatarDataUrl: null,
       roleLabel: "Student",
     });
-    expect(getProfileIdentity("creator").displayName).toBe("Anurag Singh");
     expect(getStoredProfilePreferences("student")).toEqual({
       displayName: "Avery Patel",
       avatarDataUrl: null,
@@ -45,7 +44,7 @@ describe("academy-local profile preferences", () => {
 
   it("repairs invalid or incomplete stored data from role defaults", () => {
     localStorage.setItem(getProfileStorageKey("student"), "{");
-    expect(getProfileIdentity("student").displayName).toBe("Ashi Singh");
+    expect(getProfileIdentity("student").displayName).toBe("");
 
     localStorage.setItem(
       getProfileStorageKey("student"),
@@ -55,15 +54,15 @@ describe("academy-local profile preferences", () => {
       }),
     );
     expect(getProfileIdentity("student")).toMatchObject({
-      displayName: "Ashi Singh",
-      avatarDataUrl: "/assets/sofia-avatar-160.webp",
+      displayName: "",
+      avatarDataUrl: null,
     });
     expect(getStoredProfilePreferences("student")).toBeNull();
   });
 
   it("persists public visibility choices with the profile", () => {
     saveProfilePreferences("student", {
-      displayName: "Ashi Singh",
+      displayName: "Avery Patel",
       avatarDataUrl: "/assets/sofia-avatar.jpg",
       emailPublic: true,
       mobilePublic: true,
@@ -73,10 +72,10 @@ describe("academy-local profile preferences", () => {
     });
 
     expect(getProfileIdentity("student")).toMatchObject({
-      emailPublic: true,
-      mobilePublic: true,
+      emailPublic: false,
+      mobilePublic: false,
       linkedinPublic: false,
-      githubPublic: true,
+      githubPublic: false,
       websitePublic: false,
     });
   });

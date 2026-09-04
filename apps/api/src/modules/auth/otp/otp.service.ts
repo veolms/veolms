@@ -36,13 +36,20 @@ export function createOtpService({
     identifier: string,
     identifierType: IdentifierType,
   ): Promise<OtpPurpose> {
-    const user = await userRepository.findUserByIdentifier(
+    const user = await userRepository.findUserByIdentifierIncludingDeleted(
       database,
       identifier,
       identifierType,
     );
 
     if (user) {
+      if (user.is_deleted) {
+        throw new AppError(
+          403,
+          "ACCOUNT_DEACTIVATED",
+          "This account has been deactivated.",
+        );
+      }
       return "login";
     }
 
@@ -94,6 +101,14 @@ export function createOtpService({
     identifierType: IdentifierType,
   ): Promise<void> {
     const purpose = await resolveOtpPurpose(identifier, identifierType);
+    await sendOtpWithPurpose(identifier, identifierType, purpose);
+  }
+
+  async function sendOtpWithPurpose(
+    identifier: string,
+    identifierType: IdentifierType,
+    purpose: OtpPurpose,
+  ): Promise<void> {
     await assertOtpSendAllowed(identifier, identifierType, purpose);
 
     const code = crypto.randomInt(100_000, 1_000_000).toString();
@@ -135,6 +150,14 @@ export function createOtpService({
         expiresInMinutes: OTP_TTL_MINUTES,
       }),
     );
+  }
+
+  async function sendPhoneVerificationOtp(phoneNo: string): Promise<void> {
+    await sendOtpWithPurpose(phoneNo, "phone", "phone_verification");
+  }
+
+  async function sendEmailVerificationOtp(email: string): Promise<void> {
+    await sendOtpWithPurpose(email, "email", "email_verification");
   }
 
   const invalidCode = () =>
@@ -192,6 +215,8 @@ export function createOtpService({
   return {
     resolveOtpPurpose,
     sendOtp,
+    sendPhoneVerificationOtp,
+    sendEmailVerificationOtp,
     verifyAndConsumeOtp,
   };
 }

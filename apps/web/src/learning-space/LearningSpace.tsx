@@ -141,7 +141,9 @@ export const LearningSpace = memo(function LearningSpace({
           floatingPanel.openFromClick(
             keepHoverOpenedPanel ? false : transientPopup,
           );
-          if (mostRecentSession) onActivate(mostRecentSession);
+          if (collapsedSidebar && mostRecentSession) {
+            onActivate(mostRecentSession);
+          }
         }}
       >
         {mobile && mobileNavigationPlacement === "bottom" ? (

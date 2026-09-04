@@ -4,6 +4,7 @@ import {
   SUPPORTED_COUNTRIES,
   findCountry,
   normalizeEmail,
+  toInternationalPhoneNumber,
   toNationalDigits,
   validateEmail,
   validateMobile,
@@ -83,6 +84,11 @@ describe("email validation", () => {
 describe("digit extraction", () => {
   it("keeps only the digits of a formatted number", () => {
     expect(toNationalDigits(" (98765) 43-210 ")).toBe("9876543210");
+  });
+
+  it("does not invent a country code for an empty phone input", () => {
+    expect(toInternationalPhoneNumber("", india)).toBe("");
+    expect(toInternationalPhoneNumber("letters", india)).toBe("");
   });
 });
 
