@@ -2,7 +2,7 @@
   "name": "veolms",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.18.0", 
   "engines": {
     "node": ">=24 <25",
     "pnpm": ">=11 <12"
@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web",
     "dev:web": "pnpm --filter @veolms/web dev",
-    "preview:web": "pnpm --filter @veolms/web preview",
+    "dev:web:lan": "pnpm --filter @veolms/web dev --host",
+    "dev:webweb": "pnpm --filter @veolms/web preview",
     "preview:web:lan": "pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173",
     "generate:video-thumbnails": "pnpm --filter @veolms/web generate:video-thumbnails",
     "dev:api": "pnpm --filter @veolms/api dev",

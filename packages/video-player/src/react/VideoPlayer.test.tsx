@@ -251,6 +251,74 @@ describe("VideoPlayer integration", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the same spinner node across snapshot ticks and buffering flicker", async () => {
+    const engine = new StartupBufferingFakeVideoEngine();
+    vi.useFakeTimers();
+    render(<VideoPlayer source={source} engineFactory={() => engine} />);
+
+    const overlay = screen.getByRole("status", { name: "Loading video" });
+    const spinner = overlay.querySelector(
+      '[data-video-player-buffering-spinner=""]',
+    );
+    expect(spinner).not.toBeNull();
+
+    act(() =>
+      engine.setSnapshot({
+        buffered: [{ start: 0, end: 1.5 }],
+        currentTime: 0.2,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [{ start: 0, end: 3 }],
+        currentTime: 0.8,
+      }),
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() => engine.finishLoadWhileBuffering());
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() => engine.finishBuffering());
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: true,
+        currentTime: 12,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: false,
+        currentTime: 12,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: true,
+        currentTime: 12,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+  });
+
   it("waits until timeline scrubbing ends and skips buffered seeks", async () => {
     const engine = new FakeVideoEngine();
     render(<VideoPlayer source={source} engineFactory={() => engine} />);
