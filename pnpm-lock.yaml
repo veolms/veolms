@@ -485,6 +485,9 @@ importers:
       '@veolms/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types
@@ -498,6 +501,12 @@ importers:
 
   packages/fleet-provider-local:
     dependencies:
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../config
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types
