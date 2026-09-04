@@ -912,7 +912,7 @@
   }
 
   :root[data-palette="midnight"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(187deg) saturate(3) brightness(1.0);
+    filter: sepia(1) hue-rotate(187deg) saturate(3) brightness(1);
   }
 
   :root[data-palette="graphite"] .auth-brand-panel__illustration-slot {

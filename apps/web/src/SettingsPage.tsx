@@ -31,6 +31,7 @@ import type {
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { NavigationItemWithMetadata } from "./shell/navigation";
+import type { ToastMessage } from "./ToastNotification";
 import {
   normalizeSettingsTab,
   readSettingsTab,
@@ -48,6 +49,7 @@ import { LearningSettings } from "./settings/LearningSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProfileSettings } from "./settings/ProfileSettings";
 import { SecuritySettings } from "./settings/SecuritySettings";
+import { useAuthStore } from "./store/auth.store";
 import { SidebarSettings } from "./settings/SidebarSettings";
 import "./auth/mfa-setup.css";
 export type { SettingsTab } from "./routing/tabSessionState";
@@ -110,9 +112,11 @@ const SETTINGS_ARROW_KEY_OWNER_SELECTOR = [
 export interface SettingsPageProps {
   tab?: string;
   role?: ProfileRole;
+  isAuthenticated: boolean;
   onNavigatePage?: NavigateTo;
   onExitSettings?: () => void;
   onProfileSaved?: (profile: ProfilePreferences) => void;
+  setNotice?: (message: ToastMessage) => void;
   theme: DisplayMode;
   onThemeChange: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
@@ -142,6 +146,8 @@ const SettingsTabContent = memo(function SettingsTabContent({
           role={pageProps.role}
           onNavigatePage={pageProps.onNavigatePage}
           onProfileSaved={pageProps.onProfileSaved}
+          setNotice={pageProps.setNotice}
+          isAuthenticated={pageProps.isAuthenticated}
         />
       );
     case "appearance":
@@ -172,13 +178,16 @@ const SettingsTabContent = memo(function SettingsTabContent({
     case "learning":
       return <LearningSettings />;
     case "notifications":
-      return <NotificationSettings />;
+      return (
+        <NotificationSettings isAuthenticated={pageProps.isAuthenticated} />
+      );
     case "security":
-      return <SecuritySettings />;
+      return <SecuritySettings isAuthenticated={pageProps.isAuthenticated} />;
     case "account":
       return (
         <AccountSettings
           role={pageProps.role ?? "student"}
+          isAuthenticated={pageProps.isAuthenticated}
           onNavigatePage={pageProps.onNavigatePage}
         />
       );
@@ -188,9 +197,11 @@ const SettingsTabContent = memo(function SettingsTabContent({
 export function SettingsPage({
   tab = "profile",
   role = "student",
+  isAuthenticated,
   onNavigatePage,
   onExitSettings,
   onProfileSaved,
+  setNotice,
   theme,
   onThemeChange,
   academyTheme,
@@ -206,6 +217,12 @@ export function SettingsPage({
   onNavigationVisibilityChange,
 }: SettingsPageProps) {
   const activeTab = normalizeSettingsTab(tab);
+  const storeIsAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  // Settings routes remain reachable so users can see where to sign in, but
+  // account-owned controls must follow the same live session state as the
+  // shell. This also prevents stale route props from leaving controls active
+  // for a signed-out user.
+  const canEditAuthenticatedSettings = isAuthenticated && storeIsAuthenticated;
   const activeTabIndex = SETTINGS_TAB_IDS.indexOf(activeTab);
   const [preparedTabs, setPreparedTabs] = useState<ReadonlySet<SettingsTab>>(
     () => new Set([activeTab]),
@@ -214,9 +231,11 @@ export function SettingsPage({
   const pageProps = useMemo<SettingsPageProps>(
     () => ({
       role,
+      isAuthenticated: canEditAuthenticatedSettings,
       onNavigatePage,
       onExitSettings,
       onProfileSaved,
+      setNotice,
       theme,
       onThemeChange,
       academyTheme,
@@ -233,6 +252,7 @@ export function SettingsPage({
     }),
     [
       academyTheme,
+      canEditAuthenticatedSettings,
       navigationItems,
       navigationVisibleItems,
       onAcademyThemeChange,
@@ -246,6 +266,7 @@ export function SettingsPage({
       onThemeChange,
       pageTabColors,
       role,
+      setNotice,
       sidebarMode,
       sidebarPreferences,
       theme,

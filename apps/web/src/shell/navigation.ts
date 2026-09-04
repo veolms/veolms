@@ -38,6 +38,12 @@ export type DynamicNavigationItem = readonly [
 
 export type NavigationItemWithMetadata = NavigationItem;
 
+const requiredNavigationLabels = new Set([
+  "Courses",
+  "Learning Space",
+  "Settings",
+]);
+
 const publicNavigation: readonly NavigationItem[] = [
   [
     "Courses",
@@ -45,6 +51,16 @@ const publicNavigation: readonly NavigationItem[] = [
     {
       id: "default-courses",
       routeLink: "/courses",
+      parentId: null,
+      source: "default",
+    },
+  ],
+  [
+    "Learning Space",
+    BookOpen,
+    {
+      id: "default-learning-space",
+      routeLink: "/learning-space",
       parentId: null,
       source: "default",
     },
@@ -85,7 +101,8 @@ const getMenuIcon = (iconName: string | null): Icon =>
  * Converts the server's effective RBAC menu tree to the shell's flat
  * navigation shape. Learning Space remains a special shell control because it
  * owns transient course-player sessions; its database children are still
- * exposed as ordinary navigation items.
+ * exposed as ordinary navigation items. The resolver adds the special control
+ * back alongside any missing core defaults.
  */
 export function getNavigationItemsFromMenus(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -124,6 +141,16 @@ export function getNavigationItemsFromMenus(
   return items;
 }
 
+function addMissingDefaultNavigationItems(
+  serverItems: readonly DynamicNavigationItem[],
+): NavigationItemWithMetadata[] {
+  const labels = new Set(serverItems.map(([label]) => label));
+  return [
+    ...serverItems,
+    ...publicNavigation.filter(([label]) => !labels.has(label)),
+  ];
+}
+
 export function hasNavigationMenu(
   menus: readonly AuthMenuNode[] | null | undefined,
   label: string,
@@ -141,9 +168,11 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 
 /**
  * Sidebar items for the current session: role menus from `/auth/me` when the
- * backend returns any, otherwise the public Courses and Settings defaults.
+ * backend returns any, otherwise the public Courses, Learning Space, and
+ * Settings defaults.
  * Guests, empty `menus: []`, and menus that flatten to nothing all use the
- * same fallback so the sidebar never renders blank.
+ * same fallback so the sidebar never renders blank. The fallback includes the
+ * special Learning Space control alongside Courses and Settings.
  */
 export function resolveShellNavigation(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -152,10 +181,15 @@ export function resolveShellNavigation(
   isDefault: boolean;
 } {
   const serverItems = getNavigationItemsFromMenus(menus);
-  if (serverItems.length > 0) {
-    return { items: serverItems, isDefault: false };
-  }
-  return { items: getPublicNavigationItems(), isDefault: true };
+  const result =
+    serverItems.length > 0
+      ? {
+          items: addMissingDefaultNavigationItems(serverItems),
+          isDefault: false,
+        }
+      : { items: getPublicNavigationItems(), isDefault: true };
+
+  return result;
 }
 
 const navigationTones: Record<string, string> = {
@@ -190,16 +224,32 @@ export function getDefaultNavigationVisibility(
   return getDefaultNavigationOrder(navigationItems);
 }
 
+export function getNavigationPreferenceStorageKey(
+  preference: "order" | "visibility",
+  role: string,
+  userId?: string | null,
+): string {
+  // Keep the old key for anonymous callers and backwards-compatible tests.
+  // Authenticated callers must include the account id or one user's sidebar
+  // choices can leak into another user's session in the same browser.
+  return userId
+    ? `veolms-navigation-${preference}-${userId}-${role}`
+    : `veolms-navigation-${preference}-${role}`;
+}
+
 export function getInitialNavigationOrder(
   role: string,
   navigationItems: readonly NavigationItemWithMetadata[],
+  userId?: string | null,
 ): string[] {
   const defaultOrder = getDefaultNavigationOrder(navigationItems);
   if (typeof window === "undefined") return defaultOrder;
 
   try {
     const parsedOrder: unknown = JSON.parse(
-      localStorage.getItem(`veolms-navigation-order-${role}`) || "[]",
+      localStorage.getItem(
+        getNavigationPreferenceStorageKey("order", role, userId),
+      ) || "[]",
     );
     if (!Array.isArray(parsedOrder)) return defaultOrder;
     const savedOrder = parsedOrder.filter(
@@ -222,13 +272,16 @@ export function getInitialNavigationOrder(
 export function getInitialNavigationVisibility(
   role: string,
   navigationItems: readonly NavigationItemWithMetadata[],
+  userId?: string | null,
 ): string[] {
   const defaultVisibility = getDefaultNavigationVisibility(navigationItems);
   if (typeof window === "undefined") return defaultVisibility;
 
   try {
     const parsedVisibility: unknown = JSON.parse(
-      localStorage.getItem(`veolms-navigation-visibility-${role}`) || "null",
+      localStorage.getItem(
+        getNavigationPreferenceStorageKey("visibility", role, userId),
+      ) || "null",
     );
     if (!Array.isArray(parsedVisibility)) return defaultVisibility;
 
@@ -241,10 +294,22 @@ export function getInitialNavigationVisibility(
         defaultVisibility.includes(label) &&
         normalizedVisibility.indexOf(label) === index,
     );
-    return defaultVisibility.filter((label) => savedVisibility.includes(label));
+    return ensureRequiredNavigationVisibility(savedVisibility, navigationItems);
   } catch {
     return defaultVisibility;
   }
+}
+
+export function ensureRequiredNavigationVisibility(
+  visibleLabels: readonly string[],
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string[] {
+  const visible = new Set(visibleLabels);
+  return navigationItems
+    .map(([label]) => label)
+    .filter(
+      (label) => visible.has(label) || requiredNavigationLabels.has(label),
+    );
 }
 
 export function getOrderedNavigation(

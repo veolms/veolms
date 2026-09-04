@@ -63,6 +63,22 @@ export function getCourseRouteKey(course: Pick<Course, "id" | "slug">): string {
   return course.slug?.trim() || course.id;
 }
 
+/**
+ * The local catalogue predates the API catalogue and some of its IDs are
+ * still used by saved links and browser session state. Keep those IDs valid
+ * at the API boundary without changing the public routes used by the demo UI.
+ */
+const LEGACY_API_COURSE_SLUGS: Readonly<Record<string, string>> = {
+  "backend-nodejs": "complete-backend-development-with-nodejs",
+  "typescript-course": "ultimate-typescript-course",
+};
+
+export function getApiCourseSlugForLegacyKey(
+  courseKey: string | undefined,
+): string | undefined {
+  return courseKey ? LEGACY_API_COURSE_SLUGS[courseKey] : undefined;
+}
+
 export interface CourseCatalogueFilters {
   activeSection: string;
   wishlisted: ReadonlySet<string>;

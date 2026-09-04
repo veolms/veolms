@@ -6,11 +6,38 @@ export function findUserById(database: Executor, userId: string) {
     .selectFrom("users")
     .selectAll()
     .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/** Used only by durable notification delivery after an account is deactivated. */
+export function findUserByIdIncludingDeleted(
+  database: Executor,
+  userId: string,
+) {
+  return database
+    .selectFrom("users")
+    .selectAll()
+    .where("id", "=", userId)
     .executeTakeFirst();
 }
 
 /** Looks a user up by whichever contact channel the flow was started with. */
 export function findUserByIdentifier(
+  database: Executor,
+  identifier: string,
+  identifierType: "email" | "phone",
+) {
+  return database
+    .selectFrom("users")
+    .selectAll()
+    .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/** Includes deactivated rows so registration can return a controlled conflict. */
+export function findUserByIdentifierIncludingDeleted(
   database: Executor,
   identifier: string,
   identifierType: "email" | "phone",
@@ -27,6 +54,7 @@ export function findUserByEmail(database: Executor, email: string) {
     .selectFrom("users")
     .selectAll()
     .where("email", "=", email)
+    .where("is_deleted", "=", false)
     .executeTakeFirst();
 }
 
@@ -37,18 +65,25 @@ export function findVerifiedUserByEmail(database: Executor, email: string) {
     .selectAll()
     .where("email", "=", email)
     .where("email_verified_at", "is not", null)
+    .where("is_deleted", "=", false)
     .executeTakeFirst();
 }
 
 export async function usernameExists(
   database: Executor,
   username: string,
+  excludingUserId?: string,
 ): Promise<boolean> {
-  const row = await database
+  let query = database
     .selectFrom("users")
     .select("id")
-    .where("username", "=", username)
-    .executeTakeFirst();
+    .where("username", "=", username);
+
+  if (excludingUserId) {
+    query = query.where("id", "!=", excludingUserId);
+  }
+
+  const row = await query.executeTakeFirst();
 
   return Boolean(row);
 }
@@ -69,6 +104,7 @@ export interface InsertUserInput {
   username: string;
   displayName: string;
   emailVerifiedAt: Date | null;
+  phoneVerifiedAt: Date | null;
   mfaMandatory: boolean;
 }
 
@@ -85,9 +121,122 @@ export async function insertUser(
       username: input.username,
       display_name: input.displayName,
       email_verified_at: input.emailVerifiedAt,
+      phone_verified_at: input.phoneVerifiedAt,
       mfa_mandatory: input.mfaMandatory,
     })
     .execute();
+}
+
+/** Atomically changes an active account into a deactivated account. */
+export async function deactivateUser(database: Executor, userId: string) {
+  return database
+    .updateTable("users")
+    .set({ is_deleted: true, updated_at: new Date() })
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export interface UpdateUserProfileInput {
+  username?: string;
+  displayName?: string;
+  avatarDataUrl?: string | null;
+  bio?: string | null;
+  emailPublic?: boolean;
+  mobilePublic?: boolean;
+  linkedinUrl?: string | null;
+  linkedinPublic?: boolean;
+  githubUrl?: string | null;
+  githubPublic?: boolean;
+  websiteUrl?: string | null;
+  websitePublic?: boolean;
+}
+
+export async function updateUserProfile(
+  database: Executor,
+  userId: string,
+  input: UpdateUserProfileInput,
+) {
+  const updates = {
+    ...(input.username !== undefined ? { username: input.username } : {}),
+    ...(input.displayName !== undefined
+      ? { display_name: input.displayName }
+      : {}),
+    ...(input.avatarDataUrl !== undefined
+      ? { avatar_data_url: input.avatarDataUrl }
+      : {}),
+    ...(input.bio !== undefined ? { bio: input.bio } : {}),
+    ...(input.emailPublic !== undefined
+      ? { email_public: input.emailPublic }
+      : {}),
+    ...(input.mobilePublic !== undefined
+      ? { mobile_public: input.mobilePublic }
+      : {}),
+    ...(input.linkedinUrl !== undefined
+      ? { linkedin_url: input.linkedinUrl }
+      : {}),
+    ...(input.linkedinPublic !== undefined
+      ? { linkedin_public: input.linkedinPublic }
+      : {}),
+    ...(input.githubUrl !== undefined ? { github_url: input.githubUrl } : {}),
+    ...(input.githubPublic !== undefined
+      ? { github_public: input.githubPublic }
+      : {}),
+    ...(input.websiteUrl !== undefined
+      ? { website_url: input.websiteUrl }
+      : {}),
+    ...(input.websitePublic !== undefined
+      ? { website_public: input.websitePublic }
+      : {}),
+    updated_at: new Date(),
+  };
+
+  return database
+    .updateTable("users")
+    .set(updates)
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export async function updateUserPhoneNumber(
+  database: Executor,
+  userId: string,
+  phoneNo: string,
+  verifiedAt: Date,
+) {
+  return database
+    .updateTable("users")
+    .set({
+      phone_no: phoneNo,
+      phone_verified_at: verifiedAt,
+      // A newly verified number must be explicitly published again.
+      mobile_public: false,
+      updated_at: new Date(),
+    })
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export async function markUserEmailVerified(
+  database: Executor,
+  userId: string,
+  verifiedAt: Date,
+) {
+  return database
+    .updateTable("users")
+    .set({
+      email_verified_at: verifiedAt,
+      updated_at: new Date(),
+    })
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .returningAll()
+    .executeTakeFirst();
 }
 
 export async function listUserRoleNames(
@@ -157,6 +306,10 @@ export async function listUserMenus(
       "permissions.can_delete",
     ])
     .where("user_roles.user_id", "=", userId)
+    // A joined permission query has no guaranteed row order. Keep the menu
+    // payload stable so the shell cannot appear to change between requests.
+    .orderBy("menus.created_at", "asc")
+    .orderBy("menus.id", "asc")
     .execute();
 
   const menuMap = new Map<string, AuthMenuNode>();

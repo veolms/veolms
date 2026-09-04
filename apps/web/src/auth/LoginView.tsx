@@ -54,16 +54,11 @@ export function LoginView() {
   const loginMutation = useLogin();
   const registerMutation = useRegister();
 
-  const handleAuthComplete = () => {
-    navigate(
-      resolveAuthenticatedDestination(searchParams.get("returnTo")),
-      { replace: true },
-    );
-  };
-
   useEffect(() => {
     if (flow.status !== "authenticated") return;
-    handleAuthComplete();
+    navigate(resolveAuthenticatedDestination(searchParams.get("returnTo")), {
+      replace: true,
+    });
   }, [flow.status, navigate, searchParams]);
 
   const handleSendCode = async (identifier: AuthIdentifier) => {
@@ -390,7 +385,10 @@ export function LoginView() {
                 : "idle"
             }
           />
-          <SocialLoginActions onError={setIdentifierError} />
+          <SocialLoginActions
+            onError={setIdentifierError}
+            returnTo={searchParams.get("returnTo")}
+          />
         </div>
       </>
     );

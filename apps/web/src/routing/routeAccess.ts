@@ -105,6 +105,29 @@ export interface SessionAccess {
   isSessionReady: boolean;
 }
 
+export function shouldBlockAcademyRender(
+  pathname: string,
+  access: SessionAccess,
+): boolean {
+  const path = normalizeAppPath(pathname);
+
+  if (isGuestLandingPath(path)) {
+    return true;
+  }
+
+  if (!access.isAuthenticated) {
+    return requiresAcademyAuth(path);
+  }
+
+  return access.needsMfaChallenge && path !== "/logout";
+}
+
+export function resolveAcademyLandingDestination(
+  access: SessionAccess,
+): string {
+  return access.needsMfaChallenge ? MFA_CHALLENGE_PATH : APP_HOME_PATH;
+}
+
 export function resolveSessionAccess(input: {
   user: MfaGateUser | null | undefined;
   isAuthenticated: boolean;
@@ -160,7 +183,8 @@ export function shouldRedirectToMfaChallenge(
   const path = normalizeAppPath(pathname);
   if (
     isAuthFlowPath(path) ||
-    isPublicAcademyPath(path) ||
+    isCoursesPublicPath(path) ||
+    (ALLOW_GUEST_LEARNING && isLearningPath(path)) ||
     isGuestLandingPath(path)
   ) {
     return false;
