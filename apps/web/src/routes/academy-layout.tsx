@@ -70,6 +70,7 @@ import {
   scrollApplicationTo,
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
+import { flushProfileAutosave } from "../settings/profileAutosave";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
 import {
   getNumberShortcutIndex,
@@ -288,38 +289,48 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
-      const destinationPath = options?.exact
-        ? destination
-        : getDestinationPath(destination);
-      const activeLocationPath = locationPathRef.current;
-      const path = decorateCoursePlayerLaunch(
-        destinationPath,
-        activeLocationPath,
-      );
-      if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
-        const currentScrollPosition = readApplicationScrollPosition();
-        settingsReturnLocationRef.current = {
-          path: locationPathRef.current,
-          ...currentScrollPosition,
-        };
-      }
-      if (
-        normalizeNavigationPath(path) !==
-        normalizeNavigationPath(locationPathRef.current)
-      ) {
-        if (options?.preserveScroll) {
-          preservedScrollPositionRef.current = readApplicationScrollPosition();
+      const performNavigation = () => {
+        const destinationPath = options?.exact
+          ? destination
+          : getDestinationPath(destination);
+        const activeLocationPath = locationPathRef.current;
+        const path = decorateCoursePlayerLaunch(
+          destinationPath,
+          activeLocationPath,
+        );
+        if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
+          const currentScrollPosition = readApplicationScrollPosition();
+          settingsReturnLocationRef.current = {
+            path: locationPathRef.current,
+            ...currentScrollPosition,
+          };
         }
-        // Update synchronously so a second shortcut pressed before React's
-        // route render still compares against the destination just requested.
-        locationPathRef.current = path;
-        void navigate(path, {
-          preventScrollReset: options?.preserveScroll,
-        });
+        if (
+          normalizeNavigationPath(path) !==
+          normalizeNavigationPath(locationPathRef.current)
+        ) {
+          if (options?.preserveScroll) {
+            preservedScrollPositionRef.current =
+              readApplicationScrollPosition();
+          }
+          // Update synchronously so a second shortcut pressed before React's
+          // route render still compares against the destination just requested.
+          locationPathRef.current = path;
+          void navigate(path, {
+            preventScrollReset: options?.preserveScroll,
+          });
+        }
+        if (!options?.preserveScroll) {
+          scrollApplicationTo({ top: 0, behavior: "auto" });
+        }
+      };
+
+      if (isSettingsPath(locationPathRef.current)) {
+        void flushProfileAutosave().then(performNavigation);
+        return;
       }
-      if (!options?.preserveScroll) {
-        scrollApplicationTo({ top: 0, behavior: "auto" });
-      }
+
+      performNavigation();
     },
     [navigate],
   );
