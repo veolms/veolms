@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { classNames } from "../utils/classNames";
 
@@ -10,7 +11,11 @@ export interface VideoLoadingSpinnerProps {
   className?: string;
 }
 
-export function VideoLoadingSpinner({ className }: VideoLoadingSpinnerProps) {
+const FIRST_FRAME_HIDE_TIMEOUT_MS = 800;
+
+export const VideoLoadingSpinner = memo(function VideoLoadingSpinner({
+  className,
+}: VideoLoadingSpinnerProps) {
   return (
     <span
       aria-hidden="true"
@@ -20,21 +25,10 @@ export function VideoLoadingSpinner({ className }: VideoLoadingSpinnerProps) {
       )}
       data-video-player-buffering-spinner=""
     >
-      <svg viewBox="0 0 48 48" className="size-full overflow-visible">
-        <circle
-          cx="24"
-          cy="24"
-          r="20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          className="video-player-buffering-spinner__arc"
-        />
-      </svg>
+      <span className="video-player-buffering-spinner__arc" />
     </span>
   );
-}
+});
 
 const BUFFERED_PLAYBACK_GRACE_SECONDS = 0.25;
 
@@ -48,35 +42,54 @@ function isInitialLoadingLifecycle(lifecycle: string): boolean {
 }
 
 export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
-  const { initialLoading, waitingForMedia } = usePlayerState(
-    (snapshot) => {
-      const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
-      const initialLoading = isInitialLoadingLifecycle(lifecycle);
-      const currentPositionBuffered = buffered.some(
-        (range) =>
-          currentTime >= range.start &&
-          range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
-      );
-      return {
-        initialLoading,
-        waitingForMedia:
-          !snapshot.ui.scrubbing &&
-          (initialLoading || (buffering && !currentPositionBuffered)),
-      };
-    },
-    (left, right) =>
-      left.initialLoading === right.initialLoading &&
-      left.waitingForMedia === right.waitingForMedia,
-  );
+  const controller = usePlayerController();
+  const { initialLoading, playInFlight, playbackHasBegun, waitingForMedia } =
+    usePlayerState(
+      (snapshot) => {
+        const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
+        const initialLoading = isInitialLoadingLifecycle(lifecycle);
+        const currentPositionBuffered = buffered.some(
+          (range) =>
+            currentTime >= range.start &&
+            range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
+        );
+        const playbackHasBegun = snapshot.media.playing || snapshot.media.ended;
+        const playInFlight = !playbackHasBegun && !snapshot.media.paused;
+        return {
+          initialLoading,
+          playInFlight,
+          playbackHasBegun,
+          waitingForMedia:
+            !snapshot.ui.scrubbing &&
+            (initialLoading ||
+              playInFlight ||
+              (buffering && !currentPositionBuffered)),
+        };
+      },
+      (left, right) =>
+        left.initialLoading === right.initialLoading &&
+        left.playInFlight === right.playInFlight &&
+        left.playbackHasBegun === right.playbackHasBegun &&
+        left.waitingForMedia === right.waitingForMedia,
+    );
   const [visible, setVisible] = useState(
     () => waitingForMedia && (initialLoading || delay <= 0),
   );
   const visibleRef = useRef(visible);
+  const holdForFirstFrameRef = useRef(false);
   visibleRef.current = visible;
+  if (playInFlight) {
+    holdForFirstFrameRef.current = true;
+  }
 
   useEffect(() => {
     if (waitingForMedia) {
-      if (visibleRef.current || initialLoading || delay <= 0) {
+      if (
+        visibleRef.current ||
+        initialLoading ||
+        playInFlight ||
+        delay <= 0
+      ) {
         setVisible(true);
         return;
       }
@@ -84,18 +97,44 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
       return () => window.clearTimeout(showTimer);
     }
 
-    setVisible(false);
-    return undefined;
-  }, [delay, initialLoading, waitingForMedia]);
+    if (!visibleRef.current) {
+      return undefined;
+    }
+
+    if (!holdForFirstFrameRef.current || !playbackHasBegun) {
+      holdForFirstFrameRef.current = false;
+      setVisible(false);
+      return undefined;
+    }
+
+    holdForFirstFrameRef.current = false;
+    let cancelled = false;
+    const hide = () => {
+      if (!cancelled) setVisible(false);
+    };
+    const timeoutId = window.setTimeout(hide, FIRST_FRAME_HIDE_TIMEOUT_MS);
+    void controller.waitForPresentedFrame().then(() => {
+      window.clearTimeout(timeoutId);
+      hide();
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    controller,
+    delay,
+    initialLoading,
+    playInFlight,
+    playbackHasBegun,
+    waitingForMedia,
+  ]);
 
   const label = initialLoading ? "Loading video" : "Buffering video";
 
   return (
     <div
-      className={classNames(
-        "pointer-events-none absolute inset-0 z-40 grid place-items-center",
-        visible ? "visible opacity-100" : "invisible opacity-0",
-      )}
+      className="pointer-events-none absolute inset-0 z-40 grid place-items-center"
       role={visible ? "status" : undefined}
       aria-label={visible ? label : undefined}
       aria-hidden={visible ? undefined : true}
