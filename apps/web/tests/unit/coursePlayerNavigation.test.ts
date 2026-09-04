@@ -15,6 +15,7 @@ import {
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
   getOpenCoursePlayerSessions,
+  mapLearningSpaceSessionToCoursePlayerSession,
   getPendingCourseCommentDraft,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
@@ -32,6 +33,33 @@ beforeEach(() => {
 });
 
 describe("course player navigation", () => {
+  it("maps canonical server sessions back to readable player routes", () => {
+    const session = mapLearningSpaceSessionToCoursePlayerSession({
+      id: "11111111-1111-4111-8111-111111111111",
+      courseId: "22222222-2222-4222-8222-222222222222",
+      courseSlug: "backend-nodejs",
+      courseTitle: "Complete Backend with Node.js",
+      lessonId: "33333333-3333-4333-8333-333333333333",
+      lessonNumber: 2,
+      lessonTitle: "Modules and Packages",
+      origin: "courses",
+      returnPath: "/courses",
+      createdAt: "2026-09-01T10:00:00.000Z",
+      updatedAt: "2026-09-01T10:05:00.000Z",
+    });
+
+    expect(session).toMatchObject({
+      courseId: "backend-nodejs",
+      courseTitle: "Complete Backend with Node.js",
+      lessonId: 2,
+      lessonTitle: "Modules and Packages",
+      returnPath: "/courses",
+      updatedAt: Date.parse("2026-09-01T10:05:00.000Z"),
+    });
+    expect(session.path).toContain("/learn/backend-nodejs/");
+    expect(session.path).toContain("from=courses");
+  });
+
   it("builds backward-compatible learning URLs and decorates exact launch sources", () => {
     expect(getCoursePlayerLaunchPath("typescript/course", "/courses", 1)).toBe(
       "/learn/typescript%2Fcourse/the-beginning-of-a-design-journey?from=courses",

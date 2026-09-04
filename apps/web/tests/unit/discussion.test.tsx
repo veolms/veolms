@@ -1454,4 +1454,75 @@ describe("Discussion", () => {
       window.matchMedia = originalMatchMedia;
     }
   });
+
+  it("keeps the mobile compact composer viewport-fixed outside transformed lesson content", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 639px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <div data-learning-motion-stage>
+          <article
+            data-learning-lesson-content
+            style={{ transform: "translate3d(0, 0, 0)" }}
+          >
+            <Discussion
+              persistenceKey="discussion-mobile-fixed-layer-test"
+              mobileBottomNavigation
+              mobileBottomNavigationHidden={false}
+            />
+          </article>
+        </div>,
+      );
+
+      const compactComposer = await screen.findByTestId(
+        "mobile-discussion-composer",
+      );
+      const lessonContent = container.querySelector(
+        "[data-learning-lesson-content]",
+      );
+      const motionStage = container.querySelector(
+        "[data-learning-motion-stage]",
+      );
+      const composerLayer = container.querySelector(
+        "[data-learning-mobile-composer-layer]",
+      );
+
+      expect(compactComposer).toBeVisible();
+      expect(compactComposer).toHaveAttribute("data-scroll-hidden", "false");
+      expect(lessonContent).not.toContainElement(compactComposer);
+      expect(motionStage).toContainElement(compactComposer);
+      expect(composerLayer).toHaveClass(
+        "fixed",
+        "inset-x-0",
+        "box-border",
+        "min-w-0",
+        "max-w-full",
+        "overflow-x-clip",
+        "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]",
+      );
+      expect(composerLayer).not.toHaveClass("inset-0");
+      expect(compactComposer).toHaveClass(
+        "relative",
+        "box-border",
+        "min-w-0",
+        "max-w-full",
+        "overflow-x-clip",
+      );
+      expect(compactComposer).not.toHaveClass("absolute");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
 });

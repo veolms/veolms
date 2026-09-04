@@ -1190,12 +1190,12 @@
     z-index: 1;
   }
 
-  .courses-app > .courses-main {
-    z-index: 1;
-  }
-
   .courses-app > .courses-sidebar {
     z-index: 3;
+  }
+
+  .courses-app > .courses-main {
+    z-index: 1;
   }
 }
 

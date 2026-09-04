@@ -13,6 +13,8 @@ const CLICK_SUPPRESSION_DURATION = 450;
 const WHEEL_COMMIT_DISTANCE = 36;
 const WHEEL_GESTURE_GAP = 180;
 const WHEEL_ACTION_COOLDOWN = 320;
+const DRAWER_POPUP_SELECTOR = '[data-slot="drawer-popup"]';
+const DRAWER_SWIPE_MOVEMENT_Y = "--drawer-swipe-movement-y";
 
 const WHEEL_CONTROL_EXCLUSION_SELECTOR = [
   "input",
@@ -30,6 +32,10 @@ interface LessonDrawerGesture {
   active: boolean;
   cancelled: boolean;
   expandedAtStart: boolean;
+  popupElement: HTMLElement | null;
+  popupHadSwipingAttribute: boolean;
+  popupPreviousMovementY: string;
+  popupStartTop: number;
 }
 
 interface WheelGesture {
@@ -239,6 +245,9 @@ export function useLessonDrawerHeroControl({
     clientY: number,
   ) => {
     if (!optionsRef.current.open || gestureRef.current) return;
+    const popupElement = heroElementRef.current?.closest<HTMLElement>(
+      DRAWER_POPUP_SELECTOR,
+    );
     gestureRef.current = {
       source,
       id,
@@ -248,7 +257,56 @@ export function useLessonDrawerHeroControl({
       active: false,
       cancelled: false,
       expandedAtStart: optionsRef.current.expanded,
+      popupElement: popupElement ?? null,
+      popupHadSwipingAttribute:
+        popupElement?.hasAttribute("data-swiping") ?? false,
+      popupPreviousMovementY:
+        popupElement?.style.getPropertyValue(DRAWER_SWIPE_MOVEMENT_Y) ?? "",
+      popupStartTop: popupElement?.getBoundingClientRect().top ?? 0,
     };
+  };
+
+  const moveDrawerWithGesture = (
+    gesture: LessonDrawerGesture,
+    deltaY: number,
+  ) => {
+    const popupElement = gesture.popupElement;
+    if (!popupElement) return;
+
+    const minimumOffset = -Math.max(0, gesture.popupStartTop);
+    const maximumOffset = Math.max(
+      0,
+      window.innerHeight - gesture.popupStartTop,
+    );
+    const boundedOffset = Math.max(
+      minimumOffset,
+      Math.min(maximumOffset, deltaY),
+    );
+
+    popupElement.setAttribute("data-swiping", "");
+    popupElement.style.setProperty(
+      DRAWER_SWIPE_MOVEMENT_Y,
+      `${boundedOffset}px`,
+    );
+  };
+
+  const settleDrawerGesture = (gesture: LessonDrawerGesture) => {
+    const popupElement = gesture.popupElement;
+    if (!popupElement) return;
+
+    window.requestAnimationFrame(() => {
+      if (gesture.popupPreviousMovementY) {
+        popupElement.style.setProperty(
+          DRAWER_SWIPE_MOVEMENT_Y,
+          gesture.popupPreviousMovementY,
+        );
+      } else {
+        popupElement.style.removeProperty(DRAWER_SWIPE_MOVEMENT_Y);
+      }
+      if (!gesture.popupHadSwipingAttribute) {
+        popupElement.removeAttribute("data-swiping");
+      }
+    });
   };
 
   const updateGesture = (
@@ -288,6 +346,8 @@ export function useLessonDrawerHeroControl({
       gesture.active = true;
     }
 
+    moveDrawerWithGesture(gesture, deltaY);
+
     return true;
   };
 
@@ -312,6 +372,7 @@ export function useLessonDrawerHeroControl({
       if (gesture.expandedAtStart) optionsRef.current.onCollapse();
       else optionsRef.current.onClose();
     }
+    settleDrawerGesture(gesture);
 
     return true;
   };
@@ -323,6 +384,7 @@ export function useLessonDrawerHeroControl({
     gestureRef.current = null;
     if (!gesture.active) return false;
     suppressClickUntilRef.current = Date.now() + CLICK_SUPPRESSION_DURATION;
+    settleDrawerGesture(gesture);
     return true;
   };
 
@@ -399,7 +461,6 @@ export function useLessonDrawerHeroControl({
         return;
       }
       event.preventDefault();
-      event.stopPropagation();
     },
     onTouchEndCapture: (event) => {
       const gesture = gestureRef.current;

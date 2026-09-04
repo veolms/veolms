@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { GitHubBrandIcon, GoogleBrandIcon } from "./SocialBrandIcons";
+import {
+  OAUTH_PROVIDER_STORAGE_KEY,
+  OAUTH_RETURN_TO_STORAGE_KEY,
+  clearOauthHandoff,
+} from "./oauthFlow";
 import { useOauthUrl } from "../services/auth";
 
 interface SocialLoginActionsProps {
   onError?: (message: string) => void;
+  returnTo?: string | null;
 }
 
-export function SocialLoginActions({ onError }: SocialLoginActionsProps) {
-  const [loadingProvider, setLoadingProvider] = useState<"google" | "github" | null>(null);
+export function SocialLoginActions({
+  onError,
+  returnTo,
+}: SocialLoginActionsProps) {
+  const [loadingProvider, setLoadingProvider] = useState<
+    "google" | "github" | null
+  >(null);
   const oauthUrlMutation = useOauthUrl();
 
   const handleOauth = async (provider: "google" | "github") => {
@@ -15,20 +26,30 @@ export function SocialLoginActions({ onError }: SocialLoginActionsProps) {
     setLoadingProvider(provider);
 
     try {
-      sessionStorage.setItem("veolms_oauth_provider", provider);
+      sessionStorage.setItem(OAUTH_PROVIDER_STORAGE_KEY, provider);
+      if (returnTo) {
+        sessionStorage.setItem(OAUTH_RETURN_TO_STORAGE_KEY, returnTo);
+      } else {
+        sessionStorage.removeItem(OAUTH_RETURN_TO_STORAGE_KEY);
+      }
       const redirectUri = `${window.location.origin}/auth/callback`;
       const response = await oauthUrlMutation.mutateAsync({
         provider,
         redirectUri,
       });
 
-      if (response.url) {
-        window.location.href = response.url;
+      if (!response.url) {
+        throw new Error("The OAuth provider did not return a login URL.");
       }
+
+      window.location.href = response.url;
     } catch (err: unknown) {
+      clearOauthHandoff();
       setLoadingProvider(null);
       const errorObj = err as { message?: string };
-      const message = errorObj?.message || "Unable to initialize social login. Please try again.";
+      const message =
+        errorObj?.message ||
+        "Unable to initialize social login. Please try again.";
       onError?.(message);
     }
   };
@@ -47,7 +68,9 @@ export function SocialLoginActions({ onError }: SocialLoginActionsProps) {
           type="button"
         >
           <GoogleBrandIcon size={18} />
-          {loadingProvider === "google" ? "Connecting..." : "Continue with Google"}
+          {loadingProvider === "google"
+            ? "Connecting..."
+            : "Continue with Google"}
         </button>
 
         <button
@@ -57,7 +80,9 @@ export function SocialLoginActions({ onError }: SocialLoginActionsProps) {
           type="button"
         >
           <GitHubBrandIcon size={18} />
-          {loadingProvider === "github" ? "Connecting..." : "Continue with GitHub"}
+          {loadingProvider === "github"
+            ? "Connecting..."
+            : "Continue with GitHub"}
         </button>
       </div>
     </div>

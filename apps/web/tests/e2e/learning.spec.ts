@@ -369,6 +369,50 @@ test("desktop learning page scrollbar hugs the curriculum edge", async ({
   expect(geometry.scrollbarBoxShadow).toBe("none");
 });
 
+test("player control icons stay fixed while pressed", async ({ page }) => {
+  await page.setViewportSize(LEARNING_DESKTOP_VIEWPORT);
+  await openApp(page, "/learn/typescript-course/the-design-mindset?from=home");
+
+  const player = page.getByRole("region", {
+    name: /Lesson video player for The Design Mindset/,
+  });
+  await player.hover();
+
+  const visibleControls = player.locator("button.player-control:visible");
+  await expect(visibleControls.first()).toBeVisible();
+  const transitionProperties = await visibleControls.evaluateAll((controls) =>
+    controls.map((control) => getComputedStyle(control).transitionProperty),
+  );
+  expect(
+    transitionProperties.every(
+      (transitionProperty) => !transitionProperty.includes("transform"),
+    ),
+  ).toBe(true);
+
+  const settings = player.getByRole("button", { name: "Settings" });
+  const settingsIcon = settings.locator("svg");
+  const buttonBox = await settings.boundingBox();
+  const iconBoxBeforePress = await settingsIcon.boundingBox();
+  if (!buttonBox || !iconBoxBeforePress) {
+    throw new Error("Settings control geometry is unavailable");
+  }
+
+  await page.mouse.move(
+    buttonBox.x + buttonBox.width / 2,
+    buttonBox.y + buttonBox.height / 2,
+  );
+  await page.mouse.down();
+  const [pressedTransform, iconBoxWhilePressed] = await Promise.all([
+    settings.evaluate((control) => getComputedStyle(control).transform),
+    settingsIcon.boundingBox(),
+  ]);
+  await page.mouse.up();
+
+  expect(pressedTransform).toBe("none");
+  expect(iconBoxWhilePressed?.width).toBeCloseTo(iconBoxBeforePress.width, 2);
+  expect(iconBoxWhilePressed?.height).toBeCloseTo(iconBoxBeforePress.height, 2);
+});
+
 test("lesson choice, curriculum width, and player preferences persist", async ({
   page,
 }) => {
@@ -421,26 +465,69 @@ test("lesson choice, curriculum width, and player preferences persist", async ({
     )
     .toBe(false);
   await expect(player.getByRole("switch", { name: /Autoplay/ })).toHaveCount(0);
-  await player.getByRole("button", { name: "Toggle captions" }).click();
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  const settingsMenu = page.getByRole("menu", { name: "Video settings" });
   await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    player.getByRole("button", { name: "Toggle picture in picture" }),
+  ).toHaveCount(0);
+  await expect(
+    settingsMenu.getByRole("menuitem", { name: /^Picture in picture/ }),
+  ).toBeVisible();
+  await expect(
+    settingsMenu.getByRole("menuitem", { name: /^Captions\b/ }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await player.getByRole("button", { name: "Turn captions on" }).click();
+  await expect
+    .poll(() =>
+      lessonVideo.evaluate((video) =>
+        Array.from((video as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
 
-  await player.getByRole("button", { name: "Player settings" }).click();
-  await page.getByRole("button", { name: /Playback speed/ }).click();
-  await page.getByRole("button", { name: "1.5x" }).click();
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  await settingsMenu
+    .getByRole("menuitem", { name: /^Playback speed\b/ })
+    .click();
+  await settingsMenu
+    .getByRole("menuitemradio", { name: "1.75×", exact: true })
+    .click();
   await expect
     .poll(() =>
       page
         .locator("video")
         .evaluate((video) => (video as HTMLVideoElement).playbackRate),
     )
-    .toBe(1.5);
+    .toBe(1.75);
 
-  await player.getByRole("button", { name: "Enter theater mode" }).click();
+  await player.hover();
+  await player.getByRole("button", { name: "Settings" }).click();
+  await settingsMenu
+    .getByRole("menuitem", { name: /^Playback speed\b/ })
+    .click();
+  const customSpeed = settingsMenu.getByRole("slider", {
+    name: "Custom playback speed",
+  });
+  await expect(customSpeed).toHaveAttribute("min", "0.25");
+  await expect(customSpeed).toHaveAttribute("max", "4");
+  await customSpeed.fill("3.25");
+  await expect
+    .poll(() =>
+      lessonVideo.evaluate((video) => (video as HTMLVideoElement).playbackRate),
+    )
+    .toBe(3.25);
+  await expect(settingsMenu).toBeVisible();
+  await customSpeed.fill("1");
+  await page.keyboard.press("Escape");
+
   await expect(
-    player.getByRole("button", { name: "Exit theater mode" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    player.getByRole("button", { name: /theater mode/i }),
+  ).toHaveCount(0);
 
   await page.reload();
   await expect(
@@ -1828,10 +1915,10 @@ test("mobile supplemental tabs clear sticky spacing in the natural layout", asyn
   }
 });
 
-test("lesson playback switches to the mobile sticky stack at 840px", async ({
+test("lesson playback stays in the scrolling layout above 640px", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 840, height: 779 });
+  await page.setViewportSize({ width: 820, height: 779 });
   await openApp(
     page,
     "/learn/backend-nodejs/career-opportunities-15?from=courses",
@@ -1839,92 +1926,46 @@ test("lesson playback switches to the mobile sticky stack at 840px", async ({
 
   const player = page.locator(".learning-workspace__player-wrap");
   const discussionHeader = page.locator(".learning-discussion__header");
-  const firstComment = page.locator(".learning-comment-card").first();
   const scrollport = page.locator("#courses-main-scrollport");
-  const initialCommentTop = await firstComment.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
+  const initialPlayerTop = (await player.boundingBox())!.y;
 
-  await expect(player).toHaveCSS("position", "sticky");
-  await expect(discussionHeader).toHaveCSS("position", "sticky");
+  await expect(player).toHaveCSS("position", "relative");
+  await expect(discussionHeader).toHaveCSS("position", "static");
   await scrollport.evaluate((element) => element.scrollTo(0, 360));
 
   await expect
     .poll(() => scrollport.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(100);
   await expect
-    .poll(async () => {
-      const [playerBounds, scrollportBounds] = await Promise.all([
-        player.boundingBox(),
-        scrollport.boundingBox(),
-      ]);
-      if (!playerBounds || !scrollportBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(playerBounds.y - scrollportBounds.y);
-    })
-    .toBeLessThanOrEqual(1);
-  await expect
-    .poll(async () => {
-      const [playerBounds, discussionBounds] = await Promise.all([
-        player.boundingBox(),
-        discussionHeader.boundingBox(),
-      ]);
-      if (!playerBounds || !discussionBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(
-        discussionBounds.y - (playerBounds.y + playerBounds.height),
-      );
-    })
-    .toBeLessThanOrEqual(2);
-  await expect
-    .poll(
-      async () =>
-        (await firstComment.boundingBox())?.y ?? Number.POSITIVE_INFINITY,
-    )
-    .toBeLessThan(initialCommentTop - 40);
-  const tabletPositionBefore = {
-    scrollTop: await scrollport.evaluate((element) => element.scrollTop),
-    playerTop: (await player.boundingBox())!.y,
-    discussionTop: (await discussionHeader.boundingBox())!.y,
-  };
+    .poll(async () => (await player.boundingBox())?.y ?? initialPlayerTop)
+    .toBeLessThan(initialPlayerTop - 100);
+});
 
-  await page.getByRole("tab", { name: "Notes" }).click();
-  const tabletNotesHeading = page.getByRole("heading", {
-    name: "Your lesson notes",
+test("640px landscape keeps the lesson video in normal scroll flow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  const player = page.locator(".learning-workspace__player-wrap");
+  const navigation = page.getByRole("navigation", {
+    name: "Student mobile navigation",
   });
-  await expect(tabletNotesHeading).toBeVisible();
-  expect(await scrollport.evaluate((element) => element.scrollTop)).toBeCloseTo(
-    tabletPositionBefore.scrollTop,
-    0,
-  );
-  expect((await player.boundingBox())!.y).toBeCloseTo(
-    tabletPositionBefore.playerTop,
-    0,
-  );
-  expect((await discussionHeader.boundingBox())!.y).toBeCloseTo(
-    tabletPositionBefore.discussionTop,
-    0,
-  );
-  await expect
-    .poll(async () => {
-      const [playerBounds, discussionBounds, notesBounds] = await Promise.all([
-        player.boundingBox(),
-        discussionHeader.boundingBox(),
-        tabletNotesHeading.locator("..").boundingBox(),
-      ]);
-      if (!playerBounds || !discussionBounds || !notesBounds) {
-        return Number.POSITIVE_INFINITY;
-      }
-      return Math.max(
-        Math.abs(discussionBounds.y - (playerBounds.y + playerBounds.height)),
-        Math.abs(
-          notesBounds.y - (discussionBounds.y + discussionBounds.height + 12),
-        ),
-      );
-    })
-    .toBeLessThanOrEqual(2);
 
-  await page.setViewportSize({ width: 841, height: 779 });
+  await expect(navigation).toBeVisible();
   await expect(player).toHaveCSS("position", "relative");
-  await expect(discussionHeader).toHaveCSS("position", "static");
+
+  const initialPlayerTop = (await player.boundingBox())!.y;
+  await page.evaluate(() => window.scrollTo(0, 260));
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(100);
+  await expect
+    .poll(async () => (await player.boundingBox())?.y ?? initialPlayerTop)
+    .toBeLessThan(initialPlayerTop - 100);
 });
 
 test("compact lesson video reaches every available parent edge", async ({
@@ -2296,6 +2337,56 @@ test("mobile lesson search reuses the compact expandable search contract", async
   await searchToggle.focus();
   await page.keyboard.press("Control+K");
   await expect(search).toBeFocused();
+});
+
+test("mobile player lessons control opens the curriculum at the course overview", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/career-opportunities-15?from=courses",
+  );
+
+  const lessonsButton = page.locator(
+    'button[data-player-control][aria-controls="lesson-drawer-curriculum-scrollport"]',
+  );
+  const player = page.locator(".learning-workspace__player-wrap");
+  await expect(lessonsButton).toBeVisible();
+  await expect(lessonsButton).toHaveAttribute("aria-expanded", "false");
+  await lessonsButton.click();
+
+  const dialog = page.getByRole("dialog", { name: "Course lessons" });
+  const curriculum = dialog.getByRole("complementary", {
+    name: "Course curriculum",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(lessonsButton).toHaveAttribute("aria-expanded", "true");
+  await expect(lessonsButton.locator("svg")).toHaveClass(/-rotate-180/);
+  await expect(
+    curriculum.getByRole("heading", {
+      name: "Complete Backend with Node.js",
+    }),
+  ).toBeVisible();
+  await expect
+    .poll(() => curriculum.evaluate((element) => element.scrollTop))
+    .toBe(0);
+  await expect
+    .poll(async () => {
+      const [dialogBounds, playerBounds] = await Promise.all([
+        dialog.boundingBox(),
+        player.boundingBox(),
+      ]);
+      if (!dialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
+      return Math.abs(dialogBounds.y - (playerBounds.y + playerBounds.height));
+    })
+    .toBeLessThanOrEqual(1);
+
+  await page.mouse.click(2, 2);
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Open lessons" }),
+  ).toHaveAttribute("aria-expanded", "false");
 });
 
 test("mobile lesson drawer closes with Escape and returns focus", async ({
@@ -3354,7 +3445,14 @@ test("lesson video loads directly without a thumbnail poster", async ({
     name: "Lesson video player for The Design Mindset",
   });
   const initialVideo = initialPlayer.locator("video");
-  const initialSource = await initialVideo.getAttribute("src");
+  await expect
+    .poll(() =>
+      initialVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
+    )
+    .not.toBe("");
+  const initialSource = await initialVideo.evaluate(
+    (video) => (video as HTMLVideoElement).currentSrc,
+  );
 
   await expect(initialVideo).toHaveAttribute("preload", "auto");
   await expect(initialVideo).not.toHaveAttribute("poster");
@@ -3373,11 +3471,13 @@ test("lesson video loads directly without a thumbnail poster", async ({
   await expect(nextVideo).toHaveAttribute("preload", "auto");
   await expect(nextVideo).not.toHaveAttribute("poster");
   await expect
-    .poll(() => nextVideo.getAttribute("src"))
+    .poll(() =>
+      nextVideo.evaluate((video) => (video as HTMLVideoElement).currentSrc),
+    )
     .not.toBe(initialSource);
 });
 
-test("core player controls, shortcuts, seek state, and ambient preference remain functional", async ({
+test("custom player controls, timeline preview and seek, fullscreen shell, and ambient preference remain functional", async ({
   page,
 }) => {
   await openApp(page, "/learn/typescript-course");
@@ -3385,14 +3485,19 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
     name: /Lesson video player for The Beginning of a Design Journey/,
   });
   const video = player.locator("video");
-  const positionSlider = player.getByRole("slider", {
-    name: "Video position",
+  const timeline = player.getByRole("slider", {
+    name: "Video timeline",
   });
   const volumeSlider = player.getByRole("slider", { name: "Volume" });
 
-  await expect(positionSlider).toHaveClass(/app-slider--player/);
-  await expect(volumeSlider).toHaveClass(/app-slider--volume/);
-  await expect(volumeSlider).toHaveCSS("--app-slider-progress", "100%");
+  await expect
+    .poll(() =>
+      video.evaluate((element) => (element as HTMLVideoElement).duration),
+    )
+    .toBeGreaterThan(0);
+  await player.hover();
+  await expect(timeline).toHaveAttribute("aria-valuetext", /of/);
+  await expect(volumeSlider).toHaveValue("1");
 
   await player.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
@@ -3402,6 +3507,40 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
   await expect(
     player.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
+
+  const timelineBounds = await timeline.boundingBox();
+  if (!timelineBounds) throw new Error("Video timeline geometry missing");
+  await timeline.hover({
+    position: {
+      x: Math.floor(timelineBounds.width / 2),
+      y: Math.floor(timelineBounds.height / 2),
+    },
+  });
+  await expect(player.locator("[data-video-player-preview]")).toContainText(
+    "00:09",
+  );
+  await timeline.click({
+    position: {
+      x: Math.floor(timelineBounds.width * 0.75),
+      y: Math.floor(timelineBounds.height / 2),
+    },
+  });
+  await expect
+    .poll(() =>
+      video.evaluate((element) => {
+        const media = element as HTMLVideoElement;
+        return media.duration ? media.currentTime / media.duration : 0;
+      }),
+    )
+    .toBeGreaterThan(0.7);
+  await expect
+    .poll(() =>
+      video.evaluate((element) => {
+        const media = element as HTMLVideoElement;
+        return media.duration ? media.currentTime / media.duration : 1;
+      }),
+    )
+    .toBeLessThan(0.8);
 
   await player.getByRole("button", { name: "Mute", exact: true }).click();
   await expect(
@@ -3422,20 +3561,67 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
     .poll(() =>
       video.evaluate((element) => (element as HTMLVideoElement).currentTime),
     )
-    .toBeGreaterThanOrEqual(15);
+    .toBeGreaterThanOrEqual(20);
   await video.evaluate((element) => {
     element.dispatchEvent(new Event("pause"));
   });
   await expectStoredValue(
     page,
     "veolms-watch-typescript-course-lesson-1",
-    "15",
+    "20",
   );
 
-  await player.getByRole("button", { name: "Player settings" }).click();
-  const ambient = page.getByRole("button", { name: "Ambient mode" });
+  const shell = page.locator(".video-shell").filter({ has: player });
+  await shell.evaluate((element) => {
+    Object.defineProperty(element, "requestFullscreen", {
+      configurable: true,
+      value: async () =>
+        element.setAttribute("data-fullscreen-requested", "true"),
+    });
+  });
+  await player.hover();
+  await player.getByRole("button", { name: "Toggle fullscreen" }).click();
+  await expect(shell).toHaveAttribute("data-fullscreen-requested", "true");
+
+  await player.hover();
+  const ambient = player.getByRole("button", { name: "Enable ambient mode" });
   await ambient.click();
   await expectStoredValue(page, "veolms-player-ambient", "on");
+
+  const inlineProjection = shell.locator("[data-ambient-inline-projection]");
+  await expect(inlineProjection).toHaveClass(/ambient-canvas--visible/);
+  await expect
+    .poll(() =>
+      inlineProjection.evaluate((canvas) => {
+        const shell = canvas.closest(".video-shell");
+        const player = shell?.querySelector(".youtube-player");
+        const video = player?.querySelector("video");
+        const canvasStyle = getComputedStyle(canvas);
+        const playerStyle = player ? getComputedStyle(player) : null;
+        const videoStyle = video ? getComputedStyle(video) : null;
+        return {
+          parentIsShellOverlay:
+            canvas.parentElement?.matches(
+              '[data-video-player-shell-overlay-host=""]',
+            ) && canvas.parentElement.parentElement === shell,
+          outsideForegroundPlayer: player ? !player.contains(canvas) : false,
+          canvasPosition: canvasStyle.position,
+          canvasPointerEvents: canvasStyle.pointerEvents,
+          canvasZIndex: canvasStyle.zIndex,
+          playerZIndex: playerStyle?.zIndex,
+          videoFilter: videoStyle?.filter,
+        };
+      }),
+    )
+    .toEqual({
+      parentIsShellOverlay: true,
+      outsideForegroundPlayer: true,
+      canvasPosition: "absolute",
+      canvasPointerEvents: "none",
+      canvasZIndex: "0",
+      playerZIndex: "10",
+      videoFilter: "none",
+    });
 
   const shellProjection = page.locator("[data-ambient-shell-projection]");
   await expect(shellProjection).toHaveClass(/ambient-canvas--visible/);
@@ -3464,7 +3650,7 @@ test("core player controls, shortcuts, seek state, and ambient preference remain
       reachesPastMainInlineStart: true,
       reachesPastMainBlockStart: true,
       pointerEvents: "none",
-      position: "fixed",
+      position: "absolute",
     });
 });
 
@@ -3478,7 +3664,10 @@ test("player shortcuts work page-wide outside editors and mute persists across l
   });
   const video = player.locator("video");
 
-  await page.locator("body").focus();
+  const gestureSurface = player.getByRole("button", {
+    name: "Play or pause video",
+  });
+  await gestureSurface.focus();
   await page.keyboard.press("Space");
   await expect
     .poll(() =>
@@ -3492,6 +3681,10 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     )
     .toBe(true);
 
+  const lessonTitle = page.getByRole("button", {
+    name: /Open course lessons for The Beginning of a Design Journey/,
+  });
+  await lessonTitle.focus();
   await page.keyboard.press("m");
   await expect
     .poll(() =>
@@ -3500,19 +3693,30 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     .toBe(true);
   await expectStoredValue(page, "veolms-player-muted", "true");
 
+  await expect
+    .poll(() =>
+      video.evaluate(
+        (element) => (element as HTMLVideoElement).textTracks.length,
+      ),
+    )
+    .toBeGreaterThan(0);
   await page.keyboard.press("c");
-  await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      video.evaluate((element) =>
+        Array.from((element as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
 
-  await page.keyboard.press("t");
+  const workspace = page.locator(".learning-workspace");
   await expect(
-    player.getByRole("button", { name: "Exit theater mode" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    player.getByRole("button", { name: /theater mode/i }),
+  ).toHaveCount(0);
   await page.keyboard.press("t");
-  await expect(
-    player.getByRole("button", { name: "Enter theater mode" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(workspace).not.toHaveClass(/is-theater/);
 
   const shell = page.locator(".video-shell");
   await shell.evaluate((element) => {
@@ -3543,21 +3747,26 @@ test("player shortcuts work page-wide outside editors and mute persists across l
     /\/learn\/typescript-course\/the-beginning-of-a-design-journey\?from=courses$/,
   );
 
-  const commentInput = page.getByPlaceholder("Add a comment...");
+  await page.getByRole("button", { name: "Open discussion composer" }).click();
+  const commentInput = page.getByRole("textbox", { name: "Write a comment" });
   await commentInput.focus();
   await page.keyboard.type("mct 1");
-  await expect(commentInput).toHaveValue("mct 1");
+  await expect(commentInput).toContainText("mct 1");
   await expect
     .poll(() =>
       video.evaluate((element) => (element as HTMLVideoElement).muted),
     )
     .toBe(true);
-  await expect(
-    player.getByRole("button", { name: "Toggle captions" }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    player.getByRole("button", { name: "Enter theater mode" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect
+    .poll(() =>
+      video.evaluate((element) =>
+        Array.from((element as HTMLVideoElement).textTracks).some(
+          (track) => track.mode === "showing",
+        ),
+      ),
+    )
+    .toBe(true);
+  await expect(workspace).not.toHaveClass(/is-theater/);
 
   const curriculum = page.getByRole("complementary", {
     name: "Course curriculum",
@@ -3568,6 +3777,17 @@ test("player shortcuts work page-wide outside editors and mute persists across l
       page
         .locator("video")
         .evaluate((element) => (element as HTMLVideoElement).muted),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator("video")
+        .evaluate((element) =>
+          Array.from((element as HTMLVideoElement).textTracks).some(
+            (track) => track.mode === "showing",
+          ),
+        ),
     )
     .toBe(true);
 

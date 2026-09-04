@@ -1,3 +1,8 @@
+import {
+  isBuiltInPlayerThemeId,
+  type BuiltInPlayerThemeId,
+} from "@veolms/video-player";
+
 export const SIDEBAR_MAX_WIDTH_MIN = 220;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
 export const SIDEBAR_MAX_WIDTH_LIMIT = 520;
@@ -320,7 +325,9 @@ export interface SidebarPreferences {
 
 export interface LearningPreferences {
   videoQuality: string;
+  videoPlayerTheme: BuiltInPlayerThemeId;
   playbackSpeed: string;
+  seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
   startInTheaterMode: boolean;
   showLessonPageScrollbar: boolean;
@@ -341,9 +348,30 @@ export interface LearningPreferences {
 }
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
+export const LEARNING_PREFERENCES_EVENT = "veolms:learning-preferences";
+export const LEARNING_SEEK_INTERVAL_MIN = 5;
+export const LEARNING_SEEK_INTERVAL_MAX = 60;
+export const LEARNING_SEEK_INTERVAL_DEFAULT = 10;
+export const LEARNING_SEEK_INTERVAL_PRESETS = [5, 10, 15, 30, 60] as const;
+
+export const normalizeLearningSeekInterval = (value: unknown): number => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return LEARNING_SEEK_INTERVAL_DEFAULT;
+  return Math.min(
+    LEARNING_SEEK_INTERVAL_MAX,
+    Math.max(LEARNING_SEEK_INTERVAL_MIN, Math.round(numericValue)),
+  );
+};
+
+export const normalizeVideoPlayerTheme = (
+  value: unknown,
+): BuiltInPlayerThemeId => (isBuiltInPlayerThemeId(value) ? value : "youtube");
+
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
+  videoPlayerTheme: "youtube",
   playbackSpeed: "1",
+  seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
   startInTheaterMode: false,
   showLessonPageScrollbar: true,
@@ -688,6 +716,12 @@ export const readLearningPreferences = (): LearningPreferences => {
     const preferences = {
       ...LEARNING_PREFERENCE_DEFAULTS,
       ...storedPreferences,
+      seekIntervalSeconds: normalizeLearningSeekInterval(
+        storedPreferences.seekIntervalSeconds,
+      ),
+      videoPlayerTheme: normalizeVideoPlayerTheme(
+        storedPreferences.videoPlayerTheme,
+      ),
       reminderDays: Array.isArray(storedPreferences.reminderDays)
         ? storedPreferences.reminderDays
         : LEARNING_PREFERENCE_DEFAULTS.reminderDays,

@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import {
   Outlet,
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router";
+import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
@@ -16,40 +17,43 @@ import {
   isGuestLandingPath,
   normalizeAppPath,
   requiresAcademyAuth,
+  resolveAcademyLandingDestination,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
+  shouldBlockAcademyRender,
 } from "./routeAccess";
+
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function hasMfaSessionState(user: unknown): user is MfaGateUser {
+  if (!user || typeof user !== "object") return false;
+  const candidate = user as Partial<MfaGateUser>;
+  return (
+    typeof candidate.mfaVerified === "boolean" &&
+    typeof candidate.totpEnabled === "boolean" &&
+    typeof candidate.passkeyEnabled === "boolean"
+  );
+}
 
 function useSessionAccess() {
   const { data: user, isPending, isFetched } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const access = resolveSessionAccess({ user, isAuthenticated });
+  const resolvedUser = isFetched
+    ? user
+    : hasMfaSessionState(storeUser)
+      ? storeUser
+      : undefined;
+  const access = resolveSessionAccess({
+    user: resolvedUser,
+    isAuthenticated,
+  });
 
   return {
     access,
-    pending: isPending && !isFetched,
+    pending: isPending && !isFetched && !resolvedUser,
   };
-}
-
-function shouldBlockAcademyRender(
-  pathname: string,
-  access: ReturnType<typeof resolveSessionAccess>,
-): boolean {
-  const path = normalizeAppPath(pathname);
-
-  if (isGuestLandingPath(path)) {
-    return true;
-  }
-
-  if (!requiresAcademyAuth(path)) {
-    return false;
-  }
-
-  if (!access.isAuthenticated) {
-    return true;
-  }
-
-  return access.needsMfaChallenge;
 }
 
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
@@ -57,6 +61,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { access, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
+  const landingDestination = resolveAcademyLandingDestination(access);
 
   useEffect(() => {
     if (pending) {
@@ -64,20 +69,18 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (isGuestLandingPath(path)) {
-      navigate(APP_HOME_PATH, { replace: true });
-      return;
-    }
-
-    if (!requiresAcademyAuth(path)) {
+      navigate(landingDestination, { replace: true });
       return;
     }
 
     if (!access.isAuthenticated) {
-      navigate(APP_HOME_PATH, { replace: true });
+      if (requiresAcademyAuth(path)) {
+        navigate(APP_HOME_PATH, { replace: true });
+      }
       return;
     }
 
-    if (access.needsMfaChallenge) {
+    if (access.needsMfaChallenge && path !== "/logout") {
       navigate(MFA_CHALLENGE_PATH, { replace: true });
     }
   }, [
@@ -86,6 +89,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     access.needsMfaChallenge,
     location.pathname,
     location.search,
+    landingDestination,
     navigate,
     path,
     pending,
@@ -105,7 +109,7 @@ export function AuthRouteGuard() {
   const { access, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (pending || path === "/auth/callback") {
       return;
     }

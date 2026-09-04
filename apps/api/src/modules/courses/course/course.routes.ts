@@ -48,8 +48,13 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             "The published course catalogue.",
             courseListResponseSchema,
           ),
+          403: errorResponse("MFA step-up required."),
         },
       },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.listCourses,
   );
@@ -71,8 +76,13 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             "Available courses by this creator.",
             myCoursesListResponseSchema,
           ),
+          403: errorResponse("MFA step-up required."),
         },
       },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.listCreatorCourses,
   );
@@ -92,8 +102,13 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           200: jsonResponse("The requested course.", publicCourseSchema),
           400: errorResponse("The slug is longer than 160 characters."),
           404: errorResponse("No published course matches the slug."),
+          403: errorResponse("MFA step-up required."),
         },
       },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getCourseBySlug,
   );
@@ -109,7 +124,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         summary:
           "Get full course overview data for learners and public visitors",
         description:
-          "Returns the published course overview including its curriculum, instructor info, category, pricing, settings, and duration metrics. Authentication is optional; unpublished courses remain private.",
+          "Returns the published course overview including its curriculum, instructor info, category, pricing, settings, and duration metrics. Authentication is optional for anonymous visitors; authenticated sessions must complete MFA before accessing it. Unpublished courses remain private.",
         params: z.object({
           idOrSlug: z
             .string()
@@ -123,11 +138,15 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             courseOverviewSchema,
           ),
           404: errorResponse("No course matches the provided ID or slug."),
+          403: errorResponse("MFA step-up required."),
         },
       },
       // Parse an optional session so owners/admins can still preview their
       // unpublished courses while anonymous visitors can view published ones.
-      preHandler: ctx.middleware.authenticate,
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getCourseOverview,
   );
