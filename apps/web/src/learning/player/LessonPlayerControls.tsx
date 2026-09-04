@@ -586,7 +586,7 @@ export function LessonPlayerControls({
         data-lesson-player-controls=""
       >
         <span ref={timelineAnchorRef} hidden />
-        {timelineHost ? createPortal(timelineLayer, timelineHost) : null}
+        {timelineHost ? createPortal(timelineLayer, timelineHost) : timelineLayer}
         <div
           className={
             mobileFullscreen
