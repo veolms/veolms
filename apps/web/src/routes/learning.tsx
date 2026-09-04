@@ -45,6 +45,7 @@ export default function LearningRoute() {
     onLearningPlayerMinimizeGestureChange,
     onMiniPlayerRestoreReady,
     openLearningMiniPlayer,
+    persistentPlayerMounted,
     registerPersistentPlayer,
   } = useOutletContext<AcademyOutletContext>();
   const origin = getCoursePlayerOrigin(location.search);
@@ -171,6 +172,7 @@ export default function LearningRoute() {
         (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
         routeReturnPath
       }
+      persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
     />

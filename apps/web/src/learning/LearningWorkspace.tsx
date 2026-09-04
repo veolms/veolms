@@ -1,5 +1,4 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { VideoLoadingSpinner } from "@veolms/video-player";
 import {
   useCallback,
   useEffect,
@@ -34,6 +33,7 @@ import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
 import { useShortcutPlatform } from "../useShortcutPlatform";
 import { LessonVideoPlayer } from "./player";
+import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
 import type {
   LessonPlayerMinimizeGestureState,
   LessonVideoPlayerProps,
@@ -201,6 +201,7 @@ interface LearningWorkspaceProps {
   persistentPlayerCourseRouteKey?: string;
   persistentPlayerLessonPath?: string;
   persistentPlayerReturnPath?: string;
+  persistentPlayerMounted?: boolean;
   registerPersistentPlayer?: RegisterPersistentLearningPlayer;
 }
 
@@ -280,6 +281,7 @@ export function LearningWorkspace({
   persistentPlayerCourseRouteKey,
   persistentPlayerLessonPath,
   persistentPlayerReturnPath,
+  persistentPlayerMounted = false,
   registerPersistentPlayer,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -1808,12 +1810,14 @@ export function LearningWorkspace({
                 aria-hidden="true"
                 data-learning-player-anchor=""
               >
-                <div
-                  className="absolute inset-0 grid place-items-center text-white"
-                  data-learning-player-initial-loader=""
-                >
-                  <VideoLoadingSpinner className="text-white" />
-                </div>
+                {persistentPlayerMounted ? null : (
+                  <div
+                    className="absolute inset-0 text-white"
+                    data-learning-player-initial-loader=""
+                  >
+                    <LessonPlayerChromePlaceholder {...lessonPlayerProps} />
+                  </div>
+                )}
               </div>
             ) : (
               <LessonVideoPlayer {...lessonPlayerProps} />

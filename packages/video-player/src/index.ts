@@ -48,6 +48,8 @@ export type {
   VideoEngineFactory,
   VideoPlayerHandle,
 } from "./react/PlayerRoot";
+export { PlayerChromePreview } from "./react/PlayerChromePreview";
+export type { PlayerChromePreviewProps } from "./react/PlayerChromePreview";
 export { PlayerMedia } from "./react/PlayerMedia";
 export type { PlayerMediaProps } from "./react/PlayerMedia";
 export { usePlayerController } from "./react/context";

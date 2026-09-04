@@ -91,6 +91,7 @@ export interface AcademyOutletContext {
   ) => void;
   onMiniPlayerRestoreReady: () => void;
   openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
+  persistentPlayerMounted: boolean;
   registerPersistentPlayer: RegisterPersistentLearningPlayer;
 }
 
@@ -937,6 +938,7 @@ export default function AcademyLayout() {
                         handleLearningPlayerMinimizeGestureChange,
                       onMiniPlayerRestoreReady: closeLearningMiniPlayer,
                       openLearningMiniPlayer,
+                      persistentPlayerMounted: Boolean(persistentPlayer),
                       registerPersistentPlayer,
                     } satisfies AcademyOutletContext
                   }
