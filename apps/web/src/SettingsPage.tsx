@@ -5,7 +5,7 @@ import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
-import { useEffect, useRef, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, type ComponentType } from "react";
 import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
@@ -23,7 +23,6 @@ import type {
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { NavigationItemWithMetadata } from "./shell/navigation";
-import type { ToastMessage } from "./ToastNotification";
 import {
   normalizeSettingsTab,
   rememberSettingsTab,
@@ -39,6 +38,7 @@ import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { LearningSettings } from "./settings/LearningSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProfileSettings } from "./settings/ProfileSettings";
+import { flushProfileAutosave } from "./settings/profileAutosave";
 import { SecuritySettings } from "./settings/SecuritySettings";
 import { useAuthStore } from "./store/auth.store";
 import { SidebarSettings } from "./settings/SidebarSettings";
@@ -96,7 +96,6 @@ export interface SettingsPageProps {
   onNavigatePage?: NavigateTo;
   onExitSettings?: () => void;
   onProfileSaved?: (profile: ProfilePreferences) => void;
-  setNotice?: (message: ToastMessage) => void;
   theme: DisplayMode;
   onThemeChange: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
@@ -124,9 +123,7 @@ function SettingsTabContent({
       return (
         <ProfileSettings
           role={pageProps.role}
-          onNavigatePage={pageProps.onNavigatePage}
           onProfileSaved={pageProps.onProfileSaved}
-          setNotice={pageProps.setNotice}
           isAuthenticated={pageProps.isAuthenticated}
         />
       );
@@ -181,7 +178,6 @@ export function SettingsPage({
   onNavigatePage,
   onExitSettings,
   onProfileSaved,
-  setNotice,
   theme,
   onThemeChange,
   academyTheme,
@@ -204,6 +200,7 @@ export function SettingsPage({
   // for a signed-out user.
   const canEditAuthenticatedSettings = isAuthenticated && storeIsAuthenticated;
   const tabListRef = useRef<HTMLElement>(null);
+  const flushBeforeNavigation = useCallback(() => flushProfileAutosave(), []);
   const pageProps: SettingsPageProps = {
     tab,
     role,
@@ -211,7 +208,6 @@ export function SettingsPage({
     onNavigatePage,
     onExitSettings,
     onProfileSaved,
-    setNotice,
     theme,
     onThemeChange,
     academyTheme,
@@ -226,10 +222,18 @@ export function SettingsPage({
     navigationVisibleItems,
     onNavigationVisibilityChange,
   };
-  const navigateTab = (id: SettingsTab) => {
-    rememberSettingsTab(id);
-    onNavigatePage?.(`/settings/${id}`, { preserveScroll: true });
-  };
+  const navigateTab = useCallback(
+    async (id: SettingsTab) => {
+      await flushBeforeNavigation();
+      rememberSettingsTab(id);
+      onNavigatePage?.(`/settings/${id}`, { preserveScroll: true });
+    },
+    [flushBeforeNavigation, onNavigatePage],
+  );
+
+  const leaveSettings = useCallback(() => {
+    void flushBeforeNavigation().then(() => onExitSettings?.());
+  }, [flushBeforeNavigation, onExitSettings]);
 
   const renderSettingsTab = (panelTab: SettingsTab) => (
     <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />
@@ -263,12 +267,12 @@ export function SettingsPage({
       if (transientSurfaceIsOpen) return;
 
       event.preventDefault();
-      onExitSettings?.();
+      leaveSettings();
     };
 
     document.addEventListener("keydown", exitSettings);
     return () => document.removeEventListener("keydown", exitSettings);
-  }, [onExitSettings]);
+  }, [leaveSettings]);
 
   useEffect(() => {
     const navigateSettingsTab = (event: KeyboardEvent) => {
@@ -282,19 +286,20 @@ export function SettingsPage({
       const destination = index === null ? undefined : SETTINGS_TABS[index];
       if (!destination) return;
       event.preventDefault();
-      onNavigatePage?.(`/settings/${destination.id}`, { preserveScroll: true });
-      window.setTimeout(
-        () =>
-          document
-            .getElementById(`settings-tab-${destination.id}`)
-            ?.focus({ preventScroll: true }),
-        0,
-      );
+      void navigateTab(destination.id).then(() => {
+        window.setTimeout(
+          () =>
+            document
+              .getElementById(`settings-tab-${destination.id}`)
+              ?.focus({ preventScroll: true }),
+          0,
+        );
+      });
     };
 
     document.addEventListener("keydown", navigateSettingsTab);
     return () => document.removeEventListener("keydown", navigateSettingsTab);
-  }, [onNavigatePage]);
+  }, [navigateTab]);
 
   return (
     <div className="settings-page" aria-labelledby="settings-page-title">
@@ -327,7 +332,7 @@ export function SettingsPage({
             data-swipe-tab-id={id}
             tabIndex={activeTab === id ? 0 : -1}
             className={activeTab === id ? "is-active" : ""}
-            onClick={() => navigateTab(id)}
+            onClick={() => void navigateTab(id)}
             onKeyDown={handleRovingTabKeyDown}
             onFocus={scrollKeyboardFocusedTabIntoView}
           >
@@ -341,7 +346,7 @@ export function SettingsPage({
       <SwipeableTabPanel
         tabs={SETTINGS_TAB_IDS}
         activeTab={activeTab}
-        onTabChange={navigateTab}
+        onTabChange={(nextTab) => void navigateTab(nextTab)}
         tabListRef={tabListRef}
         id="settings-tab-panel"
         className="settings-tab-content"

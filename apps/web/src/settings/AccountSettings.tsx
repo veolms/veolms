@@ -7,6 +7,7 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { useDeactivateAccount, useSignOut } from "../services/auth";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
+import { flushProfileAutosave } from "./profileAutosave";
 import type { ProfileRole } from "./profilePreferences";
 
 export interface AccountSettingsProps {
@@ -33,12 +34,18 @@ export function AccountSettings({
 
   const deactivateAccount = async () => {
     try {
+      await flushProfileAutosave();
       await deactivateMutation.mutateAsync();
       setDeactivateConfirmOpen(false);
       window.location.href = "/";
     } catch {
       // The dialog remains open and exposes the API error so the user can retry.
     }
+  };
+
+  const signOutAfterAutosave = async () => {
+    await flushProfileAutosave();
+    signOut();
   };
 
   return (
@@ -182,7 +189,7 @@ export function AccountSettings({
         isOpen={isAuthenticated && logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={signOut}
+        onConfirm={() => void signOutAfterAutosave()}
       />
 
       <ConfirmActionModal
