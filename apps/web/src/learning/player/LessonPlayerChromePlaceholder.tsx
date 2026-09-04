@@ -1,7 +1,10 @@
 import {
   PlayerChromePreview,
   VideoLoadingSpinner,
+  getPlayerThemeStyle,
+  resolvePlayerTheme,
 } from "@veolms/video-player";
+import { getInitialLearningPlayerPreferences } from "../learningPlayerPreferences";
 import { LessonPlayerControls } from "./LessonPlayerControls";
 import type { LessonVideoPlayerProps } from "./LessonVideoPlayer";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
@@ -11,7 +14,6 @@ import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
  * The ancestor is pointer-events-none; handlers are inert placeholders.
  */
 export function LessonPlayerChromePlaceholder({
-  autoplayEnabled = true,
   canGoNext = false,
   canGoPrevious = false,
   courseLessonsOpen = false,
@@ -22,16 +24,25 @@ export function LessonPlayerChromePlaceholder({
   onMinimize,
 }: LessonVideoPlayerProps) {
   const playerTheme = useLearningPlayerTheme();
+  const playerPreferences = getInitialLearningPlayerPreferences();
+  const resolvedTheme = resolvePlayerTheme(playerTheme);
 
   return (
     <div
-      className="video-shell relative size-full overflow-hidden bg-black"
+      className="video-shell relative size-full overflow-visible bg-black"
       data-learning-player-chrome-placeholder=""
+      data-player-theme={resolvedTheme.id}
+      style={getPlayerThemeStyle(resolvedTheme)}
     >
-      <PlayerChromePreview theme={playerTheme}>
+      <PlayerChromePreview
+        muted={playerPreferences.muted}
+        playbackRate={playerPreferences.playbackRate}
+        theme={playerTheme}
+        volume={playerPreferences.volume}
+      >
         <LessonPlayerControls
           ambientEnabled={false}
-          autoplayEnabled={autoplayEnabled}
+          autoplayEnabled={playerPreferences.autoplay}
           canGoNext={canGoNext}
           canGoPrevious={canGoPrevious}
           courseLessonsOpen={courseLessonsOpen}

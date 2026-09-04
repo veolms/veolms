@@ -2,6 +2,7 @@ const PLAYER_MUTED_STORAGE_KEY = "veolms-player-muted";
 const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
 const PLAYER_AUTOPLAY_STORAGE_KEY = "veolms-player-autoplay";
 const PLAYER_PLAYBACK_RATE_STORAGE_KEY = "veolms-player-playback-rate";
+const PLAYER_VOLUME_STORAGE_KEY = "veolms-player-volume";
 const PLAYER_MINI_RESTORE_STORAGE_KEY = "veolms-player-mini-restore";
 const PLAYER_MINI_WIDTH_STORAGE_KEY = "veolms-player-mini-width";
 
@@ -41,8 +42,14 @@ export const lessonPlayerStorageKeys = {
   miniPlayerWidth: PLAYER_MINI_WIDTH_STORAGE_KEY,
   muted: PLAYER_MUTED_STORAGE_KEY,
   playbackRate: PLAYER_PLAYBACK_RATE_STORAGE_KEY,
+  volume: PLAYER_VOLUME_STORAGE_KEY,
   resume: (mediaKey: string) => `veolms-watch-${mediaKey}`,
 } as const;
+
+export function clampPlayerVolume(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
+}
 
 export function readMiniPlayerWidthPreference(
   storage: StorageReader | null = getBrowserStorage(),
@@ -87,6 +94,19 @@ export function readPlaybackRatePreference(
   try {
     const value = Number(storage.getItem(PLAYER_PLAYBACK_RATE_STORAGE_KEY));
     return Number.isFinite(value) && value > 0 ? value : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export function readVolumePreference(
+  storage: StorageReader | null = getBrowserStorage(),
+): number {
+  if (!storage) return 1;
+  try {
+    const raw = storage.getItem(PLAYER_VOLUME_STORAGE_KEY);
+    if (raw === null || raw.trim() === "") return 1;
+    return clampPlayerVolume(Number(raw));
   } catch {
     return 1;
   }
@@ -148,6 +168,21 @@ export function writePlaybackRatePreference(
   if (!Number.isFinite(playbackRate) || playbackRate <= 0) return;
   try {
     storage?.setItem(PLAYER_PLAYBACK_RATE_STORAGE_KEY, String(playbackRate));
+  } catch {
+    // Playback remains usable when browser storage is unavailable.
+  }
+}
+
+export function writeVolumePreference(
+  volume: number,
+  storage: StorageWriter | null = getBrowserStorage(),
+): void {
+  if (!Number.isFinite(volume)) return;
+  try {
+    storage?.setItem(
+      PLAYER_VOLUME_STORAGE_KEY,
+      String(clampPlayerVolume(volume)),
+    );
   } catch {
     // Playback remains usable when browser storage is unavailable.
   }

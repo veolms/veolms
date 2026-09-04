@@ -4081,7 +4081,7 @@ export function CoursesPage({
         enableHorizontalDrag={Boolean(renderMain)}
       />
 
-      {!mobileSidebarNavigationActive && (
+      {compactNavigation && !mobileSidebarNavigationActive && (
         <nav
           ref={mobileBottomNavRef}
           className={`mobile-bottom-nav${mobileBottomNavHidden ? " is-scroll-hidden" : ""}`}

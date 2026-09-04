@@ -75,7 +75,7 @@
 
 [data-video-player-buffering-overlay] {
   isolation: isolate;
-  contain: strict;
+  contain: paint;
   transform: translateZ(0);
 }
 

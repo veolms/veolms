@@ -61,6 +61,12 @@ export interface VeoBootstrapState {
     curriculumCollapsed: boolean;
     curriculumWidth: number;
   };
+  player?: {
+    autoplay: boolean;
+    muted: boolean;
+    playbackRate: number;
+    volume: number;
+  };
 }
 
 declare global {

@@ -4,6 +4,7 @@ import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
+import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
 import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
@@ -55,6 +56,10 @@ export function Layout({ children }: LayoutProps) {
       data-sidebar-state="expanded"
       data-navigation-layout="wide"
       data-learning-curriculum-state="expanded"
+      data-player-autoplay="on"
+      data-player-muted="false"
+      data-player-playback-rate="1"
+      data-player-volume="1"
       data-collapsed-tooltips="true"
       data-collapsed-sidebar-logo="true"
       data-active-fill="true"
@@ -80,7 +85,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}`,
+            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
           }}
         />
         <script

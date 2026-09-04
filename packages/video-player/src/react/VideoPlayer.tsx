@@ -42,7 +42,11 @@ import type {
 } from "./playerEvents";
 import { classNames } from "../utils/classNames";
 import type { TimelineMarker } from "../timeline/timelineMath";
-import type { PlayerTheme } from "../themes/playerThemes";
+import {
+  getPlayerThemeStyle,
+  resolvePlayerTheme,
+  type PlayerTheme,
+} from "../themes/playerThemes";
 import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 
 export interface VideoPlayerProgress {
@@ -286,7 +290,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ],
     );
 
+    const resolvedTheme = resolvePlayerTheme(theme);
     const rootStyle = {
+      ...getPlayerThemeStyle(resolvedTheme),
       ...style,
       ...(accentColor ? { "--video-player-accent": accentColor } : undefined),
     } as CSSProperties;
@@ -304,11 +310,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         {...outerProps}
         ref={presentationContainerRef}
         className={classNames(
-          "video-shell relative isolate w-full",
+          "video-shell relative isolate w-full overflow-visible",
           theaterMode && "video-shell--theater",
           className,
         )}
         style={rootStyle}
+        data-player-theme={resolvedTheme.id}
       >
         <div
           aria-hidden="true"

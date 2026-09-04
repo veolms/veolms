@@ -36,10 +36,21 @@ import {
 class PreviewVideoEngine implements VideoEngine {
   readonly name = "preview" as const;
   readonly #events = new TypedEventEmitter<VideoEngineEventMap>();
-  readonly #snapshot: VideoEngineSnapshot = {
-    ...createInitialVideoEngineSnapshot(),
-    lifecycle: "loading",
-  };
+  readonly #snapshot: VideoEngineSnapshot;
+
+  constructor(playback?: {
+    muted?: boolean;
+    playbackRate?: number;
+    volume?: number;
+  }) {
+    this.#snapshot = {
+      ...createInitialVideoEngineSnapshot(),
+      lifecycle: "loading",
+      muted: playback?.muted ?? false,
+      playbackRate: playback?.playbackRate ?? 1,
+      volume: playback?.volume ?? 1,
+    };
+  }
 
   async attach(): Promise<void> {}
   async detach(): Promise<void> {}
@@ -93,8 +104,11 @@ class PreviewVideoEngine implements VideoEngine {
 
 export interface PlayerChromePreviewProps {
   children: ReactNode;
+  muted?: boolean;
+  playbackRate?: number;
   theme?: PlayerTheme;
   interactionMode?: PlayerInteractionMode;
+  volume?: number;
 }
 
 /**
@@ -104,11 +118,16 @@ export interface PlayerChromePreviewProps {
 export function PlayerChromePreview({
   children,
   interactionMode = "responsive",
+  muted = false,
+  playbackRate = 1,
   theme = "youtube",
+  volume = 1,
 }: PlayerChromePreviewProps) {
   const controllerRef = useRef<PlayerController | null>(null);
   if (!controllerRef.current) {
-    controllerRef.current = new PlayerController(new PreviewVideoEngine());
+    controllerRef.current = new PlayerController(
+      new PreviewVideoEngine({ muted, playbackRate, volume }),
+    );
   }
   const controller = controllerRef.current;
   const mobileInteraction =
@@ -126,6 +145,7 @@ export function PlayerChromePreview({
             data-player-mobile-interaction={
               mobileInteraction ? "true" : "false"
             }
+            data-video-player-root=""
             data-video-player-chrome-preview=""
           >
             {children}

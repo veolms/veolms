@@ -41,9 +41,10 @@ import type {
 } from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
 import {
-  readAutoplayPreference,
-  writeAutoplayPreference,
-} from "./player/lessonPlayerPersistence";
+  getInitialLearningPlayerPreferences,
+  publishLearningPlayerBootstrap,
+} from "./learningPlayerPreferences";
+import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
 import {
   createCurriculumSections,
   createLessonsById,
@@ -317,7 +318,9 @@ export function LearningWorkspace({
     {},
   );
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
-  const [autoplayEnabled, setAutoplayEnabled] = useState(true);
+  const [autoplayEnabled, setAutoplayEnabled] = useState(
+    () => getInitialLearningPlayerPreferences().autoplay,
+  );
   const courseTitle = getCourseTitle(courseSlug);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
@@ -403,6 +406,12 @@ export function LearningWorkspace({
       learning: state,
     };
   }, [curriculumCollapsed, curriculumWidth]);
+
+  useLayoutEffect(() => {
+    const autoplay = getInitialLearningPlayerPreferences().autoplay;
+    setAutoplayEnabled(autoplay);
+    publishLearningPlayerBootstrap({ autoplay });
+  }, []);
 
   useEffect(() => {
     if (courseContentDrawerViewport) return;
@@ -663,6 +672,7 @@ export function LearningWorkspace({
   const updateAutoplayEnabled = useCallback((enabled: boolean) => {
     setAutoplayEnabled(enabled);
     writeAutoplayPreference(enabled);
+    publishLearningPlayerBootstrap({ autoplay: enabled });
   }, []);
 
   const goToPreviousLesson = useCallback(() => {
@@ -1577,10 +1587,6 @@ export function LearningWorkspace({
   }, [lessonStorageKey, selectedLesson]);
 
   useEffect(() => {
-    setAutoplayEnabled(readAutoplayPreference());
-  }, []);
-
-  useEffect(() => {
     try {
       sessionStorage.removeItem("veolms-course-autostart");
     } catch {
@@ -1806,13 +1812,13 @@ export function LearningWorkspace({
             </button>
             {registerPersistentPlayer ? (
               <div
-                className="pointer-events-none relative aspect-video w-full overflow-hidden bg-black"
+                className="pointer-events-none relative z-10 aspect-video w-full overflow-visible bg-black"
                 aria-hidden="true"
                 data-learning-player-anchor=""
               >
                 {persistentPlayerMounted ? null : (
                   <div
-                    className="absolute inset-0 text-white"
+                    className="absolute inset-0 z-10 overflow-visible text-white"
                     data-learning-player-initial-loader=""
                   >
                     <LessonPlayerChromePlaceholder {...lessonPlayerProps} />
