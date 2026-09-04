@@ -496,7 +496,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(centralControls).not.toHaveAttribute("data-player-loading");
   });
 
-  it("shows only the loader until the lesson video is ready", async () => {
+  it("shows chrome and the loader until the lesson video is ready", async () => {
     const engine = new DeferredLoadFakeVideoEngine(90);
     const { container } = render(
       <LessonVideoPlayer {...playerProps(firstMedia, engine)} />,
@@ -504,6 +504,11 @@ describe("LessonVideoPlayer adapter", () => {
 
     await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
     expect(screen.getByRole("status", { name: "Loading video" })).toBeVisible();
+    expect(
+      screen.getAllByRole("button", {
+        name: "0:00 elapsed of 0:00. Show remaining time",
+      }).length,
+    ).toBeGreaterThan(0);
 
     const mediaPlane = container.querySelector<HTMLElement>(
       '[data-player-zoom-media-plane=""]',
@@ -527,8 +532,8 @@ describe("LessonVideoPlayer adapter", () => {
     const gestureSurface = container.querySelector<HTMLButtonElement>(
       '[data-player-shortcut-surface=""]',
     )!;
-    expect(controls).toHaveAttribute("inert");
-    expect(controls).toHaveAttribute("aria-hidden", "true");
+    expect(controls).not.toHaveAttribute("inert");
+    expect(controls).not.toHaveAttribute("aria-hidden");
     expect(centralControls).toHaveAttribute("inert");
     expect(centralControls).toHaveAttribute("data-player-loading", "true");
     expect(centralControls).toHaveClass("invisible", "opacity-0");

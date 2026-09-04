@@ -344,7 +344,7 @@ export function LessonPlayerControls({
   );
   const ready = lifecycle === "ready";
   const visible =
-    ready && !controlsSuppressed && (controlsVisible || settingsOpen);
+    !controlsSuppressed && (controlsVisible || settingsOpen);
   const mobileFullscreen = mobileInteraction && fullscreen;
   const persistentProgressVisible =
     ready && !controlsSuppressed && mobileInteraction && !fullscreen;
