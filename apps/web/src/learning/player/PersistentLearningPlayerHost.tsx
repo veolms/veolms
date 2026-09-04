@@ -214,7 +214,7 @@ export function PersistentLearningPlayerHost({
       className={
         mini
           ? "fixed z-130 m-0 touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-          : "learning-persistent-player--full z-[39] overflow-x-clip overflow-y-visible bg-transparent"
+          : "learning-persistent-player--full z-[39] overflow-visible bg-transparent"
       }
       style={mini ? miniStyle : undefined}
       aria-label={

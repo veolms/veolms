@@ -33,6 +33,9 @@ afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
   sessionStorage.clear();
+  delete window.__VEO_BOOTSTRAP__;
+  delete document.documentElement.dataset.playerAutoplay;
+  delete document.documentElement.dataset.playerMuted;
 });
 
 const englishCaptions: VideoTextTrack = {
@@ -1674,6 +1677,18 @@ describe("LessonVideoPlayer adapter", () => {
     );
   });
 
+  it("restores and persists the last selected volume", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    localStorage.setItem(lessonPlayerStorageKeys.volume, "0.4");
+
+    render(<LessonVideoPlayer {...playerProps(firstMedia, engine)} />);
+
+    await waitFor(() => expect(engine.getSnapshot().volume).toBe(0.4));
+
+    act(() => engine.setVolume(0.25));
+    expect(localStorage.getItem(lessonPlayerStorageKeys.volume)).toBe("0.25");
+  });
+
   it("groups transport controls and toggles the time pill to remaining time", async () => {
     const engine = new RecordingFakeVideoEngine(90);
     const { container } = render(
@@ -1837,7 +1852,7 @@ describe("LessonVideoPlayer adapter", () => {
       "max-sm:[&_[role=slider]]:h-9",
       "max-sm:[&_[data-timeline-buffered-range]]:rounded-none",
       "max-sm:[&_[data-timeline-progress]]:rounded-none",
-      "max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1px)]",
+      "max-sm:[&_[data-timeline-thumb]]:top-full",
       "max-sm:[&_[data-timeline-track]]:bottom-0",
       "max-sm:[&_[data-timeline-track]]:translate-y-0",
       "max-sm:[&_[data-timeline-track]]:!h-0.5",
@@ -1880,7 +1895,6 @@ describe("LessonVideoPlayer adapter", () => {
       "inset-0",
     );
     expect(timeline.parentElement).toHaveClass(
-      "max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]",
       "max-sm:[&_[data-timeline-track]]:!h-0.75",
     );
     expect(timeline.parentElement).toHaveClass(
@@ -1919,7 +1933,8 @@ describe("LessonVideoPlayer adapter", () => {
     ).toHaveClass(
       "inset-x-0",
       "bottom-0",
-      "z-70",
+      "z-80",
+      "overflow-visible",
       "max-sm:z-170",
       "pointer-events-none",
       "sm:inset-x-3",

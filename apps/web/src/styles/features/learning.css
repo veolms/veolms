@@ -70,6 +70,10 @@
   position: relative;
 }
 
+.learning-workspace__player-wrap:has([data-learning-player-initial-loader]) {
+  z-index: 2;
+}
+
 .learning-workspace__player-wrap:has([data-learning-player-anchor]) {
   pointer-events: none;
   background: transparent;

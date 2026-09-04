@@ -217,7 +217,7 @@ export function Timeline({
           <span
             aria-hidden="true"
             data-timeline-thumb=""
-            className="absolute top-1/2 z-20 size-3 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
+            className="absolute top-1/2 z-80 size-3 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
             style={{
               left: `${progress}%`,
               transformOrigin: `${progress}% 50%`,

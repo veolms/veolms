@@ -69,7 +69,7 @@ function PlayerControlSurface({
 }) {
   return (
     <div
-      className={`${PLAYER_SURFACE_CLASS} ${blurred ? "backdrop-blur-sm" : ""} ${className}`}
+      className={`${PLAYER_SURFACE_CLASS} box-border border border-solid border-transparent ${blurred ? "backdrop-blur-sm" : ""} ${className}`}
       data-player-control-cluster={cluster}
     >
       {children}
@@ -145,37 +145,63 @@ function AutoplayToggle({
   onEnabledChange: (enabled: boolean) => void;
 }) {
   const { icons } = usePlayerTheme();
-  const Icon = enabled ? icons.play : icons.pause;
+  const bootstrappedAutoplay =
+    typeof document === "undefined"
+      ? undefined
+      : document.documentElement.dataset.playerAutoplay;
+  const shownEnabled =
+    bootstrappedAutoplay === "off"
+      ? false
+      : bootstrappedAutoplay === "on"
+        ? true
+        : enabled;
+  const OnIcon = icons.play;
+  const OffIcon = icons.pause;
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={enabled}
+      aria-checked={shownEnabled}
       aria-label="Autoplay next lesson"
-      title={enabled ? "Autoplay is on" : "Autoplay is off"}
+      title={shownEnabled ? "Autoplay is on" : "Autoplay is off"}
       data-player-control=""
       className={`group/autoplay relative inline-flex h-8 w-auto shrink-0 items-center justify-center px-2 text-white !shadow-none drop-shadow-none max-sm:hover:!bg-transparent max-sm:active:!bg-white/14 max-sm:focus-visible:!bg-transparent sm:h-9 sm:px-3 ${PLAYER_INNER_CONTROL_CLASS} ${mobileInteraction ? "sm:!h-8 sm:!px-2 sm:hover:!bg-transparent sm:active:!bg-white/14 sm:focus-visible:!bg-transparent" : ""}`}
-      onClick={() => onEnabledChange(!enabled)}
+      onClick={() => onEnabledChange(!shownEnabled)}
     >
       <span
         aria-hidden="true"
         className={`relative block h-3.5 w-8 rounded-full border-0 bg-black/40 transition-colors duration-150 sm:h-4 sm:w-9 ${mobileInteraction ? "sm:!h-3.5 sm:!w-8" : ""}`}
         data-autoplay-track=""
-        data-autoplay-track-state={enabled ? "on" : "off"}
+        data-autoplay-track-state={shownEnabled ? "on" : "off"}
       >
         <span
           className={`absolute top-1/2 grid size-4.5 -translate-y-1/2 place-items-center rounded-full shadow-[0_1px_5px_rgba(0,0,0,0.38)] transition-[left,background-color,color] sm:size-5 ${mobileInteraction ? "sm:!size-4.5" : ""} ${
-            enabled
+            shownEnabled
               ? `left-3.5 bg-white text-black sm:left-4.5 ${mobileInteraction ? "sm:!left-3.5" : ""}`
               : "-left-0.5 bg-white/42 text-white"
           }`}
           data-autoplay-knob=""
         >
-          <Icon
-            size={11}
-            active={enabled}
-            className={mobileInteraction ? "sm:!size-2.75" : "sm:size-3"}
-          />
+          <span
+            className={shownEnabled ? "contents" : "hidden"}
+            data-autoplay-icon="on"
+          >
+            <OnIcon
+              size={11}
+              active
+              className={mobileInteraction ? "sm:!size-2.75" : "sm:size-3"}
+            />
+          </span>
+          <span
+            className={shownEnabled ? "hidden" : "contents"}
+            data-autoplay-icon="off"
+          >
+            <OffIcon
+              size={11}
+              active={false}
+              className={mobileInteraction ? "sm:!size-2.75" : "sm:size-3"}
+            />
+          </span>
         </span>
       </span>
     </button>
@@ -360,12 +386,12 @@ export function LessonPlayerControls({
     courseLessonsOpen &&
     Boolean(courseLessonsPanel);
   const mobileTimelineGeometry = scrubbing
-    ? "max-sm:[&_[data-timeline-track]]:!h-0.75 max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1.5px)]"
-    : "max-sm:[&_[data-timeline-track]]:!h-0.5 max-sm:[&_[data-timeline-thumb]]:top-[calc(100%-1px)]";
+    ? "max-sm:[&_[data-timeline-track]]:!h-0.75"
+    : "max-sm:[&_[data-timeline-track]]:!h-0.5";
   const forcedMobileTimelineGeometry = mobileInteraction
     ? scrubbing
-      ? "[&_[data-timeline-track]]:!h-0.75 [&_[data-timeline-thumb]]:!top-[calc(100%-1.5px)]"
-      : "[&_[data-timeline-track]]:!h-0.5 [&_[data-timeline-thumb]]:!top-[calc(100%-1px)]"
+      ? "[&_[data-timeline-track]]:!h-0.75"
+      : "[&_[data-timeline-track]]:!h-0.5"
     : "";
 
   const mobileVignettes = (
@@ -397,12 +423,12 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 z-70 max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-13 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-10 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-10 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-10 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-10 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-13 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-10 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-10 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-10 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-10 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
       <Timeline
-        className={`pointer-events-none [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-9 max-sm:[&_[role=slider]]:translate-y-[calc(100%-10px)] max-sm:[&_[data-timeline-visual]]:translate-y-[calc(-100%+10px)] max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-9 [&_[role=slider]]:!translate-y-[calc(100%-10px)] [&_[data-timeline-visual]]:!translate-y-[calc(-100%+10px)] [&_[data-video-player-preview]]:!bottom-3.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!bottom-0 [&_[data-timeline-track]]:!top-auto [&_[data-timeline-track]]:!translate-y-0 [&_[data-timeline-track]]:!rounded-none" : ""}`}
+        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-9 max-sm:[&_[role=slider]]:translate-y-[calc(100%-10px)] max-sm:[&_[data-timeline-visual]]:translate-y-[calc(-100%+10px)] max-sm:[&_[data-video-player-preview]]:!bottom-3.5 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:bottom-0 max-sm:[&_[data-timeline-track]]:top-auto max-sm:[&_[data-timeline-track]]:translate-y-0 max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-thumb]]:top-full max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-9 [&_[role=slider]]:!translate-y-[calc(100%-10px)] [&_[data-timeline-visual]]:!translate-y-[calc(-100%+10px)] [&_[data-video-player-preview]]:!bottom-3.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!bottom-0 [&_[data-timeline-track]]:!top-auto [&_[data-timeline-track]]:!translate-y-0 [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!top-full [&_[data-timeline-thumb]]:!z-80" : ""}`}
       />
     </div>
   );

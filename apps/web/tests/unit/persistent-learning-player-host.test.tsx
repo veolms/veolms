@@ -173,7 +173,7 @@ describe("PersistentLearningPlayerHost", () => {
     expect(host).toHaveClass("bg-transparent");
     expect(host).not.toHaveClass("[&_.youtube-player]:rounded-none");
     expect(host).toHaveClass("learning-persistent-player--full");
-    expect(host).toHaveClass("overflow-x-clip", "overflow-y-visible");
+    expect(host).toHaveClass("overflow-visible");
     expect(host).not.toHaveClass("fixed");
     expect(host).not.toHaveClass("bg-black");
     expect(host.style.top).toBe("");
