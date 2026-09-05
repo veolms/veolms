@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearLearningMiniPlayerVideoCornerRadius,
   easeLearningPlayerMotionProgress,
   getDefaultLearningMiniPlayerLayout,
   getLearningBackgroundMotionState,
@@ -265,5 +266,21 @@ describe("learning player surface motion", () => {
     expect(LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE).toBe(
       "40%",
     );
+  });
+
+  it("drops minimize corner radius when the persistent player leaves the mini shell", () => {
+    const host = document.createElement("aside");
+    const player = document.createElement("div");
+    player.className = "youtube-player";
+    host.append(player);
+    host.dataset.learningPlayerMinimizeCorners = "true";
+    host.style.setProperty("border-radius", "13px", "important");
+    player.style.setProperty("border-radius", "13px", "important");
+
+    clearLearningMiniPlayerVideoCornerRadius(host);
+
+    expect(host.dataset.learningPlayerMinimizeCorners).toBeUndefined();
+    expect(host.style.borderRadius).toBe("");
+    expect(player.style.borderRadius).toBe("");
   });
 });

@@ -125,13 +125,13 @@ test("static mobile learning shell places navigation and composer before hydrati
     page.getByRole("navigation", { name: "Student mobile navigation" }),
   ).toBeVisible();
   await expect(
-    page.locator("[data-learning-mobile-composer-prerender]"),
-  ).toBeVisible();
-  await expect(
     page.locator("[data-learning-player-initial-loader]"),
   ).toBeVisible();
   await expect(page.locator("[data-lesson-player-controls]")).toBeVisible();
   await expect(page.locator("[data-learning-player-chrome-placeholder]")).toBeVisible();
+  await expect(
+    page.locator("[data-learning-mobile-composer-prerender]"),
+  ).toBeVisible();
   await expect(page.locator("[data-comment-composer-container]")).toBeHidden();
   await expect(page.locator("html")).toHaveAttribute(
     "data-app-hydrated",

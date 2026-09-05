@@ -301,13 +301,44 @@ export function useLearningMiniPlayerGestures(
       return undefined;
     }
 
-    try {
-      container.showPopover();
-    } catch {
-      // Presentation changes can leave the same player open in the top layer.
-    }
+    const openPopover = () => {
+      try {
+        if (container.getAttribute("popover") !== "manual") {
+          container.setAttribute("popover", "manual");
+        }
+        container.showPopover();
+      } catch {
+        // Presentation changes can leave the same player open in the top layer.
+      }
+    };
+
+    const restackPopoverAboveFullscreen = () => {
+      // Document fullscreen promotes <html> into the top layer, which covers
+      // an already-open popover. Close and reopen to restack above it.
+      try {
+        container.hidePopover();
+      } catch {
+        // Already closed, or the popover attribute was removed.
+      }
+      openPopover();
+    };
+
+    openPopover();
+    document.addEventListener("fullscreenchange", restackPopoverAboveFullscreen);
+    document.addEventListener(
+      "webkitfullscreenchange",
+      restackPopoverAboveFullscreen,
+    );
 
     return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        restackPopoverAboveFullscreen,
+      );
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        restackPopoverAboveFullscreen,
+      );
       if (typeof container.hidePopover !== "function") return;
       try {
         container.hidePopover();

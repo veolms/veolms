@@ -521,7 +521,8 @@ test("top-level navigation stays direct while Learning Space owns the active cou
 
   await homeNavigation.click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(session).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(session).toHaveAttribute("aria-current", "page");
   await coursesNavigation.click();
   await expect(page).toHaveURL(/\/courses$/);
   await expect(coursesNavigation).toHaveAttribute("aria-current", "page");
@@ -537,7 +538,8 @@ test("top-level navigation stays direct while Learning Space owns the active cou
   await expect(
     page.getByRole("heading", { name: "Courses", level: 1 }),
   ).toBeVisible();
-  await expect(session).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(session).toHaveAttribute("aria-current", "page");
 });
 
 test("Learning Space resumes the same paused lesson while Courses remains direct", async ({
@@ -706,7 +708,8 @@ test("each Learning Space session keeps its launch page without top-level resume
   await homeNavigation.click();
   await expect(page).toHaveURL(/\/$/);
   await expect(homeNavigation).toHaveAttribute("aria-current", "page");
-  await expect(typescriptSession).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(typescriptSession).toHaveAttribute("aria-current", "page");
 
   await coursesNavigation.click();
   await page

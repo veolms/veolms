@@ -167,10 +167,24 @@ describe("LearningSpace", () => {
     expect(onActivate).toHaveBeenCalledWith(sessions[0]);
   });
 
-  it("does not expose a selected session away from the learning route", () => {
+  it("does not expose a selected session when nothing is currently playing", () => {
     renderLearningSpace({ activeCourseId: null });
 
     expect(screen.queryByRole("button", { current: "page" })).toBeNull();
+  });
+
+  it("keeps the mini-player course marked as currently playing", () => {
+    renderLearningSpace({ activeCourseId: "backend-nodejs" });
+
+    const activeSession = screen.getByRole("button", {
+      name: /Open Complete Backend with Node\.js/,
+    });
+    expect(activeSession).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("article", {
+        name: /Currently playing, Complete Backend with Node\.js/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the session count on the trigger and persists panel dismissal through its owner callback", () => {

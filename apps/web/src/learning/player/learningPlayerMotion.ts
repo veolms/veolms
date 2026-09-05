@@ -159,6 +159,8 @@ export function clearUnifiedDesktopChildExitMotion(surface: HTMLElement) {
 }
 
 export function clearLearningMiniPlayerVideoCornerRadius(host: HTMLElement) {
+  clearInlineMinimizeCorner(host);
+  delete host.dataset.learningPlayerMinimizeCorners;
   host
     .querySelectorAll<HTMLElement>(".video-shell, .youtube-player, video")
     .forEach(clearInlineMinimizeCorner);
@@ -285,6 +287,7 @@ export function runLearningPlayerFlipRestore(
     element.style.removeProperty("will-change");
     element.style.removeProperty("z-index");
     delete element.dataset.learningPlayerRestorePhase;
+    clearLearningPlayerMinimizeCornerRadius();
   };
   const handleTransitionEnd = (event: TransitionEvent) => {
     if (event.target === element && event.propertyName === "transform") finish();

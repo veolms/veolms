@@ -18,6 +18,7 @@ import {
   LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE,
   runLearningPlayerFlipRestore,
   clearLearningMiniPlayerVideoCornerRadius,
+  clearLearningPlayerMinimizeCornerRadius,
 } from "./learningPlayerMotion";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { MiniPlayerResizeHandles } from "./MiniPlayerResizeHandles";
@@ -192,7 +193,10 @@ export function PersistentLearningPlayerHost({
       "[data-learning-player-motion-target]",
     );
     const startRect = lastMiniRectRef.current;
-    if (!startRect) return;
+    if (!startRect) {
+      clearLearningPlayerMinimizeCornerRadius();
+      return;
+    }
 
     if (isDesktopLearningMinimizeViewport() && playerWrap) {
       restoreCleanupRef.current = runLearningPlayerFlipRestore(

@@ -124,61 +124,14 @@ export function MiniPlayerControls({
           onClick={() => void controller.togglePlayback()}
         />
 
-        {/* Top Controls Bar */}
-        <div
-          className="absolute top-2 inset-x-2 z-20 flex items-center justify-between pointer-events-none"
-          data-learning-mini-player-gesture-ignore=""
-        >
-          {/* Top-left Expand Button */}
-          <div className="relative group/expand pointer-events-auto">
-            <PlayerIconButton
-              label="Expand [I]"
-              title="Expand [I]"
-              aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
-              data-learning-mini-player-restore=""
-              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-              icon={
-                <AppIcon name="miniPlayerExpand" className="size-5" />
-              }
-              onClick={(event) => {
-                event.stopPropagation();
-                onRestore();
-              }}
-            />
-            <div className="pointer-events-none absolute left-0 top-full mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap z-30 font-medium">
-              <span>Expand</span>
-              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">I</kbd>
-            </div>
-          </div>
-
-          {/* Top-right Close Button */}
-          <div className="relative group/close pointer-events-auto">
-            <PlayerIconButton
-              label="Close"
-              title="Close [Esc]"
-              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-              icon={<CloseIcon size={20} />}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose();
-              }}
-            />
-            <div className="pointer-events-none absolute right-0 top-full mt-1.5 hidden group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap z-30 font-medium">
-              <span>Close</span>
-              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">Esc</kbd>
-            </div>
-          </div>
-        </div>
-
         {/* Center Controls: Previous, Play/Pause, Next */}
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center gap-6 pointer-events-none"
+          className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-6"
           data-learning-mini-player-gesture-ignore=""
         >
           <button
             type="button"
             aria-label="Previous lesson"
-            title={canGoPrevious ? "Previous lesson [Shift+P]" : undefined}
             disabled={!canGoPrevious}
             onClick={(event) => {
               event.stopPropagation();
@@ -197,7 +150,6 @@ export function MiniPlayerControls({
           <button
             type="button"
             aria-label={paused ? "Play lesson" : "Pause lesson"}
-            title={paused ? "Play [k]" : "Pause [k]"}
             onClick={(event) => {
               event.stopPropagation();
               void controller.togglePlayback();
@@ -214,7 +166,6 @@ export function MiniPlayerControls({
           <button
             type="button"
             aria-label="Next lesson"
-            title={canGoNext ? "Next lesson [Shift+N]" : undefined}
             disabled={!canGoNext}
             onClick={(event) => {
               event.stopPropagation();
@@ -229,6 +180,50 @@ export function MiniPlayerControls({
           >
             <SkipForward size={24} weight="fill" />
           </button>
+        </div>
+
+        {/* Top Controls Bar — later in DOM and higher z-index so hover chips sit on playback buttons */}
+        <div
+          className="pointer-events-none absolute inset-x-2 top-2 z-50 flex items-center justify-between"
+          data-learning-mini-player-gesture-ignore=""
+        >
+          <div className="relative z-50 group/expand pointer-events-auto">
+            <PlayerIconButton
+              label="Expand [I]"
+              title=""
+              aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
+              data-learning-mini-player-restore=""
+              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+              icon={
+                <AppIcon name="miniPlayerExpand" className="size-5" />
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                onRestore();
+              }}
+            />
+            <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+              <span>Expand</span>
+              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">I</kbd>
+            </div>
+          </div>
+
+          <div className="relative z-50 group/close pointer-events-auto">
+            <PlayerIconButton
+              label="Close"
+              title=""
+              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+              icon={<CloseIcon size={20} />}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose();
+              }}
+            />
+            <div className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+              <span>Close</span>
+              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">Esc</kbd>
+            </div>
+          </div>
         </div>
 
         {/* Bottom-left Time Display — hidden while the timeline tooltip is showing */}

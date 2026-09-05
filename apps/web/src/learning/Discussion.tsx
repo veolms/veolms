@@ -13,10 +13,22 @@ import {
   DrawerDescription,
   DrawerTitle,
 } from "../components/ui/drawer";
+import { ThemedSelect } from "../ThemedSelect";
 import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
+import {
+  applyDiscussionFeed,
+  DISCUSSION_FEED_SORT_OPTIONS,
+  getDiscussionFeedCountLabel,
+  type DiscussionEntryFilter,
+  type DiscussionFeedSort,
+} from "./discussionFeed";
 import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
+import {
+  DESCRIPTION_SURFACE_BASE,
+  LessonDescription,
+} from "./LessonDescription";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
@@ -124,7 +136,6 @@ const initialEntries: Comment[] = [
   },
 ];
 
-type EntryFilter = "all" | DiscussionEntryKind;
 type ComposerMode = "collapsed" | "desktop" | "mobile";
 
 const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
@@ -211,10 +222,10 @@ interface OpenDiscussionThread {
 
 const entryFilters = [
   ["all", "All"],
-  ["note", "Notes"],
   ["comment", "Comments"],
+  ["note", "Notes"],
   ["question", "Q&As"],
-] as const satisfies readonly (readonly [EntryFilter, string])[];
+] as const satisfies readonly (readonly [DiscussionEntryFilter, string])[];
 
 const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
   value === "comment" || value === "question" || value === "note";
@@ -273,7 +284,8 @@ export function Discussion({
   const [entries, setEntries] = useState(initialEntries);
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
-  const [entryFilter, setEntryFilter] = useState<EntryFilter>("all");
+  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>("all");
+  const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
     null,
@@ -301,19 +313,16 @@ export function Discussion({
     ]);
   }, [postedEntries]);
 
-  const filteredEntries = useMemo(() => {
-    const visibleEntries =
-      entryFilter === "all"
-        ? entries
-        : entries.filter(
-            (entry) =>
-              (entry.entryKind ??
-                (entry.isQuestion ? "question" : "comment")) === entryFilter,
-          );
-    return Array.from(
-      new Map(visibleEntries.map((entry) => [entry.id, entry])).values(),
-    );
-  }, [entries, entryFilter]);
+  const filteredEntries = useMemo(
+    () =>
+      applyDiscussionFeed({
+        currentUserName: CURRENT_USER.name,
+        entries,
+        filter: entryFilter,
+        sort: feedSort,
+      }),
+    [entries, entryFilter, feedSort],
+  );
   const threadEntries = useMemo(
     () =>
       Array.from(new Map(entries.map((entry) => [entry.id, entry])).values()),
@@ -496,6 +505,7 @@ export function Discussion({
         editingEntryId={editingEntry?.id ?? null}
         notice={notice}
         entryFilter={entryFilter}
+        feedSort={feedSort}
         entries={filteredEntries}
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
@@ -549,6 +559,7 @@ export function Discussion({
         onSubmit={submitEntry}
         onCancelEdit={() => setEditingEntry(null)}
         onEntryFilterChange={setEntryFilter}
+        onFeedSortChange={setFeedSort}
         onLike={onLike}
         onEdit={beginEditingEntry}
         onDelete={deleteEntry}
@@ -592,7 +603,8 @@ interface ThreadSurfaceProps {
   visibility: DiscussionVisibility;
   editingEntryId: number | null;
   notice: string;
-  entryFilter: EntryFilter;
+  entryFilter: DiscussionEntryFilter;
+  feedSort: DiscussionFeedSort;
   entries: Comment[];
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
@@ -604,7 +616,8 @@ interface ThreadSurfaceProps {
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
   onCancelEdit: () => void;
-  onEntryFilterChange: (filter: EntryFilter) => void;
+  onEntryFilterChange: (filter: DiscussionEntryFilter) => void;
+  onFeedSortChange: (sort: DiscussionFeedSort) => void;
   onLike: (id: number, liked: boolean) => void;
   onEdit: (comment: Comment) => void;
   onDelete: (id: number) => void;
@@ -619,6 +632,7 @@ function ThreadSurface({
   editingEntryId,
   notice,
   entryFilter,
+  feedSort,
   entries,
   draftIsTooLong,
   draftAttachmentCount,
@@ -631,6 +645,7 @@ function ThreadSurface({
   onSubmit,
   onCancelEdit,
   onEntryFilterChange,
+  onFeedSortChange,
   onLike,
   onEdit,
   onDelete,
@@ -808,11 +823,12 @@ function ThreadSurface({
 
   return (
     <div>
+      <LessonDescription />
       {!isPhone && (
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className="mt-4 scroll-mt-4 max-[640px]:hidden"
+          className="mt-3 scroll-mt-4 sm:mt-4"
         >
           {composerMode === "desktop" ? (
             <CommentComposer
@@ -851,7 +867,7 @@ function ThreadSurface({
       <div
         role="group"
         aria-label="Filter discussion entries"
-        className="learning-discussion__filter-group mt-5 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] max-[640px]:mt-2 [&::-webkit-scrollbar]:hidden"
+        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
       >
         {entryFilters.map(([value, label]) => (
           <button
@@ -866,7 +882,35 @@ function ThreadSurface({
         ))}
       </div>
 
-      <div className={`mt-1 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}>
+      <div
+        className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
+        data-discussion-feed-toolbar
+      >
+        <p
+          className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)"
+          aria-live="polite"
+        >
+          {getDiscussionFeedCountLabel(entryFilter, entries.length)}
+        </p>
+        <span
+          className="shrink-0 text-lg leading-none text-(--text-secondary)"
+          aria-hidden="true"
+          data-discussion-feed-separator
+        >
+          {"\u00A0\u00A0·\u00A0\u00A0"}
+        </span>
+        <ThemedSelect
+          value={feedSort}
+          onValueChange={onFeedSortChange}
+          ariaLabel="Sort discussions"
+          options={DISCUSSION_FEED_SORT_OPTIONS}
+          triggerClassName="h-auto! w-auto! max-w-full shrink-0! items-end! justify-start! gap-1! border-0! bg-transparent! p-0! shadow-none! text-[13px] leading-none! font-medium whitespace-nowrap text-(--text-secondary)! hover:bg-transparent! hover:text-(--text)! data-[state=open]:bg-transparent! data-[state=open]:shadow-none!"
+        />
+      </div>
+
+      <div
+        className={`mt-2.5 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}
+      >
         {entries.map((entry) => (
           <CommentCard
             key={entry.id}
@@ -985,9 +1029,13 @@ interface CompactComposerProps {
   draft: DiscussionDraft;
   attachmentCount: number;
   disabled?: boolean;
-  mobile?: boolean;
   onOpen: () => void;
 }
+
+const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-md transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
+
+const MOBILE_COMPOSER_SURFACE_BASE =
+  "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
 
 interface MobileCompactComposerPortalProps {
   draft: DiscussionDraft;
@@ -1029,12 +1077,11 @@ function MobileCompactComposerPortal({
         data-testid="mobile-discussion-composer"
         data-scroll-hidden={scrollHidden}
         aria-hidden={scrollHidden}
-        className={`pointer-events-auto relative box-border min-w-0 max-w-full overflow-x-clip bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+        className={`pointer-events-auto relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE} transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
       >
         <CompactComposer
           draft={draft}
           attachmentCount={attachmentCount}
-          mobile
           onOpen={onOpen}
         />
       </div>
@@ -1050,12 +1097,13 @@ export function PrerenderedMobileCommentComposer() {
       aria-hidden="true"
       className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden min-w-0 max-w-full overflow-x-clip [[data-navigation-layout=compact]_&]:block [[data-learning-mobile-composer-ready=true]_&]:hidden!"
     >
-      <div className="relative box-border min-w-0 max-w-full overflow-x-clip bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl">
+      <div
+        className={`relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE}`}
+      >
         <CompactComposer
           draft={EMPTY_MOBILE_COMPOSER_DRAFT}
           attachmentCount={0}
           disabled
-          mobile
           onOpen={() => undefined}
         />
       </div>
@@ -1067,7 +1115,6 @@ function CompactComposer({
   draft,
   attachmentCount,
   disabled = false,
-  mobile = false,
   onOpen,
 }: CompactComposerProps) {
   const preview =
@@ -1078,14 +1125,21 @@ function CompactComposer({
   const attachmentPreview = `${attachmentCount} ${attachmentCount === 1 ? "attachment" : "attachments"}`;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
       data-compact-comment-composer
       aria-label="Open discussion composer"
-      disabled={disabled}
-      tabIndex={disabled ? -1 : undefined}
-      onClick={onOpen}
-      className={`flex w-full items-center gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] text-left shadow-[0_12px_34px_color-mix(in_srgb,var(--canvas)_34%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_94%,var(--hover))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${mobile ? "rounded-xl p-1.5" : "rounded-lg p-1.5"}`}
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onOpen}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
     >
       <img
         src={CURRENT_USER.avatar}
@@ -1096,7 +1150,7 @@ function CompactComposer({
         {preview ||
           (attachmentCount > 0 ? attachmentPreview : "Write something…")}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -1115,7 +1169,7 @@ function usePhoneComposerLayout() {
   return isPhone;
 }
 
-const getFilterName = (filter: Exclude<EntryFilter, "all">) => {
+const getFilterName = (filter: Exclude<DiscussionEntryFilter, "all">) => {
   if (filter === "question") return "Q&As";
   if (filter === "note") return "notes";
   return "comments";

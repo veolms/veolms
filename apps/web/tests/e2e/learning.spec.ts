@@ -1,7 +1,12 @@
 import { test, expect } from "./app.fixture.ts";
 import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
+import { PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET } from "../../src/learning/useLessonDrawerHeroControl.ts";
 
 const LEARNING_DESKTOP_VIEWPORT = { width: 1424, height: 678 } as const;
+
+const mobileLessonDrawerTopOffsetFromPlayer = (
+  playerBounds: { y: number; height: number },
+) => playerBounds.y + playerBounds.height - PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET;
 
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
@@ -756,7 +761,7 @@ test("curriculum rail double-click expands and its shortcut toggles the content 
   await expect(rail).toHaveAttribute("aria-valuenow", expandedWidth!);
 });
 
-test("player edge control uses a native title and the short content shortcut", async ({
+test("player lessons control uses a native title and the short content shortcut", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -765,53 +770,63 @@ test("player edge control uses a native title and the short content shortcut", a
   await openApp(page, "/learn/typescript-course/the-design-mindset");
 
   const playerWrap = page.locator(".learning-workspace__player-wrap");
-  const minimize = page.getByRole("button", { name: "Minimize", exact: true });
-  const collapse = page.getByRole("button", {
-    name: "Collapse course content",
+  const player = page.getByRole("region", {
+    name: /Lesson video player for/,
   });
+  const minimize = page.getByRole("button", { name: "Minimize", exact: true });
+  const closeLessons = page.getByRole("button", { name: "Close lessons" });
   const curriculumColumn = page.locator(
     ".learning-workspace__curriculum-column",
   );
 
-  await expect(collapse).toHaveAttribute("aria-expanded", "true");
-  await expect(collapse).toHaveAttribute("aria-keyshortcuts", "Alt+C");
-  await expect(collapse).toHaveAttribute("title", "Collapse (Alt+C)");
-  await expect(
-    collapse.locator("[data-sidebar-toggle-direction]"),
-  ).toHaveAttribute("data-sidebar-toggle-direction", "right");
-  await expect(page.getByRole("tooltip")).toHaveCount(0);
-  await expect(collapse).toHaveCSS("opacity", "0");
-  await expect(collapse).toHaveCSS("pointer-events", "none");
   await playerWrap.hover();
-  await expect(collapse).toHaveCSS("opacity", "1");
-  await expect(collapse).toHaveCSS("pointer-events", "auto");
-  await expect(collapse).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(closeLessons).toBeVisible();
+  await expect(closeLessons).toHaveAttribute("aria-expanded", "true");
+  await expect(closeLessons).toHaveAttribute("aria-keyshortcuts", "Alt+C");
+  await expect(closeLessons).toHaveAttribute("title", "Close lessons (Alt+C)");
+  await expect(closeLessons).toHaveAttribute(
+    "aria-controls",
+    "learning-course-curriculum-scrollport",
+  );
+  await expect(closeLessons).toHaveAttribute(
+    "data-course-lessons-presentation",
+    "side",
+  );
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(minimize).toBeVisible();
 
-  const [wrapBox, minimizeBox, collapseBox] = await Promise.all([
-    playerWrap.boundingBox(),
-    minimize.boundingBox(),
-    collapse.boundingBox(),
-  ]);
-  expect(wrapBox).not.toBeNull();
-  expect(minimizeBox).not.toBeNull();
-  expect(collapseBox).not.toBeNull();
-  expect(minimizeBox!.x - wrapBox!.x).toBeGreaterThanOrEqual(6);
-  expect(minimizeBox!.x - wrapBox!.x).toBeLessThanOrEqual(14);
-  expect(
-    wrapBox!.x + wrapBox!.width - collapseBox!.x - collapseBox!.width,
-  ).toBe(0);
+  const autoplay = player.getByRole("switch", {
+    name: "Autoplay next lesson",
+  });
+  const settings = player.getByRole("button", { name: "Settings" });
+  const fullscreen = player.getByRole("button", {
+    name: "Toggle fullscreen",
+  });
+  const [lessonsBox, autoplayBox, settingsBox, fullscreenBox] =
+    await Promise.all([
+      closeLessons.boundingBox(),
+      autoplay.boundingBox(),
+      settings.boundingBox(),
+      fullscreen.boundingBox(),
+    ]);
+  expect(lessonsBox).not.toBeNull();
+  expect(autoplayBox).not.toBeNull();
+  expect(settingsBox).not.toBeNull();
+  expect(fullscreenBox).not.toBeNull();
+  expect(autoplayBox!.y + autoplayBox!.height).toBeLessThan(lessonsBox!.y);
+  expect(settingsBox!.y + settingsBox!.height).toBeLessThan(lessonsBox!.y);
+  expect(lessonsBox!.x + lessonsBox!.width).toBeLessThanOrEqual(
+    fullscreenBox!.x + 1,
+  );
+  expect(Math.abs(lessonsBox!.y - fullscreenBox!.y)).toBeLessThanOrEqual(8);
 
-  await collapse.click();
-  const expand = page.getByRole("button", { name: "Expand course content" });
-  await expect(expand).toHaveAttribute("aria-expanded", "false");
-  await expect(expand).toHaveAttribute("title", "Expand (Alt+C)");
-  await expect(
-    expand.locator("[data-sidebar-toggle-direction]"),
-  ).toHaveAttribute("data-sidebar-toggle-direction", "left");
+  await closeLessons.click();
+  const openLessons = page.getByRole("button", { name: "Open lessons" });
+  await expect(openLessons).toHaveAttribute("aria-expanded", "false");
+  await expect(openLessons).toHaveAttribute("title", "Open lessons (Alt+C)");
   await expect(curriculumColumn).toHaveClass(/is-collapsed/);
-  await expand.click();
-  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  await openLessons.click();
+  await expect(closeLessons).toHaveAttribute("aria-expanded", "true");
   await expect(curriculumColumn).not.toHaveClass(/is-collapsed/);
 });
 
@@ -829,10 +844,10 @@ test("a held second player press floats the desktop course content", async ({
     ".learning-workspace__curriculum-column",
   );
   await playerWrap.hover();
-  await page.getByRole("button", { name: "Collapse course content" }).click();
+  await page.getByRole("button", { name: "Close lessons" }).click();
 
   const secondPress = page.getByRole("button", {
-    name: "Expand course content",
+    name: "Open lessons",
   });
   const secondPressBounds = await secondPress.boundingBox();
   expect(secondPressBounds).not.toBeNull();
@@ -975,36 +990,52 @@ test("tablet player control opens a translucent floating course drawer", async (
     "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
   );
 
-  const toggle = page.getByRole("button", { name: "Expand course content" });
+  const playerWrap = page.locator(".learning-workspace__player-wrap");
+  const toggle = page.getByRole("button", { name: "Open lessons" });
   const minimize = page.getByRole("button", { name: "Minimize", exact: true });
   const player = page.getByRole("region", {
     name: "Lesson video player for What is UI/UX Design?",
   });
   const video = player.locator("video");
+  await playerWrap.hover();
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toHaveAttribute(
+    "data-course-lessons-presentation",
+    "drawer",
+  );
   await expect(player).toHaveAttribute("data-playing", "false");
-  await expect(toggle).toHaveCSS("opacity", "1");
   await expect(minimize).toBeVisible();
 
   await video.evaluate((element) =>
     element.dispatchEvent(new Event("play", { bubbles: true })),
   );
   await expect(player).toHaveAttribute("data-playing", "true");
-  await expect(toggle).toHaveCSS("opacity", "0");
-  await expect(toggle).toHaveCSS("pointer-events", "none");
 
   await video.evaluate((element) =>
     element.dispatchEvent(new Event("pause", { bubbles: true })),
   );
   await expect(player).toHaveAttribute("data-playing", "false");
-  await expect(toggle).toHaveCSS("opacity", "1");
-  await expect(minimize).toBeVisible();
+  await playerWrap.hover();
+  await expect(toggle).toBeVisible();
   await toggle.click();
 
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveCSS("backdrop-filter", /blur/);
+  const drawerRadii = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return [
+      style.borderTopLeftRadius,
+      style.borderTopRightRadius,
+      style.borderBottomRightRadius,
+      style.borderBottomLeftRadius,
+    ];
+  });
+  expect(Number.parseFloat(drawerRadii[0] ?? "0")).toBe(12);
+  expect(Number.parseFloat(drawerRadii[1] ?? "0")).toBe(18);
+  expect(Number.parseFloat(drawerRadii[2] ?? "0")).toBe(18);
+  expect(Number.parseFloat(drawerRadii[3] ?? "0")).toBe(12);
   await expect
     .poll(() =>
       dialog.evaluate((element) => {
@@ -1039,7 +1070,7 @@ test("tablet curriculum scrollbar stays on the floating drawer edge", async ({
     "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
   );
 
-  const toggle = page.getByRole("button", { name: "Expand course content" });
+  const toggle = page.getByRole("button", { name: "Open lessons" });
   await toggle.click({ force: true });
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
   const curriculumScrollbar = page.locator(
@@ -1079,7 +1110,7 @@ test("tablet curriculum resize rail can drag the floating drawer closed", async 
     "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
   );
 
-  const toggle = page.getByRole("button", { name: "Expand course content" });
+  const toggle = page.getByRole("button", { name: "Open lessons" });
   await toggle.click({ force: true });
   const dialog = page.getByRole("dialog", { name: "Course lessons" });
   const resizeRail = page.getByRole("separator", {
@@ -1212,7 +1243,7 @@ test("hidden application sidebar preserves the independent course content layout
   expect(desktopGeometry!.horizontalOverflow).toBeLessThanOrEqual(1);
 
   await page.locator(".learning-workspace__player-wrap").hover();
-  await page.getByRole("button", { name: "Collapse course content" }).click();
+  await page.getByRole("button", { name: "Close lessons" }).click();
   await expect(curriculum).toHaveClass(/is-collapsed/);
   await expect(app).toHaveClass(/courses-app--hidden/);
 
@@ -1348,7 +1379,7 @@ test("lesson title uses the responsive type scale and press-only surface", async
   const mobileFontSize = await lessonTitle.evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).fontSize),
   );
-  expect(mobileFontSize).toBe(18);
+  expect(mobileFontSize).toBe(20);
   await expect(lessonHeading).toHaveCSS("padding-top", "16px");
   await expect(lessonHeading).toHaveCSS("padding-left", "12px");
   await expect(lessonHeading).toHaveCSS("padding-right", "12px");
@@ -1451,7 +1482,7 @@ test("lesson title uses the responsive type scale and press-only surface", async
         Number.parseFloat(getComputedStyle(element).fontSize),
       ),
     )
-    .toBe(22);
+    .toBe(20);
 });
 
 test("lesson title surface aligns with the player at tablet width", async ({
@@ -2035,7 +2066,9 @@ test("mobile More sheet anchors below lesson video and scrolls its navigation co
         player.boundingBox(),
       ]);
       if (!dialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(dialogBounds.y - (playerBounds.y + playerBounds.height));
+      return Math.abs(
+        dialogBounds.y - mobileLessonDrawerTopOffsetFromPlayer(playerBounds),
+      );
     })
     .toBeLessThanOrEqual(2);
 
@@ -2378,7 +2411,9 @@ test("mobile player lessons control opens the curriculum at the course overview"
         player.boundingBox(),
       ]);
       if (!dialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(dialogBounds.y - (playerBounds.y + playerBounds.height));
+      return Math.abs(
+        dialogBounds.y - mobileLessonDrawerTopOffsetFromPlayer(playerBounds),
+      );
     })
     .toBeLessThanOrEqual(1);
 
@@ -2423,7 +2458,9 @@ test("mobile lesson drawer closes with Escape and returns focus", async ({
         player.boundingBox(),
       ]);
       if (!dialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
-      return Math.abs(dialogBounds.y - (playerBounds.y + playerBounds.height));
+      return Math.abs(
+        dialogBounds.y - mobileLessonDrawerTopOffsetFromPlayer(playerBounds),
+      );
     })
     .toBeLessThanOrEqual(1);
 
@@ -2546,7 +2583,8 @@ test("mobile lesson drawer closes with Escape and returns focus", async ({
       ]);
       if (!nextDialogBounds || !playerBounds) return Number.POSITIVE_INFINITY;
       return Math.abs(
-        nextDialogBounds.y - (playerBounds.y + playerBounds.height),
+        nextDialogBounds.y -
+          mobileLessonDrawerTopOffsetFromPlayer(playerBounds),
       );
     })
     .toBeLessThanOrEqual(1);

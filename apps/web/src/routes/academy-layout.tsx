@@ -44,10 +44,14 @@ import {
   LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
   LEARNING_PLAYER_MOTION_DURATION_MS,
 } from "../learning/player/learningPlayerMotion";
-import { shouldDemoteDetachedPersistentPlayer } from "../learning/player/persistentPlayerRegistration";
+import {
+  shouldDemoteDetachedPersistentPlayer,
+  shouldRestoreMiniPlayerForMatchingCourse,
+} from "../learning/player/persistentPlayerRegistration";
 import {
   applyPersistentMiniPlayerLessonChange,
   resolveLearningMiniPlayerLessonPath,
+  resolveMiniPlayerCourseId,
 } from "../learning/player/persistentMiniPlayerLesson";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
@@ -162,6 +166,22 @@ const isSettingsPath = (path: string) => {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 };
 
+const isLearningRoutePath = (path: string) =>
+  normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/").startsWith(
+    "/learn/",
+  );
+
+const getLearningCourseRouteKey = (path: string) => {
+  const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "learn" || !parts[1]) return null;
+  try {
+    return decodeURIComponent(parts[1]);
+  } catch {
+    return parts[1];
+  }
+};
+
 const decorateCoursePlayerLaunch = (
   destinationPath: string,
   sourcePath: string,
@@ -251,6 +271,7 @@ export default function AcademyLayout() {
   const surfaceMotionTimerRef = useRef<number | null>(null);
   const surfaceMotionVersionRef = useRef(0);
   const restoringPlayerRef = useRef(false);
+  const restoreLearningMiniPlayerRef = useRef<() => void>(() => {});
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
   const {
@@ -338,6 +359,17 @@ export default function AcademyLayout() {
         destinationPath,
         activeLocationPath,
       );
+      if (
+        !restoringPlayerRef.current &&
+        shouldRestoreMiniPlayerForMatchingCourse({
+          presentation: playerPresentationRef.current,
+          activeCourseRouteKey: persistentPlayerRef.current?.courseRouteKey,
+          requestedCourseRouteKey: getLearningCourseRouteKey(path),
+        })
+      ) {
+        restoreLearningMiniPlayerRef.current();
+        return;
+      }
       if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
         const currentScrollPosition = readApplicationScrollPosition();
         settingsReturnLocationRef.current = {
@@ -521,6 +553,16 @@ export default function AcademyLayout() {
         return;
       }
       const activePlayer = persistentPlayerRef.current;
+      if (
+        shouldRestoreMiniPlayerForMatchingCourse({
+          presentation: playerPresentationRef.current,
+          activeCourseRouteKey: activePlayer?.courseRouteKey,
+          requestedCourseRouteKey: courseRouteKey,
+        })
+      ) {
+        restoreLearningMiniPlayerRef.current();
+        return;
+      }
       if (activePlayer?.courseRouteKey === courseRouteKey) {
         navigateTo(activePlayer.lessonPath, { exact: true });
         return;
@@ -537,7 +579,12 @@ export default function AcademyLayout() {
       persistentRegistrationTokenRef.current = token;
       persistentPlayerRef.current = registration;
       setPersistentPlayer(registration);
-      if (playerPresentationRef.current !== "mini") {
+      if (playerPresentationRef.current === "mini") {
+        // Opening the learning route while the same (or another) course is
+        // minimized should expand into the in-page player, not leave a hollow
+        // lesson page with a stuck mini player.
+        restoringPlayerRef.current = true;
+      } else {
         playerPresentationRef.current = "full";
         setPlayerPresentation("full");
       }
@@ -578,6 +625,14 @@ export default function AcademyLayout() {
   );
 
   const closeLearningMiniPlayer = useCallback(() => {
+    if (
+      playerPresentationRef.current === "mini" &&
+      persistentPlayerRef.current &&
+      isLearningRoutePath(locationPathRef.current)
+    ) {
+      restoreLearningMiniPlayerRef.current();
+      return;
+    }
     persistentRegistrationTokenRef.current = null;
     persistentPlayerRef.current = null;
     setPersistentPlayer(null);
@@ -807,6 +862,29 @@ export default function AcademyLayout() {
     unmountLearningBackground,
   ]);
 
+  const commitPersistentPlayerRestore = useCallback(() => {
+    if (!restoringPlayerRef.current) return;
+    playerPresentationRef.current = "full";
+    setPlayerPresentation("full");
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const restoreOffsetY = Math.max(
+      learningMotionOffsetYRef.current,
+      viewportHeight * LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
+    );
+    setLearningLessonContentMotionActive(true);
+    animateLearningSurfaceMotion(
+      restoreOffsetY,
+      0,
+      viewportHeight,
+      "restoring",
+      finishLearningPlayerRestoreMotion,
+    );
+  }, [
+    animateLearningSurfaceMotion,
+    finishLearningPlayerRestoreMotion,
+    setLearningLessonContentMotionActive,
+  ]);
+
   const handleLearningPlayerMinimizeGestureChange = useCallback(
     (state: LessonPlayerMinimizeGestureState) => {
       if (state.phase === "idle" && playerPresentationRef.current === "mini") {
@@ -880,27 +958,8 @@ export default function AcademyLayout() {
     // route (including the title and comments) is mounted. The player and the
     // lesson surface can then run the same edge-driven motion in reverse from
     // their very first frame.
-    playerPresentationRef.current = "full";
-    setPlayerPresentation("full");
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-    const restoreOffsetY = Math.max(
-      learningMotionOffsetYRef.current,
-      viewportHeight * LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
-    );
-    setLearningLessonContentMotionActive(true);
-    animateLearningSurfaceMotion(
-      restoreOffsetY,
-      0,
-      viewportHeight,
-      "restoring",
-      finishLearningPlayerRestoreMotion,
-    );
-  }, [
-    animateLearningSurfaceMotion,
-    finishLearningPlayerRestoreMotion,
-    route.kind,
-    setLearningLessonContentMotionActive,
-  ]);
+    commitPersistentPlayerRestore();
+  }, [commitPersistentPlayerRestore, route.kind]);
 
   useEffect(
     () => () => finishLearningPlayerRestoreMotion(),
@@ -962,14 +1021,20 @@ export default function AcademyLayout() {
         }
       }
     }
+    const alreadyOnLearningRoute = isLearningRoutePath(locationPathRef.current);
     navigateTo(lessonPath, { exact: true });
+    if (alreadyOnLearningRoute) {
+      commitPersistentPlayerRestore();
+    }
   }, [
     applyLearningSurfaceMotion,
+    commitPersistentPlayerRestore,
     finishLearningPlayerRestoreMotion,
     learningMiniPlayer,
     mountLearningBackground,
     navigateTo,
   ]);
+  restoreLearningMiniPlayerRef.current = restoreLearningMiniPlayer;
 
   const activeLearningReturnPath =
     route.kind === "learning"
@@ -993,6 +1058,14 @@ export default function AcademyLayout() {
         settingsTab={route.settingsTab}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
+        miniPlayerCourseId={resolveMiniPlayerCourseId({
+          presentation: playerPresentation,
+          persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
+          persistentCourseSlug: persistentPlayer?.courseSlug,
+          persistentLessonPath: persistentPlayer?.lessonPath,
+          miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
+          miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
+        })}
         learningBackground={learningBackground}
         learningMotionStageRef={learningMotionStageRef}
         onNavigatePage={navigateTo}

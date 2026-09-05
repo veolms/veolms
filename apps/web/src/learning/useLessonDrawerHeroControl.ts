@@ -88,6 +88,26 @@ export const LESSON_DRAWER_MAX_FLOATING_WIDTH = 680;
 export const LESSON_DRAWER_MAX_TABLET_WIDTH =
   LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
 export const LESSON_DRAWER_TABLET_GUTTER = 12;
+export const PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET = 12;
+
+export function getPhoneLessonDrawerCollapsedSnapPoint(
+  viewportHeight: number,
+  playerBottom: number | undefined,
+  fallbackSnapPoint = 0.72,
+): number {
+  if (playerBottom === undefined || !Number.isFinite(playerBottom)) {
+    return fallbackSnapPoint;
+  }
+
+  return Math.max(
+    2,
+    Math.round(
+      viewportHeight -
+        playerBottom +
+        PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
+    ),
+  );
+}
 
 export function getSideLessonDrawerBounds(
   playerBounds: Pick<DOMRect, "left" | "width">,

@@ -62,6 +62,31 @@ describe("Curriculum", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses a square compact shell so the first section is not clipped", () => {
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    render(
+      <TestCurriculum
+        hideHero
+        persistenceKey="curriculum-compact-shell"
+        selectedLesson={1}
+        onSelectLesson={vi.fn()}
+        courseTitle="UX Design Fundamentals"
+      />,
+    );
+
+    const curriculum = screen.getByRole("complementary", {
+      name: "Course curriculum",
+    });
+    expect(curriculum).toHaveClass("learning-curriculum--compact");
+    expect(
+      screen.getByRole("button", { name: /Section 1:/ }),
+    ).toHaveClass("learning-curriculum__section-toggle");
+  });
+
   it("updates the visible scroll control direction when the curriculum reaches an edge", () => {
     render(
       <TestCurriculum

@@ -4,9 +4,14 @@ import {
   lessonsById as defaultLessonsById,
   sections as defaultSections,
 } from "../courseContent";
-import type { PersistentLearningPlayerRegistration } from "./PersistentLearningPlayerHost";
+import type {
+  LearningPlayerPresentation,
+  PersistentLearningPlayerRegistration,
+} from "./PersistentLearningPlayerHost";
 
-function courseRouteKeyFromLessonPath(path?: string | null): string | null {
+export function courseRouteKeyFromLessonPath(
+  path?: string | null,
+): string | null {
   if (!path) return null;
   const learnMatch = /^\/learn\/([^/?#]+)/.exec(path);
   if (learnMatch?.[1]) return decodeURIComponent(learnMatch[1]);
@@ -102,4 +107,34 @@ export function applyPersistentMiniPlayerLessonChange(
       resumePersistenceKey,
     },
   };
+}
+
+export function resolveMiniPlayerCourseId({
+  presentation,
+  persistentCourseRouteKey,
+  persistentCourseSlug,
+  persistentLessonPath,
+  miniPlayerCourseSlug,
+  miniPlayerLessonPath,
+}: {
+  presentation?: LearningPlayerPresentation | null;
+  persistentCourseRouteKey?: string | null;
+  persistentCourseSlug?: string | null;
+  persistentLessonPath?: string | null;
+  miniPlayerCourseSlug?: string | null;
+  miniPlayerLessonPath?: string | null;
+}): string | undefined {
+  const fromPersistentPlayer =
+    presentation === "mini"
+      ? persistentCourseRouteKey ||
+        persistentCourseSlug ||
+        courseRouteKeyFromLessonPath(persistentLessonPath)
+      : undefined;
+
+  return (
+    fromPersistentPlayer ||
+    miniPlayerCourseSlug ||
+    courseRouteKeyFromLessonPath(miniPlayerLessonPath) ||
+    undefined
+  );
 }
