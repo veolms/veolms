@@ -128,6 +128,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        "/course-hls": {
+          target: config.VITE_COURSE_MEDIA_BASE_URL
+            ? new URL(config.VITE_COURSE_MEDIA_BASE_URL).origin
+            : "https://dev.veolms.org",
+          changeOrigin: true,
+          secure: true,
+        },
       },
     },
   };

@@ -3,10 +3,7 @@ import {
   createAuthMiddleware,
   type AuthMiddleware,
 } from "../../../middlewares/auth.middleware.ts";
-import {
-  ADMIN_ROLE,
-  createSessionService,
-} from "../../auth/index.ts";
+import { ADMIN_ROLE, createSessionService } from "../../auth/index.ts";
 
 export interface CommerceContext {
   middleware: AuthMiddleware;
@@ -23,11 +20,13 @@ export function createCommerceContext({
   const requireAuthenticated = [
     middleware.authenticate,
     middleware.requireAuthenticated,
+    middleware.requireMfaVerified,
   ];
 
   const requireAdmin = [
     middleware.authenticate,
     middleware.requireAuthenticated,
+    middleware.requireMfaVerified,
     middleware.requireRoles([ADMIN_ROLE]),
   ];
 

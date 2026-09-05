@@ -150,7 +150,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--canvas) 64%, transparent);
+  background: color-mix(in srgb, var(--canvas) 22%, transparent);
   content: "";
   opacity: 0;
   transition: opacity 180ms ease-out;
@@ -163,11 +163,19 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
   border-radius: 50%;
   color: var(--text);
-  background: var(--surface-strong);
-  box-shadow: var(--card-compact-shadow);
+  background:
+    radial-gradient(
+      circle at 35% 20%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 56%
+    ),
+    color-mix(in srgb, var(--surface-strong) 92%, var(--canvas));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent),
+    0 12px 28px color-mix(in srgb, var(--canvas) 38%, transparent);
 }
 
 .settings-profile__avatar img {
@@ -180,6 +188,15 @@
   color: var(--text);
   font-size: 1.1rem;
   font-weight: 760;
+}
+
+.settings-profile__avatar-fallback {
+  width: 54%;
+  height: 54%;
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+  filter: drop-shadow(
+    0 0 7px color-mix(in srgb, var(--accent-shadow) 45%, transparent)
+  );
 }
 
 .settings-profile__avatar--large {
@@ -199,34 +216,177 @@
   align-items: center;
   justify-content: center;
   width: 36px;
-  min-width: 36px;
-  height: 36px;
-  min-height: 36px;
-  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 50%;
   padding: 0;
-  color: var(--on-accent, #fff);
-  background: var(--accent);
-  box-shadow: 0 7px 14px
-    color-mix(in srgb, var(--accent-shadow) 52%, transparent);
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--canvas) 35%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
   transform: none;
   transition:
     opacity 150ms ease,
-    background-color 150ms ease;
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
-.settings-profile__public-card:hover .settings-profile__camera,
-.settings-profile__public-card:focus-within .settings-profile__camera {
+.settings-profile__photo
+  > [data-profile-control-locked].settings-profile__camera-lock {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  z-index: 2;
+  width: 36px;
+  height: 32px;
+}
+
+.settings-profile__photo
+  > [data-profile-control-locked].settings-profile__camera-lock
+  > .settings-profile__camera {
+  position: static;
+  width: 100%;
+  height: 100%;
+}
+
+.settings-profile__auth-lock-button {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 8px;
+  color: var(--danger);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.settings-profile__auth-lock-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--danger) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-profile__auth-lock-icon {
+  opacity: 0;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.settings-profile__auth-lock-icon.is-visible {
+  opacity: 1;
+  transform: scale(1.04);
+}
+
+.settings-profile__auth-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  display: flex;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  align-items: center;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  border-radius: 12px;
+  padding: 9px 11px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--canvas) 48%, transparent),
+    0 3px 10px color-mix(in srgb, var(--canvas) 24%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+  transform-origin: bottom right;
+  transition:
+    opacity 150ms ease,
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.settings-profile__auth-tooltip::after {
+  position: absolute;
+  right: 17px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.settings-profile__auth-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.settings-profile__auth-tooltip-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
+  border-radius: 9px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 11%, transparent);
+}
+
+.settings-profile__auth-tooltip-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.settings-profile__auth-tooltip-copy strong {
+  color: var(--text);
+  font-size: 0.71rem;
+  font-weight: 750;
+}
+
+.settings-profile__auth-tooltip-copy > span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 550;
+}
+
+.settings-profile__photo:hover .settings-profile__camera,
+.settings-profile__photo:focus-within .settings-profile__camera {
   opacity: 1;
   pointer-events: auto;
 }
 
+.settings-profile__photo:hover::after,
+.settings-profile__photo:focus-within::after {
+  opacity: 1;
+}
+
 .settings-profile__camera:hover,
 .settings-profile__camera:focus-visible {
-  background: color-mix(in srgb, var(--accent) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  transform: translateY(-1px);
 }
 
 @media (hover: none) {
@@ -387,17 +547,6 @@
   display: grid;
   gap: 0;
   padding: 0 20px;
-}
-
-.settings-profile__error.settings-profile__save-error {
-  margin: 16px 0 0;
-  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
-  border-radius: 9px;
-  padding: 10px 12px;
-  color: color-mix(in srgb, var(--danger) 58%, var(--text)) !important;
-  background: color-mix(in srgb, var(--danger) 10%, var(--surface-strong));
-  font-size: 0.72rem;
-  line-height: 1.45;
 }
 
 .settings-profile__form-section {
@@ -571,6 +720,8 @@
 
 .settings-profile__field > input,
 .settings-profile__field > textarea,
+.settings-profile__field [data-profile-control-locked] > input,
+.settings-profile__field [data-profile-control-locked] > textarea,
 .settings-profile__input-shell,
 .settings-profile__verification-panel input {
   width: 100%;
@@ -585,6 +736,8 @@
 
 .settings-profile__field > input,
 .settings-profile__field > textarea,
+.settings-profile__field [data-profile-control-locked] > input,
+.settings-profile__field [data-profile-control-locked] > textarea,
 .settings-profile__verification-panel input {
   padding: 0 12px;
 }
@@ -596,8 +749,17 @@
   resize: vertical;
 }
 
+.settings-profile__field [data-profile-control-locked] > textarea {
+  min-height: 94px;
+  padding-top: 11px;
+  padding-bottom: 22px;
+  resize: vertical;
+}
+
 .settings-profile__field > input:focus-visible,
 .settings-profile__field > textarea:focus-visible,
+.settings-profile__field [data-profile-control-locked] > input:focus-visible,
+.settings-profile__field [data-profile-control-locked] > textarea:focus-visible,
 .settings-profile__input-shell:focus-within,
 .settings-profile__verification-panel input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
@@ -627,10 +789,34 @@
   background: transparent;
   font: inherit;
   font-size: 0.77rem;
+  caret-color: var(--accent);
+}
+
+.settings-profile__field input::selection,
+.settings-profile__field textarea::selection,
+.settings-profile__input-shell input::selection {
+  color: var(--on-accent, #fff);
+  background: color-mix(in srgb, var(--accent) 78%, var(--canvas));
 }
 
 .settings-profile__input-shell input[readonly] {
   color: var(--text-secondary);
+}
+
+.settings-profile__field > input:-webkit-autofill,
+.settings-profile__field > input:-webkit-autofill:hover,
+.settings-profile__field > input:-webkit-autofill:focus,
+.settings-profile__input-shell input:-webkit-autofill,
+.settings-profile__input-shell input:-webkit-autofill:hover,
+.settings-profile__input-shell input:-webkit-autofill:focus,
+.settings-profile__field > input:autofill,
+.settings-profile__input-shell input:autofill {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--accent);
+  background-color: transparent !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--canvas) inset;
+  box-shadow: 0 0 0 1000px var(--canvas) inset;
+  transition: background-color 9999s ease-out;
 }
 
 .settings-profile__field > small {
@@ -678,12 +864,52 @@
 }
 
 .settings-profile__phone-control {
-  display: grid;
-  align-items: center;
-  gap: 7px;
+  display: block;
+}
+
+.settings-profile__input-shell--phone {
+  gap: 8px;
+}
+
+.settings-profile__input-shell--phone > .settings-profile__country-code {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  height: 40px;
+  gap: 5px;
+  border: 0;
+  border-radius: 0 !important;
+  padding: 0 2px 0 0;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.76rem;
+}
+
+.settings-profile__input-shell--phone > .settings-profile__country-code:hover,
+.settings-profile__input-shell--phone
+  > .settings-profile__country-code[data-state="open"] {
+  background: transparent;
+}
+
+.settings-profile__input-shell--phone
+  > .settings-profile__country-code:focus-visible,
+.settings-profile__input-shell--phone
+  > .settings-profile__country-code[data-state="open"] {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.settings-profile__locked-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 
 .settings-profile__verify-action,
+.settings-profile__inline-verify-action,
 .settings-profile__verification-panel button {
   justify-self: start;
   min-height: 32px;
@@ -696,6 +922,32 @@
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.settings-profile__inline-verify-action {
+  flex: 0 0 auto;
+  height: 28px;
+  min-height: 28px;
+  margin-left: auto;
+  border: 1px solid
+    color-mix(in srgb, var(--accent-ink, var(--accent)) 28%, transparent);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+.settings-profile__inline-verify-action:disabled,
+.settings-profile__verification-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.settings-profile__inline-verify-action:hover:not(:disabled) {
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .settings-profile__verify-action {
@@ -781,6 +1033,571 @@
   padding: 0 12px;
 }
 
+.settings-profile__verification-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100vw - 32px), 520px);
+  max-width: none;
+  max-height: min(680px, calc(100dvh - 32px));
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 18px;
+  padding: 0;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--card-floating-shadow);
+}
+
+.settings-profile__verification-dialog::backdrop {
+  background: color-mix(in srgb, var(--canvas) 76%, transparent);
+  backdrop-filter: blur(9px);
+}
+
+.settings-profile__verification-dialog-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  padding: 20px 20px 17px;
+}
+
+.settings-profile__verification-dialog-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 13px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.settings-profile__verification-dialog-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-ink, var(--accent));
+  font-size: 0.62rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-profile__verification-dialog-header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.12rem;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+
+.settings-profile__verification-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
+  border-radius: 50%;
+  padding: 0;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  cursor: pointer;
+}
+
+.settings-profile__verification-dialog-close:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.settings-profile__verification-dialog-description {
+  padding: 19px 22px 0;
+}
+
+.settings-profile__verification-dialog-description p,
+.settings-profile__verification-dialog-description span {
+  display: block;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.79rem;
+  line-height: 1.5;
+}
+
+.settings-profile__verification-dialog-description strong {
+  color: var(--text);
+  font-weight: 720;
+}
+
+.settings-profile__verification-dialog-description span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.settings-profile__verification-dialog-field {
+  display: grid;
+  gap: 8px;
+  padding: 22px 22px 0;
+}
+
+.settings-profile__verification-dialog-field-label {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.settings-profile__verification-dialog-field input {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 11px;
+  padding: 0 16px;
+  color: var(--text);
+  background: var(--canvas);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 720;
+  letter-spacing: 0.28em;
+  text-align: center;
+  caret-color: var(--accent);
+}
+
+.settings-profile__verification-dialog .auth-otp {
+  --auth-h-field: clamp(36px, 10vw, 52px);
+
+  display: grid;
+  grid-template-columns: repeat(6, var(--auth-h-field));
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings-profile__verification-dialog .auth-otp__digit {
+  width: 100%;
+  height: var(--auth-h-field);
+  min-height: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 10px;
+  padding: 0;
+  color: var(--text);
+  background: var(--canvas);
+  font-size: 1.05rem;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  text-align: center;
+}
+
+.settings-profile__verification-dialog .auth-otp__digit::placeholder {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.settings-profile__verification-dialog .auth-otp__digit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+.settings-profile__verification-dialog .auth-otp__digit[aria-invalid="true"] {
+  border-color: var(--danger, #f27991);
+  background: color-mix(in srgb, var(--danger, #f27991) 9%, var(--canvas));
+}
+
+.settings-profile__verification-dialog .auth-otp__digit:disabled {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+}
+
+.settings-profile__verification-dialog-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.settings-profile__verification-dialog-field input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+.settings-profile__verification-dialog-field small {
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.settings-profile__verification-dialog-error {
+  margin: 14px 22px 0;
+  color: var(--danger, #f27991);
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+
+.settings-profile__verification-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  padding: 16px 22px 20px;
+}
+
+.settings-profile__verification-dialog-actions button {
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.settings-profile__verification-dialog-resend {
+  border: 0;
+  padding-inline: 0 !important;
+  color: var(--accent-ink, var(--accent));
+  background: transparent;
+}
+
+.settings-profile__verification-dialog-resend:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.settings-profile__verification-dialog-primary-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-profile__verification-dialog-cancel {
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.settings-profile__verification-dialog-submit {
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  color: var(--on-accent, #fff);
+  background: var(--accent);
+}
+
+.settings-profile__verification-dialog-submit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 84%, var(--text));
+}
+
+.settings-profile__verification-dialog-actions button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-profile__verification-dialog-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.settings-profile__verification-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 20px;
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(10px);
+  animation: settings-profile-verification-fade-in 180ms ease-out;
+}
+
+.settings-profile__verification-dialog-card {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 18px;
+  padding: 28px 24px 24px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow:
+    0 20px 48px rgb(0 0 0 / 50%),
+    0 4px 16px rgb(0 0 0 / 30%),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
+  animation: settings-profile-verification-pop-in 220ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.settings-profile__verification-dialog-top-line {
+  position: absolute;
+  inset: 0 32px auto;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--accent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border-color: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--muted);
+  background: transparent;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-close:hover {
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.settings-profile__verification-dialog-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-icon {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  border: 0;
+  border-radius: 17px;
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-soft);
+  box-shadow: 0 8px 20px
+    color-mix(in srgb, var(--accent-shadow) 28%, transparent);
+}
+
+.settings-profile__verification-dialog-content h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.settings-profile__verification-dialog-content p {
+  max-width: 280px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.settings-profile__verification-dialog-content p strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-field {
+  margin-top: 24px;
+  padding: 0;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-field-label {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.settings-profile__verification-dialog-card .auth-otp {
+  --auth-h-field: 42px;
+
+  grid-template-columns: repeat(6, var(--auth-h-field));
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings-profile__verification-dialog-card .auth-otp__digit {
+  box-sizing: border-box;
+  width: var(--auth-h-field);
+  height: var(--auth-h-field);
+  min-height: 0;
+  border: 1px solid
+    var(--auth-line, color-mix(in srgb, var(--text) 13%, transparent));
+  border-radius: 9px;
+  padding: 0;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.settings-profile__verification-dialog-card .auth-otp__digit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.settings-profile__verification-dialog-card
+  .auth-otp__digit[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-field
+  small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-error {
+  margin: 12px 0 0;
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.settings-profile__verification-dialog-resend-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.settings-profile__verification-dialog-resend-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-resend {
+  min-height: 0;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-resend:hover:not(:disabled) {
+  color: var(--accent-hover, var(--accent));
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+  border-top: 0;
+  padding: 0;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-actions
+  button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-cancel {
+  color: var(--text-secondary);
+  background: var(--surface-strong);
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-cancel:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-submit {
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 8px 18px
+    color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-actions
+  button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-profile__verification-dialog-card
+  .settings-profile__verification-dialog-actions
+  button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+@keyframes settings-profile-verification-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes settings-profile-verification-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 .settings-profile__link-grid .settings-profile__field > small {
   margin-top: -1px;
 }
@@ -812,14 +1629,19 @@
 .settings-profile__form-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 0 16px;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 0;
+  padding: 20px 0 8px;
 }
 
-.settings-profile__form-footer > div {
-  display: flex;
-  gap: 8px;
+.settings-profile__form-footer p {
+  flex: 0 1 32ch;
+  margin-right: auto;
+}
+
+.settings-profile__form-footer > button {
+  flex: 0 0 auto;
 }
 
 .settings-profile__status {
@@ -889,7 +1711,8 @@
   cursor: not-allowed;
 }
 
-html:has(.settings-profile__privacy-dialog[open]) {
+html:has(.settings-profile__privacy-dialog[open]),
+html:has(.settings-profile__verification-dialog-overlay) {
   overflow: hidden;
 }
 
@@ -1126,8 +1949,29 @@ html:has(.settings-profile__privacy-dialog[open]) {
 }
 
 @media (max-width: 640px) {
-  .settings-profile__verify-action {
+  .settings-profile__inline-verify-action {
     min-height: 40px;
+  }
+
+  .settings-profile__input-shell--status:has(
+    .settings-profile__inline-verify-action
+  ) {
+    flex-wrap: wrap;
+    padding-block: 6px;
+  }
+
+  .settings-profile__input-shell--phone > .settings-profile__country-code {
+    padding-right: 0;
+  }
+
+  .settings-profile__input-shell--status
+    > .settings-profile__inline-verify-action {
+    flex: 1 0 100%;
+    margin-left: 0;
+  }
+
+  .settings-profile__form-footer {
+    padding-bottom: 12px;
   }
 
   .settings-tabs {
@@ -1168,18 +2012,48 @@ html:has(.settings-profile__privacy-dialog[open]) {
   }
   .settings-profile__form-footer {
     align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
   }
-  .settings-profile__form-footer > div {
-    width: 100%;
+  .settings-profile__form-footer p {
+    grid-column: 1 / -1;
+    margin-right: 0;
   }
   .settings-profile__form-footer button {
-    flex: 1;
+    width: 100%;
+    flex: none;
   }
   .settings-profile__verification-panel {
     grid-template-columns: minmax(0, 1fr);
   }
   .settings-profile__verification-panel button {
+    width: 100%;
+  }
+  .settings-profile__verification-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+  .settings-profile__verification-dialog-header {
+    padding: 17px 16px 15px;
+  }
+  .settings-profile__verification-dialog-description,
+  .settings-profile__verification-dialog-field {
+    padding-inline: 16px;
+  }
+  .settings-profile__verification-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+    padding-inline: 16px;
+  }
+  .settings-profile__verification-dialog-resend {
+    align-self: flex-start;
+  }
+  .settings-profile__verification-dialog-primary-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .settings-profile__verification-dialog-primary-actions button {
     width: 100%;
   }
   .settings-profile__privacy-dialog {
@@ -1199,5 +2073,37 @@ html:has(.settings-profile__privacy-dialog[open]) {
   }
   .settings-profile__privacy-dialog-actions button {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-profile__verification-dialog-overlay {
+    padding: 16px;
+  }
+
+  .settings-profile__verification-dialog-card {
+    padding: 26px 18px 20px;
+  }
+
+  .settings-profile__verification-dialog-card .auth-otp {
+    --auth-h-field: 38px;
+
+    grid-template-columns: repeat(6, var(--auth-h-field));
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .settings-profile__verification-dialog-card
+    .settings-profile__verification-dialog-actions {
+    flex-direction: column-reverse;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .settings-profile__verification-dialog-card
+    .settings-profile__verification-dialog-actions
+    button {
+    width: 100%;
+    min-width: 0;
   }
 }

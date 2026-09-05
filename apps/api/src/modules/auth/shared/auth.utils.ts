@@ -61,6 +61,10 @@ export function resolveIdentifier(body: {
   );
 }
 
+export function normalizePhoneNumber(phoneNo: string): string {
+  return phoneNo.trim().replace(/[^\d+]/g, "");
+}
+
 export function generatePkce(): { verifier: string; challenge: string } {
   const verifier = crypto.randomBytes(32).toString("base64url");
   const challenge = crypto

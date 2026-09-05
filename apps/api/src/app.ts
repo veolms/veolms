@@ -41,6 +41,7 @@ export async function createApp({
 }: CreateAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger,
+    trustProxy: config.TRUST_PROXY,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
   });
 
@@ -110,6 +111,16 @@ export async function createApp({
   await app.register(fastifyAutoload, {
     dir: fileURLToPath(new URL("./modules", import.meta.url)),
     matchFilter: /\.routes\.ts$/,
+    // @fastify/autoload's default indexPattern (index.ts/js/...) treats an
+    // index file as THE plugin for its directory and silently skips every
+    // sibling file — including that directory's *.routes.ts. Several modules
+    // (media, access, discussion-uploads) have a barrel index.ts re-exporting
+    // their service for other modules to import, which was silently deleting
+    // their routes from the app with no error at boot. Setting this to a
+    // pattern no real filename matches disables that special-casing so
+    // matchFilter alone decides what gets registered, letting a barrel
+    // index.ts sit next to a routes.ts without suppressing it.
+    indexPattern: /^$/,
     dirNameRoutePrefix: false,
     ignorePattern: /(?:^|[\\/])_/u,
     options: {

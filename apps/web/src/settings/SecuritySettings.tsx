@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
@@ -337,9 +337,15 @@ function StatusNote({ children }: { children: ReactNode }) {
   );
 }
 
-export function SecuritySettings() {
+export function SecuritySettings({
+  isAuthenticated = true,
+}: {
+  isAuthenticated?: boolean;
+}) {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const sessionQuery = useSessions({ enabled: Boolean(currentUser) });
+  const sessionQuery = useSessions({
+    enabled: isAuthenticated && Boolean(currentUser),
+  });
   const revokeSession = useRevokeSession();
   const revokeAll = useRevokeAllOtherSessions();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
@@ -354,11 +360,16 @@ export function SecuritySettings() {
   const totpEnabled = currentUser?.totpEnabled ?? false;
   const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
   const showEnrollmentSetup = Boolean(
-    currentUser && !userLoading && !totpEnabled && !passkeyEnabled,
+    isAuthenticated &&
+    currentUser &&
+    !userLoading &&
+    !totpEnabled &&
+    !passkeyEnabled,
   );
   const passkeyBrowserSupported = isPasskeySupported();
 
   const handleRegisterPasskey = async () => {
+    if (!isAuthenticated) return;
     setPasskeyError(null);
     setPasskeySuccess(false);
     try {
@@ -381,6 +392,7 @@ export function SecuritySettings() {
   };
 
   const handleRevokeSession = async (id: string) => {
+    if (!isAuthenticated) return;
     try {
       await revokeSession.mutateAsync(id);
     } catch {
@@ -389,6 +401,7 @@ export function SecuritySettings() {
   };
 
   const handleRevokeAll = async () => {
+    if (!isAuthenticated) return;
     try {
       await revokeAll.mutateAsync();
     } catch {
@@ -396,16 +409,25 @@ export function SecuritySettings() {
     }
   };
 
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setShowTotpModal(false);
+    setBackupCodes(null);
+    setPasskeyError(null);
+    setPasskeySuccess(false);
+    setTotpSuccess(false);
+  }, [isAuthenticated]);
+
   return (
     <div className="settings-detail" aria-label="Privacy and security settings">
-      {showTotpModal && (
+      {isAuthenticated && showTotpModal && (
         <TotpSetupModal
           onSuccess={handleTotpSuccess}
           onClose={() => setShowTotpModal(false)}
         />
       )}
 
-      {backupCodes && (
+      {isAuthenticated && backupCodes && (
         <BackupCodesModal
           codes={backupCodes}
           onClose={() => setBackupCodes(null)}
@@ -458,6 +480,7 @@ export function SecuritySettings() {
                     }
                     className="settings-action"
                     disabled={
+                      !isAuthenticated ||
                       passkeyOptionsMutation.isPending ||
                       passkeyVerifyMutation.isPending
                     }
@@ -485,6 +508,7 @@ export function SecuritySettings() {
                 <button
                   className="settings-action settings-action--quiet"
                   onClick={() => setShowTotpModal(true)}
+                  disabled={!isAuthenticated}
                   type="button"
                 >
                   Set up
@@ -550,6 +574,7 @@ export function SecuritySettings() {
                       }
                       className="settings-action"
                       disabled={
+                        !isAuthenticated ||
                         passkeyOptionsMutation.isPending ||
                         passkeyVerifyMutation.isPending
                       }
@@ -615,6 +640,7 @@ export function SecuritySettings() {
                   <button
                     className="settings-action"
                     onClick={() => setShowTotpModal(true)}
+                    disabled={!isAuthenticated}
                     type="button"
                   >
                     {totpEnabled ? "Reconfigure" : "Set up"}
@@ -641,94 +667,104 @@ export function SecuritySettings() {
           </div>
         </header>
 
-        {sessionQuery.isLoading && (
+        {!isAuthenticated && (
+          <p className="py-3 text-[0.84rem] text-(--muted)">
+            Sign in to manage active sessions.
+          </p>
+        )}
+
+        {isAuthenticated && sessionQuery.isLoading && (
           <p className="auth-mfa-setup__loading">Loading sessions…</p>
         )}
 
-        {sessionQuery.isError && (
+        {isAuthenticated && sessionQuery.isError && (
           <p className="auth-form__error" role="alert">
             Could not load sessions. Please refresh.
           </p>
         )}
 
-        {sessionQuery.data && sessionQuery.data.length > 0 && (
-          <>
-            <div className="settings-session-list">
-              {sessionQuery.data.map((session) => {
-                const deviceLabel = session.isCurrent
-                  ? "This device"
-                  : formatSessionDevice(session.userAgent);
+        {isAuthenticated &&
+          sessionQuery.data &&
+          sessionQuery.data.length > 0 && (
+            <>
+              <div className="settings-session-list">
+                {sessionQuery.data.map((session) => {
+                  const deviceLabel = session.isCurrent
+                    ? "This device"
+                    : formatSessionDevice(session.userAgent);
 
-                return (
-                  <div className="settings-session" key={session.id}>
-                    <span className="settings-session__icon" aria-hidden>
-                      {isMobileSession(session.userAgent) ? (
-                        <DeviceMobile size={20} weight="duotone" />
+                  return (
+                    <div className="settings-session" key={session.id}>
+                      <span className="settings-session__icon" aria-hidden>
+                        {isMobileSession(session.userAgent) ? (
+                          <DeviceMobile size={20} weight="duotone" />
+                        ) : (
+                          <Laptop size={20} weight="duotone" />
+                        )}
+                      </span>
+
+                      <span className="min-w-0 flex-1 overflow-hidden">
+                        <strong title={session.userAgent ?? undefined}>
+                          {deviceLabel}
+                        </strong>
+                        <small>
+                          <span className="truncate">
+                            {session.ipAddress ?? "Unknown IP"}
+                          </span>
+                          <span aria-hidden className="shrink-0">
+                            ·
+                          </span>
+                          <span className="inline-flex shrink-0 items-center gap-1">
+                            <Timer aria-hidden size={11} />
+                            {formatRelativeDate(session.lastUsedAt)}
+                          </span>
+                        </small>
+                      </span>
+
+                      {session.isCurrent ? (
+                        <em>Current</em>
                       ) : (
-                        <Laptop size={20} weight="duotone" />
+                        <button
+                          aria-busy={revokeSession.isPending}
+                          className="settings-action settings-action--quiet"
+                          disabled={!isAuthenticated || revokeSession.isPending}
+                          onClick={() => handleRevokeSession(session.id)}
+                          type="button"
+                        >
+                          <SignOut size={14} /> Sign out
+                        </button>
                       )}
-                    </span>
-
-                    <span className="min-w-0 flex-1 overflow-hidden">
-                      <strong title={session.userAgent ?? undefined}>
-                        {deviceLabel}
-                      </strong>
-                      <small>
-                        <span className="truncate">
-                          {session.ipAddress ?? "Unknown IP"}
-                        </span>
-                        <span aria-hidden className="shrink-0">
-                          ·
-                        </span>
-                        <span className="inline-flex shrink-0 items-center gap-1">
-                          <Timer aria-hidden size={11} />
-                          {formatRelativeDate(session.lastUsedAt)}
-                        </span>
-                      </small>
-                    </span>
-
-                    {session.isCurrent ? (
-                      <em>Current</em>
-                    ) : (
-                      <button
-                        aria-busy={revokeSession.isPending}
-                        className="settings-action settings-action--quiet"
-                        disabled={revokeSession.isPending}
-                        onClick={() => handleRevokeSession(session.id)}
-                        type="button"
-                      >
-                        <SignOut size={14} /> Sign out
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {sessionQuery.data.some((session) => !session.isCurrent) && (
-              <div className="mt-3">
-                <button
-                  aria-busy={revokeAll.isPending}
-                  className="settings-action settings-action--quiet max-sm:w-full"
-                  disabled={revokeAll.isPending}
-                  onClick={handleRevokeAll}
-                  type="button"
-                >
-                  <X size={14} />{" "}
-                  {revokeAll.isPending
-                    ? "Signing out…"
-                    : "Sign out all other devices"}
-                </button>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </>
-        )}
 
-        {sessionQuery.data && sessionQuery.data.length === 0 && (
-          <p className="py-3 text-[0.84rem] text-(--muted)">
-            No other active sessions found.
-          </p>
-        )}
+              {sessionQuery.data.some((session) => !session.isCurrent) && (
+                <div className="mt-3">
+                  <button
+                    aria-busy={revokeAll.isPending}
+                    className="settings-action settings-action--quiet max-sm:w-full"
+                    disabled={!isAuthenticated || revokeAll.isPending}
+                    onClick={handleRevokeAll}
+                    type="button"
+                  >
+                    <X size={14} />{" "}
+                    {revokeAll.isPending
+                      ? "Signing out…"
+                      : "Sign out all other devices"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+        {isAuthenticated &&
+          sessionQuery.data &&
+          sessionQuery.data.length === 0 && (
+            <p className="py-3 text-[0.84rem] text-(--muted)">
+              No other active sessions found.
+            </p>
+          )}
       </section>
     </div>
   );

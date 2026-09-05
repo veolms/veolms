@@ -103,8 +103,9 @@ export const sessionResponseSchema = z.object({
   ipAddress: z.string().max(45).nullable(),
   userAgent: z.string().max(255).nullable(),
   isCurrent: z.boolean(),
-  createdAt: z.iso.datetime().optional().or(z.string().max(30)),
-  lastUsedAt: z.iso.datetime().optional().or(z.string().max(30)),
+  createdAt: z.string().max(40),
+  lastUsedAt: z.string().max(40),
+  expiresAt: z.string().max(40),
 });
 
 export const sessionParamsSchema = z.object({

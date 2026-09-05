@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Drawer,
   DrawerContent,
@@ -880,19 +881,13 @@ function ThreadSurface({
       </div>
 
       {isPhone && composerMode !== "mobile" && (
-        <div
-          data-testid="mobile-discussion-composer"
-          data-scroll-hidden={compactComposerScrollHidden}
-          aria-hidden={compactComposerScrollHidden}
-          className={`fixed inset-x-0 z-130 bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${mobileBottomNavigation ? "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]" : "bottom-0"} ${compactComposerScrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
-        >
-          <CompactComposer
-            draft={draft}
-            attachmentCount={draftAttachmentCount}
-            mobile
-            onOpen={openMobileComposer}
-          />
-        </div>
+        <MobileCompactComposerPortal
+          draft={draft}
+          attachmentCount={draftAttachmentCount}
+          mobileBottomNavigation={mobileBottomNavigation}
+          scrollHidden={compactComposerScrollHidden}
+          onOpen={openMobileComposer}
+        />
       )}
 
       {isPhone && (
@@ -979,6 +974,60 @@ interface CompactComposerProps {
   attachmentCount: number;
   mobile?: boolean;
   onOpen: () => void;
+}
+
+interface MobileCompactComposerPortalProps {
+  draft: DiscussionDraft;
+  attachmentCount: number;
+  mobileBottomNavigation: boolean;
+  scrollHidden: boolean;
+  onOpen: () => void;
+}
+
+function MobileCompactComposerPortal({
+  draft,
+  attachmentCount,
+  mobileBottomNavigation,
+  scrollHidden,
+  onOpen,
+}: MobileCompactComposerPortalProps) {
+  const layerTarget = document.querySelector<HTMLElement>(
+    "[data-learning-motion-stage]",
+  );
+
+  return createPortal(
+    <div
+      data-learning-mobile-composer-layer
+      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+        mobileBottomNavigation
+          ? "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]"
+          : "bottom-0"
+      }`}
+      style={{
+        opacity: "var(--learning-player-content-opacity, 1)",
+        transform:
+          "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
+        transitionDuration:
+          "var(--learning-player-content-motion-duration, 0ms)",
+      }}
+    >
+      <div
+        data-learning-mobile-composer-surface
+        data-testid="mobile-discussion-composer"
+        data-scroll-hidden={scrollHidden}
+        aria-hidden={scrollHidden}
+        className={`pointer-events-auto relative box-border min-w-0 max-w-full overflow-x-clip bg-[color-mix(in_srgb,var(--canvas)_90%,transparent)] px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))] shadow-[0_-12px_36px_color-mix(in_srgb,var(--canvas)_58%,transparent)] backdrop-blur-xl transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+      >
+        <CompactComposer
+          draft={draft}
+          attachmentCount={attachmentCount}
+          mobile
+          onOpen={onOpen}
+        />
+      </div>
+    </div>,
+    layerTarget ?? document.body,
+  );
 }
 
 function CompactComposer({
