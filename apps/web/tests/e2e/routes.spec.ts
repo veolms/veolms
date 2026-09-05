@@ -1,6 +1,6 @@
 import { test, expect } from "./app.fixture.ts";
 import {
-  clickLearningBack,
+  leaveLearningViaNavigation,
   getApplicationScrollTop,
   installBaselineState,
   openApp,
@@ -521,7 +521,8 @@ test("top-level navigation stays direct while Learning Space owns the active cou
 
   await homeNavigation.click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(session).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(session).toHaveAttribute("aria-current", "page");
   await coursesNavigation.click();
   await expect(page).toHaveURL(/\/courses$/);
   await expect(coursesNavigation).toHaveAttribute("aria-current", "page");
@@ -532,12 +533,13 @@ test("top-level navigation stays direct while Learning Space owns the active cou
   );
   await expect(session).toHaveAttribute("aria-current", "page");
 
-  await clickLearningBack(page, "Return to Courses");
+  await leaveLearningViaNavigation(page, "Courses");
   await expect(page).toHaveURL(/\/courses$/);
   await expect(
     page.getByRole("heading", { name: "Courses", level: 1 }),
   ).toBeVisible();
-  await expect(session).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(session).toHaveAttribute("aria-current", "page");
 });
 
 test("Learning Space resumes the same paused lesson while Courses remains direct", async ({
@@ -609,7 +611,7 @@ test("Learning Space resumes the same paused lesson while Courses remains direct
   await expect(
     navigation.getByRole("button", { name: "Courses" }),
   ).not.toHaveAttribute("aria-current");
-  await clickLearningBack(page, "Return to Courses");
+  await leaveLearningViaNavigation(page, "Courses");
 
   await expect(page).toHaveURL(/\/courses$/);
   await expect(
@@ -706,7 +708,8 @@ test("each Learning Space session keeps its launch page without top-level resume
   await homeNavigation.click();
   await expect(page).toHaveURL(/\/$/);
   await expect(homeNavigation).toHaveAttribute("aria-current", "page");
-  await expect(typescriptSession).not.toHaveAttribute("aria-current");
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+  await expect(typescriptSession).toHaveAttribute("aria-current", "page");
 
   await coursesNavigation.click();
   await page
@@ -733,14 +736,14 @@ test("each Learning Space session keeps its launch page without top-level resume
   await expect(page).toHaveURL(
     /\/learn\/typescript-course\/[^/?]+\?from=home$/,
   );
-  await clickLearningBack(page, "Return to Home");
+  await leaveLearningViaNavigation(page, "Home");
   await expect(page).toHaveURL(/\/$/);
 
   await figmaSession.click();
   await expect(page).toHaveURL(
     /\/learn\/figma-ui-essentials\/[^/?]+\?from=wishlist$/,
   );
-  await clickLearningBack(page, "Return to Wishlist");
+  await leaveLearningViaNavigation(page, "Wishlist");
   await expect(page).toHaveURL(/\/wishlist$/);
 });
 
@@ -755,7 +758,7 @@ test("listing searches survive opening a player and returning explicitly", async
     .filter({ hasText: "The Ultimate TypeScript Course" })
     .getByRole("button", { name: "Continue Learning" })
     .click();
-  await clickLearningBack(page, "Return to Courses");
+  await leaveLearningViaNavigation(page, "Courses");
   await expect(page.getByPlaceholder("Search courses...")).toHaveValue(
     "TypeScript",
   );
@@ -776,7 +779,7 @@ test("listing searches survive opening a player and returning explicitly", async
       name: "Play free preview for Figma UI Essentials",
     })
     .click();
-  await clickLearningBack(page, "Return to Wishlist");
+  await leaveLearningViaNavigation(page, "Wishlist");
   await expect(page.getByPlaceholder("Search courses...")).toHaveValue("Figma");
 });
 
@@ -796,7 +799,7 @@ test("direct course player links return to Courses by default", async ({
       .getByRole("region", { name: "Learning Space" })
       .getByRole("button", { name: /Open UI\/UX Design Mastery/ }),
   ).toHaveAttribute("aria-current", "page");
-  await clickLearningBack(page, "Return to Courses");
+  await leaveLearningViaNavigation(page, "Courses");
   await expect(page).toHaveURL(/\/courses$/);
 });
 
@@ -816,7 +819,7 @@ test("course overview launches return to the exact source URL", async ({
     );
   });
 
-  await clickLearningBack(page, "Return to Course Overview");
+  await page.goBack();
   await expect(page).toHaveURL((url) => {
     return `${url.pathname}${url.search}${url.hash}` === sourcePath;
   });
@@ -832,7 +835,7 @@ test("learning Back preserves validated source query and hash values", async ({
   });
   await openApp(page, `/learn/typescript-course?${search.toString()}`);
 
-  await clickLearningBack(page, "Return to the previous page");
+  await page.goBack();
   await expect(page).toHaveURL((url) => {
     return `${url.pathname}${url.search}${url.hash}` === sourcePath;
   });

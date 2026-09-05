@@ -61,6 +61,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { access, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
+  const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
 
   useEffect(() => {
@@ -95,7 +96,10 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
-  if (pending || shouldBlockAcademyRender(path, access)) {
+  if (
+    (pending && authenticationRequired) ||
+    shouldBlockAcademyRender(path, access)
+  ) {
     return <AppLoadingScreen />;
   }
 

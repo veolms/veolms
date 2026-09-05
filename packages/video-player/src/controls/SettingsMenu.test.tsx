@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialVideoEngineSnapshot } from "../core/snapshot";
 import type { PlayerController } from "../react/PlayerController";
+import { PlayerInteractionModeProvider } from "../react/PlayerInteractionMode";
 import { PlayerControllerContext } from "../react/context";
 import {
   createInitialPlayerUiState,
@@ -48,7 +49,15 @@ describe("SettingsMenu playback speed", () => {
     expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
       "backdrop-blur-sm",
       "!mb-8",
+      "bottom-full",
     );
+  });
+
+  it("opens below the trigger when side is bottom", () => {
+    renderPlaybackRateSettings("main", false, "bottom");
+    const menu = screen.getByRole("menu", { name: "Video settings" });
+    expect(menu).toHaveClass("top-full", "mt-2", "backdrop-blur-sm");
+    expect(menu).not.toHaveClass("bottom-full", "!mb-8");
   });
 
   it("offers exactly the compact quick-speed presets", () => {
@@ -67,6 +76,46 @@ describe("SettingsMenu playback speed", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
 
     expect(setPlaybackRate).toHaveBeenCalledWith(3);
+  });
+
+  it("keeps the mobile settings sheet open after choosing a playback speed", () => {
+    const { setPlaybackRate, setSettingsView } = renderPlaybackRateSettings(
+      "playback-rate",
+      true,
+    );
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
+
+    expect(setPlaybackRate).toHaveBeenCalledWith(3);
+    expect(setSettingsView).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Video settings" }),
+    ).toBeVisible();
+  });
+
+  it("keeps the mobile settings sheet open after choosing a quality", () => {
+    const { selectQuality, setSettingsView } = renderPlaybackRateSettings(
+      "quality",
+      true,
+    );
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "1080p" }));
+
+    expect(selectQuality).toHaveBeenCalledWith("1080");
+    expect(setSettingsView).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Video settings" }),
+    ).toBeVisible();
+  });
+
+  it("still dismisses desktop settings after choosing a quality", () => {
+    const { selectQuality, setSettingsView } =
+      renderPlaybackRateSettings("quality");
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "1080p" }));
+
+    expect(selectQuality).toHaveBeenCalledWith("1080");
+    expect(setSettingsView).toHaveBeenCalledWith("closed");
   });
 
   it("opens captions from the main settings menu", () => {
@@ -195,11 +244,23 @@ describe("SettingsMenu playback speed", () => {
 
 function renderPlaybackRateSettings(
   settingsView: PlayerSnapshot["ui"]["settingsView"] = "playback-rate",
+  mobileSheet = false,
+  side?: "top" | "bottom",
 ) {
   const snapshot: PlayerSnapshot = {
     media: {
       ...createInitialVideoEngineSnapshot(),
       playbackRate: 1.25,
+      qualities: [
+        {
+          id: "1080",
+          label: "1080p",
+          active: false,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+        },
+      ],
       textTracks: [
         {
           id: "captions-en",
@@ -228,11 +289,13 @@ function renderPlaybackRateSettings(
     markers: [],
   };
   const setPlaybackRate = vi.fn<(rate: number) => void>();
+  const selectQuality = vi.fn<(qualityId: string | null) => void>();
   const selectTextTrack = vi.fn<(trackId: string | null) => void>();
   const setSettingsView =
     vi.fn<(view: PlayerSnapshot["ui"]["settingsView"]) => void>();
   const controller = {
     getSnapshot: () => snapshot,
+    selectQuality,
     selectTextTrack,
     subscribe: () => () => undefined,
     setPlaybackRate,
@@ -241,9 +304,20 @@ function renderPlaybackRateSettings(
 
   const { unmount } = render(
     <PlayerControllerContext.Provider value={controller}>
-      <SettingsMenu />
+      <PlayerInteractionModeProvider mobile={mobileSheet}>
+        <SettingsMenu
+          mobilePresentation={mobileSheet ? "sheet" : "popover"}
+          side={side}
+        />
+      </PlayerInteractionModeProvider>
     </PlayerControllerContext.Provider>,
   );
 
-  return { selectTextTrack, setPlaybackRate, setSettingsView, unmount };
+  return {
+    selectQuality,
+    selectTextTrack,
+    setPlaybackRate,
+    setSettingsView,
+    unmount,
+  };
 }

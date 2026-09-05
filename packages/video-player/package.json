@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./shaka": "./src/engines/shaka/index.ts",
+    "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
     "./styles.css": "./src/styles/player.css",
     "./testing": "./src/testing/index.ts"
   },

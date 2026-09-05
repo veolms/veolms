@@ -351,6 +351,15 @@ export const getEffectiveRouteId = (
 ): string => {
   const normalizedPath = normalizeNavigationPath(pathname);
 
+  if (routeId === "settings") {
+    if (normalizedPath === "/settings") return routeId;
+    const match =
+      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account)$/.exec(
+        normalizedPath,
+      );
+    return match?.[1] ? `settings-${match[1]}` : "home-fallback";
+  }
+
   if (routeId === "learning" || routeId === "legacy-learning") {
     const routePrefix = routeId === "learning" ? "learn" : "courses";
     const match = new RegExp(`^/${routePrefix}/([^/]+)(?:/([^/]+))?$`).exec(

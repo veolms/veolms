@@ -48,6 +48,7 @@
   box-shadow: var(--video-player-control-shadow, none) !important;
 }
 
+.video-shell [data-timeline-track],
 [data-video-player-root] [data-timeline-track] {
   background: var(
     --video-player-timeline-track,
@@ -55,11 +56,17 @@
   ) !important;
 }
 
+.video-shell [data-timeline-buffered-range],
 [data-video-player-root] [data-timeline-buffered-range] {
   background: var(
     --video-player-timeline-buffered,
     rgb(255 255 255 / 0.46)
   ) !important;
+}
+
+.video-shell [data-timeline-progress],
+.video-shell [data-timeline-thumb] {
+  background: var(--video-player-accent, #ff7a1a);
 }
 
 [data-video-player-root] [data-video-player-controls] {
@@ -87,7 +94,7 @@
   ) !important;
 }
 
-[data-video-player-root] [data-autoplay-track] {
+[data-player-theme] [data-autoplay-track] {
   background: color-mix(
     in srgb,
     var(--video-player-control-text) 28%,
@@ -96,15 +103,69 @@
   border: 0 !important;
 }
 
-[data-video-player-root]
+[data-player-theme]
   [role="switch"][aria-checked="true"]
   [data-autoplay-track] {
   background: rgb(255 255 255 / 0.56) !important;
 }
 
-[data-video-player-root] [data-autoplay-knob] {
+:root[data-player-autoplay="off"] [data-player-theme] [data-autoplay-track] {
+  background: color-mix(
+    in srgb,
+    var(--video-player-control-text) 28%,
+    transparent
+  ) !important;
+}
+
+:root[data-player-autoplay="on"] [data-player-theme] [data-autoplay-track] {
+  background: rgb(255 255 255 / 0.56) !important;
+}
+
+[data-player-theme] [data-autoplay-knob] {
   background: var(--video-player-control-text) !important;
   color: var(--video-player-accent-contrast) !important;
+}
+
+:root[data-player-autoplay="off"] [data-player-theme] [data-autoplay-knob] {
+  left: -0.125rem !important;
+  background: rgb(255 255 255 / 0.42) !important;
+  color: #fff !important;
+}
+
+:root[data-player-autoplay="on"] [data-player-theme] [data-autoplay-knob] {
+  left: 0.875rem !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+@media (min-width: 40.0625rem) {
+  :root[data-player-autoplay="on"] [data-player-theme] [data-autoplay-knob] {
+    left: 1.125rem !important;
+  }
+
+  :root[data-player-autoplay="on"]
+    [data-player-theme][data-player-mobile-interaction="true"]
+    [data-autoplay-knob] {
+    left: 0.875rem !important;
+  }
+}
+
+:root[data-player-autoplay="off"] [data-autoplay-icon="on"],
+:root[data-player-autoplay="on"] [data-autoplay-icon="off"] {
+  display: none !important;
+}
+
+:root[data-player-autoplay="off"] [data-autoplay-icon="off"],
+:root[data-player-autoplay="on"] [data-autoplay-icon="on"] {
+  display: grid !important;
+}
+
+:root[data-player-muted="true"] [data-mute-icon="sound"] {
+  display: none !important;
+}
+
+:root[data-player-muted="true"] [data-mute-icon="muted"] {
+  display: contents !important;
 }
 
 [data-video-player-menu-panel] {
