@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CourseOverviewResponse } from "@veolms/contracts";
 import { getCourseRouteKey } from "../../src/courses/catalogue";
 import {
+  canPlayCourseLesson,
   getPublicPreviewLessonNumbers,
   PUBLIC_PREVIEW_LESSON_LIMIT,
 } from "../../src/learning/coursePlayerAccess";
@@ -16,6 +17,40 @@ const overviewWithLessons = (sections: CourseOverviewResponse["sections"]) =>
   }) as CourseOverviewResponse;
 
 describe("public course access", () => {
+  it("allows every lesson while guest learning is enabled", () => {
+    const publicPreviewLessonNumbers = new Set([1, 2]);
+
+    expect(
+      canPlayCourseLesson({
+        allowGuestLearning: true,
+        isAuthenticated: false,
+        lessonNumber: 87,
+        publicPreviewLessonNumbers,
+      }),
+    ).toBe(true);
+  });
+
+  it("retains preview-only access when guest learning is disabled", () => {
+    const publicPreviewLessonNumbers = new Set([1, 2]);
+
+    expect(
+      canPlayCourseLesson({
+        allowGuestLearning: false,
+        isAuthenticated: false,
+        lessonNumber: 2,
+        publicPreviewLessonNumbers,
+      }),
+    ).toBe(true);
+    expect(
+      canPlayCourseLesson({
+        allowGuestLearning: false,
+        isAuthenticated: false,
+        lessonNumber: 3,
+        publicPreviewLessonNumbers,
+      }),
+    ).toBe(false);
+  });
+
   it("uses the course slug for public links and falls back to the ID", () => {
     expect(
       getCourseRouteKey({

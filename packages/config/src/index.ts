@@ -34,12 +34,29 @@ const serverConfigSchema = z.object({
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
   API_PUBLIC_URL: z.string().optional(),
+  TRUST_PROXY: z
+    .string()
+    .default("false")
+    .transform((val) => {
+      const trimmed = val.trim().toLowerCase();
+      if (trimmed === "true") return true;
+      if (trimmed === "false") return false;
+      const num = Number(trimmed);
+      if (Number.isFinite(num) && Number.isInteger(num) && num > 0) {
+        return num;
+      }
+      if (trimmed.includes(",")) {
+        return trimmed.split(",").map((s) => s.trim());
+      }
+      return val.trim();
+    }),
 
   // Auth Configs
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters")
     .default("default_session_secret_at_least_32_chars_long"),
+  SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   MFA_ENCRYPTION_KEY: z
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
@@ -97,6 +114,12 @@ const serverConfigSchema = z.object({
     .default(30),
 
   // SMS Delivery
+  SMS_PROVIDER: z
+    .enum(["auto", "msg91", "vonage", "twilio", "console"])
+    .default("auto"),
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_TEMPLATE_ID: z.string().optional(),
+  MSG91_API_URL: z.string().default("https://control.msg91.com/api/v5/flow"),
   SMS_PRIMARY_URL: z.string().default("https://api.nexmo.com/v1/messages"),
   SMS_PRIMARY_KEY: z.string().optional(),
   SMS_PRIMARY_SECRET: z.string().optional(),

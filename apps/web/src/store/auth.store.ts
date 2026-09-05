@@ -9,24 +9,12 @@ export interface AuthState {
   isLoading: boolean;
 }
 
-const STORAGE_KEY = "veolms-auth-user";
-
-function getInitialUser(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-const initialUser = getInitialUser();
-
 let state: AuthState = {
-  user: initialUser,
-  isAuthenticated: Boolean(initialUser),
+  // The session cookie and `/auth/me` are the source of truth. Persisting the
+  // complete user object here made stale RBAC menus survive a reload and could
+  // briefly render another account's sidebar before the session was checked.
+  user: null,
+  isAuthenticated: false,
   isLoading: false,
 };
 
@@ -59,11 +47,7 @@ export const authStore = {
     };
     if (typeof window !== "undefined") {
       try {
-        if (user) {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-        } else {
-          window.localStorage.removeItem(STORAGE_KEY);
-        }
+        window.localStorage.removeItem("veolms-auth-user");
       } catch {
         // ignore storage errors
       }
@@ -88,7 +72,9 @@ export const authStore = {
     };
     if (typeof window !== "undefined") {
       try {
-        window.localStorage.removeItem(STORAGE_KEY);
+        // Remove the legacy cache so older builds cannot reintroduce stale
+        // user/role/menu state if the account is opened again.
+        window.localStorage.removeItem("veolms-auth-user");
       } catch {
         // ignore storage errors
       }

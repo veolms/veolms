@@ -85,7 +85,7 @@ afterEach(() => {
 });
 
 describe("Learning Space trigger", () => {
-  it("resumes the most recently active session and briefly shows its panel", async () => {
+  it("opens the panel without navigating to the most recent session", async () => {
     const onActivate = vi.fn();
     const onExpandedChange = vi.fn();
     render(
@@ -103,19 +103,15 @@ describe("Learning Space trigger", () => {
       { detail: 1 },
     );
 
-    expect(onActivate).toHaveBeenCalledWith(sessions[1]);
+    expect(onActivate).not.toHaveBeenCalled();
     expect(
       screen.getByRole("region", { name: "Learning Space" }),
     ).toBeVisible();
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(800);
-    });
-
-    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
     expect(
-      screen.queryByRole("region", { name: "Learning Space" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("region", { name: "Learning Space" }),
+    ).toBeVisible();
   });
 
   it("keeps the panel open when the pointer reaches it", async () => {
@@ -159,14 +155,14 @@ describe("Learning Space trigger", () => {
       name: "Learning Space, 3 active sessions",
     });
     fireEvent.click(trigger, { detail: 1 });
-    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(onActivate).not.toHaveBeenCalled();
     expect(
       screen.getByRole("region", { name: "Learning Space" }),
     ).toBeVisible();
 
     fireEvent.click(trigger, { detail: 1 });
 
-    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(onActivate).not.toHaveBeenCalled();
     expect(onExpandedChange).toHaveBeenLastCalledWith(false);
     expect(
       screen.queryByRole("region", { name: "Learning Space" }),
@@ -192,7 +188,7 @@ describe("Learning Space trigger", () => {
     ).toBeVisible();
 
     fireEvent.click(trigger, { detail: 1 });
-    expect(onActivate).toHaveBeenCalledWith(sessions[1]);
+    expect(onActivate).not.toHaveBeenCalled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);

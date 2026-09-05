@@ -21,6 +21,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   const requireAuthenticated = [
     authMiddleware.authenticate,
     authMiddleware.requireAuthenticated,
+    authMiddleware.requireMfaVerified,
   ];
 
   const service = createMediaService({
@@ -90,6 +91,28 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       preHandler: requireAuthenticated,
     },
     controller.getVideoJobProgress,
+  );
+
+  app.get(
+    "/media/:mediaId",
+    {
+      schema: {
+        operationId: "getMediaAssetStream",
+        tags: ["Media"],
+        summary: "Stream media file content by media ID",
+        params: z.object({ mediaId: z.string().uuid() }),
+        response: {
+          404: errorResponse("Media or file not found"),
+        },
+      },
+      // Not requireAuthenticated: published-course thumbnails/trailers must
+      // stay servable to anonymous visitors on public marketing pages.
+      // `authenticate` alone populates request.user when a session cookie
+      // is present, without rejecting anonymous requests — the service
+      // layer then enforces ownership for anything non-public.
+      preHandler: [authMiddleware.authenticate],
+    },
+    controller.getMediaAssetStream,
   );
 };
 

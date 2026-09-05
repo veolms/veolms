@@ -7,6 +7,14 @@ import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+
+try {
+  process.loadEnvFile(path.join(workspaceRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+
 const root = path.resolve(scriptDirectory, "../build/client");
 const portArgumentIndex = process.argv.indexOf("--port");
 const commandLinePort =
@@ -26,6 +34,13 @@ const apiTargetValue =
     : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
 const apiTarget = new URL(apiTargetValue);
 const apiOrigin = apiTarget.origin;
+const mediaTargetArgumentIndex = process.argv.indexOf("--media-target");
+const mediaTargetValue =
+  mediaTargetArgumentIndex >= 0 && process.argv[mediaTargetArgumentIndex + 1]
+    ? process.argv[mediaTargetArgumentIndex + 1]
+    : process.env.VITE_COURSE_MEDIA_BASE_URL || "https://dev.veolms.org";
+const mediaTarget = new URL(mediaTargetValue);
+const mediaOrigin = mediaTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -62,10 +77,16 @@ const resolveRequestPath = async (pathname) => {
   return path.join(root, "index.html");
 };
 
-const proxyApiRequest = (request, response, requestUrl) => {
+const proxyRequestToOrigin = (
+  request,
+  response,
+  requestUrl,
+  targetOrigin,
+  unavailableError,
+) => {
   const targetUrl = new URL(
     `${requestUrl.pathname}${requestUrl.search}`,
-    apiOrigin,
+    targetOrigin,
   );
   const sendRequest =
     targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
@@ -98,10 +119,7 @@ const proxyApiRequest = (request, response, requestUrl) => {
       JSON.stringify({
         success: false,
         statusCode: 502,
-        error: {
-          code: "API_UNAVAILABLE",
-          message: "The preview server could not reach the API.",
-        },
+        error: unavailableError,
       }),
     );
   });
@@ -119,7 +137,20 @@ createServer(async (request, response) => {
     requestUrl.pathname === "/api" ||
     requestUrl.pathname.startsWith("/api/")
   ) {
-    proxyApiRequest(request, response, requestUrl);
+    proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
+      code: "API_UNAVAILABLE",
+      message: "The preview server could not reach the API.",
+    });
+    return;
+  }
+  if (
+    requestUrl.pathname === "/course-hls" ||
+    requestUrl.pathname.startsWith("/course-hls/")
+  ) {
+    proxyRequestToOrigin(request, response, requestUrl, mediaOrigin, {
+      code: "COURSE_MEDIA_UNAVAILABLE",
+      message: "The preview server could not reach the course media origin.",
+    });
     return;
   }
 

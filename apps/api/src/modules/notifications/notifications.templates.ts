@@ -137,6 +137,12 @@ export function renderNotificationTemplate(
         body: "A signed-in session was revoked from your account.",
       };
       break;
+    case "auth.account_deactivated":
+      inApp = {
+        title: "Account deactivated",
+        body: "Your VeoLMS account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.",
+      };
+      break;
     case "user.mentioned":
       inApp = {
         title: `${stringValue(data, "actorName")} mentioned you`,
@@ -147,6 +153,42 @@ export function renderNotificationTemplate(
       inApp = {
         title: "Certificate ready",
         body: `Your certificate for ${stringValue(data, "courseTitle")} is ready.`,
+      };
+      break;
+    case "discussion.reply_created":
+      inApp = {
+        title: `New reply on ${stringValue(data, "threadTitle")}`,
+        body: `${stringValue(data, "actorName")}: ${stringValue(data, "replySnippet")}`,
+      };
+      break;
+    case "discussion.answer_accepted":
+      inApp = {
+        title: "Your answer was accepted!",
+        body: `${stringValue(data, "actorName")} accepted your answer on "${stringValue(data, "threadTitle")}".`,
+      };
+      break;
+    case "moderation.content_moderated":
+      inApp = {
+        title: "Content moderation update",
+        body: `Your ${stringValue(data, "contentType")} was ${stringValue(data, "action")}${data.reason ? `: ${stringValue(data, "reason")}` : "."}`,
+      };
+      break;
+    case "moderation.user_suspended":
+      inApp = {
+        title: "Discussion participation suspended",
+        body: `Your participation for ${stringValue(data, "scope")} has been suspended. Reason: ${stringValue(data, "reason")}`,
+      };
+      break;
+    case "moderation.user_unsuspended":
+      inApp = {
+        title: "Discussion suspension lifted",
+        body: "Your participation suspension has been lifted.",
+      };
+      break;
+    case "moderation.report_resolved":
+      inApp = {
+        title: "Update on your report",
+        body: `Your report regarding a ${stringValue(data, "targetType")} has been ${stringValue(data, "status")}${data.actionTaken ? ` (action: ${stringValue(data, "actionTaken")})` : "."}`,
       };
       break;
   }

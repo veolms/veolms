@@ -50,13 +50,38 @@ export function resolveCourseVideoSrc(
   return `${baseUrl.replace(/\/+$/, "")}/${encodeURIComponent(fileName)}`;
 }
 
+export function resolveCourseHlsBaseUrl(configuredBaseUrl?: string) {
+  const normalizedBaseUrl = configuredBaseUrl?.trim().replace(/\/+$/, "");
+  return normalizedBaseUrl ? `${normalizedBaseUrl}/course-hls` : "/course-hls";
+}
+
+export const courseHlsBaseUrl = resolveCourseHlsBaseUrl();
+
+export function getCourseVideoHlsSlug(fileName: string) {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function resolveCourseHlsSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/${getCourseVideoHlsSlug(fileName)}/master.m3u8`;
+}
+
 const courseVideo = (fileName: string, duration: number): CourseVideo => ({
   fileName,
   duration,
-  src: resolveCourseVideoSrc(fileName),
+  src: resolveCourseHlsSrc(fileName),
 });
 
 export const courseVideos: CourseVideo[] = [
+  courseVideo("The Complete JavaScript Course Trailer.mp4", 454.9),
   courseVideo("04 ui design system and storybook.mp4", 2090.61),
   courseVideo("00 welcome to the typescript course.mp4", 103.05),
   courseVideo("03 the idea of veolms.mp4", 699.94),
@@ -68,16 +93,16 @@ export const courseVideos: CourseVideo[] = [
 ];
 
 const sourceLessonVideos = [
-  courseVideos[4]!,
-  courseVideos[1]!,
-  courseVideos[7]!,
   courseVideos[0]!,
-  courseVideos[5]!,
   courseVideos[2]!,
+  courseVideos[8]!,
+  courseVideos[1]!,
   courseVideos[6]!,
   courseVideos[3]!,
-  courseVideos[0]!,
-  courseVideos[2]!,
+  courseVideos[7]!,
+  courseVideos[4]!,
+  courseVideos[1]!,
+  courseVideos[3]!,
 ];
 
 const repeatedSectionLessonCounts = [6, 7, 8, 5, 5];

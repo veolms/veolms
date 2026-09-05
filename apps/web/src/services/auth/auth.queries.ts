@@ -1,23 +1,27 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { CurrentUserResponse, SessionResponse } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
 
-export function useCurrentUser() {
-  const queryClient = useQueryClient();
-
-  return useQuery<CurrentUserResponse, ApiError>({
+export function currentUserQueryOptions(queryClient: QueryClient) {
+  return {
     queryKey: authKeys.me(),
-    queryFn: async () => {
+    queryFn: async (): Promise<CurrentUserResponse> => {
       const generation = authStore.getWriteGeneration();
       const profile = await authService.getMe();
 
       if (generation !== authStore.getWriteGeneration()) {
+        // A logout/login write happened while this request was in flight.
+        // Never let the old response restore a signed-out (or previous)
+        // account. The mutation that changed auth state owns the cache now.
         return (
-          queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ??
-          profile
+          queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null
         );
       }
 
@@ -31,7 +35,15 @@ export function useCurrentUser() {
     },
     staleTime: 5 * 60 * 1000,
     retry: false,
-  });
+  };
+}
+
+export function useCurrentUser() {
+  const queryClient = useQueryClient();
+
+  return useQuery<CurrentUserResponse, ApiError>(
+    currentUserQueryOptions(queryClient),
+  );
 }
 
 export function useSessions(options?: { enabled?: boolean }) {

@@ -55,6 +55,10 @@ export const authSessionRevokedEventSchema = z.strictObject({
   sessionId: z.uuid(),
 });
 
+export const authAccountDeactivatedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+});
+
 export const userMentionedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   actorName: z.string().min(1).max(255),
@@ -70,4 +74,53 @@ export const certificateGeneratedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   courseTitle: z.string().min(1).max(255),
   certificateId: z.uuid(),
+});
+
+export const discussionReplyCreatedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  actorName: z.string().min(1).max(255),
+  threadTitle: z.string().min(1).max(255),
+  replySnippet: z.string().min(1).max(1000),
+  deepLink: z
+    .string()
+    .min(1)
+    .max(1000)
+    .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+});
+
+export const discussionAnswerAcceptedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  actorName: z.string().min(1).max(255),
+  threadTitle: z.string().min(1).max(255),
+  deepLink: z
+    .string()
+    .min(1)
+    .max(1000)
+    .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+});
+
+export const moderationContentModeratedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  contentType: z.enum(["thread", "reply"]),
+  action: z.string().min(1).max(50),
+  reason: z.string().max(1000).optional().nullable(),
+});
+
+export const moderationUserSuspendedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  scope: z.string().min(1).max(50),
+  reason: z.string().min(1).max(1000),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export const moderationUserUnsuspendedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  reason: z.string().max(1000).optional().nullable(),
+});
+
+export const moderationReportResolvedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  targetType: z.string().min(1).max(50),
+  status: z.string().min(1).max(50),
+  actionTaken: z.string().max(500).optional().nullable(),
 });
