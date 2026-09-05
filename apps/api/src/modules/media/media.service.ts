@@ -27,46 +27,172 @@ function isUniqueViolation(err: unknown): boolean {
     (err as { code?: unknown }).code === "23505"
   );
 }
-
 export function createMediaService({
   database,
   services,
 }: MediaServiceOptions) {
   /**
+   * HELPER: Creates a presigned upload response from media record.
+   * Generates a presigned PUT URL for the client to upload the file directly to S3.
+   */
+  async function createPresignedUploadResponse(media: {
+    id: string;
+    storage_key: string;
+    mime_type: string;
+    size_bytes: string | number;
+  }) {
+    const uploadUrl = await services.storage.getPresignedPutUrl(
+      media.storage_key,
+      media.mime_type,
+      Number(media.size_bytes),
+    );
+
+    return {
+      uploadUrl,
+      mediaAssetId: media.id,
+    };
+  }
+
+  /**
+   * HELPER: Validates that a reused idempotency key belongs to the same request.
+   * Prevents accidental misuse where a client tries to reuse a key with different parameters.
+   * Throws 409 CONFLICT if the payload doesn't match the original request.
+   */
+  function validateSameUpload(
+    existingMedia: {
+      original_filename: string;
+      mime_type: string;
+      size_bytes: string | number;
+      type: string;
+    },
+    incomingPayload: PresignMediaRequest,
+  ) {
+    const isSameUpload =
+      existingMedia.original_filename === incomingPayload.filename &&
+      existingMedia.mime_type === incomingPayload.contentType &&
+      Number(existingMedia.size_bytes) === incomingPayload.fileSize &&
+      existingMedia.type === incomingPayload.type;
+
+    if (!isSameUpload) {
+      throw new AppError(
+        409,
+        "IDEMPOTENCY_KEY_REUSED",
+        "The idempotency key was already used for a different upload. Please use a new idempotency key.",
+      );
+    }
+  }
+
+  /**
    * Pre-signs an S3/storage upload URL for media asset creation.
+   *
+   * IDEMPOTENCY IMPLEMENTATION (REQUIRED):
+   * - Idempotency key is mandatory for all requests to prevent duplicate uploads
+   * - Checks database for prior request with same key
+   * - Validates that reused key has identical payload (filename, size, type, mime type)
+   * - Returns cached result if key + payload match
+   *
+   * RACE CONDITION HANDLING:
+   * - Uses database unique constraint: (owner_id, idempotency_key)
+   * - If concurrent requests with same key arrive simultaneously:
+   *   1. Both attempt INSERT
+   *   2. Database rejects second with unique constraint violation
+   *   3. Second request catches the error and retries lookup
+   *   4. Second request validates payload and returns winner's result
+   * - This prevents duplicate media assets and URLs from race conditions
+   *
+   * SAFETY GUARANTEES:
+   * - Multiple requests with same key always return same result
+   * - Prevents accidental payload mismatches with idempotency key reuse
+   * - Safe under high concurrency due to database constraint
+   * - Idempotency key is always stored, never null
    */
   async function presignMediaUpload(
     ownerId: string,
     payload: PresignMediaRequest,
+    idempotencyKey: string,
   ) {
-    const mediaId = crypto.randomUUID();
-    const ext = payload.filename.includes(".")
-      ? payload.filename.split(".").pop()
-      : "";
-    const storageKey = `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
-
-    const uploadUrl = await services.storage.getPresignedPutUrl(
-      storageKey,
-      payload.contentType,
-      payload.fileSize,
+    // STEP 1: Check if this idempotency key was already processed
+    const existingMedia = await mediaRepo.findMediaAssetByIdempotencyKey(
+      database,
+      ownerId,
+      idempotencyKey,
     );
 
-    await mediaRepo.insertMediaAsset(database, {
+    if (existingMedia) {
+      // Validate that the reused key has the same payload
+      validateSameUpload(existingMedia, payload);
+      if (existingMedia.status !== "uploading") {
+        throw new AppError(
+          409,
+          "IDEMPOTENCY_KEY_ALREADY_USED",
+          "This idempotency key has already been used and the upload can no longer be restarted.",
+        );
+      }
+      // Return the previously generated presigned URL
+      return createPresignedUploadResponse(existingMedia);
+    }
+
+    // STEP 2: New request - need to create new media asset
+    const mediaId = crypto.randomUUID();
+
+    // Extract file extension and normalize to lowercase
+    const extension = payload.filename.includes(".")
+      ? payload.filename.split(".").pop()?.toLowerCase()
+      : undefined;
+
+    const storageKey =
+      `media/${ownerId}/${mediaId}` + (extension ? `.${extension}` : "");
+
+    // STEP 3: Attempt to insert media asset
+    // Using try-catch to handle race conditions where concurrent requests
+    // try to insert with the same idempotency key
+    try {
+      await mediaRepo.insertMediaAsset(database, {
+        id: mediaId,
+        owner_id: ownerId,
+        type: payload.type,
+        storage_provider: "s3",
+        storage_key: storageKey,
+        original_filename: payload.filename,
+        mime_type: payload.contentType,
+        size_bytes: payload.fileSize,
+        status: "uploading",
+        idempotency_key: idempotencyKey,
+      });
+    } catch (error) {
+      // RACE CONDITION RECOVERY:
+      // If we hit the unique constraint, another concurrent request inserted first.
+      // Retry the lookup and return the winner's result.
+      if (isUniqueViolation(error)) {
+        const concurrentWinner = await mediaRepo.findMediaAssetByIdempotencyKey(
+          database,
+          ownerId,
+          idempotencyKey,
+        );
+
+        if (!concurrentWinner) {
+          // Constraint error but can't find the media - something went wrong
+          throw error;
+        }
+
+        // Double-check the payload matches (extra safety)
+        validateSameUpload(concurrentWinner, payload);
+
+        // Return the concurrent winner's presigned URL
+        return createPresignedUploadResponse(concurrentWinner);
+      }
+
+      // Not a constraint error, re-throw
+      throw error;
+    }
+
+    // STEP 4: Success - return presigned URL for the newly created media
+    return createPresignedUploadResponse({
       id: mediaId,
-      owner_id: ownerId,
-      type: payload.type,
-      storage_provider: "s3",
       storage_key: storageKey,
-      original_filename: payload.filename,
       mime_type: payload.contentType,
       size_bytes: payload.fileSize,
-      status: "uploading",
     });
-
-    return {
-      uploadUrl,
-      mediaAssetId: mediaId,
-    };
   }
 
   /**

@@ -15,6 +15,7 @@ export interface MediaAssetTable {
   height: number | null;
   duration_seconds: number | null;
   status: MediaAssetStatus;
+  idempotency_key: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

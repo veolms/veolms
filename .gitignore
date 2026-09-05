@@ -12,3 +12,4 @@ build/
 s3-bucket/
 dist/
 scratch/
+.md

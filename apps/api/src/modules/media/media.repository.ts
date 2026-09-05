@@ -59,6 +59,19 @@ export async function deleteMediaAssets(
     .execute();
 }
 
+export async function findMediaAssetByIdempotencyKey(
+  database: Kysely<Database>,
+  ownerId: string,
+  idempotencyKey: string,
+) {
+  return await database
+    .selectFrom("media_assets")
+    .selectAll()
+    .where("owner_id", "=", ownerId)
+    .where("idempotency_key", "=", idempotencyKey)
+    .executeTakeFirst();
+}
+
 export async function insertMediaAsset(
   database: Kysely<Database>,
   values: {
@@ -71,6 +84,7 @@ export async function insertMediaAsset(
     mime_type: string;
     size_bytes: number;
     status: MediaAssetStatus;
+    idempotency_key: string;
   },
 ) {
   await database.insertInto("media_assets").values(values).execute();

@@ -118,6 +118,11 @@ export const mediaAssetSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const idempotencyHeadersSchema = z.object({
+  "idempotency-key": z.uuid({
+    message: "Idempotency-Key header must be a valid UUID",
+  }),
+});
 export const presignMediaRequestSchema = z
   .object({
     filename: z.string().min(1),

@@ -4,6 +4,7 @@ import {
   presignMediaResponseSchema,
   mediaAssetStatusSchema,
   videoJobProgressResponseSchema,
+  idempotencyHeadersSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -38,11 +39,15 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         tags: ["Media"],
         summary: "Obtain pre-signed upload URL for files",
         body: presignMediaRequestSchema,
+        headers: idempotencyHeadersSchema,
         response: {
           200: jsonResponse(
             "Pre-signed upload response",
             presignMediaResponseSchema,
           ),
+          400: errorResponse(
+          "A valid Idempotency-Key header is required",
+        ),
         },
       },
       preHandler: requireAuthenticated,
