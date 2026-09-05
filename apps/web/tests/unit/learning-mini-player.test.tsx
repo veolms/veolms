@@ -7,7 +7,13 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LearningMiniPlayer } from "../../src/learning/player/LearningMiniPlayer.js";
+import { lessonPlayerStorageKeys } from "../../src/learning/player/lessonPlayerPersistence.js";
+import {
+  getLearningMiniPlayerHeight,
+  LEARNING_MINI_PLAYER_DESKTOP_INFO_BAR_HEIGHT,
+} from "../../src/learning/player/learningPlayerMotion.js";
 import type { LearningMiniPlayerSession } from "../../src/learning/player/learningMiniPlayerTypes.js";
+import * as learningMiniPlayerStore from "../../src/learning/player/learningMiniPlayerStore.js";
 
 const videoPlayerMock = vi.hoisted(() => ({
   currentTime: 42,
@@ -98,10 +104,12 @@ vi.mock("@veolms/video-player", async () => {
     ),
     PlayerIconButton: ({
       className,
+      icon,
       label,
       onClick,
     }: {
       className?: string;
+      icon?: React.ReactNode;
       label: string;
       onClick: () => void;
     }) => (
@@ -110,12 +118,46 @@ vi.mock("@veolms/video-player", async () => {
         className={className}
         type="button"
         onClick={onClick}
+      >
+        {icon}
+      </button>
+    ),
+    Timeline: ({
+      ariaLabel,
+      className,
+      showPreview,
+    }: {
+      ariaLabel?: string;
+      className?: string;
+      showPreview?: boolean;
+    }) => (
+      <div
+        role="slider"
+        aria-label={ariaLabel}
+        className={className}
+        data-show-preview={String(showPreview)}
       />
     ),
     VideoPlayer,
-    usePlayerTheme: () => ({
-      icons: { close: () => <svg aria-hidden="true" /> },
+    TimeDisplay: () => <span data-testid="time-display">0:00 / 0:00</span>,
+    usePlayerController: () => ({
+      togglePlayback: vi.fn(),
+      setControlsVisible: vi.fn(),
     }),
+    usePlayerTheme: () => ({
+      icons: {
+        close: () => <svg aria-hidden="true" />,
+        pictureInPicture: () => <svg aria-hidden="true" />,
+      },
+    }),
+    usePlayerState: <Selected,>(
+      selector: (snapshot: {
+        media: { lifecycle: "ready"; paused: boolean; ended: boolean };
+      }) => Selected,
+    ) =>
+      selector({
+        media: { lifecycle: "ready", paused: false, ended: false },
+      }),
   };
 });
 
@@ -285,6 +327,114 @@ describe("LearningMiniPlayer gestures", () => {
     expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
   });
 
+  it("restacks the mini player above document fullscreen", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    popoverLifecycleMock.show.mockClear();
+    popoverLifecycleMock.hide.mockClear();
+
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+
+    expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
+    expect(popoverLifecycleMock.show).toHaveBeenCalledWith(miniPlayer);
+    expect(miniPlayer).toHaveAttribute("data-test-popover-open", "true");
+  });
+
+  it("provides invisible resize targets for every edge and corner, including the bottom", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    const handles = Array.from(
+      miniPlayer.querySelectorAll<HTMLElement>(
+        "[data-mini-player-resize-handle]",
+      ),
+    );
+
+    expect(
+      handles.map((handle) => handle.dataset.miniPlayerResizeHandle),
+    ).toEqual(["n", "ne", "e", "se", "s", "sw", "w", "nw"]);
+    expect(handles).toHaveLength(8);
+    expect(
+      handles.every((handle) => handle.getAttribute("aria-hidden") === "true"),
+    ).toBe(true);
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "n"),
+    ).toHaveClass("cursor-n-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "ne"),
+    ).toHaveClass("cursor-ne-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "nw"),
+    ).toHaveClass("cursor-nw-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "se"),
+    ).toHaveClass("cursor-se-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "sw"),
+    ).toHaveClass("cursor-sw-resize", "bg-transparent");
+    expect(
+      handles.find((handle) => handle.dataset.miniPlayerResizeHandle === "s"),
+    ).toHaveClass("cursor-s-resize", "bg-transparent");
+  });
+
+  it("uses vertical-only resize cursors on the top and bottom when the playlist is expanded", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand curriculum menu" }),
+    );
+
+    expect(
+      miniPlayer.querySelector('[data-mini-player-resize-handle="n"]'),
+    ).toHaveClass("cursor-ns-resize");
+    expect(
+      miniPlayer.querySelector('[data-mini-player-resize-handle="s"]'),
+    ).toHaveClass("cursor-ns-resize");
+    expect(
+      miniPlayer.querySelector('[data-mini-player-resize-handle="se"]'),
+    ).toHaveClass("cursor-ns-resize");
+    expect(
+      miniPlayer.querySelector('[data-mini-player-resize-handle="e"]'),
+    ).toHaveClass("cursor-e-resize");
+  });
+
+  it("resizes from a mouse edge and remembers the settled width", () => {
+    const { miniPlayer, onRestore } = renderMiniPlayer();
+    const westHandle = miniPlayer.querySelector<HTMLElement>(
+      '[data-mini-player-resize-handle="w"]',
+    );
+    expect(westHandle).not.toBeNull();
+
+    fireEvent.pointerDown(westHandle!, {
+      button: 0,
+      clientX: 307,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+    expect(miniPlayer.setPointerCapture).toHaveBeenCalledWith(51);
+    fireEvent.pointerMove(miniPlayer, {
+      clientX: 247,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "resizing");
+    expect(miniPlayer.style.left).toBe("247px");
+    expect(miniPlayer.style.width).toBe("360px");
+
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 247,
+      clientY: 650,
+      pointerId: 51,
+      pointerType: "mouse",
+    });
+
+    expect(localStorage.getItem(lessonPlayerStorageKeys.miniPlayerWidth)).toBe(
+      "360",
+    );
+    expect(onRestore).not.toHaveBeenCalled();
+  });
+
   it("stays visible and compact when minimized above the phone breakpoint", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
@@ -390,14 +540,14 @@ describe("LearningMiniPlayer gestures", () => {
     expect(miniPlayer.style.left).toBe("12px");
     expect(miniPlayer.style.top).toBe("598.25px");
     fireEvent.click(
-      screen.getByRole("button", { name: "Return to Career Opportunities" }),
+      screen.getByRole("button", { name: "Expand" }),
     );
     expect(onRestore).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
 
     act(() => vi.runOnlyPendingTimers());
     fireEvent.click(
-      screen.getByRole("button", { name: "Return to Career Opportunities" }),
+      screen.getByRole("button", { name: "Expand" }),
     );
     expect(onRestore).toHaveBeenCalledOnce();
   });
@@ -405,7 +555,7 @@ describe("LearningMiniPlayer gestures", () => {
   it("flicks upward to the top corner without restoring or resizing", () => {
     const { miniPlayer, onClose, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
-      name: "Return to Career Opportunities",
+      name: "Expand",
     });
     const initialWidth = miniPlayer.style.width;
 
@@ -444,7 +594,7 @@ describe("LearningMiniPlayer gestures", () => {
   it("uses left and right flicks to dock on the matching side", () => {
     const { miniPlayer, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
-      name: "Return to Career Opportunities",
+      name: "Expand",
     });
 
     fireEvent.pointerDown(restoreButton, {
@@ -542,6 +692,7 @@ describe("LearningMiniPlayer gestures", () => {
       pointerType: "touch",
     });
     expect(miniPlayer.style.width).toBe("600px");
+    expect(miniPlayer.style.left).toBe("264px");
 
     fireEvent.pointerUp(miniPlayer, {
       clientX: 550,
@@ -558,6 +709,9 @@ describe("LearningMiniPlayer gestures", () => {
     expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "settling");
     expect(miniPlayer.style.width).toBe("595px");
     expect(miniPlayer.style.left).toBe("12px");
+    expect(localStorage.getItem(lessonPlayerStorageKeys.miniPlayerWidth)).toBe(
+      "595",
+    );
     expect(onClose).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(240));
@@ -628,10 +782,118 @@ describe("LearningMiniPlayer gestures", () => {
     expect(closeButton).toHaveClass("!size-9");
   });
 
+  it("attaches the thin timeline to the bottom on larger viewports without a thumb circle", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    const timeline = screen.getByRole("slider", {
+      name: "Mini player timeline",
+    });
+
+    expect(timeline.parentElement).toHaveClass(
+      "absolute",
+      "inset-x-0",
+      "bottom-0",
+      "hidden",
+      "min-[641px]:block",
+    );
+    expect(timeline.parentElement).toHaveAttribute(
+      "data-learning-mini-player-timeline",
+      "",
+    );
+    expect(timeline).toHaveClass(
+      "pointer-events-none",
+      "[&_[role=slider]]:pointer-events-auto",
+      "[&_[data-timeline-track]]:h-0.5",
+      "[&_[data-timeline-track]]:rounded-none",
+      "[&_[data-timeline-thumb]]:!hidden",
+    );
+    expect(timeline).toHaveAttribute("data-show-preview", "true");
+    expect(timeline.parentElement).toHaveAttribute(
+      "data-learning-mini-player-gesture-ignore",
+    );
+
+    fireEvent.pointerDown(timeline, {
+      button: 0,
+      clientX: 400,
+      clientY: 610,
+      pointerId: 61,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(miniPlayer, {
+      clientX: 300,
+      clientY: 610,
+      pointerId: 61,
+      pointerType: "mouse",
+    });
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "idle");
+    expect(miniPlayer).toContainElement(timeline);
+  });
+
+  it("allows dragging from the desktop info bar without expanding the curriculum", () => {
+    const desktopSession: LearningMiniPlayerSession = {
+      ...session,
+      courseTitle: "The Complete Next.js Course",
+      lessonIndex: 4,
+      totalLessons: 88,
+    };
+    const onClose = vi.fn();
+    const onRestore = vi.fn();
+    render(
+      <LearningMiniPlayer
+        session={desktopSession}
+        onClose={onClose}
+        onRestore={onRestore}
+      />,
+    );
+    const miniPlayer = screen.getByRole("complementary", {
+      name: "Mini player for Career Opportunities",
+    });
+    const infoBar = screen.getByRole("button", { name: "Expand curriculum menu" });
+    Object.assign(miniPlayer, {
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+      setPointerCapture: vi.fn(),
+    });
+    const initialLeft = miniPlayer.style.left;
+    const initialTop = miniPlayer.style.top;
+
+    fireEvent.pointerDown(infoBar, {
+      button: 0,
+      clientX: 400,
+      clientY: 610,
+      pointerId: 71,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(miniPlayer, {
+      clientX: 250,
+      clientY: 520,
+      pointerId: 71,
+      pointerType: "mouse",
+    });
+
+    expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "dragging");
+    expect(miniPlayer.style.left).not.toBe(initialLeft);
+    expect(miniPlayer.style.top).not.toBe(initialTop);
+    expect(
+      screen.getByRole("button", { name: "Expand curriculum menu" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerUp(miniPlayer, {
+      clientX: 250,
+      clientY: 520,
+      pointerId: 71,
+      pointerType: "mouse",
+    });
+    act(() => vi.runOnlyPendingTimers());
+    fireEvent.click(infoBar);
+    expect(
+      screen.getByRole("button", { name: "Collapse curriculum menu" }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps stationary mouse clicks targeted at restore and close controls", () => {
     const { miniPlayer, onClose, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
-      name: "Return to Career Opportunities",
+      name: "Expand",
     });
     const closeButton = screen.getByRole("button", {
       name: "Close mini player",
@@ -679,7 +941,7 @@ describe("LearningMiniPlayer gestures", () => {
   it("restores from the first stationary touch without waiting for a compatibility click", () => {
     const { miniPlayer, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
-      name: "Return to Career Opportunities",
+      name: "Expand",
     });
 
     fireEvent.pointerDown(restoreButton, {
@@ -750,7 +1012,7 @@ describe("LearningMiniPlayer gestures", () => {
   it("captures touch only after dragging and suppresses the restore click", () => {
     const { miniPlayer, onRestore } = renderMiniPlayer();
     const restoreButton = screen.getByRole("button", {
-      name: "Return to Career Opportunities",
+      name: "Expand",
     });
 
     fireEvent.pointerDown(restoreButton, {
@@ -858,4 +1120,180 @@ describe("LearningMiniPlayer gestures", () => {
     act(() => vi.advanceTimersByTime(200));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("allows placing the mini player anywhere freely in desktop view instead of snapping to corners", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(min-width: 641px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { miniPlayer } = renderMiniPlayer();
+      fireEvent.pointerDown(miniPlayer, {
+        button: 0,
+        clientX: 400,
+        clientY: 500,
+        pointerId: 91,
+        pointerType: "mouse",
+      });
+      fireEvent.pointerMove(miniPlayer, {
+        clientX: 300,
+        clientY: 350,
+        pointerId: 91,
+        pointerType: "mouse",
+      });
+      fireEvent.pointerUp(miniPlayer, {
+        clientX: 300,
+        clientY: 350,
+        pointerId: 91,
+        pointerType: "mouse",
+      });
+      act(() => vi.advanceTimersByTime(240));
+
+      expect(miniPlayer).toHaveAttribute("data-mini-player-mode", "idle");
+      const left = parseFloat(miniPlayer.style.left);
+      const top = parseFloat(miniPlayer.style.top);
+      expect(Number.isFinite(left)).toBe(true);
+      expect(Number.isFinite(top)).toBe(true);
+      // Confirms it stays at the dragged offset rather than jumping to a corner (12px)
+      expect(left).not.toBe(12);
+      expect(top).not.toBe(12);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("renders desktop mini player controls and bottom info bar with course and lesson info", () => {
+    const desktopSession: LearningMiniPlayerSession = {
+      ...session,
+      courseTitle: "The Complete Next.js Course",
+      lessonIndex: 4,
+      totalLessons: 88,
+      selectedLesson: 4,
+    };
+    const onClose = vi.fn();
+    const onRestore = vi.fn();
+    render(
+      <LearningMiniPlayer
+        session={desktopSession}
+        onClose={onClose}
+        onRestore={onRestore}
+      />,
+    );
+
+    const controlsOverlay = document.querySelector(
+      "[data-learning-mini-player-controls-overlay]",
+    );
+    expect(controlsOverlay).toHaveClass(
+      "opacity-0",
+      "pointer-events-none",
+      "group-hover/mini-player:opacity-100",
+      "group-hover/mini-player:pointer-events-auto",
+    );
+    expect(controlsOverlay).not.toHaveClass(
+      "group-has-[[data-learning-mini-player-timeline]:hover]/mini-player:!opacity-0",
+    );
+    expect(
+      document.querySelector("[data-learning-mini-player-fixed-time]"),
+    ).toHaveClass(
+      "group-has-[[data-learning-mini-player-timeline]:hover]/mini-player:opacity-0",
+    );
+    expect(controlsOverlay).not.toHaveClass("opacity-100");
+
+    const timeline = screen.getByRole("slider", {
+      name: "Mini player timeline",
+    });
+    expect(timeline.closest("[data-learning-mini-player-timeline]")).not.toHaveClass(
+      "opacity-0",
+    );
+
+    // Expand button with aria-label "Expand [I]" and a custom hover chip (no native title)
+    const expandButton = screen.getByRole("button", { name: "Expand [I]" });
+    expect(expandButton).toBeInTheDocument();
+    expect(expandButton).not.toHaveAttribute("title");
+    expect(expandButton.querySelector("svg")).not.toBeNull();
+    expect(expandButton.querySelector("img")).toBeNull();
+    expect(expandButton.className).not.toMatch(/rounded-full/);
+    expect(expandButton.className).toMatch(/bg-transparent/);
+    const expandTooltip = expandButton.parentElement?.querySelector("kbd");
+    expect(expandTooltip?.parentElement).toHaveClass("z-50");
+    fireEvent.click(expandButton);
+    expect(onRestore).toHaveBeenCalledOnce();
+
+    // Close button
+    const closeButton = screen.getByRole("button", { name: "Close" });
+    expect(closeButton).toBeInTheDocument();
+    expect(closeButton).not.toHaveAttribute("title");
+    expect(closeButton.className).not.toMatch(/rounded-full/);
+    expect(closeButton.className).toMatch(/bg-transparent/);
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalledOnce();
+
+    // Center controls: Previous, Play/Pause, Next
+    const previousLesson = screen.getByRole("button", { name: "Previous lesson" });
+    const nextLesson = screen.getByRole("button", { name: "Next lesson" });
+    const pauseLesson = screen.getByRole("button", { name: "Pause lesson" });
+    expect(previousLesson).toBeEnabled();
+    expect(nextLesson).toBeEnabled();
+    expect(previousLesson.className).not.toMatch(/hover:scale/);
+    expect(nextLesson.className).not.toMatch(/hover:scale/);
+    expect(pauseLesson.className).not.toMatch(/hover:scale/);
+
+    const openSession = vi.spyOn(
+      learningMiniPlayerStore,
+      "openLearningMiniPlayerSession",
+    );
+    fireEvent.click(nextLesson);
+    expect(openSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedLesson: 5,
+        lessonPath: expect.stringMatching(/^\/learn\/backend-nodejs\//),
+      }),
+    );
+    fireEvent.click(previousLesson);
+    expect(openSession).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedLesson: 3 }),
+    );
+
+    // Bottom info bar (expands curriculum in place without restoring to full player)
+    const infoBar = screen.getByRole("button", { name: "Expand curriculum menu" });
+    expect(infoBar).toBeInTheDocument();
+    expect(infoBar).toHaveTextContent("Career Opportunities");
+    expect(infoBar).toHaveTextContent("The Complete Next.js Course • 4 / 88");
+    expect(infoBar).not.toHaveAttribute("data-learning-mini-player-gesture-ignore");
+    expect(infoBar).toHaveClass("cursor-pointer");
+    fireEvent.click(infoBar);
+    expect(onRestore).toHaveBeenCalledOnce(); // onRestore was only called once from expand button, NOT from info bar!
+    expect(screen.getByRole("button", { name: "Collapse curriculum menu" })).toBeInTheDocument();
+    const curriculum = screen.getByLabelText("Course curriculum");
+    expect(curriculum).toBeInTheDocument();
+    expect(curriculum).toHaveClass("learning-curriculum--compact");
+  });
+
+  it("calculates desktop mini player height including the desktop info bar and expanded playlist", () => {
+    expect(LEARNING_MINI_PLAYER_DESKTOP_INFO_BAR_HEIGHT).toBe(52);
+    const mobileHeight = getLearningMiniPlayerHeight(320, false);
+    const desktopHeight = getLearningMiniPlayerHeight(320, true);
+    const expandedHeight = getLearningMiniPlayerHeight(320, true, true);
+    const customPlaylistHeight = getLearningMiniPlayerHeight(
+      320,
+      true,
+      true,
+      200,
+    );
+    expect(mobileHeight).toBe(320 / (16 / 9));
+    expect(desktopHeight).toBe(320 / (16 / 9) + 52);
+    expect(expandedHeight).toBe(320 / (16 / 9) + 52 + 320);
+    expect(customPlaylistHeight).toBe(320 / (16 / 9) + 52 + 200);
+  });
 });
+

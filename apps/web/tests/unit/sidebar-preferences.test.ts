@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getInitialSidebarPreferences,
+  getInitialSidebarShellState,
   getInitialSidebarWidth,
+  getSidebarPresentationBootstrapScript,
+  getSidebarShellBootstrapScript,
 } from "../../src/shell/sidebarPreferences.js";
 import {
   normalizeSidebarGlowBlur,
@@ -64,6 +67,99 @@ describe("sidebar width helpers", () => {
 
     localStorage.setItem("veolms-sidebar-width", "invalid");
     expect(getInitialSidebarWidth()).toBe(300);
+  });
+});
+
+describe("sidebar shell bootstrap", () => {
+  afterEach(() => {
+    delete window.__VEO_BOOTSTRAP__;
+    delete document.documentElement.dataset.sidebarState;
+    delete document.documentElement.dataset.navigationLayout;
+    delete document.documentElement.dataset.collapsedTooltips;
+    delete document.documentElement.dataset.collapsedSidebarLogo;
+    delete document.documentElement.dataset.activeFill;
+    delete document.documentElement.dataset.sidebarMonochromeMode;
+    document.documentElement.style.removeProperty("--sidebar-width");
+    document.documentElement.style.removeProperty("--sidebar-expanded-width");
+    document.documentElement.style.removeProperty("--sidebar-monochrome-color");
+    document.querySelector("[data-sidebar-bootstrap-test]")?.remove();
+  });
+
+  it("publishes collapsed-rail presentation before the shell is painted", () => {
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({
+        highlightActive: false,
+        monochromeColor: "#123456",
+        monochromeMode: "custom",
+        showCollapsedLabels: false,
+        showCollapsedLogo: false,
+      }),
+    );
+
+    new Function(getSidebarPresentationBootstrapScript())();
+
+    expect(document.documentElement.dataset.collapsedTooltips).toBe("false");
+    expect(document.documentElement.dataset.collapsedSidebarLogo).toBe("false");
+    expect(document.documentElement.dataset.activeFill).toBe("false");
+    expect(document.documentElement.dataset.sidebarMonochromeMode).toBe(
+      "custom",
+    );
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--sidebar-monochrome-color",
+      ),
+    ).toBe("#123456");
+  });
+
+  it("publishes persisted geometry before React initializes", () => {
+    localStorage.setItem("veolms-sidebar-mode", "collapsed");
+    localStorage.setItem("veolms-sidebar-width", "384");
+    localStorage.setItem(
+      "veolms-sidebar-max-width-default-version",
+      "300px-v1",
+    );
+    localStorage.setItem(
+      "veolms-sidebar-preferences",
+      JSON.stringify({ sidebarMaxWidth: 420 }),
+    );
+    const app = document.createElement("div");
+    app.className = "courses-app courses-app--hidden";
+    app.dataset.sidebarBootstrapTest = "";
+    document.body.append(app);
+
+    new Function(getSidebarShellBootstrapScript())();
+
+    expect(window.__VEO_BOOTSTRAP__).toEqual({
+      sidebar: { mode: "collapsed", width: 384 },
+      navigation: { compact: true },
+    });
+    expect(document.documentElement.dataset.sidebarState).toBe("collapsed");
+    expect(document.documentElement.dataset.navigationLayout).toBe("compact");
+    expect(
+      document.documentElement.style.getPropertyValue("--sidebar-width"),
+    ).toBe("384px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--sidebar-expanded-width",
+      ),
+    ).toBe("384px");
+    expect(app).toHaveClass("courses-app--collapsed");
+    expect(app).not.toHaveClass("courses-app--hidden");
+    app.remove();
+  });
+
+  it("initializes React state from the bootstrap snapshot, not storage", () => {
+    localStorage.setItem("veolms-sidebar-mode", "expanded");
+    localStorage.setItem("veolms-sidebar-width", "300");
+    window.__VEO_BOOTSTRAP__ = {
+      sidebar: { mode: "hidden", width: 412 },
+    };
+
+    expect(getInitialSidebarShellState()).toEqual({
+      mode: "hidden",
+      width: 412,
+    });
   });
 });
 

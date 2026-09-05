@@ -5,33 +5,36 @@ import type {
   VideoLoadOptions,
   VideoQuality,
   VideoSource,
-  VideoSourceKind,
   VideoTextTrack,
 } from "../../core/types";
 import { MediaElementEngineBase } from "../base/MediaElementEngineBase";
 import {
+  abandonEarlyShakaPreloadSession,
+  consumeEarlyShakaPreloadSession,
+  discardEarlyShakaPreloadManager,
+  getEarlyShakaPreloadSession,
+  waitForEarlyShakaPreloadSession,
+  type EarlyShakaPreloadSession,
+} from "./shaka-early-preload";
+import {
   addExternalTextTrack,
-  applyVideoNetworkRequest,
-  applyVideoNetworkResponse,
-  createShakaConfiguration,
+  configureShakaPlayer,
+  createShakaNetworkingFilters,
   defaultShakaRuntimeLoader,
-  mapRequestKind,
   normalizeShakaAudioTrack,
   normalizeShakaQuality,
   normalizeShakaTextTrack,
+  registerShakaNetworkingFilters,
+  resolveShakaLoadMimeType,
   resolveShakaRuntime,
-  toVideoNetworkRequest,
-  toVideoNetworkResponse,
+  unregisterShakaNetworkingFilters,
 } from "./shaka-internal";
 import type {
   ShakaAudioTrackLike,
   ShakaErrorLike,
   ShakaEventLike,
-  ShakaNetworkRequestLike,
-  ShakaNetworkResponseLike,
   ShakaPlayerLike,
-  ShakaRequestFilterLike,
-  ShakaResponseFilterLike,
+  ShakaPreloadManagerLike,
   ShakaRuntimeLike,
   ShakaRuntimeLoader,
   ShakaTextTrackLike,
@@ -43,11 +46,6 @@ export interface ShakaVideoEngineOptions {
 }
 
 type ShakaListener = (event: ShakaEventLike) => void;
-
-const MANIFEST_MIME_TYPES: Partial<Record<VideoSourceKind, string>> = {
-  dash: "application/dash+xml",
-  hls: "application/x-mpegurl",
-};
 
 function visualQualityKey(track: ShakaVariantTrackLike): string {
   return [
@@ -125,17 +123,6 @@ function variantsForSelectedAudio(
   return [...byVisualQuality.values()];
 }
 
-function resolveLoadMimeType(
-  source: VideoSource,
-  options: VideoLoadOptions,
-): string | undefined {
-  return (
-    options.mimeType ??
-    source.type ??
-    (source.kind ? MANIFEST_MIME_TYPES[source.kind] : undefined)
-  );
-}
-
 export class ShakaVideoEngine extends MediaElementEngineBase {
   readonly name = "shaka";
 
@@ -146,8 +133,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   readonly #textTracks = new Map<string, ShakaTextTrackLike>();
   #runtime: ShakaRuntimeLike | null = null;
   #player: ShakaPlayerLike | null = null;
-  #requestFilter: ShakaRequestFilterLike | null = null;
-  #responseFilter: ShakaResponseFilterLike | null = null;
+  #requestFilter: ReturnType<typeof createShakaNetworkingFilters>["requestFilter"] =
+    null;
+  #responseFilter: ReturnType<
+    typeof createShakaNetworkingFilters
+  >["responseFilter"] = null;
+  #adoptedPreloadSession: EarlyShakaPreloadSession | null = null;
   #autoQuality = true;
   #browserSupported: boolean | null = null;
 
@@ -178,9 +169,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     try {
       this.clearNetworkingFilters();
-      player.resetConfiguration?.();
-      const configuration = createShakaConfiguration(source, runtime);
-      if (!player.configure(configuration)) {
+      const preloadSession = this.takeMatchingPreloadSession(source.src);
+      if (
+        !configureShakaPlayer(player, source, runtime, {
+          reset: !preloadSession,
+        })
+      ) {
         throw new VideoEngineError({
           category: "PLAYER",
           code: "INVALID_SHAKA_CONFIGURATION",
@@ -189,11 +183,21 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
       this.installNetworkingFilters(source);
 
-      await player.load(
-        source.src,
-        options.startTime ?? source.startTime,
-        resolveLoadMimeType(source, options),
-      );
+      const startTime = options.startTime ?? source.startTime;
+      const mimeType = resolveShakaLoadMimeType(source, options);
+      const asset =
+        preloadSession?.preloadPromise != null
+          ? await this.resolveLoadAsset(preloadSession, source.src)
+          : source.src;
+      if (typeof asset !== "string") {
+        if (!this.isCurrentOperation(generation)) {
+          await asset.destroy().catch(() => undefined);
+          return;
+        }
+        await player.load(asset, startTime);
+      } else {
+        await player.load(asset, startTime, mimeType);
+      }
 
       if (!this.isCurrentOperation(generation)) {
         return;
@@ -335,6 +339,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   protected override async onAttached(media: HTMLMediaElement): Promise<void> {
+    const preloadSession = await waitForEarlyShakaPreloadSession();
     const runtime =
       this.#runtime ?? resolveShakaRuntime(await this.#runtimeLoader());
     this.#runtime = runtime;
@@ -342,6 +347,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#browserSupported = runtime.Player.isBrowserSupported();
 
     if (!this.#browserSupported) {
+      if (preloadSession) {
+        await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+      }
       throw new VideoEngineError({
         category: "UNSUPPORTED",
         code: "SHAKA_BROWSER_UNSUPPORTED",
@@ -349,7 +357,18 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       });
     }
 
-    if (!this.#player) {
+    if (!this.#player && preloadSession?.player) {
+      this.#player = preloadSession.player;
+      this.#adoptedPreloadSession = preloadSession;
+      if (preloadSession.networkingFilters) {
+        this.#requestFilter = preloadSession.networkingFilters.requestFilter;
+        this.#responseFilter = preloadSession.networkingFilters.responseFilter;
+      }
+      this.bindShakaEvents(this.#player);
+    } else if (!this.#player) {
+      if (getEarlyShakaPreloadSession()) {
+        await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+      }
       this.#player = new runtime.Player();
       this.bindShakaEvents(this.#player);
     }
@@ -369,6 +388,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): Promise<void> {
     this.clearNetworkingFilters();
     const player = this.#player;
+    const adoptedSession = this.#adoptedPreloadSession;
+    this.#adoptedPreloadSession = null;
+    if (adoptedSession && !adoptedSession.consumed) {
+      consumeEarlyShakaPreloadSession(adoptedSession);
+      await discardEarlyShakaPreloadManager(adoptedSession);
+    } else if (!adoptedSession && getEarlyShakaPreloadSession()) {
+      await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+    }
     if (player) {
       this.unbindShakaEvents(player);
       await player.destroy();
@@ -399,6 +426,52 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       });
     }
     return this.#runtime;
+  }
+
+  private takeMatchingPreloadSession(
+    manifestUrl: string,
+  ): EarlyShakaPreloadSession | null {
+    const session = this.#adoptedPreloadSession;
+    if (!session || session.consumed) {
+      this.#adoptedPreloadSession = null;
+      const leftover = getEarlyShakaPreloadSession();
+      if (leftover && leftover.player !== this.#player) {
+        void abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+      }
+      return null;
+    }
+
+    if (session.manifestUrl !== manifestUrl) {
+      consumeEarlyShakaPreloadSession(session);
+      this.#adoptedPreloadSession = null;
+      void discardEarlyShakaPreloadManager(session);
+      return null;
+    }
+
+    consumeEarlyShakaPreloadSession(session);
+    this.#adoptedPreloadSession = null;
+    return session;
+  }
+
+  private async resolveLoadAsset(
+    preloadSession: EarlyShakaPreloadSession | null,
+    manifestUrl: string,
+  ): Promise<string | ShakaPreloadManagerLike> {
+    if (!preloadSession?.preloadPromise) {
+      return manifestUrl;
+    }
+
+    let manager: ShakaPreloadManagerLike | null = null;
+    try {
+      manager = await preloadSession.preloadPromise;
+    } catch {
+      manager = null;
+    }
+
+    if (!manager) {
+      return manifestUrl;
+    }
+    return manager;
   }
 
   private bindShakaEvents(player: ShakaPlayerLike): void {
@@ -518,49 +591,17 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   private installNetworkingFilters(source: VideoSource): void {
     const player = this.requirePlayer();
     const runtime = this.requireRuntime();
-    const networkingEngine = player.getNetworkingEngine();
-    if (!networkingEngine) {
-      return;
-    }
-
-    const userRequestFilter = source.networking?.requestFilter;
-    const userResponseFilter = source.networking?.responseFilter;
-    const requestTypes = runtime.net?.NetworkingEngine?.RequestType;
-    if (userRequestFilter) {
-      this.#requestFilter = async (
-        type: number,
-        request: ShakaNetworkRequestLike,
-      ): Promise<void> => {
-        const kind = mapRequestKind(type, requestTypes);
-        const normalized = toVideoNetworkRequest(kind, request);
-        await userRequestFilter(normalized);
-        applyVideoNetworkRequest(normalized, request);
-      };
-      networkingEngine.registerRequestFilter(this.#requestFilter);
-    }
-
-    if (userResponseFilter) {
-      this.#responseFilter = async (
-        type: number,
-        response: ShakaNetworkResponseLike,
-      ): Promise<void> => {
-        const kind = mapRequestKind(type, requestTypes);
-        const normalized = toVideoNetworkResponse(kind, response);
-        await userResponseFilter(normalized);
-        applyVideoNetworkResponse(normalized, response);
-      };
-      networkingEngine.registerResponseFilter(this.#responseFilter);
-    }
+    const filters = createShakaNetworkingFilters(source, runtime);
+    registerShakaNetworkingFilters(player, filters);
+    this.#requestFilter = filters.requestFilter;
+    this.#responseFilter = filters.responseFilter;
   }
 
   private clearNetworkingFilters(): void {
-    const networkingEngine = this.#player?.getNetworkingEngine();
-    if (networkingEngine && this.#requestFilter) {
-      networkingEngine.unregisterRequestFilter(this.#requestFilter);
-    }
-    if (networkingEngine && this.#responseFilter) {
-      networkingEngine.unregisterResponseFilter(this.#responseFilter);
-    }
+    unregisterShakaNetworkingFilters(this.#player, {
+      requestFilter: this.#requestFilter,
+      responseFilter: this.#responseFilter,
+    });
     this.#requestFilter = null;
     this.#responseFilter = null;
   }

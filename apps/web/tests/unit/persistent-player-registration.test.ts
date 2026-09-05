@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { shouldDemoteDetachedPersistentPlayer } from "../../src/learning/player/persistentPlayerRegistration";
+import {
+  shouldDemoteDetachedPersistentPlayer,
+  shouldRestoreMiniPlayerForMatchingCourse,
+} from "../../src/learning/player/persistentPlayerRegistration";
 
 describe("persistent player registration cleanup", () => {
   it("does not demote an immediately restored player when stale cleanup runs", () => {
@@ -27,5 +30,25 @@ describe("persistent player registration cleanup", () => {
         currentRestoreVersion: 3,
       }),
     ).toBe(true);
+  });
+
+  it("restores the mini player when the same course is opened again", () => {
+    expect(
+      shouldRestoreMiniPlayerForMatchingCourse({
+        presentation: "mini",
+        activeCourseRouteKey: "backend-nodejs",
+        requestedCourseRouteKey: "backend-nodejs",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not restore when a different course is opened from the mini player", () => {
+    expect(
+      shouldRestoreMiniPlayerForMatchingCourse({
+        presentation: "mini",
+        activeCourseRouteKey: "backend-nodejs",
+        requestedCourseRouteKey: "typescript",
+      }),
+    ).toBe(false);
   });
 });

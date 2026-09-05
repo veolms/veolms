@@ -1,26 +1,19 @@
-import { ArrowsInLineVerticalIcon as ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
-import { ArrowsOutLineVerticalIcon as ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
-import { CrosshairSimpleIcon as CrosshairSimple } from "@phosphor-icons/react/CrosshairSimple";
-import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
-import { ListMagnifyingGlassIcon as ListMagnifyingGlass } from "@phosphor-icons/react/ListMagnifyingGlass";
-import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ExpandableSearch } from "../ExpandableSearch";
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuGroup,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../components/ui/context-menu";
 import { ElasticScroller } from "../components/elastic-scroller";
 import type { ElasticScrollerHandle } from "../components/elastic-scroller";
+import { CurriculumSectionActionsMenuContent } from "./CurriculumSectionActionsMenu";
+import {
+  getInitialCurriculumExpandedSections,
+} from "./curriculumExpandedSections";
 import {
   lessonsById as defaultLessonsById,
   sections as defaultSections,
@@ -41,9 +34,9 @@ interface CurriculumProps {
   lessonsById?: ReadonlyMap<number, Lesson>;
   lessonProgress?: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
-  onOpenCourseOverview: () => void;
+  onOpenCourseOverview?: () => void;
   courseTitle: string;
-  courseThumbnail: string;
+  courseThumbnail?: string;
   onClose?: () => void;
   onLessonSearchOpen?: () => void;
   focusRequest?: number;
@@ -54,6 +47,10 @@ interface CurriculumProps {
   scrollportRef?: RefObject<HTMLElement | null>;
   scrollControlBottomClearance?: number | string;
   drawerHeroControlProps?: LessonDrawerHeroControlProps;
+  hideHero?: boolean;
+  expandAllSections?: boolean;
+  expandedSectionIds?: readonly number[];
+  onExpandedSectionIdsChange?: (sectionIds: readonly number[]) => void;
 }
 
 export function Curriculum({
@@ -64,7 +61,7 @@ export function Curriculum({
   onSelectLesson,
   onOpenCourseOverview,
   courseTitle,
-  courseThumbnail,
+  courseThumbnail = "",
   onClose,
   onLessonSearchOpen,
   focusRequest = 0,
@@ -75,8 +72,33 @@ export function Curriculum({
   scrollportRef,
   scrollControlBottomClearance,
   drawerHeroControlProps,
+  hideHero = false,
+  expandAllSections = false,
+  expandedSectionIds: controlledExpandedSectionIds,
+  onExpandedSectionIdsChange,
 }: CurriculumProps) {
-  const [expanded, setExpanded] = useState<number[]>([1, 2]);
+  const sectionIds = sections.map(({ id }) => id);
+  const isExpandedControlled = controlledExpandedSectionIds !== undefined;
+  const [uncontrolledExpandedSectionIds, setUncontrolledExpandedSectionIds] =
+    useState<number[]>(() =>
+      getInitialCurriculumExpandedSections(sections, selectedLesson, {
+        expandAllSections,
+        hideHero,
+      }),
+    );
+  const expanded = controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
+  const setExpanded = useCallback(
+    (value: readonly number[] | ((current: readonly number[]) => readonly number[])) => {
+      const resolveNext = (current: readonly number[]) =>
+        typeof value === "function" ? value(current) : value;
+      if (onExpandedSectionIdsChange) {
+        onExpandedSectionIdsChange(resolveNext(expanded));
+        return;
+      }
+      setUncontrolledExpandedSectionIds((current) => [...resolveNext(current)]);
+    },
+    [expanded, onExpandedSectionIdsChange],
+  );
   const storageBase = `veolms-learning-${persistenceKey}-curriculum`;
   const [lessonSearch, setLessonSearch] = useSessionStorageState(
     `${storageBase}-search`,
@@ -104,13 +126,18 @@ export function Curriculum({
     ) || sections[0]!;
   const currentLesson = lessonsById.get(selectedLesson) || lessonsById.get(1)!;
   const courseProgress = 52;
-  const sectionIds = sections.map(({ id }) => id);
-  const expandedSectionCount = sectionIds.reduce(
-    (count, id) => count + (expanded.includes(id) ? 1 : 0),
-    0,
-  );
-  const allSectionsExpanded = expandedSectionCount === sectionIds.length;
-  const allSectionsCollapsed = expandedSectionCount === 0;
+
+  useEffect(() => {
+    if (expandAllSections || !hideHero || isExpandedControlled) return;
+    setExpanded([currentSection.id]);
+  }, [
+    currentSection.id,
+    expandAllSections,
+    hideHero,
+    isExpandedControlled,
+    selectedLesson,
+    setExpanded,
+  ]);
 
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
@@ -281,12 +308,62 @@ export function Curriculum({
     };
   }, [setSearchOpen, topRequest]);
 
+  useEffect(() => {
+    if (!hideHero) return undefined;
+
+    let firstFrame: number;
+    let secondFrame: number | undefined;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const targetElement = currentSectionRef.current;
+        const curriculum =
+          targetElement?.closest<HTMLElement>(".learning-curriculum");
+        const lessonList = lessonListRef.current;
+        if (!targetElement || !curriculum) return;
+
+        if (lessonList) {
+          const targetTop =
+            targetElement.getBoundingClientRect().top -
+            curriculum.getBoundingClientRect().top +
+            curriculum.scrollTop;
+          const currentRevealSpace = Number.parseFloat(
+            lessonList.dataset.revealSpace || "0",
+          );
+          const maximumScrollWithoutRevealSpace = Math.max(
+            0,
+            curriculum.scrollHeight -
+              currentRevealSpace -
+              curriculum.clientHeight,
+          );
+          const nextRevealSpace = Math.ceil(
+            Math.max(0, targetTop - maximumScrollWithoutRevealSpace) + 4,
+          );
+
+          if (nextRevealSpace !== currentRevealSpace) {
+            lessonList.dataset.revealSpace = String(nextRevealSpace);
+            lessonList.style.setProperty(
+              "--curriculum-reveal-space",
+              `${nextRevealSpace}px`,
+            );
+          }
+        }
+
+        scrollItemToTop(targetElement);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [hideHero, currentSection.id]);
+
   return (
     <ContextMenu>
       <aside
         ref={setCurriculumScrollport}
         id={scrollportId}
-        className="learning-curriculum"
+        className={`learning-curriculum ${hideHero ? "learning-curriculum--compact" : ""}`}
         aria-label="Course curriculum"
       >
         <ElasticScroller
@@ -297,133 +374,135 @@ export function Curriculum({
           contentRevision={`${selectedLesson}:${activeLessonSearch}:${expanded.join(",")}`}
           bottomClearance={scrollControlBottomClearance}
         />
-        <ContextMenuTrigger
-          render={
-            <div
-              {...drawerHeroControlProps}
-              className="learning-curriculum__hero"
-            />
-          }
-        >
-          <img
-            src={courseThumbnail}
-            alt=""
-            className="learning-curriculum__cover"
-          />
-          <div className="learning-curriculum__shade" aria-hidden="true" />
-          <button
-            type="button"
-            className="learning-curriculum__overview-link"
-            aria-label={
-              searchOpen
-                ? "Close lesson search"
-                : `View course overview for ${courseTitle}`
+        {!hideHero ? (
+          <ContextMenuTrigger
+            render={
+              <div
+                {...drawerHeroControlProps}
+                className="learning-curriculum__hero"
+              />
             }
-            title={searchOpen ? "Close search" : "View"}
-            onClick={() => {
-              if (searchOpen) {
-                setSearchOpen(false);
-                return;
+          >
+            <img
+              src={courseThumbnail}
+              alt=""
+              className="learning-curriculum__cover"
+            />
+            <div className="learning-curriculum__shade" aria-hidden="true" />
+            <button
+              type="button"
+              className="learning-curriculum__overview-link"
+              aria-label={
+                searchOpen
+                  ? "Close lesson search"
+                  : `View course overview for ${courseTitle}`
               }
-              onOpenCourseOverview();
-            }}
-          />
-          <header className="learning-curriculum__overview">
-            <div className="learning-curriculum__overview-content">
-              <div className="learning-curriculum__title-row @container">
-                <ExpandableSearch
-                  inputId={lessonSearchInputId}
-                  label="Search lessons"
-                  placeholder="Search lessons..."
-                  value={lessonSearch}
-                  onValueChange={setLessonSearch}
-                  open={searchOpen}
-                  onOpenChange={handleLessonSearchOpenChange}
-                  overlay
-                  shortcutPriority
-                  backLabel="Back from lesson search"
-                  triggerClassName="learning-curriculum__search-trigger rounded-full"
-                  triggerIconSize={21.375}
-                  backButtonClassName="learning-curriculum__search-trigger rounded-full"
+              title={searchOpen ? "Close search" : "View"}
+              onClick={() => {
+                if (searchOpen) {
+                  setSearchOpen(false);
+                  return;
+                }
+                onOpenCourseOverview?.();
+              }}
+            />
+            <header className="learning-curriculum__overview">
+              <div className="learning-curriculum__overview-content">
+                <div className="learning-curriculum__title-row @container">
+                  <ExpandableSearch
+                    inputId={lessonSearchInputId}
+                    label="Search lessons"
+                    placeholder="Search lessons..."
+                    value={lessonSearch}
+                    onValueChange={setLessonSearch}
+                    open={searchOpen}
+                    onOpenChange={handleLessonSearchOpenChange}
+                    overlay
+                    shortcutPriority
+                    backLabel="Back from lesson search"
+                    triggerClassName="learning-curriculum__search-trigger rounded-full"
+                    triggerIconSize={21.375}
+                    backButtonClassName="learning-curriculum__search-trigger rounded-full"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[clamp(1rem,4.25cqi,1.1875rem)]">
+                        {courseTitle}
+                      </h2>
+                    </div>
+                  </ExpandableSearch>
+                </div>
+              </div>
+            </header>
+
+            <div className="learning-curriculum__sticky-meta">
+              <div className="learning-curriculum__progress-copy">
+                <span>Progress</span>
+                <strong>{courseProgress}%</strong>
+              </div>
+              <div
+                className="learning-curriculum__progress-track"
+                role="progressbar"
+                aria-label={`Course progress: ${courseProgress} percent`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={courseProgress}
+              >
+                <span style={{ width: `${courseProgress}%` }} />
+              </div>
+              <div
+                className="learning-curriculum__current"
+                aria-label="Current lesson location"
+              >
+                <button
+                  type="button"
+                  className="learning-curriculum__current-action"
+                  aria-label={`Go to current section, Section ${currentSection.id}: ${currentSection.title}`}
+                  title={`Go to Section ${currentSection.id}: ${currentSection.title}`}
+                  onClick={() => {
+                    if (searchOpen) {
+                      setSearchOpen(false);
+                      return;
+                    }
+                    revealAndScrollTo("section", currentSection.id);
+                  }}
                 >
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-[clamp(1rem,4.25cqi,1.1875rem)]">
-                      {courseTitle}
-                    </h2>
-                  </div>
-                </ExpandableSearch>
+                  <span
+                    className="learning-curriculum__current-key"
+                    aria-hidden="true"
+                  >
+                    S{currentSection.id}:
+                  </span>
+                  <span className="learning-curriculum__current-label">
+                    {currentSection.title}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="learning-curriculum__current-action"
+                  aria-label={`Go to current chapter, Chapter ${selectedLesson}: ${currentLesson[1]}`}
+                  title={`Go to Chapter ${selectedLesson}: ${currentLesson[1]}`}
+                  onClick={() => {
+                    if (searchOpen) {
+                      setSearchOpen(false);
+                      return;
+                    }
+                    revealAndScrollTo("chapter", currentSection.id);
+                  }}
+                >
+                  <span
+                    className="learning-curriculum__current-key"
+                    aria-hidden="true"
+                  >
+                    L{selectedLesson}:
+                  </span>
+                  <span className="learning-curriculum__current-label">
+                    {currentLesson[1]}
+                  </span>
+                </button>
               </div>
             </div>
-          </header>
-
-          <div className="learning-curriculum__sticky-meta">
-            <div className="learning-curriculum__progress-copy">
-              <span>Progress</span>
-              <strong>{courseProgress}%</strong>
-            </div>
-            <div
-              className="learning-curriculum__progress-track"
-              role="progressbar"
-              aria-label={`Course progress: ${courseProgress} percent`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={courseProgress}
-            >
-              <span style={{ width: `${courseProgress}%` }} />
-            </div>
-            <div
-              className="learning-curriculum__current"
-              aria-label="Current lesson location"
-            >
-              <button
-                type="button"
-                className="learning-curriculum__current-action"
-                aria-label={`Go to current section, Section ${currentSection.id}: ${currentSection.title}`}
-                title={`Go to Section ${currentSection.id}: ${currentSection.title}`}
-                onClick={() => {
-                  if (searchOpen) {
-                    setSearchOpen(false);
-                    return;
-                  }
-                  revealAndScrollTo("section", currentSection.id);
-                }}
-              >
-                <span
-                  className="learning-curriculum__current-key"
-                  aria-hidden="true"
-                >
-                  S{currentSection.id}:
-                </span>
-                <span className="learning-curriculum__current-label">
-                  {currentSection.title}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="learning-curriculum__current-action"
-                aria-label={`Go to current chapter, Chapter ${selectedLesson}: ${currentLesson[1]}`}
-                title={`Go to Chapter ${selectedLesson}: ${currentLesson[1]}`}
-                onClick={() => {
-                  if (searchOpen) {
-                    setSearchOpen(false);
-                    return;
-                  }
-                  revealAndScrollTo("chapter", currentSection.id);
-                }}
-              >
-                <span
-                  className="learning-curriculum__current-key"
-                  aria-hidden="true"
-                >
-                  L{selectedLesson}:
-                </span>
-                <span className="learning-curriculum__current-label">
-                  {currentLesson[1]}
-                </span>
-              </button>
-            </div>
-          </div>
-        </ContextMenuTrigger>
+          </ContextMenuTrigger>
+        ) : null}
 
         <div ref={lessonListRef} className="learning-curriculum__lesson-list">
           {sections.map((section) => {
@@ -575,52 +654,14 @@ export function Curriculum({
         </div>
       </aside>
 
-      <ContextMenuContent
-        aria-label="Course curriculum actions"
+      <CurriculumSectionActionsMenuContent
+        sectionIds={sectionIds}
+        expandedSectionIds={expanded}
+        onExpandAllSections={() => setExpanded(sectionIds)}
+        onCollapseAllSections={() => setExpanded([])}
+        onOpenCourseOverview={onOpenCourseOverview}
         portalContainer={contextMenuPortalHostRef}
-      >
-        <ContextMenuGroup>
-          <ContextMenuLabel>Curriculum actions</ContextMenuLabel>
-          {!allSectionsExpanded && (
-            <ContextMenuItem onClick={() => setExpanded(sectionIds)}>
-              <ArrowsOutLineVertical aria-hidden="true" />
-              Expand all sections
-            </ContextMenuItem>
-          )}
-          {!allSectionsCollapsed && (
-            <ContextMenuItem onClick={() => setExpanded([])}>
-              <ArrowsInLineVertical aria-hidden="true" />
-              Collapse all sections
-            </ContextMenuItem>
-          )}
-        </ContextMenuGroup>
-        <ContextMenuSeparator />
-        <ContextMenuGroup>
-          <ContextMenuItem
-            onClick={() => revealAndScrollTo("section", currentSection.id)}
-          >
-            <CrosshairSimple aria-hidden="true" />
-            Go to current section
-          </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => revealAndScrollTo("chapter", currentSection.id)}
-          >
-            <Play aria-hidden="true" />
-            Go to current lecture
-          </ContextMenuItem>
-          <ContextMenuItem onClick={openLessonSearch}>
-            <ListMagnifyingGlass aria-hidden="true" />
-            Search lectures
-          </ContextMenuItem>
-        </ContextMenuGroup>
-        <ContextMenuSeparator />
-        <ContextMenuGroup>
-          <ContextMenuItem onClick={onOpenCourseOverview}>
-            <Eye aria-hidden />
-            View course overview
-          </ContextMenuItem>
-        </ContextMenuGroup>
-      </ContextMenuContent>
+      />
     </ContextMenu>
   );
 }

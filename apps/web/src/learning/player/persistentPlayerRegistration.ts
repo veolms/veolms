@@ -18,3 +18,20 @@ export const shouldDemoteDetachedPersistentPlayer = ({
 }: PersistentPlayerCleanupState) =>
   presentation === "full" &&
   currentRestoreVersion === restoreVersionAtRegistration;
+
+/**
+ * Playing the same course that is already in the mini player should expand
+ * into the full lesson player instead of leaving a hollow learning page.
+ */
+export const shouldRestoreMiniPlayerForMatchingCourse = ({
+  presentation,
+  activeCourseRouteKey,
+  requestedCourseRouteKey,
+}: {
+  presentation: LearningPlayerPresentation;
+  activeCourseRouteKey?: string | null;
+  requestedCourseRouteKey?: string | null;
+}) =>
+  presentation === "mini" &&
+  Boolean(activeCourseRouteKey) &&
+  activeCourseRouteKey === requestedCourseRouteKey;

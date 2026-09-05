@@ -3,14 +3,18 @@ import {
   lessonPlayerStorageKeys,
   readAmbientPreference,
   readAutoplayPreference,
+  readMiniPlayerWidthPreference,
   readMutedPreference,
   readPlaybackRatePreference,
   readResumePosition,
+  readVolumePreference,
   writeAmbientPreference,
   writeAutoplayPreference,
+  writeMiniPlayerWidthPreference,
   writeMutedPreference,
   writePlaybackRatePreference,
   writeResumePosition,
+  writeVolumePreference,
 } from "../../src/learning/player/lessonPlayerPersistence.js";
 
 const storageWith = (values: Record<string, string>) => ({
@@ -47,6 +51,25 @@ describe("lesson player persistence", () => {
     ).toBe(false);
   });
 
+  it("defaults volume to full and restores a clamped saved level", () => {
+    expect(readVolumePreference(storageWith({}))).toBe(1);
+    expect(
+      readVolumePreference(
+        storageWith({ [lessonPlayerStorageKeys.volume]: "0.35" }),
+      ),
+    ).toBe(0.35);
+    expect(
+      readVolumePreference(
+        storageWith({ [lessonPlayerStorageKeys.volume]: "2" }),
+      ),
+    ).toBe(1);
+    expect(
+      readVolumePreference(
+        storageWith({ [lessonPlayerStorageKeys.volume]: "invalid" }),
+      ),
+    ).toBe(1);
+  });
+
   it("defaults playback speed to normal and restores a valid saved rate", () => {
     expect(readPlaybackRatePreference(storageWith({}))).toBe(1);
     expect(
@@ -59,6 +82,27 @@ describe("lesson player persistence", () => {
         storageWith({ [lessonPlayerStorageKeys.playbackRate]: "invalid" }),
       ),
     ).toBe(1);
+  });
+
+  it("restores and writes the device-local mini-player width", () => {
+    expect(readMiniPlayerWidthPreference(storageWith({}))).toBeNull();
+    expect(
+      readMiniPlayerWidthPreference(
+        storageWith({ [lessonPlayerStorageKeys.miniPlayerWidth]: "248" }),
+      ),
+    ).toBe(248);
+    expect(
+      readMiniPlayerWidthPreference(
+        storageWith({ [lessonPlayerStorageKeys.miniPlayerWidth]: "invalid" }),
+      ),
+    ).toBeNull();
+
+    const setItem = vi.fn();
+    writeMiniPlayerWidthPreference(248.4, { setItem });
+    expect(setItem).toHaveBeenCalledWith(
+      lessonPlayerStorageKeys.miniPlayerWidth,
+      "248",
+    );
   });
 
   it("isolates and clamps resume positions by caller-provided media key", () => {
@@ -86,12 +130,18 @@ describe("lesson player persistence", () => {
     expect(readAmbientPreference(blockedStorage, true)).toBe(false);
     expect(readAutoplayPreference(blockedStorage)).toBe(true);
     expect(readPlaybackRatePreference(blockedStorage)).toBe(1);
+    expect(readVolumePreference(blockedStorage)).toBe(1);
+    expect(readMiniPlayerWidthPreference(blockedStorage)).toBeNull();
     expect(readResumePosition("lesson", 90, blockedStorage)).toBe(0);
     expect(() => writeMutedPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAmbientPreference(true, blockedStorage)).not.toThrow();
     expect(() => writeAutoplayPreference(true, blockedStorage)).not.toThrow();
     expect(() =>
       writePlaybackRatePreference(1.5, blockedStorage),
+    ).not.toThrow();
+    expect(() => writeVolumePreference(0.4, blockedStorage)).not.toThrow();
+    expect(() =>
+      writeMiniPlayerWidthPreference(240, blockedStorage),
     ).not.toThrow();
     expect(() =>
       writeResumePosition("lesson", 12, blockedStorage),
@@ -106,6 +156,7 @@ describe("lesson player persistence", () => {
     writeAmbientPreference(false, storage);
     writeAutoplayPreference(true, storage);
     writePlaybackRatePreference(1.5, storage);
+    writeVolumePreference(0.4, storage);
     writeResumePosition("course-a-lesson-7", 42, storage);
 
     expect(setItem).toHaveBeenNthCalledWith(
@@ -130,6 +181,11 @@ describe("lesson player persistence", () => {
     );
     expect(setItem).toHaveBeenNthCalledWith(
       5,
+      lessonPlayerStorageKeys.volume,
+      "0.4",
+    );
+    expect(setItem).toHaveBeenNthCalledWith(
+      6,
       "veolms-watch-course-a-lesson-7",
       "42",
     );

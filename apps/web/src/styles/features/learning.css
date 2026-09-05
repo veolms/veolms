@@ -36,7 +36,8 @@
   }
 
   :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
-    .courses-main--learning:has(+ .floating-scrollbar--learning-page.is-visible)
+    .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
+    > .courses-main--learning
     .learning-workspace__main:has(
       .learning-workspace__curriculum-column:not(.is-collapsed)
     ) {
@@ -55,8 +56,24 @@
 }
 
 .learning-workspace__lesson-column,
-.learning-workspace__curriculum-column {
+.learning-workspace__curriculum-column,
+.learning-workspace__curriculum-clip,
+.learning-workspace__lesson-content-clip {
   min-width: 0;
+}
+
+.learning-workspace__curriculum-clip,
+.learning-workspace__lesson-content-clip {
+  min-height: 0;
+}
+
+@media (min-width: 641px) {
+  [data-learning-motion-surface][data-learning-player-motion-phase]
+    .learning-workspace__curriculum-clip,
+  [data-learning-motion-surface][data-learning-player-motion-phase]
+    .learning-workspace__lesson-content-clip {
+    overflow: hidden;
+  }
 }
 
 .learning-workspace__lesson-content {
@@ -69,6 +86,10 @@
   position: relative;
 }
 
+.learning-workspace__player-wrap:has([data-learning-player-initial-loader]) {
+  z-index: 2;
+}
+
 .learning-workspace__player-wrap:has([data-learning-player-anchor]) {
   pointer-events: none;
   background: transparent;
@@ -77,6 +98,18 @@
 
 [data-learning-player-anchor] {
   anchor-name: --learning-persistent-player-slot;
+}
+
+/* The prerendered anchor owns first-paint chrome + loader. Once React
+   installs the persistent player, return the anchor to its transparent shell. */
+.courses-main:has([data-learning-persistent-player])
+  [data-learning-player-anchor] {
+  background: transparent;
+}
+
+.courses-main:has([data-learning-persistent-player])
+  [data-learning-player-initial-loader] {
+  display: none;
 }
 
 .learning-persistent-player--full {
@@ -111,6 +144,20 @@
   inset: 1%;
   width: 98%;
   height: 98%;
+}
+
+@media (max-width: 640px) {
+  /* Prevent video overlays (such as scaled/blurred ambient projections) from
+     bleeding past mobile viewport boundaries, which causes horizontal
+     document overflow and pushes fixed bottom navigation offscreen. */
+  [data-video-player-shell-overlay-host] {
+    overflow: hidden;
+    contain: paint;
+  }
+
+  .learning-persistent-player--full {
+    overflow-x: clip;
+  }
 }
 
 /* Large blurred projections are expensive to resample while either desktop
@@ -295,7 +342,7 @@
   );
   box-sizing: border-box;
   gap: 16px;
-  margin-top: 0;
+  margin-top: 8px;
   margin-inline: calc(-1 * var(--learning-lesson-content-inset));
   padding: 10px var(--learning-lesson-content-inset);
   border: 0;
@@ -428,7 +475,8 @@
 
 @media (min-width: 1081px) {
   :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
-    .courses-main--learning:has(+ .floating-scrollbar--learning-page.is-visible)
+    .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
+    > .courses-main--learning
     .learning-curriculum__resize-rail::before {
     width: 2px;
     opacity: 0;
@@ -483,6 +531,20 @@
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 91%, var(--canvas));
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
+}
+
+/* Compact playlists sit flush under the mini-player info bar. The aside
+   already rounds the window; clipping Section 1 here makes a false radius. */
+.learning-curriculum--compact {
+  border-radius: 0 !important;
+  box-shadow: none;
+}
+
+.learning-curriculum--compact .learning-curriculum__section:first-child,
+.learning-curriculum--compact
+  .learning-curriculum__section:first-child
+  .learning-curriculum__section-toggle {
+  border-radius: 0 !important;
 }
 
 :root:not([data-scrollbar-style="default"]) .learning-curriculum {
@@ -1326,6 +1388,7 @@
 
   .learning-workspace__lesson-heading {
     padding-block: 10px;
+    padding-top: 6px;
   }
 }
 
@@ -1356,7 +1419,7 @@
   }
 }
 
-@media (min-width: 821px) and (max-width: 1080px) {
+@media (min-width: 641px) and (max-width: 1080px) {
   :root:not([data-content-layout="edge-to-edge"])
     .learning-workspace__player-wrap
     .youtube-player {
@@ -1397,6 +1460,7 @@
 
   .learning-workspace__lesson-heading {
     padding-block: 16px;
+    padding-top: 4px;
   }
 
   .learning-workspace__lesson-heading h1 {
@@ -1477,4 +1541,182 @@
     var(--learning-comment-drawer-visible-height) -
       max(13px, var(--app-safe-area-bottom))
   );
+}
+
+/* Mini player window keeps a full 12px radius so the info bar and
+   chapter/section list sit inside a rounded shell. The video itself
+   stays square at the bottom where it meets that content; the aside
+   clips the video's top corners. */
+aside[data-learning-mini-player] {
+  overflow: hidden !important;
+  border-radius: 12px !important;
+}
+
+aside[data-learning-mini-player] .video-shell,
+aside[data-learning-mini-player] .youtube-player,
+aside[data-learning-mini-player] video {
+  border-radius: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Scoped curriculum styling inside minimized desktop player */
+aside[data-learning-mini-player] {
+  --learning-mini-player-curriculum-bg: color-mix(
+    in srgb,
+    var(--accent) 5%,
+    #0a0a0c
+  );
+  --learning-mini-player-info-bar-bg: color-mix(
+    in srgb,
+    var(--accent) 24%,
+    #0a0a0c
+  );
+  --learning-mini-player-info-bar-bg-hover: color-mix(
+    in srgb,
+    var(--accent) 30%,
+    #0a0a0c
+  );
+  --learning-mini-player-section-bg: color-mix(
+    in srgb,
+    var(--accent) 9%,
+    #0a0a0c
+  );
+  --learning-mini-player-section-toggle-bg: color-mix(
+    in srgb,
+    var(--accent) 14%,
+    #0a0a0c
+  );
+  --learning-mini-player-section-toggle-bg-hover: color-mix(
+    in srgb,
+    var(--accent) 18%,
+    #0a0a0c
+  );
+  --learning-mini-player-chrome-border: color-mix(
+    in srgb,
+    var(--accent) 22%,
+    transparent
+  );
+}
+
+aside[data-learning-mini-player] [data-learning-mini-player-info-bar] {
+  background: var(--learning-mini-player-info-bar-bg) !important;
+  border-top-color: var(--learning-mini-player-chrome-border) !important;
+  transition: background-color 150ms ease;
+}
+
+aside[data-learning-mini-player] [data-learning-mini-player-info-bar]:hover {
+  background: var(--learning-mini-player-info-bar-bg-hover) !important;
+}
+
+aside[data-learning-mini-player]
+  [data-learning-mini-player-info-bar]
+  [data-learning-mini-player-info-subtitle] {
+  color: color-mix(in srgb, var(--text-secondary) 68%, var(--accent) 32%);
+}
+
+aside[data-learning-mini-player]
+  [data-learning-mini-player-info-bar]
+  [data-learning-mini-player-info-caret] {
+  color: color-mix(in srgb, var(--text-secondary) 58%, var(--accent) 42%);
+  transition: color 150ms ease;
+}
+
+aside[data-learning-mini-player]
+  [data-learning-mini-player-info-bar]:hover
+  [data-learning-mini-player-info-caret] {
+  color: var(--text);
+}
+
+aside[data-learning-mini-player] .learning-curriculum,
+aside[data-learning-mini-player] .learning-curriculum--compact {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--learning-mini-player-curriculum-bg) !important;
+  height: var(--learning-mini-player-playlist-height, 320px) !important;
+  max-height: var(--learning-mini-player-playlist-height, 320px) !important;
+  width: 100% !important;
+}
+
+aside[data-learning-mini-player] .learning-curriculum__lesson {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+aside[data-learning-mini-player] .learning-curriculum__section {
+  border-radius: 0 !important;
+  background: var(--learning-mini-player-section-bg) !important;
+}
+
+aside[data-learning-mini-player] .learning-curriculum__section-toggle {
+  border-radius: 0 !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  min-height: 48px !important;
+  background: var(--learning-mini-player-section-toggle-bg) !important;
+}
+
+aside[data-learning-mini-player] .learning-curriculum__section-toggle:hover {
+  background: var(--learning-mini-player-section-toggle-bg-hover) !important;
+}
+
+aside[data-learning-mini-player] .learning-curriculum__lesson.is-active {
+  background: color-mix(in srgb, var(--accent) 24%, #0a0a0c) !important;
+}
+
+aside[data-learning-mini-player] [data-learning-mini-player-playlist-shell] {
+  border-top: 1px solid var(--learning-mini-player-chrome-border);
+}
+
+/* Minimized video player timeline: extends 8px (>=6px) below video window for easy clicking while visual track stays pinned to bottom edge */
+[data-learning-mini-player-timeline] [role="slider"] {
+  height: 32px !important;
+  margin-bottom: -8px !important;
+}
+
+/* Keep the scrubber flush with the square video bottom; window rounding
+   belongs on the aside that wraps the chapter list, not the video. */
+[data-learning-mini-player-timeline] [data-timeline-visual] {
+  top: -30px !important;
+  bottom: 8px !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+}
+
+[data-learning-mini-player-timeline] [data-timeline-track] {
+  top: auto !important;
+  bottom: 0 !important;
+  height: 2px !important;
+  border-radius: 0 !important;
+  transform: none !important;
+  transition: height 120ms ease !important;
+}
+
+[data-learning-mini-player-timeline] [data-timeline-buffered-range],
+[data-learning-mini-player-timeline] [data-timeline-progress] {
+  border-radius: 0 !important;
+}
+
+[data-learning-mini-player-timeline] [data-timeline-thumb] {
+  display: none !important;
+}
+
+[data-learning-mini-player-timeline]:hover [data-timeline-track],
+[data-learning-mini-player-timeline]
+  [role="slider"]:hover
+  [data-timeline-track],
+[data-learning-mini-player-timeline]
+  [data-scrubbing="true"]
+  [data-timeline-track],
+[data-learning-mini-player-timeline]:focus-within [data-timeline-track],
+[data-learning-mini-player-timeline]
+  .group\/timeline:hover
+  [data-timeline-track] {
+  height: 3px !important;
+}
+
+/* Move preview tooltip closer to the timeline in minimized view only (halving the distance) */
+[data-learning-mini-player-timeline] [data-video-player-preview] {
+  bottom: 17px !important;
+  margin-bottom: 0 !important;
 }

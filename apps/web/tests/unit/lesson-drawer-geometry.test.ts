@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  getPhoneLessonDrawerCollapsedSnapPoint,
   getSideLessonDrawerBounds,
   LESSON_DRAWER_MAX_FLOATING_WIDTH,
   LESSON_DRAWER_MAX_TABLET_WIDTH,
   LESSON_DRAWER_MIN_FLOATING_WIDTH,
   LESSON_DRAWER_TABLET_GUTTER,
+  PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
 } from "../../src/learning/useLessonDrawerHeroControl.ts";
 
 describe("getSideLessonDrawerBounds", () => {
@@ -53,5 +55,19 @@ describe("getSideLessonDrawerBounds", () => {
     });
     expect(widerBounds!.left + widerBounds!.width).toBe(1020);
     expect(narrowerBounds!.left + narrowerBounds!.width).toBe(1020);
+  });
+});
+
+describe("getPhoneLessonDrawerCollapsedSnapPoint", () => {
+  it("covers the player timeline by sitting 12px above the player bottom", () => {
+    expect(getPhoneLessonDrawerCollapsedSnapPoint(800, 300)).toBe(
+      800 - 300 + PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
+    );
+  });
+
+  it("falls back when the player bottom is unavailable", () => {
+    expect(getPhoneLessonDrawerCollapsedSnapPoint(800, undefined, 0.72)).toBe(
+      0.72,
+    );
   });
 });

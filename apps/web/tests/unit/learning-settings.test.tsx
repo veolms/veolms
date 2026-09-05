@@ -72,6 +72,33 @@ describe("LearningSettings curriculum test controls", () => {
     expect(screen.getByText("47s")).toBeVisible();
   });
 
+  it("persists the off-by-default start-from-beginning preference", async () => {
+    const { unmount } = render(<LearningSettings />);
+
+    const startFromBeginning = await screen.findByRole("switch", {
+      name: "Always start lectures from beginning",
+    });
+    expect(startFromBeginning).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(startFromBeginning);
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem(LEARNING_PREFERENCES_KEY) || "{}")
+          .resumeFromLastPosition,
+      ).toBe(false),
+    );
+    expect(startFromBeginning).toHaveAttribute("aria-checked", "true");
+
+    unmount();
+    render(<LearningSettings />);
+    expect(
+      await screen.findByRole("switch", {
+        name: "Always start lectures from beginning",
+      }),
+    ).toHaveAttribute("aria-checked", "true");
+  });
+
   it("saves a player-only theme without changing the application theme", async () => {
     render(<LearningSettings />);
 

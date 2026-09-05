@@ -8,6 +8,7 @@ import {
   PlayerMenuItem,
   PopoverMenu,
   type PopoverMenuMobilePresentation,
+  type PopoverMenuSide,
 } from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
@@ -22,6 +23,7 @@ export interface SettingsMenuProps {
   /** Application-specific settings appended to the main settings view. */
   extraMainItems?: ReactNode;
   triggerClassName?: string;
+  side?: PopoverMenuSide;
 }
 
 export function SettingsMenu({
@@ -31,6 +33,7 @@ export function SettingsMenu({
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
   triggerClassName,
+  side = "top",
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
@@ -99,8 +102,15 @@ export function SettingsMenu({
       mobileSheetPanelClassName={mobileSheetPanelClassName}
       mobileSheetPortalTarget={mobileSheetPortalTarget}
       align="end"
-      side="top"
-      panelClassName={mobileInteraction ? undefined : "backdrop-blur-sm !mb-8"}
+      side={side}
+      panelClassName={
+        mobileInteraction
+          ? undefined
+          : side === "top"
+            ? "backdrop-blur-sm !mb-8"
+            : "backdrop-blur-sm"
+      }
+      closeOnItemSelect={!(mobilePresentation === "sheet" && mobileInteraction)}
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
@@ -117,7 +127,7 @@ export function SettingsMenu({
         />
       }
     >
-      {({ close }) => (
+      {() => (
         <div
           className={`[&_button]:min-h-11 sm:[&_button]:min-h-10 ${
             mobileInteraction ? "[&_button]:!min-h-11" : ""
@@ -227,7 +237,6 @@ export function SettingsMenu({
                   }
                   onClick={() => {
                     void controller.togglePictureInPicture();
-                    close();
                   }}
                 />
               ) : null}
@@ -242,7 +251,6 @@ export function SettingsMenu({
                 selected={media.autoQuality}
                 onClick={() => {
                   controller.selectQuality(null);
-                  close();
                 }}
               />
               {media.qualities
@@ -263,7 +271,6 @@ export function SettingsMenu({
                     }
                     onClick={() => {
                       controller.selectQuality(quality.id);
-                      close();
                     }}
                   />
                 ))}
@@ -284,7 +291,6 @@ export function SettingsMenu({
                 selected={!activeTextTrack}
                 onClick={() => {
                   controller.selectTextTrack(null);
-                  close();
                 }}
               />
               {media.textTracks.map((track) => (
@@ -300,7 +306,6 @@ export function SettingsMenu({
                   selected={track.id === activeTextTrack?.id}
                   onClick={() => {
                     controller.selectTextTrack(track.id);
-                    close();
                   }}
                 />
               ))}
@@ -316,7 +321,6 @@ export function SettingsMenu({
                   selected={track.id === media.selectedAudioTrackId}
                   onClick={() => {
                     controller.selectAudioTrack(track.id);
-                    close();
                   }}
                 />
               ))
@@ -331,7 +335,6 @@ export function SettingsMenu({
                   selected={chapter.id === activeChapterId}
                   onClick={() => {
                     controller.seekTo(chapter.startTime);
-                    close();
                   }}
                 />
               ))

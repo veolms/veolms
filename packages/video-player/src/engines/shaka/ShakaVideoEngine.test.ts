@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ShakaNetworkRequestLike,
   ShakaRequestFilterLike,
   ShakaResponseFilterLike,
 } from "./shaka-internal";
+import { SHAKA_SEGMENT_PREFETCH_LIMIT } from "./shaka-internal";
+import {
+  setEarlyShakaPreloadSessionForTests,
+} from "./shaka-early-preload";
 import { ShakaVideoEngine } from "./ShakaVideoEngine";
 
 class FakeMediaElement extends EventTarget {
@@ -48,6 +52,10 @@ class FakeNetworkingEngine {
   });
 }
 
+class FakePreloadManager {
+  readonly destroy = vi.fn(async () => undefined);
+}
+
 class FakeShakaPlayer {
   readonly networking = new FakeNetworkingEngine();
   readonly listeners = new Map<string, Set<(event: object) => void>>();
@@ -58,6 +66,7 @@ class FakeShakaPlayer {
   readonly destroy = vi.fn(async () => undefined);
   readonly resetConfiguration = vi.fn();
   readonly load = vi.fn(async () => undefined as unknown);
+  readonly preload = vi.fn(async () => null as FakePreloadManager | null);
   readonly addTextTrackAsync = vi.fn(async () => undefined as unknown);
   variants = [
     {
@@ -189,10 +198,12 @@ function asMediaElement(media: FakeMediaElement): HTMLMediaElement {
 }
 
 function runtimeFor(player: FakeShakaPlayer): object {
-  const Player = function (): FakeShakaPlayer {
-    return player;
-  } as unknown as { new (): FakeShakaPlayer; isBrowserSupported(): boolean };
-  Player.isBrowserSupported = () => true;
+  const Player = Object.assign(
+    vi.fn(function FakePlayer() {
+      return player;
+    }),
+    { isBrowserSupported: () => true },
+  );
 
   return {
     default: {
@@ -214,6 +225,9 @@ function runtimeFor(player: FakeShakaPlayer): object {
 }
 
 describe("ShakaVideoEngine", () => {
+  afterEach(() => {
+    setEarlyShakaPreloadSessionForTests(null);
+  });
   it("loads Shaka lazily and normalizes tracks", async () => {
     const player = new FakeShakaPlayer();
     const runtimeLoader = vi.fn(async () => runtimeFor(player));
@@ -364,6 +378,7 @@ describe("ShakaVideoEngine", () => {
     expect(player.configurations[0]).toMatchObject({
       streaming: {
         bufferingGoal: 20,
+        segmentPrefetchLimit: SHAKA_SEGMENT_PREFETCH_LIMIT,
         retryParameters: { maxAttempts: 4, baseDelay: 250 },
       },
       abr: { enabled: true },
@@ -516,5 +531,80 @@ describe("ShakaVideoEngine", () => {
     expect(player.destroy).toHaveBeenCalledOnce();
     expect(player.listeners.get("error")?.size ?? 0).toBe(0);
     expect(engine.getSnapshot().lifecycle).toBe("destroyed");
+  });
+
+  it("adopts the early Shaka player and loads its PreloadManager", async () => {
+    const player = new FakeShakaPlayer();
+    const manager = new FakePreloadManager();
+    const runtime = runtimeFor(player) as {
+      default: { Player: ReturnType<typeof vi.fn> };
+    };
+    setEarlyShakaPreloadSessionForTests({
+      manifestUrl: "lesson.m3u8",
+      player,
+      preloadPromise: Promise.resolve(manager),
+      consumed: false,
+      ready: Promise.resolve(),
+    });
+    const engine = new ShakaVideoEngine({
+      runtimeLoader: async () => runtime,
+    });
+    await engine.attach(asMediaElement(new FakeMediaElement()));
+    await engine.load({
+      src: "lesson.m3u8",
+      kind: "hls",
+      startTime: 8,
+    });
+
+    expect(runtime.default.Player).not.toHaveBeenCalled();
+    expect(player.resetConfiguration).not.toHaveBeenCalled();
+    expect(player.load).toHaveBeenCalledWith(manager, 8);
+    expect(player.preload).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the URL load on the same player when preload is null", async () => {
+    const player = new FakeShakaPlayer();
+    setEarlyShakaPreloadSessionForTests({
+      manifestUrl: "lesson.m3u8",
+      player,
+      preloadPromise: Promise.resolve(null),
+      consumed: false,
+      ready: Promise.resolve(),
+    });
+    const engine = new ShakaVideoEngine({
+      runtimeLoader: async () => runtimeFor(player),
+    });
+    await engine.attach(asMediaElement(new FakeMediaElement()));
+    await engine.load({ src: "lesson.m3u8", kind: "hls" });
+
+    expect(player.load).toHaveBeenCalledWith(
+      "lesson.m3u8",
+      undefined,
+      "application/x-mpegurl",
+    );
+  });
+
+  it("does not consume a preload session for a different manifest", async () => {
+    const player = new FakeShakaPlayer();
+    const manager = new FakePreloadManager();
+    setEarlyShakaPreloadSessionForTests({
+      manifestUrl: "first.m3u8",
+      player,
+      preloadPromise: Promise.resolve(manager),
+      consumed: false,
+      ready: Promise.resolve(),
+    });
+    const engine = new ShakaVideoEngine({
+      runtimeLoader: async () => runtimeFor(player),
+    });
+    await engine.attach(asMediaElement(new FakeMediaElement()));
+    await engine.load({ src: "second.m3u8", kind: "hls" });
+
+    expect(player.load).toHaveBeenCalledWith(
+      "second.m3u8",
+      undefined,
+      "application/x-mpegurl",
+    );
+    await vi.waitFor(() => expect(manager.destroy).toHaveBeenCalledOnce());
   });
 });

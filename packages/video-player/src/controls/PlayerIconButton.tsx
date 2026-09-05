@@ -24,7 +24,7 @@ export function PlayerIconButton({
       aria-label={label}
       aria-pressed={pressed}
       data-player-control=""
-      title={props.title ?? label}
+      title={props.title === undefined ? label : props.title || undefined}
     >
       {icon}
     </button>

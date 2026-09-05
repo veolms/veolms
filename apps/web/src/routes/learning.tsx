@@ -7,10 +7,15 @@ import {
 } from "react-router";
 import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
+import {
+  getLearningHlsBootstrap,
+  getLearningHlsPreconnectHref,
+  LEARNING_HLS_MANIFEST_META_NAME,
+  LEARNING_HLS_MEDIA_KEY_META_NAME,
+} from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
-  getCoursePlayerBackLabel,
   getCoursePlayerOrigin,
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
@@ -31,11 +36,27 @@ const COURSE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function meta({ location, params }: Route.MetaArgs) {
-  return Object.entries(
+  const descriptors = Object.entries(
     getRouteMeta("learning", params, location.pathname),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );
+  const bootstrap = getLearningHlsBootstrap(params);
+  if (!bootstrap) return descriptors;
+  return [
+    ...descriptors,
+    { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
+    { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
+  ];
+}
+
+export function links(args?: Pick<Route.MetaArgs, "params">) {
+  const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
+  if (!bootstrap) return [];
+  const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
+  return preconnectHref
+    ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
+    : [];
 }
 
 export default function LearningRoute() {
@@ -49,6 +70,7 @@ export default function LearningRoute() {
     onLearningPlayerMinimizeGestureChange,
     onMiniPlayerRestoreReady,
     openLearningMiniPlayer,
+    persistentPlayerMounted,
     registerPersistentPlayer,
   } = useOutletContext<AcademyOutletContext>();
   const { data: authUser } = useCurrentUser();
@@ -174,21 +196,14 @@ export default function LearningRoute() {
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
       );
-      void navigate(path, { preventScrollReset: true });
+      navigateTo(path, { exact: true });
     },
-    [courseSlug, navigate, origin, routeReturnPath],
+    [courseSlug, navigateTo, origin, routeReturnPath],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
   }, [courseSlug, navigateTo]);
-  const navigateBack = useCallback(() => {
-    navigateTo(
-      (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        routeReturnPath,
-      { exact: true },
-    );
-  }, [courseSlug, navigateTo, routeReturnPath]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {
       const returnPath =
@@ -216,10 +231,8 @@ export default function LearningRoute() {
       lessonId={lessonId}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-      backLabel={getCoursePlayerBackLabel(routeReturnPath)}
       onSelectLesson={selectLesson}
       onOpenCourseOverview={openCourseOverview}
-      onNavigateBack={navigateBack}
       onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
       onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
       persistentPlayerCourseRouteKey={courseSlug}
@@ -228,6 +241,7 @@ export default function LearningRoute() {
         (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
         routeReturnPath
       }
+      persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
     />

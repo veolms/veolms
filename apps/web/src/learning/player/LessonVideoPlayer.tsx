@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
@@ -16,30 +16,38 @@ import { LessonAmbientProjection } from "./LessonAmbientProjection";
 import {
   LessonCentralControls,
   LessonPlayerControls,
+  type CourseLessonsSecondPressHoldProps,
 } from "./LessonPlayerControls";
 import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
+import {
+  getInitialLearningPlayerPreferences,
+  publishLearningPlayerBootstrap,
+} from "../learningPlayerPreferences";
 import {
   getLearningMiniPlayerRuntimeSnapshot,
   prepareLearningMiniPlayerPlaybackHandoff,
 } from "./learningMiniPlayerStore";
 import {
+  clampPlayerVolume,
   consumeMiniPlayerRestore,
   lessonPlayerStorageKeys,
   readAmbientPreference,
-  readMutedPreference,
-  readPlaybackRatePreference,
   readResumePosition,
   writeAmbientPreference,
   writeMutedPreference,
   writePlaybackRatePreference,
   writeResumePosition,
+  writeVolumePreference,
 } from "./lessonPlayerPersistence";
+import { createLearningLessonVideoSource } from "./lessonVideoSource";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
+import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
 import {
   useLessonPlayerMinimizeGesture,
   type LessonPlayerMinimizeGestureState,
 } from "./useLessonPlayerMinimizeGesture";
+import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
 import { cn } from "../../lib/utils";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
@@ -48,6 +56,7 @@ const LESSON_PLAYER_SHORTCUTS = {
   seekBackwardLarge: false,
   seekForwardLarge: false,
   toggleTheaterMode: false,
+  togglePictureInPicture: false,
 } as const;
 
 type FullscreenCoursePanelStyle = CSSProperties & {
@@ -60,6 +69,9 @@ type FullscreenCoursePanelStyle = CSSProperties & {
 export interface LessonVideoPlayerProps {
   media: CourseVideo;
   lessonTitle: string;
+  courseTitle?: string;
+  lessonIndex?: number;
+  totalLessons?: number;
   theaterMode: boolean;
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
@@ -67,7 +79,11 @@ export interface LessonVideoPlayerProps {
   canGoNext?: boolean;
   canGoPrevious?: boolean;
   courseLessonsOpen?: boolean;
+  courseLessonsDrawerOpen?: boolean;
   courseLessonsPanel?: ReactNode;
+  courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
+  courseLessonsShortcutLabel?: string;
+  courseLessonsSidePanel?: boolean;
   courseLessonsVideoWidthPercent?: number;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
@@ -95,11 +111,18 @@ export function LessonVideoPlayer({
   canGoNext = false,
   canGoPrevious = false,
   courseLessonsOpen = false,
+  courseLessonsDrawerOpen = false,
   courseLessonsPanel,
+  courseLessonsSecondPressHold,
+  courseLessonsShortcutLabel,
+  courseLessonsSidePanel = false,
   courseLessonsVideoWidthPercent = 60,
+  courseTitle,
   engineFactory,
+  lessonIndex,
   lessonTitle,
   media,
+  totalLessons,
   onProgressChange,
   onAutoplayEnabledChange = () => undefined,
   onCourseLessonsToggle,
@@ -125,9 +148,13 @@ export function LessonVideoPlayer({
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
   const handoffMutingRef = useRef(false);
-  // Keep the server and first client render deterministic, then restore the
-  // device preference after hydration just like the legacy lesson player.
-  const [muted, setMuted] = useState(false);
+  const [initialPlayerPreferences] = useState(
+    getInitialLearningPlayerPreferences,
+  );
+  const playerPrefsRef = useRef({ ...initialPlayerPreferences });
+  const playbackPrefsAppliedRef = useRef(false);
+  const applyingPlaybackPrefsRef = useRef(false);
+  const [muted, setMuted] = useState(initialPlayerPreferences.muted);
   const [ambientEnabled, setAmbientEnabled] = useState(false);
   const [seekIntervalSeconds, setSeekIntervalSeconds] = useState(
     LEARNING_SEEK_INTERVAL_DEFAULT,
@@ -145,32 +172,15 @@ export function LessonVideoPlayer({
   requestedMediaKeyRef.current = mediaKey;
 
   const source = useMemo<VideoSource>(() => {
-    const isHls = /\.m3u8(?:$|[?#])/i.test(media.src);
-    return {
-      id: mediaKey,
-      src: media.src,
-      type: isHls ? "application/x-mpegurl" : "video/mp4",
-      kind: isHls ? "hls" : "file",
-      // The catalog duration can be stale after an asset replacement. Shaka
-      // receives the stored position and the loaded event clamps it against
-      // the actual media duration before progress is reported.
-      startTime: readResumePosition(mediaKey),
-      metadata: {
-        duration: media.duration,
-        title: lessonTitle,
-      },
-      streaming: isHls ? { abrEnabled: true, bufferBehind: 600 } : undefined,
-      textTracks: [
-        {
-          src: "/assets/designing-users.vtt",
-          language: "en",
-          label: "English",
-          kind: "captions",
-          mimeType: "text/vtt",
-        },
-      ],
-    };
-  }, [lessonTitle, media.duration, media.src, mediaKey]);
+    const resumeFromLastPosition =
+      readLearningPreferences().resumeFromLastPosition;
+    return createLearningLessonVideoSource({
+      media,
+      lessonTitle,
+      mediaKey,
+      startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
+    });
+  }, [lessonTitle, media, mediaKey]);
 
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;
@@ -277,7 +287,21 @@ export function LessonVideoPlayer({
         }
         latestPositionRef.current = clampedPosition;
         lastPersistedAtRef.current = null;
-        playerRef.current?.setPlaybackRate(readPlaybackRatePreference());
+        applyingPlaybackPrefsRef.current = true;
+        try {
+          playerRef.current?.setPlaybackRate(
+            playerPrefsRef.current.playbackRate,
+          );
+          playerRef.current?.setVolume(playerPrefsRef.current.volume);
+          playerRef.current?.setMuted(
+            restoreAutoplayRef.current !== null
+              ? true
+              : playerPrefsRef.current.muted,
+          );
+        } finally {
+          applyingPlaybackPrefsRef.current = false;
+          playbackPrefsAppliedRef.current = true;
+        }
         if (restoreAutoplayRef.current !== null) {
           const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
           if (livePlayback) {
@@ -340,15 +364,34 @@ export function LessonVideoPlayer({
           onLessonEnded?.();
         }
       } else if (event.type === "volumechange") {
-        if (restoreAutoplayRef.current !== null || handoffMutingRef.current) {
+        if (
+          restoreAutoplayRef.current !== null ||
+          handoffMutingRef.current ||
+          applyingPlaybackPrefsRef.current
+        ) {
           return;
         }
         setMuted(event.detail.muted);
+        playerPrefsRef.current.muted = event.detail.muted;
         if (preferencesReadyRef.current) {
           writeMutedPreference(event.detail.muted);
+          if (playbackPrefsAppliedRef.current) {
+            playerPrefsRef.current.volume = event.detail.volume;
+            writeVolumePreference(event.detail.volume);
+            publishLearningPlayerBootstrap({
+              muted: event.detail.muted,
+              volume: event.detail.volume,
+            });
+          } else {
+            publishLearningPlayerBootstrap({ muted: event.detail.muted });
+          }
         }
       } else if (event.type === "ratechange") {
+        playerPrefsRef.current.playbackRate = event.detail.playbackRate;
         writePlaybackRatePreference(event.detail.playbackRate);
+        publishLearningPlayerBootstrap({
+          playbackRate: event.detail.playbackRate,
+        });
       } else if (event.type === "texttrackchange") {
         captionsEnabledRef.current = event.detail.track !== null;
       }
@@ -374,6 +417,9 @@ export function LessonVideoPlayer({
     onMinimize({
       currentTime,
       lessonTitle,
+      courseTitle,
+      lessonIndex,
+      totalLessons,
       mediaKey,
       muted: snapshot?.media.muted ?? muted,
       playbackRate: snapshot?.media.playbackRate ?? 1,
@@ -397,6 +443,17 @@ export function LessonVideoPlayer({
     });
   }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
 
+  const minimizeGesture = useLessonPlayerMinimizeGesture({
+    enabled: presentation === "full" && Boolean(onMinimize),
+    fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
+    motionTarget: minimizeMotionTarget,
+    onCommit: minimizePlayer,
+    onGestureStart: onMinimizeGestureStart,
+    onSettlingMiniPress: onMiniRestore,
+    onStateChange: onMinimizeGestureChange,
+    preserveTerminalStateOnDisable: presentation === "mini",
+  });
+
   const minimizePlayerFromControl = useCallback(async () => {
     if (!onMinimize) return;
     const player = playerRef.current;
@@ -407,18 +464,14 @@ export function LessonVideoPlayer({
         return;
       }
     }
-    minimizePlayer();
-  }, [minimizePlayer, onMinimize]);
+    minimizeGesture.animateMinimize();
+  }, [minimizeGesture, onMinimize]);
 
-  const minimizeGesture = useLessonPlayerMinimizeGesture({
+  useLearningPlayerMinimizeShortcut({
     enabled: presentation === "full" && Boolean(onMinimize),
-    fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
-    motionTarget: minimizeMotionTarget,
-    onCommit: minimizePlayer,
-    onGestureStart: onMinimizeGestureStart,
-    onSettlingMiniPress: onMiniRestore,
-    onStateChange: onMinimizeGestureChange,
-    preserveTerminalStateOnDisable: presentation === "mini",
+    onTrigger: () => {
+      void minimizePlayerFromControl();
+    },
   });
 
   const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
@@ -441,14 +494,29 @@ export function LessonVideoPlayer({
     [onTheaterToggle, theaterMode],
   );
 
+  useLayoutEffect(() => {
+    if (restoreAutoplayRef.current !== null) return;
+    const player = playerRef.current;
+    if (!player) return;
+    const prefs = playerPrefsRef.current;
+    applyingPlaybackPrefsRef.current = true;
+    try {
+      player.setVolume(prefs.volume);
+      player.setMuted(prefs.muted);
+      player.setPlaybackRate(prefs.playbackRate);
+    } finally {
+      applyingPlaybackPrefsRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     if (!preferencesReady) return;
     if (restoreAutoplayRef.current !== null) return;
     playerRef.current?.setMuted(muted);
+    publishLearningPlayerBootstrap({ muted });
   }, [muted, preferencesReady]);
 
   useEffect(() => {
-    setMuted(readMutedPreference());
     setAmbientEnabled(readAmbientPreference());
     setSeekIntervalSeconds(readLearningPreferences().seekIntervalSeconds);
     preferencesReadyRef.current = true;
@@ -456,7 +524,20 @@ export function LessonVideoPlayer({
 
     const syncPreferences = (event: StorageEvent) => {
       if (event.key === lessonPlayerStorageKeys.muted) {
-        setMuted(event.newValue === "true" || event.newValue === "on");
+        const nextMuted = event.newValue === "true" || event.newValue === "on";
+        setMuted(nextMuted);
+        playerPrefsRef.current.muted = nextMuted;
+      } else if (event.key === lessonPlayerStorageKeys.volume) {
+        const nextVolume = clampPlayerVolume(Number(event.newValue));
+        playerPrefsRef.current.volume = nextVolume;
+        if (playbackPrefsAppliedRef.current) {
+          playerRef.current?.setVolume(nextVolume);
+        }
+      } else if (event.key === lessonPlayerStorageKeys.playbackRate) {
+        const nextRate = Number(event.newValue);
+        if (!Number.isFinite(nextRate) || nextRate <= 0) return;
+        playerPrefsRef.current.playbackRate = nextRate;
+        playerRef.current?.setPlaybackRate(nextRate);
       } else if (event.key === lessonPlayerStorageKeys.ambient) {
         if (event.newValue === "on") setAmbientEnabled(true);
         if (event.newValue === "off") setAmbientEnabled(false);
@@ -550,6 +631,8 @@ export function LessonVideoPlayer({
       seekIntervalSeconds={seekIntervalSeconds}
       emptyTapBehavior="responsive"
       controlsIdleDelay={5_000}
+      keepControlsVisibleUntilFirstPlay
+      keepPosterVisibleUntilFirstPlay
       onEvent={handleEvent}
       lockLandscapeOnFullscreen
       mediaProps={{
@@ -559,7 +642,7 @@ export function LessonVideoPlayer({
         presentation === "full" &&
           "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
         presentation === "mini"
-          ? "!rounded-xl"
+          ? "!rounded-none"
           : fullscreenCoursePanelActive
             ? "flex h-full items-center justify-start overflow-hidden bg-black"
             : undefined,
@@ -572,7 +655,7 @@ export function LessonVideoPlayer({
       {...(presentation === "full" ? minimizeGesture.handlers : {})}
       playerClassName={
         presentation === "mini"
-          ? "!rounded-xl !shadow-none"
+          ? "!rounded-none !shadow-none"
           : fullscreenCoursePanelActive
             ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none"
             : "border-0 !rounded-none"
@@ -594,6 +677,13 @@ export function LessonVideoPlayer({
         presentation === "mini" ? (
           <MiniPlayerControls
             lessonTitle={lessonTitle}
+            courseTitle={courseTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
+            canGoNext={canGoNext}
+            canGoPrevious={canGoPrevious}
+            onGoNext={onGoNext}
+            onGoPrevious={onGoPrevious}
             onClose={onMiniClose ?? (() => undefined)}
             onRestore={onMiniRestore ?? (() => undefined)}
           />
@@ -605,7 +695,11 @@ export function LessonVideoPlayer({
             canGoPrevious={canGoPrevious}
             controlsSuppressed={minimizeGesture.controlsSuppressed}
             courseLessonsOpen={courseLessonsOpen}
+            courseLessonsDrawerOpen={courseLessonsDrawerOpen}
             courseLessonsPanel={courseLessonsPanel}
+            courseLessonsSecondPressHold={courseLessonsSecondPressHold}
+            courseLessonsShortcutLabel={courseLessonsShortcutLabel}
+            courseLessonsSidePanel={courseLessonsSidePanel}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}
@@ -623,7 +717,16 @@ export function LessonVideoPlayer({
           <LessonAmbientProjection enabled={ambientEnabled} />
         ) : undefined
       }
-      playbackFeedback={minimizeGesture.controlsSuppressed ? false : undefined}
+      playbackFeedback={
+        presentation === "mini" || minimizeGesture.controlsSuppressed
+          ? false
+          : undefined
+      }
+      bufferingIndicator={
+        presentation === "mini" ? (
+          <LearningMiniPlayerBufferingIndicator />
+        ) : undefined
+      }
     />
   );
 }

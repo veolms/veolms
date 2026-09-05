@@ -1036,7 +1036,7 @@
   --sidebar-glow-opacity: 0;
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-app {
     isolation: isolate;
   }
@@ -1147,24 +1147,15 @@
     pointer-events: none;
   }
 
-  /* The fixed sidebar glass dissolves above and below the navigation instead
-     of exposing a rectangular edge in the surrounding shell. */
+  /* A full-height backdrop-filter surface exposes its rectangular compositor
+     boundary beside the main frame in Chromium at fractional display scales.
+     Blur the generated bokeh itself so the pinned sidebar has no raster edge. */
+  .courses-app:not(.courses-app--hidden) .courses-sidebar::before {
+    filter: blur(var(--sidebar-backdrop-blur));
+  }
+
   .courses-app:not(.courses-app--hidden) .courses-sidebar::after {
-    inset: -48px 0;
-    -webkit-mask-image: linear-gradient(
-      180deg,
-      transparent 0,
-      #000 72px,
-      #000 calc(100% - 72px),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      180deg,
-      transparent 0,
-      #000 72px,
-      #000 calc(100% - 72px),
-      transparent 100%
-    );
+    content: none;
   }
 
   /* The floating sidebar needs an internal glass layer as well: applying
@@ -1186,6 +1177,12 @@
     backdrop-filter: none;
   }
 
+  :root[data-sidebar-backdrop-blur="off"]
+    .courses-app:not(.courses-app--hidden)
+    .courses-sidebar::before {
+    filter: none;
+  }
+
   .courses-sidebar > * {
     z-index: 1;
   }
@@ -1194,6 +1191,7 @@
     z-index: 3;
   }
 
+  .courses-app > .courses-main-frame,
   .courses-app > .courses-main {
     z-index: 1;
   }
@@ -1221,7 +1219,7 @@
   backdrop-filter: blur(var(--sidebar-floating-base-blur)) saturate(1.2);
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   :root[data-content-layout="framed"] .courses-app--hidden .courses-sidebar {
     top: 11px;
     bottom: 9px;

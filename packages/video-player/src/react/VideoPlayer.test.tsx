@@ -9,6 +9,7 @@ import {
 import { createRef, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { BufferingIndicator } from "../controls/BufferingIndicator";
 import { FakeVideoEngine } from "../testing/FakeVideoEngine";
 import type { VideoSource } from "../core/types";
 import { BUILT_IN_PLAYER_THEME_IDS } from "../themes/playerThemes";
@@ -206,21 +207,19 @@ class StartupBufferingFakeVideoEngine extends FakeVideoEngine {
 }
 
 describe("VideoPlayer integration", () => {
-  it("delays one spinner through startup and later buffering", async () => {
+  it("shows one spinner immediately through startup and delays later buffering", async () => {
     const engine = new StartupBufferingFakeVideoEngine();
     vi.useFakeTimers();
     render(<VideoPlayer source={source} engineFactory={() => engine} />);
 
-    await act(async () => Promise.resolve());
-    expect(engine.getSnapshot().lifecycle).toBe("loading");
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-
-    act(() => vi.advanceTimersByTime(999));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(1));
     const loadingIndicator = screen.getByRole("status", {
       name: "Loading video",
     });
+    await act(async () => Promise.resolve());
+    expect(engine.getSnapshot().lifecycle).toBe("loading");
+    expect(screen.getByRole("status", { name: "Loading video" })).toBe(
+      loadingIndicator,
+    );
     expect(loadingIndicator).toHaveClass("z-40");
     expect(
       loadingIndicator.querySelector(
@@ -233,7 +232,7 @@ describe("VideoPlayer integration", () => {
     );
     expect(
       loadingIndicator.querySelector(".video-player-buffering-spinner__arc"),
-    ).toHaveAttribute("stroke-linecap", "round");
+    ).toBeTruthy();
 
     act(() => engine.finishLoadWhileBuffering());
     expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
@@ -251,6 +250,134 @@ describe("VideoPlayer integration", () => {
     expect(
       screen.getByRole("status", { name: "Buffering video" }),
     ).toBeInTheDocument();
+  });
+
+  it("delays startup and play waits when immediatePlayWaits is disabled", async () => {
+    const engine = new StartupBufferingFakeVideoEngine();
+    vi.useFakeTimers();
+    render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        bufferingIndicator={<BufferingIndicator immediatePlayWaits={false} />}
+      />,
+    );
+
+    await act(async () => Promise.resolve());
+    expect(engine.getSnapshot().lifecycle).toBe("loading");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("status", { name: "Loading video" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the same spinner node across snapshot ticks and buffering flicker", async () => {
+    const engine = new StartupBufferingFakeVideoEngine();
+    vi.useFakeTimers();
+    render(<VideoPlayer source={source} engineFactory={() => engine} />);
+
+    const overlay = screen.getByRole("status", { name: "Loading video" });
+    const spinner = overlay.querySelector(
+      '[data-video-player-buffering-spinner=""]',
+    );
+    expect(spinner).not.toBeNull();
+
+    act(() =>
+      engine.setSnapshot({
+        buffered: [{ start: 0, end: 1.5 }],
+        currentTime: 0.2,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [{ start: 0, end: 3 }],
+        currentTime: 0.8,
+      }),
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() => engine.finishLoadWhileBuffering());
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        lifecycle: "ready",
+        paused: false,
+        playing: false,
+      }),
+    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        paused: false,
+        playing: true,
+      }),
+    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    act(() => vi.advanceTimersByTime(800));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffering: false,
+        paused: true,
+        playing: false,
+      }),
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
+
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: true,
+        currentTime: 12,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: false,
+        currentTime: 12,
+      }),
+    );
+    act(() =>
+      engine.setSnapshot({
+        buffered: [],
+        buffering: true,
+        currentTime: 12,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
+      overlay,
+    );
+    expect(
+      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
+    ).toBe(spinner);
   });
 
   it("waits until timeline scrubbing ends and skips buffered seeks", async () => {
@@ -1207,7 +1334,11 @@ describe("VideoPlayer integration", () => {
         pointerType: "touch",
       });
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
-      expect(media?.style.transform).toContain("translate3d(50px, 0px, 0)");
+      expect(
+        container.querySelector<HTMLElement>(
+          '[data-player-zoom-media-plane=""]',
+        )?.style.transform,
+      ).toContain("translate3d(50px, 0px, 0)");
       fireEvent.pointerUp(surface, {
         clientX: 190,
         clientY: 170,
@@ -1305,7 +1436,11 @@ describe("VideoPlayer integration", () => {
       expect(player).not.toHaveStyle({ overflow: "visible" });
       expect(player).not.toHaveAttribute("data-player-zoom-expanded");
       expect(zoomViewport).toHaveClass("overflow-hidden");
-      expect(media?.style.transform).toContain("translate3d(0px, 0px, 0)");
+      expect(
+        container.querySelector<HTMLElement>(
+          '[data-player-zoom-media-plane=""]',
+        )?.style.transform,
+      ).toContain("translate3d(0px, 0px, 0)");
       expect(player).toHaveAttribute("data-controls-visible", "false");
       act(() => vi.advanceTimersByTime(999));
       expect(player).toHaveAttribute("data-controls-visible", "false");
@@ -1346,9 +1481,13 @@ describe("VideoPlayer integration", () => {
       const { container } = render(
         <VideoPlayer
           ref={handle}
-          source={source}
+          source={{
+            ...source,
+            metadata: { ...source.metadata, poster: "/lesson-1.webp" },
+          }}
           engineFactory={() => engine}
           emptyTapBehavior="responsive"
+          keepPosterVisibleUntilFirstPlay
           overlays={
             <aside data-player-fullscreen-swipe-ignore="">Course lessons</aside>
           }
@@ -1361,8 +1500,20 @@ describe("VideoPlayer integration", () => {
         name: "Play or pause video; tap to show controls",
       });
       const media = container.querySelector("video");
+      const poster = container.querySelector<HTMLElement>(
+        '[data-video-player-poster-overlay=""]',
+      );
+      const zoomViewport = container.querySelector<HTMLElement>(
+        '[data-player-zoom-viewport=""]',
+      );
+      const mediaPlane = container.querySelector<HTMLElement>(
+        '[data-player-zoom-media-plane=""]',
+      );
       expect(shell).not.toBeNull();
       expect(media).not.toBeNull();
+      expect(media?.parentElement).toBe(mediaPlane);
+      expect(poster?.parentElement).toBe(mediaPlane);
+      expect(mediaPlane?.parentElement).toBe(zoomViewport);
       vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
         bottom: 300,
         height: 300,
@@ -1404,6 +1555,9 @@ describe("VideoPlayer integration", () => {
         feedbackVisible: false,
         gestureActive: true,
       });
+      expect(mediaPlane?.style.transform).toContain(
+        `scale(${enterPreview?.scale})`,
+      );
       expect(player).toHaveAttribute("data-controls-visible", "false");
       expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
         null,
@@ -1470,6 +1624,9 @@ describe("VideoPlayer integration", () => {
         feedbackVisible: false,
         gestureActive: true,
       });
+      expect(mediaPlane?.style.transform).toContain(
+        `scale(${exitPreview?.scale})`,
+      );
       expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
         null,
       );
@@ -1782,7 +1939,11 @@ describe("VideoPlayer integration", () => {
         touches: [{ ...first, clientX: 190, clientY: 140 }],
       });
       expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
-      expect(media?.style.transform).toContain("translate3d(90px, 32.5px, 0)");
+      expect(
+        container.querySelector<HTMLElement>(
+          '[data-player-zoom-media-plane=""]',
+        )?.style.transform,
+      ).toContain("translate3d(90px, 32.5px, 0)");
       fireEvent.touchEnd(surface, {
         changedTouches: [{ ...first, clientX: 190, clientY: 140 }],
         touches: [],
@@ -2332,20 +2493,23 @@ describe("VideoPlayer integration", () => {
     }
   });
 
-  it("uses desktop hover for controls and mouse clicks for playback", async () => {
+  it("pins desktop controls until first play, then uses hover visibility", async () => {
     const restoreMatchMedia = installFinePointerMatchMedia();
     const engine = new FakeVideoEngine();
     const play = vi.spyOn(engine, "play");
+    const engineFactory = () => engine;
+    const renderPlayer = (videoSource: VideoSource) => (
+      <VideoPlayer
+        source={videoSource}
+        engineFactory={engineFactory}
+        emptyTapBehavior="responsive"
+        controlsIdleDelay={5_000}
+        keepControlsVisibleUntilFirstPlay
+      />
+    );
 
     try {
-      render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-          controlsIdleDelay={5_000}
-        />,
-      );
+      const { rerender } = render(renderPlayer(source));
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
       const player = screen.getByRole("region", { name: "Video player" });
@@ -2354,14 +2518,15 @@ describe("VideoPlayer integration", () => {
       const surface = screen.getByRole("button", {
         name: "Play or pause video; tap to show controls",
       });
-      await waitFor(() =>
-        expect(player).toHaveAttribute("data-controls-visible", "false"),
-      );
-
-      fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "true");
 
       vi.useFakeTimers();
+      act(() => vi.advanceTimersByTime(5_100));
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+
+      fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
       fireEvent.pointerDown(surface, {
         clientX: 50,
         pointerId: 1,
@@ -2392,9 +2557,92 @@ describe("VideoPlayer integration", () => {
       expect(player).toHaveAttribute("data-controls-visible", "true");
       fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "false");
+
+      vi.useRealTimers();
+      const nextSource = {
+        ...source,
+        id: "lesson-2",
+        src: "/lesson-2.mp4",
+      };
+      rerender(renderPlayer(nextSource));
+      await waitFor(() =>
+        expect(engine.getSnapshot().source).toEqual(nextSource),
+      );
+      expect(player).toHaveAttribute("data-controls-visible", "true");
+      fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
+      expect(player).toHaveAttribute("data-controls-visible", "true");
     } finally {
       restoreMatchMedia();
     }
+  });
+
+  it("keeps each poster inside the transformed media plane until play", async () => {
+    const engine = new FakeVideoEngine();
+    const firstSource: VideoSource = {
+      ...source,
+      metadata: { ...source.metadata, poster: "/lesson-1.webp" },
+    };
+    const renderPlayer = (videoSource: VideoSource) => (
+      <VideoPlayer
+        source={videoSource}
+        engineFactory={() => engine}
+        keepPosterVisibleUntilFirstPlay
+      />
+    );
+
+    const { container, rerender } = render(renderPlayer(firstSource));
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+
+    const poster = container.querySelector<HTMLElement>(
+      '[data-video-player-poster-overlay=""]',
+    );
+    const mediaPlane = container.querySelector<HTMLElement>(
+      '[data-player-zoom-media-plane=""]',
+    );
+    expect(poster).toHaveAttribute(
+      "data-video-player-poster-src",
+      "/lesson-1.webp",
+    );
+    expect(poster?.parentElement).toBe(mediaPlane);
+    expect(mediaPlane?.parentElement).toHaveAttribute(
+      "data-player-zoom-viewport",
+      "",
+    );
+    expect(mediaPlane?.parentElement).toHaveClass("z-0", "isolate");
+    expect(container.querySelector("video")).toHaveClass("invisible");
+    expect(container.querySelector("video")).not.toHaveAttribute("poster");
+    expect(screen.getByRole("button", { name: "Play video" })).toHaveClass(
+      "z-10",
+    );
+    expect(
+      container.querySelector('[data-video-player-controls=""]'),
+    ).toHaveClass("z-30");
+
+    await act(async () => engine.play());
+    expect(
+      container.querySelector('[data-video-player-poster-overlay=""]'),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector("video")).not.toHaveClass("invisible");
+
+    act(() => engine.pause());
+    expect(
+      container.querySelector('[data-video-player-poster-overlay=""]'),
+    ).not.toBeInTheDocument();
+
+    const secondSource: VideoSource = {
+      ...source,
+      id: "lesson-2",
+      src: "/lesson-2.mp4",
+      metadata: { ...source.metadata, poster: "/lesson-2.webp" },
+    };
+    rerender(renderPlayer(secondSource));
+    await waitFor(() =>
+      expect(engine.getSnapshot().source).toEqual(secondSource),
+    );
+    expect(
+      container.querySelector('[data-video-player-poster-overlay=""]'),
+    ).toHaveAttribute("data-video-player-poster-src", "/lesson-2.webp");
+    expect(container.querySelector("video")).toHaveClass("invisible");
   });
 
   it("keeps controls visible while focus remains inside the player", async () => {

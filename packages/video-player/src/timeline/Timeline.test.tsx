@@ -47,14 +47,33 @@ describe("Timeline", () => {
       "bg-[var(--video-player-accent,#ff7a1a)]",
       "scale-100",
       "group-data-[controls-visible=true]/timeline:opacity-100",
-      "group-hover/timeline:scale-[1.6]",
-      "group-focus-within/timeline:scale-[1.6]",
-      "group-data-[scrubbing=true]/timeline:scale-[1.6]",
+      "group-hover/timeline:scale-[2]",
+      "max-sm:group-hover/timeline:scale-[1.5]",
+      "group-focus-within/timeline:scale-[2]",
+      "max-sm:group-focus-within/timeline:scale-[1.5]",
+      "group-data-[scrubbing=true]/timeline:scale-[2]",
+      "max-sm:group-data-[scrubbing=true]/timeline:scale-[1.5]",
       "transition-[scale,opacity]",
       "duration-200",
     );
     expect(thumb?.className).not.toContain("rgb(255_255_255");
   });
+
+  it.each([
+    [0, "0%", "0% -50%", "0% 50%"],
+    [60, "50%", "-50% -50%", "50% 50%"],
+    [120, "100%", "-100% -50%", "100% 50%"],
+  ])(
+    "keeps the timeline thumb inside the track at %i seconds",
+    (currentTime, left, translate, transformOrigin) => {
+      const { container } = renderTimeline({ currentTime });
+      const thumb = container.querySelector<HTMLElement>(
+        "[data-timeline-thumb]",
+      );
+
+      expect(thumb).toHaveStyle({ left, transformOrigin, translate });
+    },
+  );
 
   it("seeks with timeline-owned keyboard controls", () => {
     const { actions } = renderTimeline();
@@ -174,10 +193,12 @@ function renderTimeline({
     { id: "intro", title: "Introduction", startTime: 0, endTime: 60 },
     { id: "details", title: "Details", startTime: 60, endTime: 120 },
   ],
+  currentTime = 30,
   previewTime = null,
   showPreview = false,
 }: {
   chapters?: PlayerSnapshot["chapters"];
+  currentTime?: number;
   previewTime?: number | null;
   showPreview?: boolean;
 } = {}) {
@@ -185,7 +206,7 @@ function renderTimeline({
     media: {
       ...createInitialVideoEngineSnapshot(),
       lifecycle: "ready",
-      currentTime: 30,
+      currentTime,
       duration: 120,
       buffered: [{ start: 0, end: 30 }],
     },

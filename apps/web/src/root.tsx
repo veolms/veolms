@@ -1,8 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
+import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
+import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
+import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
+import {
+  EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
+  getEarlyHlsPreloadInlineScript,
+} from "./learning/learningHlsBootstrap";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -12,6 +19,10 @@ import {
   getSurfaceDepthBootstrapScript,
 } from "./settings/settingsPreferences";
 import { useCurrentUser } from "./services/auth";
+import {
+  getSidebarPresentationBootstrapScript,
+  getSidebarShellBootstrapScript,
+} from "./shell/sidebarPreferences";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -46,7 +57,19 @@ export function Layout({ children }: LayoutProps) {
       data-hide-scrollbars="true"
       data-scrollbar-style="theme"
       data-sidebar-menu-elevation="true"
+      data-sidebar-state="expanded"
+      data-navigation-layout="wide"
+      data-learning-curriculum-state="expanded"
+      data-player-autoplay="on"
+      data-player-muted="false"
+      data-player-playback-rate="1"
+      data-player-volume="1"
+      data-collapsed-tooltips="true"
+      data-collapsed-sidebar-logo="true"
+      data-active-fill="true"
       data-control-radius="balanced"
+      data-app-hydrated="false"
+      data-tab-navigation="false"
       suppressHydrationWarning
     >
       <head>
@@ -63,6 +86,18 @@ export function Layout({ children }: LayoutProps) {
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getEarlyHlsPreloadInlineScript(
+              EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
+            ),
+          }}
         />
         <script
           dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }}
@@ -83,7 +118,12 @@ export function Layout({ children }: LayoutProps) {
         />
         <link rel="stylesheet" href={fullAppStylesheet} />
         <Meta />
-        <Links />
+        {/* The complete app stylesheet is linked above. In development,
+            React Router otherwise synthesizes an additional route-critical
+            stylesheet on every document request, delaying first paint by
+            seconds in this large app. Production still receives route links
+            and preloads through Links. */}
+        {!import.meta.env.DEV && <Links />}
       </head>
       <body>
         <div id="root">{children}</div>
@@ -115,9 +155,25 @@ function SessionInitializer({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function HydrationMarker() {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.appHydrated = "true";
+    const removeTabFocusListeners = installTabFocusVisibility(root);
+
+    return () => {
+      removeTabFocusListeners();
+      root.dataset.appHydrated = "false";
+      root.dataset.tabNavigation = "false";
+    };
+  }, []);
+  return null;
+}
+
 export default function Root() {
   return (
     <QueryProvider>
+      <HydrationMarker />
       <SessionInitializer>
         <Outlet />
       </SessionInitializer>

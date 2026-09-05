@@ -190,11 +190,11 @@ export function LearningSettings() {
               </div>
             ) : null}
             <LearningToggleRow
-              label="Resume from last position"
-              note="Continue videos from where you stopped."
-              checked={preferences.resumeFromLastPosition}
-              onChange={(resumeFromLastPosition) =>
-                update({ resumeFromLastPosition })
+              label="Always start lectures from beginning"
+              note="Play every lecture from 0:00 instead of resuming where you stopped."
+              checked={!preferences.resumeFromLastPosition}
+              onChange={(startFromBeginning) =>
+                update({ resumeFromLastPosition: !startFromBeginning })
               }
             />
             <LearningToggleRow

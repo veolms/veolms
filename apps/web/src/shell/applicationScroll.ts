@@ -29,10 +29,25 @@ export const readApplicationScrollPosition = (): ApplicationScrollPosition => {
 
 export const scrollApplicationTo = (options: ScrollToOptions): void => {
   const scrollElement = getApplicationScrollElement();
-  if (scrollElement) {
-    scrollElement.scrollTo(options);
-    return;
+  const behaviorElement = scrollElement ?? document.documentElement;
+  const previousScrollBehavior = behaviorElement.style.scrollBehavior;
+
+  // `auto` normally inherits the global smooth-scroll rule. Route restoration
+  // must be synchronous so an old page position is never animated on screen.
+  if (options.behavior === "auto") {
+    behaviorElement.style.scrollBehavior = "auto";
   }
 
-  window.scrollTo(options);
+  try {
+    if (scrollElement) {
+      scrollElement.scrollTo(options);
+      return;
+    }
+
+    window.scrollTo(options);
+  } finally {
+    if (options.behavior === "auto") {
+      behaviorElement.style.scrollBehavior = previousScrollBehavior;
+    }
+  }
 };

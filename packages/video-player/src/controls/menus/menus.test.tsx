@@ -88,6 +88,67 @@ describe("PopoverMenu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("clamps the popover to the player and scrolls inside the menu", () => {
+    const rect = (values: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    }) =>
+      ({
+        ...values,
+        width: values.right - values.left,
+        height: values.bottom - values.top,
+        x: values.left,
+        y: values.top,
+        toJSON() {
+          return this;
+        },
+      }) as DOMRect;
+
+    render(
+      <div
+        className="video-shell relative"
+        data-testid="player-shell"
+        style={{ height: 360, width: 640 }}
+      >
+        <div
+          data-video-player-root=""
+          data-testid="player-root"
+          style={{ height: 360, width: 640 }}
+        >
+          <div style={{ position: "absolute", top: 16, right: 16 }}>
+            <PopoverMenu label="Options" side="bottom" trigger="Options">
+              {Array.from({ length: 12 }, (_, index) => (
+                <PlayerMenuItem key={index} label={`Item ${index + 1}`} />
+              ))}
+            </PopoverMenu>
+          </div>
+        </div>
+      </div>,
+    );
+
+    const shell = screen.getByTestId("player-shell");
+    const player = screen.getByTestId("player-root");
+    const trigger = screen.getByRole("button", { name: "Options" });
+    vi.spyOn(shell, "getBoundingClientRect").mockReturnValue(
+      rect({ top: 0, right: 640, bottom: 360, left: 0 }),
+    );
+    vi.spyOn(player, "getBoundingClientRect").mockReturnValue(
+      rect({ top: 0, right: 640, bottom: 360, left: 0 }),
+    );
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue(
+      rect({ top: 16, right: 624, bottom: 52, left: 560 }),
+    );
+
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu", { name: "Options" });
+    expect(menu).toHaveClass("z-200", "overflow-y-auto", "overscroll-contain");
+    expect(menu).toHaveStyle({ maxHeight: "292px", top: "60px", right: "16px" });
+    expect(shell.contains(menu)).toBe(true);
+    expect(menu).not.toHaveClass("top-full");
+  });
+
   it("supports controlled state without maintaining a conflicting internal value", () => {
     const onOpenChange = vi.fn();
     const { rerender } = render(

@@ -89,7 +89,7 @@
 }
 
 /* Keep the expanded rail and the phone navigation contract authoritative. */
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-app {
     grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
   }
@@ -128,7 +128,8 @@
     justify-content: flex-start;
   }
 
-  .courses-app--collapsed {
+  .courses-app--collapsed,
+  :root[data-sidebar-state="collapsed"] .courses-app {
     grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
         0,
         1fr
@@ -142,11 +143,13 @@
       );
   }
 
-  .courses-app--hidden {
+  .courses-app--hidden,
+  :root[data-sidebar-state="hidden"] .courses-app {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .courses-app--hidden .courses-sidebar {
+  .courses-app--hidden .courses-sidebar,
+  :root[data-sidebar-state="hidden"] .courses-app .courses-sidebar {
     width: var(--sidebar-expanded-width);
   }
 
@@ -573,12 +576,19 @@
 @media (max-width: 640px) {
   .courses-app,
   .courses-app--collapsed,
-  .courses-app--hidden {
+  .courses-app--hidden,
+  :root[data-sidebar-state="collapsed"] .courses-app,
+  :root[data-sidebar-state="hidden"] .courses-app {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     padding: 0;
     background: var(--main-surface);
     touch-action: pan-y pinch-zoom;
+  }
+
+  .courses-main-frame,
+  .courses-main-frame > .courses-main {
+    grid-column: 1;
   }
 
   .courses-sidebar,
