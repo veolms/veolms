@@ -472,15 +472,29 @@ export function createJobManager(options: {
         return { job: null, cancelled: false, filesDeleted: false };
       }
 
-      // Update job status to cancelled in PostgreSQL
-      await db
+      // Update job status to cancelled in PostgreSQL, constraining to cancellable job states
+      const updateResult = await db
         .updateTable("video_jobs")
         .set({
           status: "cancelled",
           updated_at: new Date(),
         })
         .where("id", "=", jobId)
-        .execute();
+        .where("status", "in", ["queued", "provisioning", "processing"])
+        .executeTakeFirst();
+
+      const numUpdated =
+        updateResult?.numUpdatedRows !== undefined
+          ? BigInt(updateResult.numUpdatedRows)
+          : 0n;
+
+      if (numUpdated !== 1n) {
+        return {
+          job,
+          cancelled: false,
+          filesDeleted: false,
+        };
+      }
 
       // If worker was assigned, reset worker's job_id and mark worker ready
       if (job.worker_id) {

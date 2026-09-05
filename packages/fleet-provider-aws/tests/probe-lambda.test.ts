@@ -6,6 +6,7 @@ import * as os from "node:os";
 import {
   extractProbeEvent,
   processProbeAndForward,
+  parseFleetManagerResponse,
 } from "../src/probe-lambda.ts";
 import { createMockExecutable } from "./helpers.ts";
 
@@ -180,5 +181,191 @@ describe("Video Metadata Probe Lambda", () => {
     assert.equal(sentPayload.jobId, "00000000-0000-4000-8000-000000000001");
     assert.equal(sentPayload.status, "cancelled");
     assert.equal(sentPayload.deleteFiles, true);
+    // Verify proxy response body was parsed
+    assert.equal(
+      typeof (result.targetLambdaResponse as any)?.body,
+      "object",
+    );
+    assert.equal(
+      (result.targetLambdaResponse as any)?.body?.cancelled,
+      true,
+    );
+  });
+
+  it("should propagate failure (success: false) when cancellation response has cancelled: false", async () => {
+    const mockLambdaClient = {
+      send: async () => ({
+        Payload: Buffer.from(
+          JSON.stringify({
+            statusCode: 200,
+            body: JSON.stringify({
+              success: true,
+              status: "cancelled",
+              cancelled: false,
+              filesDeleted: false,
+            }),
+          }),
+        ),
+      }),
+    } as any;
+
+    const result = await processProbeAndForward(
+      {
+        jobId: "00000000-0000-4000-8000-000000000002",
+        status: "cancelled",
+      },
+      {
+        lambdaClient: mockLambdaClient,
+        targetLambdaName: "test-fleet-manager",
+      },
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.probed, false);
+    assert.equal(
+      (result.targetLambdaResponse as any)?.body?.cancelled,
+      false,
+    );
+  });
+
+  it("should propagate failure when Fleet Manager returns an error status code", async () => {
+    const mockLambdaClient = {
+      send: async () => ({
+        Payload: Buffer.from(
+          JSON.stringify({
+            statusCode: 500,
+            body: JSON.stringify({
+              success: false,
+              error: "Database connection failed",
+            }),
+          }),
+        ),
+      }),
+    } as any;
+
+    const result = await processProbeAndForward(
+      {
+        jobId: "00000000-0000-4000-8000-000000000003",
+        status: "cancelled",
+      },
+      {
+        lambdaClient: mockLambdaClient,
+        targetLambdaName: "test-fleet-manager",
+      },
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(
+      (result.targetLambdaResponse as any)?.statusCode,
+      500,
+    );
+  });
+
+  it("should propagate failure when Fleet Manager invocation reports FunctionError", async () => {
+    const mockLambdaClient = {
+      send: async () => ({
+        FunctionError: "Unhandled",
+        Payload: Buffer.from(
+          JSON.stringify({
+            errorMessage: "Runtime crash",
+          }),
+        ),
+      }),
+    } as any;
+
+    const result = await processProbeAndForward(
+      {
+        jobId: "00000000-0000-4000-8000-000000000004",
+        status: "cancelled",
+      },
+      {
+        lambdaClient: mockLambdaClient,
+        targetLambdaName: "test-fleet-manager",
+      },
+    );
+
+    assert.equal(result.success, false);
+  });
+
+  it("should derive success from status and result fields correctly", () => {
+    // 1. Successful proxy response
+    const successRes = parseFleetManagerResponse({
+      Payload: Buffer.from(
+        JSON.stringify({
+          statusCode: 200,
+          body: JSON.stringify({
+            status: "completed",
+            result: { success: true },
+          }),
+        }),
+      ),
+    });
+    assert.equal(successRes.success, true);
+    assert.deepEqual((successRes.targetResult as any).body, {
+      status: "completed",
+      result: { success: true },
+    });
+
+    // 2. Failed result field
+    const failedResult = parseFleetManagerResponse({
+      Payload: Buffer.from(
+        JSON.stringify({
+          statusCode: 200,
+          body: JSON.stringify({
+            status: "ok",
+            result: { success: false, error: "Transcode failed" },
+          }),
+        }),
+      ),
+    });
+    assert.equal(failedResult.success, false);
+
+    // 3. Failed status field
+    const failedStatus = parseFleetManagerResponse({
+      Payload: Buffer.from(
+        JSON.stringify({
+          statusCode: 200,
+          body: JSON.stringify({
+            status: "failed",
+            error: "Resource limit reached",
+          }),
+        }),
+      ),
+    });
+    assert.equal(failedStatus.success, false);
+
+    // 4. Cancellation with cancelled: false
+    const failedCancel = parseFleetManagerResponse(
+      {
+        Payload: Buffer.from(
+          JSON.stringify({
+            statusCode: 200,
+            body: JSON.stringify({
+              status: "cancelled",
+              cancelled: false,
+            }),
+          }),
+        ),
+      },
+      { isCancellation: true },
+    );
+    assert.equal(failedCancel.success, false);
+
+    // 5. Successful cancellation
+    const successCancel = parseFleetManagerResponse(
+      {
+        Payload: Buffer.from(
+          JSON.stringify({
+            statusCode: 200,
+            body: JSON.stringify({
+              status: "cancelled",
+              cancelled: true,
+            }),
+          }),
+        ),
+      },
+      { isCancellation: true },
+    );
+    assert.equal(successCancel.success, true);
   });
 });

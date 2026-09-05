@@ -62,6 +62,7 @@ function createChainableMockDb(
     attempts: 0,
     max_attempts: 3,
     created_at: new Date(),
+    numUpdatedRows: 1n,
   };
 
   const handlerProxy: ProxyHandler<object> = {
