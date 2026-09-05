@@ -109,6 +109,7 @@ export async function listPublishedCourses(
       "courses.short_description",
       "courses.difficulty",
       "courses.instructor_alias",
+      "courses.thumbnail_media_id",
       "categories.name as category_name",
       "users.display_name as creator_display_name",
       "course_pricing.pricing_type",
