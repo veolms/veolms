@@ -6,7 +6,7 @@ import { isbot } from "isbot";
 import type { EntryContext, RouterContextProvider } from "react-router";
 import { ServerRouter } from "react-router";
 
-export const streamTimeout = 5_000;
+export const streamTimeout = 90_000;
 
 export default function handleRequest(
   request: Request,

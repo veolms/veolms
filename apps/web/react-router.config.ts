@@ -22,12 +22,19 @@ const staticLearningPages = createLearningPrerenderPaths({
   scope: learningPrerenderScope,
 });
 
+const prerenderConfig = {
+  paths: [...staticApplicationPages, ...staticLearningPages],
+  concurrency: 1,
+  timeout: 120_000,
+  retryCount: 2,
+  retryDelay: 1_000,
+};
+
 export default {
   appDirectory: "src",
-  prerender: {
-    paths: [...staticApplicationPages, ...staticLearningPages],
-    concurrency: 4,
-  },
+  // React Router accepts timeout/retry options at build time even though the
+  // public Config type only documents paths and concurrency.
+  prerender: prerenderConfig as NonNullable<Config["prerender"]>,
   routeDiscovery: { mode: "initial" },
   ssr: false,
 } satisfies Config;
