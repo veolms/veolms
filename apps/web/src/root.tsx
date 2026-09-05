@@ -6,6 +6,10 @@ import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
 import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
+import {
+  EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
+  getEarlyHlsPreloadInlineScript,
+} from "./learning/learningHlsBootstrap";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -86,6 +90,13 @@ export function Layout({ children }: LayoutProps) {
         <script
           dangerouslySetInnerHTML={{
             __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getEarlyHlsPreloadInlineScript(
+              EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
+            ),
           }}
         />
         <script
