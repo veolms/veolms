@@ -38,6 +38,7 @@ import {
   writeResumePosition,
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
+import { createLearningLessonVideoSource } from "./lessonVideoSource";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
 import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
@@ -162,34 +163,15 @@ export function LessonVideoPlayer({
   requestedMediaKeyRef.current = mediaKey;
 
   const source = useMemo<VideoSource>(() => {
-    const isHls = /\.m3u8(?:$|[?#])/i.test(media.src);
     const resumeFromLastPosition =
       readLearningPreferences().resumeFromLastPosition;
-    return {
-      id: mediaKey,
-      src: media.src,
-      type: isHls ? "application/x-mpegurl" : "video/mp4",
-      kind: isHls ? "hls" : "file",
-      // The catalog duration can be stale after an asset replacement. Shaka
-      // receives the stored position and the loaded event clamps it against
-      // the actual media duration before progress is reported.
+    return createLearningLessonVideoSource({
+      media,
+      lessonTitle,
+      mediaKey,
       startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
-      metadata: {
-        duration: media.duration,
-        title: lessonTitle,
-      },
-      streaming: isHls ? { abrEnabled: true, bufferBehind: 600 } : undefined,
-      textTracks: [
-        {
-          src: "/assets/designing-users.vtt",
-          language: "en",
-          label: "English",
-          kind: "captions",
-          mimeType: "text/vtt",
-        },
-      ],
-    };
-  }, [lessonTitle, media.duration, media.src, mediaKey]);
+    });
+  }, [lessonTitle, media, mediaKey]);
 
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;

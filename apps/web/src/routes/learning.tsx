@@ -7,6 +7,12 @@ import {
 } from "react-router";
 import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
+import {
+  getLearningHlsBootstrap,
+  getLearningHlsPreconnectHref,
+  LEARNING_HLS_MANIFEST_META_NAME,
+  LEARNING_HLS_MEDIA_KEY_META_NAME,
+} from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
@@ -30,11 +36,27 @@ const COURSE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function meta({ location, params }: Route.MetaArgs) {
-  return Object.entries(
+  const descriptors = Object.entries(
     getRouteMeta("learning", params, location.pathname),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );
+  const bootstrap = getLearningHlsBootstrap(params);
+  if (!bootstrap) return descriptors;
+  return [
+    ...descriptors,
+    { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
+    { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
+  ];
+}
+
+export function links(args?: Pick<Route.MetaArgs, "params">) {
+  const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
+  if (!bootstrap) return [];
+  const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
+  return preconnectHref
+    ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
+    : [];
 }
 
 export default function LearningRoute() {
