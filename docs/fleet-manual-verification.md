@@ -139,11 +139,10 @@ pnpm fleet:cli health            # cluster-wide summary
 ### What was actually run this session (real AWS)
 
 ```bash
-FLEET_PROVIDER=aws VIDEO_KEY=raw/video-1min.mp4 node --env-file-if-exists=.env scripts/queue-and-trigger-lambda.ts
+pnpm fleet:queue:trigger --provider=aws --key=raw/video-1min.mp4 --qty=240p --yes
 ```
 
-(run from `apps/fleet-manager`; equivalent to
-`VIDEO_KEY=raw/video-1min.mp4 pnpm fleet:queue:trigger` from the repo root)
+(run from the repo root; queues job in PostgreSQL and dispatches to AWS provider trigger)
 
 Output:
 

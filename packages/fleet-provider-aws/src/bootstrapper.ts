@@ -21,10 +21,18 @@ cleanup_and_terminate() {
     echo "[bootstrapper] Bootstrap failed with exit code \$exit_code."
   fi
 
-  if [ -n "\${BUCKET_NAME:-}" ] && command -v aws &> /dev/null; then
-    aws s3 cp /var/log/veolms-bootstrap.log \\
-      "s3://\$BUCKET_NAME/worker-logs/__WORKER_ID__/bootstrap.log" \\
-      --region "\${AWS_REGION:-us-east-2}" 2>/dev/null || true
+  local LOG_BUCKET="\${S3_BUILD_BUCKET:-\${BUCKET_NAME:-}}"
+  if [ -n "\$LOG_BUCKET" ] && command -v aws &> /dev/null; then
+    if [ -f /var/log/veolms-bootstrap.log ]; then
+      aws s3 cp /var/log/veolms-bootstrap.log \\
+        "s3://\$LOG_BUCKET/worker-logs/__WORKER_ID__/bootstrap.log" \\
+        --region "\${AWS_REGION:-us-east-2}" 2>/dev/null || true
+    fi
+    if [ -f /var/log/veolms-worker.log ]; then
+      aws s3 cp /var/log/veolms-worker.log \\
+        "s3://\$LOG_BUCKET/worker-logs/__WORKER_ID__/worker.log" \\
+        --region "\${AWS_REGION:-us-east-2}" 2>/dev/null || true
+    fi
   fi
 
   echo "[bootstrapper] Terminating EC2 instance..."
@@ -57,6 +65,7 @@ source /opt/veolms/worker.env
 set +a
 
 BUCKET_NAME="\${S3_BUCKET:-\${S3_BUCKET_NAME:-}}"
+BUILD_BUCKET="\${S3_BUILD_BUCKET:-\$BUCKET_NAME}"
 
 set -e
 
@@ -86,13 +95,13 @@ fi
 
 echo "[bootstrapper] System dependencies verified (node \$(node -v), ffmpeg \$(ffmpeg -version | head -n1))"
 
-if [ -z "\$BUCKET_NAME" ]; then
-  echo "[bootstrapper] No S3 bucket configured (S3_BUCKET/S3_BUCKET_NAME) — cannot download worker bundle."
+if [ -z "\$BUILD_BUCKET" ]; then
+  echo "[bootstrapper] No S3 build bucket configured (S3_BUILD_BUCKET/S3_BUCKET) — cannot download worker bundle."
   exit 1
 fi
 
-echo "[bootstrapper] Downloading worker bundle from s3://\$BUCKET_NAME/bundles/media-worker.js..."
-aws s3 cp "s3://\$BUCKET_NAME/bundles/media-worker.js" /opt/veolms/worker.js --region "\${AWS_REGION:-us-east-2}"
+echo "[bootstrapper] Downloading worker bundle from s3://\$BUILD_BUCKET/bundles/media-worker.js..."
+aws s3 cp "s3://\$BUILD_BUCKET/bundles/media-worker.js" /opt/veolms/worker.js --region "\${AWS_REGION:-us-east-2}"
 
 echo "[bootstrapper] Launching VeoLMS Media Worker..."
 cd /opt/veolms

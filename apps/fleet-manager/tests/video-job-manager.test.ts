@@ -164,4 +164,159 @@ describe("Job Manager — queueJob insert values and duplicate protection", () =
     assert.equal(result, false);
     assert.equal(updateExecuted, false);
   });
+
+  it("constrains cancelJob writes to cancellable states and skips cleanup if not updated", async () => {
+    let workerResetCalled = false;
+    let s3DeleteCalled = false;
+    const jobUpdateFilters: { col: string; op: string; val: any }[] = [];
+
+    const mockDb = {
+      selectFrom: () => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-completed-1",
+              status: "completed",
+              worker_id: "worker-1",
+              video_key: "raw/test.mp4",
+              output_prefix: "out/test/",
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: () => {
+          const chain: any = {
+            where: (col: string, op: string, val: any) => {
+              if (table === "video_jobs") {
+                jobUpdateFilters.push({ col, op, val });
+              }
+              return chain;
+            },
+            executeTakeFirst: async () => {
+              if (table === "video_jobs") {
+                // Job was completed, so 0 rows match the cancellable status filter
+                return { numUpdatedRows: 0n };
+              }
+              if (table === "workers") {
+                workerResetCalled = true;
+                return { numUpdatedRows: 1n };
+              }
+              return { numUpdatedRows: 0n };
+            },
+            execute: async () => {
+              if (table === "workers") {
+                workerResetCalled = true;
+              }
+              return [];
+            },
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const mockStorage = {
+      deleteObject: async () => {
+        s3DeleteCalled = true;
+      },
+      deletePrefix: async () => {
+        s3DeleteCalled = true;
+      },
+    } as any;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const result = await jobManager.cancelJob({
+      jobId: "job-completed-1",
+      deleteFiles: true,
+      storage: mockStorage,
+    });
+
+    assert.equal(result.cancelled, false);
+    assert.equal(result.filesDeleted, false);
+    assert.equal(workerResetCalled, false);
+    assert.equal(s3DeleteCalled, false);
+
+    // Verify the update query constrained to cancellable states
+    assert.deepEqual(jobUpdateFilters, [
+      { col: "id", op: "=", val: "job-completed-1" },
+      { col: "status", op: "in", val: ["queued", "provisioning", "processing"] },
+    ]);
+  });
+
+  it("successfully cancels job when row is updated and executes cleanup", async () => {
+    let workerResetCalled = false;
+    let s3DeleteCalled = false;
+
+    const mockDb = {
+      selectFrom: () => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-active-1",
+              status: "processing",
+              worker_id: "worker-1",
+              video_key: "raw/test.mp4",
+              output_prefix: "out/test/",
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: () => {
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => {
+              if (table === "video_jobs") {
+                return { numUpdatedRows: 1n };
+              }
+              if (table === "workers") {
+                workerResetCalled = true;
+                return { numUpdatedRows: 1n };
+              }
+              return { numUpdatedRows: 1n };
+            },
+            execute: async () => {
+              if (table === "workers") {
+                workerResetCalled = true;
+              }
+              return [];
+            },
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const mockStorage = {
+      deleteObject: async () => {
+        s3DeleteCalled = true;
+      },
+      deletePrefix: async () => {
+        s3DeleteCalled = true;
+      },
+    } as any;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const result = await jobManager.cancelJob({
+      jobId: "job-active-1",
+      deleteFiles: true,
+      storage: mockStorage,
+    });
+
+    assert.equal(result.cancelled, true);
+    assert.equal(result.filesDeleted, true);
+    assert.equal(workerResetCalled, true);
+    assert.equal(s3DeleteCalled, true);
+    assert.deepEqual(result.deletedKeys, ["raw/test.mp4"]);
+    assert.equal(result.deletedPrefix, "out/test/");
+  });
 });

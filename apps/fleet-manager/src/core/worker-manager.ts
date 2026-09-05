@@ -40,16 +40,21 @@ export type HardwareSizedJob = JobHardwareFields & { id?: string };
 
 export function calculateWorkerSpec(
   job: HardwareSizedJob,
-  options: { databaseUrl?: string; jobId?: string } = {},
+  options: { databaseUrl?: string; jobId?: string; region?: string } = {},
 ): WorkerSpec {
   const hw = resolveJobHardware(job);
+  const resolvedRegion =
+    options.region ||
+    process.env.AWS_REGION ||
+    process.env.AWS_DEFAULT_REGION ||
+    "local";
 
   return {
     cpu: hw.minCpu,
     memoryMb: hw.minMemoryMb,
     architecture: hw.architecture,
     storageGb: hw.storageGb,
-    region: "local",
+    region: resolvedRegion,
     environmentVariables: {
       ...((options.jobId ?? job.id) ? { JOB_ID: options.jobId ?? job.id } : {}),
       ...(options.databaseUrl ? { DATABASE_URL: options.databaseUrl } : {}),
@@ -154,7 +159,27 @@ export function createWorkerManager(options: {
       });
 
       // 2. Call provider to launch worker
-      const handle = await provider.createWorker(workerId, spec);
+      let handle: WorkerHandle;
+      try {
+        handle = await provider.createWorker(workerId, spec);
+      } catch (launchErr) {
+        await db
+          .updateTable("workers")
+          .set({
+            status: "failed",
+            terminated_at: new Date(),
+            updated_at: new Date(),
+          })
+          .where("id", "=", workerId)
+          .execute();
+
+        await recordEvent("worker_error", workerId, job.id, {
+          error:
+            launchErr instanceof Error ? launchErr.message : String(launchErr),
+        });
+
+        throw launchErr;
+      }
 
       // 3. Update status to PROVISIONING with provider_worker_id
       await db

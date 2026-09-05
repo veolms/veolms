@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { createDatabase } from "@veolms/database";
+import { isMainModule } from "@veolms/fleet-types";
 import { loadMediaWorkerConfig } from "@veolms/config";
 import { executeTranscodeJob } from "./processor.ts";
 import { initMediaWorker, pollForNextJob } from "./worker.ts";
@@ -89,13 +90,7 @@ export async function run(): Promise<void> {
   }
 }
 
-// Auto-run when executed directly as main script
-const isMain =
-  typeof require !== "undefined" && typeof module !== "undefined"
-    ? require.main === module
-    : true;
-
-if (isMain) {
+if (isMainModule(import.meta?.url)) {
   run().catch((err) => {
     console.error("[media-worker] Fatal error during startup:", err);
     process.exit(1);

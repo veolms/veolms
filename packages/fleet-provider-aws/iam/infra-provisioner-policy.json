@@ -1,0 +1,158 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3InfrastructureManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:ListAllMyBuckets",
+        "s3:PutBucketPolicy",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketCors",
+        "s3:GetBucketCors",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutPublicAccessBlock",
+        "s3:GetPublicAccessBlock",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:HeadObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMRoleAndInstanceProfileManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:ListRoles",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:CreateInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:ListInstanceProfiles",
+        "iam:AddRoleToInstanceProfile",
+        "iam:PassRole",
+        "iam:TagRole",
+        "iam:TagInstanceProfile",
+        "iam:DeleteInstanceProfile"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/VeoLMS*",
+        "arn:aws:iam::*:instance-profile/VeoLMS*"
+      ]
+    },
+    {
+      "Sid": "EC2SpotServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::*:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "spot.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "LambdaFunctionAndLayerManagement",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:DeleteFunction",
+        "lambda:PublishLayerVersion",
+        "lambda:GetLayerVersion",
+        "lambda:DeleteLayerVersion",
+        "lambda:TagResource",
+        "lambda:InvokeFunction"
+      ],
+      "Resource": [
+        "arn:aws:lambda:*:*:function:veolms-*",
+        "arn:aws:lambda:*:*:layer:veolms-*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsManagement",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteLogGroup",
+        "logs:TagResource"
+      ],
+      "Resource": [
+        "arn:aws:logs:*:*:log-group:/veolms/*",
+        "arn:aws:logs:*:*:log-group:/aws/lambda/veolms-*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsInspection",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EventBridgeSchedulerManagement",
+      "Effect": "Allow",
+      "Action": [
+        "scheduler:CreateSchedule",
+        "scheduler:GetSchedule",
+        "scheduler:UpdateSchedule",
+        "scheduler:DeleteSchedule",
+        "scheduler:CreateScheduleGroup"
+      ],
+      "Resource": [
+        "arn:aws:scheduler:*:*:schedule/*/*veolms*",
+        "arn:aws:scheduler:*:*:schedule-group/*veolms*"
+      ]
+    },
+    {
+      "Sid": "EC2InfraInspectionAndNetworking",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeAccountAttributes",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeKeyPairs",
+        "ec2:DescribeImages",
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceStatus",
+        "ec2:CreateSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateKeyPair",
+        "ec2:CreateTags",
+        "ec2:RunInstances",
+        "ec2:TerminateInstances",
+        "ec2:GetConsoleOutput"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CallerIdentityAndSSMLookup",
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity", "ssm:GetParameter"],
+      "Resource": "*"
+    }
+  ]
+}

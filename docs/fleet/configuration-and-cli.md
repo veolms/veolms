@@ -1,6 +1,6 @@
-# Configuration & CLI Reference
+# Configuration Reference
 
-The Fleet Manager provides unified configuration management, interactive provisioning tooling, and diagnostic CLI utilities.
+This document defines all environment variables, defaults, and configuration options used by the **Fleet Manager** and **AWS Provider**.
 
 ---
 
@@ -36,56 +36,8 @@ The Fleet Manager provides unified configuration management, interactive provisi
 
 ---
 
-## CLI Commands
+## Operational CLI Commands
 
-### Operations & Diagnostics (`pnpm fleet:cli`)
+For the complete command matrix, workflow examples, and execution details for all fleet commands (`pnpm fleet:provider`, `pnpm fleet:infra`, `pnpm fleet:destroy`, `pnpm fleet:queue:trigger`, and `pnpm fleet:cli`), see the dedicated reference:
 
-```bash
-# Start persistent fleet manager daemon (serverful mode)
-pnpm fleet:run
-
-# Show fleet cluster health summary (queued, processing, stalled count)
-pnpm fleet:cli health
-
-# List active and recent EC2 / local workers
-pnpm fleet:cli workers
-
-# List recent transcoding jobs and attempt counts
-pnpm fleet:cli jobs
-
-# Inspect detailed progress history and diagnostic audit events for a job
-pnpm fleet:cli status <job-id>
-
-# Queue a video job manually from the CLI
-pnpm fleet:cli queue <video-key-or-url> --qualities=1080p,720p --prefix=transcoded/demo/
-
-# Prune and terminate any stalled zombie worker instances
-pnpm fleet:cli prune
-```
-
-### Infrastructure Provisioning & Updates
-
-```bash
-# Interactive cloud infrastructure setup (IAM, Lambdas, S3, Security Groups)
-pnpm fleet:infra
-
-# Non-interactive update of all cloud infrastructure (Full Update)
-NON_INTERACTIVE=true pnpm fleet:infra --update
-
-# Fast code & bundle update (re-bundles Lambdas and uploads worker bundle, skips layer build)
-UPDATE_MODE=bundles pnpm fleet:infra --update
-
-# Teardown and delete all provisioned AWS resources
-pnpm fleet:destroy
-```
-
-### Serverless Bundling
-
-```bash
-# Build universal serverless Lambda bundles using esbuild
-pnpm build:serverless --entry=fleet
-pnpm build:serverless --entry=probe
-
-# Upload media worker bundle to S3
-pnpm fleet:bundle:upload
-```
+👉 **[`docs/fleet-commands-and-operations.md`](../fleet-commands-and-operations.md)**

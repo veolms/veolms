@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mapEc2StateToWorkerStatus } from "../src/provider.ts";
-import { loadAwsProviderConfig, resolveS3BucketName } from "../src/config.ts";
+import {
+  loadAwsProviderConfig,
+  resolveS3BucketName,
+  resolveS3BuildBucketName,
+} from "../src/config.ts";
 
 describe("AWS Fleet Provider", () => {
   it("should map EC2 instance states to fleet WorkerStatus correctly", () => {
@@ -26,6 +30,16 @@ describe("AWS Fleet Provider", () => {
     assert.equal(config.S3_BUCKET, "my-test-bucket");
   });
 
+  it("should load config with S3_BUILD_BUCKET", () => {
+    const config = loadAwsProviderConfig({
+      S3_BUCKET: "my-media-bucket",
+      S3_BUILD_BUCKET: "my-build-bucket",
+    });
+
+    assert.equal(config.S3_BUCKET, "my-media-bucket");
+    assert.equal(config.S3_BUILD_BUCKET, "my-build-bucket");
+  });
+
   describe("resolveS3BucketName", () => {
     it("prefers S3_BUCKET over S3_BUCKET_NAME when both are set", () => {
       assert.equal(
@@ -40,6 +54,19 @@ describe("AWS Fleet Provider", () => {
 
     it("returns null when neither is set", () => {
       assert.equal(resolveS3BucketName({}), null);
+    });
+  });
+
+  describe("resolveS3BuildBucketName", () => {
+    it("resolves S3_BUILD_BUCKET when set", () => {
+      assert.equal(
+        resolveS3BuildBucketName({ S3_BUILD_BUCKET: "build-bucket-1" }),
+        "build-bucket-1",
+      );
+    });
+
+    it("returns null when S3_BUILD_BUCKET is unset", () => {
+      assert.equal(resolveS3BuildBucketName({}), null);
     });
   });
 

@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3BuildBucketUploadAndRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:HeadObject",
+        "s3:ListBucket",
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${S3_BUILD_BUCKET}",
+        "arn:aws:s3:::${S3_BUILD_BUCKET}/*"
+      ]
+    },
+    {
+      "Sid": "LambdaFunctionCodeUpdate",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:UpdateFunctionCode",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion"
+      ],
+      "Resource": [
+        "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:veolms-fleet-manager",
+        "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:veolms-video-metadata-probe"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsDescribe",
+      "Effect": "Allow",
+      "Action": ["logs:DescribeLogGroups"],
+      "Resource": "*"
+    }
+  ]
+}

@@ -1,8 +1,11 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
@@ -56,9 +59,13 @@ function resolveWithin(root: string, candidate: string): string {
   const resolvedPath = resolve(resolvedRoot, candidate);
   const pathFromRoot = relative(resolvedRoot, resolvedPath);
   if (
+    isAbsolute(pathFromRoot) ||
     pathFromRoot === ".." ||
     pathFromRoot.startsWith("../") ||
-    pathFromRoot.startsWith("..\\")
+    pathFromRoot.startsWith("..\\") ||
+    (!resolvedPath.startsWith(resolvedRoot + "/") &&
+      !resolvedPath.startsWith(resolvedRoot + "\\") &&
+      resolvedPath !== resolvedRoot)
   ) {
     throw new Error(
       "Media job path must remain inside its configured directory",
@@ -80,6 +87,7 @@ async function runFfmpeg(options: {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(executable, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
     });
     let settled = false;
     let stderrOutput = "";
@@ -95,8 +103,26 @@ async function runFfmpeg(options: {
     };
 
     const abortChild = () => {
+      if (process.platform === "win32" && child.pid) {
+        try {
+          execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: "ignore" });
+          return;
+        } catch {
+          // Fallback
+        }
+      }
       child.kill("SIGTERM");
-      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 10_000);
+      forceKillTimer = setTimeout(() => {
+        if (process.platform === "win32" && child.pid) {
+          try {
+            execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: "ignore" });
+            return;
+          } catch {
+            // Fallback
+          }
+        }
+        child.kill("SIGKILL");
+      }, 10_000);
       forceKillTimer.unref();
     };
 
@@ -151,15 +177,21 @@ export async function probeVideoMetadata(
   ffprobePath = "ffprobe",
 ): Promise<VideoMetadata> {
   try {
-    const { stdout } = await execFileAsync(ffprobePath, [
-      "-v",
-      "error",
-      "-show_entries",
-      "format=duration:stream=width,height,r_frame_rate",
-      "-of",
-      "json",
-      videoPath,
-    ]);
+    const { stdout } = await execFileAsync(
+      ffprobePath,
+      [
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration:stream=width,height,r_frame_rate",
+        "-of",
+        "json",
+        videoPath,
+      ],
+      {
+        windowsHide: true,
+      },
+    );
 
     const parsed = JSON.parse(stdout) as {
       format?: { duration?: string };
@@ -214,9 +246,23 @@ export async function probeVideoMetadata(
 export async function executeTranscodeJob(
   ctx: MediaWorkerContext,
   jobId: string,
-  signal?: AbortSignal,
+  externalSignal?: AbortSignal,
 ): Promise<void> {
   const { db, config, workerId, recordEvent } = ctx;
+  const jobAbortController = new AbortController();
+
+  const handleExternalAbort = () => {
+    jobAbortController.abort();
+  };
+  if (externalSignal?.aborted) {
+    jobAbortController.abort();
+  } else {
+    externalSignal?.addEventListener("abort", handleExternalAbort, {
+      once: true,
+    });
+  }
+
+  const signal = jobAbortController.signal;
 
   // 1. Fetch Job from DB
   const job = await db
@@ -347,12 +393,36 @@ export async function executeTranscodeJob(
       });
     } else {
       const cleanVideoKey = job.video_key.replace(/^[/\\]+/, "");
+      const keyWithoutBucketPrefix = cleanVideoKey.replace(
+        /^s3-bucket[/\\]/,
+        "",
+      );
       const workspaceDir = process.cwd();
-      const localCandidates = [
-        resolveWithin(workspaceDir, cleanVideoKey),
-        resolveWithin(join(workspaceDir, "s3-bucket"), cleanVideoKey),
-        resolveWithin(join(workspaceDir, "scratch"), cleanVideoKey),
+
+      const candidateRoots = [
+        join(workspaceDir, "s3-bucket"),
+        join(repoRoot, "s3-bucket"),
+        join(workspaceDir, "scratch"),
+        join(repoRoot, "scratch"),
+        workspaceDir,
+        repoRoot,
       ];
+      const candidateKeys = [cleanVideoKey, keyWithoutBucketPrefix];
+
+      const localCandidates: string[] = [];
+      for (const root of candidateRoots) {
+        for (const k of candidateKeys) {
+          try {
+            const pathCandidate = resolveWithin(root, k);
+            if (!localCandidates.includes(pathCandidate)) {
+              localCandidates.push(pathCandidate);
+            }
+          } catch {
+            // Path was outside candidate root, skip
+          }
+        }
+      }
+
       let isLocalFile = false;
       for (const candidate of localCandidates) {
         if (existsSync(candidate)) {
@@ -375,13 +445,17 @@ export async function executeTranscodeJob(
             ) {
               throw error;
             }
-            // Candidate disappeared or could not be read; try the next
-            // configured local location, then S3.
+            // Candidate disappeared or could not be read; try next candidate
           }
         }
       }
 
       if (!isLocalFile) {
+        if (config.STORAGE_PROVIDER === "local") {
+          throw new Error(
+            `Local source video not found for key "${job.video_key}". Checked: ${localCandidates.slice(0, 4).join(", ")}`,
+          );
+        }
         await storage.downloadObject(cleanVideoKey, inputVideoPath, {
           signal,
         });
@@ -498,6 +572,21 @@ export async function executeTranscodeJob(
         progressWrite = progressWrite
           .catch(() => undefined)
           .then(async () => {
+            // Check if job status has been changed to "cancelled" in the database
+            const checkJob = await db
+              .selectFrom("video_jobs")
+              .select("status")
+              .where("id", "=", jobId)
+              .executeTakeFirst();
+
+            if (checkJob?.status === "cancelled") {
+              console.info(
+                `[media-worker] Job ${jobId} was cancelled in database. Aborting transcode...`,
+              );
+              jobAbortController.abort();
+              return;
+            }
+
             await db
               .updateTable("worker_monitoring")
               .set({
@@ -548,11 +637,11 @@ export async function executeTranscodeJob(
     // removed in finally, so persistence failures must fail the job rather
     // than leaving a false COMPLETED result with no playable output.
     if (config.STORAGE_PROVIDER === "local") {
-      const cleanPrefix = job.output_prefix.replace(/^s3-bucket\//, "");
-      const localTargetDir = resolveWithin(
-        join(process.cwd(), "s3-bucket"),
-        cleanPrefix,
-      );
+      const cleanPrefix = job.output_prefix.replace(/^s3-bucket[/\\]/, "");
+      const baseBucketDir = existsSync(join(repoRoot, "s3-bucket"))
+        ? join(repoRoot, "s3-bucket")
+        : join(process.cwd(), "s3-bucket");
+      const localTargetDir = resolveWithin(baseBucketDir, cleanPrefix);
       await mkdir(localTargetDir, { recursive: true });
       await cp(outputHlsDir, localTargetDir, {
         recursive: true,
@@ -631,6 +720,47 @@ export async function executeTranscodeJob(
       uploadHandle = null;
     }
 
+    const isCancelled =
+      jobAbortController.signal.aborted ||
+      externalSignal?.aborted ||
+      (error instanceof Error &&
+        (error.name === "AbortError" || (error as any).code === "ABORT_ERR"));
+
+    if (isCancelled) {
+      console.info(
+        `[media-worker] Job ${jobId} was cancelled. Resetting worker state...`,
+      );
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable("video_jobs")
+          .set({
+            status: "cancelled",
+            worker_id: null,
+            error_message: "Job was cancelled",
+            updated_at: new Date(),
+          })
+          .where("id", "=", jobId)
+          .where("worker_id", "=", workerId)
+          .execute();
+
+        await trx
+          .updateTable("workers")
+          .set({
+            status: "ready",
+            job_id: null,
+            updated_at: new Date(),
+          })
+          .where("id", "=", workerId)
+          .execute();
+      });
+
+      await recordEvent("job_cancelled", jobId, {
+        reason: errorMsg,
+      });
+
+      throw error;
+    }
+
     const nextAttempts = job.attempts + 1;
     const shouldRetry = nextAttempts < job.max_attempts;
     await db.transaction().execute(async (trx) => {
@@ -667,6 +797,9 @@ export async function executeTranscodeJob(
 
     throw error;
   } finally {
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", handleExternalAbort);
+    }
     // Clean up scratch files
     try {
       await rm(jobScratchDir, { recursive: true, force: true });

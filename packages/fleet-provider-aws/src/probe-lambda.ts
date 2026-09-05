@@ -63,6 +63,178 @@ export function extractProbeEvent(rawEvent: unknown): Record<string, unknown> {
   return candidate;
 }
 
+export interface FleetManagerEvaluationResult {
+  readonly success: boolean;
+  readonly targetResult: unknown;
+}
+
+export function parseFleetManagerResponse(
+  invokeResponse: { readonly FunctionError?: string; readonly Payload?: Uint8Array },
+  options: { readonly isCancellation?: boolean } = {},
+): FleetManagerEvaluationResult {
+  let targetResult: unknown = {};
+  if (invokeResponse.Payload) {
+    try {
+      const responseString = Buffer.from(invokeResponse.Payload).toString(
+        "utf-8",
+      );
+      targetResult = JSON.parse(responseString);
+    } catch {
+      // Non-JSON response
+    }
+  }
+
+  let bodyData: unknown = targetResult;
+  if (
+    targetResult &&
+    typeof targetResult === "object" &&
+    "body" in (targetResult as Record<string, unknown>)
+  ) {
+    const rawBody = (targetResult as Record<string, unknown>).body;
+    if (typeof rawBody === "string") {
+      try {
+        const parsed = JSON.parse(rawBody);
+        (targetResult as Record<string, unknown>).body = parsed;
+        bodyData = parsed;
+      } catch {
+        bodyData = rawBody;
+      }
+    } else if (rawBody && typeof rawBody === "object") {
+      bodyData = rawBody;
+    }
+  }
+
+  if (invokeResponse.FunctionError) {
+    console.error(
+      `[probe-lambda] Downstream Lambda error (${invokeResponse.FunctionError}):`,
+      targetResult,
+    );
+    return { success: false, targetResult };
+  }
+
+  const checkRecord = (rec: Record<string, unknown>): boolean => {
+    // Check statusCode and status when numeric
+    if (
+      typeof rec.statusCode === "number" &&
+      (rec.statusCode < 200 || rec.statusCode >= 300)
+    ) {
+      return false;
+    }
+    if (
+      typeof rec.status === "number" &&
+      (rec.status < 200 || rec.status >= 300)
+    ) {
+      return false;
+    }
+
+    // Explicit success boolean
+    if (rec.success === false) {
+      return false;
+    }
+
+    // Cancellation specific check: failure if cancelled is explicitly false
+    if (options.isCancellation || rec.status === "cancelled") {
+      if (rec.cancelled === false) {
+        return false;
+      }
+    }
+
+    // Error field presence
+    if (rec.error) {
+      return false;
+    }
+
+    // Status field string values
+    if (typeof rec.status === "string") {
+      const statusLower = rec.status.trim().toLowerCase();
+      if (
+        statusLower === "failed" ||
+        statusLower === "error" ||
+        statusLower === "failure" ||
+        statusLower === "rejected"
+      ) {
+        return false;
+      }
+    }
+
+    // Result field checks
+    if (rec.result !== undefined) {
+      if (rec.result === false) {
+        return false;
+      }
+      if (typeof rec.result === "string") {
+        const resultLower = rec.result.trim().toLowerCase();
+        if (
+          resultLower === "failed" ||
+          resultLower === "error" ||
+          resultLower === "failure" ||
+          resultLower === "rejected"
+        ) {
+          return false;
+        }
+      }
+      if (typeof rec.result === "object" && rec.result !== null) {
+        const nested = rec.result as Record<string, unknown>;
+        if (nested.success === false) {
+          return false;
+        }
+        if (
+          (options.isCancellation || nested.status === "cancelled") &&
+          nested.cancelled === false
+        ) {
+          return false;
+        }
+        if (nested.error) {
+          return false;
+        }
+        if (typeof nested.status === "string") {
+          const nestedStatusLower = nested.status.trim().toLowerCase();
+          if (
+            nestedStatusLower === "failed" ||
+            nestedStatusLower === "error" ||
+            nestedStatusLower === "failure" ||
+            nestedStatusLower === "rejected"
+          ) {
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  };
+
+  if (targetResult && typeof targetResult === "object") {
+    if (!checkRecord(targetResult as Record<string, unknown>)) {
+      return { success: false, targetResult };
+    }
+  }
+
+  if (bodyData && typeof bodyData === "object" && bodyData !== targetResult) {
+    if (!checkRecord(bodyData as Record<string, unknown>)) {
+      return { success: false, targetResult };
+    }
+  }
+
+  if (bodyData === false) {
+    return { success: false, targetResult };
+  }
+
+  if (typeof bodyData === "string") {
+    const strLower = bodyData.trim().toLowerCase();
+    if (
+      strLower === "failed" ||
+      strLower === "error" ||
+      strLower === "failure" ||
+      strLower === "rejected"
+    ) {
+      return { success: false, targetResult };
+    }
+  }
+
+  return { success: true, targetResult };
+}
+
 export async function processProbeAndForward(
   rawEvent: unknown,
   customConfig: ProbeLambdaConfig = {},
@@ -107,6 +279,51 @@ export async function processProbeAndForward(
       region,
       ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
     });
+
+  if (payload.status === "cancelled") {
+    const isExplicitlyFalse = (val: unknown) =>
+      val === false ||
+      (typeof val === "string" && val.trim().toLowerCase() === "false");
+    const cancelPayload = {
+      jobId: payload.jobId,
+      status: "cancelled",
+      deleteFiles:
+        !isExplicitlyFalse(payload.deleteFiles) &&
+        !isExplicitlyFalse(payload.deleteMedia),
+      ...(payload.videoId ? { videoId: payload.videoId } : {}),
+      ...(payload.videoKey ? { videoKey: payload.videoKey } : {}),
+    };
+
+    console.info(
+      `[probe-lambda] Forwarding cancellation request for job ${cancelPayload.jobId ?? "(unknown)"} to Fleet Manager Lambda: ${targetLambdaName}`,
+    );
+
+    const invokeResponse = await lambda.send(
+      new InvokeCommand({
+        FunctionName: targetLambdaName,
+        InvocationType: "RequestResponse",
+        Payload: Buffer.from(JSON.stringify(cancelPayload)),
+      }),
+    );
+
+    const { success, targetResult } = parseFleetManagerResponse(
+      invokeResponse,
+      { isCancellation: true },
+    );
+
+    if (!success && !invokeResponse.FunctionError) {
+      console.error(
+        `[probe-lambda] Fleet Manager cancellation response was unsuccessful:`,
+        targetResult,
+      );
+    }
+
+    return {
+      success,
+      probed: false,
+      targetLambdaResponse: targetResult,
+    };
+  }
 
   const videoKey =
     typeof payload.videoKey === "string"
@@ -176,27 +393,17 @@ export async function processProbeAndForward(
     }),
   );
 
-  let targetResult: unknown = {};
-  if (invokeResponse.Payload) {
-    try {
-      const responseString = Buffer.from(invokeResponse.Payload).toString(
-        "utf-8",
-      );
-      targetResult = JSON.parse(responseString);
-    } catch {
-      // Non-JSON response
-    }
-  }
+  const { success, targetResult } = parseFleetManagerResponse(invokeResponse);
 
-  if (invokeResponse.FunctionError) {
+  if (!success && !invokeResponse.FunctionError) {
     console.error(
-      `[probe-lambda] Downstream Lambda error (${invokeResponse.FunctionError}):`,
+      `[probe-lambda] Fleet Manager invocation response was unsuccessful:`,
       targetResult,
     );
   }
 
   return {
-    success: !invokeResponse.FunctionError,
+    success,
     probed,
     videoMetadata,
     targetLambdaResponse: targetResult,

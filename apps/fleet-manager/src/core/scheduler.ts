@@ -21,27 +21,29 @@ export function calculateNextCheckInterval(options: {
   minIntervalSeconds: number;
   maxIntervalSeconds: number;
 }): number {
-  const {
-    progressPercentage,
-    estimatedDurationSeconds,
-    minIntervalSeconds,
-    maxIntervalSeconds,
-  } = options;
+  const minInterval = Number.isFinite(options.minIntervalSeconds)
+    ? options.minIntervalSeconds
+    : 15;
+  const maxInterval = Number.isFinite(options.maxIntervalSeconds)
+    ? options.maxIntervalSeconds
+    : 300;
+  const progress = Number.isFinite(options.progressPercentage)
+    ? options.progressPercentage
+    : 0;
+  const duration = Number.isFinite(options.estimatedDurationSeconds)
+    ? options.estimatedDurationSeconds
+    : minInterval * 2;
 
-  if (progressPercentage >= 99.0) {
-    return minIntervalSeconds;
+  if (progress >= 99.0) {
+    return minInterval;
   }
 
   const remainingPercent =
-    (100 - Math.min(100, Math.max(0, progressPercentage))) / 100;
-  const estimatedRemainingSec =
-    Math.max(10, estimatedDurationSeconds) * remainingPercent;
+    (100 - Math.min(100, Math.max(0, progress))) / 100;
+  const estimatedRemainingSec = Math.max(10, duration) * remainingPercent;
   const targetInterval = Math.round(estimatedRemainingSec / 2);
 
-  return Math.max(
-    minIntervalSeconds,
-    Math.min(maxIntervalSeconds, targetInterval),
-  );
+  return Math.max(minInterval, Math.min(maxInterval, targetInterval));
 }
 
 export function createScheduler(config: FleetManagerConfig): Scheduler {

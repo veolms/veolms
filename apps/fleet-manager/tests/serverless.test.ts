@@ -62,6 +62,7 @@ function createChainableMockDb(
     attempts: 0,
     max_attempts: 3,
     created_at: new Date(),
+    numUpdatedRows: 1n,
   };
 
   const handlerProxy: ProxyHandler<object> = {
@@ -187,6 +188,25 @@ describe("Universal Serverless Entrypoint — Execution Lifecycle", () => {
     await assert.rejects(async () => {
       await runServerlessFleetCycle({}, { provider, db: brokenDb });
     }, /Database connection lost/);
+  });
+
+  it("should process cancellation when status is cancelled", async () => {
+    const provider = createMockProvider();
+    const db = createChainableMockDb({ claimableJob: true });
+
+    const result = await runServerlessFleetCycle(
+      {
+        jobId: "00000000-0000-4000-8000-000000000001",
+        status: "cancelled",
+        deleteFiles: false,
+      },
+      { provider, db },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.status, "cancelled");
+    assert.equal(result.cancelled, true);
+    assert.equal(result.jobId, "00000000-0000-4000-8000-000000000001");
   });
 });
 

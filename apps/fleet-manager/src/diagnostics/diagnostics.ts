@@ -217,6 +217,41 @@ export async function pruneZombieWorkers(
       }
     }
 
+    if (worker.job_id) {
+      try {
+        const job = await db
+          .selectFrom("video_jobs")
+          .select(["id", "attempts", "max_attempts", "status"])
+          .where("id", "=", worker.job_id)
+          .where("status", "in", ["provisioning", "processing"])
+          .executeTakeFirst();
+
+        if (job) {
+          const nextAttempts = job.attempts + 1;
+          const shouldRetry = nextAttempts < job.max_attempts;
+          await db
+            .updateTable("video_jobs")
+            .set({
+              attempts: nextAttempts,
+              status: shouldRetry ? "queued" : "failed",
+              worker_id: null,
+              error_message: `Worker ${worker.id} stalled and was terminated by prune`,
+              failed_at: shouldRetry ? null : new Date(),
+              updated_at: new Date(),
+            })
+            .where("id", "=", job.id)
+            .where("status", "in", ["provisioning", "processing"])
+            .where("worker_id", "=", worker.id)
+            .execute();
+        }
+      } catch (jobErr) {
+        console.error(
+          `Failed to recover job ${worker.job_id} during worker prune:`,
+          jobErr,
+        );
+      }
+    }
+
     await db
       .updateTable("workers")
       .set({

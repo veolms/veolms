@@ -204,9 +204,13 @@ export function buildFfmpegHlsArgs(options: {
     typeof metadata.fps === "number" && metadata.fps > 0 ? metadata.fps : 30;
   const gopSize = Math.max(1, Math.round(targetFps * segmentDuration));
 
+  const isPortrait = metadata.height > metadata.width;
+
   // Build FFmpeg multi-output HLS transcode command
   for (const quality of applicableQualities) {
     const profile = getQualityProfile(quality);
+    const targetWidth = isPortrait ? profile.height : profile.width;
+    const targetHeight = isPortrait ? profile.width : profile.height;
     const qualityOutputDir = `${outputDir}/${quality}`;
     const playlistPath = `${qualityOutputDir}/${quality}.m3u8`;
     const segmentPattern = `${qualityOutputDir}/segment_%03d.ts`;
@@ -225,6 +229,8 @@ export function buildFfmpegHlsArgs(options: {
       `${profile.maxBitrateKbps}k`,
       "-bufsize",
       `${profile.bufferSizeKbps}k`,
+      "-r",
+      String(targetFps),
       "-g",
       String(gopSize),
       "-keyint_min",
@@ -232,7 +238,7 @@ export function buildFfmpegHlsArgs(options: {
       "-sc_threshold",
       "0",
       "-vf",
-      `scale=w=${profile.width}:h=${profile.height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${profile.width}:${profile.height}:(ow-iw)/2:(oh-ih)/2:black`,
+      `scale=w=${targetWidth}:h=${targetHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`,
     );
 
     // Audio options
@@ -269,8 +275,8 @@ export function buildFfmpegHlsArgs(options: {
       quality,
       relativePlaylistPath: `${quality}/${quality}.m3u8`,
       bandwidth: totalBandwidthBps,
-      width: profile.width,
-      height: profile.height,
+      width: targetWidth,
+      height: targetHeight,
     });
   }
 

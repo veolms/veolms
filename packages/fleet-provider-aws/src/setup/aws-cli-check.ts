@@ -16,6 +16,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 import { bold, cyan, dim, green, red } from "@veolms/fleet-types/terminal";
 
@@ -23,6 +24,76 @@ export interface AwsIdentity {
   accountId: string;
   userId: string;
   arn: string;
+  profile?: string;
+}
+
+/**
+ * Discovers available AWS profile names from ~/.aws/credentials and ~/.aws/config,
+ * or via AWS CLI `aws configure list-profiles`.
+ */
+export function listAvailableAwsProfiles(): string[] {
+  const profiles = new Set<string>();
+
+  const credentialsPath = path.join(os.homedir(), ".aws", "credentials");
+  const configPath = path.join(os.homedir(), ".aws", "config");
+
+  const parseIniProfiles = (filePath: string, isConfig: boolean) => {
+    if (!fs.existsSync(filePath)) return;
+    try {
+      const content = fs.readFileSync(filePath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          const section = trimmed.slice(1, -1).trim();
+          if (isConfig) {
+            const p =
+              section === "default"
+                ? "default"
+                : section.startsWith("profile ")
+                  ? section.slice("profile ".length).trim()
+                  : undefined;
+            if (p) profiles.add(p);
+          } else if (section) {
+            profiles.add(section);
+          }
+        }
+      }
+    } catch {
+      // Ignore file read error
+    }
+  };
+
+  parseIniProfiles(credentialsPath, false);
+  parseIniProfiles(configPath, true);
+
+  if (profiles.size === 0) {
+    try {
+      const output = execSync("aws configure list-profiles", {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      for (const line of output.split("\n")) {
+        const p = line.trim();
+        if (p) profiles.add(p);
+      }
+    } catch {
+      // Ignore AWS CLI errors
+    }
+  }
+
+  const result = Array.from(profiles);
+  const defaultIdx = result.indexOf("default");
+  if (defaultIdx > 0) {
+    result.splice(defaultIdx, 1);
+    result.unshift("default");
+  } else if (
+    result.length === 0 &&
+    (fs.existsSync(credentialsPath) || fs.existsSync(configPath))
+  ) {
+    result.push("default");
+  }
+
+  return result;
 }
 
 function hasEnvCredentials(): boolean {
@@ -38,12 +109,15 @@ function hasAwsCredentialsFile(): boolean {
   return fs.existsSync(credentialsFile) || fs.existsSync(configFile);
 }
 
-function detectCredentialSource(): string {
-  if (hasEnvCredentials()) {
-    return `environment variables (${bold("AWS_ACCESS_KEY_ID")} / ${bold("AWS_SECRET_ACCESS_KEY")})`;
+function detectCredentialSource(profile?: string): string {
+  if (profile && profile !== "default") {
+    return `AWS profile: ${bold(profile)}`;
   }
   if (process.env["AWS_PROFILE"]) {
     return `AWS profile: ${bold(process.env["AWS_PROFILE"])}`;
+  }
+  if (hasEnvCredentials()) {
+    return `environment variables (${bold("AWS_ACCESS_KEY_ID")} / ${bold("AWS_SECRET_ACCESS_KEY")})`;
   }
   if (hasAwsCredentialsFile()) {
     return `~/.aws/credentials or ~/.aws/config (default profile)`;
@@ -58,7 +132,12 @@ function detectCredentialSource(): string {
  */
 export async function checkAwsCredentials(
   region: string,
+  profile?: string,
 ): Promise<AwsIdentity> {
+  if (profile) {
+    process.env["AWS_PROFILE"] = profile;
+  }
+
   // First: fast local check — are there any credentials at all?
   const hasLocalCreds = hasEnvCredentials() || hasAwsCredentialsFile();
 
@@ -68,7 +147,10 @@ export async function checkAwsCredentials(
   }
 
   // Second: live verification via STS
-  const sts = new STSClient({ region });
+  const sts = new STSClient({
+    region,
+    ...(profile ? { profile } : {}),
+  });
 
   try {
     const identity = await sts.send(new GetCallerIdentityCommand({}));
@@ -78,12 +160,12 @@ export async function checkAwsCredentials(
     const arn = identity.Arn ?? "unknown";
 
     console.log(
-      `  ${green("✔")} AWS credentials verified (source: ${detectCredentialSource()})`,
+      `  ${green("✔")} AWS credentials verified (source: ${detectCredentialSource(profile)})`,
     );
     console.log(`  ${green("✔")} Account:  ${bold(accountId)}`);
     console.log(`  ${green("✔")} Identity: ${bold(arn)}`);
 
-    return { accountId, userId, arn };
+    return { accountId, userId, arn, ...(profile ? { profile } : {}) };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
 

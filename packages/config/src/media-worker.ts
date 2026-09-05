@@ -37,6 +37,7 @@ const baseMediaWorkerConfigSchema = z.object({
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
   S3_BUCKET: z.string().default("veolms-media"),
   S3_BUCKET_NAME: z.string().optional(),
+  S3_BUILD_BUCKET: z.string().optional(),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-east-1"),
   AWS_REGION: z.string().optional(),

@@ -324,4 +324,218 @@ describe("Fleet Manager — State Reconciliation & Dynamic Scheduling", () => {
     assert.equal(scheduledDate, null);
     assert.equal(cancelledWakeup, true);
   });
+
+  it("only verifies jobs in processing status with 100% progress and avoids infinite verification on completed jobs", async () => {
+    let queriedJobStatusFilter = "";
+    let verifiedJobPrefix = "";
+    let jobMarkedCompleted = false;
+
+    const mockDb = {
+      selectFrom: (table: string) => {
+        const createChain = (rows: any[] = []) => {
+          const chain: any = {
+            select: () => chain,
+            selectAll: () => chain,
+            innerJoin: () => chain,
+            leftJoin: () => chain,
+            where: () => chain,
+            execute: async () => rows,
+            executeTakeFirst: async () => rows[0] ?? null,
+          };
+          return chain;
+        };
+
+        if (table === "video_jobs") {
+          return {
+            selectAll: () => ({
+              where: (col: string, _op: string, val: any) => {
+                if (col === "status") queriedJobStatusFilter = val;
+                return {
+                  where: () => ({
+                    where: () => ({
+                      execute: async () => [
+                        {
+                          id: "job-done-1",
+                          status: "processing",
+                          progress_percent: 100,
+                          worker_id: "w-1",
+                          output_prefix: "courses/c1/hls/",
+                        },
+                      ],
+                    }),
+                  }),
+                };
+              },
+            }),
+            select: () => createChain([]),
+          };
+        }
+        return createChain([]);
+      },
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          const chain: any = {
+            where: () => chain,
+            execute: async () => {
+              if (table === "video_jobs" && values.status === "completed") {
+                jobMarkedCompleted = true;
+              }
+              return { numUpdatedRows: 1n };
+            },
+            executeTakeFirst: async () => {
+              if (table === "video_jobs" && values.status === "completed") {
+                jobMarkedCompleted = true;
+              }
+              return { numUpdatedRows: 1n };
+            },
+          };
+          return chain;
+        },
+      }),
+      insertInto: () => ({
+        values: () => ({
+          execute: async () => {},
+        }),
+      }),
+    } as any;
+
+    const mockProvider: FleetProvider = {
+      name: "aws",
+      createWorker: async () => ({}) as WorkerHandle,
+      getWorker: async () => null,
+      getWorkerStatus: async () => "ready",
+      terminateWorker: async () => {},
+      healthCheck: async () => ({ healthy: true, state: "ready" }),
+      verifyJobOutput: async (prefix: string) => {
+        verifiedJobPrefix = prefix;
+        return true;
+      },
+    };
+
+    const fleet = createFleetManager({
+      provider: mockProvider,
+      db: mockDb,
+      config: baseConfig,
+    });
+
+    const result = await fleet.runMonitoringCycle();
+
+    assert.equal(queriedJobStatusFilter, "processing");
+    assert.equal(verifiedJobPrefix, "courses/c1/hls/");
+    assert.equal(jobMarkedCompleted, true);
+    assert.equal(result.reconcileResult.verifiedCompletedJobs, 1);
+  });
+
+  it("does not overwrite a job that was failed and requeued during overlapping storage I/O verification", async () => {
+    let currentJobState: any = {
+      id: "job-overlap-1",
+      status: "processing",
+      progress_percent: 100,
+      worker_id: "w-old",
+      output_prefix: "courses/overlap/hls/",
+      attempts: 0,
+    };
+    const recordedEvents: string[] = [];
+
+    const mockDb = {
+      selectFrom: (table: string) => {
+        const createChain = (rows: any[] = []) => {
+          const chain: any = {
+            select: () => chain,
+            selectAll: () => chain,
+            innerJoin: () => chain,
+            leftJoin: () => chain,
+            where: () => chain,
+            execute: async () => rows,
+            executeTakeFirst: async () => rows[0] ?? null,
+          };
+          return chain;
+        };
+
+        if (table === "video_jobs") {
+          return {
+            selectAll: () => ({
+              where: () => ({
+                where: () => ({
+                  where: () => ({
+                    execute: async () => [
+                      { ...currentJobState },
+                    ],
+                  }),
+                }),
+              }),
+            }),
+            select: () => createChain([]),
+          };
+        }
+        return createChain([]);
+      },
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          const filters: { col: string; val: any }[] = [];
+          const chain: any = {
+            where: (col: string, _op: string, val: any) => {
+              filters.push({ col, val });
+              return chain;
+            },
+            execute: async () => chain.executeTakeFirst(),
+            executeTakeFirst: async () => {
+              if (table === "video_jobs") {
+                const matches = filters.every(({ col, val }) => {
+                  return currentJobState[col] === val;
+                });
+                if (matches) {
+                  Object.assign(currentJobState, values);
+                  return { numUpdatedRows: 1n };
+                }
+                return { numUpdatedRows: 0n };
+              }
+              return { numUpdatedRows: 1n };
+            },
+          };
+          return chain;
+        },
+      }),
+      insertInto: () => ({
+        values: (event: any) => ({
+          execute: async () => {
+            recordedEvents.push(event.event_type);
+          },
+        }),
+      }),
+    } as any;
+
+    const mockProvider: FleetProvider = {
+      name: "aws",
+      createWorker: async () => ({}) as WorkerHandle,
+      getWorker: async () => null,
+      getWorkerStatus: async () => "ready",
+      terminateWorker: async () => {},
+      healthCheck: async () => ({ healthy: true, state: "ready" }),
+      verifyJobOutput: async () => {
+        // Simulate overlapping reconciliation: job failed & requeued during storage I/O
+        currentJobState.status = "queued";
+        currentJobState.worker_id = null;
+        currentJobState.attempts = 1;
+        return true;
+      },
+    };
+
+    const fleet = createFleetManager({
+      provider: mockProvider,
+      db: mockDb,
+      config: baseConfig,
+    });
+
+    const result = await fleet.runMonitoringCycle();
+
+    // Newer requeued attempt must NOT be overwritten
+    assert.equal(currentJobState.status, "queued");
+    assert.equal(currentJobState.worker_id, null);
+    assert.equal(currentJobState.attempts, 1);
+    // Verified completed jobs must not increment when conditional update fails
+    assert.equal(result.reconcileResult.verifiedCompletedJobs, 0);
+    // Event must not be recorded
+    assert.equal(recordedEvents.includes("job_output_verified"), false);
+  });
 });

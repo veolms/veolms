@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./terminal": "./src/terminal.ts"
+    "./terminal": "./src/terminal.ts",
+    "./entrypoint": "./src/entrypoint.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -14,5 +15,8 @@
   "dependencies": {
     "zod": "catalog:",
     "@veolms/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.13"
   }
 }

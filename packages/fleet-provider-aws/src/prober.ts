@@ -87,6 +87,7 @@ export async function probeVideoMetadata(
       encoding: "utf-8",
       maxBuffer,
       timeout,
+      shell: false,
     });
 
     const parsed: FfprobeOutput = JSON.parse(stdout.trim());
