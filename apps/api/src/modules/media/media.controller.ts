@@ -41,13 +41,9 @@ export function createMediaController({ service }: { service: MediaService }) {
     if (result.contentLength !== undefined) {
       reply.header("Content-Length", result.contentLength);
     }
-    // Only assets servable to anonymous visitors (published-course
-    // thumbnails/trailers) may sit in shared/CDN caches; anything gated on
-    // ownership must never be cached by an intermediary.
-    reply.header(
-      "Cache-Control",
-      result.isPublic ? "public, max-age=86400" : "private, no-store",
-    );
+    // Assets whose public access can be revoked (e.g. unpublished/deleted courses
+    // or replaced thumbnails) must not be retained in shared caches.
+    reply.header("Cache-Control", "no-store");
     return reply.send(result.stream);
   }
 

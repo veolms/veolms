@@ -43,6 +43,14 @@ import {
   type IncludesService,
 } from "../includes/includes.service.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
+
+const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -219,7 +227,11 @@ export function createCourseService({
         thumbnailMediaId,
         creatorId,
       );
-      if (!thumb || thumb.type !== "image") {
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
         throw new AppError(
           400,
           "INVALID_THUMBNAIL",
@@ -373,7 +385,11 @@ export function createCourseService({
         updates.thumbnailMediaId,
         creatorId,
       );
-      if (!thumb || thumb.type !== "image") {
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
         throw new AppError(
           400,
           "INVALID_THUMBNAIL",
