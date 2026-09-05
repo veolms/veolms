@@ -765,7 +765,7 @@ test("player edge control uses a native title and the short content shortcut", a
   await openApp(page, "/learn/typescript-course/the-design-mindset");
 
   const playerWrap = page.locator(".learning-workspace__player-wrap");
-  const back = page.locator(".learning-workspace__back");
+  const minimize = page.getByRole("button", { name: "Minimize", exact: true });
   const collapse = page.getByRole("button", {
     name: "Collapse course content",
   });
@@ -786,16 +786,18 @@ test("player edge control uses a native title and the short content shortcut", a
   await expect(collapse).toHaveCSS("opacity", "1");
   await expect(collapse).toHaveCSS("pointer-events", "auto");
   await expect(collapse).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(minimize).toBeVisible();
 
-  const [wrapBox, backBox, collapseBox] = await Promise.all([
+  const [wrapBox, minimizeBox, collapseBox] = await Promise.all([
     playerWrap.boundingBox(),
-    back.boundingBox(),
+    minimize.boundingBox(),
     collapse.boundingBox(),
   ]);
   expect(wrapBox).not.toBeNull();
-  expect(backBox).not.toBeNull();
+  expect(minimizeBox).not.toBeNull();
   expect(collapseBox).not.toBeNull();
-  expect(collapseBox!.y - wrapBox!.y).toBeCloseTo(backBox!.y - wrapBox!.y, 1);
+  expect(minimizeBox!.x - wrapBox!.x).toBeGreaterThanOrEqual(6);
+  expect(minimizeBox!.x - wrapBox!.x).toBeLessThanOrEqual(14);
   expect(
     wrapBox!.x + wrapBox!.width - collapseBox!.x - collapseBox!.width,
   ).toBe(0);
@@ -974,7 +976,7 @@ test("tablet player control opens a translucent floating course drawer", async (
   );
 
   const toggle = page.getByRole("button", { name: "Expand course content" });
-  const back = page.getByRole("button", { name: "Return to Courses" });
+  const minimize = page.getByRole("button", { name: "Minimize", exact: true });
   const player = page.getByRole("region", {
     name: "Lesson video player for What is UI/UX Design?",
   });
@@ -983,7 +985,7 @@ test("tablet player control opens a translucent floating course drawer", async (
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(player).toHaveAttribute("data-playing", "false");
   await expect(toggle).toHaveCSS("opacity", "1");
-  await expect(back).toHaveCSS("opacity", "1");
+  await expect(minimize).toBeVisible();
 
   await video.evaluate((element) =>
     element.dispatchEvent(new Event("play", { bubbles: true })),
@@ -991,15 +993,13 @@ test("tablet player control opens a translucent floating course drawer", async (
   await expect(player).toHaveAttribute("data-playing", "true");
   await expect(toggle).toHaveCSS("opacity", "0");
   await expect(toggle).toHaveCSS("pointer-events", "none");
-  await expect(back).toHaveCSS("opacity", "0");
-  await expect(back).toHaveCSS("pointer-events", "none");
 
   await video.evaluate((element) =>
     element.dispatchEvent(new Event("pause", { bubbles: true })),
   );
   await expect(player).toHaveAttribute("data-playing", "false");
   await expect(toggle).toHaveCSS("opacity", "1");
-  await expect(back).toHaveCSS("opacity", "1");
+  await expect(minimize).toBeVisible();
   await toggle.click();
 
   const dialog = page.getByRole("dialog", { name: "Course lessons" });

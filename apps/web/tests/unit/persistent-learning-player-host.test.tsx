@@ -287,7 +287,7 @@ describe("PersistentLearningPlayerHost", () => {
     act(() => restoreFrame?.(performance.now()));
 
     expect(host.style.transform).toBe("translate3d(0, 0, 0) scale(1)");
-    expect(host.style.transition).toContain("transform 300ms");
+    expect(host.style.transition).toContain("transform 500ms");
     expect(screen.getByTestId("persistent-learning-video")).toBe(originalVideo);
 
     fireEvent.transitionEnd(host, { propertyName: "transform" });
@@ -357,5 +357,21 @@ describe("PersistentLearningPlayerHost", () => {
     expect(playerLifecycle.mount).toHaveBeenCalledOnce();
     expect(playerLifecycle.pause).not.toHaveBeenCalled();
     expect(playerLifecycle.unmount).not.toHaveBeenCalled();
+  });
+
+  it("renders full persistent player with full presentation class", () => {
+    const player = createRegistration();
+    const { container } = render(
+      <PersistentLearningPlayerHost
+        player={player}
+        presentation="full"
+        onClose={vi.fn()}
+        onRestore={vi.fn()}
+      />,
+    );
+    const host = container.querySelector<HTMLElement>(
+      "[data-learning-persistent-player]",
+    );
+    expect(host).toHaveClass("learning-persistent-player--full");
   });
 });

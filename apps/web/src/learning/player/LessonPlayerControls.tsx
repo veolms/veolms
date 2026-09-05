@@ -25,6 +25,11 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  LEARNING_PLAYER_MINIMIZE_LABEL,
+  LEARNING_PLAYER_MINIMIZE_SHORTCUT,
+  LEARNING_PLAYER_MINIMIZE_TITLE,
+} from "./learningPlayerShortcuts";
 
 const PLAYER_SURFACE_CLASS =
   "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
@@ -630,14 +635,12 @@ export function LessonPlayerControls({
 
           {onMinimize ? (
             <div
-              className={`pointer-events-auto absolute left-2 top-2 sm:hidden ${mobileInteraction ? "sm:!block" : ""} ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
+              className={`pointer-events-auto absolute left-2 top-2 ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
             >
               <PlayerIconButton
-                label={
-                  mobileFullscreen
-                    ? "Exit fullscreen and minimize video"
-                    : "Minimize video"
-                }
+                label={LEARNING_PLAYER_MINIMIZE_LABEL}
+                title={LEARNING_PLAYER_MINIMIZE_TITLE}
+                aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
                 className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
                 icon={<MinimizeIcon size={22} />}
                 onClick={onMinimize}

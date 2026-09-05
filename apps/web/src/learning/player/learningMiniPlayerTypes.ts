@@ -11,12 +11,17 @@ export interface LearningPlayerPlaybackSnapshot {
 export interface LearningMiniPlayerRequest {
   currentTime: number;
   lessonTitle: string;
+  courseTitle?: string;
+  lessonIndex?: number;
+  totalLessons?: number;
   mediaKey: string;
   muted: boolean;
   playbackRate: number;
   playing: boolean;
   source: VideoSource;
   volume: number;
+  courseSlug?: string;
+  selectedLesson?: number;
   getLivePlaybackSnapshot?: () => LearningPlayerPlaybackSnapshot;
   preparePlaybackHandoff?: () => void;
 }

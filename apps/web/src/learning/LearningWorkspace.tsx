@@ -1,4 +1,3 @@
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import {
   useCallback,
   useEffect,
@@ -7,6 +6,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from "react";
 import type {
   CSSProperties,
@@ -40,6 +40,7 @@ import type {
   RegisterPersistentLearningPlayer,
 } from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
+import { isDesktopLearningMinimizeViewport } from "./player/learningPlayerMotion";
 import {
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
@@ -192,10 +193,8 @@ interface LearningWorkspaceProps {
   lessonId: number;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
-  backLabel: string;
   onSelectLesson: (lessonId: number) => void;
   onOpenCourseOverview: () => void;
-  onNavigateBack: () => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
   onMiniPlayerRestoreReady?: () => void;
@@ -272,10 +271,8 @@ export function LearningWorkspace({
   lessonId,
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
-  backLabel,
   onSelectLesson,
   onOpenCourseOverview,
-  onNavigateBack,
   onMinimizePlayer,
   onMinimizeGestureChange,
   onMiniPlayerRestoreReady,
@@ -439,14 +436,19 @@ export function LearningWorkspace({
       if (playerMinimizeActiveRef.current !== active) {
         playerMinimizeActiveRef.current = active;
         const workspace = workspaceRef.current;
+        const main = mainRef.current;
         const playerWrap = playerWrapRef.current;
         const lessonContent = lessonContentRef.current;
+        const desktopUnifiedMotion = isDesktopLearningMinimizeViewport();
         if (active) {
           workspace?.style.setProperty("background", "transparent");
           playerWrap?.style.setProperty("background", "transparent");
           playerWrap?.style.setProperty("box-shadow", "none");
           playerWrap?.style.setProperty("z-index", "190");
-          if (lessonContent) {
+          if (desktopUnifiedMotion && main) {
+            main.inert = true;
+            main.style.pointerEvents = "none";
+          } else if (lessonContent) {
             lessonContent.inert = true;
             lessonContent.style.pointerEvents = "none";
             lessonContent.style.willChange = "transform, opacity";
@@ -456,6 +458,11 @@ export function LearningWorkspace({
           playerWrap?.style.removeProperty("background");
           playerWrap?.style.removeProperty("box-shadow");
           playerWrap?.style.removeProperty("z-index");
+          if (main) {
+            main.inert = lessonDrawer ? true : false;
+            main.style.removeProperty("pointer-events");
+            main.style.removeProperty("will-change");
+          }
           if (lessonContent) {
             lessonContent.inert = false;
             lessonContent.style.removeProperty("pointer-events");
@@ -1661,6 +1668,9 @@ export function LearningWorkspace({
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
       lessonTitle: currentLesson[1],
+      courseTitle,
+      lessonIndex: currentLessonIndex >= 0 ? currentLessonIndex + 1 : 1,
+      totalLessons: lessonSequence.length,
       theaterMode,
       onTheaterToggle: toggleTheaterMode,
       autoPlayOnMediaChange: autoPlayOnLessonChange,
@@ -1675,7 +1685,15 @@ export function LearningWorkspace({
       onGoNext: goToNextLesson,
       onGoPrevious: goToPreviousLesson,
       onLessonEnded: handleLessonEnded,
-      onMinimize: onMinimizePlayer,
+      onMinimize: onMinimizePlayer
+        ? (request) => {
+            onMinimizePlayer({
+              ...request,
+              courseSlug,
+              selectedLesson,
+            });
+          }
+        : undefined,
       onMinimizeGestureChange: updatePlayerMinimizeGesture,
       onMiniPlayerRestoreReady,
       onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
@@ -1686,13 +1704,17 @@ export function LearningWorkspace({
       autoPlayOnLessonChange,
       autoplayEnabled,
       coursePersistenceKey,
+      courseSlug,
+      courseTitle,
       currentLesson,
+      currentLessonIndex,
       fullscreenCoursePanel,
       fullscreenVideoLayoutWidthPercent,
       goToNextLesson,
       goToPreviousLesson,
       handleLessonEnded,
       handleMobileLandscapeFullscreenChange,
+      lessonSequence.length,
       nextLessonId,
       onMiniPlayerRestoreReady,
       onMinimizePlayer,
@@ -1729,13 +1751,27 @@ export function LearningWorkspace({
         lessonPlayerProps.media.fileName,
       playerProps: lessonPlayerProps,
       returnPath: persistentPlayerReturnPath,
+      courseSlug,
+      selectedLesson,
+      onSelectLesson: selectLesson,
+      curriculumSections,
+      curriculumLessonsById,
+      lessonProgress,
+      isLessonAvailable,
     });
   }, [
+    courseSlug,
+    curriculumLessonsById,
+    curriculumSections,
+    isLessonAvailable,
     lessonPlayerProps,
+    lessonProgress,
     persistentPlayerCourseRouteKey,
     persistentPlayerLessonPath,
     persistentPlayerReturnPath,
     registerPersistentPlayer,
+    selectLesson,
+    selectedLesson,
   ]);
 
   return (
@@ -1764,6 +1800,7 @@ export function LearningWorkspace({
       />
       <main
         ref={mainRef}
+        data-learning-motion-surface=""
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
@@ -1775,15 +1812,11 @@ export function LearningWorkspace({
         }
       >
         <section className="learning-workspace__lesson-column">
-          <div ref={playerWrapRef} className="learning-workspace__player-wrap">
-            <button
-              type="button"
-              className="learning-workspace__back max-sm:hidden"
-              aria-label={backLabel}
-              onClick={onNavigateBack}
-            >
-              <ArrowLeft size={22} />
-            </button>
+          <div
+            ref={playerWrapRef}
+            className="learning-workspace__player-wrap"
+            data-learning-player-motion-target=""
+          >
             <button
               type="button"
               className="learning-workspace__curriculum-toggle"
@@ -1830,47 +1863,54 @@ export function LearningWorkspace({
             )}
           </div>
 
-          <article
-            ref={lessonContentRef}
-            className="learning-workspace__lesson-content"
-            data-discussion-panel-anchor=""
-            data-learning-lesson-content=""
-            aria-labelledby="learning-lesson-title"
-            style={{
-              opacity: "var(--learning-player-content-opacity, 1)",
-              transform:
-                "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
-              transition:
-                "transform var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            <header>
-              <button
-                id="learning-course-content-trigger"
-                ref={lessonTriggerRef}
-                type="button"
-                className="learning-workspace__lesson-heading"
-                aria-label={`Open course lessons for ${currentLesson[1]}`}
-                aria-expanded={lessonDrawer}
-                onClick={openLessonDrawer}
-              >
-                <div className="min-w-0">
-                  <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
-                </div>
-              </button>
-            </header>
-            <Discussion
-              key={discussionPersistenceKey}
-              persistenceKey={discussionPersistenceKey}
-              mobileBottomNavigation={mobileBottomNavigation}
-              mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-            />
-          </article>
+          <div className="learning-workspace__lesson-content-clip">
+            <article
+              ref={lessonContentRef}
+              className="learning-workspace__lesson-content"
+              data-discussion-panel-anchor=""
+              data-learning-lesson-content=""
+              aria-labelledby="learning-lesson-title"
+              style={
+                isDesktopLearningMinimizeViewport()
+                  ? undefined
+                  : {
+                      opacity: "var(--learning-player-content-opacity, 1)",
+                      transform:
+                        "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
+                      transition:
+                        "transform var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1)",
+                    }
+              }
+            >
+              <header>
+                <button
+                  id="learning-course-content-trigger"
+                  ref={lessonTriggerRef}
+                  type="button"
+                  className="learning-workspace__lesson-heading"
+                  aria-label={`Open course lessons for ${currentLesson[1]}`}
+                  aria-expanded={lessonDrawer}
+                  onClick={openLessonDrawer}
+                >
+                  <div className="min-w-0">
+                    <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+                  </div>
+                </button>
+              </header>
+              <Discussion
+                key={discussionPersistenceKey}
+                persistenceKey={discussionPersistenceKey}
+                mobileBottomNavigation={mobileBottomNavigation}
+                mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+              />
+            </article>
+          </div>
         </section>
 
-        <div
-          className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
-        >
+        <div className="learning-workspace__curriculum-clip">
+          <div
+            className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
+          >
           <div
             className="learning-curriculum__resize-rail"
             role="separator"
@@ -1923,6 +1963,7 @@ export function LearningWorkspace({
               persistenceKey={coursePersistenceKey}
             />
           </div>
+        </div>
         </div>
       </main>
 

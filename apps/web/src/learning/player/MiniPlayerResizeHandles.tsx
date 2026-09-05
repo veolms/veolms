@@ -5,49 +5,71 @@ const HANDLE_CLASS =
 
 const handles: ReadonlyArray<{
   className: string;
+  collapsedCursor: string;
   edges: LearningMiniPlayerResizeEdges;
+  expandedCursor?: string;
 }> = [
   {
-    className: "top-0 right-3 left-3 h-2 cursor-n-resize",
+    className: "top-0 right-3 left-3 h-2",
+    collapsedCursor: "cursor-n-resize",
     edges: "n",
+    expandedCursor: "cursor-ns-resize",
   },
   {
-    className: "top-0 right-0 size-3 cursor-ne-resize",
+    className: "top-0 right-0 size-3",
+    collapsedCursor: "cursor-ne-resize",
     edges: "ne",
+    expandedCursor: "cursor-ns-resize",
   },
   {
-    className: "top-3 right-0 bottom-3 w-2 cursor-e-resize",
+    className: "top-3 right-0 bottom-3 w-2",
+    collapsedCursor: "cursor-e-resize",
     edges: "e",
   },
   {
-    className: "right-0 bottom-0 size-3 cursor-se-resize",
+    className: "right-0 bottom-0 size-3",
+    collapsedCursor: "cursor-se-resize",
     edges: "se",
+    expandedCursor: "cursor-ns-resize",
   },
   {
-    className: "right-3 bottom-0 left-3 h-2 cursor-s-resize",
+    className: "right-3 bottom-0 left-3 h-2",
+    collapsedCursor: "cursor-s-resize",
     edges: "s",
+    expandedCursor: "cursor-ns-resize",
   },
   {
-    className: "bottom-0 left-0 size-3 cursor-sw-resize",
+    className: "bottom-0 left-0 size-3",
+    collapsedCursor: "cursor-sw-resize",
     edges: "sw",
+    expandedCursor: "cursor-ns-resize",
   },
   {
-    className: "top-3 bottom-3 left-0 w-2 cursor-w-resize",
+    className: "top-3 bottom-3 left-0 w-2",
+    collapsedCursor: "cursor-w-resize",
     edges: "w",
   },
   {
-    className: "top-0 left-0 size-3 cursor-nw-resize",
+    className: "top-0 left-0 size-3",
+    collapsedCursor: "cursor-nw-resize",
     edges: "nw",
+    expandedCursor: "cursor-ns-resize",
   },
 ];
 
-export function MiniPlayerResizeHandles() {
-  return handles.map(({ className, edges }) => (
-    <span
-      key={edges}
-      aria-hidden="true"
-      className={`${HANDLE_CLASS} ${className}`}
-      data-mini-player-resize-handle={edges}
-    />
-  ));
+export function MiniPlayerResizeHandles({
+  expanded = false,
+}: {
+  expanded?: boolean;
+}) {
+  return handles.map(
+    ({ className, collapsedCursor, edges, expandedCursor }) => (
+      <span
+        key={edges}
+        aria-hidden="true"
+        className={`${HANDLE_CLASS} ${className} ${expanded && expandedCursor ? expandedCursor : collapsedCursor}`}
+        data-mini-player-resize-handle={edges}
+      />
+    ),
+  );
 }

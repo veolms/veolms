@@ -5,6 +5,8 @@ import { classNames } from "../utils/classNames";
 
 export interface BufferingIndicatorProps {
   delay?: number;
+  /** Shows the spinner immediately during startup and play/resume waits. Defaults to true. */
+  immediatePlayWaits?: boolean;
 }
 
 export interface VideoLoadingSpinnerProps {
@@ -41,7 +43,10 @@ function isInitialLoadingLifecycle(lifecycle: string): boolean {
   );
 }
 
-export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
+export function BufferingIndicator({
+  delay = 1_000,
+  immediatePlayWaits = true,
+}: BufferingIndicatorProps) {
   const controller = usePlayerController();
   const { initialLoading, playInFlight, playbackHasBegun, waitingForMedia } =
     usePlayerState(
@@ -73,7 +78,10 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
         left.waitingForMedia === right.waitingForMedia,
     );
   const [visible, setVisible] = useState(
-    () => waitingForMedia && (initialLoading || delay <= 0),
+    () =>
+      waitingForMedia &&
+      (delay <= 0 ||
+        (immediatePlayWaits && (initialLoading || playInFlight))),
   );
   const visibleRef = useRef(visible);
   const holdForFirstFrameRef = useRef(false);
@@ -86,9 +94,8 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
     if (waitingForMedia) {
       if (
         visibleRef.current ||
-        initialLoading ||
-        playInFlight ||
-        delay <= 0
+        delay <= 0 ||
+        (immediatePlayWaits && (initialLoading || playInFlight))
       ) {
         setVisible(true);
         return;
@@ -124,6 +131,7 @@ export function BufferingIndicator({ delay = 1_000 }: BufferingIndicatorProps) {
   }, [
     controller,
     delay,
+    immediatePlayWaits,
     initialLoading,
     playInFlight,
     playbackHasBegun,

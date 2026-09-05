@@ -12,7 +12,12 @@ import {
   LEARNING_PLAYER_MOTION_EASING,
   clampLearningPlayerValue as clamp,
   clearLearningPlayerMinimizeMotionStyles,
-  getDefaultLearningMiniPlayerLayout,
+  clearLearningPlayerMinimizeClipSurfaceStyles,
+  applyLearningPlayerMinimizeCornerRadius,
+  getLearningMinimizeGeometry,
+  getLearningMotionSurfaceElement,
+  isUnifiedDesktopPlayerMinimize,
+  syncUnifiedDesktopChildExitMotion,
 } from "./learningPlayerMotion";
 import { readMiniPlayerWidthPreference } from "./lessonPlayerPersistence";
 
@@ -74,24 +79,11 @@ const DEFAULT_GEOMETRY: GestureGeometry = {
   targetY: 1,
 };
 
-const getGeometry = (element: HTMLElement): GestureGeometry => {
-  const bounds = element.getBoundingClientRect();
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-  const startWidth = bounds.width || viewportWidth;
-  const startLeft = Number.isFinite(bounds.left) ? bounds.left : 0;
-  const startTop = Number.isFinite(bounds.top) ? bounds.top : 0;
-  const target = getDefaultLearningMiniPlayerLayout(
-    startWidth,
-    undefined,
-    readMiniPlayerWidthPreference() ?? undefined,
-  );
-
-  return {
-    targetScale: target.width / startWidth,
-    targetX: target.left - startLeft,
-    targetY: Math.max(1, target.top - startTop),
-  };
-};
+const getGeometry = (element: HTMLElement): GestureGeometry =>
+  getLearningMinimizeGeometry(element, {
+    capMiniWidthToElement: !isUnifiedDesktopPlayerMinimize(element),
+    preferredWidth: readMiniPlayerWidthPreference() ?? undefined,
+  });
 
 const isExcludedTarget = (target: EventTarget | null) =>
   target instanceof Element &&
@@ -118,6 +110,7 @@ export function useLessonPlayerMinimizeGesture({
   const gestureRef = useRef<ActiveGesture | null>(null);
   const motionElementRef = useRef<HTMLElement | null>(null);
   const pendingStateRef = useRef<LessonPlayerMinimizeGestureState | null>(null);
+  const settleDurationMsRef = useRef(LEARNING_PLAYER_MOTION_DURATION_MS);
   const settleCleanupRef = useRef<(() => void) | null>(null);
   const settleFinishRef = useRef<(() => void) | null>(null);
   const settlingMiniPressTimerRef = useRef<ReturnType<
@@ -145,6 +138,10 @@ export function useLessonPlayerMinimizeGesture({
 
       if (nextState.phase === "idle") {
         clearLearningPlayerMinimizeMotionStyles(element);
+        const clipSurface = getLearningMotionSurfaceElement();
+        if (clipSurface && isUnifiedDesktopPlayerMinimize(element)) {
+          clearLearningPlayerMinimizeClipSurfaceStyles(clipSurface);
+        }
         onStateChangeRef.current?.(nextState);
         return;
       }
@@ -152,8 +149,11 @@ export function useLessonPlayerMinimizeGesture({
       const geometry = geometryRef.current;
       const scale =
         1 - (1 - geometry.targetScale) * clamp(nextState.progress, 0, 1);
+      const clipSurface = isUnifiedDesktopPlayerMinimize(element)
+        ? getLearningMotionSurfaceElement()
+        : null;
+      applyLearningPlayerMinimizeCornerRadius();
       element.dataset.learningPlayerMotionPhase = nextState.phase;
-      element.style.borderRadius = "13px";
       element.style.overflow = "hidden";
       element.style.transform = `translate3d(${(
         geometry.targetX * nextState.progress
@@ -161,14 +161,27 @@ export function useLessonPlayerMinimizeGesture({
         3,
       )}px, ${nextState.offsetY.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
       element.style.transformOrigin = "top left";
-      element.style.transitionDuration =
-        nextState.phase === "dragging"
-          ? "0ms"
-          : `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`;
+      element.style.transitionDuration = `${
+        nextState.phase === "dragging" ? 0 : settleDurationMsRef.current
+      }ms`;
       element.style.transitionProperty = "transform";
       element.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
       element.style.willChange = "transform";
       element.style.zIndex = "190";
+      if (!clipSurface) {
+        element.style.borderRadius = "13px";
+      }
+      if (clipSurface) {
+        clipSurface.dataset.learningPlayerMotionPhase = nextState.phase;
+        clipSurface.style.zIndex = "190";
+        const progress = clamp(nextState.progress, 0, 1);
+        syncUnifiedDesktopChildExitMotion(clipSurface, {
+          durationMs:
+            nextState.phase === "dragging" ? 0 : settleDurationMsRef.current,
+          exitX: geometry.targetX * progress,
+          exitY: nextState.offsetY,
+        });
+      }
       onStateChangeRef.current?.(nextState);
     },
     [],
@@ -208,6 +221,10 @@ export function useLessonPlayerMinimizeGesture({
     (nextState: LessonPlayerMinimizeGestureState, onSettled: () => void) => {
       clearSettle();
       flushPendingState();
+      const current = currentStateRef.current;
+      settleDurationMsRef.current =
+        clamp(Math.abs(nextState.progress - current.progress), 0, 1) *
+        LEARNING_PLAYER_MOTION_DURATION_MS;
       const element = motionElementRef.current;
       const reducedMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
@@ -234,7 +251,7 @@ export function useLessonPlayerMinimizeGesture({
       };
       const timeout = window.setTimeout(
         finish,
-        LEARNING_PLAYER_MOTION_DURATION_MS + SETTLE_FALLBACK_BUFFER_MS,
+        settleDurationMsRef.current + SETTLE_FALLBACK_BUFFER_MS,
       );
       const cleanup = () => {
         window.clearTimeout(timeout);
@@ -255,6 +272,46 @@ export function useLessonPlayerMinimizeGesture({
       applyState(IDLE_STATE),
     );
   }, [applyState, settleTo]);
+
+  const animateMinimize = useCallback(() => {
+    if (!enabled) {
+      commitRef.current();
+      return;
+    }
+
+    const current = pendingStateRef.current ?? currentStateRef.current;
+    if (current.phase !== "idle") return;
+
+    onGestureStartRef.current?.();
+    const element = motionTarget?.() ?? motionElementRef.current;
+    if (!element) {
+      commitRef.current();
+      return;
+    }
+
+    const geometry = getGeometry(element);
+    motionElementRef.current = element;
+    geometryRef.current = geometry;
+    setControlsSuppressed(true);
+    applyLearningPlayerMinimizeCornerRadius();
+    const clipSurface = getLearningMotionSurfaceElement();
+    if (clipSurface && isUnifiedDesktopPlayerMinimize(element)) {
+      clipSurface.dataset.learningPlayerMotionPhase = "settling-mini";
+      syncUnifiedDesktopChildExitMotion(clipSurface, {
+        durationMs: 0,
+        exitX: 0,
+        exitY: 0,
+      });
+    }
+    settleTo(
+      {
+        offsetY: geometry.targetY,
+        phase: "settling-mini",
+        progress: 1,
+      },
+      () => commitRef.current(),
+    );
+  }, [enabled, motionTarget, settleTo]);
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -472,7 +529,9 @@ export function useLessonPlayerMinimizeGesture({
     if (preserveTerminalStateOnDisable) {
       currentStateRef.current = IDLE_STATE;
       const element = motionElementRef.current;
-      if (element) clearLearningPlayerMinimizeMotionStyles(element);
+      if (element && !isUnifiedDesktopPlayerMinimize(element)) {
+        clearLearningPlayerMinimizeMotionStyles(element);
+      }
       return;
     }
     applyState(IDLE_STATE);
@@ -497,7 +556,13 @@ export function useLessonPlayerMinimizeGesture({
         clearTimeout(settlingMiniPressTimerRef.current);
       }
       const element = motionElementRef.current;
-      if (element) clearLearningPlayerMinimizeMotionStyles(element);
+      if (element) {
+        clearLearningPlayerMinimizeMotionStyles(element);
+        const clipSurface = getLearningMotionSurfaceElement();
+        if (clipSurface && isUnifiedDesktopPlayerMinimize(element)) {
+          clearLearningPlayerMinimizeClipSurfaceStyles(clipSurface);
+        }
+      }
       activePointerIdsRef.current.clear();
       gestureRef.current = null;
     },
@@ -505,6 +570,7 @@ export function useLessonPlayerMinimizeGesture({
   );
 
   return {
+    animateMinimize,
     controlsSuppressed,
     handlers: {
       onClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {

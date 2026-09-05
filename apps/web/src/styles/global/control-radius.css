@@ -211,6 +211,23 @@
 
 :root[data-control-radius]
   .courses-app
+  [data-learning-persistent-player][data-learning-player-minimize-corners]:not(
+    [data-learning-mini-player]
+  )
+  :is(.video-shell, .youtube-player, video) {
+  border-radius: 13px !important;
+  transition: none !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  aside[data-learning-mini-player][data-learning-persistent-player]
+  :is(.video-shell, .youtube-player, video) {
+  border-radius: 0 !important;
+}
+
+:root[data-control-radius]
+  .courses-app
   :is(
     .learning-workspace__back,
     .learning-workspace__lesson-heading,
