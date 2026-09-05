@@ -4,7 +4,10 @@ import {
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
 import { presentLogin } from "../shared/auth.presenters.ts";
-import { resolveIdentifier } from "../shared/auth.utils.ts";
+import {
+  normalizePhoneIdentifier,
+  resolveIdentifier,
+} from "../shared/auth.utils.ts";
 import type {
   LoginRequest,
   ProfileUpdateRequest,
@@ -54,8 +57,8 @@ export function createAuthController(context: AuthContext) {
     const result = await authService.register({
       identifier,
       identifierType,
-      email,
-      phoneNo,
+      email: email ? email.trim().toLowerCase() : undefined,
+      phoneNo: phoneNo ? normalizePhoneIdentifier(phoneNo) : undefined,
       code,
       emailCode,
       phoneCode,

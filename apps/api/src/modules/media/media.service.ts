@@ -307,6 +307,47 @@ export function createMediaService({
     };
   }
 
+  /**
+   * Fetches the media file stream and metadata from storage.
+   *
+   * Access rule: an asset is servable without restriction if it's the
+   * thumbnail/trailer of a published course (those render as plain
+   * <img>/<video> src on public, logged-out marketing pages). Anything
+   * else — draft-course assets, unattached uploads, other media types —
+   * is only servable to its owner. `requestingUserId` is undefined for
+   * anonymous requests.
+   *
+   * Returns MEDIA_NOT_FOUND (not 403) for an authorization failure too, so
+   * a caller can't distinguish "doesn't exist" from "exists but isn't
+   * yours" by probing IDs.
+   */
+  async function getMediaStream(mediaId: string, requestingUserId?: string) {
+    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
+      database,
+      mediaId,
+    );
+    if (!isPublic && media.owner_id !== requestingUserId) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const file = await services.storage.getObject(media.storage_key);
+    if (!file) {
+      throw new AppError(404, "FILE_NOT_FOUND", "Media file not found in storage.");
+    }
+    return {
+      stream: file.body,
+      contentType: media.mime_type || file.contentType || "application/octet-stream",
+      contentLength: file.contentLength ?? (media.size_bytes ? Number(media.size_bytes) : undefined),
+      filename: media.original_filename,
+      isPublic,
+    };
+  }
+
   return {
     presignMediaUpload,
     confirmUpload,
@@ -314,6 +355,7 @@ export function createMediaService({
     getMediaAsset,
     getMediaAssets,
     getVideoJobProgress,
+    getMediaStream,
   };
 }
 

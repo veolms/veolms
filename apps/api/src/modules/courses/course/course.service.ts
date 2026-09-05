@@ -43,6 +43,14 @@ import {
   type IncludesService,
 } from "../includes/includes.service.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
+
+const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -114,8 +122,9 @@ export function createCourseService({
             salePrice: null,
           };
 
-      // Note: No public URL or media serving mechanism currently exists in the codebase.
-      const thumbnailUrl = null;
+      const thumbnailUrl = row.thumbnail_media_id
+        ? `/api/v1/media/${row.thumbnail_media_id}`
+        : null;
 
       const instructorName =
         row.instructor_alias || row.creator_display_name || null;
@@ -212,6 +221,38 @@ export function createCourseService({
     const thumbnailMediaId = data.thumbnailMediaId ?? null;
     const trailerMediaId = data.trailerMediaId ?? null;
     const instructorAlias = data.instructorAlias ?? null;
+
+    if (thumbnailMediaId) {
+      const thumb = await mediaService.getMediaAsset(
+        thumbnailMediaId,
+        creatorId,
+      );
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_THUMBNAIL",
+          "Thumbnail must be a valid image asset.",
+        );
+      }
+    }
+
+    if (trailerMediaId) {
+      const trailer = await mediaService.getMediaAsset(
+        trailerMediaId,
+        creatorId,
+      );
+      if (!trailer || trailer.type !== "video") {
+        throw new AppError(
+          400,
+          "INVALID_TRAILER",
+          "Trailer must be a valid video asset.",
+        );
+      }
+    }
 
     await courseRepo.insertCourse(database, {
       id: courseId,
@@ -344,7 +385,11 @@ export function createCourseService({
         updates.thumbnailMediaId,
         creatorId,
       );
-      if (!thumb || thumb.type !== "image") {
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
         throw new AppError(
           400,
           "INVALID_THUMBNAIL",
