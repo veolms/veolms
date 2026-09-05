@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   easeLearningPlayerMotionProgress,
   getDefaultLearningMiniPlayerLayout,
   getLearningBackgroundMotionState,
   getLearningMiniPlayerPointerResizeLayout,
   getLearningMiniPlayerWidthBounds,
+  LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE,
 } from "../../src/learning/player/learningPlayerMotion.js";
 
 describe("learning player surface motion", () => {
@@ -125,12 +126,42 @@ describe("learning player surface motion", () => {
   });
 
   it.each([
-    ["w", -60, 0, { left: 240, top: 283.125, width: 360 }],
-    ["e", 60, 0, { left: 300, top: 283.125, width: 360 }],
-    ["n", 0, -33.75, { left: 270, top: 266.25, width: 360 }],
-    ["s", 0, 33.75, { left: 270, top: 300, width: 360 }],
-    ["nw", -60, -33.75, { left: 240, top: 266.25, width: 360 }],
-    ["se", 60, 33.75, { left: 300, top: 300, width: 360 }],
+    [
+      "w",
+      -60,
+      0,
+      { left: 240, playlistHeight: 320, top: 283.125, width: 360 },
+    ],
+    [
+      "e",
+      60,
+      0,
+      { left: 300, playlistHeight: 320, top: 283.125, width: 360 },
+    ],
+    [
+      "n",
+      0,
+      -33.75,
+      { left: 270, playlistHeight: 320, top: 266.25, width: 360 },
+    ],
+    [
+      "s",
+      0,
+      33.75,
+      { left: 270, playlistHeight: 320, top: 300, width: 360 },
+    ],
+    [
+      "nw",
+      -60,
+      -33.75,
+      { left: 240, playlistHeight: 320, top: 266.25, width: 360 },
+    ],
+    [
+      "se",
+      60,
+      33.75,
+      { left: 300, playlistHeight: 320, top: 300, width: 360 },
+    ],
   ] as const)(
     "resizes from the %s handle while preserving the opposite anchor",
     (edges, deltaX, deltaY, expectedLayout) => {
@@ -156,5 +187,83 @@ describe("learning player surface motion", () => {
         { height: 600, left: 0, top: 0, width: 640 },
       ),
     ).toMatchObject({ left: 12, top: 12, width: 616 });
+  });
+
+  describe("expanded desktop vertical resize", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const stubDesktopViewport = () => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query === "(min-width: 641px)",
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        onchange: null,
+      }));
+    };
+
+    it("grows the playlist from the bottom without changing width", () => {
+      stubDesktopViewport();
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, playlistHeight: 320, top: 80, width: 320 },
+          "s",
+          80,
+          40,
+          { height: 900, left: 0, top: 0, width: 1_280 },
+          true,
+        ),
+      ).toEqual({
+        left: 300,
+        playlistHeight: 360,
+        top: 80,
+        width: 320,
+      });
+    });
+
+    it("grows the playlist from the top without changing width", () => {
+      stubDesktopViewport();
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, playlistHeight: 320, top: 80, width: 320 },
+          "n",
+          80,
+          -40,
+          { height: 900, left: 0, top: 0, width: 1_280 },
+          true,
+        ),
+      ).toEqual({
+        left: 300,
+        playlistHeight: 360,
+        top: 40,
+        width: 320,
+      });
+    });
+
+    it("still changes width from the east edge while expanded", () => {
+      stubDesktopViewport();
+      const next = getLearningMiniPlayerPointerResizeLayout(
+        { left: 300, playlistHeight: 320, top: 80, width: 320 },
+        "e",
+        80,
+        0,
+        { height: 900, left: 0, top: 0, width: 1_280 },
+        true,
+      );
+      expect(next.width).toBe(400);
+      expect(next.playlistHeight).toBe(320);
+      expect(next.left).toBe(300);
+    });
+  });
+
+  it("anchors the mini player curriculum elastic scroller 40% above the bottom", () => {
+    expect(LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE).toBe(
+      "40%",
+    );
   });
 });

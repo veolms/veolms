@@ -40,10 +40,15 @@ import {
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
+  isDesktopLearningMinimizeViewport,
   LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
   LEARNING_PLAYER_MOTION_DURATION_MS,
 } from "../learning/player/learningPlayerMotion";
 import { shouldDemoteDetachedPersistentPlayer } from "../learning/player/persistentPlayerRegistration";
+import {
+  applyPersistentMiniPlayerLessonChange,
+  resolveLearningMiniPlayerLessonPath,
+} from "../learning/player/persistentMiniPlayerLesson";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -229,6 +234,9 @@ export default function AcademyLayout() {
     useState<LearningPlayerPresentation>("full");
   const persistentPlayerRef =
     useRef<PersistentLearningPlayerRegistration | null>(null);
+  const selectPersistentMiniPlayerLessonRef = useRef<
+    (lessonNumber: number) => void
+  >(() => {});
   const playerPresentationRef = useRef<LearningPlayerPresentation>("full");
   const persistentRegistrationTokenRef = useRef<symbol | null>(null);
   const playerRestoreVersionRef = useRef(0);
@@ -529,8 +537,10 @@ export default function AcademyLayout() {
       persistentRegistrationTokenRef.current = token;
       persistentPlayerRef.current = registration;
       setPersistentPlayer(registration);
-      playerPresentationRef.current = "full";
-      setPlayerPresentation("full");
+      if (playerPresentationRef.current !== "mini") {
+        playerPresentationRef.current = "full";
+        setPlayerPresentation("full");
+      }
       if (getLearningMiniPlayerSnapshot()) {
         closeLearningMiniPlayerSession();
       }
@@ -573,6 +583,27 @@ export default function AcademyLayout() {
     setPersistentPlayer(null);
     closeLearningMiniPlayerSession();
   }, []);
+
+  selectPersistentMiniPlayerLessonRef.current = (lessonNumber: number) => {
+    const current = persistentPlayerRef.current;
+    if (!current || playerPresentationRef.current !== "mini") return;
+
+    const updated = applyPersistentMiniPlayerLessonChange(
+      current,
+      lessonNumber,
+    );
+    if (!updated) return;
+
+    persistentPlayerRef.current = updated;
+    setPersistentPlayer(updated);
+  };
+
+  const selectPersistentMiniPlayerLesson = useCallback(
+    (lessonNumber: number) => {
+      selectPersistentMiniPlayerLessonRef.current(lessonNumber);
+    },
+    [],
+  );
 
   const mountLearningBackground = useCallback((deferred = true) => {
     if (deferred && learningBackgroundMountedRef.current) return;
@@ -668,11 +699,15 @@ export default function AcademyLayout() {
       );
       motionStage.style.setProperty(
         "--learning-player-content-opacity",
-        String(motion.contentOpacity),
+        isDesktopLearningMinimizeViewport()
+          ? "1"
+          : String(motion.contentOpacity),
       );
       motionStage.style.setProperty(
         "--learning-player-content-offset-y",
-        `${offsetY.toFixed(3)}px`,
+        isDesktopLearningMinimizeViewport()
+          ? "0px"
+          : `${offsetY.toFixed(3)}px`,
       );
       motionStage.dataset.learningPlayerMotion = phase;
     },
@@ -872,9 +907,32 @@ export default function AcademyLayout() {
     [finishLearningPlayerRestoreMotion],
   );
 
+  const openPersistentPlayerCourseOverview = useCallback(() => {
+    const slug =
+      persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
+    if (!slug) return;
+    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
+  }, [
+    navigateTo,
+    persistentPlayer?.courseRouteKey,
+    persistentPlayer?.courseSlug,
+  ]);
+
+  const openStandaloneMiniPlayerCourseOverview = useCallback(() => {
+    const slug = learningMiniPlayer?.courseSlug;
+    if (!slug) return;
+    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
+  }, [learningMiniPlayer?.courseSlug, navigateTo]);
+
   const restoreLearningMiniPlayer = useCallback(() => {
-    const lessonPath =
-      persistentPlayerRef.current?.lessonPath ?? learningMiniPlayer?.lessonPath;
+    const activePlayer = persistentPlayerRef.current;
+    const lessonPath = resolveLearningMiniPlayerLessonPath({
+      courseRouteKey:
+        activePlayer?.courseRouteKey ?? learningMiniPlayer?.courseSlug,
+      lessonNumber:
+        activePlayer?.selectedLesson ?? learningMiniPlayer?.selectedLesson,
+      lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
+    });
     if (!lessonPath) return;
     // A route unmount queues the outgoing registration cleanup. Mark this
     // restore before navigating so that stale cleanup cannot turn the player
@@ -968,12 +1026,15 @@ export default function AcademyLayout() {
           presentation={playerPresentation}
           onClose={closeLearningMiniPlayer}
           onRestore={restoreLearningMiniPlayer}
+          onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+          onOpenCourseOverview={openPersistentPlayerCourseOverview}
         />
       ) : learningMiniPlayer ? (
         <LearningMiniPlayer
           session={learningMiniPlayer}
           onClose={closeLearningMiniPlayer}
           onRestore={restoreLearningMiniPlayer}
+          onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
         />
       ) : null}
     </AcademyRouteGuard>

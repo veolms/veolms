@@ -10,7 +10,6 @@ import { LearningWorkspace } from "../learning/LearningWorkspace";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
-  getCoursePlayerBackLabel,
   getCoursePlayerOrigin,
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
@@ -183,13 +182,6 @@ export default function LearningRoute() {
     if (!courseSlug) return;
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
   }, [courseSlug, navigateTo]);
-  const navigateBack = useCallback(() => {
-    navigateTo(
-      (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        routeReturnPath,
-      { exact: true },
-    );
-  }, [courseSlug, navigateTo, routeReturnPath]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {
       const returnPath =
@@ -217,10 +209,8 @@ export default function LearningRoute() {
       lessonId={lessonId}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-      backLabel={getCoursePlayerBackLabel(routeReturnPath)}
       onSelectLesson={selectLesson}
       onOpenCourseOverview={openCourseOverview}
-      onNavigateBack={navigateBack}
       onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
       onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
       persistentPlayerCourseRouteKey={courseSlug}

@@ -40,10 +40,12 @@ import {
 } from "./lessonPlayerPersistence";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
+import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
 import {
   useLessonPlayerMinimizeGesture,
   type LessonPlayerMinimizeGestureState,
 } from "./useLessonPlayerMinimizeGesture";
+import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
 import { cn } from "../../lib/utils";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
@@ -52,6 +54,7 @@ const LESSON_PLAYER_SHORTCUTS = {
   seekBackwardLarge: false,
   seekForwardLarge: false,
   toggleTheaterMode: false,
+  togglePictureInPicture: false,
 } as const;
 
 type FullscreenCoursePanelStyle = CSSProperties & {
@@ -64,6 +67,9 @@ type FullscreenCoursePanelStyle = CSSProperties & {
 export interface LessonVideoPlayerProps {
   media: CourseVideo;
   lessonTitle: string;
+  courseTitle?: string;
+  lessonIndex?: number;
+  totalLessons?: number;
   theaterMode: boolean;
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
@@ -101,9 +107,12 @@ export function LessonVideoPlayer({
   courseLessonsOpen = false,
   courseLessonsPanel,
   courseLessonsVideoWidthPercent = 60,
+  courseTitle,
   engineFactory,
+  lessonIndex,
   lessonTitle,
   media,
+  totalLessons,
   onProgressChange,
   onAutoplayEnabledChange = () => undefined,
   onCourseLessonsToggle,
@@ -417,6 +426,9 @@ export function LessonVideoPlayer({
     onMinimize({
       currentTime,
       lessonTitle,
+      courseTitle,
+      lessonIndex,
+      totalLessons,
       mediaKey,
       muted: snapshot?.media.muted ?? muted,
       playbackRate: snapshot?.media.playbackRate ?? 1,
@@ -440,6 +452,17 @@ export function LessonVideoPlayer({
     });
   }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
 
+  const minimizeGesture = useLessonPlayerMinimizeGesture({
+    enabled: presentation === "full" && Boolean(onMinimize),
+    fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
+    motionTarget: minimizeMotionTarget,
+    onCommit: minimizePlayer,
+    onGestureStart: onMinimizeGestureStart,
+    onSettlingMiniPress: onMiniRestore,
+    onStateChange: onMinimizeGestureChange,
+    preserveTerminalStateOnDisable: presentation === "mini",
+  });
+
   const minimizePlayerFromControl = useCallback(async () => {
     if (!onMinimize) return;
     const player = playerRef.current;
@@ -450,18 +473,14 @@ export function LessonVideoPlayer({
         return;
       }
     }
-    minimizePlayer();
-  }, [minimizePlayer, onMinimize]);
+    minimizeGesture.animateMinimize();
+  }, [minimizeGesture, onMinimize]);
 
-  const minimizeGesture = useLessonPlayerMinimizeGesture({
+  useLearningPlayerMinimizeShortcut({
     enabled: presentation === "full" && Boolean(onMinimize),
-    fullscreen: () => playerRef.current?.getSnapshot().ui.fullscreen ?? false,
-    motionTarget: minimizeMotionTarget,
-    onCommit: minimizePlayer,
-    onGestureStart: onMinimizeGestureStart,
-    onSettlingMiniPress: onMiniRestore,
-    onStateChange: onMinimizeGestureChange,
-    preserveTerminalStateOnDisable: presentation === "mini",
+    onTrigger: () => {
+      void minimizePlayerFromControl();
+    },
   });
 
   const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
@@ -632,7 +651,7 @@ export function LessonVideoPlayer({
         presentation === "full" &&
           "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
         presentation === "mini"
-          ? "!rounded-xl"
+          ? "!rounded-none"
           : fullscreenCoursePanelActive
             ? "flex h-full items-center justify-start overflow-hidden bg-black"
             : undefined,
@@ -645,7 +664,7 @@ export function LessonVideoPlayer({
       {...(presentation === "full" ? minimizeGesture.handlers : {})}
       playerClassName={
         presentation === "mini"
-          ? "!rounded-xl !shadow-none"
+          ? "!rounded-none !shadow-none"
           : fullscreenCoursePanelActive
             ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none"
             : "border-0 !rounded-none"
@@ -667,6 +686,13 @@ export function LessonVideoPlayer({
         presentation === "mini" ? (
           <MiniPlayerControls
             lessonTitle={lessonTitle}
+            courseTitle={courseTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
+            canGoNext={canGoNext}
+            canGoPrevious={canGoPrevious}
+            onGoNext={onGoNext}
+            onGoPrevious={onGoPrevious}
             onClose={onMiniClose ?? (() => undefined)}
             onRestore={onMiniRestore ?? (() => undefined)}
           />
@@ -696,7 +722,16 @@ export function LessonVideoPlayer({
           <LessonAmbientProjection enabled={ambientEnabled} />
         ) : undefined
       }
-      playbackFeedback={minimizeGesture.controlsSuppressed ? false : undefined}
+      playbackFeedback={
+        presentation === "mini" || minimizeGesture.controlsSuppressed
+          ? false
+          : undefined
+      }
+      bufferingIndicator={
+        presentation === "mini" ? (
+          <LearningMiniPlayerBufferingIndicator />
+        ) : undefined
+      }
     />
   );
 }

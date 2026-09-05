@@ -80,6 +80,8 @@ export interface VideoPlayerProps extends Omit<
   centralControl?: ReactNode | false;
   /** Replaces the desktop transient play/pause feedback. Pass false to omit it. */
   playbackFeedback?: ReactNode | false;
+  /** Replaces the default buffering indicator. Pass false to omit it. */
+  bufferingIndicator?: ReactNode | false;
   overlays?: ReactNode;
   keyboardEnabled?: boolean;
   shortcuts?: PlayerShortcutOverrides;
@@ -172,6 +174,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onStoryboardError,
       onTheaterModeChange,
       overlays,
+      bufferingIndicator,
       playbackFeedback,
       playerClassName,
       poster,
@@ -396,7 +399,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           {playbackFeedback === false
             ? null
             : (playbackFeedback ?? <PlaybackFeedback />)}
-          <BufferingIndicator />
+          {bufferingIndicator === false
+            ? null
+            : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
           <ErrorOverlay />
           {controls === false

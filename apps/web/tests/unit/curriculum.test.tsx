@@ -377,7 +377,7 @@ describe("Curriculum", () => {
     ).toBeVisible();
     expect(screen.queryByText("Curriculum actions")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("menuitem", { name: "View course overview" }),
+      screen.getByRole("menuitem", { name: "Adjust course overview" }),
     ).toBeVisible();
     expect(
       screen.queryByRole("menuitem", { name: "Go to current section" }),

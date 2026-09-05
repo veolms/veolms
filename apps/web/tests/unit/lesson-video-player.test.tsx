@@ -899,7 +899,7 @@ describe("LessonVideoPlayer adapter", () => {
       );
       await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
       expect(
-        screen.getByRole("button", { name: "Minimize video" }),
+        screen.getByRole("button", { name: "Minimize" }),
       ).toHaveClass(
         "!size-9",
         "!bg-transparent",
@@ -1064,7 +1064,7 @@ describe("LessonVideoPlayer adapter", () => {
       ).toBeNull();
       expect(
         screen.getByRole("button", {
-          name: "Return to Designing for real users",
+          name: "Expand",
         }),
       ).toBeInTheDocument();
       expect(
@@ -1208,7 +1208,7 @@ describe("LessonVideoPlayer adapter", () => {
       expect(onMiniRestore).not.toHaveBeenCalled();
       expect(
         screen.getByRole("button", {
-          name: "Return to Designing for real users",
+          name: "Expand",
         }),
       ).toBeInTheDocument();
 
@@ -1216,11 +1216,11 @@ describe("LessonVideoPlayer adapter", () => {
 
       expect(onMiniRestore).toHaveBeenCalledTimes(1);
       expect(
-        screen.getByRole("button", { name: "Minimize video" }),
+        screen.getByRole("button", { name: "Minimize" }),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", {
-          name: "Return to Designing for real users",
+          name: "Expand",
         }),
       ).not.toBeInTheDocument();
     } finally {
@@ -1377,7 +1377,7 @@ describe("LessonVideoPlayer adapter", () => {
       lessonPlayerStorageKeys.muted,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Minimize video" }));
+    fireEvent.click(screen.getByRole("button", { name: "Minimize" }));
     const request = onMinimize.mock.calls[0]?.[0] as
       { preparePlaybackHandoff?: () => void } | undefined;
     expect(request?.preparePlaybackHandoff).toBeTypeOf("function");
@@ -2421,7 +2421,7 @@ describe("LessonVideoPlayer adapter", () => {
       ).toHaveClass("!bottom-15", "!right-3", "sm:!bottom-15", "sm:!right-3");
       expect(
         screen.getByRole("button", {
-          name: "Exit fullscreen and minimize video",
+          name: "Minimize",
         }).parentElement,
       ).toHaveClass("!left-3", "sm:!left-3");
       expect(
@@ -2591,7 +2591,7 @@ describe("LessonVideoPlayer adapter", () => {
       );
       fireEvent.click(
         screen.getByRole("button", {
-          name: "Exit fullscreen and minimize video",
+          name: "Minimize",
         }),
       );
       await waitFor(() => expect(exitFullscreen).toHaveBeenCalledOnce());

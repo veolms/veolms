@@ -9,6 +9,7 @@ import {
 import { createRef, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { BufferingIndicator } from "../controls/BufferingIndicator";
 import { FakeVideoEngine } from "../testing/FakeVideoEngine";
 import type { VideoSource } from "../core/types";
 import { BUILT_IN_PLAYER_THEME_IDS } from "../themes/playerThemes";
@@ -248,6 +249,29 @@ describe("VideoPlayer integration", () => {
     act(() => vi.advanceTimersByTime(1));
     expect(
       screen.getByRole("status", { name: "Buffering video" }),
+    ).toBeInTheDocument();
+  });
+
+  it("delays startup and play waits when immediatePlayWaits is disabled", async () => {
+    const engine = new StartupBufferingFakeVideoEngine();
+    vi.useFakeTimers();
+    render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        bufferingIndicator={<BufferingIndicator immediatePlayWaits={false} />}
+      />,
+    );
+
+    await act(async () => Promise.resolve());
+    expect(engine.getSnapshot().lifecycle).toBe("loading");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("status", { name: "Loading video" }),
     ).toBeInTheDocument();
   });
 

@@ -99,9 +99,26 @@ export async function expectAppearanceSettingsReady(page: Page) {
   });
 }
 
-export async function clickLearningBack(page: Page, label: string) {
-  await page.locator(".learning-workspace__player-wrap").hover();
-  await page.getByRole("button", { name: label }).click();
+export async function clickLearningMinimize(page: Page) {
+  const minimize = page.getByRole("button", { name: "Minimize", exact: true });
+  const playerSurface = page
+    .locator(
+      ".learning-persistent-player--full .video-shell, .learning-workspace__player-wrap .video-shell",
+    )
+    .first();
+  await playerSurface.hover();
+  await minimize.hover();
+  await minimize.click();
+}
+
+export async function leaveLearningViaNavigation(
+  page: Page,
+  destination: "Courses" | "Home" | "Wishlist",
+) {
+  await page
+    .getByRole("complementary", { name: "Student navigation" })
+    .getByRole("button", { name: destination })
+    .click();
 }
 
 type ApplicationScrollOperation =
