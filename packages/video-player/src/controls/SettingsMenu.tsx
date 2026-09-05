@@ -8,6 +8,7 @@ import {
   PlayerMenuItem,
   PopoverMenu,
   type PopoverMenuMobilePresentation,
+  type PopoverMenuSide,
 } from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
@@ -22,6 +23,7 @@ export interface SettingsMenuProps {
   /** Application-specific settings appended to the main settings view. */
   extraMainItems?: ReactNode;
   triggerClassName?: string;
+  side?: PopoverMenuSide;
 }
 
 export function SettingsMenu({
@@ -31,6 +33,7 @@ export function SettingsMenu({
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
   triggerClassName,
+  side = "top",
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
@@ -99,8 +102,14 @@ export function SettingsMenu({
       mobileSheetPanelClassName={mobileSheetPanelClassName}
       mobileSheetPortalTarget={mobileSheetPortalTarget}
       align="end"
-      side="top"
-      panelClassName={mobileInteraction ? undefined : "backdrop-blur-sm !mb-8"}
+      side={side}
+      panelClassName={
+        mobileInteraction
+          ? undefined
+          : side === "top"
+            ? "backdrop-blur-sm !mb-8"
+            : "backdrop-blur-sm"
+      }
       closeOnItemSelect={!(mobilePresentation === "sheet" && mobileInteraction)}
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}

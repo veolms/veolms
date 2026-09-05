@@ -190,7 +190,7 @@
   .courses-app
   :is(
     .learning-workspace .youtube-player,
-    .learning-curriculum,
+    .learning-curriculum:not(.learning-curriculum--compact),
     .learning-curriculum__search,
     .learning-session-dialog,
     [data-learning-radius-surface]
@@ -203,8 +203,20 @@
   :is(
     .learning-workspace__player-wrap .youtube-player,
     .learning-workspace__curriculum-column .learning-curriculum,
+    .learning-curriculum--compact,
     .learning-curriculum__section-toggle,
     .learning-curriculum__lesson
+  ) {
+  border-radius: 0 !important;
+}
+
+:root[data-control-radius]
+  aside[data-learning-mini-player]
+  :is(
+    .learning-curriculum,
+    .learning-curriculum--compact,
+    .learning-curriculum__section,
+    .learning-curriculum__section-toggle
   ) {
   border-radius: 0 !important;
 }
@@ -282,12 +294,33 @@
     var(--control-radius-learning-compact) !important;
 }
 
-:root[data-control-radius] .learning-course-content-drawer:not([data-expanded]),
 :root[data-control-radius]
-  .learning-course-content-drawer
+  .learning-course-content-drawer[data-swipe-axis="y"]:not([data-expanded]),
+:root[data-control-radius]
+  .learning-course-content-drawer[data-swipe-axis="y"]
   .learning-curriculum {
   border-radius: var(--control-radius-learning-panel)
     var(--control-radius-learning-panel) 0 0 !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  .learning-course-content-drawer[data-swipe-axis="x"],
+:root[data-control-radius]
+  .courses-app
+  .learning-course-content-drawer[data-swipe-axis="x"]
+  > [data-slot="drawer-content"] {
+  border-radius: var(--learning-floating-curriculum-left-radius, 12px)
+    var(--learning-floating-curriculum-radius, 18px)
+    var(--learning-floating-curriculum-radius, 18px)
+    var(--learning-floating-curriculum-left-radius, 12px) !important;
+}
+
+:root[data-control-radius]
+  .courses-app
+  .learning-course-content-drawer[data-swipe-axis="x"]
+  .learning-curriculum {
+  border-radius: 0 !important;
 }
 
 :root[data-control-radius] .courses-app .player-menu {
@@ -307,8 +340,19 @@
 /* Fullscreen and compact playback remain edge to edge. */
 :root[data-control-radius]
   .courses-app
-  .video-shell:fullscreen
-  .youtube-player {
+  :is(
+    .video-shell:fullscreen,
+    .video-shell:fullscreen .youtube-player,
+    .video-shell:fullscreen video,
+    .youtube-player:fullscreen,
+    [data-learning-persistent-player]:fullscreen,
+    [data-learning-persistent-player]:fullscreen
+      :is(.video-shell, .youtube-player, video),
+    [data-learning-persistent-player][data-learning-player-minimize-corners]:fullscreen
+      :is(.video-shell, .youtube-player, video),
+    [data-learning-persistent-player][data-learning-player-minimize-corners]
+      :is(.video-shell:fullscreen, .youtube-player:fullscreen, video:fullscreen)
+  ) {
   border-radius: 0 !important;
 }
 

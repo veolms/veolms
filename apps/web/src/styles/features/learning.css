@@ -342,7 +342,7 @@
   );
   box-sizing: border-box;
   gap: 16px;
-  margin-top: 0;
+  margin-top: 8px;
   margin-inline: calc(-1 * var(--learning-lesson-content-inset));
   padding: 10px var(--learning-lesson-content-inset);
   border: 0;
@@ -531,6 +531,20 @@
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 91%, var(--canvas));
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
+}
+
+/* Compact playlists sit flush under the mini-player info bar. The aside
+   already rounds the window; clipping Section 1 here makes a false radius. */
+.learning-curriculum--compact {
+  border-radius: 0 !important;
+  box-shadow: none;
+}
+
+.learning-curriculum--compact .learning-curriculum__section:first-child,
+.learning-curriculum--compact
+  .learning-curriculum__section:first-child
+  .learning-curriculum__section-toggle {
+  border-radius: 0 !important;
 }
 
 :root:not([data-scrollbar-style="default"]) .learning-curriculum {
@@ -1374,6 +1388,7 @@
 
   .learning-workspace__lesson-heading {
     padding-block: 10px;
+    padding-top: 6px;
   }
 }
 
@@ -1445,6 +1460,7 @@
 
   .learning-workspace__lesson-heading {
     padding-block: 16px;
+    padding-top: 4px;
   }
 
   .learning-workspace__lesson-heading h1 {
@@ -1611,7 +1627,8 @@ aside[data-learning-mini-player]
   color: var(--text);
 }
 
-aside[data-learning-mini-player] .learning-curriculum {
+aside[data-learning-mini-player] .learning-curriculum,
+aside[data-learning-mini-player] .learning-curriculum--compact {
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -1627,10 +1644,12 @@ aside[data-learning-mini-player] .learning-curriculum__lesson {
 }
 
 aside[data-learning-mini-player] .learning-curriculum__section {
+  border-radius: 0 !important;
   background: var(--learning-mini-player-section-bg) !important;
 }
 
 aside[data-learning-mini-player] .learning-curriculum__section-toggle {
+  border-radius: 0 !important;
   padding-left: 14px !important;
   padding-right: 14px !important;
   min-height: 48px !important;
@@ -1683,10 +1702,16 @@ aside[data-learning-mini-player] [data-learning-mini-player-playlist-shell] {
 }
 
 [data-learning-mini-player-timeline]:hover [data-timeline-track],
-[data-learning-mini-player-timeline] [role="slider"]:hover [data-timeline-track],
-[data-learning-mini-player-timeline] [data-scrubbing="true"] [data-timeline-track],
+[data-learning-mini-player-timeline]
+  [role="slider"]:hover
+  [data-timeline-track],
+[data-learning-mini-player-timeline]
+  [data-scrubbing="true"]
+  [data-timeline-track],
 [data-learning-mini-player-timeline]:focus-within [data-timeline-track],
-[data-learning-mini-player-timeline] .group\/timeline:hover [data-timeline-track] {
+[data-learning-mini-player-timeline]
+  .group\/timeline:hover
+  [data-timeline-track] {
   height: 3px !important;
 }
 
@@ -1695,4 +1720,3 @@ aside[data-learning-mini-player] [data-learning-mini-player-playlist-shell] {
   bottom: 17px !important;
   margin-bottom: 0 !important;
 }
-

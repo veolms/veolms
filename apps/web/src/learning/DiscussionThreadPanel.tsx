@@ -45,6 +45,7 @@ import {
   hasDiscussionDraftContent,
   type DiscussionDraft,
 } from "./discussion-editor/types";
+import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
 
 const THREAD_PANEL_MIN_WIDTH = 440;
 const THREAD_PANEL_MAX_WIDTH = 1080;
@@ -412,10 +413,7 @@ export function DiscussionThreadPanel({
             : "transform-none! translate-x-0! transition-[translate]! duration-300! ease-out! will-change-[translate] data-starting-style:translate-x-[calc(100%+2px)]! data-ending-style:translate-x-[calc(100%+2px)]! data-ending-style:duration-240! data-ending-style:ease-out!"
         }`}
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-28 -right-20 z-0 size-80 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--accent)_28%,transparent)_0%,color-mix(in_srgb,var(--accent)_9%,transparent)_38%,transparent_70%)] blur-3xl"
-        />
+        <SurfaceTopRightAccentGlow />
 
         {!isPhone && !expanded && (
           <div
@@ -551,8 +549,12 @@ export function DiscussionThreadPanel({
         </header>
 
         <div
-          data-base-ui-swipe-ignore=""
-          data-learning-swipe-ignore=""
+          {...(isPhone
+            ? {}
+            : {
+                "data-base-ui-swipe-ignore": "",
+                "data-learning-swipe-ignore": "",
+              })}
           role="region"
           aria-label="Swipe between discussion threads"
           style={

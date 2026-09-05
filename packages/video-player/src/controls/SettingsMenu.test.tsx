@@ -49,7 +49,15 @@ describe("SettingsMenu playback speed", () => {
     expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
       "backdrop-blur-sm",
       "!mb-8",
+      "bottom-full",
     );
+  });
+
+  it("opens below the trigger when side is bottom", () => {
+    renderPlaybackRateSettings("main", false, "bottom");
+    const menu = screen.getByRole("menu", { name: "Video settings" });
+    expect(menu).toHaveClass("top-full", "mt-2", "backdrop-blur-sm");
+    expect(menu).not.toHaveClass("bottom-full", "!mb-8");
   });
 
   it("offers exactly the compact quick-speed presets", () => {
@@ -237,6 +245,7 @@ describe("SettingsMenu playback speed", () => {
 function renderPlaybackRateSettings(
   settingsView: PlayerSnapshot["ui"]["settingsView"] = "playback-rate",
   mobileSheet = false,
+  side?: "top" | "bottom",
 ) {
   const snapshot: PlayerSnapshot = {
     media: {
@@ -296,7 +305,10 @@ function renderPlaybackRateSettings(
   const { unmount } = render(
     <PlayerControllerContext.Provider value={controller}>
       <PlayerInteractionModeProvider mobile={mobileSheet}>
-        <SettingsMenu mobilePresentation={mobileSheet ? "sheet" : "popover"} />
+        <SettingsMenu
+          mobilePresentation={mobileSheet ? "sheet" : "popover"}
+          side={side}
+        />
       </PlayerInteractionModeProvider>
     </PlayerControllerContext.Provider>,
   );

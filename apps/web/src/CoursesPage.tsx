@@ -236,6 +236,7 @@ interface CoursesPageProps {
   settingsTab?: string;
   discussionTab?: string;
   courseSlug?: string;
+  miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
     discussionTab?: string;
@@ -556,6 +557,7 @@ export function CoursesPage({
   settingsTab = "profile",
   discussionTab = "q-and-a",
   courseSlug,
+  miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
   renderMain = null,
@@ -3181,7 +3183,10 @@ export function CoursesPage({
     // session request is still loading.
     return [];
   })();
-  const visibleLearningCourseId = isLearningSurface ? courseSlug : undefined;
+  const visibleLearningCourseId =
+    (isLearningSurface ? courseSlug : undefined) ??
+    miniPlayerCourseId ??
+    undefined;
   const activateLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const destination =

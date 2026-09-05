@@ -327,6 +327,20 @@ describe("LearningMiniPlayer gestures", () => {
     expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
   });
 
+  it("restacks the mini player above document fullscreen", () => {
+    const { miniPlayer } = renderMiniPlayer();
+    popoverLifecycleMock.show.mockClear();
+    popoverLifecycleMock.hide.mockClear();
+
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+
+    expect(popoverLifecycleMock.hide).toHaveBeenCalledWith(miniPlayer);
+    expect(popoverLifecycleMock.show).toHaveBeenCalledWith(miniPlayer);
+    expect(miniPlayer).toHaveAttribute("data-test-popover-open", "true");
+  });
+
   it("provides invisible resize targets for every edge and corner, including the bottom", () => {
     const { miniPlayer } = renderMiniPlayer();
     const handles = Array.from(
@@ -788,10 +802,7 @@ describe("LearningMiniPlayer gestures", () => {
     expect(timeline).toHaveClass(
       "pointer-events-none",
       "[&_[role=slider]]:pointer-events-auto",
-      "[&_[data-timeline-track]]:bottom-0",
-      "[&_[data-timeline-track]]:top-auto",
       "[&_[data-timeline-track]]:h-0.5",
-      "[&_[data-timeline-track]]:translate-y-0",
       "[&_[data-timeline-track]]:rounded-none",
       "[&_[data-timeline-thumb]]:!hidden",
     );
@@ -1205,19 +1216,23 @@ describe("LearningMiniPlayer gestures", () => {
       "opacity-0",
     );
 
-    // Expand button with title/label "Expand [I]"
+    // Expand button with aria-label "Expand [I]" and a custom hover chip (no native title)
     const expandButton = screen.getByRole("button", { name: "Expand [I]" });
     expect(expandButton).toBeInTheDocument();
+    expect(expandButton).not.toHaveAttribute("title");
     expect(expandButton.querySelector("svg")).not.toBeNull();
     expect(expandButton.querySelector("img")).toBeNull();
     expect(expandButton.className).not.toMatch(/rounded-full/);
     expect(expandButton.className).toMatch(/bg-transparent/);
+    const expandTooltip = expandButton.parentElement?.querySelector("kbd");
+    expect(expandTooltip?.parentElement).toHaveClass("z-50");
     fireEvent.click(expandButton);
     expect(onRestore).toHaveBeenCalledOnce();
 
     // Close button
     const closeButton = screen.getByRole("button", { name: "Close" });
     expect(closeButton).toBeInTheDocument();
+    expect(closeButton).not.toHaveAttribute("title");
     expect(closeButton.className).not.toMatch(/rounded-full/);
     expect(closeButton.className).toMatch(/bg-transparent/);
     fireEvent.click(closeButton);
@@ -1259,7 +1274,9 @@ describe("LearningMiniPlayer gestures", () => {
     fireEvent.click(infoBar);
     expect(onRestore).toHaveBeenCalledOnce(); // onRestore was only called once from expand button, NOT from info bar!
     expect(screen.getByRole("button", { name: "Collapse curriculum menu" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Course curriculum")).toBeInTheDocument();
+    const curriculum = screen.getByLabelText("Course curriculum");
+    expect(curriculum).toBeInTheDocument();
+    expect(curriculum).toHaveClass("learning-curriculum--compact");
   });
 
   it("calculates desktop mini player height including the desktop info bar and expanded playlist", () => {

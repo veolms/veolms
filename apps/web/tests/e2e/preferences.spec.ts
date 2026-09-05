@@ -477,9 +477,7 @@ test("learning scrollports use floating scrollbars at compact and wide desktop s
         60,
       );
 
-      await page
-        .getByRole("button", { name: "Collapse course content" })
-        .click({ force: true });
+      await page.getByRole("button", { name: "Close lessons" }).click({ force: true });
       await expect(
         page.locator(".learning-workspace__curriculum-column"),
       ).toHaveClass(/is-collapsed/);

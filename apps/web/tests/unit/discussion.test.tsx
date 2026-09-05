@@ -13,6 +13,8 @@ import {
   Discussion,
   getDiscussionComposerViewportGeometry,
 } from "../../src/learning/Discussion.tsx";
+import { LessonDescription } from "../../src/learning/LessonDescription.tsx";
+import { getDiscussionFeedCountLabel } from "../../src/learning/discussionFeed";
 
 const uploadAttachment = vi.hoisted(() =>
   vi.fn(async (file: File) => ({
@@ -60,12 +62,68 @@ describe("CommentCard", () => {
     expect(onLike).toHaveBeenLastCalledWith(7, false);
   });
 
-  it("uses the full comment row as a subtle discussion-thread trigger", () => {
+  it("toggles nested replies from the full comment row when replies exist", () => {
     const onOpenThread = vi.fn();
     const { container } = render(
       <CommentCard
         comment={{
           id: 71,
+          name: "Alex Morgan",
+          time: "Just now",
+          avatar: "/alex.jpg",
+          text: "Clear explanation.",
+          likes: 3,
+          replies: 2,
+          thread: [
+            {
+              id: 72,
+              name: "Sam Lee",
+              time: "Just now",
+              avatar: "/sam.jpg",
+              text: "Agreed.",
+              likes: 1,
+            },
+          ],
+        }}
+        onLike={vi.fn()}
+        onOpenThread={onOpenThread}
+      />,
+    );
+
+    const entry = container.querySelector<HTMLElement>("#discussion-entry-71");
+    if (!entry) throw new Error("Expected a discussion entry");
+
+    expect(entry).not.toHaveAttribute("data-discussion-thread-trigger");
+    expect(entry).toHaveClass(
+      "hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]",
+    );
+    expect(entry).toHaveClass(
+      "active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]",
+    );
+    expect(entry).not.toHaveClass("border-b");
+    expect(entry).toHaveClass("-mx-3", "px-3", "sm:-mx-4", "sm:px-4");
+    expect(entry).toHaveClass("py-3.5", "sm:py-4");
+
+    const viewReplies = screen.getByRole("button", { name: "View 2 replies" });
+    expect(viewReplies).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Agreed.")).toBeNull();
+
+    fireEvent.click(entry);
+    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(viewReplies).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Agreed.")).toBeVisible();
+
+    fireEvent.click(entry);
+    expect(viewReplies).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Agreed.")).toBeNull();
+  });
+
+  it("opens the discussion thread only from the Reply action", () => {
+    const onOpenThread = vi.fn();
+    render(
+      <CommentCard
+        comment={{
+          id: 73,
           name: "Alex Morgan",
           time: "Just now",
           avatar: "/alex.jpg",
@@ -77,24 +135,11 @@ describe("CommentCard", () => {
       />,
     );
 
-    const entry = container.querySelector<HTMLElement>(
-      "[data-discussion-thread-trigger]",
-    );
-    if (!entry) throw new Error("Expected a discussion thread trigger");
+    const reply = screen.getByRole("button", { name: "Reply" });
+    expect(reply).toHaveAttribute("data-discussion-thread-trigger", "true");
 
-    expect(entry).toHaveAttribute("data-discussion-thread-trigger", "true");
-    expect(entry).toHaveClass(
-      "hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]",
-    );
-    expect(entry).toHaveClass(
-      "active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]",
-    );
-    expect(entry).not.toHaveClass("border-b");
-    expect(entry).toHaveClass("-mx-3", "px-3", "sm:-mx-4", "sm:px-4");
-    expect(entry).toHaveClass("py-3.5", "sm:py-4");
-
-    fireEvent.click(entry);
-    expect(onOpenThread).toHaveBeenCalledWith(71);
+    fireEvent.click(reply);
+    expect(onOpenThread).toHaveBeenCalledWith(73, true);
   });
 
   it("keeps timestamps and overflow actions in comment and reply headers", () => {
@@ -455,12 +500,20 @@ describe("discussion composer viewport geometry", () => {
 });
 
 describe("Discussion", () => {
-  it("opens a swipeable discussion thread from the whole comment and closes it from the header", async () => {
+  it("opens a swipeable discussion thread from the Reply action and closes it from the header", async () => {
     render(<Discussion persistenceKey="discussion-thread-panel-test" />);
 
-    fireEvent.click(
-      screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+    const rohitComment = screen
+      .getByRole("document", { name: "Comment by Rohit Sharma" })
+      .closest("article");
+    if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+    const engagement = rohitComment.querySelector<HTMLElement>(
+      "[data-comment-engagement]",
     );
+    if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
+    fireEvent.click(within(engagement).getByRole("button", { name: "Reply" }));
 
     const thread = await screen.findByRole("dialog", {
       name: "Discussion thread",
@@ -729,9 +782,17 @@ describe("Discussion", () => {
   it("keeps the desktop thread open during page interaction and closes it with Escape", async () => {
     render(<Discussion persistenceKey="discussion-thread-non-modal-test" />);
 
-    fireEvent.click(
-      screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+    const rohitComment = screen
+      .getByRole("document", { name: "Comment by Rohit Sharma" })
+      .closest("article");
+    if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+    const engagement = rohitComment.querySelector<HTMLElement>(
+      "[data-comment-engagement]",
     );
+    if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
+    fireEvent.click(within(engagement).getByRole("button", { name: "Reply" }));
     const thread = await screen.findByRole("dialog", {
       name: "Discussion thread",
     });
@@ -793,8 +854,18 @@ describe("Discussion", () => {
 
     try {
       render(<Discussion persistenceKey="discussion-mobile-thread-test" />);
+      const rohitComment = screen
+        .getByRole("document", { name: "Comment by Rohit Sharma" })
+        .closest("article");
+      if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+      const engagement = rohitComment.querySelector<HTMLElement>(
+        "[data-comment-engagement]",
+      );
+      if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
       fireEvent.click(
-        screen.getByRole("document", { name: "Comment by Rohit Sharma" }),
+        within(engagement).getByRole("button", { name: "Reply" }),
       );
 
       const thread = await screen.findByRole("dialog", {
@@ -826,8 +897,8 @@ describe("Discussion", () => {
       const swipeRegion = within(thread).getByRole("region", {
         name: "Swipe between discussion threads",
       });
-      expect(swipeRegion).toHaveAttribute("data-base-ui-swipe-ignore");
-      expect(swipeRegion).toHaveAttribute("data-learning-swipe-ignore");
+      expect(swipeRegion).not.toHaveAttribute("data-base-ui-swipe-ignore");
+      expect(swipeRegion).not.toHaveAttribute("data-learning-swipe-ignore");
       expect(swipeRegion).toHaveClass("touch-pan-y");
       const initialReply = within(thread).getByRole("textbox", {
         name: "Reply to Rohit Sharma",
@@ -853,20 +924,279 @@ describe("Discussion", () => {
     }
   });
 
-  it("renders only the entry-type filters without a sort control", () => {
-    render(<Discussion persistenceKey="discussion-filter-controls-test" />);
+  it("swipes the phone discussion thread drawer closed from non-scrollable thread content", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 639px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
 
-    const filters = screen.getByRole("group", {
-      name: "Filter discussion entries",
+    const createTouch = (clientX: number, clientY: number) => ({
+      clientX,
+      clientY,
+      pageX: clientX,
+      pageY: clientY,
+      identifier: 0,
     });
+
+    try {
+      render(<Discussion persistenceKey="discussion-mobile-thread-swipe-test" />);
+      const rohitComment = screen
+        .getByRole("document", { name: "Comment by Rohit Sharma" })
+        .closest("article");
+      if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+      const engagement = rohitComment.querySelector<HTMLElement>(
+        "[data-comment-engagement]",
+      );
+      if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
+      fireEvent.click(
+        within(engagement).getByRole("button", { name: "Reply" }),
+      );
+
+      const thread = await screen.findByRole("dialog", {
+        name: "Discussion thread",
+      });
+      const popup = thread.closest<HTMLElement>('[data-slot="drawer-popup"]');
+      if (!popup) throw new Error("Expected discussion thread drawer popup");
+
+      const threadScrollport = thread.querySelector<HTMLElement>(
+        ".learning-comment-formatting-scrollport",
+      );
+      if (!threadScrollport) {
+        throw new Error("Expected thread scrollport");
+      }
+
+      vi.spyOn(popup, "getBoundingClientRect").mockReturnValue(
+        new DOMRect(0, 180, 375, 487),
+      );
+      Object.defineProperty(threadScrollport, "scrollTop", {
+        configurable: true,
+        value: 0,
+      });
+      Object.defineProperty(threadScrollport, "clientHeight", {
+        configurable: true,
+        value: 400,
+      });
+      Object.defineProperty(threadScrollport, "scrollHeight", {
+        configurable: true,
+        value: 400,
+      });
+      Object.defineProperty(document, "elementFromPoint", {
+        configurable: true,
+        value: () => threadScrollport,
+      });
+
+      const startTouch = createTouch(180, 260);
+      const moveTouch = createTouch(180, 400);
+      fireEvent.touchStart(threadScrollport, {
+        touches: [startTouch],
+        targetTouches: [startTouch],
+        changedTouches: [startTouch],
+      });
+      fireEvent.touchMove(threadScrollport, {
+        touches: [moveTouch],
+        targetTouches: [moveTouch],
+        changedTouches: [moveTouch],
+      });
+
+      expect(popup).toHaveAttribute("data-swiping");
+
+      fireEvent.touchCancel(threadScrollport, {
+        touches: [],
+        changedTouches: [moveTouch],
+      });
+      expect(popup).not.toHaveAttribute("data-swiping");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("keeps drawer swipe disabled while phone thread content is scrolled", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 639px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    const createTouch = (clientX: number, clientY: number) => ({
+      clientX,
+      clientY,
+      pageX: clientX,
+      pageY: clientY,
+      identifier: 0,
+    });
+
+    try {
+      render(
+        <Discussion persistenceKey="discussion-mobile-thread-scroll-swipe-test" />,
+      );
+      const rohitComment = screen
+        .getByRole("document", { name: "Comment by Rohit Sharma" })
+        .closest("article");
+      if (!rohitComment) throw new Error("Expected Rohit's comment card");
+
+      const engagement = rohitComment.querySelector<HTMLElement>(
+        "[data-comment-engagement]",
+      );
+      if (!engagement) throw new Error("Expected Rohit's engagement controls");
+
+      fireEvent.click(
+        within(engagement).getByRole("button", { name: "Reply" }),
+      );
+
+      const thread = await screen.findByRole("dialog", {
+        name: "Discussion thread",
+      });
+      const popup = thread.closest<HTMLElement>('[data-slot="drawer-popup"]');
+      if (!popup) throw new Error("Expected discussion thread drawer popup");
+
+      const threadScrollport = thread.querySelector<HTMLElement>(
+        ".learning-comment-formatting-scrollport",
+      );
+      if (!threadScrollport) {
+        throw new Error("Expected thread scrollport");
+      }
+
+      Object.defineProperty(threadScrollport, "scrollTop", {
+        configurable: true,
+        value: 120,
+      });
+      Object.defineProperty(threadScrollport, "scrollHeight", {
+        configurable: true,
+        value: 900,
+      });
+      Object.defineProperty(threadScrollport, "clientHeight", {
+        configurable: true,
+        value: 400,
+      });
+
+      const startTouch = createTouch(180, 260);
+      const moveTouch = createTouch(180, 332);
+      fireEvent.touchStart(threadScrollport, {
+        touches: [startTouch],
+        targetTouches: [startTouch],
+        changedTouches: [startTouch],
+      });
+      fireEvent.touchMove(threadScrollport, {
+        touches: [moveTouch],
+        targetTouches: [moveTouch],
+        changedTouches: [moveTouch],
+      });
+
+      expect(popup).not.toHaveAttribute("data-swiping");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("shows a tab count and sorts the feed with Newest, Top, and Mine", () => {
+    const { container } = render(
+      <Discussion persistenceKey="discussion-feed-toolbar-test" />,
+    );
+    const visibleAuthors = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>("[data-discussion-entry]"),
+      ).map(
+        (entry) =>
+          entry.querySelector("h2")?.textContent ??
+          entry.getAttribute("aria-label"),
+      );
+
+    const count = screen.getByText((_, element) =>
+      element?.textContent === getDiscussionFeedCountLabel("all", 4),
+    );
+    const sortTrigger = screen.getByRole("button", {
+      name: "Sort discussions: Newest",
+    });
+    const toolbar = container.querySelector("[data-discussion-feed-toolbar]");
+    const separator = toolbar?.querySelector(
+      "[data-discussion-feed-separator]",
+    );
+    expect(count).toBeVisible();
+    expect(count).toHaveClass("text-lg", "leading-none");
+    expect(count).not.toHaveClass("text-xl", "text-[0.94rem]");
+    expect(toolbar).toHaveClass("items-end");
+    expect(toolbar).not.toHaveClass("justify-between", "gap-2");
+    expect(separator).toHaveTextContent("·");
+    expect(separator?.textContent).toBe("\u00A0\u00A0·\u00A0\u00A0");
+    expect(sortTrigger).toBeVisible();
+    expect(sortTrigger).toHaveClass(
+      "text-[13px]",
+      "leading-none!",
+      "w-auto!",
+      "bg-transparent!",
+      "gap-1!",
+    );
+    expect(sortTrigger).not.toHaveClass("text-sm", "w-36!", "h-10!");
+    expect(separator?.previousElementSibling).toBe(count);
+    expect(sortTrigger.previousElementSibling).toBe(separator);
+
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
     expect(
-      within(filters)
-        .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["All", "Notes", "Comments", "Q&As"]);
+      screen.getByText((_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("note", 1),
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Comments" }));
     expect(
-      screen.queryByRole("button", { name: /Sort discussion/i }),
-    ).not.toBeInTheDocument();
+      screen.getByText((_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("comment", 1),
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
+    expect(
+      screen.getByText((_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("question", 2),
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sort discussions: Newest" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Top" }));
+    expect(visibleAuthors()).toEqual([
+      "Rohit Sharma",
+      "Neha Patel",
+      "Vivek Nair",
+      "Ashi Singh",
+    ]);
+    expect(
+      screen.getByText((_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("all", 4),
+      ),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sort discussions: Top" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Mine" }));
+    expect(visibleAuthors()).toEqual(["Ashi Singh"]);
+    expect(
+      screen.getByText((_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("all", 1),
+      ),
+    ).toBeVisible();
   });
 
   it("filters the unified feed by entry type", () => {
@@ -879,12 +1209,104 @@ describe("Discussion", () => {
       ).map((entry) => entry.dataset.discussionEntry);
 
     expect(visibleKinds()).toEqual(["comment", "question", "note", "question"]);
+    expect(
+      Array.from(
+        container.querySelectorAll(".learning-discussion__filter-button"),
+      ).map((button) => button.textContent),
+    ).toEqual(["All", "Comments", "Notes", "Q&As"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
     expect(visibleKinds()).toEqual(["note"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
     expect(visibleKinds()).toEqual(["question", "question"]);
+  });
+
+  it("renders the lesson description above the compact composer", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <Discussion persistenceKey="lesson-description-placement-test" />,
+      );
+      const discussion = container.querySelector(".learning-discussion");
+      const description = discussion?.querySelector("[data-lesson-description]");
+      const composer = discussion?.querySelector(
+        "[data-compact-comment-composer]",
+      );
+
+      if (!description || !composer) {
+        throw new Error("Expected a lesson description and compact composer");
+      }
+
+      expect(
+        description.compareDocumentPosition(composer) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(description).toHaveClass("rounded-xl");
+      expect(composer).toHaveClass("rounded-md");
+      expect(composer).not.toHaveClass("rounded-xl");
+      expect(composer.tagName).toBe("DIV");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("renders the lesson description above the compact composer on mobile", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 640px)",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    })) as typeof window.matchMedia;
+
+    try {
+      const { container } = render(
+        <Discussion persistenceKey="lesson-description-mobile-placement-test" />,
+      );
+      const discussion = container.querySelector(".learning-discussion");
+      const description = discussion?.querySelector("[data-lesson-description]");
+      const composerHost = discussion?.querySelector(
+        "[data-comment-composer-container]",
+      );
+      const compactComposer = await screen.findByTestId(
+        "mobile-discussion-composer",
+      );
+
+      if (!description) {
+        throw new Error(
+          "Expected a lesson description and mobile portal composer on mobile",
+        );
+      }
+
+      expect(composerHost).toBeNull();
+      expect(
+        document.querySelector("[data-learning-mobile-composer-layer]"),
+      ).not.toBeNull();
+      expect(compactComposer).toBeVisible();
+      expect(discussion).not.toContainElement(compactComposer);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("opens the rich discussion composer from its compact state", async () => {
@@ -1523,4 +1945,182 @@ describe("Discussion", () => {
       window.matchMedia = originalMatchMedia;
     }
   });
+
 });
+
+describe("LessonDescription", () => {
+  it("clamps the example markdown behind more until expanded", () => {
+    render(<LessonDescription />);
+
+    const description = screen.getByRole("button", {
+      name: "Show more of the lesson description",
+    });
+    const body = description.querySelector("[data-lesson-description-body]");
+    const preview = description.querySelector(
+      "[data-lesson-description-preview]",
+    );
+    const more = description.querySelector("[data-lesson-description-more]");
+
+    expect(description).toHaveAttribute("data-expanded", "false");
+    expect(description).toHaveClass("rounded-xl");
+    expect(body).not.toHaveClass("line-clamp-4");
+    expect(preview).toHaveClass("line-clamp-2");
+    expect(preview).toHaveClass("sm:line-clamp-3");
+    expect(more?.closest("[data-lesson-description-preview]")).toBe(preview);
+    expect(more).not.toHaveClass("absolute");
+    expect(description).toHaveAttribute("aria-expanded", "false");
+    expect(body).toHaveAttribute("aria-hidden", "true");
+    expect(body).not.toHaveAttribute("inert");
+    expect(more).toHaveTextContent("more");
+    expect(description).toHaveTextContent(/more/);
+    expect(description.textContent?.match(/more/g)?.length).toBe(1);
+    expect(description.querySelector("h2")?.textContent).toBe("Description");
+    expect(description.querySelector("h1")).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "Try this in code" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+
+    fireEvent.click(description);
+
+    expect(description).toHaveAttribute("data-expanded", "true");
+    expect(description).toHaveClass("rounded-xl");
+    expect(body).not.toHaveClass("line-clamp-4");
+    expect(
+      description.querySelector("[data-lesson-description-preview]"),
+    ).toBeNull();
+    expect(
+      description.querySelector("[data-lesson-description-more]"),
+    ).toBeNull();
+    expect(body).not.toHaveAttribute("aria-hidden");
+    expect(description).toHaveAttribute("aria-label", "Lesson description");
+    expect(description).not.toHaveAttribute("role");
+    expect(
+      screen.getByRole("button", {
+        name: "Show less of the lesson description",
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "Show less of the lesson description",
+      }),
+    ).toHaveTextContent("Show less");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Description" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { level: 1, name: "Description" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Try this in code" })).toBeVisible();
+    expect(screen.getByText("javascript")).toBeVisible();
+    expect(description.querySelector("blockquote")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Nielsen Norman Group glossary" }),
+    ).toBeVisible();
+    expect(screen.getByText("empathy").closest("code")).toBeTruthy();
+  });
+
+  it("does not collapse when clicking the description body while expanded", () => {
+    render(<LessonDescription />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Show more of the lesson description",
+      }),
+    );
+
+    const description = screen.getByLabelText("Lesson description");
+    const body = description.querySelector("[data-lesson-description-body]");
+
+    expect(description).toHaveAttribute("data-expanded", "true");
+    expect(body).toBeTruthy();
+
+    fireEvent.click(body!);
+
+    expect(description).toHaveAttribute("data-expanded", "true");
+    expect(
+      screen.getByRole("heading", { name: "Try this in code" }),
+    ).toBeVisible();
+  });
+
+  it("collapses from the show less button", () => {
+    render(<LessonDescription />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Show more of the lesson description",
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Show less of the lesson description",
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: "Show more of the lesson description" })).toHaveAttribute(
+      "data-expanded",
+      "false",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Try this in code" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("collapses when Escape is pressed while focus is inside", async () => {
+    render(<LessonDescription />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Show more of the lesson description",
+      }),
+    );
+
+    const description = screen.getByLabelText("Lesson description");
+    const showLess = screen.getByRole("button", {
+      name: "Show less of the lesson description",
+    });
+
+    showLess.focus();
+
+    fireEvent.keyDown(description, { key: "Escape" });
+
+    const collapsedDescription = screen.getByRole("button", {
+      name: "Show more of the lesson description",
+    });
+
+    expect(collapsedDescription).toHaveAttribute("data-expanded", "false");
+    await waitFor(() => {
+      expect(collapsedDescription).toHaveFocus();
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Try this in code" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("focuses show less without scrolling on expand", async () => {
+    render(<LessonDescription />);
+
+    const description = screen.getByRole("button", {
+      name: "Show more of the lesson description",
+    });
+    const focusSpy = vi.spyOn(
+      HTMLButtonElement.prototype,
+      "focus",
+    );
+
+    fireEvent.click(description);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: "Show less of the lesson description",
+        }),
+      ).toHaveFocus();
+    });
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
+  });
+});
+

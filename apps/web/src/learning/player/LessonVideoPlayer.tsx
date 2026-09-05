@@ -16,6 +16,7 @@ import { LessonAmbientProjection } from "./LessonAmbientProjection";
 import {
   LessonCentralControls,
   LessonPlayerControls,
+  type CourseLessonsSecondPressHoldProps,
 } from "./LessonPlayerControls";
 import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
 import {
@@ -78,7 +79,11 @@ export interface LessonVideoPlayerProps {
   canGoNext?: boolean;
   canGoPrevious?: boolean;
   courseLessonsOpen?: boolean;
+  courseLessonsDrawerOpen?: boolean;
   courseLessonsPanel?: ReactNode;
+  courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
+  courseLessonsShortcutLabel?: string;
+  courseLessonsSidePanel?: boolean;
   courseLessonsVideoWidthPercent?: number;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
@@ -106,7 +111,11 @@ export function LessonVideoPlayer({
   canGoNext = false,
   canGoPrevious = false,
   courseLessonsOpen = false,
+  courseLessonsDrawerOpen = false,
   courseLessonsPanel,
+  courseLessonsSecondPressHold,
+  courseLessonsShortcutLabel,
+  courseLessonsSidePanel = false,
   courseLessonsVideoWidthPercent = 60,
   courseTitle,
   engineFactory,
@@ -686,7 +695,11 @@ export function LessonVideoPlayer({
             canGoPrevious={canGoPrevious}
             controlsSuppressed={minimizeGesture.controlsSuppressed}
             courseLessonsOpen={courseLessonsOpen}
+            courseLessonsDrawerOpen={courseLessonsDrawerOpen}
             courseLessonsPanel={courseLessonsPanel}
+            courseLessonsSecondPressHold={courseLessonsSecondPressHold}
+            courseLessonsShortcutLabel={courseLessonsShortcutLabel}
+            courseLessonsSidePanel={courseLessonsSidePanel}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}
