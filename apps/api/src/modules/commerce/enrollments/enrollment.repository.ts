@@ -14,6 +14,26 @@ export async function findEnrollment(
     .executeTakeFirst();
 }
 
+export async function findActiveEnrollment(
+  database: Executor,
+  userId: string,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("enrollments")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .where("course_id", "=", courseId)
+    .where("status", "=", "active")
+    .where((eb) =>
+      eb.or([
+        eb("access_expires_at", "is", null),
+        eb("access_expires_at", ">", new Date()),
+      ]),
+    )
+    .executeTakeFirst();
+}
+
 export async function listUserEnrollments(
   database: Executor,
   userId: string,

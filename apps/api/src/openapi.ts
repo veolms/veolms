@@ -56,6 +56,10 @@ const OPENAPI_TAGS = [
     description:
       "Administrator-only recovery and retention management for deleted courses.",
   },
+  {
+    name: "Streaming",
+    description: "Enrolled course lecture video streaming and playback URLs.",
+  },
 ];
 
 /**

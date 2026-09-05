@@ -8,4 +8,4 @@ export * from "./notification.ts";
 export * from "./learning-space.ts";
 export * from "./health.ts";
 export * from "./error.ts";
-
+export * from "./stream.ts";

@@ -33,3 +33,8 @@ export * from "./lifecycle/course-deletion.service.ts";
 // Course Bin
 export * from "./bin/bin.service.ts";
 export * from "./bin/bin.controller.ts";
+
+// Stream
+export * from "./stream/stream.service.ts";
+export * from "./stream/stream.controller.ts";
+export * from "./stream/stream.types.ts";
