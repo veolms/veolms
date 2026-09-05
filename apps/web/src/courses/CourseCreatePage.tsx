@@ -11,6 +11,7 @@ import {
   BookOpen,
   Calendar,
   CaretDown,
+  CaretLeft,
   CaretRight,
   CaretUp,
   Certificate,
@@ -123,14 +124,14 @@ type WizardStepIcon = ComponentType<{
   weight?: "bold" | "duotone" | "fill" | "regular";
 }>;
 
-interface WizardStepDefinition {
+export interface WizardStepDefinition {
   id: CourseWizardStepId;
   label: string;
   Icon: WizardStepIcon;
   tone: "blue" | "cyan" | "gold" | "green" | "orange" | "rose" | "violet";
 }
 
-const WIZARD_STEPS: readonly WizardStepDefinition[] = [
+export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "basics", label: "Basics", Icon: BookOpen, tone: "blue" },
   { id: "curriculum", label: "Curriculum", Icon: ListBullets, tone: "violet" },
   { id: "access-rules", label: "Access Rules", Icon: LockKey, tone: "gold" },
@@ -139,7 +140,7 @@ const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
 
-const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
+export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
   ({ id }) => id,
 );
 
@@ -182,7 +183,7 @@ export const normalizeBasicsState = (
       : true,
 });
 
-export const isBasicsEqual = (
+export const isBasicsMetaEqual = (
   a: BasicsFormState,
   b: BasicsFormState,
 ): boolean => {
@@ -194,10 +195,27 @@ export const isBasicsEqual = (
     normA.description === normB.description &&
     normA.categoryId === normB.categoryId &&
     normA.difficulty === normB.difficulty &&
+    normA.instructorAlias === normB.instructorAlias
+  );
+};
+
+export const isBasicsSettingsEqual = (
+  a: BasicsFormState,
+  b: BasicsFormState,
+): boolean => {
+  const normA = normalizeBasicsState(a);
+  const normB = normalizeBasicsState(b);
+  return (
     normA.language === normB.language &&
-    normA.instructorAlias === normB.instructorAlias &&
     normA.showInstructorName === normB.showInstructorName
   );
+};
+
+export const isBasicsEqual = (
+  a: BasicsFormState,
+  b: BasicsFormState,
+): boolean => {
+  return isBasicsMetaEqual(a, b) && isBasicsSettingsEqual(a, b);
 };
 
 export function formatIsoToDatetimeLocal(isoString?: string | null): string {
@@ -269,7 +287,7 @@ export const normalizeAccessRulesState = (
     raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
 });
 
-export const isAccessRulesEqual = (
+export const isAccessRuleConfigEqual = (
   a: AccessRulesFormState,
   b: AccessRulesFormState,
 ): boolean => {
@@ -279,11 +297,28 @@ export const isAccessRulesEqual = (
     normA.accessType === normB.accessType &&
     normA.durationMode === normB.durationMode &&
     normA.fixedDurationValue === normB.fixedDurationValue &&
-    normA.fixedDurationUnit === normB.fixedDurationUnit &&
+    normA.fixedDurationUnit === normB.fixedDurationUnit
+  );
+};
+
+export const isAccessSettingsEqual = (
+  a: AccessRulesFormState,
+  b: AccessRulesFormState,
+): boolean => {
+  const normA = normalizeAccessRulesState(a);
+  const normB = normalizeAccessRulesState(b);
+  return (
     normA.enableQA === normB.enableQA &&
     normA.enableComments === normB.enableComments &&
     normA.enableDownloads === normB.enableDownloads
   );
+};
+
+export const isAccessRulesEqual = (
+  a: AccessRulesFormState,
+  b: AccessRulesFormState,
+): boolean => {
+  return isAccessRuleConfigEqual(a, b) && isAccessSettingsEqual(a, b);
 };
 
 // Pricing State Model & Normalization
@@ -1746,6 +1781,9 @@ export function CourseCreatePage({
   }>({ left: 0, width: 0 });
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
+  const navigateToStepRef = useRef<
+    (destination: CourseWizardStepId) => Promise<void>
+  >((async () => {}) as any);
   const [isNavMouseDown, setIsNavMouseDown] = useState(false);
   const [navStartX, setNavStartX] = useState(0);
   const [navScrollLeft, setNavScrollLeft] = useState(0);
@@ -1851,15 +1889,12 @@ export function CourseCreatePage({
       const destination = WIZARD_STEPS[index];
       if (!destination) return;
       event.preventDefault();
-      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-      if (index > currentIdx) setSlideDirection("right");
-      else if (index < currentIdx) setSlideDirection("left");
-      setActiveStep(destination.id);
+      void navigateToStepRef.current(destination.id);
     };
 
     document.addEventListener("keydown", navigateWizardTab);
     return () => document.removeEventListener("keydown", navigateWizardTab);
-  }, [activeStep]);
+  }, []);
 
   // Synchronize URL search params with active wizard tab
   useEffect(() => {
@@ -2002,6 +2037,9 @@ export function CourseCreatePage({
   } | null>(null);
 
   const isEditing = Boolean(activeEditId);
+  const isNewCourse = !currentCourseId && !isEditing;
+  const isDownstreamUnlocked =
+    !isNewCourse || basicsDraft.title.trim().length > 0;
 
   const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
@@ -4055,50 +4093,73 @@ export function CourseCreatePage({
         setBasicsDraft(newBaseline);
         return created;
       } else {
-        // Update basics on server
-        const updated = await updateBasicsMutation.mutateAsync({
-          id: targetCourseId,
-          payload: {
-            title: basicsDraft.title.trim(),
-            shortDescription: basicsDraft.shortDescription.trim() || null,
-            description: basicsDraft.description.trim() || null,
-            categoryId: basicsDraft.categoryId || null,
-            difficulty: basicsDraft.difficulty || null,
-            instructorAlias: basicsDraft.instructorAlias.trim() || null,
-            version: courseVersion,
-          },
-        });
-        setCourseVersion(updated.version);
+        // Update basics on server conditionally per persistence domain
+        const isMetaDirty = !isBasicsMetaEqual(basicsDraft, serverBasics);
+        const isSettingsDirty = !isBasicsSettingsEqual(basicsDraft, serverBasics);
 
-        let confirmedLang = language;
-        let confirmedShowInstructor = basicsDraft.showInstructorName;
-        const settingsRes = await upsertSettingsMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            language: basicsDraft.language || "en",
-            showInstructorName: basicsDraft.showInstructorName,
-          },
-        });
-        confirmedLang = settingsRes.language || basicsDraft.language || "en";
-        confirmedShowInstructor =
-          settingsRes.showInstructorName !== undefined
-            ? settingsRes.showInstructorName
-            : basicsDraft.showInstructorName;
+        let confirmedTitle = serverBasics.title;
+        let confirmedShortDesc = serverBasics.shortDescription;
+        let confirmedDesc = serverBasics.description;
+        let confirmedCat = serverBasics.categoryId;
+        let confirmedDiff = serverBasics.difficulty;
+        let confirmedInstructorAlias = serverBasics.instructorAlias;
+        let resultCourse = null;
+
+        if (isMetaDirty) {
+          const updated = await updateBasicsMutation.mutateAsync({
+            id: targetCourseId,
+            payload: {
+              title: basicsDraft.title.trim(),
+              shortDescription: basicsDraft.shortDescription.trim() || null,
+              description: basicsDraft.description.trim() || null,
+              categoryId: basicsDraft.categoryId || null,
+              difficulty: basicsDraft.difficulty || null,
+              instructorAlias: basicsDraft.instructorAlias.trim() || null,
+              version: courseVersion,
+            },
+          });
+          setCourseVersion(updated.version);
+          resultCourse = updated;
+          confirmedTitle = updated.title;
+          confirmedShortDesc = updated.shortDescription || "";
+          confirmedDesc = updated.description || "";
+          confirmedCat = updated.categoryId || "";
+          confirmedDiff =
+            (updated.difficulty as BasicsFormState["difficulty"]) || "";
+          confirmedInstructorAlias = updated.instructorAlias || "";
+        }
+
+        let confirmedLang = serverBasics.language;
+        let confirmedShowInstructor = serverBasics.showInstructorName;
+
+        if (isSettingsDirty) {
+          const settingsRes = await upsertSettingsMutation.mutateAsync({
+            courseId: targetCourseId,
+            payload: {
+              language: basicsDraft.language || "en",
+              showInstructorName: basicsDraft.showInstructorName,
+            },
+          });
+          confirmedLang = settingsRes.language || basicsDraft.language || "en";
+          confirmedShowInstructor =
+            settingsRes.showInstructorName !== undefined
+              ? settingsRes.showInstructorName
+              : basicsDraft.showInstructorName;
+        }
 
         const newBaseline: BasicsFormState = {
-          title: updated.title,
-          shortDescription: updated.shortDescription || "",
-          description: updated.description || "",
-          categoryId: updated.categoryId || "",
-          difficulty:
-            (updated.difficulty as BasicsFormState["difficulty"]) || "",
+          title: confirmedTitle,
+          shortDescription: confirmedShortDesc,
+          description: confirmedDesc,
+          categoryId: confirmedCat,
+          difficulty: confirmedDiff,
           language: confirmedLang,
-          instructorAlias: updated.instructorAlias || "",
+          instructorAlias: confirmedInstructorAlias,
           showInstructorName: confirmedShowInstructor,
         };
         setServerBasics(newBaseline);
         setBasicsDraft(newBaseline);
-        return updated;
+        return resultCourse || newBaseline;
       }
     } finally {
       setIsSavingBasics(false);
@@ -4245,39 +4306,86 @@ export function CourseCreatePage({
         durationDays = val * unitMultiplier;
       }
 
-      const [accessRuleRes, settingsRes] = await Promise.all([
-        upsertAccessRulesMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            accessType: "everyone",
-            durationType:
-              accessRulesDraft.durationMode === "fixed"
-                ? "fixed_duration"
-                : "lifetime",
-            durationDays:
-              accessRulesDraft.durationMode === "fixed" ? durationDays : null,
-          },
-        }),
-        upsertSettingsMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            language: language || undefined,
-            allowQa: accessRulesDraft.enableQA,
-            allowComments: accessRulesDraft.enableComments,
-            allowDownloads: accessRulesDraft.enableDownloads,
-          },
-        }),
-      ]);
+      const isRulesConfigDirty = !isAccessRuleConfigEqual(
+        accessRulesDraft,
+        serverAccessRules,
+      );
+      const isInteractionSettingsDirty = !isAccessSettingsEqual(
+        accessRulesDraft,
+        serverAccessRules,
+      );
 
-      const isFixed = accessRuleRes.durationType === "fixed_duration";
+      let accessRuleRes: any = null;
+      let settingsRes: any = null;
+
+      const mutationsToRun: Promise<unknown>[] = [];
+
+      if (isRulesConfigDirty) {
+        mutationsToRun.push(
+          upsertAccessRulesMutation
+            .mutateAsync({
+              courseId: targetCourseId,
+              payload: {
+                accessType: "everyone",
+                durationType:
+                  accessRulesDraft.durationMode === "fixed"
+                    ? "fixed_duration"
+                    : "lifetime",
+                durationDays:
+                  accessRulesDraft.durationMode === "fixed"
+                    ? durationDays
+                    : null,
+              },
+            })
+            .then((res) => {
+              accessRuleRes = res;
+            }),
+        );
+      }
+
+      if (isInteractionSettingsDirty) {
+        mutationsToRun.push(
+          upsertSettingsMutation
+            .mutateAsync({
+              courseId: targetCourseId,
+              payload: {
+                language: language || undefined,
+                allowQa: accessRulesDraft.enableQA,
+                allowComments: accessRulesDraft.enableComments,
+                allowDownloads: accessRulesDraft.enableDownloads,
+              },
+            })
+            .then((res) => {
+              settingsRes = res;
+            }),
+        );
+      }
+
+      if (mutationsToRun.length > 0) {
+        await Promise.all(mutationsToRun);
+      }
+
+      const isFixed = accessRuleRes
+        ? accessRuleRes.durationType === "fixed_duration"
+        : serverAccessRules.durationMode === "fixed";
+
       const newBaseline: AccessRulesFormState = normalizeAccessRulesState({
         accessType: "everyone",
         durationMode: isFixed ? "fixed" : "lifetime",
         fixedDurationValue: accessRulesDraft.fixedDurationValue,
         fixedDurationUnit: accessRulesDraft.fixedDurationUnit,
-        enableQA: settingsRes.allowQa,
-        enableComments: settingsRes.allowComments,
-        enableDownloads: settingsRes.allowDownloads,
+        enableQA:
+          settingsRes && settingsRes.allowQa !== undefined
+            ? settingsRes.allowQa
+            : serverAccessRules.enableQA,
+        enableComments:
+          settingsRes && settingsRes.allowComments !== undefined
+            ? settingsRes.allowComments
+            : serverAccessRules.enableComments,
+        enableDownloads:
+          settingsRes && settingsRes.allowDownloads !== undefined
+            ? settingsRes.allowDownloads
+            : serverAccessRules.enableDownloads,
       });
 
       setAccessRulesExists(true);
@@ -4377,16 +4485,24 @@ export function CourseCreatePage({
         setCourseVersion(created.version);
       }
 
-      // 1. Save certificate settings
-      const res = await upsertSettingsMutation.mutateAsync({
-        courseId: targetCourseId,
-        payload: {
-          certificateEnabled: extras.enableCertificate,
-        },
-      });
+      // 1. Save certificate settings only if dirty
+      const isCertificateDirty =
+        extras.enableCertificate !== serverExtras.enableCertificate;
+      let confirmedCertificate = serverExtras.enableCertificate;
+      let res: Awaited<ReturnType<typeof upsertSettingsMutation.mutateAsync>> | null = null;
+
+      if (isCertificateDirty) {
+        res = await upsertSettingsMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            certificateEnabled: extras.enableCertificate,
+          },
+        });
+        confirmedCertificate = res.certificateEnabled ?? false;
+      }
 
       const newBaseline: ExtrasFormState = normalizeExtrasState({
-        enableCertificate: res.certificateEnabled ?? false,
+        enableCertificate: confirmedCertificate,
       });
 
       setServerExtras(newBaseline);
@@ -4470,36 +4586,54 @@ export function CourseCreatePage({
     }
   };
 
-  const handleSaveChangesAction = async () => {
-    if (actionLoading) return;
-    if (activeStep === "basics") {
-      if (!isBasicsDirty) return;
-      if (!courseTitle.trim()) {
-        setToastMessage("Please enter a course title.");
-        return;
-      }
-    } else if (activeStep === "curriculum") {
-      if (!isCurriculumDirty) return;
-    } else if (activeStep === "access-rules") {
-      if (!needsAccessRulesSave) return;
-    } else if (activeStep === "pricing") {
-      if (!isPricingDirty) return;
-    } else if (activeStep === "extras") {
-      if (!isExtrasDirty) return;
+  const navigateToStep = async (destination: CourseWizardStepId) => {
+    if (isAnyApiInProgress || actionLoading !== null) {
+      return;
+    }
+    if (destination === activeStep) {
+      return;
+    }
+    if (!isDownstreamUnlocked && destination !== "basics") {
+      return;
+    }
+
+    const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
+    const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === destination);
+    if (targetIdx > currentIdx) {
+      setSlideDirection("right");
+    } else if (targetIdx < currentIdx) {
+      setSlideDirection("left");
+    }
+
+    if (!isStepDirty(activeStep)) {
+      setActiveStep(destination);
+      return;
     }
 
     setActionLoading("save");
     try {
       await saveCurrentStep();
-      setToastMessage("Changes saved successfully!");
     } catch (err: unknown) {
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to save changes.";
-      setToastMessage(errorMsg);
+      const stepLabel =
+        WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
+      setToastMessage(
+        `Failed to save ${stepLabel}. Your changes are kept locally.`,
+      );
     } finally {
       setActionLoading(null);
+      setActiveStep(destination);
     }
   };
+
+  navigateToStepRef.current = navigateToStep;
+
+  const currentStepIndex = WIZARD_STEP_IDS.indexOf(activeStep);
+  const previousStepId =
+    currentStepIndex > 0 ? WIZARD_STEP_IDS[currentStepIndex - 1] : null;
+  const nextStepId =
+    currentStepIndex < WIZARD_STEP_IDS.length - 1
+      ? WIZARD_STEP_IDS[currentStepIndex + 1]
+      : null;
 
   const reconcileDirtyState = async (explicitCourseId?: string | null) => {
     let targetCourseId = explicitCourseId || currentCourseId;
@@ -4566,23 +4700,6 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
-    }
-  };
-
-  const getContextualActionLabel = (step: CourseWizardStepId) => {
-    switch (step) {
-      case "basics":
-        return "Save Basics";
-      case "curriculum":
-        return "Save Curriculum";
-      case "access-rules":
-        return "Save Access Rules";
-      case "pricing":
-        return "Save Pricing";
-      case "extras":
-        return "Save Extras";
-      case "publish":
-        return "Validate";
     }
   };
 
@@ -4818,7 +4935,34 @@ export function CourseCreatePage({
               )}
             </button>
 
-            {/* Contextual Action Button (Save Basics / Save Curriculum / ... / Validate) */}
+            {/* Previous Button (Ghost / Secondary) */}
+            <button
+              type="button"
+              style={{
+                fontSize: "0.80rem",
+                fontWeight: 700,
+                height: "34px",
+                borderRadius: "8px",
+                gap: "6px",
+                paddingLeft: "14px",
+                paddingRight: "14px",
+              }}
+              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                activeStep === "basics" || isAnyApiInProgress
+                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              }`}
+              onClick={() => {
+                if (previousStepId) void navigateToStep(previousStepId);
+              }}
+              disabled={activeStep === "basics" || isAnyApiInProgress}
+              aria-label="Previous Step"
+            >
+              <CaretLeft size={15} />
+              <span>Previous</span>
+            </button>
+
+            {/* Next Button / Validate on Publish */}
             {activeStep === "publish" ? (
               <button
                 type="button"
@@ -4863,24 +5007,19 @@ export function CourseCreatePage({
                   paddingRight: "16px",
                 }}
                 className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                  actionLoading !== null ||
-                  (activeStep === "basics" && !isBasicsDirty) ||
-                  (activeStep === "curriculum" && !isCurriculumDirty) ||
-                  (activeStep === "access-rules" && !needsAccessRulesSave) ||
-                  (activeStep === "pricing" && !isPricingDirty) ||
-                  (activeStep === "extras" && !isExtrasDirty)
+                  isAnyApiInProgress ||
+                  (!isDownstreamUnlocked && activeStep === "basics")
                     ? "!opacity-40 !cursor-not-allowed !shadow-none"
                     : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                 }`}
-                onClick={handleSaveChangesAction}
+                onClick={() => {
+                  if (nextStepId) void navigateToStep(nextStepId);
+                }}
                 disabled={
-                  actionLoading !== null ||
-                  (activeStep === "basics" && !isBasicsDirty) ||
-                  (activeStep === "curriculum" && !isCurriculumDirty) ||
-                  (activeStep === "access-rules" && !needsAccessRulesSave) ||
-                  (activeStep === "pricing" && !isPricingDirty) ||
-                  (activeStep === "extras" && !isExtrasDirty)
+                  isAnyApiInProgress ||
+                  (!isDownstreamUnlocked && activeStep === "basics")
                 }
+                aria-label="Next Step"
               >
                 {actionLoading === "save" ? (
                   <>
@@ -4892,8 +5031,8 @@ export function CourseCreatePage({
                   </>
                 ) : (
                   <>
-                    <FloppyDisk size={15} weight="bold" />
-                    <span>{getContextualActionLabel(activeStep)}</span>
+                    <span>Next</span>
+                    <CaretRight size={15} weight="bold" />
                   </>
                 )}
               </button>
@@ -5024,19 +5163,12 @@ export function CourseCreatePage({
               data-page-tab-tone={step.tone}
               data-swipe-tab-id={step.id}
               disabled={
-                isAnyApiInProgress
+                isAnyApiInProgress ||
+                (!isDownstreamUnlocked && step.id !== "basics")
               }
               className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
               onClick={() => {
-                if (isAnyApiInProgress) {
-                  return;
-                }
-                const currentIdx = WIZARD_STEPS.findIndex(
-                  (s) => s.id === activeStep,
-                );
-                if (idx > currentIdx) setSlideDirection("right");
-                else if (idx < currentIdx) setSlideDirection("left");
-                setActiveStep(step.id);
+                void navigateToStep(step.id);
               }}
               onKeyDown={handleRovingTabKeyDown}
             >
@@ -5061,12 +5193,7 @@ export function CourseCreatePage({
         tabs={WIZARD_STEP_IDS}
         activeTab={activeStep}
         onTabChange={(newStep) => {
-          if (isAnyApiInProgress) return;
-          const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-          const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === newStep);
-          if (targetIdx > currentIdx) setSlideDirection("right");
-          else if (targetIdx < currentIdx) setSlideDirection("left");
-          setActiveStep(newStep);
+          void navigateToStep(newStep);
         }}
         tabListRef={stepsNavRef}
         id="course-wizard-tab-panel"
@@ -7930,7 +8057,9 @@ export function CourseCreatePage({
                   {/* Checklist Item: Basics */}
                   <div
                     className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => setActiveStep("basics")}
+                    onClick={() => {
+                      void navigateToStep("basics");
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <CheckCircle
@@ -7955,7 +8084,9 @@ export function CourseCreatePage({
                   {/* Checklist Item: Curriculum */}
                   <div
                     className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => setActiveStep("curriculum")}
+                    onClick={() => {
+                      void navigateToStep("curriculum");
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <CheckCircle
@@ -7982,7 +8113,9 @@ export function CourseCreatePage({
                   {/* Checklist Item: Access Rules */}
                   <div
                     className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => setActiveStep("access-rules")}
+                    onClick={() => {
+                      void navigateToStep("access-rules");
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <CheckCircle
@@ -8011,7 +8144,9 @@ export function CourseCreatePage({
                   {/* Checklist Item: Pricing */}
                   <div
                     className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => setActiveStep("pricing")}
+                    onClick={() => {
+                      void navigateToStep("pricing");
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <CheckCircle
@@ -8040,7 +8175,9 @@ export function CourseCreatePage({
                   {/* Checklist Item: Extras */}
                   <div
                     className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => setActiveStep("extras")}
+                    onClick={() => {
+                      void navigateToStep("extras");
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <CheckCircle
@@ -8230,7 +8367,32 @@ export function CourseCreatePage({
           )}
         </button>
 
-        {/* Contextual Action Button (Save Basics / Save Curriculum / ... / Validate) */}
+        {/* Previous Button */}
+        <button
+          type="button"
+          style={{
+            fontSize: "0.84rem",
+            fontWeight: 500,
+            height: "44px",
+            borderRadius: "12px",
+            gap: "6px",
+          }}
+          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+            activeStep === "basics" || isAnyApiInProgress
+              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+          }`}
+          onClick={() => {
+            if (previousStepId) void navigateToStep(previousStepId);
+          }}
+          disabled={activeStep === "basics" || isAnyApiInProgress}
+          aria-label="Previous Step"
+        >
+          <CaretLeft size={14} />
+          <span>Previous</span>
+        </button>
+
+        {/* Next Button / Validate on Publish */}
         {activeStep === "publish" ? (
           <button
             type="button"
@@ -8271,24 +8433,19 @@ export function CourseCreatePage({
               gap: "6px",
             }}
             className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
-              actionLoading !== null ||
-              (activeStep === "basics" && !isBasicsDirty) ||
-              (activeStep === "curriculum" && !isCurriculumDirty) ||
-              (activeStep === "access-rules" && !needsAccessRulesSave) ||
-              (activeStep === "pricing" && !isPricingDirty) ||
-              (activeStep === "extras" && !isExtrasDirty)
+              isAnyApiInProgress ||
+              (!isDownstreamUnlocked && activeStep === "basics")
                 ? "!opacity-40 !cursor-not-allowed !shadow-none"
                 : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
             }`}
-            onClick={handleSaveChangesAction}
+            onClick={() => {
+              if (nextStepId) void navigateToStep(nextStepId);
+            }}
             disabled={
-              actionLoading !== null ||
-              (activeStep === "basics" && !isBasicsDirty) ||
-              (activeStep === "curriculum" && !isCurriculumDirty) ||
-              (activeStep === "access-rules" && !needsAccessRulesSave) ||
-              (activeStep === "pricing" && !isPricingDirty) ||
-              (activeStep === "extras" && !isExtrasDirty)
+              isAnyApiInProgress ||
+              (!isDownstreamUnlocked && activeStep === "basics")
             }
+            aria-label="Next Step"
           >
             {actionLoading === "save" ? (
               <>
@@ -8297,8 +8454,8 @@ export function CourseCreatePage({
               </>
             ) : (
               <>
-                <FloppyDisk size={14} weight="bold" />
-                <span>{getContextualActionLabel(activeStep)}</span>
+                <span>Next</span>
+                <CaretRight size={14} weight="bold" />
               </>
             )}
           </button>

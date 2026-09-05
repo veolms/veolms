@@ -3,6 +3,8 @@ import {
   initialAccessRulesState,
   normalizeAccessRulesState,
   isAccessRulesEqual,
+  isAccessRuleConfigEqual,
+  isAccessSettingsEqual,
   initialPricingState,
   normalizePricingState,
   isPricingEqual,
@@ -362,4 +364,49 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       expect(getIsDisabled("pricing", true)).toBe(false);
     });
   });
+
+  describe("Sub-Domain Persistence Isolation (Multi-Endpoint)", () => {
+    it("distinguishes between access-rule config changes and settings changes", () => {
+      const baseline: AccessRulesFormState = {
+        accessType: "everyone",
+        durationMode: "fixed",
+        fixedDurationValue: 30,
+        fixedDurationUnit: "Days",
+        enableQA: true,
+        enableComments: true,
+        enableDownloads: false,
+      };
+
+      // 1. Only duration changed
+      const durationOnlyDraft: AccessRulesFormState = {
+        ...baseline,
+        fixedDurationValue: 60,
+      };
+      expect(isAccessRuleConfigEqual(durationOnlyDraft, baseline)).toBe(false);
+      expect(isAccessSettingsEqual(durationOnlyDraft, baseline)).toBe(true);
+
+      // 2. Only Q&A setting changed
+      const settingsOnlyDraft: AccessRulesFormState = {
+        ...baseline,
+        enableQA: false,
+      };
+      expect(isAccessRuleConfigEqual(settingsOnlyDraft, baseline)).toBe(true);
+      expect(isAccessSettingsEqual(settingsOnlyDraft, baseline)).toBe(false);
+
+      // 3. Both changed
+      const bothChangedDraft: AccessRulesFormState = {
+        ...baseline,
+        durationMode: "lifetime",
+        enableDownloads: true,
+      };
+      expect(isAccessRuleConfigEqual(bothChangedDraft, baseline)).toBe(false);
+      expect(isAccessSettingsEqual(bothChangedDraft, baseline)).toBe(false);
+
+      // 4. Neither changed
+      const cleanDraft: AccessRulesFormState = { ...baseline };
+      expect(isAccessRuleConfigEqual(cleanDraft, baseline)).toBe(true);
+      expect(isAccessSettingsEqual(cleanDraft, baseline)).toBe(true);
+    });
+  });
 });
+
