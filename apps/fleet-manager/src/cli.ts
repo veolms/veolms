@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDatabase } from "@veolms/database";
@@ -11,7 +12,10 @@ import { bold, cyan, dim, red } from "@veolms/fleet-types/terminal";
 import { loadFleetManagerConfig, resolveProviderName } from "@veolms/config";
 import { loadModuleFunction } from "./core/dynamic-module.ts";
 import { createJobManager } from "./core/video-job-manager.ts";
-import { resolveFleetProvider } from "./core/provider-resolver.ts";
+import {
+  resolveFleetProvider,
+  resolveFleetProviderOptions,
+} from "./core/provider-resolver.ts";
 import {
   getFleetHealthSummary,
   getJobDiagnostics,
@@ -83,12 +87,11 @@ export async function runCli(
   // Resolved from this file's own location, not process.cwd() — the CLI
   // can be run from the repo root or from inside apps/fleet-manager, and
   // cwd differs between the two.
-  const repoRoot = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-  );
+  const moduleDirectory =
+    typeof import.meta.url === "string" && import.meta.url
+      ? dirname(fileURLToPath(import.meta.url))
+      : process.cwd();
+  const repoRoot = join(moduleDirectory, "..", "..", "..");
   const defaultWorkerScript = join(repoRoot, "apps/media-worker/src/index.ts");
   const workerScript =
     config.MEDIA_WORKER_SCRIPT_PATH ??
@@ -289,9 +292,10 @@ export async function runCli(
 
     case "prune": {
       console.info("[fleet-cli] Pruning zombie workers...");
-      const provider = await resolveFleetProvider(config.PROVIDER, {
-        workerScriptPath: workerScript,
-      });
+      const provider = await resolveFleetProvider(
+        config.PROVIDER,
+        resolveFleetProviderOptions(config, workerScript),
+      );
       const pruned = await pruneZombieWorkers(
         getDb(),
         provider,
@@ -299,6 +303,136 @@ export async function runCli(
       );
       console.info(`✓ Pruned ${pruned.length} stalled workers.`);
       break;
+    }
+
+    case "test": {
+      if (!config.FLEET_TEST_MODE) {
+        throw new Error(
+          "Fleet test controls are disabled. Set FLEET_TEST_MODE=true in the local fleet environment.",
+        );
+      }
+      const action = positional[0];
+      if (action === "fault") {
+        const fault = positional[1];
+        const workerId =
+          (flags["worker"] as string | undefined) ??
+          (flags["worker-id"] as string | undefined);
+        const allowedFaults = new Set([
+          "interrupt",
+          "heartbeat-loss",
+          "progress-stall",
+          "worker-failure",
+          "storage-failure",
+        ]);
+        if (!workerId || !fault || !allowedFaults.has(fault)) {
+          throw new Error(
+            "Usage: fleet test fault <interrupt|heartbeat-loss|progress-stall|worker-failure|storage-failure> --worker <worker-id>",
+          );
+        }
+        const worker = await getDb()
+          .selectFrom("workers")
+          .select(["id", "job_id", "provider_worker_id"])
+          .where("id", "=", workerId)
+          .executeTakeFirst();
+        if (!worker) throw new Error(`Worker ${workerId} was not found`);
+
+        await getDb()
+          .insertInto("worker_events")
+          .values({
+            id: randomUUID(),
+            worker_id: worker.id,
+            job_id: worker.job_id,
+            event: "test_fault_requested",
+            metadata: { fault },
+            created_at: new Date(),
+          })
+          .execute();
+
+        if (fault === "interrupt") {
+          const provider = await resolveFleetProvider(
+            config.PROVIDER,
+            resolveFleetProviderOptions(config, workerScript),
+          );
+          // Intentionally bypass WorkerManager: the DB must still regard this
+          // worker as active so normal reconciliation performs the recovery.
+          await provider.terminateWorker(worker.provider_worker_id);
+          await getDb()
+            .insertInto("worker_events")
+            .values({
+              id: randomUUID(),
+              worker_id: worker.id,
+              job_id: worker.job_id,
+              event: "test_fault_applied",
+              metadata: { fault },
+              created_at: new Date(),
+            })
+            .execute();
+        } else {
+          await getDb()
+            .insertInto("fleet_test_controls")
+            .values({
+              worker_id: worker.id,
+              fault: fault as
+                | "heartbeat-loss"
+                | "progress-stall"
+                | "worker-failure"
+                | "storage-failure",
+              requested_at: new Date(),
+              applied_at: null,
+              metadata: {},
+            })
+            .onConflict((oc) =>
+              oc.column("worker_id").doUpdateSet({
+                fault: fault as
+                  | "heartbeat-loss"
+                  | "progress-stall"
+                  | "worker-failure"
+                  | "storage-failure",
+                requested_at: new Date(),
+                applied_at: null,
+              }),
+            )
+            .execute();
+        }
+        console.info(`✓ Requested ${fault} fault for worker ${workerId}.`);
+        break;
+      }
+
+      if (action === "watch") {
+        const jobId =
+          (flags["job"] as string | undefined) ??
+          (flags["job-id"] as string | undefined);
+        if (!jobId) throw new Error("Usage: fleet test watch --job <job-id>");
+        let lastSnapshot = "";
+        while (true) {
+          const job = await getDb()
+            .selectFrom("video_jobs")
+            .select(["status", "worker_id", "attempts", "error_message"])
+            .where("id", "=", jobId)
+            .executeTakeFirst();
+          if (!job) throw new Error(`Job ${jobId} was not found`);
+          const progress = job.worker_id
+            ? await getDb()
+                .selectFrom("worker_monitoring")
+                .select(["progress_percent", "last_progress_at"])
+                .where("worker_id", "=", job.worker_id)
+                .executeTakeFirst()
+            : undefined;
+          const snapshot = `${new Date().toISOString()} status=${job.status} attempts=${job.attempts} worker=${job.worker_id ?? "none"} progress=${progress?.progress_percent ?? 0}%`;
+          if (snapshot !== lastSnapshot) console.info(snapshot);
+          lastSnapshot = snapshot;
+          if (["completed", "failed", "cancelled"].includes(job.status)) {
+            if (job.error_message) console.info(`error: ${job.error_message}`);
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        break;
+      }
+
+      throw new Error(
+        "Usage: fleet test fault ... | fleet test watch --job <job-id>",
+      );
     }
 
     case "infra": {
@@ -394,17 +528,22 @@ Usage:
   fleet jobs                    List recent jobs
   fleet health                  Show cluster health metrics
   fleet prune                   Terminate stalled zombie workers
+  fleet test fault <scenario>   Inject a guarded local test fault
+  fleet test watch --job <id>   Watch a job until it reaches a terminal state
   fleet infra                   Provision infrastructure for FLEET_PROVIDER
 `);
       break;
   }
 }
 
-if (
+const isStandaloneSourceCli =
   process.argv[1] &&
+  !process.argv[1].endsWith("fleet-manager.cjs") &&
+  typeof import.meta.url === "string" &&
   (import.meta.url.endsWith(process.argv[1]) ||
-    import.meta.url === `file://${resolve(process.argv[1])}`)
-) {
+    import.meta.url === `file://${resolve(process.argv[1])}`);
+
+if (isStandaloneSourceCli) {
   runCli().catch((err) => {
     console.error("[fleet-cli] Fatal error:", err);
     process.exit(1);

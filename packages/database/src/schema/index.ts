@@ -95,6 +95,7 @@ import type {
   WorkerEventTable,
   WorkerMonitoringTable,
   WorkerTable,
+  FleetTestControlTable,
 } from "./fleet.schema.ts";
 import type { LearningSpaceSessionTable } from "./learning-space.schema.ts";
 
@@ -178,6 +179,7 @@ export interface Database {
   workers: WorkerTable;
   worker_monitoring: WorkerMonitoringTable;
   worker_events: WorkerEventTable;
+  fleet_test_controls: FleetTestControlTable;
 
   // Learner state
   learning_space_sessions: LearningSpaceSessionTable;

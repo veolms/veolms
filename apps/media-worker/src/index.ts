@@ -40,8 +40,10 @@ export async function run(): Promise<void> {
     // queue for the next one instead of terminating immediately. Reuses
     // the instance across many jobs, skipping the fresh-boot cost each
     // subsequent job would otherwise pay.
+    let attemptedJobs = 0;
     while (jobId && !shutdownController.signal.aborted) {
       console.info(`[media-worker] Processing job ${jobId}...`);
+      attemptedJobs++;
       try {
         await executeTranscodeJob(workerCtx, jobId, shutdownController.signal);
         console.info(`[media-worker] Job ${jobId} finished successfully.`);
@@ -56,7 +58,10 @@ export async function run(): Promise<void> {
         }
       }
 
-      jobId = await pollForNextJob(workerCtx, shutdownController.signal);
+      jobId =
+        attemptedJobs >= config.WORKER_MAX_JOBS
+          ? null
+          : await pollForNextJob(workerCtx, shutdownController.signal);
     }
 
     if (shutdownController.signal.aborted) {

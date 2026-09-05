@@ -25,6 +25,7 @@ import type {
 } from "@veolms/fleet-types";
 import {
   encodeUserDataBase64,
+  generateLocalStackUserDataScript,
   generateUserDataScript,
 } from "./bootstrapper.ts";
 import { loadAwsProviderConfig } from "./config.ts";
@@ -38,6 +39,7 @@ import {
   type AwsSchedulerConfig,
   type AwsSchedulerManager,
 } from "./scheduler.ts";
+import { LOCALSTACK_DOCKER_AMI_ID } from "./localstack-constants.ts";
 
 // Capacity/availability-class RunInstances errors: worth trying the next
 // same-size candidate for. Everything else (bad AMI, IAM, subnet, etc.)
@@ -149,7 +151,6 @@ export function createAwsProvider(
   // Real AWS AMI IDs are API-only/mock resources in LocalStack and do not
   // create an instance container or execute UserData.
   const isLocalStack = Boolean(process.env.AWS_ENDPOINT_URL);
-  const defaultLocalStackAmi = "ami-df5de72bdb3b3";
 
   return {
     name: "aws",
@@ -169,7 +170,7 @@ export function createAwsProvider(
       const imageId =
         amiId ??
         (isLocalStack
-          ? defaultLocalStackAmi
+          ? LOCALSTACK_DOCKER_AMI_ID
           : await resolveDebianAmiId(ssm, region, spec.architecture));
       // LocalStack's EC2 mock doesn't model real AMI metadata (see the
       // isLocalStack comment above), so DescribeImages there wouldn't
@@ -182,17 +183,23 @@ export function createAwsProvider(
       const defaultAwsEnv: Record<string, string> = {
         AWS_REGION: region,
         STORAGE_PROVIDER: envConfig.STORAGE_PROVIDER,
+        LOCAL_STORAGE_ROOT: process.env.LOCAL_STORAGE_ROOT ?? "/app/s3-bucket",
+        WORKER_MAX_JOBS: process.env.WORKER_MAX_JOBS ?? "1",
+        FLEET_TEST_MODE: process.env.FLEET_TEST_MODE ?? "false",
         ...(bucketName
           ? { S3_BUCKET: bucketName, S3_BUCKET_NAME: bucketName }
           : {}),
         ...config.defaultEnv,
       };
 
-      const userDataScript = generateUserDataScript({
+      const bootstrapOptions = {
         workerId: id,
         spec,
         extraEnv: defaultAwsEnv,
-      });
+      };
+      const userDataScript = isLocalStack
+        ? generateLocalStackUserDataScript(bootstrapOptions)
+        : generateUserDataScript(bootstrapOptions);
 
       const userDataBase64 = encodeUserDataBase64(userDataScript);
 

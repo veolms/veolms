@@ -133,6 +133,33 @@ export function generateUserDataScript(options: BootstrapperOptions): string {
   ).replaceAll("__ENV_FILE_LINES__", envFileLines);
 }
 
+/** LocalStack EC2 workers use a prebuilt Docker AMI and stay fully local. */
+export function generateLocalStackUserDataScript(
+  options: BootstrapperOptions,
+): string {
+  const mergedEnv: Record<string, string> = {
+    WORKER_ID: options.workerId,
+    PROVIDER: "aws",
+    ...options.spec.environmentVariables,
+    ...options.extraEnv,
+  };
+  const envFileLines = Object.entries(mergedEnv)
+    .map(([key, value]) => `${key}="${escapeEnvValue(value)}"`)
+    .join("\n");
+  return `#!/bin/bash
+set -eu
+mkdir -p /opt/veolms
+cat << 'EOF' > /opt/veolms/worker.env
+${envFileLines}
+EOF
+set -a
+source /opt/veolms/worker.env
+set +a
+cd /opt/veolms
+exec node /opt/veolms/worker.js
+`;
+}
+
 export function encodeUserDataBase64(script: string): string {
   return Buffer.from(script, "utf-8").toString("base64");
 }

@@ -1,0 +1,81 @@
+# Optional local Fleet services. This file never starts PostgreSQL: provide
+# DATABASE_URL must point at either an existing local database or a remote one.
+services:
+  fleet-manager:
+    profiles: [serverful]
+    image: veolms-fleet-manager:local
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to an accessible PostgreSQL URL}
+      PROVIDER: docker
+      FLEET_PROVIDER: docker
+      DOCKER_WORKER_IMAGE: veolms-media-worker:local
+      DOCKER_NETWORK: ${DOCKER_NETWORK:-veolms-fleet}
+      DOCKER_TRANSPORT: socket
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_STORAGE_ROOT: ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}
+      DOCKER_VERIFICATION_STORAGE_ROOT: /app/s3-bucket
+      FLEET_TEST_MODE: "true"
+      STORAGE_PROVIDER: local
+      LOCAL_STORAGE_ROOT: /app/s3-bucket
+      WORKER_MAX_JOBS: "1"
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
+      HEARTBEAT_TIMEOUT_SECONDS: ${HEARTBEAT_TIMEOUT_SECONDS:-90}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}:/app/s3-bucket:rw
+    group_add:
+      - ${DOCKER_SOCKET_GID:-0}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks: [veolms]
+
+  localstack:
+    profiles: [localstack]
+    image: localstack/localstack:latest
+    environment:
+      SERVICES: lambda,ec2,iam,sts,s3,logs,ssm,scheduler
+      AWS_DEFAULT_REGION: us-east-1
+      DEBUG: ${LOCALSTACK_DEBUG:-0}
+      EC2_VM_MANAGER: docker
+      EC2_REMOVE_CONTAINERS: "1"
+      EC2_DOCKER_FLAGS: -v ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}:/app/s3-bucket:rw --network ${DOCKER_NETWORK:-veolms-fleet}
+      LAMBDA_DOCKER_NETWORK: ${DOCKER_NETWORK:-veolms-fleet}
+      LAMBDA_DOCKER_FLAGS: -v /var/run/docker.sock:/var/run/docker.sock -v ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}:/app/s3-bucket:rw
+      HOSTNAME_FROM_LAMBDA: localstack
+    ports:
+      - "4566:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}:/app/s3-bucket:rw
+      - ./:/workspace:ro
+      - localstack-data:/var/lib/localstack
+    networks: [veolms]
+
+  localstack-init:
+    profiles: [localstack]
+    image: amazon/aws-cli:2
+    depends_on:
+      localstack:
+        condition: service_started
+    entrypoint:
+      ["/bin/sh", "/workspace/apps/fleet-manager/scripts/init-localstack.sh"]
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to an accessible PostgreSQL URL}
+      LOCALSTACK_EC2_ENABLED: ${LOCALSTACK_EC2_ENABLED:-false}
+      DOCKER_STORAGE_ROOT: ${VEOLMS_STORAGE_ROOT:-${PWD}/s3-bucket}
+    volumes:
+      - ./:/workspace:ro
+    networks: [veolms]
+
+volumes:
+  localstack-data:
+    name: veolms-localstack-data
+
+networks:
+  veolms:
+    name: ${DOCKER_NETWORK:-veolms-fleet}

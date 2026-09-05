@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
+import type { Kysely } from "kysely";
+import type { Database } from "@veolms/database";
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
@@ -24,7 +27,7 @@ import {
   type IncrementalUploadHandle,
 } from "./incremental-upload.ts";
 import type { MediaWorkerConfig } from "@veolms/config";
-import type { MediaWorkerContext } from "./worker.ts";
+import { getRequestedTestFault, type MediaWorkerContext } from "./worker.ts";
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_STDERR_TAIL_BYTES = 16 * 1024;
@@ -65,6 +68,48 @@ function resolveWithin(root: string, candidate: string): string {
     );
   }
   return resolvedPath;
+}
+
+/**
+ * Returns the portable storage key for the HLS master playlist.  Database
+ * paths are storage keys (not absolute scratch/container paths), so the same
+ * value works for both local `s3-bucket/` storage and S3.
+ */
+export function buildMasterPlaylistStorageKey(outputPrefix: string): string {
+  const prefix = outputPrefix.replace(/^\/+|\/+$/g, "");
+  return prefix ? `${prefix}/master.m3u8` : "master.m3u8";
+}
+
+async function persistVideoOutput(
+  database: Kysely<Database>,
+  videoId: string,
+  masterPlaylistPath: string,
+): Promise<void> {
+  const existing = await database
+    .selectFrom("video_outputs")
+    .select(["id"])
+    .where("video_id", "=", videoId)
+    .orderBy("created_at", "desc")
+    .executeTakeFirst();
+
+  if (existing) {
+    await database
+      .updateTable("video_outputs")
+      .set({ master_playlist_path: masterPlaylistPath })
+      .where("id", "=", existing.id)
+      .execute();
+    return;
+  }
+
+  await database
+    .insertInto("video_outputs")
+    .values({
+      id: randomUUID(),
+      video_id: videoId,
+      master_playlist_path: masterPlaylistPath,
+      created_at: new Date(),
+    })
+    .execute();
 }
 
 async function runFfmpeg(options: {
@@ -243,6 +288,10 @@ export async function executeTranscodeJob(
   try {
     throwIfAborted(signal);
 
+    if ((await getRequestedTestFault(ctx)) === "worker-failure") {
+      throw new Error("Test fault: worker-failure");
+    }
+
     if (
       job.status !== "processing" &&
       job.status !== "provisioning" &&
@@ -347,10 +396,11 @@ export async function executeTranscodeJob(
       });
     } else {
       const cleanVideoKey = job.video_key.replace(/^[/\\]+/, "");
+      const localStorageRoot = resolve(config.LOCAL_STORAGE_ROOT);
       const workspaceDir = process.cwd();
       const localCandidates = [
         resolveWithin(workspaceDir, cleanVideoKey),
-        resolveWithin(join(workspaceDir, "s3-bucket"), cleanVideoKey),
+        resolveWithin(localStorageRoot, cleanVideoKey),
         resolveWithin(join(workspaceDir, "scratch"), cleanVideoKey),
       ];
       let isLocalFile = false;
@@ -421,6 +471,22 @@ export async function executeTranscodeJob(
         config.FFPROBE_PATH,
       );
     }
+
+    // Keep the media asset authoritative for metadata discovered by the
+    // worker. Jobs created with only a video/job id may not have been probed
+    // by the API yet, so persist the duration before FFmpeg starts. Existing
+    // dimensions are retained when available; the resolved duration is
+    // written as the worker's authoritative integer value.
+    await db
+      .updateTable("media_assets")
+      .set({
+        width: mediaAsset?.width ?? sourceMetadata.width,
+        height: mediaAsset?.height ?? sourceMetadata.height,
+        duration_seconds: Math.round(sourceMetadata.durationSeconds),
+        updated_at: new Date(),
+      })
+      .where("id", "=", job.video_id)
+      .execute();
 
     // 5. Build FFmpeg command for requested qualities array
     const targetQualities: readonly VideoQualityLevel[] = [
@@ -498,6 +564,9 @@ export async function executeTranscodeJob(
         progressWrite = progressWrite
           .catch(() => undefined)
           .then(async () => {
+            if ((await getRequestedTestFault(ctx)) === "progress-stall") {
+              return;
+            }
             await db
               .updateTable("worker_monitoring")
               .set({
@@ -548,9 +617,12 @@ export async function executeTranscodeJob(
     // removed in finally, so persistence failures must fail the job rather
     // than leaving a false COMPLETED result with no playable output.
     if (config.STORAGE_PROVIDER === "local") {
+      if ((await getRequestedTestFault(ctx)) === "storage-failure") {
+        throw new Error("Test fault: storage-failure");
+      }
       const cleanPrefix = job.output_prefix.replace(/^s3-bucket\//, "");
       const localTargetDir = resolveWithin(
-        join(process.cwd(), "s3-bucket"),
+        resolve(config.LOCAL_STORAGE_ROOT),
         cleanPrefix,
       );
       await mkdir(localTargetDir, { recursive: true });
@@ -578,7 +650,12 @@ export async function executeTranscodeJob(
     // Mark the job complete and make the live worker ready for a compatible
     // next claim in one transaction. Clearing job_id avoids monitor races
     // against the just-completed job while the worker waits for more work.
+    const masterPlaylistStorageKey = buildMasterPlaylistStorageKey(
+      job.output_prefix,
+    );
     await db.transaction().execute(async (trx) => {
+      await persistVideoOutput(trx, job.video_id, masterPlaylistStorageKey);
+
       await trx
         .updateTable("video_jobs")
         .set({
@@ -614,6 +691,7 @@ export async function executeTranscodeJob(
     await recordEvent("job_completed", jobId, {
       applicableQualities,
       outputPrefix: job.output_prefix,
+      masterPlaylistPath: masterPlaylistStorageKey,
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : String(error);

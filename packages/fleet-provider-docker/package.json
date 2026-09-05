@@ -1,0 +1,14 @@
+{
+  "name": "@veolms/fleet-provider-docker",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@veolms/fleet-types": "workspace:*"
+  }
+}

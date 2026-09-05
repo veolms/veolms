@@ -71,7 +71,7 @@ export const ARCHITECTURES = ["arm64", "x86_64"] as const;
 export type Architecture = (typeof ARCHITECTURES)[number];
 export const architectureSchema = z.enum(ARCHITECTURES);
 
-export const PROVIDER_TYPES = ["local", "aws"] as const;
+export const PROVIDER_TYPES = ["local", "docker", "aws"] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 export const providerTypeSchema = z.enum(PROVIDER_TYPES);
 
@@ -93,6 +93,8 @@ export const FLEET_EVENT_TYPES = [
   "orphan_instance_terminated",
   "job_output_verified",
   "job_output_verification_failed",
+  "test_fault_requested",
+  "test_fault_applied",
 ] as const;
 export type FleetEventType = (typeof FLEET_EVENT_TYPES)[number];
 export const fleetEventTypeSchema = z.enum(FLEET_EVENT_TYPES);

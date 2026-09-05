@@ -19,22 +19,26 @@ This document is a comprehensive guide to all commands used to configure, provis
 
 ## ⚡ Quick Command Matrix
 
-| Command                      | Workspace Location            | Purpose                                                                                     |
-| :--------------------------- | :---------------------------- | :------------------------------------------------------------------------------------------ |
-| `pnpm fleet:provider`        | `apps/fleet-manager`          | Interactively select and install a provider (`aws`, `local`, etc.)                          |
-| `pnpm fleet:infra`           | `apps/fleet-manager`          | Provision cloud infrastructure (IAM, Lambda, S3, CloudWatch, `.env`)                        |
-| `pnpm fleet:destroy`         | `apps/fleet-manager`          | **Teardown**: Terminate all EC2 workers and delete all AWS resources                        |
-| `pnpm fleet:build-ami`       | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                            |
-| `pnpm build:serverless`      | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                   |
-| `pnpm build:worker`          | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                      |
-| `pnpm fleet:queue:trigger`   | `apps/fleet-manager`          | Queue one AWS job & invoke the Lambda once to claim it — requires `fleet:infra` already run |
-| `pnpm test:pipeline`         | `apps/fleet-manager`          | Automated local offline end-to-end transcoding test                                         |
-| `pnpm fleet:run`             | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                     |
-| `pnpm fleet:cli health`      | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                            |
-| `pnpm fleet:cli workers`     | `apps/fleet-manager`          | List active, recent, and pending worker instances                                           |
-| `pnpm fleet:cli jobs`        | `apps/fleet-manager`          | List recent transcoding jobs and status                                                     |
-| `pnpm fleet:cli status <id>` | `apps/fleet-manager`          | View detailed diagnostics & real-time progress history for a job                            |
-| `pnpm fleet:cli prune`       | `apps/fleet-manager`          | Terminate and clean up any stalled zombie worker processes/instances                        |
+| Command                         | Workspace Location            | Purpose                                                                                     |
+| :------------------------------ | :---------------------------- | :------------------------------------------------------------------------------------------ |
+| `pnpm fleet:provider`           | `apps/fleet-manager`          | Select a provider (`aws`, `local`, or built-in `docker`)                                    |
+| `pnpm fleet:infra`              | `apps/fleet-manager`          | Provision cloud infrastructure (IAM, Lambda, S3, CloudWatch, `.env`)                        |
+| `pnpm fleet:destroy`            | `apps/fleet-manager`          | **Teardown**: Terminate all EC2 workers and delete all AWS resources                        |
+| `pnpm fleet:build-ami`          | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                            |
+| `pnpm build:serverless`         | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                   |
+| `pnpm build:worker`             | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                      |
+| `pnpm fleet:images:build`       | root                          | Build one-file Docker images for the local manager and worker                               |
+| `pnpm fleet:local:up`           | root                          | Start the optional serverful Docker Fleet profile                                           |
+| `pnpm fleet:localstack:prepare` | root                          | Build LocalStack Lambda and Docker-worker artifacts                                         |
+| `pnpm fleet:localstack:up`      | root                          | Start the optional LocalStack Fleet profile                                                 |
+| `pnpm fleet:queue:trigger`      | `apps/fleet-manager`          | Queue one AWS job & invoke the Lambda once to claim it — requires `fleet:infra` already run |
+| `pnpm test:pipeline`            | `apps/fleet-manager`          | Automated local offline end-to-end transcoding test                                         |
+| `pnpm fleet:run`                | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                     |
+| `pnpm fleet:cli health`         | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                            |
+| `pnpm fleet:cli workers`        | `apps/fleet-manager`          | List active, recent, and pending worker instances                                           |
+| `pnpm fleet:cli jobs`           | `apps/fleet-manager`          | List recent transcoding jobs and status                                                     |
+| `pnpm fleet:cli status <id>`    | `apps/fleet-manager`          | View detailed diagnostics & real-time progress history for a job                            |
+| `pnpm fleet:cli prune`          | `apps/fleet-manager`          | Terminate and clean up any stalled zombie worker processes/instances                        |
 
 ---
 
@@ -152,6 +156,27 @@ VIDEO_KEY=raw/other.mp4 QUALITIES=240p,360p pnpm fleet:queue:trigger
 
 - Runs a 100% offline local transcode test using `@veolms/fleet-provider-local`.
 - Spawns local worker child processes with FFmpeg, writes HLS chunks to local disk, and verifies playlists without incurring any cloud costs.
+
+### Docker Fleet profiles
+
+`compose.yaml` is intentionally PostgreSQL-only. Use `compose.fleet.yaml`
+through the scripts below only when testing the Fleet. Before starting either
+profile, set the existing `DATABASE_URL` in `apps/fleet-manager/.env` to the
+local or remote PostgreSQL database to use; these commands do not create a
+PostgreSQL container:
+
+```bash
+pnpm fleet:images:build
+pnpm fleet:local:up
+pnpm fleet:local:down
+
+pnpm fleet:localstack:prepare
+pnpm fleet:localstack:up
+pnpm fleet:localstack:down
+```
+
+LocalStack defaults to its Community-compatible Lambda → Docker socket path.
+Set `LOCALSTACK_EC2_ENABLED=true` only when EC2 Docker emulation is available.
 
 ---
 

@@ -26,6 +26,8 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { resolveS3BucketName } from "../config.ts";
+import { LOCALSTACK_DOCKER_AMI_ID } from "../localstack-constants.ts";
+export { LOCALSTACK_DOCKER_AMI_ID } from "../localstack-constants.ts";
 
 import {
   IAMClient,
@@ -97,8 +99,6 @@ const LOG_GROUP_WORKERS = "/veolms/workers";
 const LOG_GROUP_FLEET = "/veolms/fleet-manager";
 const LOG_GROUP_PROBE = "/aws/lambda/veolms-video-metadata-probe";
 const LOG_RETENTION_DAYS = 30;
-const LOCALSTACK_DOCKER_AMI_ID = "ami-df5de72bdb3b3";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TargetEnv = "aws" | "localstack";

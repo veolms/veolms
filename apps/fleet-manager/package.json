@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "build:bundle": "esbuild src/container-entry.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/fleet-manager.cjs",
     "build:serverless": "node --env-file-if-exists=.env scripts/build-serverless.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/**/*.test.ts",
@@ -27,6 +28,7 @@
     "@veolms/contracts": "workspace:*",
     "@veolms/fleet-provider-aws": "workspace:*",
     "@veolms/fleet-provider-local": "workspace:*",
+    "@veolms/fleet-provider-docker": "workspace:*",
     "@veolms/fleet-types": "workspace:*",
     "kysely": "catalog:",
     "pg": "^8.22.0",

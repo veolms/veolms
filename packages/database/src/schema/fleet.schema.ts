@@ -2,6 +2,7 @@ import type { Generated, JSONColumnType } from "kysely";
 import type {
   Architecture,
   FleetEventType,
+  FleetTestFault,
   HardwareProfile,
   ProviderType,
   VideoJobStatus,
@@ -12,6 +13,7 @@ import type {
 export type {
   Architecture,
   FleetEventType,
+  FleetTestFault,
   HardwareProfile,
   ProviderType,
   VideoJobStatus,
@@ -91,4 +93,16 @@ export interface WorkerEventTable {
     Record<string, unknown> | string
   >;
   created_at: Generated<Date>;
+}
+
+export interface FleetTestControlTable {
+  worker_id: string;
+  fault: FleetTestFault;
+  requested_at: Generated<Date>;
+  applied_at: Date | null;
+  metadata: JSONColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | string,
+    Record<string, unknown> | string
+  >;
 }

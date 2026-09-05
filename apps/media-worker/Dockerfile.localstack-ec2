@@ -1,0 +1,12 @@
+# LocalStack recognises images tagged localstack-ec2/*:<ami-id> as Docker EC2
+# AMIs. Build this only after LocalStack has pulled its Ubuntu base AMI.
+FROM localstack-ec2/ubuntu-22-04:ami-df5de72bdb3b3
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
+  && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/veolms
+COPY dist/media-worker.js /opt/veolms/worker.js

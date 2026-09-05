@@ -5,6 +5,7 @@ import type { Database } from "@veolms/database";
 import type { FleetEventType } from "@veolms/fleet-types";
 import { loadMediaWorkerConfig } from "@veolms/config";
 import {
+  buildMasterPlaylistStorageKey,
   executeTranscodeJob,
   extractVideoExtension,
 } from "../src/processor.ts";
@@ -35,6 +36,19 @@ describe("extractVideoExtension", () => {
       extractVideoExtension("https://cdn.example.com/clip.webm#t=10"),
       "webm",
     );
+  });
+});
+
+describe("buildMasterPlaylistStorageKey", () => {
+  it("stores the master playlist as a portable output key", () => {
+    assert.equal(
+      buildMasterPlaylistStorageKey("output/course-1/"),
+      "output/course-1/master.m3u8",
+    );
+  });
+
+  it("normalizes empty or slash-only prefixes", () => {
+    assert.equal(buildMasterPlaylistStorageKey("///"), "master.m3u8");
   });
 });
 

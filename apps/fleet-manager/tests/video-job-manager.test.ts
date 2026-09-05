@@ -10,8 +10,8 @@ describe("Job Manager — queueJob insert values and duplicate protection", () =
     let insertedValues: Record<string, unknown> | undefined;
 
     const mockDb = {
-      selectFrom: () => ({
-        selectAll: () => ({
+      selectFrom: () => {
+        const selectChain = () => ({
           where: () => ({
             executeTakeFirst: async () => undefined,
             where: () => ({
@@ -20,8 +20,9 @@ describe("Job Manager — queueJob insert values and duplicate protection", () =
               }),
             }),
           }),
-        }),
-      }),
+        });
+        return { selectAll: selectChain, select: selectChain };
+      },
       insertInto: () => ({
         values: (v: Record<string, unknown>) => {
           insertedValues = v;

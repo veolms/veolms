@@ -20,7 +20,10 @@ import {
   type FleetManager,
   type MonitorCycleResult,
 } from "../core/fleet-manager.ts";
-import { resolveFleetProvider } from "../core/provider-resolver.ts";
+import {
+  resolveFleetProvider,
+  resolveFleetProviderOptions,
+} from "../core/provider-resolver.ts";
 
 export interface ServerlessFleetOptions {
   readonly configOverride?: Partial<FleetManagerConfig>;
@@ -156,9 +159,9 @@ export async function runServerlessFleetCycle(
         config.PROVIDER ??
         "AWS";
 
-      const providerOpts = options.providerOptions ?? {
-        workerScriptPath: workerScript,
-      };
+      const providerOpts =
+        options.providerOptions ??
+        resolveFleetProviderOptions(config, workerScript, targetProviderName);
 
       provider = await resolveFleetProvider(targetProviderName, providerOpts);
     }

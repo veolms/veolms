@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { loadFleetManagerConfig } from "@veolms/config";
-import { resolveFleetProvider } from "../src/core/provider-resolver.ts";
+import {
+  resolveFleetProvider,
+  resolveFleetProviderOptions,
+} from "../src/core/provider-resolver.ts";
+import { AVAILABLE_PROVIDERS } from "../src/provider-select.ts";
 
 describe("Pluggable Provider Resolver", () => {
   it("should attempt to resolve provider package dynamically", async () => {
@@ -45,5 +49,59 @@ describe("Pluggable Provider Resolver", () => {
     assert.equal(provider.name, "aws");
     assert.equal(typeof provider.createWorker, "function");
     assert.equal(typeof provider.terminateWorker, "function");
+  });
+
+  it("passes Docker socket settings to the Docker provider", () => {
+    const config = loadFleetManagerConfig({
+      PROVIDER: "docker",
+      DATABASE_URL: "postgresql://worker-db.local/veolms",
+      DOCKER_TRANSPORT: "socket",
+      DOCKER_SOCKET_PATH: "/tmp/docker.sock",
+    });
+
+    assert.deepEqual(resolveFleetProviderOptions(config), {
+      image: "veolms-media-worker:local",
+      network: undefined,
+      storageRoot: undefined,
+      verificationStorageRoot: undefined,
+      workerDatabaseUrl: "postgresql://worker-db.local/veolms",
+      transport: "socket",
+      socketPath: "/tmp/docker.sock",
+      defaultEnv: {
+        FLEET_TEST_MODE: "false",
+        HEARTBEAT_INTERVAL_MS: "45000",
+      },
+    });
+  });
+
+  it("uses the effective provider override for serverless options", () => {
+    const config = loadFleetManagerConfig({ PROVIDER: "aws" });
+    const options = resolveFleetProviderOptions(
+      config,
+      undefined,
+      "docker",
+    ) as {
+      image: string;
+      workerDatabaseUrl: string;
+      defaultEnv: Record<string, string>;
+    };
+    assert.equal(options.image, "veolms-media-worker:local");
+    assert.equal(options.workerDatabaseUrl, config.DATABASE_URL);
+    assert.equal(options.defaultEnv.HEARTBEAT_INTERVAL_MS, "45000");
+  });
+
+  it("offers Docker through the interactive provider selector", () => {
+    const docker = AVAILABLE_PROVIDERS.find(
+      (provider) => provider.id === "docker",
+    );
+    assert.deepEqual(docker, {
+      id: "docker",
+      name: "Docker Engine (Local Fleet)",
+      pkg: "@veolms/fleet-provider-docker",
+      description:
+        "One ephemeral media-worker container per job, shared s3-bucket mount, and Docker socket orchestration",
+      status: "available",
+      requiresInstall: false,
+    });
   });
 });

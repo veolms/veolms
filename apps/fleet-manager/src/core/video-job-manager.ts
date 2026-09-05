@@ -30,6 +30,7 @@ export interface JobManager {
     jobId: string,
     errorMessage: string,
     expectedWorkerId?: string,
+    options?: { allowCompleted?: boolean },
   ): Promise<boolean>;
   queueJob(params: QueueJobParams): Promise<Selectable<VideoJobTable>>;
   getJob(jobId: string): Promise<Selectable<VideoJobTable> | null>;
@@ -73,6 +74,7 @@ export function createJobManager(options: {
       jobId: string,
       errorMessage: string,
       expectedWorkerId?: string,
+      options: { allowCompleted?: boolean } = {},
     ): Promise<boolean> {
       let query = db
         .selectFrom("video_jobs")
@@ -81,13 +83,19 @@ export function createJobManager(options: {
 
       if (expectedWorkerId) {
         query = query
-          .where("status", "in", ["provisioning", "processing"])
+          .where(
+            "status",
+            "in",
+            options.allowCompleted
+              ? ["provisioning", "processing", "completed"]
+              : ["provisioning", "processing"],
+          )
           .where("worker_id", "=", expectedWorkerId);
       }
 
       const job = await query.executeTakeFirst();
 
-      if (!job || job.status === "completed") {
+      if (!job || (job.status === "completed" && !options.allowCompleted)) {
         return false;
       }
 
@@ -100,6 +108,8 @@ export function createJobManager(options: {
           attempts: nextAttempts,
           status: shouldRetry ? "queued" : "failed",
           worker_id: null,
+          completed_at: null,
+          ...(shouldRetry ? { progress_percent: 0 } : {}),
           error_message: errorMessage,
           failed_at: shouldRetry ? null : new Date(),
           updated_at: new Date(),
@@ -108,7 +118,13 @@ export function createJobManager(options: {
 
       if (expectedWorkerId) {
         updateQuery = updateQuery
-          .where("status", "in", ["provisioning", "processing"])
+          .where(
+            "status",
+            "in",
+            options.allowCompleted
+              ? ["provisioning", "processing", "completed"]
+              : ["provisioning", "processing"],
+          )
           .where("worker_id", "=", expectedWorkerId);
       }
 
@@ -183,12 +199,15 @@ export function createJobManager(options: {
         ? Math.round(params.videoMetadata.durationSeconds)
         : null;
 
-      // Ensure media_assets record exists so foreign key video_jobs.video_id -> media_assets.id is satisfied
+      // Ensure media_assets record exists so foreign key
+      // video_jobs.video_id -> media_assets.id is satisfied. API callers
+      // normally provide the media asset id; direct/local callers may only
+      // provide a storage key, so support both lookup paths.
       let videoId = params.videoId;
       if (!videoId) {
         const existingMedia = await db
           .selectFrom("media_assets")
-          .selectAll()
+          .select(["id", "width", "height", "duration_seconds"])
           .where("storage_key", "=", params.videoKey)
           .executeTakeFirst();
 
@@ -223,7 +242,7 @@ export function createJobManager(options: {
           try {
             const ownerUser = await db
               .selectFrom("users")
-              .selectAll()
+              .select("id")
               .where("id", "=", defaultOwnerId)
               .executeTakeFirst();
             if (ownerUser?.id) {
@@ -268,7 +287,7 @@ export function createJobManager(options: {
       } else {
         const existingMedia = await db
           .selectFrom("media_assets")
-          .selectAll()
+          .select(["id", "width", "height", "duration_seconds"])
           .where("id", "=", videoId)
           .executeTakeFirst();
 
@@ -301,7 +320,7 @@ export function createJobManager(options: {
           try {
             const ownerUser = await db
               .selectFrom("users")
-              .selectAll()
+              .select("id")
               .where("id", "=", defaultOwnerId)
               .executeTakeFirst();
             if (ownerUser?.id) {
