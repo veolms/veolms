@@ -72,6 +72,7 @@ const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
 
 type InitialLayoutDomState = {
   rootAttributes: Record<string, string>;
+  rootStyle: Record<string, string>;
   bodyAttributes: Record<string, string>;
 };
 
@@ -79,13 +80,28 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
   if (typeof document === "undefined") {
     return {
       rootAttributes: DEFAULT_ROOT_ATTRIBUTES,
+      rootStyle: {},
       bodyAttributes: {},
     };
   }
 
   const rootAttributes = { ...DEFAULT_ROOT_ATTRIBUTES };
+  const rootStyle: Record<string, string> = {};
   for (const attribute of Array.from(document.documentElement.attributes)) {
-    if (attribute.name === "style") continue;
+    if (attribute.name === "style") {
+      for (
+        let index = 0;
+        index < document.documentElement.style.length;
+        index++
+      ) {
+        const property = document.documentElement.style.item(index);
+        if (property) {
+          rootStyle[property] =
+            document.documentElement.style.getPropertyValue(property);
+        }
+      }
+      continue;
+    }
     rootAttributes[attribute.name === "class" ? "className" : attribute.name] =
       attribute.value;
   }
@@ -102,6 +118,7 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
 
   return {
     rootAttributes,
+    rootStyle,
     bodyAttributes,
   };
 };
@@ -144,10 +161,9 @@ export function Layout({ children }: LayoutProps) {
       data-app-hydrated="false"
       data-tab-navigation="false"
       {...initialLayoutDomState.rootAttributes}
-      // These CSS variables are intentionally written by the pre-hydration
-      // preference scripts from localStorage. The server cannot know those
-      // values, so React must preserve the already-painted root geometry while
-      // it claims the document.
+      style={initialLayoutDomState.rootStyle}
+      // The head preference scripts must mutate the root before first paint;
+      // those client-only values cannot be present in SSR HTML.
       suppressHydrationWarning
     >
       <head>
