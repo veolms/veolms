@@ -31,7 +31,6 @@ import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UserIcon as User } from "@phosphor-icons/react/User";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
@@ -505,12 +504,10 @@ const isFocusedSidebarSwipeInput = (target: EventTarget | null) => {
 
 function LoginProfileButton({
   className,
-  iconSize,
   arrowSize,
   onLogin,
 }: {
   className: string;
-  iconSize: number;
   arrowSize: number;
   onLogin: () => void;
 }) {
@@ -521,12 +518,7 @@ function LoginProfileButton({
       aria-label="Login. Access Your Learning Journey"
       onClick={onLogin}
     >
-      <i
-        aria-hidden="true"
-        className="courses-profile__login-icon flex size-[43px] shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] text-(--accent) shadow-none"
-      >
-        <User size={iconSize} weight="duotone" />
-      </i>
+      <ShellProfileAvatar avatarUrl={null} />
       <span className="courses-profile__login-copy">
         <strong className="courses-profile__login-title">Login</strong>
         <small className="courses-profile__login-subtitle">
@@ -716,7 +708,11 @@ export function CoursesPage({
   const isAuthenticated = Boolean(activeUser);
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
-    enabled: isAuthenticated,
+    // The learning route already has its static player content and does not
+    // need Learning Space sessions before the video can mount. Load these
+    // sessions when the panel is opened; keep the existing eager behavior on
+    // catalogue/home surfaces.
+    enabled: isAuthenticated && (!renderMain || learningSpaceExpanded),
   });
   const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
     activeUser?.id,
@@ -3740,7 +3736,6 @@ export function CoursesPage({
               ) : (
                 <LoginProfileButton
                   className="courses-profile__button"
-                  iconSize={30}
                   arrowSize={16}
                   onLogin={() => onNavigatePage("/login")}
                 />
@@ -3894,8 +3889,16 @@ export function CoursesPage({
                         onPointerCancel={finishDockLongPress}
                       >
                         <Eye
+                          aria-hidden="true"
+                          data-reading-mode-icon="off"
                           size={20}
-                          weight={readingModeEnabled ? "fill" : "regular"}
+                          weight="regular"
+                        />
+                        <Eye
+                          aria-hidden="true"
+                          data-reading-mode-icon="on"
+                          size={20}
+                          weight="fill"
                         />
                       </button>
                     );
@@ -4248,7 +4251,6 @@ export function CoursesPage({
               ) : (
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile"
-                  iconSize={30}
                   arrowSize={17}
                   onLogin={() => onNavigatePage("/login")}
                 />
@@ -4458,8 +4460,16 @@ export function CoursesPage({
                       onPointerCancel={finishDockLongPress}
                     >
                       <Eye
+                        aria-hidden="true"
+                        data-reading-mode-icon="off"
                         size={20}
-                        weight={readingModeEnabled ? "fill" : "regular"}
+                        weight="regular"
+                      />
+                      <Eye
+                        aria-hidden="true"
+                        data-reading-mode-icon="on"
+                        size={20}
+                        weight="fill"
                       />
                     </button>
                   );

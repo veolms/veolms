@@ -2,7 +2,9 @@ import { getLessonSlug, sections } from "./courseContent";
 
 export const PRERENDERED_LEARNING_COURSE_SLUGS = [
   "backend-nodejs",
+  "complete-backend-development-with-nodejs",
   "typescript-course",
+  "ultimate-typescript-course",
   "ui-ux-design-mastery",
   "mongodb-database-design",
 ] as const;
