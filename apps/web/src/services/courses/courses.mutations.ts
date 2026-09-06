@@ -419,10 +419,17 @@ export function useUpsertAccessRules() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertAccessRules(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            accessRules: data,
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
@@ -441,10 +448,20 @@ export function useUpsertSettings() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertSettings(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            settings: {
+              ...(old.settings || ({} as CourseSettings)),
+              ...variables.payload,
+            },
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
@@ -463,10 +480,17 @@ export function useUpsertPricing() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertPricing(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pricing: data,
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
