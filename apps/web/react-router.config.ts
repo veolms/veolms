@@ -2,6 +2,7 @@ import type { Config } from "@react-router/dev/config";
 import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPaths";
 
 const staticApplicationPages = [
+  "/",
   "/courses",
   "/settings",
   "/settings/profile",
