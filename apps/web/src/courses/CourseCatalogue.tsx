@@ -40,6 +40,7 @@ export interface CourseCatalogueProps {
   isLoading?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
+  deletingCourseIds?: ReadonlySet<string>;
 }
 
 export function CourseCatalogue({
@@ -66,9 +67,16 @@ export function CourseCatalogue({
   onResetCatalogue,
   onDeleteCourse,
   onRestoreCourse,
+  deletingCourseIds,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
+  const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  const isCourseDeleting = (courseId: string) =>
+    Boolean(deletingCourseIds?.has(courseId) || localDeletingIds.has(courseId));
 
   const quickFilters = (
     role === "creator"
@@ -153,6 +161,7 @@ export function CourseCatalogue({
       setNotice={setNotice}
       imagePriority={index === 0}
       isBin={enrollmentFilter === "bin"}
+      isDeleting={isCourseDeleting(course.id)}
     />
   );
 
@@ -304,6 +313,7 @@ export function CourseCatalogue({
         onConfirm={async () => {
           if (!pendingDelete) return;
           const target = pendingDelete;
+          setLocalDeletingIds((prev) => new Set(prev).add(target.id));
           try {
             if (onDeleteCourse) {
               await onDeleteCourse(target);
@@ -313,6 +323,11 @@ export function CourseCatalogue({
           } catch {
             // Failure is handled by onDeleteCourse toast notification
           } finally {
+            setLocalDeletingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(target.id);
+              return next;
+            });
             setPendingDelete(null);
           }
         }}

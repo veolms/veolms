@@ -365,6 +365,35 @@ describe("CourseCard", () => {
 
     expect(setMenuOpen).toHaveBeenCalledWith(null);
   });
+
+  it("renders deleting state with overlay, disabled interactions and deleting badge", () => {
+    const { onOpen, onNavigatePage } = renderCard({
+      isDeleting: true,
+    });
+
+    const card = screen.getByRole("article");
+    expect(card).toHaveAttribute("data-deleting", "true");
+    expect(card).toHaveAttribute("aria-busy", "true");
+    expect(card).toHaveClass("pointer-events-none");
+
+    expect(screen.getByTestId("course-deleting-tag")).toHaveTextContent("Deleting...");
+    expect(screen.getByTestId("course-deleting-overlay")).toBeInTheDocument();
+    expect(screen.getByText("Moving to Bin...")).toBeInTheDocument();
+
+    // Menu should not be rendered while deleting
+    expect(screen.queryByRole("button", { name: /Actions for/i })).toBeNull();
+
+    // Clicking play thumbnail does not trigger onOpen
+    const playBtn = screen.getByRole("button", { name: /Resume/i });
+    expect(playBtn).toBeDisabled();
+    fireEvent.click(playBtn);
+    expect(onOpen).not.toHaveBeenCalled();
+
+    // Clicking overview link does not navigate
+    const link = screen.getByRole("link", { name: /View course overview/i });
+    fireEvent.click(link);
+    expect(onNavigatePage).not.toHaveBeenCalled();
+  });
 });
 
 describe("PlaceholderPage", () => {

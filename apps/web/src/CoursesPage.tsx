@@ -781,6 +781,9 @@ export function CoursesPage({
   }, [enrollmentFilter, isAdmin, effectiveRole]);
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
+  const [deletingCourseIds, setDeletingCourseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const savedShellProfile = activeUser ? savedShellProfiles[role] : null;
   const shellProfileDisplayName =
@@ -1664,6 +1667,7 @@ export function CoursesPage({
   ]);
 
   const handleDeleteCourse = async (course: Course) => {
+    setDeletingCourseIds((prev) => new Set(prev).add(course.id));
     try {
       await deleteCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} moved to Bin.`);
@@ -1674,6 +1678,12 @@ export function CoursesPage({
           `Failed to move "${course.title}" to Bin. Please try again.`,
       );
       throw err;
+    } finally {
+      setDeletingCourseIds((prev) => {
+        const next = new Set(prev);
+        next.delete(course.id);
+        return next;
+      });
     }
   };
 
@@ -3295,6 +3305,7 @@ export function CoursesPage({
         onResetCatalogue={resetCatalogue}
         onDeleteCourse={handleDeleteCourse}
         onRestoreCourse={handleRestoreCourse}
+        deletingCourseIds={deletingCourseIds}
       />
     );
   };
