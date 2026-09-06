@@ -28,7 +28,6 @@ import {
   Eye,
   EyeSlash,
   FileText,
-  FloppyDisk,
   Globe,
   Image as ImageIcon,
   Info,
@@ -216,6 +215,337 @@ export const isBasicsEqual = (
   b: BasicsFormState,
 ): boolean => {
   return isBasicsMetaEqual(a, b) && isBasicsSettingsEqual(a, b);
+};
+
+export type BasicsFieldKey =
+  | "title"
+  | "shortDescription"
+  | "courseDescription"
+  | "instructorAlias"
+  | "showInstructorName";
+
+export const BasicsFieldStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
+};
+
+export type AccessRulesControlKey =
+  | "accessType"
+  | "durationMode"
+  | "fixedDuration"
+  | "enableQA"
+  | "enableComments"
+  | "enableDownloads";
+
+export const AccessRulesControlStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
+};
+
+export type PricingControlKey =
+  | "pricingType"
+  | "currency"
+  | "sellingPrice"
+  | "originalPrice"
+  | "pricingDetails";
+
+export const PricingControlStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
+};
+
+export type ExtrasControlKey =
+  | "enableCertificate"
+  | "inclusions"
+  | (string & {});
+
+export const ExtrasControlStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
+};
+
+export type CurriculumItemKey = string;
+
+export const CurriculumItemStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
+};
+
+export type PublishControlKey = string;
+
+export const PublishControlStatusIndicator = ({
+  status,
+  testId,
+}: {
+  status: "saving" | "saved" | "failed" | null;
+  testId?: string;
+}) => {
+  if (!status) return null;
+
+  if (status === "saving") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
+        aria-live="polite"
+      >
+        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <span>Saving...</span>
+      </span>
+    );
+  }
+
+  if (status === "saved") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-emerald-500"
+        aria-live="polite"
+      >
+        <span>Saved ✓</span>
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        data-testid={testId}
+        className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
+        role="alert"
+      >
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <span>Save failed</span>
+      </span>
+    );
+  }
+
+  return null;
 };
 
 export function formatIsoToDatetimeLocal(isoString?: string | null): string {
@@ -2069,6 +2399,105 @@ export function CourseCreatePage({
     savingBasicsControlsRef.current.has(controlKey) ||
     (inFlightBasicsControlsRef.current[controlKey] ?? 0) > 0;
 
+  const [basicsFieldStatus, setBasicsFieldStatus] = useState<
+    Partial<Record<BasicsFieldKey, "saved" | "failed" | null>>
+  >({});
+  const basicsFieldTimersRef = useRef<
+    Partial<Record<BasicsFieldKey, ReturnType<typeof setTimeout>>>
+  >({});
+  const [basicsSaveFailed, setBasicsSaveFailed] = useState(false);
+  const [showBasicsSavedBriefly, setShowBasicsSavedBriefly] = useState(false);
+  const basicsSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerBasicsSavedBriefly = () => {
+    if (basicsSavedBrieflyTimerRef.current) {
+      clearTimeout(basicsSavedBrieflyTimerRef.current);
+    }
+    setShowBasicsSavedBriefly(true);
+    basicsSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowBasicsSavedBriefly(false);
+      basicsSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(basicsFieldTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (basicsSavedBrieflyTimerRef.current) {
+        clearTimeout(basicsSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearBasicsFieldStatus = (fieldKey: BasicsFieldKey) => {
+    if (basicsFieldTimersRef.current[fieldKey]) {
+      clearTimeout(basicsFieldTimersRef.current[fieldKey]);
+      delete basicsFieldTimersRef.current[fieldKey];
+    }
+    setBasicsFieldStatus((prev) => {
+      if (!prev[fieldKey]) return prev;
+      const next = { ...prev };
+      delete next[fieldKey];
+      return next;
+    });
+    setBasicsSaveFailed(false);
+    if (basicsSavedBrieflyTimerRef.current) {
+      clearTimeout(basicsSavedBrieflyTimerRef.current);
+      basicsSavedBrieflyTimerRef.current = null;
+    }
+    setShowBasicsSavedBriefly(false);
+  };
+
+  const markBasicsFieldSaved = (fieldKey: BasicsFieldKey) => {
+    if (basicsFieldTimersRef.current[fieldKey]) {
+      clearTimeout(basicsFieldTimersRef.current[fieldKey]);
+      delete basicsFieldTimersRef.current[fieldKey];
+    }
+    setBasicsFieldStatus((prev) => ({ ...prev, [fieldKey]: "saved" }));
+    setBasicsSaveFailed(false);
+    triggerBasicsSavedBriefly();
+
+    basicsFieldTimersRef.current[fieldKey] = setTimeout(() => {
+      setBasicsFieldStatus((prev) => {
+        if (prev[fieldKey] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[fieldKey];
+        return next;
+      });
+      delete basicsFieldTimersRef.current[fieldKey];
+    }, 1500);
+  };
+
+  const markBasicsFieldFailed = (fieldKey: BasicsFieldKey) => {
+    if (basicsFieldTimersRef.current[fieldKey]) {
+      clearTimeout(basicsFieldTimersRef.current[fieldKey]);
+      delete basicsFieldTimersRef.current[fieldKey];
+    }
+    setBasicsFieldStatus((prev) => ({ ...prev, [fieldKey]: "failed" }));
+    setBasicsSaveFailed(true);
+    if (basicsSavedBrieflyTimerRef.current) {
+      clearTimeout(basicsSavedBrieflyTimerRef.current);
+      basicsSavedBrieflyTimerRef.current = null;
+    }
+    setShowBasicsSavedBriefly(false);
+  };
+
+  const getBasicsFieldDisplayStatus = (
+    fieldKey: BasicsFieldKey,
+  ): "saving" | "saved" | "failed" | null => {
+    if (
+      savingBasicsControls.has(fieldKey) ||
+      (inFlightBasicsControlsRef.current[fieldKey] ?? 0) > 0
+    ) {
+      return "saving";
+    }
+    return basicsFieldStatus[fieldKey] ?? null;
+  };
+
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -2172,14 +2601,39 @@ export function CourseCreatePage({
 
   // Page-specific in-flight save states
   const [isSavingBasics, setIsSavingBasics] = useState(false);
+  const [isSavingCurriculum, setIsSavingCurriculum] = useState(false);
   const [isSavingAccessRules, setIsSavingAccessRules] = useState(false);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [isSavingExtras, setIsSavingExtras] = useState(false);
+  const [isSavingPublish, setIsSavingPublish] = useState(false);
 
   const isBasicsSaving = isSavingBasics;
+  const isCurriculumSaving = isSavingCurriculum;
   const isAccessRulesSaving = isSavingAccessRules;
   const isPricingSaving = isSavingPricing;
   const isExtrasSaving = isSavingExtras;
+  const isPublishSaving = isSavingPublish;
+
+  const isAnyBasicsSaving =
+    savingBasicsControls.size > 0 ||
+    isSavingBasics ||
+    Boolean(inFlightBasicsPromiseRef.current) ||
+    (inFlightBasicsControlsRef.current.title ?? 0) > 0 ||
+    (inFlightBasicsControlsRef.current.shortDescription ?? 0) > 0 ||
+    (inFlightBasicsControlsRef.current.courseDescription ?? 0) > 0 ||
+    (inFlightBasicsControlsRef.current.instructorAlias ?? 0) > 0 ||
+    (inFlightBasicsControlsRef.current.showInstructorName ?? 0) > 0;
+
+  const hasBasicsFieldFailed =
+    basicsSaveFailed ||
+    Object.values(basicsFieldStatus).some((status) => status === "failed");
+
+  const basicsOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+    if (isAnyBasicsSaving) return "saving";
+    if (hasBasicsFieldFailed) return "failed";
+    if (showBasicsSavedBriefly) return "saved";
+    return null;
+  }, [isAnyBasicsSaving, hasBasicsFieldFailed, showBasicsSavedBriefly]);
 
   const isMutatingCount = useIsMutating();
 
@@ -2187,9 +2641,11 @@ export function CourseCreatePage({
     isMutatingCount > 0 ||
     actionLoading !== null ||
     isBasicsSaving ||
+    isCurriculumSaving ||
     isAccessRulesSaving ||
     isPricingSaving ||
     isExtrasSaving ||
+    isPublishSaving ||
     isCreatingSection ||
     creatingLessonSectionId !== null ||
     savingLessonId !== null ||
@@ -2408,6 +2864,137 @@ export function CourseCreatePage({
     previousLessons: CurriculumLessonItem[];
   } | null>(null);
 
+  // Immediate persistence states for Curriculum interactive items
+  const [curriculumItemStatus, setCurriculumItemStatus] = useState<
+    Record<string, "saved" | "failed" | null>
+  >({});
+  const curriculumItemTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+  const [curriculumSaveFailed, setCurriculumSaveFailed] = useState(false);
+  const [showCurriculumSavedBriefly, setShowCurriculumSavedBriefly] =
+    useState(false);
+  const curriculumSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerCurriculumSavedBriefly = () => {
+    if (curriculumSavedBrieflyTimerRef.current) {
+      clearTimeout(curriculumSavedBrieflyTimerRef.current);
+    }
+    setShowCurriculumSavedBriefly(true);
+    curriculumSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowCurriculumSavedBriefly(false);
+      curriculumSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(curriculumItemTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (curriculumSavedBrieflyTimerRef.current) {
+        clearTimeout(curriculumSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearCurriculumItemStatus = (itemId: string) => {
+    if (curriculumItemTimersRef.current[itemId]) {
+      clearTimeout(curriculumItemTimersRef.current[itemId]);
+      delete curriculumItemTimersRef.current[itemId];
+    }
+    setCurriculumItemStatus((prev) => {
+      if (!prev[itemId]) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    setCurriculumSaveFailed(false);
+    if (curriculumSavedBrieflyTimerRef.current) {
+      clearTimeout(curriculumSavedBrieflyTimerRef.current);
+      curriculumSavedBrieflyTimerRef.current = null;
+    }
+    setShowCurriculumSavedBriefly(false);
+  };
+
+  const markCurriculumItemSaved = (itemId: string) => {
+    if (curriculumItemTimersRef.current[itemId]) {
+      clearTimeout(curriculumItemTimersRef.current[itemId]);
+      delete curriculumItemTimersRef.current[itemId];
+    }
+    setCurriculumItemStatus((prev) => ({ ...prev, [itemId]: "saved" }));
+    setCurriculumSaveFailed(false);
+    triggerCurriculumSavedBriefly();
+
+    curriculumItemTimersRef.current[itemId] = setTimeout(() => {
+      setCurriculumItemStatus((prev) => {
+        if (prev[itemId] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      delete curriculumItemTimersRef.current[itemId];
+    }, 1500);
+  };
+
+  const markCurriculumItemFailed = (itemId: string) => {
+    if (curriculumItemTimersRef.current[itemId]) {
+      clearTimeout(curriculumItemTimersRef.current[itemId]);
+      delete curriculumItemTimersRef.current[itemId];
+    }
+    setCurriculumItemStatus((prev) => ({ ...prev, [itemId]: "failed" }));
+    setCurriculumSaveFailed(true);
+    if (curriculumSavedBrieflyTimerRef.current) {
+      clearTimeout(curriculumSavedBrieflyTimerRef.current);
+      curriculumSavedBrieflyTimerRef.current = null;
+    }
+    setShowCurriculumSavedBriefly(false);
+  };
+
+  const getCurriculumItemDisplayStatus = (
+    itemId: string,
+  ): "saving" | "saved" | "failed" | null => {
+    if (
+      updatingSectionId === itemId ||
+      savingLessonId === itemId ||
+      inFlightLessonSavesRef.current.has(itemId)
+    ) {
+      return "saving";
+    }
+    return curriculumItemStatus[itemId] ?? null;
+  };
+
+  const isAnyCurriculumSaving =
+    isSavingCurriculum ||
+    isCreatingSection ||
+    updatingSectionId !== null ||
+    deletingSectionId !== null ||
+    isReorderingSections ||
+    creatingLessonSectionId !== null ||
+    savingLessonId !== null ||
+    deletingLessonId !== null ||
+    reorderingLessonsSectionId !== null ||
+    inFlightLessonSavesRef.current.size > 0 ||
+    sections.some(
+      (s) => s.isPendingCreation || s.lessons.some((l) => l.isPendingCreation),
+    );
+
+  const hasCurriculumItemFailed =
+    curriculumSaveFailed ||
+    Object.values(curriculumItemStatus).some((status) => status === "failed");
+
+  const curriculumOverallStatus = useMemo(
+    (): "saving" | "failed" | "saved" | null => {
+      if (isAnyCurriculumSaving) return "saving";
+      if (hasCurriculumItemFailed) return "failed";
+      if (showCurriculumSavedBriefly) return "saved";
+      return null;
+    },
+    [isAnyCurriculumSaving, hasCurriculumItemFailed, showCurriculumSavedBriefly],
+  );
+
   // Access Rules Step server-confirmed and draft states
   const [accessRulesExists, setAccessRulesExists] = useState(false);
   const [serverAccessRules, setServerAccessRules] =
@@ -2473,6 +3060,127 @@ export function CourseCreatePage({
   const isAccessControlSaving = (controlKey: string) =>
     savingAccessControlsRef.current.has(controlKey) ||
     (inFlightAccessControlsRef.current[controlKey] ?? 0) > 0;
+
+  const [accessControlStatus, setAccessControlStatus] = useState<
+    Partial<Record<AccessRulesControlKey, "saved" | "failed" | null>>
+  >({});
+  const accessControlTimersRef = useRef<
+    Partial<Record<AccessRulesControlKey, ReturnType<typeof setTimeout>>>
+  >({});
+  const [accessRulesSaveFailed, setAccessRulesSaveFailed] = useState(false);
+  const [showAccessRulesSavedBriefly, setShowAccessRulesSavedBriefly] =
+    useState(false);
+  const accessRulesSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerAccessRulesSavedBriefly = () => {
+    if (accessRulesSavedBrieflyTimerRef.current) {
+      clearTimeout(accessRulesSavedBrieflyTimerRef.current);
+    }
+    setShowAccessRulesSavedBriefly(true);
+    accessRulesSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowAccessRulesSavedBriefly(false);
+      accessRulesSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(accessControlTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (accessRulesSavedBrieflyTimerRef.current) {
+        clearTimeout(accessRulesSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearAccessControlStatus = (controlKey: AccessRulesControlKey) => {
+    if (accessControlTimersRef.current[controlKey]) {
+      clearTimeout(accessControlTimersRef.current[controlKey]);
+      delete accessControlTimersRef.current[controlKey];
+    }
+    setAccessControlStatus((prev) => {
+      if (!prev[controlKey]) return prev;
+      const next = { ...prev };
+      delete next[controlKey];
+      return next;
+    });
+    setAccessRulesSaveFailed(false);
+    if (accessRulesSavedBrieflyTimerRef.current) {
+      clearTimeout(accessRulesSavedBrieflyTimerRef.current);
+      accessRulesSavedBrieflyTimerRef.current = null;
+    }
+    setShowAccessRulesSavedBriefly(false);
+  };
+
+  const markAccessControlSaved = (controlKey: AccessRulesControlKey) => {
+    if (accessControlTimersRef.current[controlKey]) {
+      clearTimeout(accessControlTimersRef.current[controlKey]);
+      delete accessControlTimersRef.current[controlKey];
+    }
+    setAccessControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
+    setAccessRulesSaveFailed(false);
+    triggerAccessRulesSavedBriefly();
+
+    accessControlTimersRef.current[controlKey] = setTimeout(() => {
+      setAccessControlStatus((prev) => {
+        if (prev[controlKey] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[controlKey];
+        return next;
+      });
+      delete accessControlTimersRef.current[controlKey];
+    }, 1500);
+  };
+
+  const markAccessControlFailed = (controlKey: AccessRulesControlKey) => {
+    if (accessControlTimersRef.current[controlKey]) {
+      clearTimeout(accessControlTimersRef.current[controlKey]);
+      delete accessControlTimersRef.current[controlKey];
+    }
+    setAccessControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
+    setAccessRulesSaveFailed(true);
+    if (accessRulesSavedBrieflyTimerRef.current) {
+      clearTimeout(accessRulesSavedBrieflyTimerRef.current);
+      accessRulesSavedBrieflyTimerRef.current = null;
+    }
+    setShowAccessRulesSavedBriefly(false);
+  };
+
+  const getAccessControlDisplayStatus = (
+    controlKey: AccessRulesControlKey,
+  ): "saving" | "saved" | "failed" | null => {
+    if (
+      savingAccessControls.has(controlKey) ||
+      (inFlightAccessControlsRef.current[controlKey] ?? 0) > 0
+    ) {
+      return "saving";
+    }
+    return accessControlStatus[controlKey] ?? null;
+  };
+
+  const isAnyAccessRulesSaving =
+    savingAccessControls.size > 0 ||
+    isSavingAccessRules ||
+    (inFlightAccessControlsRef.current.accessType ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.durationMode ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.fixedDuration ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.enableQA ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.enableComments ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.enableDownloads ?? 0) > 0;
+
+  const hasAccessControlFailed =
+    accessRulesSaveFailed ||
+    Object.values(accessControlStatus).some((status) => status === "failed");
+
+  const accessRulesOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+    if (isAnyAccessRulesSaving) return "saving";
+    if (hasAccessControlFailed) return "failed";
+    if (showAccessRulesSavedBriefly) return "saved";
+    return null;
+  }, [isAnyAccessRulesSaving, hasAccessControlFailed, showAccessRulesSavedBriefly]);
 
   useEffect(() => {
     return () => {
@@ -2570,6 +3278,140 @@ export function CourseCreatePage({
     savingPricingControlsRef.current.has(controlKey) ||
     (inFlightPricingControlsRef.current[controlKey] ?? 0) > 0;
 
+  const lastEditedPricingFieldRef = useRef<
+    "sellingPrice" | "originalPrice" | null
+  >(null);
+
+  const [pricingControlStatus, setPricingControlStatus] = useState<
+    Partial<Record<PricingControlKey, "saved" | "failed" | null>>
+  >({});
+  const pricingControlTimersRef = useRef<
+    Partial<Record<PricingControlKey, ReturnType<typeof setTimeout>>>
+  >({});
+  const [pricingSaveFailed, setPricingSaveFailed] = useState(false);
+  const [showPricingSavedBriefly, setShowPricingSavedBriefly] = useState(false);
+  const pricingSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerPricingSavedBriefly = () => {
+    if (pricingSavedBrieflyTimerRef.current) {
+      clearTimeout(pricingSavedBrieflyTimerRef.current);
+    }
+    setShowPricingSavedBriefly(true);
+    pricingSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowPricingSavedBriefly(false);
+      pricingSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(pricingControlTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (pricingSavedBrieflyTimerRef.current) {
+        clearTimeout(pricingSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearPricingControlStatus = (controlKey: PricingControlKey) => {
+    if (pricingControlTimersRef.current[controlKey]) {
+      clearTimeout(pricingControlTimersRef.current[controlKey]);
+      delete pricingControlTimersRef.current[controlKey];
+    }
+    setPricingControlStatus((prev) => {
+      if (!prev[controlKey]) return prev;
+      const next = { ...prev };
+      delete next[controlKey];
+      return next;
+    });
+    setPricingSaveFailed(false);
+    if (pricingSavedBrieflyTimerRef.current) {
+      clearTimeout(pricingSavedBrieflyTimerRef.current);
+      pricingSavedBrieflyTimerRef.current = null;
+    }
+    setShowPricingSavedBriefly(false);
+  };
+
+  const markPricingControlSaved = (controlKey: PricingControlKey) => {
+    if (pricingControlTimersRef.current[controlKey]) {
+      clearTimeout(pricingControlTimersRef.current[controlKey]);
+      delete pricingControlTimersRef.current[controlKey];
+    }
+    setPricingControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
+    setPricingSaveFailed(false);
+    triggerPricingSavedBriefly();
+
+    pricingControlTimersRef.current[controlKey] = setTimeout(() => {
+      setPricingControlStatus((prev) => {
+        if (prev[controlKey] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[controlKey];
+        return next;
+      });
+      delete pricingControlTimersRef.current[controlKey];
+    }, 1500);
+  };
+
+  const markPricingControlFailed = (controlKey: PricingControlKey) => {
+    if (pricingControlTimersRef.current[controlKey]) {
+      clearTimeout(pricingControlTimersRef.current[controlKey]);
+      delete pricingControlTimersRef.current[controlKey];
+    }
+    setPricingControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
+    setPricingSaveFailed(true);
+    if (pricingSavedBrieflyTimerRef.current) {
+      clearTimeout(pricingSavedBrieflyTimerRef.current);
+      pricingSavedBrieflyTimerRef.current = null;
+    }
+    setShowPricingSavedBriefly(false);
+  };
+
+  const getPricingControlDisplayStatus = (
+    controlKey: PricingControlKey,
+  ): "saving" | "saved" | "failed" | null => {
+    if (controlKey === "sellingPrice" || controlKey === "originalPrice") {
+      const isDetailsSaving =
+        savingPricingControls.has("pricingDetails") ||
+        (inFlightPricingControlsRef.current.pricingDetails ?? 0) > 0;
+      if (
+        isDetailsSaving &&
+        (lastEditedPricingFieldRef.current === controlKey ||
+          !lastEditedPricingFieldRef.current)
+      ) {
+        return "saving";
+      }
+      return pricingControlStatus[controlKey] ?? null;
+    }
+    if (
+      savingPricingControls.has(controlKey) ||
+      (inFlightPricingControlsRef.current[controlKey] ?? 0) > 0
+    ) {
+      return "saving";
+    }
+    return pricingControlStatus[controlKey] ?? null;
+  };
+
+  const isAnyPricingSaving =
+    savingPricingControls.size > 0 ||
+    isSavingPricing ||
+    (inFlightPricingControlsRef.current.pricingType ?? 0) > 0 ||
+    (inFlightPricingControlsRef.current.currency ?? 0) > 0 ||
+    (inFlightPricingControlsRef.current.pricingDetails ?? 0) > 0;
+
+  const hasPricingControlFailed =
+    pricingSaveFailed ||
+    Object.values(pricingControlStatus).some((status) => status === "failed");
+
+  const pricingOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+    if (isAnyPricingSaving) return "saving";
+    if (hasPricingControlFailed) return "failed";
+    if (showPricingSavedBriefly) return "saved";
+    return null;
+  }, [isAnyPricingSaving, hasPricingControlFailed, showPricingSavedBriefly]);
+
   useEffect(() => {
     return () => {
       if (pricingDebounceTimerRef.current) {
@@ -2631,6 +3473,126 @@ export function CourseCreatePage({
     return () => clearTimeout(timer);
   }, [publishValidationError]);
 
+  // Immediate persistence states for Publish interactive controls
+  const [publishControlStatus, setPublishControlStatus] = useState<
+    Record<string, "saving" | "saved" | "failed" | null>
+  >({});
+  const publishControlTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+  const [publishSaveFailed, setPublishSaveFailed] = useState(false);
+  const [showPublishSavedBriefly, setShowPublishSavedBriefly] = useState(false);
+  const publishSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerPublishSavedBriefly = () => {
+    if (publishSavedBrieflyTimerRef.current) {
+      clearTimeout(publishSavedBrieflyTimerRef.current);
+    }
+    setShowPublishSavedBriefly(true);
+    publishSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowPublishSavedBriefly(false);
+      publishSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(publishControlTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (publishSavedBrieflyTimerRef.current) {
+        clearTimeout(publishSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearPublishControlStatus = (controlKey: string) => {
+    if (publishControlTimersRef.current[controlKey]) {
+      clearTimeout(publishControlTimersRef.current[controlKey]);
+      delete publishControlTimersRef.current[controlKey];
+    }
+    setPublishControlStatus((prev) => {
+      if (!prev[controlKey]) return prev;
+      const next = { ...prev };
+      delete next[controlKey];
+      return next;
+    });
+    setPublishSaveFailed(false);
+    if (publishSavedBrieflyTimerRef.current) {
+      clearTimeout(publishSavedBrieflyTimerRef.current);
+      publishSavedBrieflyTimerRef.current = null;
+    }
+    setShowPublishSavedBriefly(false);
+  };
+
+  const markPublishControlSaving = (controlKey: string) => {
+    if (publishControlTimersRef.current[controlKey]) {
+      clearTimeout(publishControlTimersRef.current[controlKey]);
+      delete publishControlTimersRef.current[controlKey];
+    }
+    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saving" }));
+  };
+
+  const markPublishControlSaved = (controlKey: string) => {
+    if (publishControlTimersRef.current[controlKey]) {
+      clearTimeout(publishControlTimersRef.current[controlKey]);
+      delete publishControlTimersRef.current[controlKey];
+    }
+    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
+    setPublishSaveFailed(false);
+    triggerPublishSavedBriefly();
+
+    publishControlTimersRef.current[controlKey] = setTimeout(() => {
+      setPublishControlStatus((prev) => {
+        if (prev[controlKey] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[controlKey];
+        return next;
+      });
+      delete publishControlTimersRef.current[controlKey];
+    }, 1500);
+  };
+
+  const markPublishControlFailed = (controlKey: string) => {
+    if (publishControlTimersRef.current[controlKey]) {
+      clearTimeout(publishControlTimersRef.current[controlKey]);
+      delete publishControlTimersRef.current[controlKey];
+    }
+    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
+    setPublishSaveFailed(true);
+    if (publishSavedBrieflyTimerRef.current) {
+      clearTimeout(publishSavedBrieflyTimerRef.current);
+      publishSavedBrieflyTimerRef.current = null;
+    }
+    setShowPublishSavedBriefly(false);
+  };
+
+  const getPublishControlDisplayStatus = (
+    controlKey: string,
+  ): "saving" | "saved" | "failed" | null => {
+    return publishControlStatus[controlKey] ?? null;
+  };
+
+  const isAnyPublishSaving =
+    isSavingPublish ||
+    Object.values(publishControlStatus).some((status) => status === "saving");
+
+  const hasPublishControlFailed =
+    publishSaveFailed ||
+    Object.values(publishControlStatus).some((status) => status === "failed");
+
+  const publishOverallStatus = useMemo(
+    (): "saving" | "failed" | "saved" | null => {
+      if (isAnyPublishSaving) return "saving";
+      if (hasPublishControlFailed) return "failed";
+      if (showPublishSavedBriefly) return "saved";
+      return null;
+    },
+    [isAnyPublishSaving, hasPublishControlFailed, showPublishSavedBriefly],
+  );
+
   // Extras Step server-confirmed and draft states
   const [serverExtras, setServerExtras] =
     useState<ExtrasFormState>(initialExtrasState);
@@ -2654,6 +3616,145 @@ export function CourseCreatePage({
   );
   const [isSavingCertificate, setIsSavingCertificate] = useState(false);
   const isSavingCertificateRef = useRef(false);
+
+  const [extrasControlStatus, setExtrasControlStatus] = useState<
+    Record<string, "saved" | "failed" | null>
+  >({});
+  const extrasControlTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+  const [extrasSaveFailed, setExtrasSaveFailed] = useState(false);
+  const [showExtrasSavedBriefly, setShowExtrasSavedBriefly] = useState(false);
+  const extrasSavedBrieflyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const triggerExtrasSavedBriefly = () => {
+    if (extrasSavedBrieflyTimerRef.current) {
+      clearTimeout(extrasSavedBrieflyTimerRef.current);
+    }
+    setShowExtrasSavedBriefly(true);
+    extrasSavedBrieflyTimerRef.current = setTimeout(() => {
+      setShowExtrasSavedBriefly(false);
+      extrasSavedBrieflyTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(extrasControlTimersRef.current).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+      if (extrasSavedBrieflyTimerRef.current) {
+        clearTimeout(extrasSavedBrieflyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearExtrasControlStatus = (controlKey: string) => {
+    if (extrasControlTimersRef.current[controlKey]) {
+      clearTimeout(extrasControlTimersRef.current[controlKey]);
+      delete extrasControlTimersRef.current[controlKey];
+    }
+    setExtrasControlStatus((prev) => {
+      if (!prev[controlKey]) return prev;
+      const next = { ...prev };
+      delete next[controlKey];
+      return next;
+    });
+    setExtrasSaveFailed(false);
+    if (extrasSavedBrieflyTimerRef.current) {
+      clearTimeout(extrasSavedBrieflyTimerRef.current);
+      extrasSavedBrieflyTimerRef.current = null;
+    }
+    setShowExtrasSavedBriefly(false);
+  };
+
+  const markExtrasControlSaved = (controlKey: string) => {
+    if (extrasControlTimersRef.current[controlKey]) {
+      clearTimeout(extrasControlTimersRef.current[controlKey]);
+      delete extrasControlTimersRef.current[controlKey];
+    }
+    setExtrasControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
+    setExtrasSaveFailed(false);
+    triggerExtrasSavedBriefly();
+
+    extrasControlTimersRef.current[controlKey] = setTimeout(() => {
+      setExtrasControlStatus((prev) => {
+        if (prev[controlKey] !== "saved") return prev;
+        const next = { ...prev };
+        delete next[controlKey];
+        return next;
+      });
+      delete extrasControlTimersRef.current[controlKey];
+    }, 1500);
+  };
+
+  const markExtrasControlFailed = (controlKey: string) => {
+    if (extrasControlTimersRef.current[controlKey]) {
+      clearTimeout(extrasControlTimersRef.current[controlKey]);
+      delete extrasControlTimersRef.current[controlKey];
+    }
+    setExtrasControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
+    setExtrasSaveFailed(true);
+    if (extrasSavedBrieflyTimerRef.current) {
+      clearTimeout(extrasSavedBrieflyTimerRef.current);
+      extrasSavedBrieflyTimerRef.current = null;
+    }
+    setShowExtrasSavedBriefly(false);
+  };
+
+  const getExtrasControlDisplayStatus = (
+    controlKey: string,
+  ): "saving" | "saved" | "failed" | null => {
+    if (controlKey === "enableCertificate") {
+      if (isSavingCertificate) return "saving";
+      return extrasControlStatus["enableCertificate"] ?? null;
+    }
+    if (controlKey === "inclusions") {
+      if (
+        isReorderingIncludes ||
+        reorderIncludesMutation.isPending ||
+        savingIncludeIds.size > 0 ||
+        deletingIncludeIds.size > 0 ||
+        createIncludeMutation.isPending ||
+        manualIncludesDraft.some((m) => m.isPendingCreation)
+      ) {
+        return "saving";
+      }
+      return extrasControlStatus["inclusions"] ?? null;
+    }
+    // Specific inclusion ID:
+    if (
+      savingIncludeIds.has(controlKey) ||
+      deletingIncludeIds.has(controlKey) ||
+      manualIncludesDraft.some((m) => m.id === controlKey && m.isPendingCreation)
+    ) {
+      return "saving";
+    }
+    return extrasControlStatus[controlKey] ?? null;
+  };
+
+  const isAnyExtrasSaving =
+    isSavingExtras ||
+    isSavingCertificate ||
+    savingIncludeIds.size > 0 ||
+    deletingIncludeIds.size > 0 ||
+    isReorderingIncludes ||
+    reorderIncludesMutation.isPending ||
+    createIncludeMutation.isPending ||
+    manualIncludesDraft.some((m) => m.isPendingCreation);
+
+  const hasExtrasControlFailed =
+    extrasSaveFailed ||
+    Object.values(extrasControlStatus).some((status) => status === "failed");
+
+  const extrasOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+    if (isAnyExtrasSaving) return "saving";
+    if (hasExtrasControlFailed) return "failed";
+    if (showExtrasSavedBriefly) return "saved";
+    return null;
+  }, [isAnyExtrasSaving, hasExtrasControlFailed, showExtrasSavedBriefly]);
 
   const [extras, setExtras] = useState<ExtrasState>({
     inclusions: [],
@@ -3091,11 +4192,14 @@ export function CourseCreatePage({
         if (prev.some((s) => s.id === created.id)) return prev;
         return [...prev, created];
       });
+      markExtrasControlSaved(created.id);
+      markExtrasControlSaved("inclusions");
     } catch (err: unknown) {
       // 5. On failure: remove ONLY this failed temporary inclusion
       setManualIncludesDraft((prev) =>
         prev.filter((item) => item.id !== tempId),
       );
+      markExtrasControlFailed("inclusions");
       const errorMsg =
         (err as { message?: string })?.message || "Failed to add inclusion.";
       setToastMessage(errorMsg);
@@ -3103,6 +4207,8 @@ export function CourseCreatePage({
   };
 
   const handleUpdateManualInclusionText = (id: string, text: string) => {
+    clearExtrasControlStatus(id);
+    clearExtrasControlStatus("inclusions");
     const truncated = text.slice(0, 25);
     setManualIncludesDraft((prev) =>
       prev.map((item) => (item.id === id ? { ...item, text: truncated } : item)),
@@ -3181,7 +4287,11 @@ export function CourseCreatePage({
       setServerIncludes((prev) =>
         prev.map((s) => (s.id === id ? updated : s)),
       );
+      markExtrasControlSaved(id);
+      markExtrasControlSaved("inclusions");
     } catch (err: unknown) {
+      markExtrasControlFailed(id);
+      markExtrasControlFailed("inclusions");
       // Revert on failure to the last confirmed server value
       setManualIncludesDraft((prev) =>
         prev.map((item) =>
@@ -3206,6 +4316,7 @@ export function CourseCreatePage({
     // If it is not a real server UUID (e.g. client-only temp item) or no course ID, remove locally
     if (!currentCourseId || !UUID_REGEX.test(id)) {
       setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
+      clearExtrasControlStatus(id);
       if (focusedInclusionId === id) {
         setFocusedInclusionId(null);
       }
@@ -3227,6 +4338,8 @@ export function CourseCreatePage({
       // On success: remove only this inclusion from draft and server baseline
       setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
       setServerIncludes((prev) => prev.filter((s) => s.id !== id));
+      clearExtrasControlStatus(id);
+      markExtrasControlSaved("inclusions");
       if (focusedInclusionId === id) {
         setFocusedInclusionId(null);
       }
@@ -3234,6 +4347,8 @@ export function CourseCreatePage({
         setDragEnabledInclusionId(null);
       }
     } catch (err: unknown) {
+      markExtrasControlFailed(id);
+      markExtrasControlFailed("inclusions");
       // On failure: keep inclusion visible and show error toast
       const errorMsg =
         (err as { message?: string })?.message || "Failed to delete inclusion.";
@@ -3324,8 +4439,10 @@ export function CourseCreatePage({
             .map((id) => serverIncludes.find((s) => s.id === id))
             .filter(Boolean) as CourseIncludeItem[];
           setServerIncludes(reorderedServer);
+          markExtrasControlSaved("inclusions");
           setToastMessage("Inclusions reordered successfully.");
         } catch (err: unknown) {
+          markExtrasControlFailed("inclusions");
           // Rollback to previous order on failure
           setManualIncludesDraft(initial.previousIncludes);
           const errorMsg =
@@ -3343,6 +4460,7 @@ export function CourseCreatePage({
   const handleToggleCertificate = async () => {
     if (isSavingCertificateRef.current) return;
 
+    clearExtrasControlStatus("enableCertificate");
     const previousValue = extras.enableCertificate;
     const nextValue = !previousValue;
 
@@ -3382,7 +4500,9 @@ export function CourseCreatePage({
         ...prev,
         enableCertificate: newBaseline.enableCertificate,
       }));
+      markExtrasControlSaved("enableCertificate");
     } catch (err: unknown) {
+      markExtrasControlFailed("enableCertificate");
       // 5. Rollback on failure
       setExtras((prev) => ({
         ...prev,
@@ -3440,6 +4560,7 @@ export function CourseCreatePage({
     if (type === "restricted") return; // Restricted is disabled/coming soon
     if (accessRulesDraftRef.current.accessType === type) return;
 
+    clearAccessControlStatus("accessType");
     const previousValue = accessRulesDraftRef.current.accessType;
     const version = ++accessControlVersionsRef.current.accessType;
 
@@ -3494,9 +4615,11 @@ export function CourseCreatePage({
           ...prev,
           accessType: type,
         }));
+        markAccessControlSaved("accessType");
       }
     } catch (err: unknown) {
       if (accessControlVersionsRef.current.accessType === version) {
+        markAccessControlFailed("accessType");
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
           accessType: previousValue,
@@ -3524,6 +4647,7 @@ export function CourseCreatePage({
   const handleDurationModeChange = async (mode: AccessDurationMode) => {
     if (accessRulesDraftRef.current.durationMode === mode) return;
 
+    clearAccessControlStatus("durationMode");
     if (fixedDurationDebounceTimerRef.current) {
       clearTimeout(fixedDurationDebounceTimerRef.current);
       fixedDurationDebounceTimerRef.current = null;
@@ -3587,9 +4711,11 @@ export function CourseCreatePage({
               }
             : {}),
         }));
+        markAccessControlSaved("durationMode");
       }
     } catch (err: unknown) {
       if (accessControlVersionsRef.current.durationMode === version) {
+        markAccessControlFailed("durationMode");
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
           durationMode: previousMode,
@@ -3621,6 +4747,7 @@ export function CourseCreatePage({
     const currentDraft = accessRulesDraftRef.current;
     if (currentDraft.durationMode !== "fixed") return;
 
+    clearAccessControlStatus("fixedDuration");
     const val = Math.max(
       1,
       explicitVal !== undefined
@@ -3674,12 +4801,14 @@ export function CourseCreatePage({
             fixedDurationValue: val,
             fixedDurationUnit: unit,
           }));
+          markAccessControlSaved("fixedDuration");
         }
       } catch (err: unknown) {
         if (
           accessControlVersionsRef.current.fixedDuration === version &&
           accessRulesDraftRef.current.durationMode === "fixed"
         ) {
+          markAccessControlFailed("fixedDuration");
           accessRulesDraftRef.current = {
             ...accessRulesDraftRef.current,
             fixedDurationValue: previousVal,
@@ -3736,6 +4865,7 @@ export function CourseCreatePage({
   };
 
   const handleFixedDurationValueChange = (val: number) => {
+    clearAccessControlStatus("fixedDuration");
     const value = Math.max(1, isNaN(val) ? 1 : val);
     accessRulesDraftRef.current = {
       ...accessRulesDraftRef.current,
@@ -3756,6 +4886,7 @@ export function CourseCreatePage({
   };
 
   const handleFixedDurationUnitChange = (unit: DurationUnit) => {
+    clearAccessControlStatus("fixedDuration");
     if (fixedDurationDebounceTimerRef.current) {
       clearTimeout(fixedDurationDebounceTimerRef.current);
       fixedDurationDebounceTimerRef.current = null;
@@ -3772,6 +4903,7 @@ export function CourseCreatePage({
   };
 
   const handleToggleQA = async () => {
+    clearAccessControlStatus("enableQA");
     const previousValue = accessRulesDraftRef.current.enableQA;
     const nextValue = !previousValue;
     const version = ++accessControlVersionsRef.current.enableQA;
@@ -3812,9 +4944,11 @@ export function CourseCreatePage({
           ...prev,
           enableQA: confirmedQa,
         }));
+        markAccessControlSaved("enableQA");
       }
     } catch (err: unknown) {
       if (accessControlVersionsRef.current.enableQA === version) {
+        markAccessControlFailed("enableQA");
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
           enableQA: previousValue,
@@ -3840,6 +4974,7 @@ export function CourseCreatePage({
   };
 
   const handleToggleComments = async () => {
+    clearAccessControlStatus("enableComments");
     const previousValue = accessRulesDraftRef.current.enableComments;
     const nextValue = !previousValue;
     const version = ++accessControlVersionsRef.current.enableComments;
@@ -3882,9 +5017,11 @@ export function CourseCreatePage({
           ...prev,
           enableComments: confirmedComments,
         }));
+        markAccessControlSaved("enableComments");
       }
     } catch (err: unknown) {
       if (accessControlVersionsRef.current.enableComments === version) {
+        markAccessControlFailed("enableComments");
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
           enableComments: previousValue,
@@ -3910,6 +5047,7 @@ export function CourseCreatePage({
   };
 
   const handleToggleDownloads = async () => {
+    clearAccessControlStatus("enableDownloads");
     const previousValue = accessRulesDraftRef.current.enableDownloads;
     const nextValue = !previousValue;
     const version = ++accessControlVersionsRef.current.enableDownloads;
@@ -3952,9 +5090,11 @@ export function CourseCreatePage({
           ...prev,
           enableDownloads: confirmedDownloads,
         }));
+        markAccessControlSaved("enableDownloads");
       }
     } catch (err: unknown) {
       if (accessControlVersionsRef.current.enableDownloads === version) {
+        markAccessControlFailed("enableDownloads");
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
           enableDownloads: previousValue,
@@ -4086,6 +5226,7 @@ export function CourseCreatePage({
   };
 
   const handleStartEditSectionTitle = (sectionId: string) => {
+    clearCurriculumItemStatus(sectionId);
     setSections((prev) =>
       prev.map((s) =>
         s.id === sectionId ? { ...s, isEditingTitle: true } : s,
@@ -4126,6 +5267,7 @@ export function CourseCreatePage({
           ),
         );
         setToastMessage(`Section updated to "${trimmedTitle}".`);
+        markCurriculumItemSaved(sectionId);
       } catch (err: unknown) {
         const errorMsg =
           (err as { message?: string })?.message ||
@@ -4136,6 +5278,7 @@ export function CourseCreatePage({
             s.id === sectionId ? { ...s, isEditingTitle: false } : s,
           ),
         );
+        markCurriculumItemFailed(sectionId);
       } finally {
         setUpdatingSectionId(null);
       }
@@ -4517,6 +5660,7 @@ export function CourseCreatePage({
     lessonId: string,
     updates: Partial<CurriculumLessonItem>,
   ) => {
+    clearCurriculumItemStatus(lessonId);
     const currentSections = sectionsRef.current || sections;
     const nextSections = currentSections.map((sec) => {
       if (sec.id !== sectionId) return sec;
@@ -4624,12 +5768,14 @@ export function CourseCreatePage({
           });
 
           setToastMessage(`Lesson "${trimmedTitle}" updated successfully.`);
+          markCurriculumItemSaved(lessonId);
           return true;
         } catch (err: unknown) {
           const errorMsg =
             (err as { message?: string })?.message ||
             "Failed to update lesson.";
           setToastMessage(errorMsg);
+          markCurriculumItemFailed(lessonId);
           return false;
         } finally {
           setSavingLessonId(null);
@@ -5227,6 +6373,16 @@ export function CourseCreatePage({
         });
         setServerPricing(newBaseline);
         serverPricingRef.current = newBaseline;
+
+        if (controlKey === "pricingDetails") {
+          const field = lastEditedPricingFieldRef.current;
+          if (field) {
+            markPricingControlSaved(field);
+          }
+          markPricingControlSaved("pricingDetails");
+        } else {
+          markPricingControlSaved(controlKey);
+        }
       }
       return res;
     };
@@ -5246,6 +6402,7 @@ export function CourseCreatePage({
               ...prev,
               pricingType: previousSnapshot.pricingType,
             }));
+            markPricingControlFailed("pricingType");
           } else if (controlKey === "currency") {
             pricingDraftRef.current = {
               ...pricingDraftRef.current,
@@ -5255,6 +6412,7 @@ export function CourseCreatePage({
               ...prev,
               currency: previousSnapshot.currency,
             }));
+            markPricingControlFailed("currency");
           } else if (controlKey === "pricingDetails") {
             pricingDraftRef.current = {
               ...pricingDraftRef.current,
@@ -5266,6 +6424,11 @@ export function CourseCreatePage({
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
             }));
+            const field = lastEditedPricingFieldRef.current;
+            if (field) {
+              markPricingControlFailed(field);
+            }
+            markPricingControlFailed("pricingDetails");
           }
           const errorMsg =
             err instanceof Error
@@ -5336,6 +6499,7 @@ export function CourseCreatePage({
   const handlePricingTypeChange = async (type: PricingType) => {
     if (pricingDraftRef.current.pricingType === type) return;
 
+    clearPricingControlStatus("pricingType");
     if (pricingDebounceTimerRef.current) {
       clearTimeout(pricingDebounceTimerRef.current);
       pricingDebounceTimerRef.current = null;
@@ -5378,6 +6542,9 @@ export function CourseCreatePage({
   };
 
   const handleSellingPriceChange = (val: string) => {
+    lastEditedPricingFieldRef.current = "sellingPrice";
+    clearPricingControlStatus("sellingPrice");
+    clearPricingControlStatus("pricingDetails");
     const digitsOnly = val.replace(/\D/g, "");
     pricingDraftRef.current = {
       ...pricingDraftRef.current,
@@ -5396,6 +6563,9 @@ export function CourseCreatePage({
   };
 
   const handleOriginalPriceChange = (val: string) => {
+    lastEditedPricingFieldRef.current = "originalPrice";
+    clearPricingControlStatus("originalPrice");
+    clearPricingControlStatus("pricingDetails");
     const digitsOnly = val.replace(/\D/g, "");
     pricingDraftRef.current = {
       ...pricingDraftRef.current,
@@ -5416,6 +6586,7 @@ export function CourseCreatePage({
   const handleCurrencyChange = async (val: string) => {
     if (pricingDraftRef.current.currency === val) return;
 
+    clearPricingControlStatus("currency");
     const previousSnapshot = { ...pricingDraftRef.current };
     const version = ++pricingVersionRef.current;
     pricingControlVersionsRef.current.currency = version;
@@ -5599,10 +6770,29 @@ export function CourseCreatePage({
 
     const execute = async () => {
       try {
-        return await run();
+        const result = await run();
+        if (result && basicsVersionRef.current === targetVersion) {
+          if (
+            controlKey === "title" ||
+            controlKey === "shortDescription" ||
+            controlKey === "courseDescription" ||
+            controlKey === "instructorAlias"
+          ) {
+            markBasicsFieldSaved(controlKey);
+          }
+        }
+        return result;
       } catch (err: unknown) {
         // Rollback only if no newer edit has superseded this one
         if (basicsVersionRef.current === targetVersion) {
+          if (
+            controlKey === "title" ||
+            controlKey === "shortDescription" ||
+            controlKey === "courseDescription" ||
+            controlKey === "instructorAlias"
+          ) {
+            markBasicsFieldFailed(controlKey);
+          }
           if (controlKey === "title") {
             setCourseTitle(previousSnapshot.title);
           } else if (controlKey === "shortDescription") {
@@ -5687,8 +6877,10 @@ export function CourseCreatePage({
             instructorAlias:
               created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
           };
+          markBasicsFieldSaved("title");
           return created;
         } catch (err: unknown) {
+          markBasicsFieldFailed("title");
           const errorMsg =
             err instanceof Error
               ? err.message
@@ -5773,6 +6965,7 @@ export function CourseCreatePage({
 
     // 1. Optimistic UI update
     setShowInstructorName(nextValue);
+    clearBasicsFieldStatus("showInstructorName");
     markBasicsControlSaving("showInstructorName", true);
     inFlightBasicsControlsRef.current.showInstructorName =
       (inFlightBasicsControlsRef.current.showInstructorName || 0) + 1;
@@ -5797,15 +6990,17 @@ export function CourseCreatePage({
         };
         setServerBasics(newBaseline);
         serverBasicsRef.current = newBaseline;
+        markBasicsFieldSaved("showInstructorName");
       }
     } catch (err: unknown) {
       if (basicsVersionRef.current === version) {
         setShowInstructorName(previousValue);
+        markBasicsFieldFailed("showInstructorName");
         const errorMsg =
           err instanceof Error
             ? err.message
             : "Failed to update instructor name visibility.";
-        setToastMessage(errorMsg);
+          setToastMessage(errorMsg);
       }
     } finally {
       inFlightBasicsControlsRef.current.showInstructorName = Math.max(
@@ -5944,57 +7139,80 @@ export function CourseCreatePage({
           setServerBasics(updatedBaseline);
           serverBasicsRef.current = updatedBaseline;
         }
+        markBasicsFieldSaved("title");
+        setBasicsSaveFailed(false);
+        triggerBasicsSavedBriefly();
         return created;
       } else {
-        await flushBasicsPersistence();
+        const ok = await flushBasicsPersistence();
+        if (!ok) {
+          setBasicsSaveFailed(true);
+        } else {
+          setBasicsSaveFailed(false);
+          triggerBasicsSavedBriefly();
+        }
         return serverBasicsRef.current;
       }
+    } catch (err) {
+      setBasicsSaveFailed(true);
+      throw err;
     } finally {
       setIsSavingBasics(false);
     }
   };
 
   const saveCurriculumStep = async (explicitCourseId?: string | null) => {
-    let targetCourseId = explicitCourseId || currentCourseId;
-    if (!targetCourseId) {
-      throw new Error("Please enter a course title on the Basics tab first.");
-    }
+    setIsSavingCurriculum(true);
+    setCurriculumSaveFailed(false);
+    try {
+      let targetCourseId = explicitCourseId || currentCourseId;
+      if (!targetCourseId) {
+        throw new Error("Please enter a course title on the Basics tab first.");
+      }
 
-    // 1. Save any pending section title edits
-    const editingSections = sections.filter(
-      (s) =>
-        s.isEditingTitle &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          s.id,
-        ),
-    );
-    if (editingSections.length > 0) {
-      await Promise.all(
-        editingSections.map(async (sec) => {
-          const trimmed = sec.title.trim();
-          if (trimmed) {
-            await updateSectionMutation.mutateAsync({
-              courseId: targetCourseId,
-              sectionId: sec.id,
-              payload: { title: trimmed },
-            });
-            setSections((prev) =>
-              prev.map((s) =>
-                s.id === sec.id ? { ...s, isEditingTitle: false } : s,
-              ),
-            );
-          }
-        }),
+      // 1. Save any pending section title edits
+      const editingSections = sections.filter(
+        (s) =>
+          s.isEditingTitle &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            s.id,
+          ),
       );
-    }
+      if (editingSections.length > 0) {
+        await Promise.all(
+          editingSections.map(async (sec) => {
+            const trimmed = sec.title.trim();
+            if (trimmed) {
+              await updateSectionMutation.mutateAsync({
+                courseId: targetCourseId,
+                sectionId: sec.id,
+                payload: { title: trimmed },
+              });
+              setSections((prev) =>
+                prev.map((s) =>
+                  s.id === sec.id ? { ...s, isEditingTitle: false } : s,
+                ),
+              );
+              markCurriculumItemSaved(sec.id);
+            }
+          }),
+        );
+      }
 
-    // 2. Save all dirty lessons across all sections
-    const allSaved = await saveAllDirtyLessons(targetCourseId);
-    if (!allSaved) {
-      throw new Error("Failed to save some lessons in curriculum.");
-    }
+      // 2. Save all dirty lessons across all sections
+      const allSaved = await saveAllDirtyLessons(targetCourseId);
+      if (!allSaved) {
+        throw new Error("Failed to save some lessons in curriculum.");
+      }
 
-    return true;
+      triggerCurriculumSavedBriefly();
+      return true;
+    } catch (err) {
+      setCurriculumSaveFailed(true);
+      throw err;
+    } finally {
+      setIsSavingCurriculum(false);
+    }
   };
 
   const saveAccessRulesStep = async (explicitCourseId?: string | null) => {
@@ -6069,7 +7287,12 @@ export function CourseCreatePage({
       setAccessRulesExists(true);
       setServerAccessRules(newBaseline);
       setAccessRulesDraft(newBaseline);
+      setAccessRulesSaveFailed(false);
+      triggerAccessRulesSavedBriefly();
       return { accessRule: accessRuleRes };
+    } catch (err) {
+      setAccessRulesSaveFailed(true);
+      throw err;
     } finally {
       setIsSavingAccessRules(false);
     }
@@ -6123,7 +7346,12 @@ export function CourseCreatePage({
       serverPricingRef.current = newBaseline;
       setPricingDraft(newBaseline);
       pricingDraftRef.current = newBaseline;
+      setPricingSaveFailed(false);
+      triggerPricingSavedBriefly();
       return res;
+    } catch (err) {
+      setPricingSaveFailed(true);
+      throw err;
     } finally {
       setIsSavingPricing(false);
     }
@@ -6192,9 +7420,29 @@ export function CourseCreatePage({
         );
       }
 
+      setExtrasSaveFailed(false);
+      triggerExtrasSavedBriefly();
       return { success: true };
+    } catch (err) {
+      setExtrasSaveFailed(true);
+      throw err;
     } finally {
       setIsSavingExtras(false);
+    }
+  };
+
+  const savePublishStep = async (explicitCourseId?: string | null) => {
+    setIsSavingPublish(true);
+    setPublishSaveFailed(false);
+    try {
+      await reconcileDirtyState();
+      triggerPublishSavedBriefly();
+      return true;
+    } catch (err) {
+      setPublishSaveFailed(true);
+      throw err;
+    } finally {
+      setIsSavingPublish(false);
     }
   };
 
@@ -6209,6 +7457,8 @@ export function CourseCreatePage({
       return await savePricingStep();
     } else if (activeStep === "extras") {
       return await saveExtrasStep();
+    } else if (activeStep === "publish") {
+      return await savePublishStep();
     }
   };
 
@@ -6684,18 +7934,6 @@ export function CourseCreatePage({
                         : "Add the essential details of your course."}
                     </p>
                   </div>
-                  {savingBasicsControls.size > 0 && (
-                    <div
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-(--accent-light) text-(--accent) text-[0.76rem] font-medium"
-                      aria-live="polite"
-                    >
-                      <CircleNotch
-                        size={13}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving...</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="relative flex flex-col gap-2 mb-5">
@@ -6732,13 +7970,19 @@ export function CourseCreatePage({
                       />
                     </div>
                   )}
-                  <label
-                    htmlFor="course-title"
-                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                  >
-                    Course Title{" "}
-                    <span className="text-[#ff5252] ml-0.5">*</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="course-title"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                    >
+                      Course Title{" "}
+                      <span className="text-[#ff5252] ml-0.5">*</span>
+                    </label>
+                    <BasicsFieldStatusIndicator
+                      status={getBasicsFieldDisplayStatus("title")}
+                      testId="basics-field-status-title"
+                    />
+                  </div>
                   <div className="relative flex items-center">
                     <input
                       id="course-title"
@@ -6751,6 +7995,7 @@ export function CourseCreatePage({
                       onChange={(e) => {
                         const val = e.target.value.slice(0, 120);
                         setCourseTitle(val);
+                        clearBasicsFieldStatus("title");
                         if (val.trim()) {
                           setShowTitleTooltip(false);
                         }
@@ -6789,12 +8034,18 @@ export function CourseCreatePage({
                 </div>
 
                 <div className="flex flex-col gap-2 mb-5">
-                  <label
-                    htmlFor="course-short-description"
-                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                  >
-                    Short Description
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="course-short-description"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                    >
+                      Short Description
+                    </label>
+                    <BasicsFieldStatusIndicator
+                      status={getBasicsFieldDisplayStatus("shortDescription")}
+                      testId="basics-field-status-shortDescription"
+                    />
+                  </div>
                   <div className="relative flex items-center">
                     <textarea
                       id="course-short-description"
@@ -6803,9 +8054,10 @@ export function CourseCreatePage({
                       placeholder="A concise summary of your course (shown in course cards and search)..."
                       disabled={!isDownstreamUnlocked}
                       value={shortDescription}
-                      onChange={(e) =>
-                        setShortDescription(e.target.value.slice(0, 150))
-                      }
+                      onChange={(e) => {
+                        setShortDescription(e.target.value.slice(0, 150));
+                        clearBasicsFieldStatus("shortDescription");
+                      }}
                       onBlur={() => {
                         void persistBasicsField("shortDescription");
                       }}
@@ -6823,18 +8075,27 @@ export function CourseCreatePage({
                     void persistBasicsField("courseDescription");
                   }}
                 >
-                  <label
-                    htmlFor="course-description"
-                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                  >
-                    Course Description{" "}
-                    <span className="text-[#ff5252] ml-0.5">*</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="course-description"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                    >
+                      Course Description{" "}
+                      <span className="text-[#ff5252] ml-0.5">*</span>
+                    </label>
+                    <BasicsFieldStatusIndicator
+                      status={getBasicsFieldDisplayStatus("courseDescription")}
+                      testId="basics-field-status-courseDescription"
+                    />
+                  </div>
                   <RichTextEditor
                     id="course-description"
                     disabled={!isDownstreamUnlocked}
                     value={courseDescription}
-                    onChange={setCourseDescription}
+                    onChange={(val) => {
+                      setCourseDescription(val);
+                      clearBasicsFieldStatus("courseDescription");
+                    }}
                     placeholder="Describe what your course is about, what students will learn, and who this course is for..."
                     maxLength={1500}
                   />
@@ -6842,12 +8103,18 @@ export function CourseCreatePage({
 
                 {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
                 <div className="flex flex-col gap-2 mb-4.5">
-                  <label
-                    htmlFor="instructor-alias"
-                    className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                  >
-                    Instructor Alias
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="instructor-alias"
+                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                    >
+                      Instructor Alias
+                    </label>
+                    <BasicsFieldStatusIndicator
+                      status={getBasicsFieldDisplayStatus("instructorAlias")}
+                      testId="basics-field-status-instructorAlias"
+                    />
+                  </div>
                   <input
                     id="instructor-alias"
                     type="text"
@@ -6855,7 +8122,10 @@ export function CourseCreatePage({
                     placeholder="e.g. Alex Rivera or Design Guild"
                     disabled={!isDownstreamUnlocked}
                     value={instructorAlias}
-                    onChange={(e) => setInstructorAlias(e.target.value)}
+                    onChange={(e) => {
+                      setInstructorAlias(e.target.value);
+                      clearBasicsFieldStatus("instructorAlias");
+                    }}
                     onBlur={() => {
                       void persistBasicsField("instructorAlias");
                     }}
@@ -6869,9 +8139,15 @@ export function CourseCreatePage({
                 {/* Show Instructor Name Settings Row */}
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex flex-col min-w-0 pr-3">
-                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                      Show Instructor Name
-                    </strong>
+                    <div className="flex items-center gap-2">
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                        Show Instructor Name
+                      </strong>
+                      <BasicsFieldStatusIndicator
+                        status={getBasicsFieldDisplayStatus("showInstructorName")}
+                        testId="basics-field-status-showInstructorName"
+                      />
+                    </div>
                     <p className="m-0 text-(--muted) text-[0.8rem]">
                       Control whether the instructor name is shown to students.
                     </p>
@@ -7481,15 +8757,12 @@ export function CourseCreatePage({
                           />
                           <span>Saving order...</span>
                         </span>
-                      ) : updatingSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                          <CircleNotch
-                            size={12}
-                            className="animate-spin text-(--accent)"
-                          />
-                          <span>Saving...</span>
-                        </span>
-                      ) : null}
+                      ) : (
+                        <CurriculumItemStatusIndicator
+                          status={getCurriculumItemDisplayStatus(sec.id)}
+                          testId={`curriculum-status-section-${sec.id}`}
+                        />
+                      )}
                       <button
                         type="button"
                         disabled={
@@ -7674,15 +8947,12 @@ export function CourseCreatePage({
                                     />
                                     <span>Deleting...</span>
                                   </span>
-                                ) : savingLessonId === les.id ? (
-                                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                    <CircleNotch
-                                      size={12}
-                                      className="animate-spin text-(--accent)"
-                                    />
-                                    <span>Saving...</span>
-                                  </span>
-                                ) : null}
+                                ) : (
+                                  <CurriculumItemStatusIndicator
+                                    status={getCurriculumItemDisplayStatus(les.id)}
+                                    testId={`curriculum-status-lesson-${les.id}`}
+                                  />
+                                )}
                                 {les.isPublished === false && (
                                   <span
                                     className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
@@ -8317,66 +9587,6 @@ export function CourseCreatePage({
                                         </p>
                                       )}
                                     </div>
-
-                                    <div className="flex justify-end mt-4 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                                      <button
-                                        type="button"
-                                        disabled={
-                                          les.isPendingCreation ||
-                                          !isLessonDirty(les) ||
-                                          savingLessonId === les.id ||
-                                          updateLessonMutation.isPending
-                                        }
-                                        style={{
-                                          fontSize: "0.80rem",
-                                          fontWeight: 700,
-                                          height: "34px",
-                                          borderRadius: "8px",
-                                          gap: "6px",
-                                          paddingLeft: "16px",
-                                          paddingRight: "16px",
-                                        }}
-                                        className={`inline-flex items-center justify-center border transition-all duration-150 ${
-                                          !isLessonDirty(les) ||
-                                          les.isPendingCreation ||
-                                          savingLessonId === les.id
-                                            ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) bg-transparent opacity-40 cursor-not-allowed pointer-events-none"
-                                            : "border-(--accent) text-(--on-accent,#ffffff) bg-(--accent) hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_12px_var(--accent-shadow)] cursor-pointer"
-                                        }`}
-                                        onClick={() =>
-                                          handleSaveLesson(sec.id, les.id)
-                                        }
-                                        title={
-                                          les.isPendingCreation
-                                            ? "Creating lesson..."
-                                            : !isLessonDirty(les)
-                                              ? "No changes to save"
-                                              : "Save changes"
-                                        }
-                                      >
-                                        {les.isPendingCreation ? (
-                                          <>
-                                            <CircleNotch
-                                              size={14}
-                                              className="animate-spin text-(--accent)"
-                                            />
-                                            <span>Creating lesson...</span>
-                                          </>
-                                        ) : savingLessonId === les.id ? (
-                                          <>
-                                            <CircleNotch
-                                              size={14}
-                                              className="animate-spin text-(--accent)"
-                                            />
-                                            <span>Saving...</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FloppyDisk size={15} /> Save Lesson
-                                          </>
-                                        )}
-                                      </button>
-                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -8433,15 +9643,10 @@ export function CourseCreatePage({
                       Choose who is allowed to access this course.
                     </p>
                   </div>
-                  {savingAccessControls.has("accessType") && (
-                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                      <CircleNotch
-                        size={14}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving...</span>
-                    </span>
-                  )}
+                  <AccessRulesControlStatusIndicator
+                    status={getAccessControlDisplayStatus("accessType")}
+                    testId="access-rules-status-accessType"
+                  />
                 </div>
 
                 <div className="flex flex-col gap-3">
@@ -8523,15 +9728,10 @@ export function CourseCreatePage({
                       Set how long learners can access this course.
                     </p>
                   </div>
-                  {savingAccessControls.has("durationMode") && (
-                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                      <CircleNotch
-                        size={14}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving...</span>
-                    </span>
-                  )}
+                  <AccessRulesControlStatusIndicator
+                    status={getAccessControlDisplayStatus("durationMode")}
+                    testId="access-rules-status-durationMode"
+                  />
                 </div>
 
                 <div className="flex flex-col gap-3">
@@ -8614,7 +9814,7 @@ export function CourseCreatePage({
 
                       {accessRules.durationMode === "fixed" && (
                         <div
-                          className="flex items-center gap-2.5 mt-3"
+                          className="flex items-center gap-2.5 mt-3 flex-wrap"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
@@ -8654,6 +9854,10 @@ export function CourseCreatePage({
                             ariaLabel="Select duration unit"
                             triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
                           />
+                          <AccessRulesControlStatusIndicator
+                            status={getAccessControlDisplayStatus("fixedDuration")}
+                            testId="access-rules-status-fixedDuration"
+                          />
                         </div>
                       )}
                     </div>
@@ -8690,15 +9894,10 @@ export function CourseCreatePage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
-                    {savingAccessControls.has("enableQA") && (
-                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-(--accent)"
-                        />
-                        <span>Saving...</span>
-                      </span>
-                    )}
+                    <AccessRulesControlStatusIndicator
+                      status={getAccessControlDisplayStatus("enableQA")}
+                      testId="access-rules-status-enableQA"
+                    />
                     <SettingsToggle
                       checked={accessRules.enableQA}
                       disabled={
@@ -8727,15 +9926,10 @@ export function CourseCreatePage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
-                    {savingAccessControls.has("enableComments") && (
-                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-(--accent)"
-                        />
-                        <span>Saving...</span>
-                      </span>
-                    )}
+                    <AccessRulesControlStatusIndicator
+                      status={getAccessControlDisplayStatus("enableComments")}
+                      testId="access-rules-status-enableComments"
+                    />
                     <SettingsToggle
                       checked={accessRules.enableComments}
                       disabled={
@@ -8765,15 +9959,10 @@ export function CourseCreatePage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
-                    {savingAccessControls.has("enableDownloads") && (
-                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-(--accent)"
-                        />
-                        <span>Saving...</span>
-                      </span>
-                    )}
+                    <AccessRulesControlStatusIndicator
+                      status={getAccessControlDisplayStatus("enableDownloads")}
+                      testId="access-rules-status-enableDownloads"
+                    />
                     <SettingsToggle
                       checked={accessRules.enableDownloads}
                       disabled={
@@ -8810,15 +9999,10 @@ export function CourseCreatePage({
                       Choose how you want to sell this course.
                     </p>
                   </div>
-                  {savingPricingControls.has("pricingType") && (
-                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                      <CircleNotch
-                        size={14}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving...</span>
-                    </span>
-                  )}
+                  <PricingControlStatusIndicator
+                    status={getPricingControlDisplayStatus("pricingType")}
+                    testId="pricing-field-status-pricingType"
+                  />
                 </div>
 
                 <div className="flex flex-col gap-3">
@@ -8917,27 +10101,23 @@ export function CourseCreatePage({
                       Set the pricing for your course.
                     </p>
                   </div>
-                  {(savingPricingControls.has("pricingDetails") ||
-                    savingPricingControls.has("currency")) && (
-                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                      <CircleNotch
-                        size={14}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving...</span>
-                    </span>
-                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.75">
                   {/* Currency Combobox Field */}
                   <div className="flex flex-col gap-2 mb-5">
-                    <label
-                      id="currency-label"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Currency <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label
+                        id="currency-label"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Currency <span className="text-[#ff5252] ml-0.5">*</span>
+                      </label>
+                      <PricingControlStatusIndicator
+                        status={getPricingControlDisplayStatus("currency")}
+                        testId="pricing-field-status-currency"
+                      />
+                    </div>
                     <ThemedSelect
                       value={pricing.currency || "INR"}
                       onValueChange={handleCurrencyChange}
@@ -8960,13 +10140,19 @@ export function CourseCreatePage({
 
                   {/* Selling Price Field */}
                   <div className="flex flex-col gap-2 mb-5">
-                    <label
-                      htmlFor="selling-price"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Selling price{" "}
-                      <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="selling-price"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Selling price{" "}
+                        <span className="text-[#ff5252] ml-0.5">*</span>
+                      </label>
+                      <PricingControlStatusIndicator
+                        status={getPricingControlDisplayStatus("sellingPrice")}
+                        testId="pricing-field-status-sellingPrice"
+                      />
+                    </div>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
                         {getCurrencySymbol(pricing.currency || "INR")}
@@ -8999,12 +10185,18 @@ export function CourseCreatePage({
 
                   {/* Original Price Field */}
                   <div className="flex flex-col gap-2 mb-5">
-                    <label
-                      htmlFor="original-price"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Original price
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="original-price"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Original price
+                      </label>
+                      <PricingControlStatusIndicator
+                        status={getPricingControlDisplayStatus("originalPrice")}
+                        testId="pricing-field-status-originalPrice"
+                      />
+                    </div>
                     <div className="relative flex items-center w-full">
                       <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
                         {getCurrencySymbol(pricing.currency || "INR")}
@@ -9149,15 +10341,10 @@ export function CourseCreatePage({
                     </p>
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
-                    {isSavingCertificate && (
-                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-(--accent)"
-                        />
-                        <span>Saving...</span>
-                      </span>
-                    )}
+                    <ExtrasControlStatusIndicator
+                      status={getExtrasControlDisplayStatus("enableCertificate")}
+                      testId="extras-field-status-enableCertificate"
+                    />
                     <SettingsToggle
                       checked={extras.enableCertificate}
                       disabled={isSavingCertificate}
@@ -9435,8 +10622,8 @@ export function CourseCreatePage({
                       <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
                         Course inclusions
                       </h4>
-                      {(isReorderingIncludes ||
-                        reorderIncludesMutation.isPending) && (
+                      {isReorderingIncludes ||
+                      reorderIncludesMutation.isPending ? (
                         <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
                           <CircleNotch
                             size={12}
@@ -9444,6 +10631,11 @@ export function CourseCreatePage({
                           />
                           <span>Saving inclusion order...</span>
                         </span>
+                      ) : (
+                        <ExtrasControlStatusIndicator
+                          status={extrasControlStatus["inclusions"] ?? null}
+                          testId="extras-field-status-inclusions"
+                        />
                       )}
                     </div>
                     <span
@@ -9567,14 +10759,11 @@ export function CourseCreatePage({
                             placeholder="e.g. Personal guidance"
                             maxLength={25}
                           />
-                          {savingIncludeIds.has(item.id) ? (
-                            <span className="text-(--accent) text-[0.74rem] font-medium shrink-0 select-none px-1 flex items-center gap-1">
-                              <CircleNotch
-                                size={12}
-                                className="animate-spin text-(--accent)"
-                              />
-                              <span>Saving...</span>
-                            </span>
+                          {getExtrasControlDisplayStatus(item.id) ? (
+                            <ExtrasControlStatusIndicator
+                              status={getExtrasControlDisplayStatus(item.id)}
+                              testId={`extras-field-status-inclusion-${item.id}`}
+                            />
                           ) : focusedInclusionId === item.id ? (
                             <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
                               {item.text.length} / 25
@@ -10126,7 +11315,7 @@ export function CourseCreatePage({
         className="course-wizard-sticky-bottom-bar"
         data-testid="course-wizard-sticky-bottom-bar"
       >
-        <div className="flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
+        <div className="relative flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
           {/* Left: Preview Button */}
           <div className="flex items-center gap-2.5 shrink-0">
             <button
@@ -10164,6 +11353,264 @@ export function CourseCreatePage({
               )}
             </button>
           </div>
+
+          {/* Center: True horizontal center save status */}
+          {activeStep === "basics" && basicsOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="basics-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {basicsOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {basicsOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {basicsOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Center: True horizontal center save status for Curriculum */}
+          {activeStep === "curriculum" && curriculumOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="curriculum-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {curriculumOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {curriculumOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {curriculumOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Center: True horizontal center save status for Access Rules */}
+          {activeStep === "access-rules" && accessRulesOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="access-rules-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {accessRulesOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {accessRulesOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {accessRulesOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Center: True horizontal center save status for Pricing */}
+          {activeStep === "pricing" && pricingOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="pricing-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {pricingOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {pricingOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {pricingOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Center: True horizontal center save status for Extras */}
+          {activeStep === "extras" && extrasOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="extras-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {extrasOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {extrasOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {extrasOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Center: True horizontal center save status for Publish */}
+          {activeStep === "publish" && publishOverallStatus && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              data-testid="publish-overall-save-status"
+              aria-live="polite"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+                {publishOverallStatus === "saving" && (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span className="text-(--text-secondary)">
+                      Saving changes...
+                    </span>
+                  </>
+                )}
+                {publishOverallStatus === "failed" && (
+                  <>
+                    <WarningCircle
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500 shrink-0"
+                    />
+                    <span className="text-rose-500">Save failed</span>
+                  </>
+                )}
+                {publishOverallStatus === "saved" && (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      weight="fill"
+                      className="text-emerald-500 shrink-0"
+                    />
+                    <span className="text-emerald-500">All changes saved</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Right: Previous & Next / Validate / Publish Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
@@ -10358,6 +11805,312 @@ export function CourseCreatePage({
           </div>
         </div>
       </div>
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Basics only, above mobile bar) */}
+      {activeStep === "basics" && basicsOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="basics-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {basicsOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {basicsOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {basicsOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Curriculum only, above mobile bar) */}
+      {activeStep === "curriculum" && curriculumOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="curriculum-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {curriculumOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {curriculumOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {curriculumOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Access Rules only, above mobile bar) */}
+      {activeStep === "access-rules" && accessRulesOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="access-rules-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {accessRulesOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {accessRulesOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {accessRulesOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Pricing only, above mobile bar) */}
+      {activeStep === "pricing" && pricingOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="pricing-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {pricingOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {pricingOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {pricingOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Extras only, above mobile bar) */}
+      {activeStep === "extras" && extrasOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="extras-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {extrasOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {extrasOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {extrasOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sticky / Fixed Bottom Save Status Pill (Publish only, above mobile bar) */}
+      {activeStep === "publish" && publishOverallStatus && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+            bottomNavHidden
+              ? "opacity-0 translate-y-3 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
+          style={{
+            bottom:
+              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+          }}
+          data-testid="publish-overall-save-status-mobile"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+            {publishOverallStatus === "saving" && (
+              <>
+                <CircleNotch
+                  size={13}
+                  className="animate-spin text-(--accent)"
+                />
+                <span className="text-(--text-secondary)">
+                  Saving changes...
+                </span>
+              </>
+            )}
+            {publishOverallStatus === "failed" && (
+              <>
+                <WarningCircle
+                  size={13}
+                  weight="fill"
+                  className="text-rose-500 shrink-0"
+                />
+                <span className="text-rose-500">Save failed</span>
+              </>
+            )}
+            {publishOverallStatus === "saved" && (
+              <>
+                <CheckCircle
+                  size={13}
+                  weight="fill"
+                  className="text-emerald-500 shrink-0"
+                />
+                <span className="text-emerald-500">All changes saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Mobile Sticky / Fixed Bottom Action Bar */}
       <div
