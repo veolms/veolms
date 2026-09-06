@@ -339,4 +339,126 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(getTabIndicatorVisible("basics")).toBe(false);
     });
   });
+
+  describe("6. Persistent Sticky Bottom Action Bar Navigation Contract", () => {
+    interface BottomBarButtonProps {
+      step: CourseWizardStepId;
+      isDownstreamUnlocked: boolean;
+      isAnyApiInProgress: boolean;
+      isPreviewLoading: boolean;
+      actionLoading: string | null;
+      isValidating: boolean;
+      isPublished: boolean;
+      isCourseReadyToPublish: boolean;
+    }
+
+    const evaluateBottomBarStates = ({
+      step,
+      isDownstreamUnlocked,
+      isAnyApiInProgress,
+      isPreviewLoading,
+      actionLoading,
+      isValidating,
+      isPublished,
+      isCourseReadyToPublish,
+    }: BottomBarButtonProps) => {
+      const currentIdx = WIZARD_STEP_IDS.indexOf(step);
+      const previousStepId = currentIdx > 0 ? WIZARD_STEP_IDS[currentIdx - 1] : null;
+      const nextStepId = currentIdx < WIZARD_STEP_IDS.length - 1 ? WIZARD_STEP_IDS[currentIdx + 1] : null;
+
+      const previewDisabled = isAnyApiInProgress || isPreviewLoading;
+      const previousDisabled = step === "basics" || isAnyApiInProgress;
+      const isNextDisabled =
+        actionLoading !== null || (!isDownstreamUnlocked && step === "basics");
+      const isValidateDisabled = actionLoading !== null || isValidating;
+      const isPublishDisabled = actionLoading !== null || !isCourseReadyToPublish;
+
+      return {
+        previousStepId,
+        nextStepId,
+        previewDisabled,
+        previousDisabled,
+        isNextDisabled,
+        isValidateDisabled,
+        isPublishDisabled,
+        isPublishStep: step === "publish",
+        showUnpublish: step === "publish" && isPublished,
+      };
+    };
+
+    it("evaluates correct button states on Basics step for a new course without title", () => {
+      const states = evaluateBottomBarStates({
+        step: "basics",
+        isDownstreamUnlocked: false,
+        isAnyApiInProgress: false,
+        isPreviewLoading: false,
+        actionLoading: null,
+        isValidating: false,
+        isPublished: false,
+        isCourseReadyToPublish: false,
+      });
+
+      expect(states.previousStepId).toBeNull();
+      expect(states.previousDisabled).toBe(true);
+      expect(states.nextStepId).toBe("curriculum");
+      expect(states.isNextDisabled).toBe(true); // Locked until title entered
+      expect(states.previewDisabled).toBe(false);
+    });
+
+    it("unlocks Next button on Basics step once title is provided", () => {
+      const states = evaluateBottomBarStates({
+        step: "basics",
+        isDownstreamUnlocked: true,
+        isAnyApiInProgress: false,
+        isPreviewLoading: false,
+        actionLoading: null,
+        isValidating: false,
+        isPublished: false,
+        isCourseReadyToPublish: false,
+      });
+
+      expect(states.previousDisabled).toBe(true);
+      expect(states.isNextDisabled).toBe(false);
+      expect(states.nextStepId).toBe("curriculum");
+    });
+
+    it("disables all navigation buttons while API operations or saves are in-flight", () => {
+      const states = evaluateBottomBarStates({
+        step: "curriculum",
+        isDownstreamUnlocked: true,
+        isAnyApiInProgress: true,
+        isPreviewLoading: false,
+        actionLoading: "save",
+        isValidating: false,
+        isPublished: false,
+        isCourseReadyToPublish: false,
+      });
+
+      expect(states.previewDisabled).toBe(true);
+      expect(states.previousDisabled).toBe(true);
+      expect(states.isNextDisabled).toBe(true);
+    });
+
+    it("transforms Next into Validate and shows Publish CTA on Publish step", () => {
+      const states = evaluateBottomBarStates({
+        step: "publish",
+        isDownstreamUnlocked: true,
+        isAnyApiInProgress: false,
+        isPreviewLoading: false,
+        actionLoading: null,
+        isValidating: false,
+        isPublished: true,
+        isCourseReadyToPublish: true,
+      });
+
+      expect(states.isPublishStep).toBe(true);
+      expect(states.previousDisabled).toBe(false);
+      expect(states.previousStepId).toBe("extras");
+      expect(states.nextStepId).toBeNull();
+      expect(states.isValidateDisabled).toBe(false);
+      expect(states.showUnpublish).toBe(true);
+      expect(states.isPublishDisabled).toBe(false);
+    });
+  });
 });
+

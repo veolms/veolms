@@ -5,10 +5,14 @@
    ───────────────────────────────────────────────────────────────────────────── */
 /* Sticky Course Wizard Tabs Navigation */
 .course-wizard-steps-nav {
-  --wizard-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
+  --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
   position: sticky !important;
   top: var(--page-tabs-sticky-top, 0px) !important;
   z-index: 30 !important;
+  width: auto !important;
+  max-width: none !important;
+  align-self: stretch !important;
+  box-sizing: border-box !important;
   margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 14px !important;
   padding: 0 var(--wizard-tab-nav-bleed) !important;
   gap: 8px !important;
@@ -98,7 +102,49 @@
   will-change: transform;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 641px) {
+  .courses-main:has([data-course-wizard]),
+  .courses-main:has(.course-wizard-sticky-bottom-bar),
+  .courses-main:has(.course-wizard-steps-nav),
+  .student-surface-main:has([data-course-wizard]),
+  .student-surface-main:has(.course-wizard-sticky-bottom-bar),
+  .student-surface-main:has(.course-wizard-steps-nav) {
+    padding-bottom: 0 !important;
+  }
+}
+
+.course-wizard-sticky-bottom-bar {
+  --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 25 !important;
+  width: auto !important;
+  max-width: none !important;
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+  margin: 16px calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
+  padding: 12px var(--wizard-tab-nav-bleed) 14px !important;
+  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent) !important;
+  box-shadow: 0 -4px 20px color-mix(in srgb, var(--accent-shadow) 8%, transparent);
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+
+:root[data-theme="light"] .course-wizard-sticky-bottom-bar {
+  border-top-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+}
+
+@media (max-width: 640px) {
+  .course-wizard-sticky-bottom-bar {
+    display: none !important;
+  }
+}
+
+@media (min-width: 641px) {
   .course-wizard-mobile-action-bar {
     display: none !important;
   }
@@ -757,9 +803,11 @@
    Course Wizard — Mobile Scrollport Bottom Space Optimization
    Eliminate excess trailing blank space beneath cards on small viewports.
    ───────────────────────────────────────────────────────────────────────────── */
-@media (max-width: 820px) {
+@media (max-width: 640px) {
   .student-surface-main:has(.course-wizard-steps-nav),
-  .student-surface-main:has(.course-wizard-mobile-action-bar) {
+  .student-surface-main:has(.course-wizard-mobile-action-bar),
+  .courses-main:has(.course-wizard-steps-nav),
+  .courses-main:has(.course-wizard-mobile-action-bar) {
     padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
   }
 }
@@ -771,6 +819,9 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .course-wizard-tab-content .swipeable-tab-panel__swiper {
