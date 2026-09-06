@@ -2595,6 +2595,33 @@ export function CourseCreatePage({
     showInstructorName: 0,
   });
   const inFlightBasicsPromiseRef = useRef<Promise<unknown> | null>(null);
+  /**
+   * Shared in-flight new-course creation promise.
+   * Registered BEFORE the first await so every concurrent caller joins the
+   * same POST /courses request instead of firing a new one.
+   * Cleared in the finally block after success or failure.
+   */
+  const inFlightCourseCreationPromiseRef = useRef<Promise<{
+    id: string;
+    version: number;
+    title: string;
+    instructorAlias?: string | null;
+  }> | null>(null);
+
+  /**
+   * 1-second debounce timer for initial new-course title creation.
+   * Cleared whenever the user presses Enter, blurs, navigates, saves, or unmounts.
+   */
+  const titleCreationDebounceTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const cancelTitleCreationDebounce = () => {
+    if (titleCreationDebounceTimerRef.current) {
+      clearTimeout(titleCreationDebounceTimerRef.current);
+      titleCreationDebounceTimerRef.current = null;
+    }
+  };
 
   const markBasicsControlSaving = (controlKey: string, isSaving: boolean) => {
     if (isSaving) {
@@ -2634,6 +2661,10 @@ export function CourseCreatePage({
 
   useEffect(() => {
     return () => {
+      if (titleCreationDebounceTimerRef.current) {
+        clearTimeout(titleCreationDebounceTimerRef.current);
+        titleCreationDebounceTimerRef.current = null;
+      }
       Object.values(basicsFieldTimersRef.current).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
@@ -2701,7 +2732,10 @@ export function CourseCreatePage({
   ): "saving" | "saved" | "failed" | null => {
     if (
       savingBasicsControls.has(fieldKey) ||
-      (inFlightBasicsControlsRef.current[fieldKey] ?? 0) > 0
+      (inFlightBasicsControlsRef.current[fieldKey] ?? 0) > 0 ||
+      (!currentCourseId &&
+        fieldKey === "title" &&
+        createCourseMutation.isPending)
     ) {
       return "saving";
     }
@@ -2720,7 +2754,11 @@ export function CourseCreatePage({
   const isEditing = Boolean(activeEditId);
   const isNewCourse = !currentCourseId && !isEditing;
   const isCourseTitleFilled = Boolean(courseTitle.trim());
-  const isDownstreamUnlocked = Boolean(currentCourseId) || isCourseTitleFilled;
+  // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
+  // course ID exists. A non-empty title alone (isCourseTitleFilled) is NOT
+  // sufficient — allowing that caused tabs to become clickable before creation
+  // completed, which let concurrent callers each fire their own POST /courses.
+  const isDownstreamUnlocked = Boolean(currentCourseId);
 
   const currentCourseIdRef = useRef<string | null>(currentCourseId);
   useEffect(() => {
@@ -2841,6 +2879,12 @@ export function CourseCreatePage({
   const isPricingSaving = isSavingPricing;
   const isExtrasSaving = isSavingExtras;
   const isPublishSaving = isSavingPublish;
+
+  const isInitialCourseCreationPending =
+    !currentCourseId &&
+    (createCourseMutation.isPending ||
+      isSavingBasics ||
+      savingBasicsControls.has("title"));
 
   const isAnyBasicsSaving =
     savingBasicsControls.size > 0 ||
@@ -6902,7 +6946,8 @@ export function CourseCreatePage({
       isAnyApiInProgress ||
       isPreviewLoading ||
       actionLoading !== null ||
-      isSavingAllDirtyLessonsRef.current
+      isSavingAllDirtyLessonsRef.current ||
+      isInitialCourseCreationPending
     )
       return;
 
@@ -7066,6 +7111,63 @@ export function CourseCreatePage({
     return await promise;
   };
 
+  /**
+   * Ensures a brand-new course has been created exactly once.
+   *
+   * Invariant:
+   *   - If a creation request is already in flight, the caller JOINS that
+   *     shared promise — no second POST /courses is issued.
+   *   - If no creation is in flight, one is started and its promise is
+   *     registered synchronously (before the first await) so every subsequent
+   *     concurrent caller will find it and join rather than fork.
+   *   - currentCourseIdRef.current is updated immediately on success so every
+   *     caller that awaited the shared promise can read the confirmed ID.
+   *   - The promise is cleared in finally so a failed attempt can be retried.
+   */
+  const ensureCourseCreated = async (
+    title: string,
+    instructorAlias: string | null,
+  ): Promise<{
+    id: string;
+    version: number;
+    title: string;
+    instructorAlias?: string | null;
+  }> => {
+    // Cancel any pending title creation debounce since creation is now starting/joining.
+    cancelTitleCreationDebounce();
+
+    // If course already exists, return it.
+    if (currentCourseIdRef.current) {
+      return {
+        id: currentCourseIdRef.current,
+        version: courseVersionRef.current,
+        title: serverBasicsRef.current.title || title,
+        instructorAlias:
+          serverBasicsRef.current.instructorAlias || instructorAlias,
+      };
+    }
+
+    // Join an existing in-flight creation rather than starting a new one.
+    if (inFlightCourseCreationPromiseRef.current) {
+      return await inFlightCourseCreationPromiseRef.current;
+    }
+
+    // Register the promise SYNCHRONOUSLY before the first await so any
+    // concurrent caller that checks immediately after this line will find it.
+    const promise = createCourseMutation.mutateAsync({ title, instructorAlias });
+    inFlightCourseCreationPromiseRef.current = promise;
+    try {
+      const created = await promise;
+      // Write the confirmed ID to the ref immediately so all awaiting callers
+      // can use it as soon as the shared promise resolves.
+      currentCourseIdRef.current = created.id;
+      return created;
+    } finally {
+      // Clear regardless of success/failure so a failed attempt can be retried.
+      inFlightCourseCreationPromiseRef.current = null;
+    }
+  };
+
   const persistBasicsField = async (
     fieldKey:
       | "title"
@@ -7078,18 +7180,20 @@ export function CourseCreatePage({
 
     if (fieldKey === "title") {
       const trimmed = currentDraft.title.trim();
-      if (!currentCourseId) {
-        // Creation gate
+      if (!currentCourseIdRef.current && !currentCourseId) {
+        // Creation gate: do not call the API for an empty title.
         if (!trimmed) {
           return;
         }
         markBasicsControlSaving("title", true);
         try {
-          const created = await createCourseMutation.mutateAsync({
-            title: trimmed,
-            instructorAlias: currentDraft.instructorAlias.trim() || null,
-          });
-          currentCourseIdRef.current = created.id;
+          // ensureCourseCreated guarantees at most one POST /courses even when
+          // multiple callers (blur, tab-switch, flush, preview) race here.
+          const created = await ensureCourseCreated(
+            trimmed,
+            currentDraft.instructorAlias.trim() || null,
+          );
+          // currentCourseIdRef.current is already set inside ensureCourseCreated.
           setCurrentCourseId(created.id);
           setCourseVersion(created.version);
           courseVersionRef.current = created.version;
@@ -7103,19 +7207,38 @@ export function CourseCreatePage({
           setServerBasics(newBaseline);
           serverBasicsRef.current = newBaseline;
 
-          // CRITICAL: Preserve existing local draft fields! Do NOT reset other draft fields
-          setBasicsDraft((prev) => ({
-            ...prev,
-            title: created.title,
-            instructorAlias: created.instructorAlias ?? prev.instructorAlias,
-          }));
-          basicsDraftRef.current = {
-            ...basicsDraftRef.current,
-            title: created.title,
-            instructorAlias:
-              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
-          };
-          markBasicsFieldSaved("title");
+          // Check if title was edited while creation was in flight
+          const latestTitle = basicsDraftRef.current.title.trim();
+          if (latestTitle && latestTitle !== created.title) {
+            // User modified title while creation was in flight.
+            // Preserve user's latest draft in local state:
+            setBasicsDraft((prev) => ({
+              ...prev,
+              instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+            }));
+            basicsDraftRef.current = {
+              ...basicsDraftRef.current,
+              instructorAlias:
+                created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+            };
+            // Now that currentCourseId is established, persist the latest title
+            // through the EXISTING COURSE update path (executeSerializedBasicsMetaMutation).
+            void persistBasicsField("title");
+          } else {
+            // CRITICAL: Preserve existing local draft fields! Do NOT reset other draft fields
+            setBasicsDraft((prev) => ({
+              ...prev,
+              title: created.title,
+              instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+            }));
+            basicsDraftRef.current = {
+              ...basicsDraftRef.current,
+              title: created.title,
+              instructorAlias:
+                created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+            };
+            markBasicsFieldSaved("title");
+          }
           return created;
         } catch (err: unknown) {
           markBasicsFieldFailed("title");
@@ -7290,9 +7413,14 @@ export function CourseCreatePage({
       } catch {
         return false;
       }
-    } else if (inFlightBasicsPromiseRef.current) {
+    } else if (
+      inFlightCourseCreationPromiseRef.current ||
+      inFlightBasicsPromiseRef.current
+    ) {
       try {
-        await inFlightBasicsPromiseRef.current;
+        // Await whichever in-flight operation is active (creation takes priority).
+        await (inFlightCourseCreationPromiseRef.current ??
+          inFlightBasicsPromiseRef.current);
         return true;
       } catch {
         return false;
@@ -7316,10 +7444,14 @@ export function CourseCreatePage({
     setIsSavingBasics(true);
     try {
       if (!targetCourseId) {
-        const created = await createCourseMutation.mutateAsync({
-          title: basicsDraftRef.current.title.trim(),
-          instructorAlias: basicsDraftRef.current.instructorAlias.trim() || null,
-        });
+        // Use the shared creation helper so concurrent callers (e.g. onBlur
+        // and saveBasicsStep both firing while courseId is still null) join the
+        // same POST /courses rather than issuing duplicate requests.
+        const created = await ensureCourseCreated(
+          basicsDraftRef.current.title.trim(),
+          basicsDraftRef.current.instructorAlias.trim() || null,
+        );
+        // currentCourseIdRef.current is already set inside ensureCourseCreated.
         setCurrentCourseId(created.id);
         setCourseVersion(created.version);
         courseVersionRef.current = created.version;
@@ -7332,17 +7464,31 @@ export function CourseCreatePage({
         setServerBasics(newBaseline);
         serverBasicsRef.current = newBaseline;
 
-        setBasicsDraft((prev) => ({
-          ...prev,
-          title: created.title,
-          instructorAlias: created.instructorAlias ?? prev.instructorAlias,
-        }));
-        basicsDraftRef.current = {
-          ...basicsDraftRef.current,
-          title: created.title,
-          instructorAlias:
-            created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
-        };
+        const latestTitle = basicsDraftRef.current.title.trim();
+        if (latestTitle && latestTitle !== created.title) {
+          setBasicsDraft((prev) => ({
+            ...prev,
+            instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+          }));
+          basicsDraftRef.current = {
+            ...basicsDraftRef.current,
+            instructorAlias:
+              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+          };
+          void persistBasicsField("title");
+        } else {
+          setBasicsDraft((prev) => ({
+            ...prev,
+            title: created.title,
+            instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+          }));
+          basicsDraftRef.current = {
+            ...basicsDraftRef.current,
+            title: created.title,
+            instructorAlias:
+              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+          };
+        }
 
         if (
           basicsDraftRef.current.shortDescription.trim() ||
@@ -7701,6 +7847,7 @@ export function CourseCreatePage({
   };
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
+    cancelTitleCreationDebounce();
     if (
       actionLoading !== null ||
       isSavingAllDirtyLessonsRef.current
@@ -7713,7 +7860,7 @@ export function CourseCreatePage({
 
     if (activeStep === "basics") {
       const flushed = await flushBasicsPersistence();
-      if (!currentCourseId && !flushed) {
+      if (!currentCourseIdRef.current && !currentCourseId && !flushed) {
         setShowTitleTooltip(true);
         titleInputRef.current?.focus();
         setToastMessage("Add a course title to continue.");
@@ -7721,7 +7868,11 @@ export function CourseCreatePage({
       }
     }
 
-    if (!isDownstreamUnlocked && destination !== "basics") {
+    if (
+      !currentCourseIdRef.current &&
+      !isDownstreamUnlocked &&
+      destination !== "basics"
+    ) {
       setShowTitleTooltip(true);
       titleInputRef.current?.focus();
       setToastMessage("Add a course title to continue.");
@@ -8177,7 +8328,9 @@ export function CourseCreatePage({
                 </div>
 
                 <div className="relative flex flex-col gap-2 mb-5">
-                  {showTitleTooltip && !isDownstreamUnlocked && (
+                  {showTitleTooltip &&
+                    !isDownstreamUnlocked &&
+                    !isInitialCourseCreationPending && (
                     <div
                       role="tooltip"
                       id="course-title-tooltip"
@@ -8231,19 +8384,48 @@ export function CourseCreatePage({
                       type="text"
                       maxLength={120}
                       placeholder="e.g. Complete Backend with Node.js"
+                      disabled={isInitialCourseCreationPending}
                       value={courseTitle}
                       onChange={(e) => {
+                        if (isInitialCourseCreationPending) return;
                         const val = e.target.value.slice(0, 120);
                         setCourseTitle(val);
                         clearBasicsFieldStatus("title");
                         if (val.trim()) {
                           setShowTitleTooltip(false);
                         }
+
+                        // 1-second debounce for brand-new courses only
+                        if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
+                          cancelTitleCreationDebounce();
+                          if (val.trim()) {
+                            titleCreationDebounceTimerRef.current = setTimeout(() => {
+                              titleCreationDebounceTimerRef.current = null;
+                              void persistBasicsField("title");
+                            }, 1000);
+                          }
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (isInitialCourseCreationPending) {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          // Pressing Enter triggers immediate creation, cancelling pending debounce
+                          if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
+                            cancelTitleCreationDebounce();
+                            void persistBasicsField("title");
+                          }
+                        }
                       }}
                       onFocus={() => {
                         setShowTitleTooltip(false);
                       }}
                       onBlur={() => {
+                        if (isInitialCourseCreationPending) return;
+                        cancelTitleCreationDebounce();
                         void persistBasicsField("title");
                         if (!currentCourseId && !courseTitle.trim()) {
                           setShowTitleTooltip(true);
@@ -8264,11 +8446,21 @@ export function CourseCreatePage({
                   </div>
                   {!isDownstreamUnlocked && (
                     <p
-                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1"
+                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
                       role="status"
                       data-testid="basics-title-helper"
                     >
-                      Add a course title to continue.
+                      {createCourseMutation.isPending || isInitialCourseCreationPending ? (
+                        <>
+                          <CircleNotch
+                            size={13}
+                            className="animate-spin text-(--accent) shrink-0"
+                          />
+                          <span>Creating course…</span>
+                        </>
+                      ) : (
+                        "Add a course title to continue."
+                      )}
                     </p>
                   )}
                 </div>
