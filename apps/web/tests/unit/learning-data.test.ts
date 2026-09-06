@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { CourseOverviewResponse } from "@veolms/contracts";
 import {
+  adaptCourseOverviewToLearningSections,
   courseVideos,
   createCurriculumSections,
   formatMediaTime,
@@ -98,6 +100,65 @@ describe("learning course content", () => {
       sparseSections.filter(({ lessons }) => lessons.length === 0),
     ).toHaveLength(48);
     expect(loadTestSections[0]?.lessons[0]).toEqual(sections[0]?.lessons[0]);
+  });
+
+  it("adapts the API curriculum in order while keeping the static fallback safe", () => {
+    const overview = {
+      sections: [
+        {
+          id: "00000000-0000-4000-8000-000000000002",
+          courseId: "00000000-0000-4000-8000-000000000001",
+          title: "Second section",
+          position: 2,
+          lessons: [
+            {
+              id: "00000000-0000-4000-8000-000000000004",
+              courseId: "00000000-0000-4000-8000-000000000001",
+              sectionId: "00000000-0000-4000-8000-000000000002",
+              title: "Second lesson",
+              contentType: "video",
+              contentMediaId: null,
+              position: 2,
+              isPreview: false,
+              isPublished: true,
+            },
+          ],
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000003",
+          courseId: "00000000-0000-4000-8000-000000000001",
+          title: "First section",
+          position: 1,
+          lessons: [
+            {
+              id: "00000000-0000-4000-8000-000000000005",
+              courseId: "00000000-0000-4000-8000-000000000001",
+              sectionId: "00000000-0000-4000-8000-000000000003",
+              title: "First lesson",
+              contentType: "video",
+              contentMediaId: null,
+              position: 1,
+              isPreview: true,
+              isPublished: true,
+            },
+          ],
+        },
+      ],
+    } as CourseOverviewResponse;
+
+    expect(adaptCourseOverviewToLearningSections(overview)).toMatchObject([
+      {
+        id: 1,
+        title: "First section",
+        lessons: [[1, "First lesson", "07:34", "todo", true]],
+      },
+      {
+        id: 2,
+        title: "Second section",
+        lessons: [[2, "Second lesson", "01:43", "todo", false]],
+      },
+    ]);
+    expect(adaptCourseOverviewToLearningSections()).toBeNull();
   });
 
   it("assigns stable unique lecture slugs and resolves legacy lecture IDs", () => {
