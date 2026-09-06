@@ -114,6 +114,12 @@ const serverConfigSchema = z.object({
     .default(30),
 
   // SMS Delivery
+  SMS_PROVIDER: z
+    .enum(["auto", "msg91", "vonage", "twilio", "console"])
+    .default("auto"),
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_TEMPLATE_ID: z.string().optional(),
+  MSG91_API_URL: z.string().default("https://control.msg91.com/api/v5/flow"),
   SMS_PRIMARY_URL: z.string().default("https://api.nexmo.com/v1/messages"),
   SMS_PRIMARY_KEY: z.string().optional(),
   SMS_PRIMARY_SECRET: z.string().optional(),

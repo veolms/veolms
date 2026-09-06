@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEventHandler, PointerEventHandler } from "react";
 
 const DEFAULT_SECOND_PRESS_WINDOW = 1200;
@@ -32,6 +32,18 @@ export function useSecondPressHold<T extends HTMLElement>({
 }: UseSecondPressHoldOptions) {
   const callbacksRef = useRef({ onPress, onSecondPressHold });
   callbacksRef.current = { onPress, onSecondPressHold };
+  const optionsRef = useRef({
+    deferFirstPress,
+    holdDuration,
+    secondPressWindow,
+    moveTolerance,
+  });
+  optionsRef.current = {
+    deferFirstPress,
+    holdDuration,
+    secondPressWindow,
+    moveTolerance,
+  };
   const armedUntilRef = useRef(0);
   const deferredPressTimerRef = useRef<number | null>(null);
   const holdTimerRef = useRef<number | null>(null);
@@ -73,7 +85,7 @@ export function useSecondPressHold<T extends HTMLElement>({
     [],
   );
 
-  const onPointerDown: PointerEventHandler<T> = (event) => {
+  const onPointerDown: PointerEventHandler<T> = useCallback((event) => {
     if (
       !event.isPrimary ||
       event.button !== 0 ||
@@ -111,10 +123,10 @@ export function useSecondPressHold<T extends HTMLElement>({
       setIsSecondPressHolding(false);
       callbacksRef.current.onSecondPressHold();
       if (event.pointerType === "touch") navigator.vibrate?.(10);
-    }, holdDuration);
-  };
+    }, optionsRef.current.holdDuration);
+  }, []);
 
-  const onPointerMove: PointerEventHandler<T> = (event) => {
+  const onPointerMove: PointerEventHandler<T> = useCallback((event) => {
     const pointer = secondPointerRef.current;
     if (!pointer || pointer.pointerId !== event.pointerId || pointer.completed)
       return;
@@ -122,49 +134,60 @@ export function useSecondPressHold<T extends HTMLElement>({
       Math.hypot(
         event.clientX - pointer.startX,
         event.clientY - pointer.startY,
-      ) <= moveTolerance
+      ) <= optionsRef.current.moveTolerance
     ) {
       return;
     }
     pointer.cancelled = true;
     clearHoldTimer();
     setIsSecondPressHolding(false);
-  };
+  }, []);
 
-  const finishSecondPress = (
-    event: Parameters<PointerEventHandler<T>>[0],
-    cancelled = false,
-  ) => {
-    const pointer = secondPointerRef.current;
-    if (!pointer || pointer.pointerId !== event.pointerId) return;
-    clearHoldTimer();
-    setIsSecondPressHolding(false);
-    secondPointerRef.current = null;
-    try {
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-    } catch {
-      // Capture may already have been released by the browser.
-    }
-
-    if (pointer.completed || pointer.cancelled || cancelled) {
-      suppressNextClickRef.current = pointer.completed || pointer.cancelled;
-      secondClickPendingRef.current = false;
-      armedUntilRef.current = 0;
-      if (pointer.completed || pointer.cancelled) {
-        event.preventDefault();
-        event.stopPropagation();
+  const finishSecondPress = useCallback(
+    (
+      event: Parameters<PointerEventHandler<T>>[0],
+      cancelled = false,
+    ) => {
+      const pointer = secondPointerRef.current;
+      if (!pointer || pointer.pointerId !== event.pointerId) return;
+      clearHoldTimer();
+      setIsSecondPressHolding(false);
+      secondPointerRef.current = null;
+      try {
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // Capture may already have been released by the browser.
       }
-    }
-  };
 
-  const onPointerUp: PointerEventHandler<T> = (event) =>
-    finishSecondPress(event);
-  const onPointerCancel: PointerEventHandler<T> = (event) =>
-    finishSecondPress(event, true);
-  const onLostPointerCapture: PointerEventHandler<T> = (event) =>
-    finishSecondPress(event, true);
+      if (pointer.completed || pointer.cancelled || cancelled) {
+        suppressNextClickRef.current = pointer.completed || pointer.cancelled;
+        secondClickPendingRef.current = false;
+        armedUntilRef.current = 0;
+        if (pointer.completed || pointer.cancelled) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }
+    },
+    [],
+  );
 
-  const onClick: MouseEventHandler<T> = (event) => {
+  const onPointerUp: PointerEventHandler<T> = useCallback(
+    (event) => finishSecondPress(event),
+    [finishSecondPress],
+  );
+  const onPointerCancel: PointerEventHandler<T> = useCallback(
+    (event) => finishSecondPress(event, true),
+    [finishSecondPress],
+  );
+  const onLostPointerCapture: PointerEventHandler<T> = useCallback(
+    (event) => finishSecondPress(event, true),
+    [finishSecondPress],
+  );
+
+  const onClick: MouseEventHandler<T> = useCallback((event) => {
+    const { deferFirstPress: deferFirstPressOption, secondPressWindow: secondPressWindowOption } =
+      optionsRef.current;
     if (event.detail === 0) {
       disarm();
       callbacksRef.current.onPress?.();
@@ -184,8 +207,8 @@ export function useSecondPressHold<T extends HTMLElement>({
       return;
     }
 
-    armedUntilRef.current = performance.now() + secondPressWindow;
-    if (!deferFirstPress) {
+    armedUntilRef.current = performance.now() + secondPressWindowOption;
+    if (!deferFirstPressOption) {
       callbacksRef.current.onPress?.();
       return;
     }
@@ -195,18 +218,30 @@ export function useSecondPressHold<T extends HTMLElement>({
       deferredPressTimerRef.current = null;
       armedUntilRef.current = 0;
       callbacksRef.current.onPress?.();
-    }, secondPressWindow);
-  };
+    }, secondPressWindowOption);
+  }, []);
 
-  return {
-    isSecondPressHolding,
-    handlers: {
+  const handlers = useMemo(
+    () => ({
       onClick,
       onLostPointerCapture,
       onPointerCancel,
       onPointerDown,
       onPointerMove,
       onPointerUp,
-    },
+    }),
+    [
+      onClick,
+      onLostPointerCapture,
+      onPointerCancel,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+    ],
+  );
+
+  return {
+    isSecondPressHolding,
+    handlers,
   } as const;
 }

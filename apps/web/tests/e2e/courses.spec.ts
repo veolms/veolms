@@ -1,5 +1,11 @@
 import { test, expect } from "./app.fixture.ts";
-import { expectStoredValue, installBaselineState, openApp } from "./support.ts";
+import {
+  expectStoredValue,
+  getApplicationScrollTop,
+  installBaselineState,
+  openApp,
+  setApplicationScrollTop,
+} from "./support.ts";
 import { academyThemes } from "../../src/themes.ts";
 
 test.beforeEach(async ({ page }) => {
@@ -21,6 +27,44 @@ test("bottom navigation starts at the 640px phone breakpoint", async ({
   await page.setViewportSize({ width: 640, height: 844 });
   await expect(navigation).toBeVisible();
   await expect(page.locator(".courses-sidebar")).toBeHidden();
+});
+
+test("new pages open at the top and revisited pages restore their scroll position", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setApplicationScrollTop(page, 420);
+  const coursesScrollTop = await getApplicationScrollTop(page);
+  expect(coursesScrollTop).toBeGreaterThan(200);
+
+  await page
+    .getByRole("article", { name: /Complete Backend with Node.js/ })
+    .getByRole("button", { name: "Continue Learning" })
+    .evaluate((button) => (button as HTMLButtonElement).click());
+
+  await expect(page).toHaveURL(/\/learn\/backend-nodejs\//);
+  await expect.poll(() => getApplicationScrollTop(page)).toBe(0);
+
+  await setApplicationScrollTop(page, 360);
+  const learningScrollTop = await getApplicationScrollTop(page);
+  expect(learningScrollTop).toBeGreaterThan(200);
+
+  await page
+    .locator('[data-navigation-label="Courses"]')
+    .evaluate((button) => (button as HTMLButtonElement).click());
+  await expect(page).toHaveURL(/\/courses$/);
+  await expect
+    .poll(() => getApplicationScrollTop(page))
+    .toBeCloseTo(coursesScrollTop, 0);
+
+  await page
+    .getByRole("article", { name: /Complete Backend with Node.js/ })
+    .getByRole("button", { name: "Continue Learning" })
+    .evaluate((button) => (button as HTMLButtonElement).click());
+  await expect(page).toHaveURL(/\/learn\/backend-nodejs\//);
+  await expect
+    .poll(() => getApplicationScrollTop(page))
+    .toBeCloseTo(learningScrollTop, 0);
 });
 
 test("browser back closes an ordinary popup before course navigation", async ({

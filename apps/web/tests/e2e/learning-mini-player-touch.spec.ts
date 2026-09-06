@@ -167,7 +167,7 @@ test("restores the persistent player on the first touch without a synthesized cl
   await openApp(page, "/learn/backend-nodejs/the-design-mindset?from=courses");
   await page.addStyleTag({
     content:
-      '[data-learning-persistent-player] [role="alert"] { pointer-events: none !important; }',
+      '[data-learning-persistent-player] [role="alert"], [data-learning-mini-player] [role="alert"] { pointer-events: none !important; }',
   });
 
   const player = page.getByRole("region", {
@@ -192,11 +192,17 @@ test("restores the persistent player on the first touch without a synthesized cl
     touchPoints: [],
   });
 
-  const restore = page.getByRole("button", {
-    name: "Return to The Design Mindset",
+  const miniPlayer = page.locator("[data-learning-mini-player]");
+  await expect(miniPlayer).toBeVisible();
+
+  const restore = miniPlayer
+    .locator("[data-learning-mini-player-restore]")
+    .first();
+  await expect(restore).toBeAttached();
+  const miniPlayerVideo = miniPlayer.getByRole("region", {
+    name: "Lesson video player for The Design Mindset",
   });
-  await expect(restore).toBeVisible();
-  const restoreBounds = await restore.boundingBox();
+  const restoreBounds = await miniPlayerVideo.boundingBox();
   expect(restoreBounds).not.toBeNull();
   const restoreX = restoreBounds!.x + restoreBounds!.width / 2;
   const restoreY = restoreBounds!.y + restoreBounds!.height / 2;
@@ -232,7 +238,7 @@ test("restores the persistent player on the first touch without a synthesized cl
           (host?.getBoundingClientRect().bottom ?? 0) / window.innerHeight,
       });
 
-      if (performance.now() - startedAt < 500) requestAnimationFrame(sample);
+      if (performance.now() - startedAt < 1500) requestAnimationFrame(sample);
     };
 
     requestAnimationFrame(sample);
@@ -255,7 +261,7 @@ test("restores the persistent player on the first touch without a synthesized cl
     page.getByRole("heading", { name: "The Design Mindset", level: 1 }),
   ).toBeVisible();
 
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(1200);
   const restoreSamples = await page.evaluate(
     () =>
       (

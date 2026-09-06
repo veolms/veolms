@@ -2,6 +2,8 @@ import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./app.fixture.ts";
 import { installBaselineState, openApp } from "./support.ts";
 
+test.use({ hasTouch: true });
+
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
   await page.setViewportSize({ width: 1133, height: 753 });

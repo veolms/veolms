@@ -22,6 +22,33 @@ export async function findMediaAssetById(
   return await query.executeTakeFirst();
 }
 
+/**
+ * True if `mediaId` is the thumbnail or trailer of a published, non-deleted
+ * course — i.e. safe to serve without authentication (public course
+ * marketing pages embed it directly as an <img>/<video> src). Queries the
+ * `courses` table directly rather than importing the courses module, to
+ * avoid a circular dependency (courses already depends on media).
+ */
+export async function isMediaAttachedToPublishedCourse(
+  database: Kysely<Database>,
+  mediaId: string,
+) {
+  const row = await database
+    .selectFrom("courses")
+    .select("id")
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .where((eb) =>
+      eb.or([
+        eb("thumbnail_media_id", "=", mediaId),
+        eb("trailer_media_id", "=", mediaId),
+      ]),
+    )
+    .executeTakeFirst();
+
+  return row !== undefined;
+}
+
 export async function findMediaAssetsByIds(
   database: Kysely<Database>,
   mediaIds: string[],
