@@ -59,14 +59,7 @@ describe("React Router framework route configuration", () => {
       messages: "messages",
       "order-history": "order-history",
       notifications: "notifications",
-      settings: "settings",
-      "settings-profile": "settings/profile",
-      "settings-appearance": "settings/appearance",
-      "settings-sidebar": "settings/sidebar",
-      "settings-notifications": "settings/notifications",
-      "settings-learning": "settings/learning",
-      "settings-security": "settings/security",
-      "settings-account": "settings/account",
+      settings: "settings/:settingsTab?",
       logout: "logout",
       "course-overview": "courses/:courseSlug/overview",
       learning: "learn/:courseSlug/:lectureSlug?",
@@ -225,8 +218,11 @@ describe("framework route descriptors", () => {
     expect(getEffectiveRouteId("dashboard", "/DASHBOARD")).toBe(
       "home-fallback",
     );
-    expect(getEffectiveRouteId("settings-learning", "/settings/Learning")).toBe(
+    expect(getEffectiveRouteId("settings", "/settings/Learning")).toBe(
       "home-fallback",
+    );
+    expect(getEffectiveRouteId("settings", "/settings/learning")).toBe(
+      "settings-learning",
     );
     expect(
       getEffectiveRouteId("discussions-comments", "/discussions/Comments"),
@@ -287,10 +283,10 @@ describe("framework route descriptors", () => {
 
   it("selects the deepest matched descriptor and safely falls back home", () => {
     expect(
-      getMatchedRouteDescriptor([
-        { id: "academy-layout" },
-        { id: "settings-sidebar" },
-      ]),
+      getMatchedRouteDescriptor(
+        [{ id: "academy-layout" }, { id: "settings" }],
+        "/settings/sidebar",
+      ),
     ).toBe(routeDescriptors["settings-sidebar"]);
     expect(getMatchedRouteDescriptor([{ id: "academy-layout" }])).toBe(
       routeDescriptors.home,

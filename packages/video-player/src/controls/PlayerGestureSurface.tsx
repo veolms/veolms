@@ -58,7 +58,15 @@ export function PlayerGestureSurface({
 }: PlayerGestureSurfaceProps) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
-  const zoomGestureActive = usePlayerState(({ ui }) => ui.zoom.gestureActive);
+  const { ready, zoomGestureActive } = usePlayerState(
+    ({ media, ui }) => ({
+      ready: media.lifecycle === "ready",
+      zoomGestureActive: ui.zoom.gestureActive,
+    }),
+    (left, right) =>
+      left.ready === right.ready &&
+      left.zoomGestureActive === right.zoomGestureActive,
+  );
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -493,8 +501,11 @@ export function PlayerGestureSurface({
   return (
     <button
       type="button"
+      disabled={!ready}
+      aria-hidden={ready ? undefined : true}
       data-player-zoom-surface=""
       data-player-shortcut-surface=""
+      data-player-ready={ready ? "true" : "false"}
       className={classNames(
         "absolute inset-0 z-0 cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
         mobileInteraction ? "touch-none" : "touch-pan-y",

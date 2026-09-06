@@ -36,11 +36,15 @@ export interface CreateServicesOptions {
  * at boot rather than blocked, since SMS is optional when email is configured.
  */
 function resolveSmsTransport(config: ServerConfig): "http" | "console" {
+  if (config.SMS_PROVIDER === "console") {
+    return "console";
+  }
+  const hasMsg91 = Boolean(config.MSG91_AUTH_KEY && config.MSG91_TEMPLATE_ID);
   const hasPrimary = Boolean(
     config.SMS_PRIMARY_KEY && config.SMS_PRIMARY_SECRET,
   );
   const hasBackup = Boolean(config.SMS_BACKUP_SID && config.SMS_BACKUP_TOKEN);
-  return hasPrimary || hasBackup ? "http" : "console";
+  return hasMsg91 || hasPrimary || hasBackup ? "http" : "console";
 }
 
 /**
@@ -71,7 +75,7 @@ export function createServices({
     }
     if (smsTransport === "console") {
       logger.warn(
-        "No SMS gateway credentials configured; no SMS will be delivered",
+        "No SMS gateway credentials configured (MSG91, Vonage, or Twilio); no SMS will be delivered",
       );
     }
   }
@@ -91,8 +95,14 @@ export function createServices({
     sms: createSmsService({
       logger,
       config: {
+        provider: config.SMS_PROVIDER,
         transport: smsTransport,
         senderId: config.RP_NAME,
+        msg91: {
+          authKey: config.MSG91_AUTH_KEY,
+          templateId: config.MSG91_TEMPLATE_ID,
+          apiUrl: config.MSG91_API_URL,
+        },
         primaryUrl: config.SMS_PRIMARY_URL,
         primaryKey: config.SMS_PRIMARY_KEY,
         primarySecret: config.SMS_PRIMARY_SECRET,

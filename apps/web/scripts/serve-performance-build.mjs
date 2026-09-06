@@ -5,6 +5,15 @@ import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
+import {
+  FIRST_SECTION_FLAG,
+  runPerformanceBuild,
+} from "./build-performance.mjs";
+
+const buildExitCode = await runPerformanceBuild(
+  process.argv.includes(FIRST_SECTION_FLAG) ? [FIRST_SECTION_FLAG] : [],
+);
+if (buildExitCode !== 0) process.exit(buildExitCode);
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(scriptDirectory, "../../..");
