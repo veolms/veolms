@@ -8,6 +8,7 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 
 import {
   useNotificationPreferences,
@@ -72,6 +73,7 @@ export function NotificationSettings({
   const isGroupEnabled = (types: readonly string[]) =>
     types.every((type) => channels.some((channel) => isEnabled(type, channel)));
   const isSaving = update.isPending;
+  const hasSaveError = query.isError || update.isError;
 
   const save = (
     types: readonly string[],
@@ -97,15 +99,34 @@ export function NotificationSettings({
           <h2>Notifications</h2>
           <p>Choose the updates that deserve your attention.</p>
         </div>
-        <span className="settings-detail__saved">
-          <CheckCircle size={17} weight="fill" />
+        <span
+          className={`settings-detail__saved ${hasSaveError ? "text-red-400!" : ""}`}
+          role={hasSaveError ? "alert" : "status"}
+        >
+          {hasSaveError ? (
+            <WarningCircle
+              size={17}
+              weight="fill"
+              aria-hidden="true"
+              data-status-icon="error"
+            />
+          ) : (
+            <CheckCircle
+              size={17}
+              weight="fill"
+              aria-hidden="true"
+              data-status-icon="success"
+            />
+          )}
           {!isAuthenticated
             ? "Sign in to manage notifications"
-            : update.isError
-              ? "Save failed"
-              : isSaving
-                ? "Saving…"
-                : "Saved automatically"}
+            : query.isError
+              ? "Could not load notification settings"
+              : update.isError
+                ? "Save failed"
+                : isSaving
+                  ? "Saving…"
+                  : "Saved automatically"}
         </span>
       </header>
 

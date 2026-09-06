@@ -65,7 +65,7 @@ import {
   getPublicNavigationItems,
 } from "../shell/navigation";
 import type { NavigationItemWithMetadata } from "../shell/navigation";
-import type { ProfileRole } from "./profilePreferences";
+import type { ProfileRole } from "./profileTypes";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
 // deliberately the shared registry rather than a display-only subset.

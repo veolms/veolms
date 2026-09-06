@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
 });
 
-test("profile settings do not invent a signed-out identity or autosave drafts", async ({
+test("profile settings keep signed-out identity blank and controls locked", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
@@ -33,17 +33,13 @@ test("profile settings do not invent a signed-out identity or autosave drafts", 
   const photoFile = page.getByLabel("Profile photo file");
 
   await expect(displayName).toHaveValue("");
+  await expect(displayName).toBeDisabled();
   await expect(email).toHaveAttribute("readonly", "");
+  await expect(email).toBeDisabled();
   await expect(photoFile).toHaveAttribute("tabindex", "-1");
-  await expect(
-    page.getByRole("button", { name: "Save changes" }),
-  ).toBeDisabled();
-
-  await displayName.fill("Avery Patel");
-  await expect(displayName).toHaveValue("Avery Patel");
-  await expect(
-    page.getByRole("button", { name: "Save changes" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByText("Sign in to edit and save your profile."),
   ).toBeVisible();
@@ -56,12 +52,13 @@ test("profile settings do not invent a signed-out identity or autosave drafts", 
 
   await page.reload();
   await expect(displayName).toHaveValue("");
+  await expect(displayName).toBeDisabled();
   await expect(page.locator(".courses-profile__login-button")).toContainText(
     "Login",
   );
 });
 
-test("profile settings keep an offline draft local without autosaving it", async ({
+test("signed-out profile settings stay locked while offline", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
@@ -69,25 +66,17 @@ test("profile settings keep an offline draft local without autosaving it", async
   const displayName = page.getByLabel("Display name", { exact: true });
   await page.context().setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-  await displayName.fill("Offline draft");
-  await expect(displayName).toHaveValue("Offline draft");
-
-  await page.waitForTimeout(500);
+  await expect(displayName).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(
+    0,
+  );
   await expect(
-    page.getByRole("button", { name: "Save changes" }),
-  ).toBeDisabled();
-  await expect(
-    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
+    page.evaluate(() => localStorage.getItem("veolms-profile-draft-student")),
   ).resolves.toBeNull();
 
   await page.context().setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect(
-    page.getByRole("button", { name: "Save changes" }),
-  ).toBeDisabled();
-  await expect(
-    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
-  ).resolves.toBeNull();
+  await expect(displayName).toBeDisabled();
 });
 
 test("settings tabs support roving arrow, Home, and End navigation", async ({

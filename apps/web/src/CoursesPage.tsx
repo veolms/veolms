@@ -63,7 +63,7 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { autosyncManager } from "./lib/autosync";
 import { useCurrentUser, useSignOut, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
 import {
@@ -195,8 +195,7 @@ import {
   DrawerTitle,
   type DrawerDismissThen,
 } from "@/components/ui/drawer";
-import type { ProfilePreferences } from "./settings/profilePreferences.ts";
-
+import type { ProfilePreferences } from "./settings/profileTypes";
 const CreatorDashboard = lazy(() =>
   import("./CreatorDashboard").then((module) => ({
     default: module.CreatorDashboard,
@@ -744,6 +743,14 @@ export function CoursesPage({
     [role, userRoles],
   );
   const { isPending: isSigningOut, signOut } = useSignOut();
+  const signOutAfterSync = useCallback(async () => {
+    try {
+      await autosyncManager.requireSynced();
+      await signOut();
+    } catch {
+      setNotice("Couldn't sign out yet. Please try again.");
+    }
+  }, [setNotice, signOut]);
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const { data: publishedCoursesData } = useCourses({
     enabled: shouldLoadCourseSurface && role === "student",
@@ -3198,7 +3205,7 @@ export function CoursesPage({
       onNavigatePage,
       upsertLearningSpaceSession,
     ],
-  );
+  );``
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
@@ -3274,7 +3281,6 @@ export function CoursesPage({
           isAuthenticated={isAuthenticated}
           onNavigatePage={onNavigatePage}
           onExitSettings={onExitSettings}
-          setNotice={setNotice}
           theme={theme}
           onThemeChange={(next, origin) => {
             if (next !== theme) themeRevealOriginRef.current = origin ?? null;
@@ -4541,7 +4547,7 @@ export function CoursesPage({
         isOpen={logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={signOut}
+        onConfirm={() => void signOutAfterSync()}
       />
 
       {notice && (

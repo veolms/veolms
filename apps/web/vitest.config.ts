@@ -2,11 +2,15 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
+const axiosBrowserEntry = fileURLToPath(
+  new URL("./node_modules/axios/dist/esm/axios.js", import.meta.url),
+);
 
 export default defineConfig({
   resolve: {
     alias: {
       "@": webSourceRoot,
+      axios: axiosBrowserEntry,
     },
   },
   ssr: {

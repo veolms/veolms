@@ -82,6 +82,7 @@ import {
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
+import { autosyncManager } from "../lib/autosync";
 import {
   getNumberShortcutIndex,
   isEditingShortcutTarget,
@@ -309,7 +310,12 @@ export default function AcademyLayout() {
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
-      signOut();
+      void signOut().catch(() => {
+        // A critical sync barrier must be allowed to stop logout. Return to
+        // the previous screen so an offline/blocked draft is not stranded on
+        // a route with no actionable UI.
+        void navigate(-1);
+      });
       return;
     }
     const destination =
@@ -362,56 +368,60 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
-      const destinationPath = options?.exact
-        ? destination
-        : getDestinationPath(destination);
-      const activeLocationPath = locationPathRef.current;
-      const path = decorateCoursePlayerLaunch(
-        destinationPath,
-        activeLocationPath,
-      );
-      if (
-        !restoringPlayerRef.current &&
-        shouldRestoreMiniPlayerForMatchingCourse({
-          presentation: playerPresentationRef.current,
-          activeCourseRouteKey: persistentPlayerRef.current?.courseRouteKey,
-          requestedCourseRouteKey: getLearningCourseRouteKey(path),
-        })
-      ) {
-        restoreLearningMiniPlayerRef.current();
-        return;
-      }
-      if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
-        const currentScrollPosition = readApplicationScrollPosition();
-        settingsReturnLocationRef.current = {
-          path: locationPathRef.current,
-          ...currentScrollPosition,
-        };
-      }
-      if (
-        normalizeNavigationPath(path) !==
-        normalizeNavigationPath(locationPathRef.current)
-      ) {
-        const sourcePath = locationPathRef.current;
-        const sourcePosition = readApplicationScrollPosition();
-        applicationScrollPositionsRef.current.set(sourcePath, sourcePosition);
-        pendingScrollPositionRef.current = {
-          destinationPath: path,
-          sourcePath,
-          position: options?.preserveScroll
-            ? sourcePosition
-            : (applicationScrollPositionsRef.current.get(path) ?? {
-                left: 0,
-                top: 0,
-              }),
-        };
-        // Update synchronously so a second shortcut pressed before React's
-        // route render still compares against the destination just requested.
-        locationPathRef.current = path;
-        void navigate(path, {
-          preventScrollReset: true,
-        });
-      }
+      const performNavigation = () => {
+        const destinationPath = options?.exact
+          ? destination
+          : getDestinationPath(destination);
+        const activeLocationPath = locationPathRef.current;
+        const path = decorateCoursePlayerLaunch(
+          destinationPath,
+          activeLocationPath,
+        );
+        if (
+          !restoringPlayerRef.current &&
+          shouldRestoreMiniPlayerForMatchingCourse({
+            presentation: playerPresentationRef.current,
+            activeCourseRouteKey: persistentPlayerRef.current?.courseRouteKey,
+            requestedCourseRouteKey: getLearningCourseRouteKey(path),
+          })
+        ) {
+          restoreLearningMiniPlayerRef.current();
+          return;
+        }
+        if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
+          const currentScrollPosition = readApplicationScrollPosition();
+          settingsReturnLocationRef.current = {
+            path: locationPathRef.current,
+            ...currentScrollPosition,
+          };
+        }
+        if (
+          normalizeNavigationPath(path) !==
+          normalizeNavigationPath(locationPathRef.current)
+        ) {
+          const sourcePath = locationPathRef.current;
+          const sourcePosition = readApplicationScrollPosition();
+          applicationScrollPositionsRef.current.set(sourcePath, sourcePosition);
+          pendingScrollPositionRef.current = {
+            destinationPath: path,
+            sourcePath,
+            position: options?.preserveScroll
+              ? sourcePosition
+              : (applicationScrollPositionsRef.current.get(path) ?? {
+                  left: 0,
+                  top: 0,
+                }),
+          };
+          // Update synchronously so a second shortcut pressed before React's
+          // route render still compares against the destination just requested.
+          locationPathRef.current = path;
+          void navigate(path, {
+            preventScrollReset: true,
+          });
+        }
+      };
+
+      void autosyncManager.flushAll().then(performNavigation);
     },
     [navigate],
   );
@@ -435,7 +445,9 @@ export default function AcademyLayout() {
       },
     };
     locationPathRef.current = destination.path;
-    void navigate(destination.path, { preventScrollReset: true });
+    void autosyncManager
+      .flushAll()
+      .then(() => navigate(destination.path, { preventScrollReset: true }));
   }, [navigate]);
 
   useEffect(() => {
@@ -771,9 +783,7 @@ export default function AcademyLayout() {
       );
       motionStage.style.setProperty(
         "--learning-player-content-offset-y",
-        isDesktopLearningMinimizeViewport()
-          ? "0px"
-          : `${offsetY.toFixed(3)}px`,
+        isDesktopLearningMinimizeViewport() ? "0px" : `${offsetY.toFixed(3)}px`,
       );
       motionStage.dataset.learningPlayerMotion = phase;
     },
