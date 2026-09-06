@@ -113,7 +113,6 @@ import {
   getDefaultSidebarPreferences,
   getInitialSidebarPreferences,
   getInitialSidebarShellState,
-  getInitialSidebarWidth,
 } from "./shell/sidebarPreferences";
 import {
   canStartSidebarTouchGesture,
@@ -426,9 +425,6 @@ function SidebarTooltipSurface() {
   );
 }
 
-const isSidebarMode = (value: string | null): value is SidebarMode =>
-  value === "expanded" || value === "collapsed" || value === "hidden";
-
 const procodrrLogoSvg = logoDarkSvg.replace(
   /fill="black"/g,
   'fill="currentColor"',
@@ -567,13 +563,9 @@ export function CoursesPage({
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
-  const [initialSidebarShellState] = useState(getInitialSidebarShellState);
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
-    initialSidebarShellState.mode,
-  );
-  const [sidebarWidth, setSidebarWidth] = useState(
-    initialSidebarShellState.width,
-  );
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarShellHydratedRef = useRef(false);
 
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [sidebarResizePreviewWidth, setSidebarResizePreviewWidth] = useState<
@@ -643,7 +635,12 @@ export function CoursesPage({
     ...READING_MODE_DEFAULTS,
   });
   const readingModeEnabled = readingModePreferences.enabled;
-  const [, setCoursePlayerSessionVersion] = useState(0);
+  // Local course-player sessions are browser state, so keep the first render
+  // deterministic for SSR. The stored sessions are loaded in the effect
+  // below before they are used for the interactive Learning Space control.
+  const [storedCoursePlayerSessions, setStoredCoursePlayerSessions] = useState<
+    CoursePlayerSession[]
+  >([]);
   const [learningSpaceExpanded, setLearningSpaceExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState(() => {
     if (page === "home") return role === "creator" ? "Dashboard" : "Home";
@@ -895,23 +892,9 @@ export function CoursesPage({
 
   useEffect(() => {
     try {
-      const storedSidebarMode = localStorage.getItem("veolms-sidebar-mode");
-      const legacySidebarCollapsed = localStorage.getItem(
-        "veolms-sidebar-collapsed",
-      );
-      setSidebarMode(
-        isSidebarMode(storedSidebarMode)
-          ? storedSidebarMode
-          : legacySidebarCollapsed !== null
-            ? legacySidebarCollapsed === "true"
-              ? "collapsed"
-              : "expanded"
-            : getResponsiveSidebarMode(
-                "expanded",
-                window.matchMedia(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY).matches,
-              ),
-      );
-      setSidebarWidth(getInitialSidebarWidth());
+      const shellState = getInitialSidebarShellState();
+      setSidebarMode(shellState.mode);
+      setSidebarWidth(shellState.width);
       const storedTheme = localStorage.getItem("veolms-theme");
       setTheme(
         storedTheme === "light" ||
@@ -949,13 +932,25 @@ export function CoursesPage({
   }, []);
 
   useLayoutEffect(() => {
+    let shellState = { mode: sidebarMode, width: sidebarWidth };
+    const isInitialShellSync = !sidebarShellHydratedRef.current;
+    if (isInitialShellSync) {
+      sidebarShellHydratedRef.current = true;
+      shellState = getInitialSidebarShellState();
+      if (shellState.mode !== sidebarMode) setSidebarMode(shellState.mode);
+      if (shellState.width !== sidebarWidth) setSidebarWidth(shellState.width);
+    }
+
     const root = document.documentElement;
-    root.dataset.sidebarState = sidebarMode;
-    root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
-    root.style.setProperty("--sidebar-expanded-width", `${sidebarWidth}px`);
+    root.dataset.sidebarState = shellState.mode;
+    root.style.setProperty("--sidebar-width", `${shellState.width}px`);
+    root.style.setProperty(
+      "--sidebar-expanded-width",
+      `${shellState.width}px`,
+    );
     window.__VEO_BOOTSTRAP__ = {
       ...window.__VEO_BOOTSTRAP__,
-      sidebar: { mode: sidebarMode, width: sidebarWidth },
+      sidebar: shellState,
     };
   }, [sidebarMode, sidebarWidth]);
 
@@ -1196,7 +1191,8 @@ export function CoursesPage({
 
   useEffect(() => {
     const syncCoursePlayerSession = () =>
-      setCoursePlayerSessionVersion((version) => version + 1);
+      setStoredCoursePlayerSessions(getOpenCoursePlayerSessions());
+    syncCoursePlayerSession();
     const syncCoursePlayerStorage = (event: StorageEvent) => {
       if (event.key === COURSE_PLAYER_SESSIONS_STORAGE_KEY)
         syncCoursePlayerSession();
@@ -2032,18 +2028,12 @@ export function CoursesPage({
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
-  const sidebarLayoutPresentation = getSidebarPresentation(sidebarMode);
-  const sidebarLayoutPresentedAsOverlay =
-    sidebarLayoutPresentation.hidden || compactNavigation;
-  const sidebarLayoutVisuallyCollapsed =
-    sidebarLayoutPresentation.collapsed && !sidebarLayoutPresentedAsOverlay;
-  // Keep the static sidebar's content deterministic through hydration. The
-  // head bootstrap and layout presentation already own its pre-paint geometry;
-  // detailed controls adopt the stored mode after preferences are available.
-  const renderedSidebarMode = storedPreferencesReady ? sidebarMode : "expanded";
-  const renderedSidebarWidth = storedPreferencesReady
-    ? sidebarWidth
-    : SIDEBAR_DEFAULT_WIDTH;
+  // The first render is deterministic on both server and client. The layout
+  // effect above adopts the head bootstrap snapshot before the browser paints,
+  // so React owns the persisted shell mode and width without a hydration
+  // mismatch.
+  const renderedSidebarMode = sidebarMode;
+  const renderedSidebarWidth = sidebarWidth;
   const { collapsed: sidebarCollapsed, hidden: sidebarHidden } =
     getSidebarPresentation(renderedSidebarMode);
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
@@ -2572,9 +2562,9 @@ export function CoursesPage({
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
-    sidebarLayoutVisuallyCollapsed ? "courses-app--collapsed" : "",
-    sidebarLayoutPresentedAsOverlay ? "courses-app--hidden" : "",
-    sidebarLayoutPresentedAsOverlay && edgeSidebarOpen
+    sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
+    sidebarPresentedAsOverlay ? "courses-app--hidden" : "",
+    sidebarPresentedAsOverlay && edgeSidebarOpen
       ? "courses-app--edge-open"
       : "",
     sidebarOverlaySwipeOffset !== null ? "courses-app--overlay-swiping" : "",
@@ -3177,16 +3167,15 @@ export function CoursesPage({
     // When the API catalogue is empty, the visible courses are the local
     // catalogue, so its local player sessions are the correct source too.
     if (!isAuthenticated || !hasBackendCourses) {
-      return getOpenCoursePlayerSessions();
+      return storedCoursePlayerSessions;
     }
     // Avoid showing local records while an authenticated backend catalogue or
     // session request is still loading.
     return [];
   })();
-  const visibleLearningCourseId =
-    (isLearningSurface ? courseSlug : undefined) ??
-    miniPlayerCourseId ??
-    undefined;
+  const fullLearningCourseId = isLearningSurface ? courseSlug : undefined;
+  const panelActiveLearningCourseId =
+    fullLearningCourseId ?? miniPlayerCourseId ?? undefined;
   const activateLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const destination =
@@ -3426,7 +3415,6 @@ export function CoursesPage({
     <div
       ref={coursesAppRef}
       className={sidebarClassName}
-      suppressHydrationWarning
       onPointerDownCapture={(event) =>
         startSidebarScreenSwipe({
           pointerId: event.pointerId,
@@ -3613,7 +3601,8 @@ export function CoursesPage({
                     <LearningSpace
                       key={label}
                       sessions={learningSessions}
-                      activeCourseId={visibleLearningCourseId}
+                      activeCourseId={fullLearningCourseId}
+                      panelActiveCourseId={panelActiveLearningCourseId}
                       expanded={learningSpaceExpanded}
                       mobile={mobileSidebarNavigationActive}
                       mobileNavigationPlacement="sidebar"
@@ -4102,7 +4091,8 @@ export function CoursesPage({
                 <LearningSpace
                   key={label}
                   sessions={learningSessions}
-                  activeCourseId={visibleLearningCourseId}
+                  activeCourseId={fullLearningCourseId}
+                  panelActiveCourseId={panelActiveLearningCourseId}
                   expanded={learningSpaceExpanded}
                   mobile
                   iconColor={getNavigationIconColor(

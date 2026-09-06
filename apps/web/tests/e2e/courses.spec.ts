@@ -88,7 +88,7 @@ test("browser back closes an ordinary popup before course navigation", async ({
 test("home shell follows viewport resizing without animating its layout track", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   for (const width of [1440, 1180, 900, 821, 820, 700, 820, 821, 900, 1440]) {
     await page.setViewportSize({ width, height: 779 });
@@ -347,7 +347,7 @@ test("home cards keep their light material and elevation in every light palette"
   await page.evaluate(() => {
     localStorage.setItem("veolms-theme", "light");
   });
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   const root = page.locator("html");
   await expect(root).toHaveAttribute("data-theme", "light");
@@ -416,7 +416,7 @@ test("home cards keep their light material and elevation in every light palette"
 test("home replaces the duplicate TypeScript card with the enrolled JavaScript course", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   await expect(
     page

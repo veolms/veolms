@@ -144,8 +144,8 @@ describe("sidebar shell bootstrap", () => {
         "--sidebar-expanded-width",
       ),
     ).toBe("384px");
-    expect(app).toHaveClass("courses-app--collapsed");
-    expect(app).not.toHaveClass("courses-app--hidden");
+    expect(app).toHaveClass("courses-app--hidden");
+    expect(app).not.toHaveClass("courses-app--collapsed");
     app.remove();
   });
 

@@ -1046,6 +1046,8 @@ describe("LessonVideoPlayer adapter", () => {
       expect(centralPlay).not.toBeNull();
       expect(playerControls).not.toBeNull();
       expect(centralControls).not.toBeNull();
+      centralPlay!.focus();
+      expect(centralPlay).toHaveFocus();
       expect(shell).toHaveClass(
         "touch-pan-x",
         "touch-pinch-zoom",
@@ -1083,6 +1085,7 @@ describe("LessonVideoPlayer adapter", () => {
       });
       act(() => vi.advanceTimersByTime(16));
       const forwardTransform = shell.style.transform;
+      expect(centralPlay).not.toHaveFocus();
       expect(forwardTransform).toMatch(/translate3d\(.+px, .+px, 0\) scale\(/);
       expect(shell).toHaveAttribute("data-learning-player-controls-suppressed");
       expect(playerControls).toHaveAttribute("aria-hidden", "true");
@@ -1518,6 +1521,35 @@ describe("LessonVideoPlayer adapter", () => {
       "true",
     );
     expect(container.querySelector("video")).toBeInTheDocument();
+  });
+
+  it("moves focus out of the controls before a direct minimize hides them", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const onMinimize = vi.fn();
+    let motionTarget: HTMLElement | null = null;
+    const { container } = render(
+      <LessonVideoPlayer
+        {...playerProps(firstMedia, engine)}
+        onMinimize={onMinimize}
+        minimizeMotionTarget={() => motionTarget}
+      />,
+    );
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Designing for real users",
+    });
+    motionTarget = player.parentElement;
+    const minimizeButton = screen.getByRole("button", { name: "Minimize" });
+    minimizeButton.focus();
+    expect(minimizeButton).toHaveFocus();
+
+    fireEvent.click(minimizeButton);
+
+    expect(minimizeButton).not.toHaveFocus();
+    expect(
+      container.querySelector("[data-lesson-player-controls]"),
+    ).toHaveAttribute("aria-hidden", "true");
   });
 
   it("exposes a mobile mute control so a saved muted state is recoverable", async () => {

@@ -276,7 +276,7 @@ test("sidebar navigation stays scrollable without exposing a scrollbar", async (
     window.localStorage.setItem("veolms-role", "creator");
     window.localStorage.setItem("veolms-sidebar-mode", "expanded");
   });
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   const navigation = page.locator("#courses-sidebar-nav-scrollport");
   const floatingScrollbar = page.locator(
@@ -744,7 +744,7 @@ test("curriculum floating scrollbar follows sidebar layout shifts", async ({
 test("dock context menus stay attached and reading controls update immediately", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
   });
@@ -856,7 +856,7 @@ test("theme menus use the available height before introducing overflow", async (
   page,
 }) => {
   await page.setViewportSize({ width: 1101, height: 753 });
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
   await updateSidebarPreferences(page, "/", {
     dockItems,
@@ -1014,7 +1014,7 @@ test("sidebar keyboard shortcut hints can be hidden without disabling shortcuts"
     )
     .toBe(false);
 
-  await openApp(page, "/");
+  await openApp(page, "/home");
   await page.keyboard.press("Control+,");
   await expect(page).toHaveURL(/\/settings\/appearance$/);
 
@@ -1219,7 +1219,7 @@ test("dark active sidebar items share the dashboard card elevation", async ({
   }
   await expect(root).toHaveAttribute("data-sidebar-menu-elevation", "true");
 
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const activeHome = page
     .getByRole("complementary", { name: "Student navigation" })
     .getByRole("button", { name: "Home" });
@@ -1290,7 +1290,7 @@ test("light mode keeps toggle thumbs white in every switch state", async ({
 test("active dock controls reuse the sidebar menu active surface", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
   await updateSidebarPreferences(page, "/", {
     dockItems,
@@ -1474,7 +1474,7 @@ test("sidebar navigation clips at the rail edges without moving its menu items",
 test("role, appearance, and academy palette persist across routes and reloads", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
   await updateSidebarPreferences(page, "/", {
     dockItems,
@@ -1607,7 +1607,7 @@ test("role, appearance, and academy palette persist across routes and reloads", 
 test("toggling appearance dismisses the open desktop theme menu", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const dockItems = ["appearance", "theme", "reading-mode", "fullscreen"];
   await updateSidebarPreferences(page, "/", {
     dockItems,
@@ -1635,7 +1635,7 @@ test("toggling appearance dismisses the open desktop theme menu", async ({
 test("theme picker keeps pointer choices open and makes keyboard previews reversible", async ({
   page,
 }) => {
-  await openApp(page, "/");
+  await openApp(page, "/home");
   const sidebar = page.getByRole("complementary", {
     name: "Student navigation",
   });
@@ -2146,7 +2146,7 @@ test("profile control keeps equal avatar padding and a fixed height while the si
   await page.addInitScript(() => {
     window.localStorage.setItem("veolms-sidebar-mode", "expanded");
   });
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   const app = page.locator(".courses-app");
   const profileButton = page.locator(".courses-profile__button");
@@ -3065,7 +3065,7 @@ test("hidden sidebar navigation stays open through selection and closes on point
     window.localStorage.setItem("veolms-sidebar-mode", "hidden");
     window.localStorage.setItem("veolms-sidebar-width", "252");
   });
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   const app = page.locator(".courses-app");
   const sidebar = page.locator(".courses-sidebar");
@@ -3225,7 +3225,7 @@ test("fixed sidebar stays transparent while the shell glow remains visible", asy
   page,
 }) => {
   await page.setViewportSize({ width: 1247, height: 779 });
-  await openApp(page, "/");
+  await openApp(page, "/home");
 
   const app = page.locator(".courses-app");
   const sidebar = page.locator(".courses-sidebar");

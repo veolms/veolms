@@ -11,10 +11,7 @@ export interface MuteButtonProps {
 export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
   const controller = usePlayerController();
   const { muted, volume } = useVolume();
-  const htmlMuted =
-    typeof document !== "undefined" &&
-    document.documentElement.dataset.playerMuted === "true";
-  const silent = muted || volume === 0 || htmlMuted;
+  const silent = muted || volume === 0;
   const volumeLevel = silent
     ? "muted"
     : volume < 0.34
