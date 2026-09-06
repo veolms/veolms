@@ -4,7 +4,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@veolms/video-player/shaka-preload": [
+        "../../packages/video-player/src/engines/shaka/shaka-early-preload.ts"
+      ]
     },
     "types": ["node", "vite/client"],
     "rootDirs": [".", "./.react-router/types"]

@@ -9,6 +9,7 @@ export interface CourseVideo {
   fileName: string;
   duration: number;
   src: string;
+  thumbnailSrc?: string;
 }
 
 export type LessonStatus = "done" | "active" | "todo";
@@ -74,10 +75,18 @@ export function resolveCourseHlsSrc(
   return `${baseUrl.replace(/\/+$/, "")}/${getCourseVideoHlsSlug(fileName)}/master.m3u8`;
 }
 
+export function resolveCourseVideoThumbnailSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/thumbnails/${getCourseVideoHlsSlug(fileName)}.webp`;
+}
+
 const courseVideo = (fileName: string, duration: number): CourseVideo => ({
   fileName,
   duration,
   src: resolveCourseHlsSrc(fileName),
+  thumbnailSrc: resolveCourseVideoThumbnailSrc(fileName),
 });
 
 export const courseVideos: CourseVideo[] = [

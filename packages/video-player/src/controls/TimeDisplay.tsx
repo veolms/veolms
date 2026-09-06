@@ -15,18 +15,23 @@ export function TimeDisplay({
 }: TimeDisplayProps = {}) {
   const [showRemaining, setShowRemaining] = useState(false);
   const mobileInteraction = usePlayerMobileInteraction();
-  const { currentTime, duration } = usePlayerState(
+  const { currentTime, duration, lifecycle } = usePlayerState(
     ({ media }) => ({
       currentTime: media.currentTime,
       duration: media.duration,
+      lifecycle: media.lifecycle,
     }),
     (left, right) =>
       Math.floor(left.currentTime) === Math.floor(right.currentTime) &&
-      Math.floor(left.duration) === Math.floor(right.duration),
+      Math.floor(left.duration) === Math.floor(right.duration) &&
+      left.lifecycle === right.lifecycle,
   );
-  const remainingTime = Math.max(0, duration - currentTime);
-  const currentLabel = formatMediaTime(currentTime);
-  const durationLabel = formatMediaTime(duration);
+  const timeResolved = lifecycle === "ready" && duration > 0;
+  const displayCurrentTime = timeResolved ? currentTime : 0;
+  const displayDuration = timeResolved ? duration : 0;
+  const remainingTime = Math.max(0, displayDuration - displayCurrentTime);
+  const currentLabel = formatMediaTime(displayCurrentTime);
+  const durationLabel = formatMediaTime(displayDuration);
   const remainingLabel = formatMediaTime(remainingTime);
   const displayValue = showRemaining
     ? `-${remainingLabel} / ${durationLabel}`
@@ -59,7 +64,7 @@ export function TimeDisplay({
       }
       aria-pressed={showRemaining}
       data-player-control=""
-      disabled={!Number.isFinite(duration) || duration <= 0}
+      disabled={!timeResolved}
       title={showRemaining ? "Show elapsed time" : "Show remaining time"}
       onClick={() => setShowRemaining((remaining) => !remaining)}
     >

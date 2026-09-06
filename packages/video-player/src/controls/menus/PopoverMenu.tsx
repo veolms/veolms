@@ -44,6 +44,8 @@ export interface PopoverMenuProps {
   disabled?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
+  /** Whether activating a menu item dismisses the menu. */
+  closeOnItemSelect?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -59,7 +61,74 @@ const triggerClass =
   "player-menu-trigger inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-[background-color,border-color,color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm";
 
 const panelClass =
-  "absolute z-70 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border-0 bg-[color-mix(in_srgb,var(--video-player-menu-surface,rgb(11_11_13_/_0.88))_78%,transparent)] p-1.5 text-(--video-player-menu-text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] focus:outline-none";
+  "absolute z-200 max-h-[min(70vh,24rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-xl border-0 bg-[color-mix(in_srgb,var(--video-player-menu-surface,rgb(11_11_13_/_0.88))_78%,transparent)] p-1.5 text-(--video-player-menu-text) shadow-[0_16px_40px_rgba(0,0,0,0.38)] focus:outline-none";
+const popoverGapPx = 8;
+const popoverEdgePadPx = 8;
+const popoverMinHeightPx = 96;
+const popoverMaxHeightCapPx = 24 * 16;
+
+type PopoverPanelLayout = {
+  host: HTMLElement;
+  maxHeight: number;
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+};
+
+function getPopoverOverlayHost(from: HTMLElement | null) {
+  if (!from) return null;
+  return (
+    from.closest<HTMLElement>(".video-shell") ??
+    from.closest<HTMLElement>("[data-video-player-root]")
+  );
+}
+
+function measurePopoverPanelLayout(
+  trigger: HTMLElement,
+  side: PopoverMenuSide,
+  align: PopoverMenuAlign,
+): PopoverPanelLayout | null {
+  const host = getPopoverOverlayHost(trigger);
+  if (!host) return null;
+  const player =
+    trigger.closest<HTMLElement>("[data-video-player-root]") ?? host;
+  const hostRect = host.getBoundingClientRect();
+  const playerRect = player.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  const horizontal =
+    align === "start"
+      ? { left: triggerRect.left - hostRect.left }
+      : { right: hostRect.right - triggerRect.right };
+
+  if (side === "bottom") {
+    return {
+      host,
+      ...horizontal,
+      top: triggerRect.bottom - hostRect.top + popoverGapPx,
+      maxHeight: Math.min(
+        popoverMaxHeightCapPx,
+        Math.max(
+          popoverMinHeightPx,
+          playerRect.bottom - triggerRect.bottom - popoverGapPx - popoverEdgePadPx,
+        ),
+      ),
+    };
+  }
+
+  return {
+    host,
+    ...horizontal,
+    bottom: hostRect.bottom - triggerRect.top + popoverGapPx,
+    maxHeight: Math.min(
+      popoverMaxHeightCapPx,
+      Math.max(
+        popoverMinHeightPx,
+        triggerRect.top - playerRect.top - popoverGapPx - popoverEdgePadPx,
+      ),
+    ),
+  };
+}
 
 const mobileSheetPanelClass =
   "pointer-events-auto inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
@@ -70,6 +139,7 @@ export function PopoverMenu({
   align = "end",
   children,
   className,
+  closeOnItemSelect = true,
   defaultOpen = false,
   disabled = false,
   label,
@@ -99,6 +169,9 @@ export function PopoverMenu({
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
   const [mobileSheetDragging, setMobileSheetDragging] = useState(false);
+  const [panelLayout, setPanelLayout] = useState<PopoverPanelLayout | null>(
+    null,
+  );
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
   const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
@@ -149,6 +222,33 @@ export function PopoverMenu({
     target?.focus();
     initialFocusRef.current = "selected";
   }, [getItems, isMobileSheet, isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || isMobileSheet) {
+      setPanelLayout(null);
+      return;
+    }
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const update = () => {
+      setPanelLayout(measurePopoverPanelLayout(trigger, side, align));
+    };
+    update();
+    const observed =
+      trigger.closest("[data-video-player-root]") ??
+      getPopoverOverlayHost(trigger);
+    const observer =
+      observed && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(update)
+        : null;
+    if (observed) observer?.observe(observed);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [align, isMobileSheet, isOpen, side]);
 
   useEffect(() => {
     if (!isOpen || isMobileSheet) return;
@@ -238,7 +338,11 @@ export function PopoverMenu({
     const target = event.target;
     if (!(target instanceof Element)) return;
     const item = target.closest<HTMLElement>(menuItemSelector);
-    if (item && !item.hasAttribute("data-menu-keep-open")) {
+    if (
+      closeOnItemSelect &&
+      item &&
+      !item.hasAttribute("data-menu-keep-open")
+    ) {
       closeAndRestoreFocus();
     }
   };
@@ -300,6 +404,15 @@ export function PopoverMenu({
       data-player-theme={theme.id}
       style={{
         ...getPlayerThemeStyle(theme),
+        ...(panelLayout
+          ? {
+              top: panelLayout.top,
+              bottom: panelLayout.bottom,
+              left: panelLayout.left,
+              right: panelLayout.right,
+              maxHeight: panelLayout.maxHeight,
+            }
+          : {}),
         transform:
           isMobileSheet && mobileSheetDragOffset > 0
             ? `translate3d(0, ${mobileSheetDragOffset}px, 0)`
@@ -314,7 +427,10 @@ export function PopoverMenu({
               isContainedMobileSheet ? "absolute" : "fixed",
               mobileSheetPanelClassName,
             )
-          : classNames(panelClass, positionClass),
+          : classNames(
+              panelClass,
+              panelLayout ? "pointer-events-auto" : positionClass,
+            ),
         panelClassName,
       )}
       onClick={handleMenuClick}
@@ -377,7 +493,9 @@ export function PopoverMenu({
           </>,
           mobileSheetPortalTarget ?? document.body,
         )
-      : panel;
+      : isOpen && panelLayout && typeof document !== "undefined"
+        ? createPortal(panel, panelLayout.host)
+        : panel;
 
   return (
     <div

@@ -61,6 +61,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { access, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
+  const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
 
   useEffect(() => {
@@ -95,7 +96,17 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
-  if (pending || shouldBlockAcademyRender(path, access)) {
+  // Guest-landing aliases immediately redirect into the academy. Keep their
+  // shell visible while the session request settles so static HTML is not
+  // replaced by a loading takeover.
+  if (isGuestLandingPath(path)) {
+    return <>{children}</>;
+  }
+
+  if (
+    (pending && authenticationRequired) ||
+    shouldBlockAcademyRender(path, access)
+  ) {
     return <AppLoadingScreen />;
   }
 

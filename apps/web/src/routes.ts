@@ -49,33 +49,8 @@ export default [
       id: "notifications",
       caseSensitive: true,
     }),
-    route("settings", marker, { id: "settings", caseSensitive: true }),
-    route("settings/profile", marker, {
-      id: "settings-profile",
-      caseSensitive: true,
-    }),
-    route("settings/appearance", marker, {
-      id: "settings-appearance",
-      caseSensitive: true,
-    }),
-    route("settings/sidebar", marker, {
-      id: "settings-sidebar",
-      caseSensitive: true,
-    }),
-    route("settings/notifications", marker, {
-      id: "settings-notifications",
-      caseSensitive: true,
-    }),
-    route("settings/learning", marker, {
-      id: "settings-learning",
-      caseSensitive: true,
-    }),
-    route("settings/security", marker, {
-      id: "settings-security",
-      caseSensitive: true,
-    }),
-    route("settings/account", marker, {
-      id: "settings-account",
+    route("settings/:settingsTab?", marker, {
+      id: "settings",
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),

@@ -40,10 +40,19 @@ import {
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
+  isDesktopLearningMinimizeViewport,
   LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
   LEARNING_PLAYER_MOTION_DURATION_MS,
 } from "../learning/player/learningPlayerMotion";
-import { shouldDemoteDetachedPersistentPlayer } from "../learning/player/persistentPlayerRegistration";
+import {
+  shouldDemoteDetachedPersistentPlayer,
+  shouldRestoreMiniPlayerForMatchingCourse,
+} from "../learning/player/persistentPlayerRegistration";
+import {
+  applyPersistentMiniPlayerLessonChange,
+  resolveLearningMiniPlayerLessonPath,
+  resolveMiniPlayerCourseId,
+} from "../learning/player/persistentMiniPlayerLesson";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -63,11 +72,13 @@ import {
   getVisibleOrderedNavigation,
   getNavigationDestination,
   resolveShellNavigation,
+  type NavigationItemWithMetadata,
 } from "../shell/navigation";
 import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
+  type ApplicationScrollPosition,
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
@@ -90,6 +101,7 @@ export interface AcademyOutletContext {
   ) => void;
   onMiniPlayerRestoreReady: () => void;
   openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
+  persistentPlayerMounted: boolean;
   registerPersistentPlayer: RegisterPersistentLearningPlayer;
 }
 
@@ -154,6 +166,22 @@ const isSettingsPath = (path: string) => {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 };
 
+const isLearningRoutePath = (path: string) =>
+  normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/").startsWith(
+    "/learn/",
+  );
+
+const getLearningCourseRouteKey = (path: string) => {
+  const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "learn" || !parts[1]) return null;
+  try {
+    return decodeURIComponent(parts[1]);
+  } catch {
+    return parts[1];
+  }
+};
+
 const decorateCoursePlayerLaunch = (
   destinationPath: string,
   sourcePath: string,
@@ -195,13 +223,18 @@ export default function AcademyLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { courseSlug } = useParams();
-  const preservedScrollPositionRef = useRef<{
-    left: number;
-    top: number;
+  const applicationScrollPositionsRef = useRef(
+    new Map<string, ApplicationScrollPosition>(),
+  );
+  const pendingScrollPositionRef = useRef<{
+    destinationPath: string;
+    sourcePath: string;
+    position: ApplicationScrollPosition;
   } | null>(null);
   const locationPathRef = useRef(
     `${location.pathname}${location.search}${location.hash}`,
   );
+  const renderedLocationPathRef = useRef(locationPathRef.current);
   const settingsReturnLocationRef = useRef({
     path: "/",
     left: 0,
@@ -221,6 +254,9 @@ export default function AcademyLayout() {
     useState<LearningPlayerPresentation>("full");
   const persistentPlayerRef =
     useRef<PersistentLearningPlayerRegistration | null>(null);
+  const selectPersistentMiniPlayerLessonRef = useRef<
+    (lessonNumber: number) => void
+  >(() => {});
   const playerPresentationRef = useRef<LearningPlayerPresentation>("full");
   const persistentRegistrationTokenRef = useRef<symbol | null>(null);
   const playerRestoreVersionRef = useRef(0);
@@ -235,6 +271,7 @@ export default function AcademyLayout() {
   const surfaceMotionTimerRef = useRef<number | null>(null);
   const surfaceMotionVersionRef = useRef(0);
   const restoringPlayerRef = useRef(false);
+  const restoreLearningMiniPlayerRef = useRef<() => void>(() => {});
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
   const {
@@ -275,16 +312,42 @@ export default function AcademyLayout() {
   }, [location.pathname, location.search, navigate, signOut]);
 
   useLayoutEffect(() => {
-    const position = preservedScrollPositionRef.current;
-    if (!position) return undefined;
-    preservedScrollPositionRef.current = null;
+    const previousPath = renderedLocationPathRef.current;
+    const pending = pendingScrollPositionRef.current;
+    if (previousPath === currentLocationPath && !pending) return;
 
-    scrollApplicationTo({ ...position, behavior: "auto" });
-    const frame = window.requestAnimationFrame(() => {
+    if (previousPath !== currentLocationPath) {
+      if (pending?.sourcePath !== previousPath) {
+        applicationScrollPositionsRef.current.set(
+          previousPath,
+          readApplicationScrollPosition(),
+        );
+      }
+      renderedLocationPathRef.current = currentLocationPath;
+    }
+
+    const position =
+      pending?.destinationPath === currentLocationPath
+        ? pending.position
+        : (applicationScrollPositionsRef.current.get(currentLocationPath) ?? {
+            left: 0,
+            top: 0,
+          });
+    pendingScrollPositionRef.current = null;
+    const restorePosition = () =>
       scrollApplicationTo({ ...position, behavior: "auto" });
-    });
+    restorePosition();
+    const frame = window.requestAnimationFrame(restorePosition);
     return () => window.cancelAnimationFrame(frame);
-  }, [location.pathname]);
+  }, [currentLocationPath]);
+
+  useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
@@ -296,6 +359,17 @@ export default function AcademyLayout() {
         destinationPath,
         activeLocationPath,
       );
+      if (
+        !restoringPlayerRef.current &&
+        shouldRestoreMiniPlayerForMatchingCourse({
+          presentation: playerPresentationRef.current,
+          activeCourseRouteKey: persistentPlayerRef.current?.courseRouteKey,
+          requestedCourseRouteKey: getLearningCourseRouteKey(path),
+        })
+      ) {
+        restoreLearningMiniPlayerRef.current();
+        return;
+      }
       if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
         const currentScrollPosition = readApplicationScrollPosition();
         settingsReturnLocationRef.current = {
@@ -307,18 +381,25 @@ export default function AcademyLayout() {
         normalizeNavigationPath(path) !==
         normalizeNavigationPath(locationPathRef.current)
       ) {
-        if (options?.preserveScroll) {
-          preservedScrollPositionRef.current = readApplicationScrollPosition();
-        }
+        const sourcePath = locationPathRef.current;
+        const sourcePosition = readApplicationScrollPosition();
+        applicationScrollPositionsRef.current.set(sourcePath, sourcePosition);
+        pendingScrollPositionRef.current = {
+          destinationPath: path,
+          sourcePath,
+          position: options?.preserveScroll
+            ? sourcePosition
+            : (applicationScrollPositionsRef.current.get(path) ?? {
+                left: 0,
+                top: 0,
+              }),
+        };
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
         locationPathRef.current = path;
         void navigate(path, {
-          preventScrollReset: options?.preserveScroll,
+          preventScrollReset: true,
         });
-      }
-      if (!options?.preserveScroll) {
-        scrollApplicationTo({ top: 0, behavior: "auto" });
       }
     },
     [navigate],
@@ -329,9 +410,18 @@ export default function AcademyLayout() {
   }, [navigateTo]);
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
-    preservedScrollPositionRef.current = {
-      left: destination.left,
-      top: destination.top,
+    const sourcePath = locationPathRef.current;
+    applicationScrollPositionsRef.current.set(
+      sourcePath,
+      readApplicationScrollPosition(),
+    );
+    pendingScrollPositionRef.current = {
+      destinationPath: destination.path,
+      sourcePath,
+      position: {
+        left: destination.left,
+        top: destination.top,
+      },
     };
     locationPathRef.current = destination.path;
     void navigate(destination.path, { preventScrollReset: true });
@@ -339,14 +429,24 @@ export default function AcademyLayout() {
 
   useEffect(() => {
     const navigateByNumber = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.altKey ||
-        isEditingShortcutTarget(event.target)
-      )
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
         return;
-      const index = getNumberShortcutIndex(event);
-      if (index === null) return;
+
+      const cycleDirection =
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown")
+          ? event.key === "ArrowDown"
+            ? 1
+            : -1
+          : null;
+      const numberIndex =
+        cycleDirection === null && !event.altKey
+          ? getNumberShortcutIndex(event)
+          : null;
+      if (cycleDirection === null && numberIndex === null) return;
 
       const navigationRole =
         localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id)) ||
@@ -367,19 +467,65 @@ export default function AcademyLayout() {
               activeUser?.id,
             ),
         navigationItems,
-      )
-        .filter(
-          ([label]) =>
-            label !== "Settings" ||
-            !normalizeSidebarDockItems(
-              getInitialSidebarPreferences().dockItems,
-            ).includes("settings"),
-        )
-        .filter(([label]) => label !== "Learning Space");
-      const destination = orderedNavigation[index];
+      ).filter(
+        ([label]) =>
+          label !== "Settings" ||
+          !normalizeSidebarDockItems(
+            getInitialSidebarPreferences().dockItems,
+          ).includes("settings"),
+      );
+
+      let destination: NavigationItemWithMetadata | undefined;
+      if (cycleDirection !== null) {
+        const cycleNavigation = orderedNavigation.filter(
+          ([label]) => label !== "Logout",
+        );
+        if (cycleNavigation.length === 0) return;
+
+        const currentPath = normalizeNavigationPath(
+          locationPathRef.current.split(/[?#]/)[0] || "/",
+        );
+        let currentIndex = -1;
+        let currentMatchLength = -1;
+        cycleNavigation.forEach((item, index) => {
+          const destinationPath = normalizeNavigationPath(
+            getDestinationPath(getNavigationDestination(item)).split(
+              /[?#]/,
+            )[0] || "/",
+          );
+          const matches =
+            destinationPath === "/"
+              ? currentPath === "/"
+              : currentPath === destinationPath ||
+                currentPath.startsWith(`${destinationPath}/`);
+          if (matches && destinationPath.length > currentMatchLength) {
+            currentIndex = index;
+            currentMatchLength = destinationPath.length;
+          }
+        });
+        const nextIndex =
+          currentIndex < 0
+            ? cycleDirection > 0
+              ? 0
+              : cycleNavigation.length - 1
+            : (currentIndex + cycleDirection + cycleNavigation.length) %
+              cycleNavigation.length;
+        destination = cycleNavigation[nextIndex];
+      } else if (numberIndex !== null) {
+        destination = orderedNavigation[numberIndex];
+      }
       if (!destination) return;
 
       event.preventDefault();
+      if (cycleDirection !== null) {
+        if (numberNavigationTimerRef.current !== null) {
+          window.clearTimeout(numberNavigationTimerRef.current);
+          numberNavigationTimerRef.current = null;
+        }
+        navigateToRef.current(getNavigationDestination(destination));
+        return;
+      }
+
       if (numberNavigationTimerRef.current !== null) {
         window.clearTimeout(numberNavigationTimerRef.current);
       }
@@ -407,6 +553,16 @@ export default function AcademyLayout() {
         return;
       }
       const activePlayer = persistentPlayerRef.current;
+      if (
+        shouldRestoreMiniPlayerForMatchingCourse({
+          presentation: playerPresentationRef.current,
+          activeCourseRouteKey: activePlayer?.courseRouteKey,
+          requestedCourseRouteKey: courseRouteKey,
+        })
+      ) {
+        restoreLearningMiniPlayerRef.current();
+        return;
+      }
       if (activePlayer?.courseRouteKey === courseRouteKey) {
         navigateTo(activePlayer.lessonPath, { exact: true });
         return;
@@ -423,8 +579,15 @@ export default function AcademyLayout() {
       persistentRegistrationTokenRef.current = token;
       persistentPlayerRef.current = registration;
       setPersistentPlayer(registration);
-      playerPresentationRef.current = "full";
-      setPlayerPresentation("full");
+      if (playerPresentationRef.current === "mini") {
+        // Opening the learning route while the same (or another) course is
+        // minimized should expand into the in-page player, not leave a hollow
+        // lesson page with a stuck mini player.
+        restoringPlayerRef.current = true;
+      } else {
+        playerPresentationRef.current = "full";
+        setPlayerPresentation("full");
+      }
       if (getLearningMiniPlayerSnapshot()) {
         closeLearningMiniPlayerSession();
       }
@@ -462,11 +625,40 @@ export default function AcademyLayout() {
   );
 
   const closeLearningMiniPlayer = useCallback(() => {
+    if (
+      playerPresentationRef.current === "mini" &&
+      persistentPlayerRef.current &&
+      isLearningRoutePath(locationPathRef.current)
+    ) {
+      restoreLearningMiniPlayerRef.current();
+      return;
+    }
     persistentRegistrationTokenRef.current = null;
     persistentPlayerRef.current = null;
     setPersistentPlayer(null);
     closeLearningMiniPlayerSession();
   }, []);
+
+  selectPersistentMiniPlayerLessonRef.current = (lessonNumber: number) => {
+    const current = persistentPlayerRef.current;
+    if (!current || playerPresentationRef.current !== "mini") return;
+
+    const updated = applyPersistentMiniPlayerLessonChange(
+      current,
+      lessonNumber,
+    );
+    if (!updated) return;
+
+    persistentPlayerRef.current = updated;
+    setPersistentPlayer(updated);
+  };
+
+  const selectPersistentMiniPlayerLesson = useCallback(
+    (lessonNumber: number) => {
+      selectPersistentMiniPlayerLessonRef.current(lessonNumber);
+    },
+    [],
+  );
 
   const mountLearningBackground = useCallback((deferred = true) => {
     if (deferred && learningBackgroundMountedRef.current) return;
@@ -562,11 +754,15 @@ export default function AcademyLayout() {
       );
       motionStage.style.setProperty(
         "--learning-player-content-opacity",
-        String(motion.contentOpacity),
+        isDesktopLearningMinimizeViewport()
+          ? "1"
+          : String(motion.contentOpacity),
       );
       motionStage.style.setProperty(
         "--learning-player-content-offset-y",
-        `${offsetY.toFixed(3)}px`,
+        isDesktopLearningMinimizeViewport()
+          ? "0px"
+          : `${offsetY.toFixed(3)}px`,
       );
       motionStage.dataset.learningPlayerMotion = phase;
     },
@@ -666,6 +862,29 @@ export default function AcademyLayout() {
     unmountLearningBackground,
   ]);
 
+  const commitPersistentPlayerRestore = useCallback(() => {
+    if (!restoringPlayerRef.current) return;
+    playerPresentationRef.current = "full";
+    setPlayerPresentation("full");
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const restoreOffsetY = Math.max(
+      learningMotionOffsetYRef.current,
+      viewportHeight * LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
+    );
+    setLearningLessonContentMotionActive(true);
+    animateLearningSurfaceMotion(
+      restoreOffsetY,
+      0,
+      viewportHeight,
+      "restoring",
+      finishLearningPlayerRestoreMotion,
+    );
+  }, [
+    animateLearningSurfaceMotion,
+    finishLearningPlayerRestoreMotion,
+    setLearningLessonContentMotionActive,
+  ]);
+
   const handleLearningPlayerMinimizeGestureChange = useCallback(
     (state: LessonPlayerMinimizeGestureState) => {
       if (state.phase === "idle" && playerPresentationRef.current === "mini") {
@@ -739,36 +958,40 @@ export default function AcademyLayout() {
     // route (including the title and comments) is mounted. The player and the
     // lesson surface can then run the same edge-driven motion in reverse from
     // their very first frame.
-    playerPresentationRef.current = "full";
-    setPlayerPresentation("full");
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-    const restoreOffsetY = Math.max(
-      learningMotionOffsetYRef.current,
-      viewportHeight * LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS,
-    );
-    setLearningLessonContentMotionActive(true);
-    animateLearningSurfaceMotion(
-      restoreOffsetY,
-      0,
-      viewportHeight,
-      "restoring",
-      finishLearningPlayerRestoreMotion,
-    );
-  }, [
-    animateLearningSurfaceMotion,
-    finishLearningPlayerRestoreMotion,
-    route.kind,
-    setLearningLessonContentMotionActive,
-  ]);
+    commitPersistentPlayerRestore();
+  }, [commitPersistentPlayerRestore, route.kind]);
 
   useEffect(
     () => () => finishLearningPlayerRestoreMotion(),
     [finishLearningPlayerRestoreMotion],
   );
 
+  const openPersistentPlayerCourseOverview = useCallback(() => {
+    const slug =
+      persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
+    if (!slug) return;
+    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
+  }, [
+    navigateTo,
+    persistentPlayer?.courseRouteKey,
+    persistentPlayer?.courseSlug,
+  ]);
+
+  const openStandaloneMiniPlayerCourseOverview = useCallback(() => {
+    const slug = learningMiniPlayer?.courseSlug;
+    if (!slug) return;
+    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
+  }, [learningMiniPlayer?.courseSlug, navigateTo]);
+
   const restoreLearningMiniPlayer = useCallback(() => {
-    const lessonPath =
-      persistentPlayerRef.current?.lessonPath ?? learningMiniPlayer?.lessonPath;
+    const activePlayer = persistentPlayerRef.current;
+    const lessonPath = resolveLearningMiniPlayerLessonPath({
+      courseRouteKey:
+        activePlayer?.courseRouteKey ?? learningMiniPlayer?.courseSlug,
+      lessonNumber:
+        activePlayer?.selectedLesson ?? learningMiniPlayer?.selectedLesson,
+      lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
+    });
     if (!lessonPath) return;
     // A route unmount queues the outgoing registration cleanup. Mark this
     // restore before navigating so that stale cleanup cannot turn the player
@@ -798,14 +1021,20 @@ export default function AcademyLayout() {
         }
       }
     }
+    const alreadyOnLearningRoute = isLearningRoutePath(locationPathRef.current);
     navigateTo(lessonPath, { exact: true });
+    if (alreadyOnLearningRoute) {
+      commitPersistentPlayerRestore();
+    }
   }, [
     applyLearningSurfaceMotion,
+    commitPersistentPlayerRestore,
     finishLearningPlayerRestoreMotion,
     learningMiniPlayer,
     mountLearningBackground,
     navigateTo,
   ]);
+  restoreLearningMiniPlayerRef.current = restoreLearningMiniPlayer;
 
   const activeLearningReturnPath =
     route.kind === "learning"
@@ -829,6 +1058,14 @@ export default function AcademyLayout() {
         settingsTab={route.settingsTab}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
+        miniPlayerCourseId={resolveMiniPlayerCourseId({
+          presentation: playerPresentation,
+          persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
+          persistentCourseSlug: persistentPlayer?.courseSlug,
+          persistentLessonPath: persistentPlayer?.lessonPath,
+          miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
+          miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
+        })}
         learningBackground={learningBackground}
         learningMotionStageRef={learningMotionStageRef}
         onNavigatePage={navigateTo}
@@ -847,6 +1084,7 @@ export default function AcademyLayout() {
                         handleLearningPlayerMinimizeGestureChange,
                       onMiniPlayerRestoreReady: closeLearningMiniPlayer,
                       openLearningMiniPlayer,
+                      persistentPlayerMounted: Boolean(persistentPlayer),
                       registerPersistentPlayer,
                     } satisfies AcademyOutletContext
                   }
@@ -861,12 +1099,15 @@ export default function AcademyLayout() {
           presentation={playerPresentation}
           onClose={closeLearningMiniPlayer}
           onRestore={restoreLearningMiniPlayer}
+          onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+          onOpenCourseOverview={openPersistentPlayerCourseOverview}
         />
       ) : learningMiniPlayer ? (
         <LearningMiniPlayer
           session={learningMiniPlayer}
           onClose={closeLearningMiniPlayer}
           onRestore={restoreLearningMiniPlayer}
+          onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
         />
       ) : null}
     </AcademyRouteGuard>

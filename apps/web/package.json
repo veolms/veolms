@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
+    "build": "node scripts/build-performance.mjs",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
+    "generate:video-thumbnails": "node scripts/generate-course-video-thumbnails.mjs",
     "preview": "node scripts/serve-performance-build.mjs",
     "preview:performance": "node scripts/serve-performance-build.mjs",
-    "preview:device": "pnpm build && node scripts/serve-performance-build.mjs --host 0.0.0.0 --port 4173",
     "routes": "react-router routes",
     "typegen": "react-router typegen",
     "typecheck": "react-router typegen && tsc --noEmit",
@@ -21,8 +21,8 @@
     "test:e2e:dist": "playwright test --config=playwright.preview.config.ts",
     "test:e2e:update": "playwright test --grep @visual --update-snapshots=all",
     "test:e2e:headed": "playwright test --headed",
-    "check": "pnpm typecheck && pnpm test:unit && pnpm build && pnpm test:e2e:dist && pnpm test:e2e",
-    "check:ci": "pnpm typecheck && pnpm test:unit && pnpm build && pnpm test:e2e:dist && pnpm test:e2e:behavior"
+    "check": "pnpm typecheck && pnpm test:unit && pnpm test:e2e:dist && pnpm test:e2e",
+    "check:ci": "pnpm typecheck && pnpm test:unit && pnpm test:e2e:dist && pnpm test:e2e:behavior"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.6.2",
