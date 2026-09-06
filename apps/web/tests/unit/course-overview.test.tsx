@@ -249,4 +249,46 @@ describe("CourseOverviewPage", () => {
       "animate-pulse",
     );
   });
+
+  it("renders empty state for description when description is missing and never renders dummy text", () => {
+    const courseWithoutDescription = {
+      ...sampleCourse,
+      title: "Course Without Description",
+      description: "",
+    };
+
+    renderWithClient(
+      <CourseOverviewPage
+        customCourse={courseWithoutDescription}
+        isReadOnlyPreview={true}
+      />,
+    );
+
+    expect(screen.getByTestId("course-description-empty")).toBeVisible();
+    expect(screen.getByText("No description available yet")).toBeVisible();
+    // Confirms dummy fallback text is completely removed
+    expect(screen.queryByText(/This course is designed to take you from the basics/i)).toBeNull();
+    expect(screen.queryByText(/You'll learn core concepts/i)).toBeNull();
+    expect(screen.queryByText(/Show more/i)).toBeNull();
+  });
+
+  it("renders actual course description when description is provided", () => {
+    const courseWithDescription = {
+      ...sampleCourse,
+      title: "Course With Real Description",
+      description: "This is a real authentic course description written by the instructor.",
+    };
+
+    renderWithClient(
+      <CourseOverviewPage
+        customCourse={courseWithDescription}
+        isReadOnlyPreview={true}
+      />,
+    );
+
+    expect(screen.queryByTestId("course-description-empty")).toBeNull();
+    expect(
+      screen.getByText("This is a real authentic course description written by the instructor."),
+    ).toBeVisible();
+  });
 });

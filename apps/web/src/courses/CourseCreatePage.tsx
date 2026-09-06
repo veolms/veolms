@@ -98,8 +98,15 @@ import {
   useUnpublishCourse,
 } from "../services/courses";
 import { useIsMutating } from "@tanstack/react-query";
-import type { Category, CourseIncludeItem } from "@veolms/contracts";
-import { CourseOverviewPage } from "./CourseOverviewPage";
+import type {
+  Category,
+  CourseEditorDataResponse,
+  CourseIncludeItem,
+} from "@veolms/contracts";
+import {
+  CourseOverviewPage,
+  CourseOverviewSkeleton,
+} from "./CourseOverviewPage";
 import type {
   CourseInclude,
   CourseOverviewPricingProps,
@@ -1190,6 +1197,221 @@ const inclusionGhostHtml = (text: string) => `
     </span>
   </div>
 `;
+
+export function buildPricingPayload(state: PricingFormState) {
+  if (state.pricingType === "free") {
+    return {
+      pricingType: "free" as const,
+      price: 0,
+      salePrice: null,
+      currency: state.currency || "INR",
+    };
+  }
+  const rawSell = state.sellingPrice.replace(/,/g, "").trim();
+  const rawOrig = state.originalPrice.replace(/,/g, "").trim();
+  const sellNum = Math.round(parseFloat(rawSell));
+  const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
+
+  const price = origNum && origNum > 0 ? origNum : (isNaN(sellNum) ? 0 : sellNum);
+  const salePrice = origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
+
+  return {
+    pricingType: "paid" as const,
+    price,
+    salePrice,
+    currency: state.currency || "INR",
+  };
+}
+
+export interface BuildLocalPreviewParams {
+  currentCourseId: string | null;
+  courseTitle: string;
+  shortDescription: string;
+  courseDescription: string;
+  categoryId: string;
+  difficultyLevel: "beginner" | "intermediate" | "advanced" | "";
+  language: string;
+  instructorAlias: string;
+  showInstructorName: boolean;
+  courseVersion: number;
+  isPublished: boolean;
+  thumbnailMediaId?: string | null;
+  trailerMediaId?: string | null;
+  sections: Array<{
+    id: string;
+    title: string;
+    lessons: Array<{
+      id: string;
+      title: string;
+      description?: string | null;
+      contentType: "video" | "document";
+      isPreview?: boolean;
+      isPublished?: boolean;
+      resources?: Array<{
+        id: string;
+        name: string;
+        mediaAssetId?: string;
+      }>;
+    }>;
+  }>;
+  pricingDraft: PricingFormState;
+  accessRulesDraft: AccessRulesFormState;
+  enableCertificate: boolean;
+  manualIncludesDraft: Array<{ id: string; text: string }>;
+  editorData?: CourseEditorDataResponse | null;
+  now?: string;
+}
+
+export function buildLocalPreviewData({
+  currentCourseId,
+  courseTitle,
+  shortDescription,
+  courseDescription,
+  categoryId,
+  difficultyLevel,
+  language,
+  instructorAlias,
+  showInstructorName,
+  courseVersion,
+  isPublished,
+  thumbnailMediaId,
+  trailerMediaId,
+  sections,
+  pricingDraft,
+  accessRulesDraft,
+  enableCertificate,
+  manualIncludesDraft,
+  editorData,
+  now = new Date().toISOString(),
+}: BuildLocalPreviewParams): CourseEditorDataResponse | null {
+  // Preserve course-title/course-ID boundary without "Untitled Course" fallback
+  if (!currentCourseId || !courseTitle.trim()) {
+    return null;
+  }
+
+  const totalSectionsCount = sections.length;
+  const totalLessonsCount = sections.reduce(
+    (acc, sec) => acc + (sec.lessons?.length ?? 0),
+    0,
+  );
+
+  const isFixedDuration = accessRulesDraft.durationMode === "fixed";
+  const unitMultiplier =
+    accessRulesDraft.fixedDurationUnit === "Years"
+      ? 365
+      : accessRulesDraft.fixedDurationUnit === "Months"
+        ? 30
+        : accessRulesDraft.fixedDurationUnit === "Weeks"
+          ? 7
+          : 1;
+  const durationDays = isFixedDuration
+    ? (accessRulesDraft.fixedDurationValue || 30) * unitMultiplier
+    : null;
+
+  const pricingPayload = buildPricingPayload(pricingDraft);
+
+  const courseData: CourseEditorDataResponse["course"] = {
+    id: currentCourseId,
+    slug: editorData?.course?.slug || "",
+    title: courseTitle.trim(),
+    shortDescription: shortDescription.trim() || null,
+    description: courseDescription.trim() || null,
+    difficulty: difficultyLevel ? difficultyLevel : null,
+    status: isPublished ? "published" : (editorData?.course?.status || "draft"),
+    creatorId: editorData?.course?.creatorId || null,
+    categoryId: categoryId || null,
+    thumbnailMediaId: thumbnailMediaId ?? (editorData?.course?.thumbnailMediaId || null),
+    trailerMediaId: trailerMediaId ?? (editorData?.course?.trailerMediaId || null),
+    instructorAlias: instructorAlias.trim() || null,
+    version: courseVersion,
+    createdAt: editorData?.course?.createdAt || now,
+    updatedAt: editorData?.course?.updatedAt || now,
+    publishedAt: editorData?.course?.publishedAt || null,
+    totalSections: totalSectionsCount,
+    totalLessons: totalLessonsCount,
+    totalDurationSeconds: editorData?.course?.totalDurationSeconds || 0,
+  };
+
+  const sectionsData: CourseEditorDataResponse["sections"] = sections.map(
+    (sec, secIdx) => ({
+      id: sec.id,
+      courseId: currentCourseId,
+      title: sec.title,
+      position: secIdx,
+      lessons: (sec.lessons || []).map((les, lesIdx) => ({
+        id: les.id,
+        courseId: currentCourseId,
+        sectionId: sec.id,
+        title: les.title,
+        description: les.description || null,
+        contentType: les.contentType,
+        position: lesIdx,
+        isPreview: Boolean(les.isPreview),
+        isPublished: les.isPublished !== undefined ? les.isPublished : true,
+        resources: (les.resources || []).map((res, resIdx) => ({
+          id: res.id,
+          lessonId: les.id,
+          mediaAssetId: res.mediaAssetId || res.id,
+          title: res.name,
+          position: resIdx,
+          createdAt: now,
+        })),
+      })),
+    }),
+  );
+
+  const accessRulesData: CourseEditorDataResponse["accessRules"] = {
+    id: editorData?.accessRules?.id || "preview-access-rules",
+    courseId: currentCourseId,
+    accessType: (accessRulesDraft.accessType as AccessType) || "everyone",
+    durationType: isFixedDuration ? "fixed_duration" : "lifetime",
+    durationDays,
+  };
+
+  const pricingData: CourseEditorDataResponse["pricing"] = {
+    id: editorData?.pricing?.id || "preview-pricing",
+    courseId: currentCourseId,
+    pricingType: pricingPayload.pricingType,
+    price: pricingPayload.price,
+    salePrice: pricingPayload.salePrice,
+    currency: pricingPayload.currency,
+  };
+
+  const settingsData: CourseEditorDataResponse["settings"] = {
+    id: editorData?.settings?.id || "preview-settings",
+    courseId: currentCourseId,
+    allowQa: accessRulesDraft.enableQA,
+    allowComments: accessRulesDraft.enableComments,
+    allowDownloads: accessRulesDraft.enableDownloads,
+    certificateEnabled: enableCertificate,
+    showInstructorName: showInstructorName !== false,
+    language: language || "en",
+    estimatedDuration: editorData?.settings?.estimatedDuration ?? null,
+  };
+
+  const includesData: CourseEditorDataResponse["includes"] =
+    manualIncludesDraft
+      .filter((inc) => Boolean(inc.text.trim()))
+      .map((inc, index) => ({
+        id: inc.id,
+        courseId: currentCourseId,
+        text: inc.text.trim(),
+        icon: null,
+        position: index,
+        createdAt:
+          editorData?.includes?.find((i) => i.id === inc.id)?.createdAt || now,
+        updatedAt: now,
+      }));
+
+  return {
+    course: courseData,
+    sections: sectionsData,
+    accessRules: accessRulesData,
+    pricing: pricingData,
+    settings: settingsData,
+    includes: includesData,
+  };
+}
 
 export function parseWizardTab(
   rawParam: string | null | undefined,
@@ -6290,31 +6512,6 @@ export function CourseCreatePage({
     );
   };
 
-  const buildPricingPayload = (state: PricingFormState) => {
-    if (state.pricingType === "free") {
-      return {
-        pricingType: "free" as const,
-        price: 0,
-        salePrice: null,
-        currency: state.currency || "INR",
-      };
-    }
-    const rawSell = state.sellingPrice.replace(/,/g, "").trim();
-    const rawOrig = state.originalPrice.replace(/,/g, "").trim();
-    const sellNum = Math.round(parseFloat(rawSell));
-    const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
-
-    const price = origNum && origNum > 0 ? origNum : sellNum;
-    const salePrice = origNum && origNum > 0 ? sellNum : null;
-
-    return {
-      pricingType: "paid" as const,
-      price,
-      salePrice,
-      currency: state.currency || "INR",
-    };
-  };
-
   const executeSerializedPricingMutation = async (
     controlKey: "pricingType" | "currency" | "pricingDetails",
     targetVersion: number,
@@ -6642,6 +6839,52 @@ export function CourseCreatePage({
                 )}% OFF`
               : undefined,
         };
+
+  const localPreviewData = useMemo<CourseEditorDataResponse | null>(() => {
+    return buildLocalPreviewData({
+      currentCourseId,
+      courseTitle,
+      shortDescription,
+      courseDescription,
+      categoryId,
+      difficultyLevel,
+      language,
+      instructorAlias,
+      showInstructorName,
+      courseVersion,
+      isPublished,
+      thumbnailMediaId: editorData?.course?.thumbnailMediaId || null,
+      trailerMediaId: editorData?.course?.trailerMediaId || null,
+      sections,
+      pricingDraft,
+      accessRulesDraft,
+      enableCertificate: extras.enableCertificate,
+      manualIncludesDraft,
+      editorData,
+    });
+  }, [
+    currentCourseId,
+    courseTitle,
+    shortDescription,
+    courseDescription,
+    difficultyLevel,
+    categoryId,
+    instructorAlias,
+    showInstructorName,
+    language,
+    courseVersion,
+    isPublished,
+    editorData,
+    sections,
+    accessRulesDraft,
+    pricingDraft,
+    extras.enableCertificate,
+    manualIncludesDraft,
+  ]);
+
+  // Explicit non-reconciliation: when local preview data is available from wizard state,
+  // it renders immediately. previewData remains fetched in the background without overwriting.
+  const activePreviewData = localPreviewData || previewData;
 
   // Publish Checklist Validation based strictly on server validation response
   const isBasicsValid = serverValidation?.sections?.basics?.valid ?? false;
@@ -8439,17 +8682,9 @@ export function CourseCreatePage({
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="m-0 mb-2 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
+                  <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
                     {courseTitle.trim() ? courseTitle : "Course Title"}
                   </h3>
-
-                  {difficultyLevel && (
-                    <div className="inline-block mb-3">
-                      <span className="rounded-md px-2.5 py-0.75 text-(--accent-ink,var(--accent)) bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[0.74rem] font-semibold">
-                        {difficultyLevel}
-                      </span>
-                    </div>
-                  )}
 
                   <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
                     <span className="flex items-center gap-1.25">
@@ -12422,12 +12657,18 @@ export function CourseCreatePage({
                       <span>Back to Editor</span>
                     </button>
                   </div>
+                ) : activePreviewData ? (
+                  <CourseOverviewPage
+                    previewData={activePreviewData}
+                    categories={serverCategories}
+                    isReadOnlyPreview={true}
+                    onNavigateCourses={() => setIsPreviewModalOpen(false)}
+                  />
                 ) : isPreviewLoading ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">
-                    <div className="w-8 h-8 rounded-full border-2 border-(--accent) border-t-transparent animate-spin mb-4" />
-                    <p className="text-[0.9rem] font-medium text-(--text)">
-                      Loading course preview...
-                    </p>
+                  <div className="p-6 max-[640px]:p-3 w-full">
+                    <CourseOverviewSkeleton
+                      onNavigateCourses={() => setIsPreviewModalOpen(false)}
+                    />
                   </div>
                 ) : isPreviewError ? (
                   <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">
@@ -12457,13 +12698,6 @@ export function CourseCreatePage({
                       <span>Retry</span>
                     </button>
                   </div>
-                ) : previewData ? (
-                  <CourseOverviewPage
-                    previewData={previewData}
-                    categories={serverCategories}
-                    isReadOnlyPreview={true}
-                    onNavigateCourses={() => setIsPreviewModalOpen(false)}
-                  />
                 ) : null}
               </div>
             </div>

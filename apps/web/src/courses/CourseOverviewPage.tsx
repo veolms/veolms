@@ -231,20 +231,14 @@ function CurriculumSectionItem({
           <div className="px-3.5 pt-1 pb-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
             {section.lessons.length > 0 ? (
               section.lessons.map(
-                ([number, title, duration, status, isPreview]) => {
-                  const isDoc =
-                    title.toLowerCase().includes("discord") ||
-                    title.toLowerCase().includes("app") ||
-                    title.toLowerCase().includes("community") ||
-                    title.toLowerCase().includes("download") ||
-                    title.toLowerCase().endsWith(".pdf") ||
-                    title.toLowerCase().endsWith(".doc") ||
-                    title.toLowerCase().endsWith(".docx");
+                ([number, title, duration, status, isPreview, contentType]) => {
+                  const isDoc = contentType === "document";
                   return (
                     <div
                       className="group/lesson flex items-center gap-3 min-h-9.5 px-3 py-1.5 rounded-md text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
                       key={number}
                     >
+                      {/* Content type icon */}
                       <span
                         className="inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 group-hover/lesson:text-(--accent)"
                         aria-hidden="true"
@@ -255,14 +249,30 @@ function CurriculumSectionItem({
                           <PlayCircle size={16} weight="regular" />
                         )}
                       </span>
+
+                      {/* Lesson title */}
                       <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
                         {title}
                       </span>
+
+                      {/* Free preview badge */}
+                      {isPreview && (
+                        <span
+                          className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
+                          aria-label="Free preview"
+                        >
+                          Free
+                        </span>
+                      )}
+
+                      {/* Duration */}
                       {duration ? (
                         <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
                           {duration}
                         </span>
                       ) : null}
+
+                      {/* Progress status */}
                       {status === "done" ? (
                         <span
                           className="inline-flex items-center justify-center shrink-0"
@@ -311,6 +321,7 @@ interface CourseHeroSectionProps {
   language?: string;
   pricing?: CourseOverviewPricingProps;
   inclusions?: string[];
+  trailerMediaId?: string | null;
   onNavigateCourses?: () => void;
   onToggleWishlist?: (event: MouseEvent<HTMLButtonElement>) => void;
   onNavigatePage?: NavigateTo;
@@ -321,6 +332,7 @@ function CourseHeroSection({
   course,
   title,
   thumbnail,
+  trailerMediaId,
   wishlisted,
   instructorName,
   shortDescription,
@@ -355,9 +367,9 @@ function CourseHeroSection({
     <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5">
       {/* Left Column: Title, Metadata, Pricing Section */}
       <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
-        {/* Upper Navigation & Category / Level Badges */}
-        <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
-          {onNavigateCourses && (
+        {/* Upper Navigation Back Button */}
+        {onNavigateCourses && (
+          <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
             <button
               type="button"
               className="inline-flex items-center justify-center w-9.5 h-9.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,#000)] text-(--text) cursor-pointer p-0 shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-[border-color,background-color,color] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover) hover:text-(--text)"
@@ -367,17 +379,8 @@ function CourseHeroSection({
             >
               <ArrowLeft size={18} weight="bold" />
             </button>
-          )}
-
-          {course.level ? (
-            <span
-              className="inline-flex items-center border border-(--accent-border,color-mix(in_srgb,var(--accent)_35%,transparent)) rounded-full px-3.25 py-1.25 text-(--accent-ink,var(--accent)) bg-(--accent-soft,color-mix(in_srgb,var(--accent)_15%,transparent)) text-[0.74rem] font-[750] tracking-[0.06em] leading-none"
-              aria-label={`Level: ${course.level}`}
-            >
-              {course.level.toUpperCase()}
-            </span>
-          ) : null}
-        </div>
+          </div>
+        )}
 
         {/* Lower Content Group: Title, Meta row, Pricing Card */}
         <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
@@ -596,35 +599,25 @@ function CourseHeroSection({
           ) : (
             <CourseThumbnailPlaceholder />
           )}
-          <div className="absolute inset-0 bg-linear-to-b from-black/8 to-black/45 pointer-events-none" />
 
-          {/* Center Play Button */}
-          <button
-            type="button"
-            className="group/play absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent cursor-pointer p-0 z-2"
-            aria-label={`Play preview for ${title}`}
-            onClick={handlePreviewClick}
-            disabled={isReadOnlyPreview}
-          >
-            <span
-              className="inline-flex w-13.5 h-13.5 items-center justify-center rounded-full bg-black/55 backdrop-blur-md border-[1.5px] border-white/25 text-white shadow-[0_4px_18px_rgba(0,0,0,0.35)] transition-[transform,background-color,border-color] duration-180 ease-out motion-reduce:transition-none group-hover/play:scale-[1.08] group-hover/play:bg-black/75 group-hover/play:border-white/50 max-[640px]:w-12.5 max-[640px]:h-12.5"
-              aria-hidden="true"
-            >
-              <Play size={22} weight="fill" />
-            </span>
-          </button>
+          {/* Conditional Trailer Overlay & Watch Trailer Action */}
+          {Boolean(trailerMediaId) && (
+            <>
+              <div className="absolute inset-0 bg-linear-to-b from-black/8 to-black/45 pointer-events-none" />
 
-          {/* Bottom Left Pill Button */}
-          <button
-            type="button"
-            className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
-            onClick={handlePreviewClick}
-            disabled={isReadOnlyPreview}
-            aria-label="View trailer"
-          >
-            <PlayCircle size={15} weight="bold" />
-            <span>Preview this course</span>
-          </button>
+              {/* Bottom Left Pill Button */}
+              <button
+                type="button"
+                className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
+                onClick={handlePreviewClick}
+                disabled={isReadOnlyPreview}
+                aria-label="Watch trailer"
+              >
+                <PlayCircle size={15} weight="bold" />
+                <span>Watch trailer</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -635,23 +628,25 @@ function CourseHeroSection({
 
 interface CourseAboutCardProps {
   description?: string;
-  aboutLead?: string;
-  aboutBody?: string;
-  aboutExtra?: string;
-  showMore: boolean;
-  onToggleShowMore: () => void;
   isReadOnlyPreview?: boolean;
 }
 
-function CourseAboutCard({
-  description,
-  aboutLead,
-  aboutBody,
-  aboutExtra,
-  showMore,
-  onToggleShowMore,
-  isReadOnlyPreview = false,
-}: CourseAboutCardProps) {
+/** Line height × clamp lines = collapsed max-height in px. */
+const CLAMP_LINES = 5;
+const LINE_HEIGHT_PX = 0.88 * 16 * 1.65; // font-size × line-height ≈ 23.2 px
+
+function CourseAboutCard({ description }: CourseAboutCardProps) {
+  const hasDescription = Boolean(description && description.trim());
+  const [expanded, setExpanded] = useState(false);
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const contentRef = (node: HTMLDivElement | null) => {
+    if (!node) return;
+    const collapsedMax = Math.round(LINE_HEIGHT_PX * CLAMP_LINES);
+    setNeedsClamp(node.scrollHeight > collapsedMax + 4);
+  };
+
+  const collapsedMaxHeight = `${Math.round(LINE_HEIGHT_PX * CLAMP_LINES)}px`;
+
   return (
     <section
       className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
@@ -664,45 +659,66 @@ function CourseAboutCard({
         About this course
       </h2>
 
-      <div className="flex flex-col gap-3">
-        {description ? (
-          <div className="cov-prose text-[0.88rem] leading-[1.65]">
-            <RenderMarkdown content={description} />
-          </div>
-        ) : (
-          <>
-            {aboutLead && (
-              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
-                {aboutLead}
-              </p>
-            )}
-            {aboutBody && (
-              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
-                {aboutBody}
-              </p>
-            )}
-            {showMore && aboutExtra && (
-              <p className="m-0 text-(--text-secondary) text-[0.87rem] leading-[1.6]">
-                {aboutExtra}
-              </p>
-            )}
-          </>
-        )}
-      </div>
+      {hasDescription ? (
+        <div className="flex flex-col gap-2">
+          {/* Clamp wrapper */}
+          <div className="relative">
+            <div
+              ref={contentRef}
+              className="cov-prose text-[0.88rem] leading-[1.65] overflow-hidden transition-[max-height] duration-300 ease-in-out"
+              style={{
+                maxHeight: needsClamp && !expanded ? collapsedMaxHeight : "9999px",
+              }}
+            >
+              <RenderMarkdown content={description!.trim()} />
+            </div>
 
-      {!description && !isReadOnlyPreview && (
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 mt-2.5 border-0 bg-transparent text-(--accent) text-[0.82rem] font-semibold p-0 cursor-pointer transition-opacity duration-140 hover:opacity-85"
-          aria-expanded={showMore}
-          onClick={onToggleShowMore}
+            {/* Gradient fade — only shown when collapsed and clamp is active */}
+            {needsClamp && !expanded && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-(--surface) to-transparent"
+              />
+            )}
+          </div>
+
+          {/* Toggle button */}
+          {needsClamp && (
+            <button
+              type="button"
+              data-testid="description-toggle"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="self-start flex items-center gap-1.5 text-[0.82rem] font-semibold text-(--accent) hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-0 p-0"
+            >
+              {expanded ? (
+                <>
+                  Show less
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    className="rotate-180 transition-transform duration-200"
+                  />
+                </>
+              ) : (
+                <>
+                  Show more
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    className="transition-transform duration-200"
+                  />
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div
+          className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) text-(--muted) text-center text-[0.88rem] italic"
+          data-testid="course-description-empty"
         >
-          <span>{showMore ? "Show less" : "Show more"}</span>
-          <CaretDown
-            size={14}
-            className={`transition-transform duration-200 ${showMore ? "rotate-180" : ""}`}
-          />
-        </button>
+          No description available yet
+        </div>
       )}
     </section>
   );
@@ -784,6 +800,7 @@ export interface CourseOverviewPageProps {
   customIncludes?: CourseInclude[];
   customInclusions?: string[];
   customPricing?: CourseOverviewPricingProps;
+  customTrailerMediaId?: string | null;
   isReadOnlyPreview?: boolean;
 }
 
@@ -797,6 +814,7 @@ export interface AdaptedOverviewData {
   inclusions: string[];
   pricing: CourseOverviewPricingProps;
   instructorName: string | undefined;
+  trailerMediaId: string | null;
 }
 
 export function adaptCourseOverviewResponse(
@@ -869,6 +887,7 @@ export function adaptCourseOverviewResponse(
           "",
           "todo" as const,
           les.isPreview,
+          les.contentType ?? "video",
         ]),
     }));
 
@@ -914,6 +933,7 @@ export function adaptCourseOverviewResponse(
     inclusions: finalPerks,
     pricing: pricingProps,
     instructorName: resolvedInstructorName,
+    trailerMediaId: c.trailerMediaId ?? null,
   };
 }
 
@@ -983,6 +1003,7 @@ export function adaptPreviewDataToOverview(
           "", // No fake duration
           "todo" as const,
           les.isPreview,
+          les.contentType ?? "video",
         ]),
     }));
 
@@ -1028,6 +1049,7 @@ export function adaptPreviewDataToOverview(
     inclusions: finalPerks,
     pricing: pricingProps,
     instructorName: resolvedInstructorName,
+    trailerMediaId: c.trailerMediaId ?? null,
   };
 }
 
@@ -1044,14 +1066,12 @@ export function CourseOverviewSkeleton({
       <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5 w-full">
         {/* Left Column Skeleton */}
         <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
-          {/* Top badges & Back button */}
-          <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
-            {onNavigateCourses && (
+          {/* Top Back button skeleton */}
+          {onNavigateCourses && (
+            <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
               <div className="w-9.5 h-9.5 rounded-xl bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-            )}
-            <div className="h-6.5 w-24 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-            <div className="h-6.5 w-20 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-          </div>
+            </div>
+          )}
 
           <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
             {/* Title & Metadata row skeleton */}
@@ -1086,11 +1106,7 @@ export function CourseOverviewSkeleton({
 
         {/* Right Column: 16:9 Course Trailer Video Placeholder */}
         <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
-          <div className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0">
-            <div className="w-13.5 h-13.5 rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] flex items-center justify-center">
-              <div className="w-5 h-5 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)]" />
-            </div>
-          </div>
+          <div className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0" />
         </div>
       </div>
 
@@ -1218,6 +1234,7 @@ function CourseOverviewContent({
   customIncludes,
   customInclusions,
   customPricing,
+  customTrailerMediaId,
   isReadOnlyPreview = false,
 }: CourseOverviewContentProps) {
   const locationHash =
@@ -1267,7 +1284,7 @@ function CourseOverviewContent({
   const language = adaptedFromPreview?.language ?? customLanguage ?? undefined;
   const courseSections = adaptedFromPreview?.sections ?? customSections ?? [];
   const activeDescription =
-    adaptedFromPreview?.description ?? customDescription;
+    adaptedFromPreview?.description ?? customDescription ?? course.description;
   const activePricing = adaptedFromPreview?.pricing ?? customPricing;
 
   const inclusions: string[] | undefined = adaptedFromPreview
@@ -1293,7 +1310,6 @@ function CourseOverviewContent({
   const [openSections, setOpenSections] = useState<Set<number>>(
     () => new Set([0]),
   );
-  const [showMore, setShowMore] = useState(false);
   const [wishlisted, setWishlisted] = useState(() => {
     try {
       const saved: unknown = JSON.parse(
@@ -1335,13 +1351,11 @@ function CourseOverviewContent({
     });
   };
 
-  const categoryTopic =
-    course.category && course.category.trim()
-      ? course.category.toLowerCase()
-      : "software";
-  const aboutLead = `This course is designed to take you from the basics of ${course.title} to building complex, scalable ${categoryTopic} applications.`;
-  const aboutBody = `${course.description} You'll learn core concepts, work with databases, authentication, APIs, and deploy real-world projects. Whether you're a beginner or looking to level up your ${categoryTopic} skills, this course provides practical knowledge and hands-on experience to help you build professional-grade applications.`;
-  const aboutExtra = `By the end of this course, you will have built complete production-ready projects, learned testing and deployment workflows, and acquired the professional skill set needed for industry roles.`;
+  const trailerMediaId =
+    adaptedFromPreview?.trailerMediaId ??
+    customTrailerMediaId ??
+    (course as { trailerMediaId?: string | null }).trailerMediaId ??
+    null;
 
   return (
     <div
@@ -1357,6 +1371,7 @@ function CourseOverviewContent({
         course={course}
         title={title}
         thumbnail={thumbnail}
+        trailerMediaId={trailerMediaId}
         wishlisted={wishlisted}
         instructorName={instructorName}
         shortDescription={shortDescription}
@@ -1371,15 +1386,7 @@ function CourseOverviewContent({
       />
 
       {/* 2. About This Course */}
-      <CourseAboutCard
-        description={activeDescription}
-        aboutLead={aboutLead}
-        aboutBody={aboutBody}
-        aboutExtra={aboutExtra}
-        showMore={showMore}
-        onToggleShowMore={() => setShowMore((v) => !v)}
-        isReadOnlyPreview={isReadOnlyPreview}
-      />
+      <CourseAboutCard description={activeDescription} />
 
       {/* 3. Course Curriculum */}
       <CourseCurriculumCard
