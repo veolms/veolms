@@ -21,6 +21,7 @@ import { FakeVideoEngine } from "@veolms/video-player/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CourseVideo } from "../../src/learning/courseContent.js";
 import { LessonVideoPlayer } from "../../src/learning/player/LessonVideoPlayer.js";
+import { appendLearningHlsCacheVersion } from "../../src/learning/player/learningHlsConstants.js";
 import { getDefaultLearningMiniPlayerLayout } from "../../src/learning/player/learningPlayerMotion.js";
 import { registerLearningMiniPlayerRuntime } from "../../src/learning/player/learningMiniPlayerStore.js";
 import {
@@ -1802,6 +1803,7 @@ describe("LessonVideoPlayer adapter", () => {
           title: "Designing for real users",
         },
         streaming: { abrEnabled: true, bufferBehind: 600 },
+        networking: { requestFilter: appendLearningHlsCacheVersion },
         textTracks: [
           {
             src: "/assets/designing-users.vtt",
