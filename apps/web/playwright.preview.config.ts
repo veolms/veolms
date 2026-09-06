@@ -34,7 +34,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm preview:performance -- --port 43918",
+    command: "pnpm preview:performance -- --first-section --port 43918",
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

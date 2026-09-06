@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearLearningMiniPlayerVideoCornerRadius,
   easeLearningPlayerMotionProgress,
+  getDefaultLearningMiniPlayerLayout,
   getLearningBackgroundMotionState,
+  getLearningMiniPlayerPointerResizeLayout,
   getLearningMiniPlayerWidthBounds,
+  LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE,
 } from "../../src/learning/player/learningPlayerMotion.js";
 
 describe("learning player surface motion", () => {
@@ -82,5 +86,201 @@ describe("learning player surface motion", () => {
         width: 1_280,
       }),
     ).toEqual({ maximumWidth: 1_256, minimumWidth: 200 });
+  });
+
+  it.each([
+    [320, 200],
+    [640, 200],
+    [641, 260],
+    [1_023, 260],
+    [1_024, 320],
+    [1_440, 320],
+  ])(
+    "uses a %ipx-wide viewport to select a %ipx mini player",
+    (viewportWidth, expectedWidth) => {
+      expect(
+        getDefaultLearningMiniPlayerLayout(Number.POSITIVE_INFINITY, {
+          height: 900,
+          left: 0,
+          top: 0,
+          width: viewportWidth,
+        }).width,
+      ).toBe(expectedWidth);
+    },
+  );
+
+  it("uses a remembered user width while retaining viewport padding", () => {
+    expect(
+      getDefaultLearningMiniPlayerLayout(
+        Number.POSITIVE_INFINITY,
+        { height: 900, left: 0, top: 0, width: 640 },
+        248,
+      ).width,
+    ).toBe(248);
+    expect(
+      getDefaultLearningMiniPlayerLayout(
+        Number.POSITIVE_INFINITY,
+        { height: 900, left: 0, top: 0, width: 320 },
+        500,
+      ),
+    ).toMatchObject({ left: 12, width: 296 });
+  });
+
+  it.each([
+    [
+      "w",
+      -60,
+      0,
+      { left: 240, playlistHeight: 320, top: 283.125, width: 360 },
+    ],
+    [
+      "e",
+      60,
+      0,
+      { left: 300, playlistHeight: 320, top: 283.125, width: 360 },
+    ],
+    [
+      "n",
+      0,
+      -33.75,
+      { left: 270, playlistHeight: 320, top: 266.25, width: 360 },
+    ],
+    [
+      "s",
+      0,
+      33.75,
+      { left: 270, playlistHeight: 320, top: 300, width: 360 },
+    ],
+    [
+      "nw",
+      -60,
+      -33.75,
+      { left: 240, playlistHeight: 320, top: 266.25, width: 360 },
+    ],
+    [
+      "se",
+      60,
+      33.75,
+      { left: 300, playlistHeight: 320, top: 300, width: 360 },
+    ],
+  ] as const)(
+    "resizes from the %s handle while preserving the opposite anchor",
+    (edges, deltaX, deltaY, expectedLayout) => {
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, top: 300, width: 300 },
+          edges,
+          deltaX,
+          deltaY,
+          { height: 800, left: 0, top: 0, width: 1_000 },
+        ),
+      ).toEqual(expectedLayout);
+    },
+  );
+
+  it("keeps pointer resizing inside the viewport padding", () => {
+    expect(
+      getLearningMiniPlayerPointerResizeLayout(
+        { left: 12, top: 12, width: 300 },
+        "nw",
+        -1_000,
+        -1_000,
+        { height: 600, left: 0, top: 0, width: 640 },
+      ),
+    ).toMatchObject({ left: 12, top: 12, width: 616 });
+  });
+
+  describe("expanded desktop vertical resize", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const stubDesktopViewport = () => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query === "(min-width: 641px)",
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        onchange: null,
+      }));
+    };
+
+    it("grows the playlist from the bottom without changing width", () => {
+      stubDesktopViewport();
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, playlistHeight: 320, top: 80, width: 320 },
+          "s",
+          80,
+          40,
+          { height: 900, left: 0, top: 0, width: 1_280 },
+          true,
+        ),
+      ).toEqual({
+        left: 300,
+        playlistHeight: 360,
+        top: 80,
+        width: 320,
+      });
+    });
+
+    it("grows the playlist from the top without changing width", () => {
+      stubDesktopViewport();
+      expect(
+        getLearningMiniPlayerPointerResizeLayout(
+          { left: 300, playlistHeight: 320, top: 80, width: 320 },
+          "n",
+          80,
+          -40,
+          { height: 900, left: 0, top: 0, width: 1_280 },
+          true,
+        ),
+      ).toEqual({
+        left: 300,
+        playlistHeight: 360,
+        top: 40,
+        width: 320,
+      });
+    });
+
+    it("still changes width from the east edge while expanded", () => {
+      stubDesktopViewport();
+      const next = getLearningMiniPlayerPointerResizeLayout(
+        { left: 300, playlistHeight: 320, top: 80, width: 320 },
+        "e",
+        80,
+        0,
+        { height: 900, left: 0, top: 0, width: 1_280 },
+        true,
+      );
+      expect(next.width).toBe(400);
+      expect(next.playlistHeight).toBe(320);
+      expect(next.left).toBe(300);
+    });
+  });
+
+  it("anchors the mini player curriculum elastic scroller 40% above the bottom", () => {
+    expect(LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE).toBe(
+      "40%",
+    );
+  });
+
+  it("drops minimize corner radius when the persistent player leaves the mini shell", () => {
+    const host = document.createElement("aside");
+    const player = document.createElement("div");
+    player.className = "youtube-player";
+    host.append(player);
+    host.dataset.learningPlayerMinimizeCorners = "true";
+    host.style.setProperty("border-radius", "13px", "important");
+    player.style.setProperty("border-radius", "13px", "important");
+
+    clearLearningMiniPlayerVideoCornerRadius(host);
+
+    expect(host.dataset.learningPlayerMinimizeCorners).toBeUndefined();
+    expect(host.style.borderRadius).toBe("");
+    expect(player.style.borderRadius).toBe("");
   });
 });

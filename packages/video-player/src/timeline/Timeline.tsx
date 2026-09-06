@@ -160,7 +160,7 @@ export function Timeline({
         aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
         data-player-control=""
         data-scrubbing={scrubbing ? "true" : "false"}
-        className="relative flex h-6 cursor-pointer items-center focus-visible:outline-none focus-visible:after:absolute focus-visible:after:inset-x-0 focus-visible:after:top-1/2 focus-visible:after:h-3 focus-visible:after:-translate-y-1/2 focus-visible:after:rounded-full focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--video-player-accent,#ff7a1a)] aria-disabled:cursor-not-allowed aria-disabled:opacity-55"
+        className="relative flex h-5 cursor-pointer items-center focus-visible:outline-none focus-visible:after:absolute focus-visible:after:inset-x-0 focus-visible:after:top-1/2 focus-visible:after:h-2.5 focus-visible:after:-translate-y-1/2 focus-visible:after:rounded-full focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--video-player-accent,#ff7a1a)] aria-disabled:cursor-not-allowed aria-disabled:opacity-55"
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -217,8 +217,12 @@ export function Timeline({
           <span
             aria-hidden="true"
             data-timeline-thumb=""
-            className="absolute top-1/2 z-20 size-3 -translate-x-1/2 -translate-y-1/2 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[1.6] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[1.6] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[1.6] group-data-[scrubbing=true]/timeline:opacity-100"
-            style={{ left: `${progress}%` }}
+            className="absolute top-1/2 z-80 size-3 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[2] max-sm:group-hover/timeline:scale-[1.5] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[2] max-sm:group-focus-within/timeline:scale-[1.5] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[2] max-sm:group-data-[scrubbing=true]/timeline:scale-[1.5] group-data-[scrubbing=true]/timeline:opacity-100"
+            style={{
+              left: `${progress}%`,
+              transformOrigin: `${progress}% 50%`,
+              translate: `${-progress}% -50%`,
+            }}
           />
         </div>
       </div>

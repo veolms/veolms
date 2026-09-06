@@ -10,6 +10,7 @@ import {
   MFA_CHALLENGE_PATH,
   shouldRedirectToMfaChallenge,
 } from "../routing/routeAccess";
+import { isReactRouterBuildRequest } from "./react-router-build";
 
 export { getApiError, type ApiError };
 
@@ -37,6 +38,13 @@ const axiosInstance: AxiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (config) => {
+    if (isReactRouterBuildRequest()) {
+      return Promise.reject(
+        Object.assign(new Error("API requests are disabled during prerender."), {
+          config,
+        }),
+      );
+    }
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
       config.headers.delete("Content-Type");
     }
