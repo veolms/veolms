@@ -6,7 +6,7 @@ const homeMarker = "routes/home-marker.tsx";
 
 export default [
   layout("routes/academy-layout.tsx", { id: "academy-layout" }, [
-    index(homeMarker, { id: "home" }),
+    index(marker, { id: "root-courses" }),
     route("home", homeMarker, { id: "home-alias", caseSensitive: true }),
     route("dashboard", homeMarker, { id: "dashboard", caseSensitive: true }),
     route("courses", marker, { id: "courses", caseSensitive: true }),
