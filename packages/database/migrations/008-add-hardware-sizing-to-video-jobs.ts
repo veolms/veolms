@@ -9,17 +9,17 @@ import { sql, type Kysely } from "kysely";
  *  - video_metadata (jsonb, nullable): the probed subset of ffprobe output
  *    (width/height/fps/codec/bitrate/duration; excludes the raw per-stream
  *    dump) captured when the probe Lambda ran. NULL means "queued via a
- *    direct trigger with no probe step, or probing failed" — every reader
+ *    direct trigger with no probe step, or probing failed" â€” every reader
  *    must treat that as "fall back to the qualities+size heuristic," never
  *    as an error. estimateJobHardware() in @veolms/fleet-types is a pure
  *    function of (video_size, qualities, video_metadata), so any reader
  *    can recompute the exact same minCpu/minMemoryMb/storageGb/profile
- *    from this column at any time — nothing else needs to be persisted.
+ *    from this column at any time â€” nothing else needs to be persisted.
  *
  *  - hardware_profile (new enum type, nullable): the nano/micro/small/
  *    medium/large tier estimateJobHardware() resolved at queue time.
  *    Informational/queryable (dashboards, "show me all large jobs", the
- *    idle-worker pull-claim pre-filter below) — not re-derived from it by
+ *    idle-worker pull-claim pre-filter below) â€” not re-derived from it by
  *    any sizing logic, since video_metadata above is already sufficient.
  */
 export async function up(database: Kysely<unknown>): Promise<void> {
@@ -43,3 +43,5 @@ export async function down(database: Kysely<unknown>): Promise<void> {
 
   await sql`drop type if exists hardware_profile_enum`.execute(database);
 }
+
+

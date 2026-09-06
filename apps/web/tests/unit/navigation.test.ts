@@ -6,6 +6,7 @@ import {
   getNavigationDestination,
   getNavigationIconColor,
   getNavigationItemsFromMenus,
+  getNavigationPreferenceStorageKey,
   getOrderedNavigation,
   getPublicNavigationItems,
   getVisibleOrderedNavigation,
@@ -108,31 +109,75 @@ describe("server menu navigation adapter", () => {
     expect(getNavigationItemsFromMenus(undefined)).toEqual([]);
   });
 
-  it("provides only Courses and Settings outside an authenticated menu payload", () => {
+  it("provides Courses, Learning Space, and Settings outside an authenticated menu payload", () => {
     const navigation = getPublicNavigationItems();
-    expect(labels(navigation)).toEqual(["Courses", "Settings"]);
+    expect(labels(navigation)).toEqual([
+      "Courses",
+      "Learning Space",
+      "Settings",
+    ]);
     expect(getNavigationDestination(navigation[0]!)).toBe("/courses");
-    expect(getNavigationDestination(navigation[1]!)).toBe("/settings");
+    expect(getNavigationDestination(navigation[1]!)).toBe("/learning-space");
+    expect(getNavigationDestination(navigation[2]!)).toBe("/settings");
   });
 
-  it("uses role menus when present and falls back to Courses and Settings otherwise", () => {
+  it("uses role menus when present and falls back to the default menu otherwise", () => {
     const withMenus = resolveShellNavigation(dynamicMenus);
     expect(withMenus.isDefault).toBe(false);
     expect(labels(withMenus.items)).toEqual([
       "Overview",
       "My Courses",
       "Notification",
+      "Courses",
+      "Learning Space",
+      "Settings",
     ]);
+
+    const withCoreMenus = resolveShellNavigation([
+      ...dynamicMenus,
+      {
+        ...dynamicMenus[0]!,
+        id: "66666666-6666-4666-8666-666666666666",
+        label: "Courses",
+        routeLink: "/courses",
+        icon: "GraduationCap",
+      },
+      {
+        ...dynamicMenus[0]!,
+        id: "77777777-7777-4777-8777-777777777777",
+        label: "Settings",
+        routeLink: "/settings",
+        icon: "GearSix",
+      },
+    ]);
+    expect(
+      labels(withCoreMenus.items)
+        .filter((label) =>
+          ["Courses", "Learning Space", "Settings"].includes(label),
+        )
+        .sort(),
+    ).toEqual(["Courses", "Learning Space", "Settings"]);
 
     const emptyMenus = resolveShellNavigation([]);
     expect(emptyMenus.isDefault).toBe(true);
-    expect(labels(emptyMenus.items)).toEqual(["Courses", "Settings"]);
+    expect(labels(emptyMenus.items)).toEqual([
+      "Courses",
+      "Learning Space",
+      "Settings",
+    ]);
     expect(getNavigationDestination(emptyMenus.items[0]!)).toBe("/courses");
-    expect(getNavigationDestination(emptyMenus.items[1]!)).toBe("/settings");
+    expect(getNavigationDestination(emptyMenus.items[1]!)).toBe(
+      "/learning-space",
+    );
+    expect(getNavigationDestination(emptyMenus.items[2]!)).toBe("/settings");
 
     const guestMenus = resolveShellNavigation(undefined);
     expect(guestMenus.isDefault).toBe(true);
-    expect(labels(guestMenus.items)).toEqual(["Courses", "Settings"]);
+    expect(labels(guestMenus.items)).toEqual([
+      "Courses",
+      "Learning Space",
+      "Settings",
+    ]);
   });
 
   it("applies existing order and visibility preferences to server menus", () => {
@@ -194,12 +239,24 @@ describe("navigation preferences", () => {
     ]);
   });
 
+  it("restores required menu items from stale visibility preferences", () => {
+    const navigation = resolveShellNavigation(dynamicMenus).items;
+    localStorage.setItem("veolms-navigation-visibility-student", "[]");
+
+    expect(getInitialNavigationVisibility("student", navigation)).toEqual([
+      "Courses",
+      "Learning Space",
+      "Settings",
+    ]);
+  });
+
   it("falls back to the supplied menu list when storage is invalid", () => {
     const navigation = getPublicNavigationItems();
     localStorage.setItem("veolms-navigation-order-student", "{");
 
     expect(getInitialNavigationOrder("student", navigation)).toEqual([
       "Courses",
+      "Learning Space",
       "Settings",
     ]);
   });
@@ -211,7 +268,31 @@ describe("navigation preferences", () => {
 
     expect(
       getInitialNavigationOrder("student", getPublicNavigationItems()),
-    ).toEqual(["Courses", "Settings"]);
+    ).toEqual(["Courses", "Learning Space", "Settings"]);
+  });
+
+  it("scopes saved preferences to the authenticated account", () => {
+    const navigation = getNavigationItemsFromMenus(dynamicMenus);
+    const firstUserKey = getNavigationPreferenceStorageKey(
+      "order",
+      "student",
+      "user-one",
+    );
+    const secondUserKey = getNavigationPreferenceStorageKey(
+      "order",
+      "student",
+      "user-two",
+    );
+
+    expect(firstUserKey).not.toBe(secondUserKey);
+    localStorage.setItem(firstUserKey, JSON.stringify(["My Courses"]));
+
+    expect(
+      getInitialNavigationOrder("student", navigation, "user-one"),
+    ).toEqual(["My Courses", "Overview", "Notification"]);
+    expect(
+      getInitialNavigationOrder("student", navigation, "user-two"),
+    ).toEqual(["Overview", "My Courses", "Notification"]);
   });
 });
 
@@ -225,6 +306,9 @@ describe("navigation display and icon color helpers", () => {
       "/courses",
     );
     expect(getNavigationDestination(getPublicNavigationItems()[1]!)).toBe(
+      "/learning-space",
+    );
+    expect(getNavigationDestination(getPublicNavigationItems()[2]!)).toBe(
       "/settings",
     );
   });

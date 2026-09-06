@@ -32,10 +32,11 @@ export function useNotificationSummary() {
   });
 }
 
-export function useNotificationPreferences() {
+export function useNotificationPreferences(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: notificationKeys.preferences(),
     queryFn: notificationsService.getPreferences,
+    enabled: options?.enabled ?? true,
     staleTime: 60_000,
   });
 }

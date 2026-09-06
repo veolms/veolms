@@ -13,6 +13,7 @@ export type NotificationTemplateKey =
   | "auth.mfa_enabled"
   | "auth.passkey_added"
   | "auth.session_revoked"
+  | "auth.account_deactivated"
   | "user.mentioned"
   | "certificate.generated"
   | "discussion.reply_created"

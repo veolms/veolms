@@ -4,6 +4,7 @@
 /* Scrollbar pseudo-elements cannot be expressed with Tailwind. Keep their
    application-wide preference styles owned by the settings feature. */
 @import "./settings/scrollbars/scrollbarPreferences.css";
+@import "./accessibility/tabFocusVisibility.css";
 
 @font-face {
   font-family: "Manrope Variable";

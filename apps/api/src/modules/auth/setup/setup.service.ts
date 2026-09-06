@@ -118,6 +118,7 @@ export function createSetupService({
       username,
       displayName: input.name,
       emailVerified: true,
+      phoneVerified: false,
     };
     const userId = await authService.createUser(createInput);
     const user = await authService.requireUser(userId);

@@ -11,5 +11,5 @@ This repository is a monorepo containing the following packages and applications
 ## Monorepo Rules
 
 1. Always use contracts from `@veolms/contracts` for API requests and responses between backend and frontend.
-2. For frontend architecture, state management, and API integrations, strictly adhere to `apps/web/AGENTS.md`.
+2. For frontend architecture, state management, API integrations, visual design, and component reuse, strictly adhere to `apps/web/AGENTS.md`.
 3. For backend architecture, layered service pattern, and database repositories, strictly adhere to `apps/api/AGENTS.md`.

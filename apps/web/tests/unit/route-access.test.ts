@@ -1,19 +1,47 @@
 import { describe, expect, it } from "vitest";
 import {
   APP_HOME_PATH,
+  MFA_CHALLENGE_PATH,
   buildLoginPath,
   isCoursesPublicPath,
+  hasCourseAuthorRole,
+  isCourseAuthorPath,
   isLearningPath,
   isPublicAcademyPath,
   isSettingsPath,
   requiresAcademyAuth,
   resolveAuthenticatedDestination,
+  resolveAcademyLandingDestination,
   resolveSessionAccess,
+  shouldBlockAcademyRender,
+  shouldRedirectFromCourseAuthorPath,
   sanitizeReturnTo,
   shouldRedirectToMfaChallenge,
 } from "../../src/routing/routeAccess.ts";
 
 describe("route access policy", () => {
+  it("restricts course authoring to creator-capable roles", () => {
+    expect(isCourseAuthorPath("/courses/create?edit=course-id")).toBe(true);
+    expect(hasCourseAuthorRole(["student"])).toBe(false);
+    expect(hasCourseAuthorRole(["INSTRUCTOR"])).toBe(true);
+    expect(hasCourseAuthorRole(["admin"])).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", ["student"]),
+    ).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", undefined),
+    ).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", [
+        "student",
+        "creator",
+      ]),
+    ).toBe(false);
+    expect(shouldRedirectFromCourseAuthorPath("/courses", ["student"])).toBe(
+      false,
+    );
+  });
+
   it("treats courses, lessons, and settings as public academy routes", () => {
     expect(isCoursesPublicPath("/courses")).toBe(true);
     expect(isCoursesPublicPath("/courses/demo/overview")).toBe(true);
@@ -85,18 +113,64 @@ describe("route access policy", () => {
     });
   });
 
+  it("blocks pending-MFA sessions on public-looking academy routes", () => {
+    const pendingMfa = resolveSessionAccess({
+      user: {
+        mfaVerified: false,
+        totpEnabled: true,
+        passkeyEnabled: false,
+      },
+      isAuthenticated: true,
+    });
+
+    expect(shouldBlockAcademyRender("/courses", pendingMfa)).toBe(true);
+    expect(shouldBlockAcademyRender("/courses?tab=featured", pendingMfa)).toBe(
+      true,
+    );
+    expect(shouldBlockAcademyRender("/settings/security", pendingMfa)).toBe(
+      true,
+    );
+  });
+
+  it("keeps the public catalogue available to signed-out visitors", () => {
+    expect(
+      shouldBlockAcademyRender("/courses", {
+        isAuthenticated: false,
+        needsMfaChallenge: false,
+        isSessionReady: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips the catalogue hop when the session is already pending MFA", () => {
+    expect(
+      resolveAcademyLandingDestination({
+        isAuthenticated: true,
+        needsMfaChallenge: true,
+        isSessionReady: false,
+      }),
+    ).toBe(MFA_CHALLENGE_PATH);
+    expect(
+      resolveAcademyLandingDestination({
+        isAuthenticated: false,
+        needsMfaChallenge: false,
+        isSessionReady: false,
+      }),
+    ).toBe(APP_HOME_PATH);
+  });
+
   it("sanitizes return targets", () => {
     expect(sanitizeReturnTo("/courses?tab=mine")).toBe("/courses?tab=mine");
     expect(sanitizeReturnTo("/mfa-setup")).toBeNull();
   });
 
-  it("does not bounce public or auth screens to MFA on a 403", () => {
+  it("does not bounce auth screens to MFA on a 403", () => {
     const mfaError = { status: 403, code: "MFA_REQUIRED" };
 
     expect(shouldRedirectToMfaChallenge("/courses", mfaError)).toBe(false);
     expect(shouldRedirectToMfaChallenge("/learn/demo", mfaError)).toBe(false);
     expect(shouldRedirectToMfaChallenge("/settings/appearance", mfaError)).toBe(
-      false,
+      true,
     );
     expect(shouldRedirectToMfaChallenge("/", mfaError)).toBe(false);
     expect(shouldRedirectToMfaChallenge("/login", mfaError)).toBe(false);

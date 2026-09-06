@@ -15,6 +15,7 @@ import {
   resolveCourseMediaBaseUrl,
   resolveCourseHlsBaseUrl,
   resolveCourseHlsSrc,
+  resolveCourseVideoThumbnailSrc,
   resolveCourseVideoSrc,
   sections,
   totalCourseLectures,
@@ -119,6 +120,8 @@ describe("learning course content", () => {
       fileName: "The Complete JavaScript Course Trailer.mp4",
       duration: 454.9,
       src: "/course-hls/the-complete-javascript-course-trailer/master.m3u8",
+      thumbnailSrc:
+        "/course-hls/thumbnails/the-complete-javascript-course-trailer.webp",
     });
     expect(lessonVideoMap[4]).toBe(lessonVideoMap[9]);
     expect(lessonVideoMap[6]).toBe(lessonVideoMap[10]);
@@ -172,6 +175,12 @@ describe("learning course content", () => {
     expect(
       resolveCourseHlsSrc("03 creating velms respository.mp4", "/course-hls/"),
     ).toBe("/course-hls/03-creating-velms-respository/master.m3u8");
+    expect(
+      resolveCourseVideoThumbnailSrc(
+        "03 creating velms respository.mp4",
+        "/course-hls/",
+      ),
+    ).toBe("/course-hls/thumbnails/03-creating-velms-respository.webp");
   });
 });
 

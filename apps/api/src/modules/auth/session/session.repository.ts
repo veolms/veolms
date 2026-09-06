@@ -50,6 +50,13 @@ export async function revokeSession(
     .execute();
 }
 
+export async function deleteAllUserSessions(
+  database: Executor,
+  userId: string,
+): Promise<void> {
+  await database.deleteFrom("sessions").where("user_id", "=", userId).execute();
+}
+
 /** Scoped by `user_id` so one user can never revoke another user's session. */
 export async function revokeUserSession(
   database: Executor,

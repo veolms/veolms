@@ -1,5 +1,6 @@
 import {
   authMfaEnabledEventSchema,
+  authAccountDeactivatedEventSchema,
   authPasskeyAddedEventSchema,
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
@@ -185,6 +186,21 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: true,
         deepLink: "/settings/security",
+      },
+    ];
+  },
+  "auth.account_deactivated": async (payload) => {
+    const event = authAccountDeactivatedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "auth.account_deactivated",
+        category: "system",
+        templateKey: "auth.account_deactivated",
+        templateData: {},
+        channels: ["email"],
+        mandatory: true,
+        deepLink: null,
       },
     ];
   },
