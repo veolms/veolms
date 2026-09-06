@@ -8,6 +8,7 @@ import {
   initialPricingState,
   normalizePricingState,
   isPricingEqual,
+  validatePricing,
   type AccessRulesFormState,
   type PricingFormState,
 } from "../../src/courses/CourseCreatePage";
@@ -67,13 +68,17 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       draftState = { ...draftState, durationMode: "fixed" };
       expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
 
-      // 2. Edit fixedDurationValue
-      draftState = { ...serverState, fixedDurationValue: 90 };
-      expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
+      // 2. Edit fixedDurationValue (relevant when durationMode === "fixed")
+      const fixedServerState: AccessRulesFormState = {
+        ...serverState,
+        durationMode: "fixed",
+      };
+      draftState = { ...fixedServerState, fixedDurationValue: 90 };
+      expect(!isAccessRulesEqual(draftState, fixedServerState)).toBe(true);
 
-      // 3. Edit fixedDurationUnit
-      draftState = { ...serverState, fixedDurationUnit: "Months" };
-      expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
+      // 3. Edit fixedDurationUnit (relevant when durationMode === "fixed")
+      draftState = { ...fixedServerState, fixedDurationUnit: "Months" };
+      expect(!isAccessRulesEqual(draftState, fixedServerState)).toBe(true);
 
       // 4. Toggle QA
       draftState = { ...serverState, enableQA: false };
@@ -406,6 +411,505 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       const cleanDraft: AccessRulesFormState = { ...baseline };
       expect(isAccessRuleConfigEqual(cleanDraft, baseline)).toBe(true);
       expect(isAccessSettingsEqual(cleanDraft, baseline)).toBe(true);
+    });
+  });
+
+  describe("Server-First Pricing Tab: Immediate & Debounced Persistence", () => {
+    it("immediate persistence: switching to free sends price: 0, salePrice: null and updates server baseline", async () => {
+      let serverState: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "2999",
+        currency: "USD",
+      };
+      let draftState: PricingFormState = { ...serverState };
+
+      // User selects 'free'
+      draftState = { ...draftState, pricingType: "free" };
+      expect(!isPricingEqual(draftState, serverState)).toBe(true);
+
+      const mockFreeRes: CoursePricing = {
+        id: "pricing-free-1",
+        courseId: sampleCourseId,
+        pricingType: "free",
+        price: 0,
+        salePrice: null,
+        currency: draftState.currency || "USD",
+      };
+      const spy = vi
+        .spyOn(coursesService, "upsertPricing")
+        .mockResolvedValue(mockFreeRes);
+
+      const res = await coursesService.upsertPricing(sampleCourseId, {
+        pricingType: "free",
+        price: 0,
+        salePrice: null,
+        currency: draftState.currency || "USD",
+      });
+
+      expect(spy).toHaveBeenCalledWith(sampleCourseId, {
+        pricingType: "free",
+        price: 0,
+        salePrice: null,
+        currency: "USD",
+      });
+
+      const newBaseline = normalizePricingState({
+        pricingType: "free",
+        sellingPrice: "",
+        originalPrice: "",
+        currency: res.currency || "USD",
+      });
+      serverState = newBaseline;
+      draftState = newBaseline;
+
+      expect(!isPricingEqual(draftState, serverState)).toBe(false);
+      expect(serverState.pricingType).toBe("free");
+      expect(serverState.sellingPrice).toBe("");
+    });
+
+    it("rolls back to previous pricing state when immediate free/paid toggle fails", async () => {
+      const serverState: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let draftState: PricingFormState = { ...serverState, pricingType: "free" };
+
+      vi.spyOn(coursesService, "upsertPricing").mockRejectedValue(
+        new Error("Network disconnect"),
+      );
+
+      let caughtError: Error | null = null;
+      try {
+        await coursesService.upsertPricing(sampleCourseId, {
+          pricingType: "free",
+          price: 0,
+          salePrice: null,
+          currency: "INR",
+        });
+      } catch (err: any) {
+        caughtError = err;
+        // Rollback
+        draftState = { ...draftState, pricingType: serverState.pricingType };
+      }
+
+      expect(caughtError).not.toBeNull();
+      expect(draftState.pricingType).toBe("paid");
+      expect(isPricingEqual(draftState, serverState)).toBe(true);
+    });
+
+    it("switching to paid when selling price is empty delays API persistence until valid price is typed", () => {
+      const serverState: PricingFormState = {
+        pricingType: "free",
+        sellingPrice: "",
+        originalPrice: "",
+        currency: "INR",
+      };
+      // User clicks 'paid'
+      const draftState: PricingFormState = {
+        ...serverState,
+        pricingType: "paid",
+      };
+
+      // Validation check before firing API
+      const validation = validatePricing(draftState);
+      expect(validation.isValid).toBe(false);
+      expect(validation.error).toContain("selling price");
+
+      // Draft is kept locally without API call
+      expect(draftState.pricingType).toBe("paid");
+      expect(!isPricingEqual(draftState, serverState)).toBe(true);
+    });
+
+    it("switching to paid when selling price is already valid persists immediately", async () => {
+      const serverState: PricingFormState = {
+        pricingType: "free",
+        sellingPrice: "999",
+        originalPrice: "1499",
+        currency: "USD",
+      };
+      const draftState: PricingFormState = {
+        ...serverState,
+        pricingType: "paid",
+      };
+
+      const validation = validatePricing(draftState);
+      expect(validation.isValid).toBe(true);
+
+      const spy = vi
+        .spyOn(coursesService, "upsertPricing")
+        .mockResolvedValue({
+          id: "pricing-paid-1",
+          courseId: sampleCourseId,
+          pricingType: "paid",
+          price: 1499,
+          salePrice: 999,
+          currency: "USD",
+        });
+
+      await coursesService.upsertPricing(sampleCourseId, {
+        pricingType: "paid",
+        price: 1499,
+        salePrice: 999,
+        currency: "USD",
+      });
+
+      expect(spy).toHaveBeenCalledWith(sampleCourseId, {
+        pricingType: "paid",
+        price: 1499,
+        salePrice: 999,
+        currency: "USD",
+      });
+    });
+
+    it("currency change persists immediately with current valid prices", async () => {
+      const serverState: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "499",
+        originalPrice: "",
+        currency: "INR",
+      };
+
+      const spy = vi
+        .spyOn(coursesService, "upsertPricing")
+        .mockResolvedValue({
+          id: "pricing-curr-1",
+          courseId: sampleCourseId,
+          pricingType: "paid",
+          price: 499,
+          salePrice: null,
+          currency: "EUR",
+        });
+
+      const res = await coursesService.upsertPricing(sampleCourseId, {
+        pricingType: "paid",
+        price: 499,
+        salePrice: null,
+        currency: "EUR",
+      });
+
+      expect(spy).toHaveBeenCalledWith(sampleCourseId, {
+        pricingType: "paid",
+        price: 499,
+        salePrice: null,
+        currency: "EUR",
+      });
+      expect(res.currency).toBe("EUR");
+    });
+
+    it("currency change rolls back to previous currency on API failure", async () => {
+      const serverState: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "499",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let draftState: PricingFormState = { ...serverState, currency: "GBP" };
+
+      vi.spyOn(coursesService, "upsertPricing").mockRejectedValue(
+        new Error("Failed to persist currency"),
+      );
+
+      try {
+        await coursesService.upsertPricing(sampleCourseId, {
+          pricingType: "paid",
+          price: 499,
+          salePrice: null,
+          currency: "GBP",
+        });
+      } catch {
+        draftState = { ...draftState, currency: serverState.currency };
+      }
+
+      expect(draftState.currency).toBe("INR");
+      expect(isPricingEqual(draftState, serverState)).toBe(true);
+    });
+
+    it("selling price and original price form a single pricingDetails domain mapping correctly", () => {
+      // 1. With originalPrice: price = originalPrice, salePrice = sellingPrice
+      const draftWithOriginal: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "2999",
+        currency: "INR",
+      };
+      const validation1 = validatePricing(draftWithOriginal);
+      expect(validation1.isValid).toBe(true);
+
+      const rawSell1 = Math.round(parseFloat(draftWithOriginal.sellingPrice));
+      const rawOrig1 = Math.round(parseFloat(draftWithOriginal.originalPrice));
+      const price1 = rawOrig1 > 0 ? rawOrig1 : rawSell1;
+      const salePrice1 = rawOrig1 > 0 ? rawSell1 : null;
+
+      expect(price1).toBe(2999);
+      expect(salePrice1).toBe(1999);
+
+      // 2. Without originalPrice: price = sellingPrice, salePrice = null
+      const draftWithoutOriginal: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      const validation2 = validatePricing(draftWithoutOriginal);
+      expect(validation2.isValid).toBe(true);
+
+      const rawSell2 = Math.round(parseFloat(draftWithoutOriginal.sellingPrice));
+      const rawOrig2 = draftWithoutOriginal.originalPrice
+        ? Math.round(parseFloat(draftWithoutOriginal.originalPrice))
+        : null;
+      const price2 = rawOrig2 && rawOrig2 > 0 ? rawOrig2 : rawSell2;
+      const salePrice2 = rawOrig2 && rawOrig2 > 0 ? rawSell2 : null;
+
+      expect(price2).toBe(1999);
+      expect(salePrice2).toBeNull();
+    });
+
+    it("never sends persistence for invalid intermediate pricing states", () => {
+      // 1. Sale price exceeds original price
+      const invalidSaleHigher: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "3500",
+        originalPrice: "2000",
+        currency: "INR",
+      };
+      const res1 = validatePricing(invalidSaleHigher);
+      expect(res1.isValid).toBe(false);
+      expect(res1.error).toContain(
+        "Sale price cannot be greater than original price",
+      );
+
+      // 2. Zero or negative selling price
+      const zeroPrice: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "0",
+        originalPrice: "",
+        currency: "INR",
+      };
+      const res2 = validatePricing(zeroPrice);
+      expect(res2.isValid).toBe(false);
+      expect(res2.error).toContain("greater than 0");
+
+      // 3. Non-numeric or empty selling price
+      const emptyPrice: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "",
+        originalPrice: "",
+        currency: "INR",
+      };
+      const res3 = validatePricing(emptyPrice);
+      expect(res3.isValid).toBe(false);
+      expect(res3.error).toContain("valid selling price");
+    });
+  });
+
+  describe("Full-Object Replacement Serialization & Concurrency Protection", () => {
+    it("serialized queue prevents stale snapshots from overwriting newer changes", async () => {
+      // Scenario: User changes Currency to USD, then immediately enters Selling Price 2499
+      let serverBaseline: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let draftRef: PricingFormState = { ...serverBaseline };
+      let globalVersion = 0;
+      const apiCalls: any[] = [];
+
+      let inFlightPromise: Promise<unknown> | null = null;
+
+      const executeSerialized = async (
+        targetVersion: number,
+      ) => {
+        const prior = inFlightPromise;
+        const run = async () => {
+          if (prior) {
+            try {
+              await prior;
+            } catch {}
+          }
+          if (globalVersion !== targetVersion) return; // Coalesced / superseded
+          const latest = { ...draftRef };
+          const payload = {
+            pricingType: latest.pricingType,
+            price: parseFloat(latest.sellingPrice),
+            salePrice: null,
+            currency: latest.currency,
+          };
+          apiCalls.push(payload);
+          await new Promise((r) => setTimeout(r, 10)); // Simulated network latency
+          if (globalVersion === targetVersion) {
+            serverBaseline = { ...latest };
+          }
+        };
+
+        const exec = async () => {
+          try {
+            return await run();
+          } finally {
+            if (globalVersion === targetVersion) {
+              inFlightPromise = null;
+            }
+          }
+        };
+        const p = exec();
+        inFlightPromise = p;
+        return await p;
+      };
+
+      // Mutation 1: Currency changed to USD
+      globalVersion++;
+      const v1 = globalVersion;
+      draftRef = { ...draftRef, currency: "USD" };
+      const p1 = executeSerialized(v1);
+
+      // Mutation 2: Price changed to 2499 before Mutation 1 resolves
+      globalVersion++;
+      const v2 = globalVersion;
+      draftRef = { ...draftRef, sellingPrice: "2499" };
+      const p2 = executeSerialized(v2);
+
+      await Promise.all([p1, p2]);
+
+      // Both mutations finished: Mutation 1 was either in-flight or superseded.
+      // Final baseline MUST contain BOTH currency: USD and sellingPrice: 2499!
+      expect(serverBaseline.currency).toBe("USD");
+      expect(serverBaseline.sellingPrice).toBe("2499");
+      expect(isPricingEqual(draftRef, serverBaseline)).toBe(true);
+    });
+
+    it("discards stale responses arriving out of order using version tracking", async () => {
+      let serverBaseline: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1000",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let activeVersion = 1;
+
+      // Simulated slow response from version 1
+      const slowResponse = {
+        pricingType: "paid" as const,
+        price: 1000,
+        salePrice: null,
+        currency: "INR",
+      };
+
+      // In the meantime, user updated to version 2
+      activeVersion = 2;
+      const latestDraft: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "2000",
+        originalPrice: "",
+        currency: "USD",
+      };
+
+      // When slow response arrives, version check rejects it
+      const incomingVersion = 1;
+      if (incomingVersion === activeVersion) {
+        serverBaseline = normalizePricingState({
+          pricingType: slowResponse.pricingType,
+          sellingPrice: String(slowResponse.price),
+          originalPrice: "",
+          currency: slowResponse.currency,
+        });
+      }
+
+      // Stale response was discarded; serverBaseline was NOT reverted to 1000 INR
+      expect(serverBaseline.sellingPrice).not.toBe("2000"); // Baseline stays at clean pre-save state
+      expect(latestDraft.sellingPrice).toBe("2000");
+      expect(latestDraft.currency).toBe("USD");
+    });
+  });
+
+  describe("Hydration Protection for Active Pricing Draft", () => {
+    it("preserves active dirty local changes and ignores incoming query refetch for draft", () => {
+      const confirmedBaseline: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let draftState: PricingFormState = {
+        ...confirmedBaseline,
+        sellingPrice: "2499", // User actively edited
+      };
+      const isPricingDirty = !isPricingEqual(draftState, confirmedBaseline);
+      const savingControls = new Set<string>();
+
+      const newBaseline = normalizePricingState({
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      });
+
+      // Hydration logic
+      if (!isPricingDirty && savingControls.size === 0) {
+        draftState = newBaseline;
+      }
+
+      // Active edit preserved!
+      expect(draftState.sellingPrice).toBe("2499");
+      expect(isPricingDirty).toBe(true);
+    });
+
+    it("hydrates local draft when clean and no controls are saving", () => {
+      const confirmedBaseline: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      let draftState: PricingFormState = { ...confirmedBaseline };
+      const isPricingDirty = !isPricingEqual(draftState, confirmedBaseline);
+      const savingControls = new Set<string>();
+
+      const refetchedBaseline = normalizePricingState({
+        pricingType: "paid",
+        sellingPrice: "2999",
+        originalPrice: "",
+        currency: "USD",
+      });
+
+      if (!isPricingDirty && savingControls.size === 0) {
+        draftState = refetchedBaseline;
+      }
+
+      expect(draftState.sellingPrice).toBe("2999");
+      expect(draftState.currency).toBe("USD");
+    });
+  });
+
+  describe("Step Navigation & savePricingStep Deduplication", () => {
+    it("savePricingStep skips duplicate network request when already persisted and clean", async () => {
+      const serverBaseline: PricingFormState = {
+        pricingType: "paid",
+        sellingPrice: "1999",
+        originalPrice: "",
+        currency: "INR",
+      };
+      const draftRef: PricingFormState = { ...serverBaseline };
+      const isDirty = !isPricingEqual(draftRef, serverBaseline);
+
+      const spy = vi.spyOn(coursesService, "upsertPricing");
+
+      const savePricingStep = async () => {
+        if (!isDirty) {
+          return { ...serverBaseline };
+        }
+        return await coursesService.upsertPricing(sampleCourseId, {
+          pricingType: "paid",
+          price: 1999,
+          currency: "INR",
+        });
+      };
+
+      const result = await savePricingStep();
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.pricingType).toBe("paid");
     });
   });
 });

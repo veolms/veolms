@@ -293,12 +293,12 @@ export const isAccessRuleConfigEqual = (
 ): boolean => {
   const normA = normalizeAccessRulesState(a);
   const normB = normalizeAccessRulesState(b);
-  return (
-    normA.accessType === normB.accessType &&
+  const durationMatch =
     normA.durationMode === normB.durationMode &&
-    normA.fixedDurationValue === normB.fixedDurationValue &&
-    normA.fixedDurationUnit === normB.fixedDurationUnit
-  );
+    (normA.durationMode !== "fixed" ||
+      (normA.fixedDurationValue === normB.fixedDurationValue &&
+        normA.fixedDurationUnit === normB.fixedDurationUnit));
+  return normA.accessType === normB.accessType && durationMatch;
 };
 
 export const isAccessSettingsEqual = (
@@ -1952,23 +1952,45 @@ export function CourseCreatePage({
   const instructorAlias = basicsDraft.instructorAlias;
   const showInstructorName = basicsDraft.showInstructorName;
 
-  const setCourseTitle = (title: string) =>
+  const serverBasicsRef = useRef<BasicsFormState>(serverBasics);
+  serverBasicsRef.current = serverBasics;
+  const basicsDraftRef = useRef<BasicsFormState>(basicsDraft);
+  basicsDraftRef.current = basicsDraft;
+
+  const setCourseTitle = (title: string) => {
     setBasicsDraft((prev) => ({ ...prev, title }));
-  const setShortDescription = (shortDescription: string) =>
+    basicsDraftRef.current = { ...basicsDraftRef.current, title };
+  };
+  const setShortDescription = (shortDescription: string) => {
     setBasicsDraft((prev) => ({ ...prev, shortDescription }));
-  const setCourseDescription = (description: string) =>
+    basicsDraftRef.current = { ...basicsDraftRef.current, shortDescription };
+  };
+  const setCourseDescription = (description: string) => {
     setBasicsDraft((prev) => ({ ...prev, description }));
-  const setCategoryId = (categoryId: string) =>
+    basicsDraftRef.current = { ...basicsDraftRef.current, description };
+  };
+  const setCategoryId = (categoryId: string) => {
     setBasicsDraft((prev) => ({ ...prev, categoryId }));
+    basicsDraftRef.current = { ...basicsDraftRef.current, categoryId };
+  };
   const setDifficultyLevel = (
     difficulty: "beginner" | "intermediate" | "advanced" | "",
-  ) => setBasicsDraft((prev) => ({ ...prev, difficulty }));
-  const setLanguage = (language: string) =>
+  ) => {
+    setBasicsDraft((prev) => ({ ...prev, difficulty }));
+    basicsDraftRef.current = { ...basicsDraftRef.current, difficulty };
+  };
+  const setLanguage = (language: string) => {
     setBasicsDraft((prev) => ({ ...prev, language }));
-  const setInstructorAlias = (instructorAlias: string) =>
+    basicsDraftRef.current = { ...basicsDraftRef.current, language };
+  };
+  const setInstructorAlias = (instructorAlias: string) => {
     setBasicsDraft((prev) => ({ ...prev, instructorAlias }));
-  const setShowInstructorName = (showInstructorName: boolean) =>
+    basicsDraftRef.current = { ...basicsDraftRef.current, instructorAlias };
+  };
+  const setShowInstructorName = (showInstructorName: boolean) => {
     setBasicsDraft((prev) => ({ ...prev, showInstructorName }));
+    basicsDraftRef.current = { ...basicsDraftRef.current, showInstructorName };
+  };
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
@@ -2027,6 +2049,37 @@ export function CourseCreatePage({
     activeEditId,
   );
   const [courseVersion, setCourseVersion] = useState<number>(1);
+  const courseVersionRef = useRef<number>(courseVersion);
+  courseVersionRef.current = courseVersion;
+
+  // Immediate persistence states for Basics interactive controls
+  const [savingBasicsControls, setSavingBasicsControls] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const savingBasicsControlsRef = useRef<Set<string>>(new Set());
+  const basicsVersionRef = useRef<number>(0);
+  const inFlightBasicsControlsRef = useRef<Record<string, number>>({
+    title: 0,
+    shortDescription: 0,
+    courseDescription: 0,
+    instructorAlias: 0,
+    showInstructorName: 0,
+  });
+  const inFlightBasicsPromiseRef = useRef<Promise<unknown> | null>(null);
+
+  const markBasicsControlSaving = (controlKey: string, isSaving: boolean) => {
+    if (isSaving) {
+      savingBasicsControlsRef.current.add(controlKey);
+    } else {
+      savingBasicsControlsRef.current.delete(controlKey);
+    }
+    setSavingBasicsControls(new Set(savingBasicsControlsRef.current));
+  };
+
+  const isBasicsControlSaving = (controlKey: string) =>
+    savingBasicsControlsRef.current.has(controlKey) ||
+    (inFlightBasicsControlsRef.current[controlKey] ?? 0) > 0;
+
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -2038,8 +2091,22 @@ export function CourseCreatePage({
 
   const isEditing = Boolean(activeEditId);
   const isNewCourse = !currentCourseId && !isEditing;
-  const isDownstreamUnlocked =
-    !isNewCourse || basicsDraft.title.trim().length > 0;
+  const isCourseTitleFilled = Boolean(courseTitle.trim());
+  const isDownstreamUnlocked = Boolean(currentCourseId) || isCourseTitleFilled;
+
+  const currentCourseIdRef = useRef<string | null>(currentCourseId);
+  useEffect(() => {
+    currentCourseIdRef.current = currentCourseId;
+  }, [currentCourseId]);
+
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+
+  useEffect(() => {
+    if (!currentCourseId && !isCourseTitleFilled && activeStep === "basics") {
+      titleInputRef.current?.focus();
+    }
+  }, [currentCourseId, isCourseTitleFilled, activeStep]);
 
   const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
@@ -2333,6 +2400,11 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const isCollapsingSectionRef = useRef(false);
+  const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
+    new Map(),
+  );
+  const isSavingAllDirtyLessonsRef = useRef(false);
   const isCurriculumDirty = useMemo(
     () => checkIsCurriculumDirty(sections),
     [sections],
@@ -2353,6 +2425,8 @@ export function CourseCreatePage({
     useState<AccessRulesFormState>(initialAccessRulesState);
   const [accessRulesDraft, setAccessRulesDraft] =
     useState<AccessRulesFormState>(initialAccessRulesState);
+  const accessRulesDraftRef = useRef(accessRulesDraft);
+  accessRulesDraftRef.current = accessRulesDraft;
   const isAccessRulesDirty = useMemo(
     () => !isAccessRulesEqual(accessRulesDraft, serverAccessRules),
     [accessRulesDraft, serverAccessRules],
@@ -2364,6 +2438,60 @@ export function CourseCreatePage({
     isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
   const accessRules = accessRulesDraft;
   const setAccessRules = setAccessRulesDraft;
+
+  // Immediate persistence states for Access Rules interactive controls
+  const [savingAccessControls, setSavingAccessControls] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const savingAccessControlsRef = useRef<Set<string>>(new Set());
+  const accessControlVersionsRef = useRef<{
+    accessType: number;
+    durationMode: number;
+    fixedDuration: number;
+    enableQA: number;
+    enableComments: number;
+    enableDownloads: number;
+  }>({
+    accessType: 0,
+    durationMode: 0,
+    fixedDuration: 0,
+    enableQA: 0,
+    enableComments: 0,
+    enableDownloads: 0,
+  });
+  const inFlightAccessControlsRef = useRef<Record<string, number>>({
+    accessType: 0,
+    durationMode: 0,
+    fixedDuration: 0,
+    enableQA: 0,
+    enableComments: 0,
+    enableDownloads: 0,
+  });
+  const fixedDurationDebounceTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const inFlightDurationPromiseRef = useRef<Promise<unknown> | null>(null);
+
+  const markAccessControlSaving = (controlKey: string, isSaving: boolean) => {
+    if (isSaving) {
+      savingAccessControlsRef.current.add(controlKey);
+    } else {
+      savingAccessControlsRef.current.delete(controlKey);
+    }
+    setSavingAccessControls(new Set(savingAccessControlsRef.current));
+  };
+
+  const isAccessControlSaving = (controlKey: string) =>
+    savingAccessControlsRef.current.has(controlKey) ||
+    (inFlightAccessControlsRef.current[controlKey] ?? 0) > 0;
+
+  useEffect(() => {
+    return () => {
+      if (fixedDurationDebounceTimerRef.current) {
+        clearTimeout(fixedDurationDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Extras interfaces
   interface ExtrasInclusionItem {
@@ -2386,12 +2514,21 @@ export function CourseCreatePage({
   // Pricing Step server-confirmed and draft states
   const [serverPricing, setServerPricing] =
     useState<PricingFormState>(initialPricingState);
+  const serverPricingRef = useRef(serverPricing);
+  serverPricingRef.current = serverPricing;
+
   const [pricingDraft, setPricingDraft] =
     useState<PricingFormState>(initialPricingState);
+  const pricingDraftRef = useRef(pricingDraft);
+  pricingDraftRef.current = pricingDraft;
+
   const isPricingDirty = useMemo(
     () => !isPricingEqual(pricingDraft, serverPricing),
     [pricingDraft, serverPricing],
   );
+  const isPricingDirtyRef = useRef(isPricingDirty);
+  isPricingDirtyRef.current = isPricingDirty;
+
   const pricing = pricingDraft;
   const setPricing = setPricingDraft;
   const [pricingValidationError, setPricingValidationError] = useState<
@@ -2405,6 +2542,52 @@ export function CourseCreatePage({
     }, 4000);
     return () => clearTimeout(timer);
   }, [pricingValidationError]);
+
+  // Immediate persistence states for Pricing interactive controls
+  const [savingPricingControls, setSavingPricingControls] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const savingPricingControlsRef = useRef<Set<string>>(new Set());
+  const pricingControlVersionsRef = useRef<{
+    pricingType: number;
+    currency: number;
+    pricingDetails: number;
+  }>({
+    pricingType: 0,
+    currency: 0,
+    pricingDetails: 0,
+  });
+  const pricingVersionRef = useRef<number>(0);
+  const inFlightPricingControlsRef = useRef<Record<string, number>>({
+    pricingType: 0,
+    currency: 0,
+    pricingDetails: 0,
+  });
+  const pricingDebounceTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const inFlightPricingPromiseRef = useRef<Promise<unknown> | null>(null);
+
+  const markPricingControlSaving = (controlKey: string, isSaving: boolean) => {
+    if (isSaving) {
+      savingPricingControlsRef.current.add(controlKey);
+    } else {
+      savingPricingControlsRef.current.delete(controlKey);
+    }
+    setSavingPricingControls(new Set(savingPricingControlsRef.current));
+  };
+
+  const isPricingControlSaving = (controlKey: string) =>
+    savingPricingControlsRef.current.has(controlKey) ||
+    (inFlightPricingControlsRef.current[controlKey] ?? 0) > 0;
+
+  useEffect(() => {
+    return () => {
+      if (pricingDebounceTimerRef.current) {
+        clearTimeout(pricingDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Publish interfaces
   type CourseVisibility = "public" | "private" | "unlisted";
@@ -2464,14 +2647,24 @@ export function CourseCreatePage({
     useState<ExtrasFormState>(initialExtrasState);
   const [serverIncludes, setServerIncludes] = useState<CourseIncludeItem[]>([]);
   const [manualIncludesDraft, setManualIncludesDraft] = useState<
-    Array<{ id: string; text: string }>
+    Array<{ id: string; text: string; isPendingCreation?: boolean }>
   >([]);
   const manualIncludesDraftRef = useRef(manualIncludesDraft);
   manualIncludesDraftRef.current = manualIncludesDraft;
   const dragInitialIncludesStateRef = useRef<{
     includeIds: string[];
-    previousIncludes: Array<{ id: string; text: string }>;
+    previousIncludes: Array<{ id: string; text: string; isPendingCreation?: boolean }>;
   } | null>(null);
+  const deletingIncludeIdsRef = useRef<Set<string>>(new Set());
+  const [deletingIncludeIds, setDeletingIncludeIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const savingIncludeIdsRef = useRef<Set<string>>(new Set());
+  const [savingIncludeIds, setSavingIncludeIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [isSavingCertificate, setIsSavingCertificate] = useState(false);
+  const isSavingCertificateRef = useRef(false);
 
   const [extras, setExtras] = useState<ExtrasState>({
     inclusions: [],
@@ -2556,63 +2749,126 @@ export function CourseCreatePage({
             : true,
       });
       setServerBasics(confirmedBasics);
-      if (!isBasicsDirtyRef.current) {
+      serverBasicsRef.current = confirmedBasics;
+      setCourseVersion(c.version || 1);
+      courseVersionRef.current = c.version || 1;
+
+      const isBasicsSavingActive =
+        savingBasicsControlsRef.current.size > 0 ||
+        Boolean(inFlightBasicsPromiseRef.current);
+      if (!isBasicsDirtyRef.current && !isBasicsSavingActive) {
         setBasicsDraft(confirmedBasics);
+        basicsDraftRef.current = confirmedBasics;
       }
       setIsPublished(c.status === "published");
-      setCourseVersion(c.version || 1);
 
       const hasAccessRules = Boolean(
         editorData.accessRules && editorData.accessRules.id,
       );
       setAccessRulesExists(hasAccessRules);
 
-      if (hasAccessRules) {
-        const ar = editorData.accessRules!;
-        const s = editorData.settings;
-        const isFixed = ar.durationType === "fixed_duration";
-        let fixedVal = 30;
-        let fixedUnit: DurationUnit = "Days";
+      const ar = editorData.accessRules;
+      const s = editorData.settings;
+      const isFixed = ar?.durationType === "fixed_duration";
+      let fixedVal = 30;
+      let fixedUnit: DurationUnit = "Days";
 
-        if (isFixed && ar.durationDays && ar.durationDays > 0) {
-          const days = ar.durationDays;
-          if (days % 365 === 0 && days >= 365) {
-            fixedVal = days / 365;
-            fixedUnit = "Years";
-          } else if (days % 30 === 0 && days >= 30) {
-            fixedVal = days / 30;
-            fixedUnit = "Months";
-          } else if (days % 7 === 0 && days >= 7) {
-            fixedVal = days / 7;
-            fixedUnit = "Weeks";
-          } else {
-            fixedVal = days;
-            fixedUnit = "Days";
-          }
+      if (hasAccessRules && isFixed && ar?.durationDays && ar.durationDays > 0) {
+        const days = ar.durationDays;
+        if (days % 365 === 0 && days >= 365) {
+          fixedVal = days / 365;
+          fixedUnit = "Years";
+        } else if (days % 30 === 0 && days >= 30) {
+          fixedVal = days / 30;
+          fixedUnit = "Months";
+        } else if (days % 7 === 0 && days >= 7) {
+          fixedVal = days / 7;
+          fixedUnit = "Weeks";
+        } else {
+          fixedVal = days;
+          fixedUnit = "Days";
         }
+      }
 
-        const confirmedAccessRules: AccessRulesFormState =
-          normalizeAccessRulesState({
-            accessType: "everyone",
-            durationMode: isFixed ? "fixed" : "lifetime",
-            fixedDurationValue: fixedVal,
-            fixedDurationUnit: fixedUnit,
-            enableQA: s?.allowQa !== undefined ? s.allowQa : true,
-            enableComments:
-              s?.allowComments !== undefined ? s.allowComments : true,
-            enableDownloads:
-              s?.allowDownloads !== undefined ? s.allowDownloads : false,
-          });
+      const confirmedAccessRules: AccessRulesFormState =
+        normalizeAccessRulesState({
+          accessType: (ar?.accessType as AccessType) || "everyone",
+          durationMode: hasAccessRules
+            ? isFixed
+              ? "fixed"
+              : "lifetime"
+            : "",
+          fixedDurationValue: fixedVal,
+          fixedDurationUnit: fixedUnit,
+          enableQA:
+            s?.allowQa !== undefined
+              ? Boolean(s.allowQa)
+              : initialAccessRulesState.enableQA,
+          enableComments:
+            s?.allowComments !== undefined
+              ? Boolean(s.allowComments)
+              : initialAccessRulesState.enableComments,
+          enableDownloads:
+            s?.allowDownloads !== undefined
+              ? Boolean(s.allowDownloads)
+              : initialAccessRulesState.enableDownloads,
+        });
 
-        setServerAccessRules(confirmedAccessRules);
-        if (!isAccessRulesDirtyRef.current) {
-          setAccessRulesDraft(confirmedAccessRules);
-        }
-      } else {
-        setServerAccessRules(initialAccessRulesState);
-        if (!isAccessRulesDirtyRef.current) {
-          setAccessRulesDraft(initialAccessRulesState);
-        }
+      setServerAccessRules((prev) => ({
+        accessType: isAccessControlSaving("accessType")
+          ? prev.accessType
+          : confirmedAccessRules.accessType,
+        durationMode: isAccessControlSaving("durationMode")
+          ? prev.durationMode
+          : confirmedAccessRules.durationMode,
+        fixedDurationValue: isAccessControlSaving("fixedDuration")
+          ? prev.fixedDurationValue
+          : confirmedAccessRules.fixedDurationValue,
+        fixedDurationUnit: isAccessControlSaving("fixedDuration")
+          ? prev.fixedDurationUnit
+          : confirmedAccessRules.fixedDurationUnit,
+        enableQA: isAccessControlSaving("enableQA")
+          ? prev.enableQA
+          : confirmedAccessRules.enableQA,
+        enableComments: isAccessControlSaving("enableComments")
+          ? prev.enableComments
+          : confirmedAccessRules.enableComments,
+        enableDownloads: isAccessControlSaving("enableDownloads")
+          ? prev.enableDownloads
+          : confirmedAccessRules.enableDownloads,
+      }));
+
+      if (
+        !isAccessRulesDirtyRef.current &&
+        savingAccessControlsRef.current.size === 0
+      ) {
+        setAccessRulesDraft((prev) => {
+          const next = {
+            accessType: isAccessControlSaving("accessType")
+              ? prev.accessType
+              : confirmedAccessRules.accessType || prev.accessType,
+            durationMode: isAccessControlSaving("durationMode")
+              ? prev.durationMode
+              : confirmedAccessRules.durationMode || prev.durationMode,
+            fixedDurationValue: isAccessControlSaving("fixedDuration")
+              ? prev.fixedDurationValue
+              : confirmedAccessRules.fixedDurationValue,
+            fixedDurationUnit: isAccessControlSaving("fixedDuration")
+              ? prev.fixedDurationUnit
+              : confirmedAccessRules.fixedDurationUnit,
+            enableQA: isAccessControlSaving("enableQA")
+              ? prev.enableQA
+              : confirmedAccessRules.enableQA,
+            enableComments: isAccessControlSaving("enableComments")
+              ? prev.enableComments
+              : confirmedAccessRules.enableComments,
+            enableDownloads: isAccessControlSaving("enableDownloads")
+              ? prev.enableDownloads
+              : confirmedAccessRules.enableDownloads,
+          };
+          accessRulesDraftRef.current = next;
+          return next;
+        });
       }
 
       if (editorData.settings) {
@@ -2630,17 +2886,26 @@ export function CourseCreatePage({
       if (editorData.includes) {
         setServerIncludes(editorData.includes);
         if (!isExtrasDirtyRef.current) {
-          setManualIncludesDraft(
-            editorData.includes.map((inc) => ({
-              id: inc.id,
-              text: inc.text,
-            })),
-          );
+          const serverItems = editorData.includes.map((inc) => ({
+            id: inc.id,
+            text: inc.text,
+          }));
+          setManualIncludesDraft((prev) => {
+            const pendingItems = prev.filter((p) => p.isPendingCreation);
+            if (pendingItems.length === 0) return serverItems;
+            const serverIds = new Set(serverItems.map((s) => s.id));
+            const uniquePending = pendingItems.filter(
+              (p) => !serverIds.has(p.id),
+            );
+            return [...serverItems, ...uniquePending];
+          });
         }
       } else {
         setServerIncludes([]);
         if (!isExtrasDirtyRef.current) {
-          setManualIncludesDraft([]);
+          setManualIncludesDraft((prev) =>
+            prev.filter((p) => p.isPendingCreation),
+          );
         }
       }
 
@@ -2661,7 +2926,14 @@ export function CourseCreatePage({
           currency: p.currency || "INR",
         });
         setServerPricing(confirmedPricing);
-        setPricingDraft(confirmedPricing);
+        serverPricingRef.current = confirmedPricing;
+        if (
+          !isPricingDirtyRef.current &&
+          savingPricingControlsRef.current.size === 0
+        ) {
+          setPricingDraft(confirmedPricing);
+          pricingDraftRef.current = confirmedPricing;
+        }
       }
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
@@ -2774,20 +3046,71 @@ export function CourseCreatePage({
     null,
   );
 
-  const handleAddManualInclusion = (customText?: string) => {
-    if (manualIncludesDraft.length >= 6) return;
+  const handleAddManualInclusion = async (customText?: string) => {
+    if (manualIncludesDraftRef.current.length >= 6) return;
     const defaultText =
       customText?.trim().slice(0, 25) ||
-      `Benefit ${manualIncludesDraft.length + 1}`.slice(0, 25);
-    const newId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setManualIncludesDraft((prev) => [
-      ...prev,
-      {
-        id: newId,
-        text: defaultText,
-      },
-    ]);
-    setFocusedInclusionId(newId);
+      `Benefit ${manualIncludesDraftRef.current.length + 1}`.slice(0, 25);
+    const tempId = `temp-inc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // 1. Immediately append temporary pending inclusion
+    setManualIncludesDraft((prev) => {
+      if (prev.length >= 6) return prev;
+      return [
+        ...prev,
+        {
+          id: tempId,
+          text: defaultText,
+          isPendingCreation: true,
+        },
+      ];
+    });
+    setFocusedInclusionId(tempId);
+
+    // 2. Ensure course ID exists
+    let targetCourseId = currentCourseId;
+    if (!targetCourseId) {
+      setManualIncludesDraft((prev) =>
+        prev.filter((item) => item.id !== tempId),
+      );
+      setToastMessage("Please enter a course title on the Basics tab first.");
+      return;
+    }
+
+    // 3. Immediately trigger create mutation
+    try {
+      const created = await createIncludeMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: { text: defaultText },
+      });
+
+      // 4. On success: replace tempId with real server UUID and clear isPendingCreation
+      setManualIncludesDraft((prev) =>
+        prev.map((item) =>
+          item.id === tempId
+            ? {
+                id: created.id,
+                text: item.text,
+                isPendingCreation: false,
+              }
+            : item,
+        ),
+      );
+
+      // Keep serverIncludes baseline in sync so existing saveExtrasStep does not duplicate it
+      setServerIncludes((prev) => {
+        if (prev.some((s) => s.id === created.id)) return prev;
+        return [...prev, created];
+      });
+    } catch (err: unknown) {
+      // 5. On failure: remove ONLY this failed temporary inclusion
+      setManualIncludesDraft((prev) =>
+        prev.filter((item) => item.id !== tempId),
+      );
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to add inclusion.";
+      setToastMessage(errorMsg);
+    }
   };
 
   const handleUpdateManualInclusionText = (id: string, text: string) => {
@@ -2797,8 +3120,139 @@ export function CourseCreatePage({
     );
   };
 
-  const handleDeleteManualInclusion = (id: string) => {
-    setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
+  const handleManualInclusionBlur = async (id: string) => {
+    setFocusedInclusionId(null);
+
+    if (
+      savingIncludeIdsRef.current.has(id) ||
+      deletingIncludeIdsRef.current.has(id)
+    ) {
+      return;
+    }
+
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!currentCourseId || !UUID_REGEX.test(id)) {
+      return;
+    }
+
+    const currentItem = manualIncludesDraftRef.current.find((i) => i.id === id);
+    if (!currentItem || currentItem.isPendingCreation) {
+      return;
+    }
+
+    const serverItem = serverIncludes.find((s) => s.id === id);
+    if (!serverItem) {
+      return;
+    }
+
+    const trimmed = currentItem.text.trim();
+
+    // Empty text handling: revert to server-confirmed value because backend schema requires min(1)
+    if (!trimmed) {
+      setManualIncludesDraft((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, text: serverItem.text } : item,
+        ),
+      );
+      return;
+    }
+
+    // Clean blur: if trimmed matches server baseline, nothing to persist
+    if (trimmed === serverItem.text.trim()) {
+      if (trimmed !== currentItem.text) {
+        setManualIncludesDraft((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, text: trimmed } : item,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Normalize draft to trimmed before persisting
+    setManualIncludesDraft((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, text: trimmed } : item,
+      ),
+    );
+
+    savingIncludeIdsRef.current.add(id);
+    setSavingIncludeIds(new Set(savingIncludeIdsRef.current));
+
+    try {
+      const updated = await updateIncludeMutation.mutateAsync({
+        courseId: currentCourseId,
+        includeId: id,
+        payload: { text: trimmed },
+      });
+
+      // Update serverIncludes baseline so saveExtrasStep does not duplicate it
+      setServerIncludes((prev) =>
+        prev.map((s) => (s.id === id ? updated : s)),
+      );
+    } catch (err: unknown) {
+      // Revert on failure to the last confirmed server value
+      setManualIncludesDraft((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, text: serverItem.text } : item,
+        ),
+      );
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to update inclusion.";
+      setToastMessage(errorMsg);
+    } finally {
+      savingIncludeIdsRef.current.delete(id);
+      setSavingIncludeIds(new Set(savingIncludeIdsRef.current));
+    }
+  };
+
+  const handleDeleteManualInclusion = async (id: string) => {
+    if (deletingIncludeIdsRef.current.has(id)) return;
+
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    // If it is not a real server UUID (e.g. client-only temp item) or no course ID, remove locally
+    if (!currentCourseId || !UUID_REGEX.test(id)) {
+      setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
+      if (focusedInclusionId === id) {
+        setFocusedInclusionId(null);
+      }
+      if (dragEnabledInclusionId === id) {
+        setDragEnabledInclusionId(null);
+      }
+      return;
+    }
+
+    deletingIncludeIdsRef.current.add(id);
+    setDeletingIncludeIds(new Set(deletingIncludeIdsRef.current));
+
+    try {
+      await deleteIncludeMutation.mutateAsync({
+        courseId: currentCourseId,
+        includeId: id,
+      });
+
+      // On success: remove only this inclusion from draft and server baseline
+      setManualIncludesDraft((prev) => prev.filter((item) => item.id !== id));
+      setServerIncludes((prev) => prev.filter((s) => s.id !== id));
+      if (focusedInclusionId === id) {
+        setFocusedInclusionId(null);
+      }
+      if (dragEnabledInclusionId === id) {
+        setDragEnabledInclusionId(null);
+      }
+    } catch (err: unknown) {
+      // On failure: keep inclusion visible and show error toast
+      const errorMsg =
+        (err as { message?: string })?.message || "Failed to delete inclusion.";
+      setToastMessage(errorMsg);
+    } finally {
+      deletingIncludeIdsRef.current.delete(id);
+      setDeletingIncludeIds(new Set(deletingIncludeIdsRef.current));
+    }
   };
 
   const handleInclusionDragStart = (
@@ -2897,11 +3351,62 @@ export function CourseCreatePage({
   };
 
   // Certificate Handlers
-  const handleToggleCertificate = () => {
+  const handleToggleCertificate = async () => {
+    if (isSavingCertificateRef.current) return;
+
+    const previousValue = extras.enableCertificate;
+    const nextValue = !previousValue;
+
+    // 1. Optimistic update
     setExtras((prev) => ({
       ...prev,
-      enableCertificate: !prev.enableCertificate,
+      enableCertificate: nextValue,
     }));
+
+    isSavingCertificateRef.current = true;
+    setIsSavingCertificate(true);
+
+    try {
+      // 2. Ensure course ID exists
+      let targetCourseId = currentCourseId;
+      if (!targetCourseId) {
+        throw new Error(
+          "Course draft must be created before enabling certificates. Please enter a course title first.",
+        );
+      }
+
+      // 3. Directly call existing settings mutation
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          certificateEnabled: nextValue,
+        },
+      });
+
+      // 4. Update serverExtras baseline
+      const confirmedCertificate = res.certificateEnabled ?? nextValue;
+      const newBaseline = normalizeExtrasState({
+        enableCertificate: confirmedCertificate,
+      });
+      setServerExtras(newBaseline);
+      setExtras((prev) => ({
+        ...prev,
+        enableCertificate: newBaseline.enableCertificate,
+      }));
+    } catch (err: unknown) {
+      // 5. Rollback on failure
+      setExtras((prev) => ({
+        ...prev,
+        enableCertificate: previousValue,
+      }));
+      const errorMsg =
+        (err as { message?: string })?.message ||
+        "Failed to update certificate setting.";
+      setToastMessage(errorMsg);
+    } finally {
+      isSavingCertificateRef.current = false;
+      setIsSavingCertificate(false);
+    }
   };
 
   const handleCertificateTemplateChange = (template: string) => {
@@ -2928,43 +3433,561 @@ export function CourseCreatePage({
     }));
   };
 
-  // Access Rules State Handlers
-  const handleAccessTypeChange = (type: AccessType) => {
-    if (type === "restricted") return; // Restricted is disabled/coming soon
-    setAccessRules((prev) => ({ ...prev, accessType: type }));
+  const ensureCourseDraftForAccessRules = async (): Promise<string> => {
+    let id = currentCourseIdRef.current || currentCourseId;
+    if (id) return id;
+    if (inFlightBasicsPromiseRef.current) {
+      await inFlightBasicsPromiseRef.current;
+      id = currentCourseIdRef.current || currentCourseId;
+      if (id) return id;
+    }
+    throw new Error(
+      "Course draft must be created before configuring access rules. Please enter a course title first.",
+    );
   };
 
-  const handleDurationModeChange = (mode: AccessDurationMode) => {
+  // Access Rules State Handlers (Immediate Persistence)
+  const handleAccessTypeChange = async (type: AccessType) => {
+    if (type === "restricted") return; // Restricted is disabled/coming soon
+    if (accessRulesDraftRef.current.accessType === type) return;
+
+    const previousValue = accessRulesDraftRef.current.accessType;
+    const version = ++accessControlVersionsRef.current.accessType;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      accessType: type,
+    };
+    setAccessRules((prev) => ({ ...prev, accessType: type }));
+    inFlightAccessControlsRef.current.accessType =
+      (inFlightAccessControlsRef.current.accessType || 0) + 1;
+    markAccessControlSaving("accessType", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      let durationDays: number | null = null;
+      if (accessRulesDraftRef.current.durationMode === "fixed") {
+        const val = Math.max(
+          1,
+          accessRulesDraftRef.current.fixedDurationValue || 1,
+        );
+        const unitMultiplier =
+          accessRulesDraftRef.current.fixedDurationUnit === "Years"
+            ? 365
+            : accessRulesDraftRef.current.fixedDurationUnit === "Months"
+              ? 30
+              : accessRulesDraftRef.current.fixedDurationUnit === "Weeks"
+                ? 7
+                : 1;
+        durationDays = val * unitMultiplier;
+      }
+
+      await upsertAccessRulesMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          accessType: type,
+          durationType:
+            accessRulesDraftRef.current.durationMode === "fixed"
+              ? "fixed_duration"
+              : "lifetime",
+          durationDays:
+            accessRulesDraftRef.current.durationMode === "fixed"
+              ? durationDays
+              : null,
+        },
+      });
+
+      if (accessControlVersionsRef.current.accessType === version) {
+        setAccessRulesExists(true);
+        setServerAccessRules((prev) => ({
+          ...prev,
+          accessType: type,
+        }));
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.accessType === version) {
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          accessType: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          accessType: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update access type.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.accessType = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.accessType || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.accessType === 0) {
+        markAccessControlSaving("accessType", false);
+      }
+    }
+  };
+
+  const handleDurationModeChange = async (mode: AccessDurationMode) => {
+    if (accessRulesDraftRef.current.durationMode === mode) return;
+
+    if (fixedDurationDebounceTimerRef.current) {
+      clearTimeout(fixedDurationDebounceTimerRef.current);
+      fixedDurationDebounceTimerRef.current = null;
+    }
+    // Invalidate in-flight fixed duration requests so an older duration response cannot overwrite
+    ++accessControlVersionsRef.current.fixedDuration;
+
+    const previousMode = accessRulesDraftRef.current.durationMode;
+    const version = ++accessControlVersionsRef.current.durationMode;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      durationMode: mode,
+    };
     setAccessRules((prev) => ({ ...prev, durationMode: mode }));
+    inFlightAccessControlsRef.current.durationMode =
+      (inFlightAccessControlsRef.current.durationMode || 0) + 1;
+    markAccessControlSaving("durationMode", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      let durationDays: number | null = null;
+      if (mode === "fixed") {
+        const val = Math.max(
+          1,
+          accessRulesDraftRef.current.fixedDurationValue || 1,
+        );
+        const unitMultiplier =
+          accessRulesDraftRef.current.fixedDurationUnit === "Years"
+            ? 365
+            : accessRulesDraftRef.current.fixedDurationUnit === "Months"
+              ? 30
+              : accessRulesDraftRef.current.fixedDurationUnit === "Weeks"
+                ? 7
+                : 1;
+        durationDays = val * unitMultiplier;
+      }
+
+      await upsertAccessRulesMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          accessType: accessRulesDraftRef.current.accessType || "everyone",
+          durationType: mode === "fixed" ? "fixed_duration" : "lifetime",
+          durationDays: mode === "fixed" ? durationDays : null,
+        },
+      });
+
+      if (accessControlVersionsRef.current.durationMode === version) {
+        setAccessRulesExists(true);
+        setServerAccessRules((prev) => ({
+          ...prev,
+          durationMode: mode,
+          ...(mode === "fixed"
+            ? {
+                fixedDurationValue:
+                  accessRulesDraftRef.current.fixedDurationValue,
+                fixedDurationUnit:
+                  accessRulesDraftRef.current.fixedDurationUnit,
+              }
+            : {}),
+        }));
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.durationMode === version) {
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          durationMode: previousMode,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          durationMode: previousMode,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update access duration.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.durationMode = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.durationMode || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.durationMode === 0) {
+        markAccessControlSaving("durationMode", false);
+      }
+    }
+  };
+
+  const persistFixedDuration = async (
+    explicitVal?: number,
+    explicitUnit?: DurationUnit,
+  ) => {
+    const currentDraft = accessRulesDraftRef.current;
+    if (currentDraft.durationMode !== "fixed") return;
+
+    const val = Math.max(
+      1,
+      explicitVal !== undefined
+        ? explicitVal
+        : currentDraft.fixedDurationValue || 1,
+    );
+    const unit =
+      explicitUnit !== undefined
+        ? explicitUnit
+        : currentDraft.fixedDurationUnit || "Days";
+
+    const unitMultiplier =
+      unit === "Years"
+        ? 365
+        : unit === "Months"
+          ? 30
+          : unit === "Weeks"
+            ? 7
+            : 1;
+    const durationDays = val * unitMultiplier;
+
+    const previousVal = serverAccessRules.fixedDurationValue;
+    const previousUnit = serverAccessRules.fixedDurationUnit;
+    const version = ++accessControlVersionsRef.current.fixedDuration;
+
+    inFlightAccessControlsRef.current.fixedDuration =
+      (inFlightAccessControlsRef.current.fixedDuration || 0) + 1;
+    markAccessControlSaving("fixedDuration", true);
+
+    const run = async () => {
+      try {
+        const targetCourseId = await ensureCourseDraftForAccessRules();
+
+        await upsertAccessRulesMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            accessType: accessRulesDraftRef.current.accessType || "everyone",
+            durationType: "fixed_duration",
+            durationDays,
+          },
+        });
+
+        if (
+          accessControlVersionsRef.current.fixedDuration === version &&
+          accessRulesDraftRef.current.durationMode === "fixed"
+        ) {
+          setAccessRulesExists(true);
+          setServerAccessRules((prev) => ({
+            ...prev,
+            durationMode: "fixed",
+            fixedDurationValue: val,
+            fixedDurationUnit: unit,
+          }));
+        }
+      } catch (err: unknown) {
+        if (
+          accessControlVersionsRef.current.fixedDuration === version &&
+          accessRulesDraftRef.current.durationMode === "fixed"
+        ) {
+          accessRulesDraftRef.current = {
+            ...accessRulesDraftRef.current,
+            fixedDurationValue: previousVal,
+            fixedDurationUnit: previousUnit,
+          };
+          setAccessRules((prev) => ({
+            ...prev,
+            fixedDurationValue: previousVal,
+            fixedDurationUnit: previousUnit,
+          }));
+          const errorMsg =
+            (err as { message?: string })?.message ||
+            "Failed to update fixed access duration.";
+          setToastMessage(errorMsg);
+        }
+      } finally {
+        inFlightAccessControlsRef.current.fixedDuration = Math.max(
+          0,
+          (inFlightAccessControlsRef.current.fixedDuration || 1) - 1,
+        );
+        if (inFlightAccessControlsRef.current.fixedDuration === 0) {
+          markAccessControlSaving("fixedDuration", false);
+        }
+        if (accessControlVersionsRef.current.fixedDuration === version) {
+          inFlightDurationPromiseRef.current = null;
+        }
+      }
+    };
+
+    const promise = run();
+    inFlightDurationPromiseRef.current = promise;
+    return await promise;
+  };
+
+  const flushFixedDurationPersistence = async () => {
+    if (fixedDurationDebounceTimerRef.current) {
+      clearTimeout(fixedDurationDebounceTimerRef.current);
+      fixedDurationDebounceTimerRef.current = null;
+    }
+
+    const currentDraft = accessRulesDraftRef.current;
+    const isDurationDirty =
+      currentDraft.durationMode === "fixed" &&
+      (serverAccessRules.durationMode !== "fixed" ||
+        currentDraft.fixedDurationValue !==
+          serverAccessRules.fixedDurationValue ||
+        currentDraft.fixedDurationUnit !== serverAccessRules.fixedDurationUnit);
+
+    if (isDurationDirty) {
+      await persistFixedDuration();
+    } else if (inFlightDurationPromiseRef.current) {
+      await inFlightDurationPromiseRef.current;
+    }
   };
 
   const handleFixedDurationValueChange = (val: number) => {
+    const value = Math.max(1, isNaN(val) ? 1 : val);
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      fixedDurationValue: value,
+    };
     setAccessRules((prev) => ({
       ...prev,
-      fixedDurationValue: Math.max(1, val || 1),
+      fixedDurationValue: value,
     }));
+
+    if (fixedDurationDebounceTimerRef.current) {
+      clearTimeout(fixedDurationDebounceTimerRef.current);
+    }
+    fixedDurationDebounceTimerRef.current = setTimeout(() => {
+      fixedDurationDebounceTimerRef.current = null;
+      void persistFixedDuration();
+    }, 400);
   };
 
   const handleFixedDurationUnitChange = (unit: DurationUnit) => {
+    if (fixedDurationDebounceTimerRef.current) {
+      clearTimeout(fixedDurationDebounceTimerRef.current);
+      fixedDurationDebounceTimerRef.current = null;
+    }
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      fixedDurationUnit: unit,
+    };
     setAccessRules((prev) => ({ ...prev, fixedDurationUnit: unit }));
+    void persistFixedDuration(
+      accessRulesDraftRef.current.fixedDurationValue,
+      unit,
+    );
   };
 
-  const handleToggleQA = () => {
-    setAccessRules((prev) => ({ ...prev, enableQA: !prev.enableQA }));
+  const handleToggleQA = async () => {
+    const previousValue = accessRulesDraftRef.current.enableQA;
+    const nextValue = !previousValue;
+    const version = ++accessControlVersionsRef.current.enableQA;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      enableQA: nextValue,
+    };
+    setAccessRules((prev) => ({ ...prev, enableQA: nextValue }));
+    inFlightAccessControlsRef.current.enableQA =
+      (inFlightAccessControlsRef.current.enableQA || 0) + 1;
+    markAccessControlSaving("enableQA", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          allowQa: nextValue,
+        },
+      });
+
+      if (accessControlVersionsRef.current.enableQA === version) {
+        const confirmedQa =
+          res.allowQa !== undefined ? Boolean(res.allowQa) : nextValue;
+
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableQA: confirmedQa,
+        };
+        setServerAccessRules((prev) => ({
+          ...prev,
+          enableQA: confirmedQa,
+        }));
+        setAccessRules((prev) => ({
+          ...prev,
+          enableQA: confirmedQa,
+        }));
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.enableQA === version) {
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableQA: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          enableQA: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update Q&A setting.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.enableQA = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.enableQA || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.enableQA === 0) {
+        markAccessControlSaving("enableQA", false);
+      }
+    }
   };
 
-  const handleToggleComments = () => {
-    setAccessRules((prev) => ({
-      ...prev,
-      enableComments: !prev.enableComments,
-    }));
+  const handleToggleComments = async () => {
+    const previousValue = accessRulesDraftRef.current.enableComments;
+    const nextValue = !previousValue;
+    const version = ++accessControlVersionsRef.current.enableComments;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      enableComments: nextValue,
+    };
+    setAccessRules((prev) => ({ ...prev, enableComments: nextValue }));
+    inFlightAccessControlsRef.current.enableComments =
+      (inFlightAccessControlsRef.current.enableComments || 0) + 1;
+    markAccessControlSaving("enableComments", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          allowComments: nextValue,
+        },
+      });
+
+      if (accessControlVersionsRef.current.enableComments === version) {
+        const confirmedComments =
+          res.allowComments !== undefined
+            ? Boolean(res.allowComments)
+            : nextValue;
+
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableComments: confirmedComments,
+        };
+        setServerAccessRules((prev) => ({
+          ...prev,
+          enableComments: confirmedComments,
+        }));
+        setAccessRules((prev) => ({
+          ...prev,
+          enableComments: confirmedComments,
+        }));
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.enableComments === version) {
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableComments: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          enableComments: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update comments setting.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.enableComments = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.enableComments || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.enableComments === 0) {
+        markAccessControlSaving("enableComments", false);
+      }
+    }
   };
 
-  const handleToggleDownloads = () => {
-    setAccessRules((prev) => ({
-      ...prev,
-      enableDownloads: !prev.enableDownloads,
-    }));
+  const handleToggleDownloads = async () => {
+    const previousValue = accessRulesDraftRef.current.enableDownloads;
+    const nextValue = !previousValue;
+    const version = ++accessControlVersionsRef.current.enableDownloads;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      enableDownloads: nextValue,
+    };
+    setAccessRules((prev) => ({ ...prev, enableDownloads: nextValue }));
+    inFlightAccessControlsRef.current.enableDownloads =
+      (inFlightAccessControlsRef.current.enableDownloads || 0) + 1;
+    markAccessControlSaving("enableDownloads", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          allowDownloads: nextValue,
+        },
+      });
+
+      if (accessControlVersionsRef.current.enableDownloads === version) {
+        const confirmedDownloads =
+          res.allowDownloads !== undefined
+            ? Boolean(res.allowDownloads)
+            : nextValue;
+
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableDownloads: confirmedDownloads,
+        };
+        setServerAccessRules((prev) => ({
+          ...prev,
+          enableDownloads: confirmedDownloads,
+        }));
+        setAccessRules((prev) => ({
+          ...prev,
+          enableDownloads: confirmedDownloads,
+        }));
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.enableDownloads === version) {
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableDownloads: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          enableDownloads: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update downloads setting.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.enableDownloads = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.enableDownloads || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.enableDownloads === 0) {
+        markAccessControlSaving("enableDownloads", false);
+      }
+    }
   };
 
   // Drag and Drop state for Sections & Lessons
@@ -3021,30 +4044,11 @@ export function CourseCreatePage({
     setIsCreatingSection(true);
 
     let targetCourseId = currentCourseId;
-
-    // If no course draft exists yet, create it on the server first
     if (!targetCourseId) {
-      const fallbackTitle = courseTitle.trim() || "Untitled Course";
-      try {
-        const createdCourse = await createCourseMutation.mutateAsync({
-          title: fallbackTitle,
-        });
-        targetCourseId = createdCourse.id;
-        setCurrentCourseId(createdCourse.id);
-        setCourseVersion(createdCourse.version);
-        if (!courseTitle.trim()) {
-          setCourseTitle(fallbackTitle);
-        }
-      } catch (err: unknown) {
-        // Rollback temporary section
-        setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
-        const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to create course draft.";
-        setToastMessage(errorMsg);
-        setIsCreatingSection(false);
-        return;
-      }
+      setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
+      setToastMessage("Please enter a course title on the Basics tab first.");
+      setIsCreatingSection(false);
+      return;
     }
 
     try {
@@ -3090,14 +4094,6 @@ export function CourseCreatePage({
     } finally {
       setIsCreatingSection(false);
     }
-  };
-
-  const handleToggleSectionExpand = (sectionId: string) => {
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === sectionId ? { ...s, isExpanded: !s.isExpanded } : s,
-      ),
-    );
   };
 
   const handleStartEditSectionTitle = (sectionId: string) => {
@@ -3343,38 +4339,20 @@ export function CourseCreatePage({
     setCreatingLessonSectionId(sectionId);
     let targetCourseId = currentCourseId;
 
-    // If no course draft exists yet, create it on the server first
     if (!targetCourseId) {
-      const fallbackTitle = courseTitle.trim() || "Untitled Course";
-      try {
-        const createdCourse = await createCourseMutation.mutateAsync({
-          title: fallbackTitle,
-        });
-        targetCourseId = createdCourse.id;
-        setCurrentCourseId(createdCourse.id);
-        setCourseVersion(createdCourse.version);
-        if (!courseTitle.trim()) {
-          setCourseTitle(fallbackTitle);
-        }
-      } catch (err: unknown) {
-        // Rollback temporary lesson
-        setSections((prev) =>
-          prev.map((s) =>
-            s.id === sectionId
-              ? {
-                  ...s,
-                  lessons: s.lessons.filter((l) => l.id !== tempLessonId),
-                }
-              : s,
-          ),
-        );
-        const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to create course draft.";
-        setToastMessage(errorMsg);
-        setCreatingLessonSectionId(null);
-        return;
-      }
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id === sectionId
+            ? {
+                ...s,
+                lessons: s.lessons.filter((l) => l.id !== tempLessonId),
+              }
+            : s,
+        ),
+      );
+      setToastMessage("Please enter a course title on the Basics tab first.");
+      setCreatingLessonSectionId(null);
+      return;
     }
 
     let targetSectionId = sectionId;
@@ -3490,20 +4468,6 @@ export function CourseCreatePage({
     }
   };
 
-  const handleToggleLessonExpand = (sectionId: string, lessonId: string) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          lessons: sec.lessons.map((l) =>
-            l.id === lessonId ? { ...l, isExpanded: !l.isExpanded } : l,
-          ),
-        };
-      }),
-    );
-  };
-
   const handleDeleteLesson = (sectionId: string, lessonId: string) => {
     const sec = sections.find((s) => s.id === sectionId);
     const les = sec?.lessons.find((l) => l.id === lessonId);
@@ -3564,122 +4528,355 @@ export function CourseCreatePage({
     lessonId: string,
     updates: Partial<CurriculumLessonItem>,
   ) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          lessons: sec.lessons.map((l) =>
-            l.id === lessonId ? { ...l, ...updates } : l,
-          ),
-        };
-      }),
-    );
+    const currentSections = sectionsRef.current || sections;
+    const nextSections = currentSections.map((sec) => {
+      if (sec.id !== sectionId) return sec;
+      return {
+        ...sec,
+        lessons: sec.lessons.map((l) =>
+          l.id === lessonId ? { ...l, ...updates } : l,
+        ),
+      };
+    });
+    sectionsRef.current = nextSections;
+    setSections(nextSections);
   };
 
-  const handleSaveLesson = async (sectionId: string, lessonId: string) => {
-    if (savingLessonId || updateLessonMutation.isPending) return;
+  interface PersistLessonOptions {
+    collapseOnSuccess?: boolean;
+    showCleanToast?: boolean;
+    explicitCourseId?: string | null;
+  }
 
-    const sec = sections.find((s) => s.id === sectionId);
-    const les = sec?.lessons.find((l) => l.id === lessonId);
-    if (!les || les.isPendingCreation) return;
-
-    if (!isLessonDirty(les)) {
-      setToastMessage("No changes to save.");
-      return;
+  const persistLesson = async (
+    sectionId: string,
+    lessonId: string,
+    options?: PersistLessonOptions,
+  ): Promise<boolean> => {
+    // If a save is already in-flight for this lesson, await it, then persist any subsequent edits
+    const existingSave = inFlightLessonSavesRef.current.get(lessonId);
+    if (existingSave) {
+      await existingSave;
+      return persistLesson(sectionId, lessonId, options);
     }
 
-    const trimmedTitle = les.title.trim();
-    if (!trimmedTitle) {
-      setToastMessage("Lesson title cannot be empty.");
-      return;
-    }
+    const savePromise = (async () => {
+      // 1. Find the freshest lesson draft
+      const currentSections = sectionsRef.current || sections;
+      const sec = currentSections.find((s) => s.id === sectionId);
+      const les = sec?.lessons.find((l) => l.id === lessonId);
+      if (!les || les.isPendingCreation) return false;
 
-    const isPublishedVal =
-      les.isPublished !== undefined ? les.isPublished : true;
-    const isPreviewVal = les.isPreview !== undefined ? les.isPreview : false;
+      // 2. Check whether it is dirty
+      if (!isLessonDirty(les)) {
+        if (options?.showCleanToast) {
+          setToastMessage("No changes to save.");
+        }
+        return true;
+      }
 
-    if (
-      currentCourseId &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        lessonId,
-      )
-    ) {
-      setSavingLessonId(lessonId);
-      try {
-        await updateLessonMutation.mutateAsync({
-          courseId: currentCourseId,
+      // 3. Validate existing lesson title rules
+      const trimmedTitle = les.title.trim();
+      if (!trimmedTitle) {
+        setToastMessage("Lesson title cannot be empty.");
+        return false;
+      }
+
+      const isPublishedVal =
+        les.isPublished !== undefined ? les.isPublished : true;
+      const isPreviewVal = les.isPreview !== undefined ? les.isPreview : false;
+
+      // 4. Snapshot the exact payload being persisted
+      const persistedSnapshot = {
+        title: trimmedTitle,
+        description: les.description || "",
+        contentType: les.contentType,
+        isPublished: isPublishedVal,
+        isPreview: isPreviewVal,
+      };
+
+      const targetCourseId = options?.explicitCourseId || currentCourseId;
+
+      if (
+        targetCourseId &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           lessonId,
-          payload: {
-            title: trimmedTitle,
-            description: les.description || "",
-            contentType: les.contentType,
-            isPublished: isPublishedVal,
-            isPreview: isPreviewVal,
-          },
-        });
+        )
+      ) {
+        setSavingLessonId(lessonId);
+        try {
+          await updateLessonMutation.mutateAsync({
+            courseId: targetCourseId,
+            lessonId,
+            payload: persistedSnapshot,
+          });
 
-        setSections((prev) =>
-          prev.map((s) => {
+          setSections((prev) => {
+            const next = prev.map((s) => {
+              if (s.id !== sectionId) return s;
+              return {
+                ...s,
+                lessons: s.lessons.map((l) => {
+                  if (l.id !== lessonId) return l;
+                  return {
+                    ...l,
+                    isExpanded: options?.collapseOnSuccess
+                      ? false
+                      : l.isExpanded,
+                    initialState: {
+                      ...persistedSnapshot,
+                    },
+                  };
+                }),
+              };
+            });
+            sectionsRef.current = next;
+            return next;
+          });
+
+          setToastMessage(`Lesson "${trimmedTitle}" updated successfully.`);
+          return true;
+        } catch (err: unknown) {
+          const errorMsg =
+            (err as { message?: string })?.message ||
+            "Failed to update lesson.";
+          setToastMessage(errorMsg);
+          return false;
+        } finally {
+          setSavingLessonId(null);
+        }
+      } else {
+        setSections((prev) => {
+          const next = prev.map((s) => {
             if (s.id !== sectionId) return s;
             return {
               ...s,
-              lessons: s.lessons.map((l) =>
-                l.id === lessonId
-                  ? {
-                      ...l,
-                      title: trimmedTitle,
-                      isPublished: isPublishedVal,
-                      isPreview: isPreviewVal,
-                      isExpanded: false,
-                      initialState: {
-                        title: trimmedTitle,
-                        description: les.description || "",
-                        contentType: les.contentType,
-                        isPublished: isPublishedVal,
-                        isPreview: isPreviewVal,
-                      },
-                    }
-                  : l,
-              ),
+              lessons: s.lessons.map((l) => {
+                if (l.id !== lessonId) return l;
+                return {
+                  ...l,
+                  isExpanded: options?.collapseOnSuccess
+                    ? false
+                    : l.isExpanded,
+                  initialState: {
+                    ...persistedSnapshot,
+                  },
+                };
+              }),
             };
-          }),
-        );
-        setToastMessage(`Lesson "${trimmedTitle}" updated successfully.`);
-      } catch (err: unknown) {
-        const errorMsg =
-          (err as { message?: string })?.message || "Failed to update lesson.";
-        setToastMessage(errorMsg);
-      } finally {
-        setSavingLessonId(null);
+          });
+          sectionsRef.current = next;
+          return next;
+        });
+        return true;
       }
-    } else {
-      setSections((prev) =>
-        prev.map((s) => {
+    })();
+
+    inFlightLessonSavesRef.current.set(lessonId, savePromise);
+    savePromise.finally(() => {
+      inFlightLessonSavesRef.current.delete(lessonId);
+    });
+
+    return savePromise;
+  };
+
+  const handleSaveLesson = async (
+    sectionId: string,
+    lessonId: string,
+  ): Promise<boolean> => {
+    return await persistLesson(sectionId, lessonId, {
+      collapseOnSuccess: true,
+      showCleanToast: true,
+    });
+  };
+
+  const handleLessonFieldBlur = async (
+    sectionId: string,
+    lessonId: string,
+  ) => {
+    const currentSections = sectionsRef.current || sections;
+    const sec = currentSections.find((s) => s.id === sectionId);
+    const les = sec?.lessons.find((l) => l.id === lessonId);
+    if (!les || les.isPendingCreation) return;
+    if (!isLessonDirty(les)) return;
+
+    await persistLesson(sectionId, lessonId, {
+      collapseOnSuccess: false,
+    });
+  };
+
+  const handleLessonDiscreteChange = async (
+    sectionId: string,
+    lessonId: string,
+    updates: Partial<CurriculumLessonItem>,
+  ) => {
+    handleUpdateLesson(sectionId, lessonId, updates);
+    const currentSections = sectionsRef.current || sections;
+    const sec = currentSections.find((s) => s.id === sectionId);
+    const les = sec?.lessons.find((l) => l.id === lessonId);
+    if (!les || les.isPendingCreation) return;
+    if (!isLessonDirty(les)) return;
+
+    await persistLesson(sectionId, lessonId, {
+      collapseOnSuccess: false,
+    });
+  };
+
+  const saveAllDirtyLessons = async (
+    explicitCourseId?: string | null,
+  ): Promise<boolean> => {
+    if (isSavingAllDirtyLessonsRef.current) return false;
+    isSavingAllDirtyLessonsRef.current = true;
+    try {
+      const currentSections = sectionsRef.current || sections;
+      const dirtyLessons: Array<{ sectionId: string; lessonId: string }> = [];
+      for (const sec of currentSections) {
+        for (const les of sec.lessons) {
+          if (isLessonDirty(les) && !les.isPendingCreation) {
+            dirtyLessons.push({ sectionId: sec.id, lessonId: les.id });
+          }
+        }
+      }
+
+      if (dirtyLessons.length === 0) {
+        return true;
+      }
+
+      const results = await Promise.all(
+        dirtyLessons.map(({ sectionId, lessonId }) =>
+          persistLesson(sectionId, lessonId, {
+            collapseOnSuccess: false,
+            explicitCourseId,
+          }),
+        ),
+      );
+
+      return results.every(Boolean);
+    } finally {
+      isSavingAllDirtyLessonsRef.current = false;
+    }
+  };
+
+  const handleToggleLessonExpand = async (
+    sectionId: string,
+    lessonId: string,
+  ) => {
+    const currentSections = sectionsRef.current || sections;
+    const sec = currentSections.find((s) => s.id === sectionId);
+    const les = sec?.lessons.find((l) => l.id === lessonId);
+    if (!les) return;
+
+    // 1. When the lesson is being COLLAPSED:
+    if (les.isExpanded) {
+      if (isLessonDirty(les)) {
+        await handleSaveLesson(sectionId, lessonId);
+        return;
+      }
+      // If clean, collapse immediately
+      setSections((prev) => {
+        const next = prev.map((s) => {
           if (s.id !== sectionId) return s;
           return {
             ...s,
             lessons: s.lessons.map((l) =>
-              l.id === lessonId
-                ? {
-                    ...l,
-                    title: trimmedTitle,
-                    isPublished: isPublishedVal,
-                    isPreview: isPreviewVal,
-                    isExpanded: false,
-                    initialState: {
-                      title: trimmedTitle,
-                      description: les.description || "",
-                      contentType: les.contentType,
-                      isPublished: isPublishedVal,
-                      isPreview: isPreviewVal,
-                    },
-                  }
-                : l,
+              l.id === lessonId ? { ...l, isExpanded: false } : l,
             ),
           };
-        }),
-      );
+        });
+        sectionsRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    // 2. When the lesson is being EXPANDED:
+    // Preserve current behavior exactly: do not save anything, expand immediately
+    setSections((prev) => {
+      const next = prev.map((s) => {
+        if (s.id !== sectionId) return s;
+        return {
+          ...s,
+          lessons: s.lessons.map((l) =>
+            l.id === lessonId ? { ...l, isExpanded: true } : l,
+          ),
+        };
+      });
+      sectionsRef.current = next;
+      return next;
+    });
+  };
+
+  const handleToggleSectionExpand = async (sectionId: string) => {
+    const currentSections = sectionsRef.current || sections;
+    const sec = currentSections.find((s) => s.id === sectionId);
+    if (!sec) return;
+
+    // 1. When the section is being EXPANDED:
+    if (!sec.isExpanded) {
+      setSections((prev) => {
+        const next = prev.map((s) =>
+          s.id === sectionId ? { ...s, isExpanded: true } : s,
+        );
+        sectionsRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    // 2. When the section is being COLLAPSED:
+    // Find dirty lessons in that section
+    const dirtyLessons = sec.lessons.filter(
+      (l) => isLessonDirty(l) && !l.isPendingCreation,
+    );
+
+    // No dirty lessons? Collapse immediately
+    if (dirtyLessons.length === 0) {
+      setSections((prev) => {
+        const next = prev.map((s) =>
+          s.id === sectionId ? { ...s, isExpanded: false } : s,
+        );
+        sectionsRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    // Guard against re-entrancy if already collapsing or saving
+    if (
+      isCollapsingSectionRef.current ||
+      isSavingAllDirtyLessonsRef.current
+    ) {
+      return;
+    }
+
+    // Dirty lessons? Save dirty lesson(s)
+    isCollapsingSectionRef.current = true;
+    let allSuccessful = true;
+    try {
+      for (const lesson of dirtyLessons) {
+        const success = await persistLesson(sectionId, lesson.id, {
+          collapseOnSuccess: true,
+        });
+        if (!success) {
+          allSuccessful = false;
+          break;
+        }
+      }
+    } finally {
+      isCollapsingSectionRef.current = false;
+    }
+
+    // All saves successful?
+    // Yes -> Collapse section
+    // No  -> Keep section expanded
+    if (allSuccessful) {
+      setSections((prev) => {
+        const next = prev.map((s) =>
+          s.id === sectionId ? { ...s, isExpanded: false } : s,
+        );
+        sectionsRef.current = next;
+        return next;
+      });
     }
   };
 
@@ -3946,26 +5143,323 @@ export function CourseCreatePage({
     }));
   }, [previewInclusions]);
 
-  const handlePricingTypeChange = (type: PricingType) => {
-    setPricing((prev) => ({ ...prev, pricingType: type }));
+  const ensureCourseDraftForPricing = async (
+    explicitCourseId?: string | null,
+  ): Promise<string> => {
+    let targetId =
+      explicitCourseId || currentCourseIdRef.current || currentCourseId;
+    if (targetId) return targetId;
+    if (inFlightBasicsPromiseRef.current) {
+      await inFlightBasicsPromiseRef.current;
+      targetId =
+        explicitCourseId || currentCourseIdRef.current || currentCourseId;
+      if (targetId) return targetId;
+    }
+    throw new Error(
+      "Course draft must be created before setting pricing. Please enter a course title first.",
+    );
+  };
+
+  const buildPricingPayload = (state: PricingFormState) => {
+    if (state.pricingType === "free") {
+      return {
+        pricingType: "free" as const,
+        price: 0,
+        salePrice: null,
+        currency: state.currency || "INR",
+      };
+    }
+    const rawSell = state.sellingPrice.replace(/,/g, "").trim();
+    const rawOrig = state.originalPrice.replace(/,/g, "").trim();
+    const sellNum = Math.round(parseFloat(rawSell));
+    const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
+
+    const price = origNum && origNum > 0 ? origNum : sellNum;
+    const salePrice = origNum && origNum > 0 ? sellNum : null;
+
+    return {
+      pricingType: "paid" as const,
+      price,
+      salePrice,
+      currency: state.currency || "INR",
+    };
+  };
+
+  const executeSerializedPricingMutation = async (
+    controlKey: "pricingType" | "currency" | "pricingDetails",
+    targetVersion: number,
+    previousSnapshot: PricingFormState,
+  ) => {
+    const priorPromise = inFlightPricingPromiseRef.current;
+
+    const run = async () => {
+      if (priorPromise) {
+        try {
+          await priorPromise;
+        } catch {
+          // Allow subsequent queued requests to proceed even if previous failed
+        }
+      }
+
+      // If a newer version was triggered while waiting in queue, abort obsolete execution
+      if (pricingVersionRef.current !== targetVersion) {
+        return;
+      }
+
+      const latestDraft = pricingDraftRef.current;
+      const validation = validatePricing(latestDraft);
+      if (!validation.isValid) {
+        return;
+      }
+
+      const targetCourseId = await ensureCourseDraftForPricing();
+      const payload = buildPricingPayload(latestDraft);
+
+      const res = await upsertPricingMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload,
+      });
+
+      // Stale-response protection: Only update baseline if we are still at targetVersion
+      if (pricingVersionRef.current === targetVersion) {
+        const isFree = res.pricingType === "free";
+        const hasSale = res.salePrice != null && res.salePrice !== undefined;
+        const newBaseline: PricingFormState = normalizePricingState({
+          pricingType: isFree ? "free" : "paid",
+          sellingPrice: isFree
+            ? ""
+            : hasSale
+              ? String(res.salePrice)
+              : res.price > 0
+                ? String(res.price)
+                : "",
+          originalPrice: !isFree && hasSale ? String(res.price) : "",
+          currency: res.currency || "INR",
+        });
+        setServerPricing(newBaseline);
+        serverPricingRef.current = newBaseline;
+      }
+      return res;
+    };
+
+    const execute = async () => {
+      try {
+        return await run();
+      } catch (err: unknown) {
+        // Rollback only if no newer edit has superseded this one
+        if (pricingVersionRef.current === targetVersion) {
+          if (controlKey === "pricingType") {
+            pricingDraftRef.current = {
+              ...pricingDraftRef.current,
+              pricingType: previousSnapshot.pricingType,
+            };
+            setPricingDraft((prev) => ({
+              ...prev,
+              pricingType: previousSnapshot.pricingType,
+            }));
+          } else if (controlKey === "currency") {
+            pricingDraftRef.current = {
+              ...pricingDraftRef.current,
+              currency: previousSnapshot.currency,
+            };
+            setPricingDraft((prev) => ({
+              ...prev,
+              currency: previousSnapshot.currency,
+            }));
+          } else if (controlKey === "pricingDetails") {
+            pricingDraftRef.current = {
+              ...pricingDraftRef.current,
+              sellingPrice: previousSnapshot.sellingPrice,
+              originalPrice: previousSnapshot.originalPrice,
+            };
+            setPricingDraft((prev) => ({
+              ...prev,
+              sellingPrice: previousSnapshot.sellingPrice,
+              originalPrice: previousSnapshot.originalPrice,
+            }));
+          }
+          const errorMsg =
+            err instanceof Error
+              ? err.message
+              : "Failed to save pricing changes. Reverting to last saved state.";
+          setToastMessage(errorMsg);
+        }
+        throw err;
+      } finally {
+        inFlightPricingControlsRef.current[controlKey] = Math.max(
+          0,
+          (inFlightPricingControlsRef.current[controlKey] || 1) - 1,
+        );
+        if (inFlightPricingControlsRef.current[controlKey] === 0) {
+          markPricingControlSaving(controlKey, false);
+        }
+        if (pricingVersionRef.current === targetVersion) {
+          inFlightPricingPromiseRef.current = null;
+        }
+      }
+    };
+
+    const promise = execute();
+    inFlightPricingPromiseRef.current = promise;
+    return await promise;
+  };
+
+  const persistPricingDetails = async () => {
+    const currentDraft = pricingDraftRef.current;
+    const validation = validatePricing(currentDraft);
+    if (!validation.isValid) {
+      return;
+    }
+
+    const version = ++pricingVersionRef.current;
+    pricingControlVersionsRef.current.pricingDetails = version;
+    inFlightPricingControlsRef.current.pricingDetails =
+      (inFlightPricingControlsRef.current.pricingDetails || 0) + 1;
+    markPricingControlSaving("pricingDetails", true);
+
+    const previousSnapshot = { ...serverPricingRef.current };
+    return await executeSerializedPricingMutation(
+      "pricingDetails",
+      version,
+      previousSnapshot,
+    );
+  };
+
+  const flushPricingPersistence = async () => {
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+
+    const currentDraft = pricingDraftRef.current;
+    const isDirty = !isPricingEqual(currentDraft, serverPricingRef.current);
+
+    if (isDirty) {
+      const validation = validatePricing(currentDraft);
+      if (validation.isValid) {
+        await persistPricingDetails();
+      }
+    } else if (inFlightPricingPromiseRef.current) {
+      await inFlightPricingPromiseRef.current;
+    }
+  };
+
+  const handlePricingTypeChange = async (type: PricingType) => {
+    if (pricingDraftRef.current.pricingType === type) return;
+
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+
+    const previousSnapshot = { ...pricingDraftRef.current };
+    const version = ++pricingVersionRef.current;
+    pricingControlVersionsRef.current.pricingType = version;
+
+    // 1. Optimistic update
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      pricingType: type,
+    };
+    setPricingDraft((prev) => ({ ...prev, pricingType: type }));
     if (pricingValidationError) setPricingValidationError(null);
+
+    // 2. If switching to paid and price is not valid yet, keep in local draft without firing API
+    if (type === "paid") {
+      const validation = validatePricing(pricingDraftRef.current);
+      if (!validation.isValid) {
+        return;
+      }
+    }
+
+    // 3. Persist immediately
+    inFlightPricingControlsRef.current.pricingType =
+      (inFlightPricingControlsRef.current.pricingType || 0) + 1;
+    markPricingControlSaving("pricingType", true);
+
+    try {
+      await executeSerializedPricingMutation(
+        "pricingType",
+        version,
+        previousSnapshot,
+      );
+    } catch {
+      // Error handled in executeSerializedPricingMutation
+    }
   };
 
   const handleSellingPriceChange = (val: string) => {
     const digitsOnly = val.replace(/\D/g, "");
-    setPricing((prev) => ({ ...prev, sellingPrice: digitsOnly }));
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      sellingPrice: digitsOnly,
+    };
+    setPricingDraft((prev) => ({ ...prev, sellingPrice: digitsOnly }));
     if (pricingValidationError) setPricingValidationError(null);
+
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+    }
+    pricingDebounceTimerRef.current = setTimeout(() => {
+      pricingDebounceTimerRef.current = null;
+      void persistPricingDetails();
+    }, 400);
   };
 
   const handleOriginalPriceChange = (val: string) => {
     const digitsOnly = val.replace(/\D/g, "");
-    setPricing((prev) => ({ ...prev, originalPrice: digitsOnly }));
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      originalPrice: digitsOnly,
+    };
+    setPricingDraft((prev) => ({ ...prev, originalPrice: digitsOnly }));
     if (pricingValidationError) setPricingValidationError(null);
+
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+    }
+    pricingDebounceTimerRef.current = setTimeout(() => {
+      pricingDebounceTimerRef.current = null;
+      void persistPricingDetails();
+    }, 400);
   };
 
-  const handleCurrencyChange = (val: string) => {
-    setPricing((prev) => ({ ...prev, currency: val }));
+  const handleCurrencyChange = async (val: string) => {
+    if (pricingDraftRef.current.currency === val) return;
+
+    const previousSnapshot = { ...pricingDraftRef.current };
+    const version = ++pricingVersionRef.current;
+    pricingControlVersionsRef.current.currency = version;
+
+    // 1. Optimistic update
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      currency: val,
+    };
+    setPricingDraft((prev) => ({ ...prev, currency: val }));
     if (pricingValidationError) setPricingValidationError(null);
+
+    // If paid and current price is invalid, keep currency in local draft until price is valid
+    if (pricingDraftRef.current.pricingType === "paid") {
+      const validation = validatePricing(pricingDraftRef.current);
+      if (!validation.isValid) {
+        return;
+      }
+    }
+
+    inFlightPricingControlsRef.current.currency =
+      (inFlightPricingControlsRef.current.currency || 0) + 1;
+    markPricingControlSaving("currency", true);
+
+    try {
+      await executeSerializedPricingMutation(
+        "currency",
+        version,
+        previousSnapshot,
+      );
+    } catch {
+      // Error handled in executeSerializedPricingMutation
+    }
   };
 
   const currencySymbol = getCurrencySymbol(pricing.currency || "INR");
@@ -4005,161 +5499,466 @@ export function CourseCreatePage({
 
   const isCourseReadyToPublish = serverValidation?.canPublish ?? false;
 
-  const handlePreviewAction = () => {
-    if (isAnyApiInProgress || isPreviewLoading) return;
+  const handlePreviewAction = async () => {
+    if (
+      isAnyApiInProgress ||
+      isPreviewLoading ||
+      actionLoading !== null ||
+      isSavingAllDirtyLessonsRef.current
+    )
+      return;
+
+    if (activeStep === "curriculum") {
+      const currentSections = sectionsRef.current || sections;
+      const hasDirty = currentSections.some((s) =>
+        s.lessons.some((l) => isLessonDirty(l) && !l.isPendingCreation),
+      );
+      if (hasDirty) {
+        setActionLoading("save");
+        try {
+          const success = await saveAllDirtyLessons();
+        } catch {
+          return;
+        } finally {
+          setActionLoading(null);
+        }
+      }
+    }
+
+    if (activeStep === "basics") {
+      await flushBasicsPersistence();
+    }
+
     setIsPreviewModalOpen(true);
   };
 
+  const executeSerializedBasicsMetaMutation = async (
+    controlKey:
+      | "title"
+      | "shortDescription"
+      | "courseDescription"
+      | "instructorAlias",
+    targetVersion: number,
+    previousSnapshot: BasicsFormState,
+  ) => {
+    const priorPromise = inFlightBasicsPromiseRef.current;
+
+    const run = async () => {
+      if (priorPromise) {
+        try {
+          await priorPromise;
+        } catch {
+          // Allow subsequent queued requests to proceed even if previous failed
+        }
+      }
+
+      // If a newer version was triggered while waiting in queue, abort obsolete execution
+      if (basicsVersionRef.current !== targetVersion) {
+        return;
+      }
+
+      // CRITICAL: Read LATEST draft values and LATEST courseVersion at actual execution time!
+      const latestDraft = basicsDraftRef.current;
+      const currentVersion = courseVersionRef.current;
+
+      const trimmedTitle = latestDraft.title.trim();
+      if (!trimmedTitle) {
+        return;
+      }
+
+      const targetCourseId = currentCourseIdRef.current || currentCourseId;
+      if (!targetCourseId) {
+        return;
+      }
+
+      const payload = {
+        title: trimmedTitle,
+        shortDescription: latestDraft.shortDescription.trim() || null,
+        description: latestDraft.description.trim() || null,
+        categoryId: latestDraft.categoryId || null,
+        difficulty: latestDraft.difficulty || null,
+        instructorAlias: latestDraft.instructorAlias.trim() || null,
+        version: currentVersion,
+      };
+
+      const updated = await updateBasicsMutation.mutateAsync({
+        id: targetCourseId,
+        payload,
+      });
+
+      // Stale-response protection: Only update baseline if we are still at targetVersion
+      if (basicsVersionRef.current === targetVersion) {
+        setCourseVersion(updated.version);
+        courseVersionRef.current = updated.version;
+
+        const newBaseline: BasicsFormState = normalizeBasicsState({
+          title: updated.title,
+          shortDescription: updated.shortDescription || "",
+          description: updated.description || "",
+          categoryId: updated.categoryId || "",
+          difficulty:
+            (updated.difficulty as BasicsFormState["difficulty"]) || "",
+          language: serverBasicsRef.current.language,
+          instructorAlias: updated.instructorAlias || "",
+          showInstructorName: serverBasicsRef.current.showInstructorName,
+        });
+        setServerBasics(newBaseline);
+        serverBasicsRef.current = newBaseline;
+      }
+      return updated;
+    };
+
+    const execute = async () => {
+      try {
+        return await run();
+      } catch (err: unknown) {
+        // Rollback only if no newer edit has superseded this one
+        if (basicsVersionRef.current === targetVersion) {
+          if (controlKey === "title") {
+            setCourseTitle(previousSnapshot.title);
+          } else if (controlKey === "shortDescription") {
+            setShortDescription(previousSnapshot.shortDescription);
+          } else if (controlKey === "courseDescription") {
+            setCourseDescription(previousSnapshot.description);
+          } else if (controlKey === "instructorAlias") {
+            setInstructorAlias(previousSnapshot.instructorAlias);
+          }
+          const errorMsg =
+            err instanceof Error
+              ? err.message
+              : "Failed to save course basics changes. Reverting to last saved state.";
+          setToastMessage(errorMsg);
+        }
+        throw err;
+      } finally {
+        inFlightBasicsControlsRef.current[controlKey] = Math.max(
+          0,
+          (inFlightBasicsControlsRef.current[controlKey] || 1) - 1,
+        );
+        if (inFlightBasicsControlsRef.current[controlKey] === 0) {
+          markBasicsControlSaving(controlKey, false);
+        }
+        if (basicsVersionRef.current === targetVersion) {
+          inFlightBasicsPromiseRef.current = null;
+        }
+      }
+    };
+
+    const promise = execute();
+    inFlightBasicsPromiseRef.current = promise;
+    return await promise;
+  };
+
+  const persistBasicsField = async (
+    fieldKey:
+      | "title"
+      | "shortDescription"
+      | "courseDescription"
+      | "instructorAlias",
+  ) => {
+    const currentDraft = basicsDraftRef.current;
+    const baseline = serverBasicsRef.current;
+
+    if (fieldKey === "title") {
+      const trimmed = currentDraft.title.trim();
+      if (!currentCourseId) {
+        // Creation gate
+        if (!trimmed) {
+          return;
+        }
+        markBasicsControlSaving("title", true);
+        try {
+          const created = await createCourseMutation.mutateAsync({
+            title: trimmed,
+            instructorAlias: currentDraft.instructorAlias.trim() || null,
+          });
+          currentCourseIdRef.current = created.id;
+          setCurrentCourseId(created.id);
+          setCourseVersion(created.version);
+          courseVersionRef.current = created.version;
+          setShowTitleTooltip(false);
+
+          const newBaseline: BasicsFormState = normalizeBasicsState({
+            ...baseline,
+            title: created.title,
+            instructorAlias: created.instructorAlias || "",
+          });
+          setServerBasics(newBaseline);
+          serverBasicsRef.current = newBaseline;
+
+          // CRITICAL: Preserve existing local draft fields! Do NOT reset other draft fields
+          setBasicsDraft((prev) => ({
+            ...prev,
+            title: created.title,
+            instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+          }));
+          basicsDraftRef.current = {
+            ...basicsDraftRef.current,
+            title: created.title,
+            instructorAlias:
+              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+          };
+          return created;
+        } catch (err: unknown) {
+          const errorMsg =
+            err instanceof Error
+              ? err.message
+              : "Failed to create course. Please try again.";
+          setToastMessage(errorMsg);
+        } finally {
+          markBasicsControlSaving("title", false);
+        }
+        return;
+      }
+
+      // Course already exists
+      if (!trimmed) {
+        setCourseTitle(baseline.title);
+        setToastMessage("Course title cannot be empty.");
+        return;
+      }
+      if (trimmed === baseline.title) {
+        return;
+      }
+    } else {
+      let targetCourseId = currentCourseIdRef.current || currentCourseId;
+      if (!targetCourseId) {
+        if (inFlightBasicsPromiseRef.current) {
+          await inFlightBasicsPromiseRef.current;
+        } else if (basicsDraftRef.current.title.trim()) {
+          await persistBasicsField("title");
+        }
+        targetCourseId = currentCourseIdRef.current || currentCourseId;
+      }
+      if (!targetCourseId) {
+        return;
+      }
+      if (fieldKey === "shortDescription") {
+        if (
+          currentDraft.shortDescription.trim() ===
+          baseline.shortDescription.trim()
+        ) {
+          return;
+        }
+      } else if (fieldKey === "courseDescription") {
+        if (currentDraft.description.trim() === baseline.description.trim()) {
+          return;
+        }
+      } else if (fieldKey === "instructorAlias") {
+        if (
+          currentDraft.instructorAlias.trim() ===
+          baseline.instructorAlias.trim()
+        ) {
+          return;
+        }
+      }
+    }
+
+    const version = ++basicsVersionRef.current;
+    markBasicsControlSaving(fieldKey, true);
+    inFlightBasicsControlsRef.current[fieldKey] =
+      (inFlightBasicsControlsRef.current[fieldKey] || 0) + 1;
+    const previousSnapshot = { ...serverBasicsRef.current };
+
+    return await executeSerializedBasicsMetaMutation(
+      fieldKey,
+      version,
+      previousSnapshot,
+    );
+  };
+
+  const handleShowInstructorNameChange = async (nextValue: boolean) => {
+    let targetCourseId = currentCourseIdRef.current || currentCourseId;
+    if (!targetCourseId) {
+      if (inFlightBasicsPromiseRef.current) {
+        await inFlightBasicsPromiseRef.current;
+      } else if (basicsDraftRef.current.title.trim()) {
+        await persistBasicsField("title");
+      }
+      targetCourseId = currentCourseIdRef.current || currentCourseId;
+    }
+    if (!targetCourseId) return;
+
+    const previousValue = serverBasicsRef.current.showInstructorName;
+    const version = ++basicsVersionRef.current;
+
+    // 1. Optimistic UI update
+    setShowInstructorName(nextValue);
+    markBasicsControlSaving("showInstructorName", true);
+    inFlightBasicsControlsRef.current.showInstructorName =
+      (inFlightBasicsControlsRef.current.showInstructorName || 0) + 1;
+
+    try {
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          showInstructorName: nextValue,
+          language: basicsDraftRef.current.language || "en",
+        },
+      });
+
+      if (basicsVersionRef.current === version) {
+        const confirmedShow =
+          res.showInstructorName !== undefined
+            ? res.showInstructorName
+            : nextValue;
+        const newBaseline: BasicsFormState = {
+          ...serverBasicsRef.current,
+          showInstructorName: confirmedShow,
+        };
+        setServerBasics(newBaseline);
+        serverBasicsRef.current = newBaseline;
+      }
+    } catch (err: unknown) {
+      if (basicsVersionRef.current === version) {
+        setShowInstructorName(previousValue);
+        const errorMsg =
+          err instanceof Error
+            ? err.message
+            : "Failed to update instructor name visibility.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightBasicsControlsRef.current.showInstructorName = Math.max(
+        0,
+        (inFlightBasicsControlsRef.current.showInstructorName || 1) - 1,
+      );
+      if (inFlightBasicsControlsRef.current.showInstructorName === 0) {
+        markBasicsControlSaving("showInstructorName", false);
+      }
+    }
+  };
+
+  const flushBasicsPersistence = async (): Promise<boolean> => {
+    const currentDraft = basicsDraftRef.current;
+    const baseline = serverBasicsRef.current;
+
+    let targetCourseId = currentCourseIdRef.current || currentCourseId;
+    if (!targetCourseId) {
+      if (!currentDraft.title.trim()) {
+        return false;
+      }
+      try {
+        await persistBasicsField("title");
+        return Boolean(currentCourseIdRef.current || currentCourseId);
+      } catch {
+        return false;
+      }
+    }
+
+    const isMetaDirty = !isBasicsMetaEqual(currentDraft, baseline);
+    if (isMetaDirty) {
+      if (!currentDraft.title.trim()) {
+        setCourseTitle(baseline.title);
+        setToastMessage("Course title cannot be empty.");
+        return false;
+      }
+      const version = ++basicsVersionRef.current;
+      markBasicsControlSaving("title", true);
+      inFlightBasicsControlsRef.current.title =
+        (inFlightBasicsControlsRef.current.title || 0) + 1;
+      const previousSnapshot = { ...serverBasicsRef.current };
+      try {
+        await executeSerializedBasicsMetaMutation(
+          "title",
+          version,
+          previousSnapshot,
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    } else if (inFlightBasicsPromiseRef.current) {
+      try {
+        await inFlightBasicsPromiseRef.current;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const saveBasicsStep = async (explicitCourseId?: string | null) => {
-    if (!basicsDraft.title.trim()) {
+    const targetCourseId = explicitCourseId || currentCourseId;
+    if (
+      targetCourseId &&
+      isBasicsEqual(basicsDraftRef.current, serverBasicsRef.current)
+    ) {
+      return serverBasicsRef.current;
+    }
+
+    if (!basicsDraftRef.current.title.trim()) {
       throw new Error("Please enter a course title.");
     }
     setIsSavingBasics(true);
     try {
-      const targetCourseId = explicitCourseId || currentCourseId;
       if (!targetCourseId) {
-        // Create initial course on server
         const created = await createCourseMutation.mutateAsync({
-          title: basicsDraft.title.trim(),
-          instructorAlias: basicsDraft.instructorAlias.trim() || null,
+          title: basicsDraftRef.current.title.trim(),
+          instructorAlias: basicsDraftRef.current.instructorAlias.trim() || null,
         });
         setCurrentCourseId(created.id);
         setCourseVersion(created.version);
+        courseVersionRef.current = created.version;
 
-        let confirmedTitle = created.title;
-        let confirmedShortDesc = created.shortDescription || "";
-        let confirmedDesc = created.description || "";
-        let confirmedCat = created.categoryId || "";
-        let confirmedDiff: BasicsFormState["difficulty"] =
-          (created.difficulty as BasicsFormState["difficulty"]) || "";
-        let confirmedLang = "en";
-        let confirmedInstructorAlias = created.instructorAlias || "";
-        let confirmedShowInstructor = true;
+        const newBaseline: BasicsFormState = normalizeBasicsState({
+          ...serverBasicsRef.current,
+          title: created.title,
+          instructorAlias: created.instructorAlias || "",
+        });
+        setServerBasics(newBaseline);
+        serverBasicsRef.current = newBaseline;
 
-        // If shortDescription, description, category, difficulty, or instructorAlias are filled, update basics immediately
+        setBasicsDraft((prev) => ({
+          ...prev,
+          title: created.title,
+          instructorAlias: created.instructorAlias ?? prev.instructorAlias,
+        }));
+        basicsDraftRef.current = {
+          ...basicsDraftRef.current,
+          title: created.title,
+          instructorAlias:
+            created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+        };
+
         if (
-          basicsDraft.shortDescription.trim() ||
-          basicsDraft.description.trim() ||
-          basicsDraft.categoryId ||
-          basicsDraft.difficulty ||
-          basicsDraft.instructorAlias.trim()
+          basicsDraftRef.current.shortDescription.trim() ||
+          basicsDraftRef.current.description.trim() ||
+          basicsDraftRef.current.categoryId ||
+          basicsDraftRef.current.difficulty
         ) {
           const updated = await updateBasicsMutation.mutateAsync({
             id: created.id,
             payload: {
               title: created.title,
-              shortDescription: basicsDraft.shortDescription.trim() || null,
-              description: basicsDraft.description.trim() || null,
-              categoryId: basicsDraft.categoryId || null,
-              difficulty: basicsDraft.difficulty || null,
-              instructorAlias: basicsDraft.instructorAlias.trim() || null,
+              shortDescription:
+                basicsDraftRef.current.shortDescription.trim() || null,
+              description: basicsDraftRef.current.description.trim() || null,
+              categoryId: basicsDraftRef.current.categoryId || null,
+              difficulty: basicsDraftRef.current.difficulty || null,
+              instructorAlias:
+                basicsDraftRef.current.instructorAlias.trim() || null,
               version: created.version,
             },
           });
           setCourseVersion(updated.version);
-          confirmedTitle = updated.title;
-          confirmedShortDesc = updated.shortDescription || "";
-          confirmedDesc = updated.description || "";
-          confirmedCat = updated.categoryId || "";
-          confirmedDiff =
-            (updated.difficulty as BasicsFormState["difficulty"]) || "";
-          confirmedInstructorAlias = updated.instructorAlias || "";
+          courseVersionRef.current = updated.version;
+          const updatedBaseline = normalizeBasicsState({
+            ...newBaseline,
+            shortDescription: updated.shortDescription || "",
+            description: updated.description || "",
+            categoryId: updated.categoryId || "",
+            difficulty:
+              (updated.difficulty as BasicsFormState["difficulty"]) || "",
+          });
+          setServerBasics(updatedBaseline);
+          serverBasicsRef.current = updatedBaseline;
         }
-
-        const settingsRes = await upsertSettingsMutation.mutateAsync({
-          courseId: created.id,
-          payload: {
-            language: basicsDraft.language || "en",
-            showInstructorName: basicsDraft.showInstructorName,
-          },
-        });
-        confirmedLang = settingsRes.language || basicsDraft.language || "en";
-        confirmedShowInstructor =
-          settingsRes.showInstructorName !== undefined
-            ? settingsRes.showInstructorName
-            : basicsDraft.showInstructorName;
-
-        const newBaseline: BasicsFormState = {
-          title: confirmedTitle,
-          shortDescription: confirmedShortDesc,
-          description: confirmedDesc,
-          categoryId: confirmedCat,
-          difficulty: confirmedDiff,
-          language: confirmedLang,
-          instructorAlias: confirmedInstructorAlias,
-          showInstructorName: confirmedShowInstructor,
-        };
-        setServerBasics(newBaseline);
-        setBasicsDraft(newBaseline);
         return created;
       } else {
-        // Update basics on server conditionally per persistence domain
-        const isMetaDirty = !isBasicsMetaEqual(basicsDraft, serverBasics);
-        const isSettingsDirty = !isBasicsSettingsEqual(basicsDraft, serverBasics);
-
-        let confirmedTitle = serverBasics.title;
-        let confirmedShortDesc = serverBasics.shortDescription;
-        let confirmedDesc = serverBasics.description;
-        let confirmedCat = serverBasics.categoryId;
-        let confirmedDiff = serverBasics.difficulty;
-        let confirmedInstructorAlias = serverBasics.instructorAlias;
-        let resultCourse = null;
-
-        if (isMetaDirty) {
-          const updated = await updateBasicsMutation.mutateAsync({
-            id: targetCourseId,
-            payload: {
-              title: basicsDraft.title.trim(),
-              shortDescription: basicsDraft.shortDescription.trim() || null,
-              description: basicsDraft.description.trim() || null,
-              categoryId: basicsDraft.categoryId || null,
-              difficulty: basicsDraft.difficulty || null,
-              instructorAlias: basicsDraft.instructorAlias.trim() || null,
-              version: courseVersion,
-            },
-          });
-          setCourseVersion(updated.version);
-          resultCourse = updated;
-          confirmedTitle = updated.title;
-          confirmedShortDesc = updated.shortDescription || "";
-          confirmedDesc = updated.description || "";
-          confirmedCat = updated.categoryId || "";
-          confirmedDiff =
-            (updated.difficulty as BasicsFormState["difficulty"]) || "";
-          confirmedInstructorAlias = updated.instructorAlias || "";
-        }
-
-        let confirmedLang = serverBasics.language;
-        let confirmedShowInstructor = serverBasics.showInstructorName;
-
-        if (isSettingsDirty) {
-          const settingsRes = await upsertSettingsMutation.mutateAsync({
-            courseId: targetCourseId,
-            payload: {
-              language: basicsDraft.language || "en",
-              showInstructorName: basicsDraft.showInstructorName,
-            },
-          });
-          confirmedLang = settingsRes.language || basicsDraft.language || "en";
-          confirmedShowInstructor =
-            settingsRes.showInstructorName !== undefined
-              ? settingsRes.showInstructorName
-              : basicsDraft.showInstructorName;
-        }
-
-        const newBaseline: BasicsFormState = {
-          title: confirmedTitle,
-          shortDescription: confirmedShortDesc,
-          description: confirmedDesc,
-          categoryId: confirmedCat,
-          difficulty: confirmedDiff,
-          language: confirmedLang,
-          instructorAlias: confirmedInstructorAlias,
-          showInstructorName: confirmedShowInstructor,
-        };
-        setServerBasics(newBaseline);
-        setBasicsDraft(newBaseline);
-        return resultCourse || newBaseline;
+        await flushBasicsPersistence();
+        return serverBasicsRef.current;
       }
     } finally {
       setIsSavingBasics(false);
@@ -4169,12 +5968,7 @@ export function CourseCreatePage({
   const saveCurriculumStep = async (explicitCourseId?: string | null) => {
     let targetCourseId = explicitCourseId || currentCourseId;
     if (!targetCourseId) {
-      const created = await createCourseMutation.mutateAsync({
-        title: courseTitle.trim() || "Untitled Course",
-      });
-      targetCourseId = created.id;
-      setCurrentCourseId(created.id);
-      setCourseVersion(created.version);
+      throw new Error("Please enter a course title on the Basics tab first.");
     }
 
     // 1. Save any pending section title edits
@@ -4206,163 +6000,67 @@ export function CourseCreatePage({
     }
 
     // 2. Save all dirty lessons across all sections
-    const dirtyLessons: Array<{
-      sectionId: string;
-      lesson: CurriculumLessonItem;
-    }> = [];
-    for (const sec of sections) {
-      for (const les of sec.lessons) {
-        if (isLessonDirty(les) && !les.isPendingCreation) {
-          dirtyLessons.push({ sectionId: sec.id, lesson: les });
-        }
-      }
+    const allSaved = await saveAllDirtyLessons(targetCourseId);
+    if (!allSaved) {
+      throw new Error("Failed to save some lessons in curriculum.");
     }
 
-    if (dirtyLessons.length > 0) {
-      await Promise.all(
-        dirtyLessons.map(async ({ sectionId, lesson }) => {
-          const trimmedTitle = lesson.title.trim() || "Untitled Lesson";
-          const isPub = lesson.isPublished !== false;
-          const isPrev = lesson.isPreview === true;
-
-          if (
-            targetCourseId &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              lesson.id,
-            )
-          ) {
-            await updateLessonMutation.mutateAsync({
-              courseId: targetCourseId,
-              lessonId: lesson.id,
-              payload: {
-                title: trimmedTitle,
-                description: lesson.description || "",
-                contentType: lesson.contentType,
-                isPublished: isPub,
-                isPreview: isPrev,
-              },
-            });
-
-            setSections((prev) =>
-              prev.map((s) => {
-                if (s.id !== sectionId) return s;
-                return {
-                  ...s,
-                  lessons: s.lessons.map((l) =>
-                    l.id === lesson.id
-                      ? {
-                          ...l,
-                          title: trimmedTitle,
-                          isPublished: isPub,
-                          isPreview: isPrev,
-                          initialState: {
-                            title: trimmedTitle,
-                            description: lesson.description || "",
-                            contentType: lesson.contentType,
-                            isPublished: isPub,
-                            isPreview: isPrev,
-                          },
-                        }
-                      : l,
-                  ),
-                };
-              }),
-            );
-          }
-        }),
-      );
-    }
-
-    return { savedLessonsCount: dirtyLessons.length };
+    return true;
   };
 
   const saveAccessRulesStep = async (explicitCourseId?: string | null) => {
-    if (!accessRulesDraft.durationMode) {
+    await flushFixedDurationPersistence();
+
+    const currentDraft = accessRulesDraftRef.current;
+    if (!currentDraft.durationMode) {
       throw new Error("Please select an access duration option.");
     }
     setIsSavingAccessRules(true);
     try {
       let targetCourseId = explicitCourseId || currentCourseId;
       if (!targetCourseId) {
-        const created = await createCourseMutation.mutateAsync({
-          title: courseTitle.trim() || "Untitled Course",
-        });
-        targetCourseId = created.id;
-        setCurrentCourseId(created.id);
-        setCourseVersion(created.version);
+        throw new Error("Please enter a course title on the Basics tab first.");
       }
 
       let durationDays: number | null = null;
-      if (accessRulesDraft.durationMode === "fixed") {
-        const val = Math.max(1, accessRulesDraft.fixedDurationValue || 1);
+      if (accessRulesDraftRef.current.durationMode === "fixed") {
+        const val = Math.max(
+          1,
+          accessRulesDraftRef.current.fixedDurationValue || 1,
+        );
         const unitMultiplier =
-          accessRulesDraft.fixedDurationUnit === "Years"
+          accessRulesDraftRef.current.fixedDurationUnit === "Years"
             ? 365
-            : accessRulesDraft.fixedDurationUnit === "Months"
+            : accessRulesDraftRef.current.fixedDurationUnit === "Months"
               ? 30
-              : accessRulesDraft.fixedDurationUnit === "Weeks"
+              : accessRulesDraftRef.current.fixedDurationUnit === "Weeks"
                 ? 7
                 : 1;
         durationDays = val * unitMultiplier;
       }
 
       const isRulesConfigDirty = !isAccessRuleConfigEqual(
-        accessRulesDraft,
-        serverAccessRules,
-      );
-      const isInteractionSettingsDirty = !isAccessSettingsEqual(
-        accessRulesDraft,
+        accessRulesDraftRef.current,
         serverAccessRules,
       );
 
       let accessRuleRes: any = null;
-      let settingsRes: any = null;
-
-      const mutationsToRun: Promise<unknown>[] = [];
 
       if (isRulesConfigDirty) {
-        mutationsToRun.push(
-          upsertAccessRulesMutation
-            .mutateAsync({
-              courseId: targetCourseId,
-              payload: {
-                accessType: "everyone",
-                durationType:
-                  accessRulesDraft.durationMode === "fixed"
-                    ? "fixed_duration"
-                    : "lifetime",
-                durationDays:
-                  accessRulesDraft.durationMode === "fixed"
-                    ? durationDays
-                    : null,
-              },
-            })
-            .then((res) => {
-              accessRuleRes = res;
-            }),
-        );
-      }
-
-      if (isInteractionSettingsDirty) {
-        mutationsToRun.push(
-          upsertSettingsMutation
-            .mutateAsync({
-              courseId: targetCourseId,
-              payload: {
-                language: language || undefined,
-                allowQa: accessRulesDraft.enableQA,
-                allowComments: accessRulesDraft.enableComments,
-                allowDownloads: accessRulesDraft.enableDownloads,
-              },
-            })
-            .then((res) => {
-              settingsRes = res;
-            }),
-        );
-      }
-
-      if (mutationsToRun.length > 0) {
-        await Promise.all(mutationsToRun);
+        accessRuleRes = await upsertAccessRulesMutation.mutateAsync({
+          courseId: targetCourseId,
+          payload: {
+            accessType: accessRulesDraftRef.current.accessType || "everyone",
+            durationType:
+              accessRulesDraftRef.current.durationMode === "fixed"
+                ? "fixed_duration"
+                : "lifetime",
+            durationDays:
+              accessRulesDraftRef.current.durationMode === "fixed"
+                ? durationDays
+                : null,
+          },
+        });
       }
 
       const isFixed = accessRuleRes
@@ -4370,35 +6068,37 @@ export function CourseCreatePage({
         : serverAccessRules.durationMode === "fixed";
 
       const newBaseline: AccessRulesFormState = normalizeAccessRulesState({
-        accessType: "everyone",
+        accessType: accessRulesDraftRef.current.accessType || "everyone",
         durationMode: isFixed ? "fixed" : "lifetime",
-        fixedDurationValue: accessRulesDraft.fixedDurationValue,
-        fixedDurationUnit: accessRulesDraft.fixedDurationUnit,
-        enableQA:
-          settingsRes && settingsRes.allowQa !== undefined
-            ? settingsRes.allowQa
-            : serverAccessRules.enableQA,
-        enableComments:
-          settingsRes && settingsRes.allowComments !== undefined
-            ? settingsRes.allowComments
-            : serverAccessRules.enableComments,
-        enableDownloads:
-          settingsRes && settingsRes.allowDownloads !== undefined
-            ? settingsRes.allowDownloads
-            : serverAccessRules.enableDownloads,
+        fixedDurationValue: accessRulesDraftRef.current.fixedDurationValue,
+        fixedDurationUnit: accessRulesDraftRef.current.fixedDurationUnit,
+        enableQA: accessRulesDraftRef.current.enableQA,
+        enableComments: accessRulesDraftRef.current.enableComments,
+        enableDownloads: accessRulesDraftRef.current.enableDownloads,
       });
 
       setAccessRulesExists(true);
       setServerAccessRules(newBaseline);
       setAccessRulesDraft(newBaseline);
-      return { accessRule: accessRuleRes, settings: settingsRes };
+      return { accessRule: accessRuleRes };
     } finally {
       setIsSavingAccessRules(false);
     }
   };
 
   const savePricingStep = async (explicitCourseId?: string | null) => {
-    const validation = validatePricing(pricingDraft);
+    await flushPricingPersistence();
+
+    // If already saved and clean, do not fire redundant duplicate mutation
+    const isDirty = !isPricingEqual(
+      pricingDraftRef.current,
+      serverPricingRef.current,
+    );
+    if (!isDirty) {
+      return { ...serverPricingRef.current };
+    }
+
+    const validation = validatePricing(pricingDraftRef.current);
     if (!validation.isValid) {
       setPricingValidationError(validation.error);
       setToastMessage(validation.error || "Please fix pricing errors.");
@@ -4408,46 +6108,12 @@ export function CourseCreatePage({
 
     setIsSavingPricing(true);
     try {
-      let targetCourseId = explicitCourseId || currentCourseId;
-      if (!targetCourseId) {
-        const created = await createCourseMutation.mutateAsync({
-          title: courseTitle.trim() || "Untitled Course",
-        });
-        targetCourseId = created.id;
-        setCurrentCourseId(created.id);
-        setCourseVersion(created.version);
-      }
-
-      let res: any;
-      if (pricingDraft.pricingType === "free") {
-        res = await upsertPricingMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            pricingType: "free",
-            price: 0,
-            salePrice: null,
-            currency: pricingDraft.currency || "INR",
-          },
-        });
-      } else {
-        const rawSell = pricingDraft.sellingPrice.replace(/,/g, "").trim();
-        const rawOrig = pricingDraft.originalPrice.replace(/,/g, "").trim();
-        const sellNum = Math.round(parseFloat(rawSell));
-        const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
-
-        const price = origNum && origNum > 0 ? origNum : sellNum;
-        const salePrice = origNum && origNum > 0 ? sellNum : null;
-
-        res = await upsertPricingMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            pricingType: "paid",
-            price,
-            salePrice,
-            currency: pricingDraft.currency || "INR",
-          },
-        });
-      }
+      const targetCourseId = await ensureCourseDraftForPricing(explicitCourseId);
+      const payload = buildPricingPayload(pricingDraftRef.current);
+      const res = await upsertPricingMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload,
+      });
 
       const isFree = res.pricingType === "free";
       const hasSale = res.salePrice != null && res.salePrice !== undefined;
@@ -4465,7 +6131,9 @@ export function CourseCreatePage({
       });
 
       setServerPricing(newBaseline);
+      serverPricingRef.current = newBaseline;
       setPricingDraft(newBaseline);
+      pricingDraftRef.current = newBaseline;
       return res;
     } finally {
       setIsSavingPricing(false);
@@ -4477,41 +6145,10 @@ export function CourseCreatePage({
     try {
       let targetCourseId = explicitCourseId || currentCourseId;
       if (!targetCourseId) {
-        const created = await createCourseMutation.mutateAsync({
-          title: courseTitle.trim() || "Untitled Course",
-        });
-        targetCourseId = created.id;
-        setCurrentCourseId(created.id);
-        setCourseVersion(created.version);
+        throw new Error("Please enter a course title on the Basics tab first.");
       }
 
-      // 1. Save certificate settings only if dirty
-      const isCertificateDirty =
-        extras.enableCertificate !== serverExtras.enableCertificate;
-      let confirmedCertificate = serverExtras.enableCertificate;
-      let res: Awaited<ReturnType<typeof upsertSettingsMutation.mutateAsync>> | null = null;
-
-      if (isCertificateDirty) {
-        res = await upsertSettingsMutation.mutateAsync({
-          courseId: targetCourseId,
-          payload: {
-            certificateEnabled: extras.enableCertificate,
-          },
-        });
-        confirmedCertificate = res.certificateEnabled ?? false;
-      }
-
-      const newBaseline: ExtrasFormState = normalizeExtrasState({
-        enableCertificate: confirmedCertificate,
-      });
-
-      setServerExtras(newBaseline);
-      setExtras((prev) => ({
-        ...prev,
-        enableCertificate: newBaseline.enableCertificate,
-      }));
-
-      // 2. Sync manual includes if dirty
+      // Sync manual includes if dirty
       if (isManualIncludesDirty) {
         // Delete removed items
         const deleted = serverIncludes.filter(
@@ -4566,7 +6203,7 @@ export function CourseCreatePage({
         );
       }
 
-      return res;
+      return { success: true };
     } finally {
       setIsSavingExtras(false);
     }
@@ -4587,13 +6224,31 @@ export function CourseCreatePage({
   };
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
-    if (isAnyApiInProgress || actionLoading !== null) {
+    if (
+      isAnyApiInProgress ||
+      actionLoading !== null ||
+      isSavingAllDirtyLessonsRef.current
+    ) {
       return;
     }
     if (destination === activeStep) {
       return;
     }
+
+    if (activeStep === "basics") {
+      const flushed = await flushBasicsPersistence();
+      if (!currentCourseId && !flushed) {
+        setShowTitleTooltip(true);
+        titleInputRef.current?.focus();
+        setToastMessage("Add a course title to continue.");
+        return;
+      }
+    }
+
     if (!isDownstreamUnlocked && destination !== "basics") {
+      setShowTitleTooltip(true);
+      titleInputRef.current?.focus();
+      setToastMessage("Add a course title to continue.");
       return;
     }
 
@@ -4605,8 +6260,32 @@ export function CourseCreatePage({
       setSlideDirection("left");
     }
 
+    if (activeStep === "access-rules") {
+      await flushFixedDurationPersistence();
+    }
+    if (activeStep === "pricing") {
+      await flushPricingPersistence();
+    }
+
     if (!isStepDirty(activeStep)) {
       setActiveStep(destination);
+      return;
+    }
+
+    if (activeStep === "curriculum") {
+      setActionLoading("save");
+      try {
+        await saveCurriculumStep();
+        setActiveStep(destination);
+      } catch (err: unknown) {
+        const stepLabel =
+          WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
+        setToastMessage(
+          `Failed to save ${stepLabel}. Your changes are kept locally.`,
+        );
+      } finally {
+        setActionLoading(null);
+      }
       return;
     }
 
@@ -4638,6 +6317,13 @@ export function CourseCreatePage({
   const reconcileDirtyState = async (explicitCourseId?: string | null) => {
     let targetCourseId = explicitCourseId || currentCourseId;
 
+    if (inFlightBasicsPromiseRef.current) {
+      await inFlightBasicsPromiseRef.current;
+    }
+    if (activeStep === "basics") {
+      await flushBasicsPersistence();
+    }
+
     // 1. If basics is dirty or course has not been created yet, save basics first
     if (!targetCourseId || isBasicsDirty) {
       const createdOrUpdated = await saveBasicsStep(targetCourseId);
@@ -4658,6 +6344,12 @@ export function CourseCreatePage({
 
     // 2. Save only the other dirty / unpersisted server-backed pages
     const pendingSaves: Promise<unknown>[] = [];
+    if (activeStep === "access-rules") {
+      await flushFixedDurationPersistence();
+    }
+    if (activeStep === "pricing") {
+      await flushPricingPersistence();
+    }
     if (needsAccessRulesSave) {
       pendingSaves.push(saveAccessRulesStep(targetCourseId));
     }
@@ -5007,7 +6699,7 @@ export function CourseCreatePage({
                   paddingRight: "16px",
                 }}
                 className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                  isAnyApiInProgress ||
+                  actionLoading !== null ||
                   (!isDownstreamUnlocked && activeStep === "basics")
                     ? "!opacity-40 !cursor-not-allowed !shadow-none"
                     : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
@@ -5015,8 +6707,13 @@ export function CourseCreatePage({
                 onClick={() => {
                   if (nextStepId) void navigateToStep(nextStepId);
                 }}
+                title={
+                  !isDownstreamUnlocked && activeStep === "basics"
+                    ? "Add a course title to continue."
+                    : undefined
+                }
                 disabled={
-                  isAnyApiInProgress ||
+                  actionLoading !== null ||
                   (!isDownstreamUnlocked && activeStep === "basics")
                 }
                 aria-label="Next Step"
@@ -5162,8 +6859,13 @@ export function CourseCreatePage({
               tabIndex={isActive ? 0 : -1}
               data-page-tab-tone={step.tone}
               data-swipe-tab-id={step.id}
+              title={
+                !isDownstreamUnlocked && step.id !== "basics"
+                  ? "Add a course title to continue."
+                  : undefined
+              }
               disabled={
-                isAnyApiInProgress ||
+                actionLoading !== null ||
                 (!isDownstreamUnlocked && step.id !== "basics")
               }
               className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
@@ -5210,18 +6912,65 @@ export function CourseCreatePage({
             <div className="flex flex-col gap-5">
               {/* Basic Information Section */}
               <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                <div className="mb-4.5">
-                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                    Basic Information
-                  </h2>
-                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                    {isEditing
-                      ? "Update the essential details of your course."
-                      : "Add the essential details of your course."}
-                  </p>
+                <div className="mb-4.5 flex items-center justify-between">
+                  <div>
+                    <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                      Basic Information
+                    </h2>
+                    <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
+                      {isEditing
+                        ? "Update the essential details of your course."
+                        : "Add the essential details of your course."}
+                    </p>
+                  </div>
+                  {savingBasicsControls.size > 0 && (
+                    <div
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-(--accent-light) text-(--accent) text-[0.76rem] font-medium"
+                      aria-live="polite"
+                    >
+                      <CircleNotch
+                        size={13}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving...</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-col gap-2 mb-5">
+                <div className="relative flex flex-col gap-2 mb-5">
+                  {showTitleTooltip && !isDownstreamUnlocked && (
+                    <div
+                      role="tooltip"
+                      id="course-title-tooltip"
+                      data-testid="basics-title-tooltip"
+                      onClick={() => titleInputRef.current?.focus()}
+                      className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
+                    >
+                      <Info
+                        size={15}
+                        weight="fill"
+                        className="text-(--accent) shrink-0"
+                      />
+                      <span>
+                        Continue course creation by entering a course title
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Dismiss tooltip"
+                        className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowTitleTooltip(false);
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
+                      <div
+                        className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
+                        aria-hidden="true"
+                      />
+                    </div>
+                  )}
                   <label
                     htmlFor="course-title"
                     className="text-(--text-secondary) text-[0.84rem] font-semibold"
@@ -5232,13 +6981,34 @@ export function CourseCreatePage({
                   <div className="relative flex items-center">
                     <input
                       id="course-title"
+                      ref={titleInputRef}
+                      autoFocus={!currentCourseId}
                       type="text"
                       maxLength={120}
                       placeholder="e.g. Complete Backend with Node.js"
-                      disabled={isBasicsSaving}
                       value={courseTitle}
-                      onChange={(e) =>
-                        setCourseTitle(e.target.value.slice(0, 120))
+                      onChange={(e) => {
+                        const val = e.target.value.slice(0, 120);
+                        setCourseTitle(val);
+                        if (val.trim()) {
+                          setShowTitleTooltip(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        setShowTitleTooltip(false);
+                      }}
+                      onBlur={() => {
+                        void persistBasicsField("title");
+                        if (!currentCourseId && !courseTitle.trim()) {
+                          setShowTitleTooltip(true);
+                        }
+                      }}
+                      aria-describedby={
+                        showTitleTooltip && !isDownstreamUnlocked
+                          ? "course-title-tooltip"
+                          : !isDownstreamUnlocked
+                            ? "basics-title-helper"
+                            : undefined
                       }
                       className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                     />
@@ -5246,6 +7016,15 @@ export function CourseCreatePage({
                       {courseTitle.length} / 120
                     </span>
                   </div>
+                  {!isDownstreamUnlocked && (
+                    <p
+                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1"
+                      role="status"
+                      data-testid="basics-title-helper"
+                    >
+                      Add a course title to continue.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2 mb-5">
@@ -5261,11 +7040,14 @@ export function CourseCreatePage({
                       rows={2}
                       maxLength={150}
                       placeholder="A concise summary of your course (shown in course cards and search)..."
-                      disabled={isBasicsSaving}
+                      disabled={!isDownstreamUnlocked}
                       value={shortDescription}
                       onChange={(e) =>
                         setShortDescription(e.target.value.slice(0, 150))
                       }
+                      onBlur={() => {
+                        void persistBasicsField("shortDescription");
+                      }}
                       className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
                     />
                     <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
@@ -5274,7 +7056,12 @@ export function CourseCreatePage({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 mb-5">
+                <div
+                  className="flex flex-col gap-2 mb-5"
+                  onBlur={() => {
+                    void persistBasicsField("courseDescription");
+                  }}
+                >
                   <label
                     htmlFor="course-description"
                     className="text-(--text-secondary) text-[0.84rem] font-semibold"
@@ -5284,7 +7071,7 @@ export function CourseCreatePage({
                   </label>
                   <RichTextEditor
                     id="course-description"
-                    disabled={isBasicsSaving}
+                    disabled={!isDownstreamUnlocked}
                     value={courseDescription}
                     onChange={setCourseDescription}
                     placeholder="Describe what your course is about, what students will learn, and who this course is for..."
@@ -5305,9 +7092,12 @@ export function CourseCreatePage({
                     type="text"
                     maxLength={100}
                     placeholder="e.g. Alex Rivera or Design Guild"
-                    disabled={isBasicsSaving}
+                    disabled={!isDownstreamUnlocked}
                     value={instructorAlias}
                     onChange={(e) => setInstructorAlias(e.target.value)}
+                    onBlur={() => {
+                      void persistBasicsField("instructorAlias");
+                    }}
                     className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                   <p className="m-0 text-(--muted) text-[0.78rem]">
@@ -5327,9 +7117,12 @@ export function CourseCreatePage({
                   </div>
                   <SettingsToggle
                     checked={showInstructorName}
-                    disabled={isBasicsSaving}
+                    disabled={
+                      !isDownstreamUnlocked ||
+                      isBasicsControlSaving("showInstructorName")
+                    }
                     onChange={() =>
-                      setShowInstructorName(!showInstructorName)
+                      void handleShowInstructorNameChange(!showInstructorName)
                     }
                     label="Toggle Show Instructor Name"
                   />
@@ -5352,7 +7145,7 @@ export function CourseCreatePage({
                   <input
                     type="file"
                     ref={thumbnailInputRef}
-                    disabled={isBasicsSaving}
+                    disabled={!isDownstreamUnlocked || isBasicsSaving}
                     onChange={handleThumbnailFileSelect}
                     accept="image/*"
                     style={{ display: "none" }}
@@ -5362,7 +7155,7 @@ export function CourseCreatePage({
                   <input
                     type="file"
                     ref={videoTrailerInputRef}
-                    disabled={isBasicsSaving}
+                    disabled={!isDownstreamUnlocked || isBasicsSaving}
                     onChange={handleVideoTrailerFileSelect}
                     accept="video/*"
                     style={{ display: "none" }}
@@ -5386,7 +7179,7 @@ export function CourseCreatePage({
                         <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 700,
@@ -5403,7 +7196,7 @@ export function CourseCreatePage({
                           </button>
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 500,
@@ -5429,7 +7222,7 @@ export function CourseCreatePage({
                         <div className="flex items-center justify-center gap-2.5 flex-wrap">
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 700,
@@ -5470,7 +7263,7 @@ export function CourseCreatePage({
                         <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 700,
@@ -5487,7 +7280,7 @@ export function CourseCreatePage({
                           </button>
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 500,
@@ -5513,7 +7306,7 @@ export function CourseCreatePage({
                         <div className="flex items-center justify-center gap-2.5 flex-wrap">
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 700,
@@ -5530,7 +7323,7 @@ export function CourseCreatePage({
                           </button>
                           <button
                             type="button"
-                            disabled={isBasicsSaving}
+                            disabled={!isDownstreamUnlocked || isBasicsSaving}
                             style={{
                               fontSize: "0.80rem",
                               fontWeight: 500,
@@ -6246,6 +8039,12 @@ export function CourseCreatePage({
                                               title: e.target.value,
                                             })
                                           }
+                                          onBlur={() => {
+                                            void handleLessonFieldBlur(
+                                              sec.id,
+                                              les.id,
+                                            );
+                                          }}
                                           placeholder="e.g. Introduction to React Hooks"
                                           className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                                         />
@@ -6269,6 +8068,18 @@ export function CourseCreatePage({
                                             ? "opacity-60 pointer-events-none"
                                             : ""
                                         }
+                                        onBlur={(e) => {
+                                          if (
+                                            !e.currentTarget.contains(
+                                              e.relatedTarget as Node,
+                                            )
+                                          ) {
+                                            void handleLessonFieldBlur(
+                                              sec.id,
+                                              les.id,
+                                            );
+                                          }
+                                        }}
                                       >
                                         <RichTextEditor
                                           value={les.description}
@@ -6307,9 +8118,13 @@ export function CourseCreatePage({
                                           }`}
                                           onClick={() => {
                                             if (les.isPendingCreation) return;
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              contentType: "video",
-                                            });
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                contentType: "video",
+                                              },
+                                            );
                                           }}
                                         >
                                           <div
@@ -6344,9 +8159,13 @@ export function CourseCreatePage({
                                           }`}
                                           onClick={() => {
                                             if (les.isPendingCreation) return;
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              contentType: "document",
-                                            });
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                contentType: "document",
+                                              },
+                                            );
                                           }}
                                         >
                                           <div
@@ -6448,9 +8267,13 @@ export function CourseCreatePage({
                                           }`}
                                           onClick={() => {
                                             if (les.isPendingCreation) return;
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              isPublished: true,
-                                            });
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                isPublished: true,
+                                              },
+                                            );
                                           }}
                                         >
                                           <div
@@ -6486,9 +8309,13 @@ export function CourseCreatePage({
                                           }`}
                                           onClick={() => {
                                             if (les.isPendingCreation) return;
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              isPublished: false,
-                                            });
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                isPublished: false,
+                                              },
+                                            );
                                           }}
                                         >
                                           <div
@@ -6532,9 +8359,13 @@ export function CourseCreatePage({
                                         checked={les.isPreview === true}
                                         onChange={(checked) => {
                                           if (les.isPendingCreation) return;
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            isPreview: checked,
-                                          });
+                                          void handleLessonDiscreteChange(
+                                            sec.id,
+                                            les.id,
+                                            {
+                                              isPreview: checked,
+                                            },
+                                          );
                                         }}
                                         label="Toggle Free Preview"
                                       />
@@ -6832,24 +8663,47 @@ export function CourseCreatePage({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Who can access this course? */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    1. Who can access this course?
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Choose who is allowed to access this course.
-                  </p>
+                <div className="mb-4.5 flex items-center justify-between">
+                  <div>
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      1. Who can access this course?
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Choose who is allowed to access this course.
+                    </p>
+                  </div>
+                  {savingAccessControls.has("accessType") && (
+                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                      <CircleNotch
+                        size={14}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving...</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Radio option: Everyone */}
                   <label
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-pointer transition-[border-color,background-color] duration-150 ease-out select-none ${
+                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                      isAccessRulesSaving ||
+                      savingAccessControls.has("accessType")
+                        ? "opacity-60 cursor-not-allowed"
+                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                    } ${
                       accessRules.accessType === "everyone"
                         ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     }`}
-                    onClick={() => handleAccessTypeChange("everyone")}
+                    onClick={() => {
+                      if (
+                        !isAccessRulesSaving &&
+                        !savingAccessControls.has("accessType")
+                      ) {
+                        handleAccessTypeChange("everyone");
+                      }
+                    }}
                   >
                     <div
                       className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
@@ -6899,20 +8753,32 @@ export function CourseCreatePage({
 
               {/* Card 2: Access duration */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    2. Access duration
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Set how long learners can access this course.
-                  </p>
+                <div className="mb-4.5 flex items-center justify-between">
+                  <div>
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      2. Access duration
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Set how long learners can access this course.
+                    </p>
+                  </div>
+                  {savingAccessControls.has("durationMode") && (
+                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                      <CircleNotch
+                        size={14}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving...</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Option 1: Lifetime access */}
                   <div
                     className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isAccessRulesSaving
+                      isAccessRulesSaving ||
+                      savingAccessControls.has("durationMode")
                         ? "opacity-60 cursor-not-allowed"
                         : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                     } ${
@@ -6922,6 +8788,7 @@ export function CourseCreatePage({
                     }`}
                     onClick={() =>
                       !isAccessRulesSaving &&
+                      !savingAccessControls.has("durationMode") &&
                       handleDurationModeChange("lifetime")
                     }
                   >
@@ -6949,7 +8816,8 @@ export function CourseCreatePage({
                   {/* Option 2: Fixed duration */}
                   <div
                     className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isAccessRulesSaving
+                      isAccessRulesSaving ||
+                      savingAccessControls.has("durationMode")
                         ? "opacity-60 cursor-not-allowed"
                         : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                     } ${
@@ -6958,7 +8826,9 @@ export function CourseCreatePage({
                         : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     }`}
                     onClick={() =>
-                      !isAccessRulesSaving && handleDurationModeChange("fixed")
+                      !isAccessRulesSaving &&
+                      !savingAccessControls.has("durationMode") &&
+                      handleDurationModeChange("fixed")
                     }
                   >
                     <div
@@ -6988,7 +8858,10 @@ export function CourseCreatePage({
                         >
                           <input
                             type="number"
-                            disabled={isAccessRulesSaving}
+                            disabled={
+                              isAccessRulesSaving ||
+                              savingAccessControls.has("durationMode")
+                            }
                             className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
                             min={1}
                             value={accessRules.fixedDurationValue}
@@ -6997,9 +8870,16 @@ export function CourseCreatePage({
                                 parseInt(e.target.value, 10),
                               )
                             }
+                            onBlur={() => {
+                              void flushFixedDurationPersistence();
+                            }}
                           />
                           <ThemedSelect
-                            disabled={isAccessRulesSaving}
+                            disabled={
+                              isAccessRulesSaving ||
+                              savingAccessControls.has("durationMode") ||
+                              savingAccessControls.has("fixedDuration")
+                            }
                             value={accessRules.fixedDurationUnit}
                             onValueChange={(val) =>
                               handleFixedDurationUnitChange(val as DurationUnit)
@@ -7048,12 +8928,26 @@ export function CourseCreatePage({
                       </p>
                     </div>
                   </div>
-                  <SettingsToggle
-                    checked={accessRules.enableQA}
-                    disabled={isAccessRulesSaving}
-                    onChange={handleToggleQA}
-                    label="Toggle Q&A"
-                  />
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {savingAccessControls.has("enableQA") && (
+                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-(--accent)"
+                        />
+                        <span>Saving...</span>
+                      </span>
+                    )}
+                    <SettingsToggle
+                      checked={accessRules.enableQA}
+                      disabled={
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("enableQA")
+                      }
+                      onChange={handleToggleQA}
+                      label="Toggle Q&A"
+                    />
+                  </div>
                 </div>
 
                 {/* Toggle 2: Comments */}
@@ -7071,12 +8965,26 @@ export function CourseCreatePage({
                       </p>
                     </div>
                   </div>
-                  <SettingsToggle
-                    checked={accessRules.enableComments}
-                    disabled={isAccessRulesSaving}
-                    onChange={handleToggleComments}
-                    label="Toggle Comments"
-                  />
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {savingAccessControls.has("enableComments") && (
+                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-(--accent)"
+                        />
+                        <span>Saving...</span>
+                      </span>
+                    )}
+                    <SettingsToggle
+                      checked={accessRules.enableComments}
+                      disabled={
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("enableComments")
+                      }
+                      onChange={handleToggleComments}
+                      label="Toggle Comments"
+                    />
+                  </div>
                 </div>
 
                 {/* Toggle 3: Downloads */}
@@ -7095,12 +9003,26 @@ export function CourseCreatePage({
                       </p>
                     </div>
                   </div>
-                  <SettingsToggle
-                    checked={accessRules.enableDownloads}
-                    disabled={isAccessRulesSaving}
-                    onChange={handleToggleDownloads}
-                    label="Toggle Downloads"
-                  />
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {savingAccessControls.has("enableDownloads") && (
+                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-(--accent)"
+                        />
+                        <span>Saving...</span>
+                      </span>
+                    )}
+                    <SettingsToggle
+                      checked={accessRules.enableDownloads}
+                      disabled={
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("enableDownloads")
+                      }
+                      onChange={handleToggleDownloads}
+                      label="Toggle Downloads"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -7118,20 +9040,31 @@ export function CourseCreatePage({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
               {/* Card 1: Course pricing */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    1. Course pricing
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Choose how you want to sell this course.
-                  </p>
+                <div className="flex items-center justify-between mb-4.5">
+                  <div>
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      1. Course pricing
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Choose how you want to sell this course.
+                    </p>
+                  </div>
+                  {savingPricingControls.has("pricingType") && (
+                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                      <CircleNotch
+                        size={14}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving...</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Radio Option: Free */}
                   <div
                     className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isPricingSaving
+                      isSavingPricing || isPricingControlSaving("pricingType")
                         ? "opacity-60 cursor-not-allowed"
                         : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                     } ${
@@ -7140,7 +9073,9 @@ export function CourseCreatePage({
                         : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     }`}
                     onClick={() =>
-                      !isPricingSaving && handlePricingTypeChange("free")
+                      !isSavingPricing &&
+                      !isPricingControlSaving("pricingType") &&
+                      handlePricingTypeChange("free")
                     }
                   >
                     <div
@@ -7167,7 +9102,7 @@ export function CourseCreatePage({
                   {/* Radio Option: Paid */}
                   <div
                     className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isPricingSaving
+                      isSavingPricing || isPricingControlSaving("pricingType")
                         ? "opacity-60 cursor-not-allowed"
                         : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                     } ${
@@ -7176,7 +9111,9 @@ export function CourseCreatePage({
                         : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     }`}
                     onClick={() =>
-                      !isPricingSaving && handlePricingTypeChange("paid")
+                      !isSavingPricing &&
+                      !isPricingControlSaving("pricingType") &&
+                      handlePricingTypeChange("paid")
                     }
                   >
                     <div
@@ -7210,13 +9147,25 @@ export function CourseCreatePage({
                     : ""
                 }`}
               >
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    2. Price details
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Set the pricing for your course.
-                  </p>
+                <div className="flex items-center justify-between mb-4.5">
+                  <div>
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      2. Price details
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Set the pricing for your course.
+                    </p>
+                  </div>
+                  {(savingPricingControls.has("pricingDetails") ||
+                    savingPricingControls.has("currency")) && (
+                    <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                      <CircleNotch
+                        size={14}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving...</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.75">
@@ -7233,7 +9182,10 @@ export function CourseCreatePage({
                       onValueChange={handleCurrencyChange}
                       options={currencyOptions}
                       disabled={
-                        pricing.pricingType === "free" || isPricingSaving
+                        pricing.pricingType === "free" ||
+                        isSavingPricing ||
+                        isPricingControlSaving("pricingType") ||
+                        isPricingControlSaving("currency")
                       }
                       ariaLabel="Select currency"
                       searchable
@@ -7264,12 +9216,17 @@ export function CourseCreatePage({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         disabled={
-                          pricing.pricingType === "free" || isPricingSaving
+                          pricing.pricingType === "free" ||
+                          isSavingPricing ||
+                          isPricingControlSaving("pricingType")
                         }
                         value={pricing.sellingPrice}
                         onChange={(e) =>
                           handleSellingPriceChange(e.target.value)
                         }
+                        onBlur={() => {
+                          void flushPricingPersistence();
+                        }}
                         placeholder="1999"
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
@@ -7297,12 +9254,17 @@ export function CourseCreatePage({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         disabled={
-                          pricing.pricingType === "free" || isPricingSaving
+                          pricing.pricingType === "free" ||
+                          isSavingPricing ||
+                          isPricingControlSaving("pricingType")
                         }
                         value={pricing.originalPrice}
                         onChange={(e) =>
                           handleOriginalPriceChange(e.target.value)
                         }
+                        onBlur={() => {
+                          void flushPricingPersistence();
+                        }}
                         placeholder="2999"
                         className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
@@ -7425,12 +9387,23 @@ export function CourseCreatePage({
                       Issue certificates to learners on course completion.
                     </p>
                   </div>
-                  <SettingsToggle
-                    checked={extras.enableCertificate}
-                    disabled={isExtrasSaving}
-                    onChange={handleToggleCertificate}
-                    label="Toggle certificate"
-                  />
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {isSavingCertificate && (
+                      <span className="flex items-center gap-1.5 text-[0.78rem] text-(--accent) font-medium">
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-(--accent)"
+                        />
+                        <span>Saving...</span>
+                      </span>
+                    )}
+                    <SettingsToggle
+                      checked={extras.enableCertificate}
+                      disabled={isSavingCertificate}
+                      onChange={handleToggleCertificate}
+                      label="Toggle certificate"
+                    />
+                  </div>
                 </div>
 
                 {/* Certificate Configuration Controls */}
@@ -7740,6 +9713,9 @@ export function CourseCreatePage({
                             !isReorderingIncludes &&
                             !reorderIncludesMutation.isPending &&
                             !isExtrasSaving &&
+                            !item.isPendingCreation &&
+                            !deletingIncludeIds.has(item.id) &&
+                            !savingIncludeIds.has(item.id) &&
                             dragEnabledInclusionId === item.id
                           }
                           onDragStart={(e) =>
@@ -7748,48 +9724,79 @@ export function CourseCreatePage({
                           onDragOver={(e) => handleInclusionDragOver(e, index)}
                           onDragEnd={handleInclusionDragEnd}
                           className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
-                            isReorderingIncludes || isExtrasSaving
-                              ? "opacity-60"
-                              : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                            item.isPendingCreation ||
+                            deletingIncludeIds.has(item.id) ||
+                            savingIncludeIds.has(item.id)
+                              ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                              : isReorderingIncludes || isExtrasSaving
+                                ? "opacity-60"
+                                : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
                           }`}
                         >
-                          <span
-                            className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
-                              isReorderingIncludes ||
-                              reorderIncludesMutation.isPending ||
-                              isExtrasSaving
-                                ? "opacity-30 cursor-not-allowed pointer-events-none"
-                                : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
-                            }`}
-                            onMouseEnter={() => {
-                              if (
-                                !isReorderingIncludes &&
-                                !reorderIncludesMutation.isPending &&
-                                !isExtrasSaving
-                              ) {
-                                setDragEnabledInclusionId(item.id);
+                          {item.isPendingCreation ? (
+                            <span
+                              className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
+                              title="Adding inclusion..."
+                            >
+                              <CircleNotch
+                                size={18}
+                                className="animate-spin text-(--accent)"
+                              />
+                            </span>
+                          ) : (
+                            <span
+                              className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
+                                isReorderingIncludes ||
+                                reorderIncludesMutation.isPending ||
+                                isExtrasSaving ||
+                                deletingIncludeIds.has(item.id) ||
+                                savingIncludeIds.has(item.id)
+                                  ? "opacity-30 cursor-not-allowed pointer-events-none"
+                                  : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
+                              }`}
+                              onMouseEnter={() => {
+                                if (
+                                  !isReorderingIncludes &&
+                                  !reorderIncludesMutation.isPending &&
+                                  !isExtrasSaving &&
+                                  !deletingIncludeIds.has(item.id) &&
+                                  !savingIncludeIds.has(item.id)
+                                ) {
+                                  setDragEnabledInclusionId(item.id);
+                                }
+                              }}
+                              onMouseLeave={() =>
+                                setDragEnabledInclusionId(null)
                               }
-                            }}
-                            onMouseLeave={() => setDragEnabledInclusionId(null)}
-                            title={
-                              isReorderingIncludes
-                                ? "Saving order..."
-                                : "Drag to reorder"
-                            }
-                          >
-                            <DotsSixVertical size={18} />
-                          </span>
+                              title={
+                                isReorderingIncludes
+                                  ? "Saving order..."
+                                  : deletingIncludeIds.has(item.id)
+                                    ? "Deleting..."
+                                    : savingIncludeIds.has(item.id)
+                                      ? "Saving..."
+                                      : "Drag to reorder"
+                              }
+                            >
+                              <DotsSixVertical size={18} />
+                            </span>
+                          )}
                           <input
                             type="text"
                             disabled={
                               isReorderingIncludes ||
                               reorderIncludesMutation.isPending ||
-                              isExtrasSaving
+                              isExtrasSaving ||
+                              item.isPendingCreation ||
+                              deletingIncludeIds.has(item.id) ||
+                              savingIncludeIds.has(item.id)
                             }
                             className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
                             value={item.text}
                             onFocus={() => setFocusedInclusionId(item.id)}
-                            onBlur={() => setFocusedInclusionId(null)}
+                            onBlur={() => {
+                              void handleManualInclusionBlur(item.id);
+                            }}
                             onChange={(e) =>
                               handleUpdateManualInclusionText(
                                 item.id,
@@ -7799,24 +9806,50 @@ export function CourseCreatePage({
                             placeholder="e.g. Personal guidance"
                             maxLength={25}
                           />
-                          {focusedInclusionId === item.id && (
+                          {savingIncludeIds.has(item.id) ? (
+                            <span className="text-(--accent) text-[0.74rem] font-medium shrink-0 select-none px-1 flex items-center gap-1">
+                              <CircleNotch
+                                size={12}
+                                className="animate-spin text-(--accent)"
+                              />
+                              <span>Saving...</span>
+                            </span>
+                          ) : focusedInclusionId === item.id ? (
                             <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
                               {item.text.length} / 25
                             </span>
-                          )}
+                          ) : null}
                           <button
                             type="button"
                             disabled={
                               isReorderingIncludes ||
                               reorderIncludesMutation.isPending ||
-                              isExtrasSaving
+                              isExtrasSaving ||
+                              item.isPendingCreation ||
+                              deletingIncludeIds.has(item.id) ||
+                              savingIncludeIds.has(item.id)
                             }
                             onClick={() => handleDeleteManualInclusion(item.id)}
                             className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
-                            aria-label="Remove inclusion"
-                            title="Remove inclusion"
+                            aria-label={
+                              deletingIncludeIds.has(item.id)
+                                ? "Deleting inclusion..."
+                                : "Remove inclusion"
+                            }
+                            title={
+                              deletingIncludeIds.has(item.id)
+                                ? "Deleting..."
+                                : "Remove inclusion"
+                            }
                           >
-                            <Trash size={15} />
+                            {deletingIncludeIds.has(item.id) ? (
+                              <CircleNotch
+                                size={14}
+                                className="animate-spin text-red-500"
+                              />
+                            ) : (
+                              <Trash size={15} />
+                            )}
                           </button>
                         </div>
                       ))
@@ -8433,7 +10466,7 @@ export function CourseCreatePage({
               gap: "6px",
             }}
             className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
-              isAnyApiInProgress ||
+              actionLoading !== null ||
               (!isDownstreamUnlocked && activeStep === "basics")
                 ? "!opacity-40 !cursor-not-allowed !shadow-none"
                 : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
@@ -8441,8 +10474,13 @@ export function CourseCreatePage({
             onClick={() => {
               if (nextStepId) void navigateToStep(nextStepId);
             }}
+            title={
+              !isDownstreamUnlocked && activeStep === "basics"
+                ? "Add a course title to continue."
+                : undefined
+            }
             disabled={
-              isAnyApiInProgress ||
+              actionLoading !== null ||
               (!isDownstreamUnlocked && activeStep === "basics")
             }
             aria-label="Next Step"
