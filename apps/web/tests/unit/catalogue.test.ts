@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getVisibleCourses } from "../../src/courses/catalogue.ts";
+import {
+  getApiCourseSlugForLegacyKey,
+  getVisibleCourses,
+} from "../../src/courses/catalogue.ts";
 import type {
   Course,
   CourseCatalogueFilters,
@@ -127,6 +130,13 @@ const select = (overrides: Partial<CourseCatalogueFilters> = {}) =>
   getVisibleCourses(testCourses, { ...defaultFilters, ...overrides });
 
 describe("course catalogue selector", () => {
+  it("resolves legacy course keys to their API slugs", () => {
+    expect(getApiCourseSlugForLegacyKey("backend-nodejs")).toBe(
+      "complete-backend-development-with-nodejs",
+    );
+    expect(getApiCourseSlugForLegacyKey("unknown-course")).toBeUndefined();
+  });
+
   it("returns all seven courses with mixed enrollment in the first two cards", () => {
     const result = select();
 

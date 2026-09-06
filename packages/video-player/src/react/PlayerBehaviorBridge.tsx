@@ -9,6 +9,7 @@ export interface PlayerBehaviorBridgeProps {
   shortcuts?: PlayerShortcutOverrides;
   keyboardEnabled?: boolean;
   controlsIdleDelay?: number;
+  keepControlsVisibleUntilFirstPlay?: boolean;
   onToggleTheater?: () => void;
   seekIntervalSeconds?: number;
 }
@@ -16,6 +17,7 @@ export interface PlayerBehaviorBridgeProps {
 export function PlayerBehaviorBridge({
   controlsIdleDelay,
   keyboardEnabled,
+  keepControlsVisibleUntilFirstPlay,
   onToggleTheater,
   rootRef,
   seekIntervalSeconds,
@@ -37,7 +39,11 @@ export function PlayerBehaviorBridge({
     seekIntervalSeconds,
     shortcuts,
   });
-  useControlsVisibility({ idleDelay: controlsIdleDelay, rootRef });
+  useControlsVisibility({
+    idleDelay: controlsIdleDelay,
+    keepVisibleUntilFirstPlay: keepControlsVisibleUntilFirstPlay,
+    rootRef,
+  });
 
   useEffect(() => {
     const root = rootRef.current;

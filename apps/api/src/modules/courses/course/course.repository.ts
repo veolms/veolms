@@ -95,7 +95,11 @@ export async function listPublishedCourses(
         .onRef("categories.id", "=", "courses.category_id")
         .on("categories.deleted_at", "is", null),
     )
-    .leftJoin("users", "users.id", "courses.creator_id")
+    .leftJoin("users", (join) =>
+      join
+        .onRef("users.id", "=", "courses.creator_id")
+        .on("users.is_deleted", "=", false),
+    )
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
     .select((eb) => [
@@ -105,6 +109,7 @@ export async function listPublishedCourses(
       "courses.short_description",
       "courses.difficulty",
       "courses.instructor_alias",
+      "courses.thumbnail_media_id",
       "categories.name as category_name",
       "users.display_name as creator_display_name",
       "course_pricing.pricing_type",

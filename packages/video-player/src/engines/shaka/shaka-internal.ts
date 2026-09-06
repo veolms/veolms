@@ -95,6 +95,10 @@ export interface ShakaNetworkingEngineLike {
   unregisterResponseFilter(filter: ShakaResponseFilterLike): void;
 }
 
+export interface ShakaPreloadManagerLike {
+  destroy(): Promise<unknown>;
+}
+
 export interface ShakaPlayerLike {
   addEventListener(
     type: string,
@@ -106,7 +110,16 @@ export interface ShakaPlayerLike {
   ): void;
   attach(media: HTMLMediaElement, initializeMediaSource?: boolean): Promise<void>;
   detach(): Promise<void>;
-  load(uri: string, startTime?: number, mimeType?: string): Promise<unknown>;
+  load(
+    uriOrPreloader: string | ShakaPreloadManagerLike | null,
+    startTime?: number,
+    mimeType?: string,
+  ): Promise<unknown>;
+  preload?(
+    uri: string,
+    startTime?: number | null,
+    mimeType?: string | null,
+  ): Promise<ShakaPreloadManagerLike | null>;
   unload(initializeMediaSource?: boolean): Promise<void>;
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
@@ -162,6 +175,8 @@ export interface ShakaRuntimeLike {
 }
 
 export type ShakaRuntimeLoader = () => Promise<unknown>;
+
+export const SHAKA_SEGMENT_PREFETCH_LIMIT = 2;
 
 export async function defaultShakaRuntimeLoader(): Promise<unknown> {
   return import("shaka-player");
@@ -377,31 +392,30 @@ export function createShakaConfiguration(
   const streaming = source.streaming;
   const networking = source.networking;
 
-  if (streaming || networking?.segmentRetry) {
-    result.streaming = {
-      ...(streaming?.bufferingGoal !== undefined
-        ? { bufferingGoal: streaming.bufferingGoal }
-        : {}),
-      ...(streaming?.rebufferingGoal !== undefined
-        ? { rebufferingGoal: streaming.rebufferingGoal }
-        : {}),
-      ...(streaming?.bufferBehind !== undefined
-        ? { bufferBehind: streaming.bufferBehind }
-        : {}),
-      ...(streaming?.lowLatencyMode !== undefined
-        ? { lowLatencyMode: streaming.lowLatencyMode }
-        : {}),
-      ...(streaming?.preferNativeHls !== undefined
-        ? { preferNativeHls: streaming.preferNativeHls }
-        : {}),
-      ...(streaming?.useNativeHlsForFairPlay !== undefined
-        ? { useNativeHlsForFairPlay: streaming.useNativeHlsForFairPlay }
-        : {}),
-      ...(networking?.segmentRetry
-        ? { retryParameters: retryConfiguration(networking.segmentRetry) }
-        : {}),
-    };
-  }
+  result.streaming = {
+    segmentPrefetchLimit: SHAKA_SEGMENT_PREFETCH_LIMIT,
+    ...(streaming?.bufferingGoal !== undefined
+      ? { bufferingGoal: streaming.bufferingGoal }
+      : {}),
+    ...(streaming?.rebufferingGoal !== undefined
+      ? { rebufferingGoal: streaming.rebufferingGoal }
+      : {}),
+    ...(streaming?.bufferBehind !== undefined
+      ? { bufferBehind: streaming.bufferBehind }
+      : {}),
+    ...(streaming?.lowLatencyMode !== undefined
+      ? { lowLatencyMode: streaming.lowLatencyMode }
+      : {}),
+    ...(streaming?.preferNativeHls !== undefined
+      ? { preferNativeHls: streaming.preferNativeHls }
+      : {}),
+    ...(streaming?.useNativeHlsForFairPlay !== undefined
+      ? { useNativeHlsForFairPlay: streaming.useNativeHlsForFairPlay }
+      : {}),
+    ...(networking?.segmentRetry
+      ? { retryParameters: retryConfiguration(networking.segmentRetry) }
+      : {}),
+  };
 
   if (streaming?.abrEnabled !== undefined || streaming?.abrRestrictions) {
     result.abr = {
@@ -509,6 +523,111 @@ export function createShakaConfiguration(
   }
 
   return result;
+}
+
+export function configureShakaPlayer(
+  player: ShakaPlayerLike,
+  source: VideoSource,
+  runtime: ShakaRuntimeLike,
+  options: { reset?: boolean } = {},
+): boolean {
+  if (options.reset !== false) {
+    player.resetConfiguration?.();
+  }
+  return player.configure(createShakaConfiguration(source, runtime));
+}
+
+export interface ShakaNetworkingFilters {
+  requestFilter: ShakaRequestFilterLike | null;
+  responseFilter: ShakaResponseFilterLike | null;
+}
+
+export function createShakaNetworkingFilters(
+  source: VideoSource,
+  runtime: ShakaRuntimeLike,
+): ShakaNetworkingFilters {
+  const userRequestFilter = source.networking?.requestFilter;
+  const userResponseFilter = source.networking?.responseFilter;
+  const requestTypes = runtime.net?.NetworkingEngine?.RequestType;
+  const filters: ShakaNetworkingFilters = {
+    requestFilter: null,
+    responseFilter: null,
+  };
+
+  if (userRequestFilter) {
+    filters.requestFilter = async (
+      type: number,
+      request: ShakaNetworkRequestLike,
+    ): Promise<void> => {
+      const kind = mapRequestKind(type, requestTypes);
+      const normalized = toVideoNetworkRequest(kind, request);
+      await userRequestFilter(normalized);
+      applyVideoNetworkRequest(normalized, request);
+    };
+  }
+
+  if (userResponseFilter) {
+    filters.responseFilter = async (
+      type: number,
+      response: ShakaNetworkResponseLike,
+    ): Promise<void> => {
+      const kind = mapRequestKind(type, requestTypes);
+      const normalized = toVideoNetworkResponse(kind, response);
+      await userResponseFilter(normalized);
+      applyVideoNetworkResponse(normalized, response);
+    };
+  }
+
+  return filters;
+}
+
+export function registerShakaNetworkingFilters(
+  player: ShakaPlayerLike,
+  filters: ShakaNetworkingFilters,
+): void {
+  const networkingEngine = player.getNetworkingEngine();
+  if (!networkingEngine) {
+    return;
+  }
+  if (filters.requestFilter) {
+    networkingEngine.registerRequestFilter(filters.requestFilter);
+  }
+  if (filters.responseFilter) {
+    networkingEngine.registerResponseFilter(filters.responseFilter);
+  }
+}
+
+export function unregisterShakaNetworkingFilters(
+  player: ShakaPlayerLike | null | undefined,
+  filters: ShakaNetworkingFilters,
+): void {
+  const networkingEngine = player?.getNetworkingEngine();
+  if (!networkingEngine) {
+    return;
+  }
+  if (filters.requestFilter) {
+    networkingEngine.unregisterRequestFilter(filters.requestFilter);
+  }
+  if (filters.responseFilter) {
+    networkingEngine.unregisterResponseFilter(filters.responseFilter);
+  }
+}
+
+export function resolveShakaLoadMimeType(
+  source: VideoSource,
+  options: import("../../core/types").VideoLoadOptions = {},
+): string | undefined {
+  const manifestMimeTypes: Partial<
+    Record<import("../../core/types").VideoSourceKind, string>
+  > = {
+    dash: "application/dash+xml",
+    hls: "application/x-mpegurl",
+  };
+  return (
+    options.mimeType ??
+    source.type ??
+    (source.kind ? manifestMimeTypes[source.kind] : undefined)
+  );
 }
 
 export async function addExternalTextTrack(

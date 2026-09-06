@@ -117,4 +117,17 @@ describe("security settings layout", () => {
     const dialog = screen.getByRole("dialog", { name: "Set up authenticator" });
     expect(dialog.parentElement).toBe(document.body);
   });
+
+  it("disables account-security actions while signed out", () => {
+    renderWithAppProviders(<SecuritySettings isAuthenticated={false} />);
+
+    expect(
+      screen.getByRole("button", { name: "Register passkey" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Set up" })).toBeDisabled();
+    expect(screen.queryByText("This device")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Sign in to manage active sessions."),
+    ).toBeInTheDocument();
+  });
 });
