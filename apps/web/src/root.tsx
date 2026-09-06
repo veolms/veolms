@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useLayoutEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
@@ -38,7 +38,80 @@ const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
 
+const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
+  lang: "en",
+  "data-theme": "dark",
+  "data-palette": "codex",
+  "data-reading-mode": "false",
+  "data-reading-mode-texture": "false",
+  "data-reading-mode-temperature": "false",
+  "data-reading-mode-colors": "full",
+  "data-page-tab-colors": "follow-sidebar",
+  "data-content-layout": "framed",
+  "data-sidebar-header-layout": "inline",
+  "data-sidebar-glow": "theme",
+  "data-sidebar-glow-shape": "circle",
+  "data-elevated-surfaces": "true",
+  "data-hide-scrollbars": "true",
+  "data-scrollbar-style": "theme",
+  "data-sidebar-menu-elevation": "true",
+  "data-sidebar-state": "expanded",
+  "data-navigation-layout": "wide",
+  "data-learning-curriculum-state": "expanded",
+  "data-player-autoplay": "on",
+  "data-player-muted": "false",
+  "data-player-playback-rate": "1",
+  "data-player-volume": "1",
+  "data-collapsed-tooltips": "true",
+  "data-collapsed-sidebar-logo": "true",
+  "data-active-fill": "true",
+  "data-control-radius": "balanced",
+  "data-app-hydrated": "false",
+  "data-tab-navigation": "false",
+};
+
+type InitialLayoutDomState = {
+  rootAttributes: Record<string, string>;
+  bodyAttributes: Record<string, string>;
+};
+
+const getInitialLayoutDomState = (): InitialLayoutDomState => {
+  if (typeof document === "undefined") {
+    return {
+      rootAttributes: DEFAULT_ROOT_ATTRIBUTES,
+      bodyAttributes: {},
+    };
+  }
+
+  const rootAttributes = { ...DEFAULT_ROOT_ATTRIBUTES };
+  for (const attribute of Array.from(document.documentElement.attributes)) {
+    if (attribute.name === "style") continue;
+    rootAttributes[attribute.name === "class" ? "className" : attribute.name] =
+      attribute.value;
+  }
+
+  const bodyAttributes: Record<string, string> = {};
+  if (document.body) {
+    for (const attribute of Array.from(document.body.attributes)) {
+      if (attribute.name === "style") continue;
+      bodyAttributes[
+        attribute.name === "class" ? "className" : attribute.name
+      ] = attribute.value;
+    }
+  }
+
+  return {
+    rootAttributes,
+    bodyAttributes,
+  };
+};
+
 export function Layout({ children }: LayoutProps) {
+  // The preference scripts run before hydration so they can prevent visual
+  // flashes. Snapshot the already-mutated document into React's first render;
+  // the server uses the deterministic defaults above.
+  const initialLayoutDomState = getInitialLayoutDomState();
+
   return (
     <html
       lang="en"
@@ -70,6 +143,11 @@ export function Layout({ children }: LayoutProps) {
       data-control-radius="balanced"
       data-app-hydrated="false"
       data-tab-navigation="false"
+      {...initialLayoutDomState.rootAttributes}
+      // These CSS variables are intentionally written by the pre-hydration
+      // preference scripts from localStorage. The server cannot know those
+      // values, so React must preserve the already-painted root geometry while
+      // it claims the document.
       suppressHydrationWarning
     >
       <head>
@@ -125,7 +203,7 @@ export function Layout({ children }: LayoutProps) {
             and preloads through Links. */}
         {!import.meta.env.DEV && <Links />}
       </head>
-      <body>
+      <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>
         <Scripts />
         <ReadingModeEffects />
@@ -156,7 +234,7 @@ function SessionInitializer({ children }: { children: ReactNode }) {
 }
 
 function HydrationMarker() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
