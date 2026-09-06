@@ -2,8 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
-import { flushProfileAutosave } from "../../src/settings/profileAutosave.ts";
-import { getProfileDraftStorageKey } from "../../src/settings/profilePreferences.ts";
+import { autosyncManager, getAutosyncDraftKey } from "../../src/lib/autosync";
 import { renderWithQueryClient } from "./test-utils.tsx";
 
 const authMocks = vi.hoisted(() => ({
@@ -13,6 +12,8 @@ const authMocks = vi.hoisted(() => ({
   useUpdateProfile: vi.fn(),
   useVerifyEmail: vi.fn(),
   useVerifyPhoneNumber: vi.fn(),
+  authService: { updateProfile: vi.fn() },
+  authKeys: { me: () => ["auth", "me"] },
   sendEmailVerification: vi.fn(),
   sendPhoneVerification: vi.fn(),
   mutateAsync: vi.fn(),
@@ -27,6 +28,8 @@ vi.mock("../../src/services/auth", () => ({
   useUpdateProfile: authMocks.useUpdateProfile,
   useVerifyEmail: authMocks.useVerifyEmail,
   useVerifyPhoneNumber: authMocks.useVerifyPhoneNumber,
+  authService: authMocks.authService,
+  authKeys: authMocks.authKeys,
 }));
 
 const profileUser = {
@@ -79,6 +82,11 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       isFetched: true,
     });
     authMocks.mutateAsync.mockReset();
+    authMocks.authService.updateProfile.mockReset();
+    authMocks.authService.updateProfile.mockImplementation(
+      (...args: Parameters<typeof authMocks.mutateAsync>) =>
+        authMocks.mutateAsync(...args),
+    );
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPhoneVerification.mockReset();
     authMocks.verifyEmail.mockReset();
@@ -140,6 +148,9 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     ).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Discard" }),
     ).not.toBeInTheDocument();
   });
 
@@ -367,7 +378,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       screen.queryByRole("button", { name: "Save changes" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("Sign in to edit and save your profile."),
+      screen.getByText("Sign in to edit your profile."),
     ).toBeInTheDocument();
   });
 
@@ -406,9 +417,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
         bio: "Building useful products.",
       }),
     );
-    expect(
-      await screen.findByText("All profile changes are saved."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
   it("persists email visibility through the profile update payload", async () => {
@@ -444,7 +453,11 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       target: { value: "Draft that must survive" },
     });
 
-    const draftKey = getProfileDraftStorageKey("student", profileUser.id);
+    const draftKey = getAutosyncDraftKey({
+      entity: "profile",
+      entityId: profileUser.id,
+      scope: "settings",
+    });
     await waitFor(
       () => {
         const stored = localStorage.getItem(draftKey);
@@ -478,7 +491,11 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       target: { value: "Offline profile draft" },
     });
 
-    const draftKey = getProfileDraftStorageKey("student", profileUser.id);
+    const draftKey = getAutosyncDraftKey({
+      entity: "profile",
+      entityId: profileUser.id,
+      scope: "settings",
+    });
     await waitFor(() =>
       expect(localStorage.getItem(draftKey)).toContain("Offline profile draft"),
     );
@@ -506,7 +523,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     fireEvent.change(screen.getByLabelText("Display name"), {
       target: { value: "Navigation-safe profile" },
     });
-    await flushProfileAutosave();
+    await autosyncManager.flushAll();
 
     expect(authMocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ displayName: "Navigation-safe profile" }),

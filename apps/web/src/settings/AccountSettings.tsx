@@ -7,8 +7,8 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { useDeactivateAccount, useSignOut } from "../services/auth";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
-import { flushProfileAutosave } from "./profileAutosave";
-import type { ProfileRole } from "./profilePreferences";
+import { autosyncManager } from "../lib/autosync";
+import type { ProfileRole } from "./profileTypes";
 
 export interface AccountSettingsProps {
   role: ProfileRole;
@@ -34,7 +34,7 @@ export function AccountSettings({
 
   const deactivateAccount = async () => {
     try {
-      await flushProfileAutosave();
+      await autosyncManager.requireSynced();
       await deactivateMutation.mutateAsync();
       setDeactivateConfirmOpen(false);
       window.location.href = "/";
@@ -43,9 +43,13 @@ export function AccountSettings({
     }
   };
 
-  const signOutAfterAutosave = async () => {
-    await flushProfileAutosave();
-    signOut();
+  const signOutAfterSync = async () => {
+    try {
+      await autosyncManager.requireSynced();
+      await signOut();
+    } catch {
+      // Keep the dialog open when a draft is offline, blocked, or failed.
+    }
   };
 
   return (
@@ -189,7 +193,7 @@ export function AccountSettings({
         isOpen={isAuthenticated && logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void signOutAfterAutosave()}
+        onConfirm={() => void signOutAfterSync()}
       />
 
       <ConfirmActionModal

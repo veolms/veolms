@@ -14,6 +14,7 @@ import {
   APP_HOME_PATH,
   MFA_CHALLENGE_PATH,
   buildLoginPath,
+  shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
   normalizeAppPath,
   requiresAcademyAuth,
@@ -52,6 +53,7 @@ function useSessionAccess() {
 
   return {
     access,
+    user: resolvedUser,
     pending: isPending && !isFetched && !resolvedUser,
   };
 }
@@ -59,9 +61,13 @@ function useSessionAccess() {
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { access, pending } = useSessionAccess();
+  const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
   const landingDestination = resolveAcademyLandingDestination(access);
+  const courseAuthorRouteDenied = shouldRedirectFromCourseAuthorPath(
+    path,
+    user?.roles,
+  );
 
   useEffect(() => {
     if (pending) {
@@ -82,11 +88,17 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
 
     if (access.needsMfaChallenge && path !== "/logout") {
       navigate(MFA_CHALLENGE_PATH, { replace: true });
+      return;
+    }
+
+    if (courseAuthorRouteDenied) {
+      navigate(APP_HOME_PATH, { replace: true });
     }
   }, [
     access.isAuthenticated,
     access.isSessionReady,
     access.needsMfaChallenge,
+    courseAuthorRouteDenied,
     location.pathname,
     location.search,
     landingDestination,
@@ -95,7 +107,11 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
-  if (pending || shouldBlockAcademyRender(path, access)) {
+  if (
+    pending ||
+    shouldBlockAcademyRender(path, access) ||
+    courseAuthorRouteDenied
+  ) {
     return <AppLoadingScreen />;
   }
 

@@ -135,7 +135,6 @@ export const authService = {
 
   getMe: async (): Promise<CurrentUserResponse> => {
     const response = await api.get<CurrentUserResponse>("/auth/me");
-    console.log("[auth/me] response:", JSON.stringify(response, null, 2));
     return response;
   },
 
