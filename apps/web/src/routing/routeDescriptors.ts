@@ -61,6 +61,13 @@ const discussionsRouteBase = {
 } as const;
 
 export const routeDescriptors = {
+  "root-courses": {
+    kind: "shell",
+    page: "courses",
+    section: "Courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
   home: {
     kind: "shell",
     page: "home",
@@ -304,6 +311,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
 };
 
 const canonicalPathsByRouteId = {
+  "root-courses": "/",
   home: "/",
   "home-alias": "/home",
   dashboard: "/dashboard",

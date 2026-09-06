@@ -19,7 +19,7 @@ describe("learning shell bootstrap", () => {
     document.querySelector("[data-learning-shell-test]")?.remove();
   });
 
-  it("applies persisted course-content geometry before React initializes", () => {
+  it("publishes persisted course-content geometry without mutating React nodes", () => {
     window.history.replaceState(
       null,
       "",
@@ -58,10 +58,10 @@ describe("learning shell bootstrap", () => {
         "--learning-curriculum-expanded-width",
       ),
     ).toBe("512px");
-    expect(workspace.querySelector("main")).toHaveClass(
+    expect(workspace.querySelector("main")).not.toHaveClass(
       "is-curriculum-collapsed",
     );
-    expect(workspace.querySelector("aside")).toHaveClass("is-collapsed");
+    expect(workspace.querySelector("aside")).not.toHaveClass("is-collapsed");
   });
 
   it("initializes React from the bootstrap snapshot instead of rereading storage", () => {

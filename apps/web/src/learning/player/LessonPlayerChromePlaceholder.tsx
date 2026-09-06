@@ -4,10 +4,14 @@ import {
   getPlayerThemeStyle,
   resolvePlayerTheme,
 } from "@veolms/video-player";
-import { getInitialLearningPlayerPreferences } from "../learningPlayerPreferences";
+import {
+  DEFAULT_LEARNING_PLAYER_PREFERENCES,
+  getInitialLearningPlayerPreferences,
+} from "../learningPlayerPreferences";
 import { LessonPlayerControls } from "./LessonPlayerControls";
 import type { LessonVideoPlayerProps } from "./LessonVideoPlayer";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { useLayoutEffect, useState } from "react";
 
 /**
  * Paints the real lesson chrome before PersistentLearningPlayerHost mounts.
@@ -24,7 +28,12 @@ export function LessonPlayerChromePlaceholder({
   onMinimize,
 }: LessonVideoPlayerProps) {
   const playerTheme = useLearningPlayerTheme();
-  const playerPreferences = getInitialLearningPlayerPreferences();
+  const [playerPreferences, setPlayerPreferences] = useState(
+    DEFAULT_LEARNING_PLAYER_PREFERENCES,
+  );
+  useLayoutEffect(() => {
+    setPlayerPreferences(getInitialLearningPlayerPreferences());
+  }, []);
   const resolvedTheme = resolvePlayerTheme(playerTheme);
 
   return (
@@ -35,6 +44,7 @@ export function LessonPlayerChromePlaceholder({
       style={getPlayerThemeStyle(resolvedTheme)}
     >
       <PlayerChromePreview
+        key={`${playerPreferences.muted}:${playerPreferences.playbackRate}:${playerPreferences.volume}`}
         muted={playerPreferences.muted}
         playbackRate={playerPreferences.playbackRate}
         theme={playerTheme}

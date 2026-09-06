@@ -40,7 +40,7 @@ describe("React Router framework route configuration", () => {
         childRoutes.map(({ id, index, path }) => [id, index ? "/" : path]),
       ),
     ).toEqual({
-      home: "/",
+      "root-courses": "/",
       "home-alias": "home",
       dashboard: "dashboard",
       courses: "courses",
@@ -69,9 +69,15 @@ describe("React Router framework route configuration", () => {
   });
 
   it("declares the root, learning, and fallback routes explicitly", () => {
-    expect(childRoutes.find(({ id }) => id === "home")).toMatchObject({
-      index: true,
+    expect(childRoutes.find(({ id }) => id === "home-alias")).toMatchObject({
+      path: "home",
       file: "routes/home-marker.tsx",
+    });
+    expect(
+      childRoutes.find(({ id }) => id === "root-courses"),
+    ).toMatchObject({
+      index: true,
+      file: "routes/academy-marker.tsx",
     });
     expect(childRoutes.find(({ id }) => id === "learning")).toMatchObject({
       path: "learn/:courseSlug/:lectureSlug?",
@@ -162,6 +168,9 @@ describe("framework route descriptors", () => {
   });
 
   it("maps route IDs to the existing shell contracts", () => {
+    expect(getRouteDescriptor("root-courses")).toEqual(
+      routeDescriptors["root-courses"],
+    );
     expect(getRouteDescriptor("home-alias")).toEqual(routeDescriptors.home);
     expect(getRouteDescriptor("settings-learning")).toMatchObject({
       kind: "shell",
@@ -212,6 +221,10 @@ describe("framework route descriptors", () => {
   });
 
   it("preserves case-sensitive route behavior around framework hydration", () => {
+    expect(getEffectiveRouteId("root-courses", "/")).toBe("root-courses");
+    expect(getEffectiveRouteId("root-courses", "/courses")).toBe(
+      "home-fallback",
+    );
     expect(getEffectiveRouteId("courses", "/courses")).toBe("courses");
     expect(getEffectiveRouteId("courses", "/courses/")).toBe("courses");
     expect(getEffectiveRouteId("courses", "/COURSES")).toBe("home-fallback");

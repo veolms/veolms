@@ -20,6 +20,7 @@ import {
 } from "./LessonPlayerControls";
 import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
 import {
+  DEFAULT_LEARNING_PLAYER_PREFERENCES,
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
 } from "../learningPlayerPreferences";
@@ -149,7 +150,7 @@ export function LessonVideoPlayer({
   const captionsEnabledRef = useRef(false);
   const handoffMutingRef = useRef(false);
   const [initialPlayerPreferences] = useState(
-    getInitialLearningPlayerPreferences,
+    () => DEFAULT_LEARNING_PLAYER_PREFERENCES,
   );
   const playerPrefsRef = useRef({ ...initialPlayerPreferences });
   const playbackPrefsAppliedRef = useRef(false);
@@ -495,10 +496,13 @@ export function LessonVideoPlayer({
   );
 
   useLayoutEffect(() => {
+    const prefs = getInitialLearningPlayerPreferences();
+    playerPrefsRef.current = prefs;
+    setMuted(prefs.muted);
+
     if (restoreAutoplayRef.current !== null) return;
     const player = playerRef.current;
     if (!player) return;
-    const prefs = playerPrefsRef.current;
     applyingPlaybackPrefsRef.current = true;
     try {
       player.setVolume(prefs.volume);

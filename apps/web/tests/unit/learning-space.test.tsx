@@ -55,6 +55,7 @@ afterEach(() => {
 interface RenderLearningSpaceOptions {
   sessions?: CoursePlayerSession[];
   activeCourseId?: string | null;
+  panelActiveCourseId?: string | null;
   expanded?: boolean;
   collapsedSidebar?: boolean;
   mobile?: boolean;
@@ -67,6 +68,7 @@ interface RenderLearningSpaceOptions {
 const renderLearningSpace = ({
   sessions = createSessions(3),
   activeCourseId = sessions[0]?.courseId,
+  panelActiveCourseId,
   expanded = true,
   collapsedSidebar = false,
   mobile = false,
@@ -79,6 +81,7 @@ const renderLearningSpace = ({
     <LearningSpace
       sessions={sessions}
       activeCourseId={activeCourseId}
+      panelActiveCourseId={panelActiveCourseId}
       expanded={expanded}
       collapsedSidebar={collapsedSidebar}
       mobile={mobile}
@@ -185,6 +188,24 @@ describe("LearningSpace", () => {
         name: /Currently playing, Complete Backend with Node\.js/,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("highlights the mini-player course only inside the panel", () => {
+    renderLearningSpace({
+      activeCourseId: null,
+      panelActiveCourseId: "backend-nodejs",
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: "Learning Space, 3 active sessions",
+      }),
+    ).not.toHaveAttribute("aria-current");
+    expect(
+      screen.getByRole("button", {
+        name: /Open Complete Backend with Node\.js/,
+      }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("keeps the session count on the trigger and persists panel dismissal through its owner callback", () => {

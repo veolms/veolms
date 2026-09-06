@@ -1,14 +1,28 @@
 import { StrictMode } from "react";
+import { flushSync } from "react-dom";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
+import { prepareDocumentForHydration } from "./bootstrap/documentHydration";
 
 const hydrateApplication = () => {
-  hydrateRoot(
-    document,
-    <StrictMode>
-      <HydratedRouter />
-    </StrictMode>,
-  );
+  // Extensions such as Dark Mode mutate the SSR document at document_start
+  // and re-apply those mutations from a MutationObserver (a microtask).
+  // hydrateRoot otherwise yields to the scheduler, so the observer would
+  // dirty the tree again before React walked it. Park, hydrate synchronously,
+  // then restore.
+  const restoreDocumentAfterHydration = prepareDocumentForHydration();
+  try {
+    flushSync(() => {
+      hydrateRoot(
+        document,
+        <StrictMode>
+          <HydratedRouter />
+        </StrictMode>,
+      );
+    });
+  } finally {
+    restoreDocumentAfterHydration();
+  }
 };
 
 // The generated route context is streamed through scripts at the end of the
