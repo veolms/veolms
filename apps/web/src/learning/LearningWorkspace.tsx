@@ -39,8 +39,12 @@ import type {
   RegisterPersistentLearningPlayer,
 } from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
-import { isDesktopLearningMinimizeViewport } from "./player/learningPlayerMotion";
 import {
+  isDesktopLearningMinimizeViewport,
+  LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY,
+} from "./player/learningPlayerMotion";
+import {
+  DEFAULT_LEARNING_PLAYER_PREFERENCES,
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
 } from "./learningPlayerPreferences";
@@ -67,6 +71,7 @@ import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
   CURRICULUM_COLLAPSED_WIDTH,
+  CURRICULUM_DEFAULT_WIDTH,
   CURRICULUM_MAX_WIDTH,
   CURRICULUM_MIN_WIDTH,
   CURRICULUM_WIDTH_STORAGE_KEY,
@@ -129,6 +134,19 @@ const getPhoneLessonDrawerViewportSnapshot = () =>
 
 const getPhoneLessonDrawerViewportServerSnapshot = () => false;
 
+const subscribeToDesktopLearningMinimizeViewport = (
+  onStoreChange: () => void,
+) => {
+  const media = window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY);
+  media.addEventListener("change", onStoreChange);
+  return () => media.removeEventListener("change", onStoreChange);
+};
+
+const getDesktopLearningMinimizeViewportSnapshot = () =>
+  window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY).matches;
+
+const getDesktopLearningMinimizeViewportServerSnapshot = () => false;
+
 const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
   "input",
@@ -159,12 +177,6 @@ const isCurriculumSwipeExcludedTarget = (
   target: EventTarget | null,
   selector = CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
 ) => target instanceof Element && Boolean(target.closest(selector));
-
-const getInitialCurriculumWidth = () =>
-  getInitialLearningShellState().curriculumWidth;
-
-const getInitialCurriculumCollapsed = () =>
-  getInitialLearningShellState().curriculumCollapsed;
 
 const getInitialFloatingLessonDrawerWidth = () => {
   if (typeof window === "undefined")
@@ -261,11 +273,6 @@ interface CurriculumScreenSwipeStartEvent {
   splitX?: number;
 }
 
-type LearningWorkspaceStyle = CSSProperties & {
-  "--learning-curriculum-width": string;
-  "--learning-curriculum-expanded-width": string;
-};
-
 export function LearningWorkspace({
   courseSlug,
   lessonId,
@@ -316,7 +323,7 @@ export function LearningWorkspace({
   );
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const [autoplayEnabled, setAutoplayEnabled] = useState(
-    () => getInitialLearningPlayerPreferences().autoplay,
+    DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
   );
   const courseTitle = getCourseTitle(courseSlug);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
@@ -360,6 +367,11 @@ export function LearningWorkspace({
     getPhoneLessonDrawerViewportSnapshot,
     getPhoneLessonDrawerViewportServerSnapshot,
   );
+  const desktopLearningMinimizeViewport = useSyncExternalStore(
+    subscribeToDesktopLearningMinimizeViewport,
+    getDesktopLearningMinimizeViewportSnapshot,
+    getDesktopLearningMinimizeViewportServerSnapshot,
+  );
   const phoneLessonDrawer = mobileBottomNavigation && phoneLessonDrawerViewport;
   const lessonDrawerSnapPoints = useMemo(
     () => [lessonDrawerCollapsedSnapPoint, 1],
@@ -372,37 +384,54 @@ export function LearningWorkspace({
     "current" | "top"
   >("current");
   const [curriculumWidth, setCurriculumWidth] = useState(
-    getInitialCurriculumWidth,
+    CURRICULUM_DEFAULT_WIDTH,
   );
-  const [curriculumCollapsed, setCurriculumCollapsed] = useState(
-    getInitialCurriculumCollapsed,
-  );
+  const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
+  const learningShellHydratedRef = useRef(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
     useState<number | null>(null);
 
   useLayoutEffect(() => {
-    const root = document.documentElement;
-    const state = {
+    let shellState = {
       curriculumCollapsed,
       curriculumWidth,
     };
-    root.dataset.learningCurriculumState = curriculumCollapsed
+    const isInitialShellSync = !learningShellHydratedRef.current;
+    if (isInitialShellSync) {
+      learningShellHydratedRef.current = true;
+      shellState = getInitialLearningShellState();
+      if (shellState.curriculumCollapsed !== curriculumCollapsed) {
+        setCurriculumCollapsed(shellState.curriculumCollapsed);
+      }
+      if (shellState.curriculumWidth !== curriculumWidth) {
+        setCurriculumWidth(shellState.curriculumWidth);
+      }
+    }
+
+    const root = document.documentElement;
+    const rootWidth = isInitialShellSync
+      ? shellState.curriculumCollapsed
+        ? CURRICULUM_COLLAPSED_WIDTH
+        : shellState.curriculumWidth
+      : (curriculumResizePreviewWidth ??
+        (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth));
+    root.dataset.learningCurriculumState = shellState.curriculumCollapsed
       ? "collapsed"
       : "expanded";
     root.style.setProperty(
       "--learning-curriculum-width",
-      `${curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth}px`,
+      `${rootWidth}px`,
     );
     root.style.setProperty(
       "--learning-curriculum-expanded-width",
-      `${curriculumWidth}px`,
+      `${shellState.curriculumWidth}px`,
     );
     window.__VEO_BOOTSTRAP__ = {
       ...window.__VEO_BOOTSTRAP__,
-      learning: state,
+      learning: shellState,
     };
-  }, [curriculumCollapsed, curriculumWidth]);
+  }, [curriculumCollapsed, curriculumResizePreviewWidth, curriculumWidth]);
 
   useLayoutEffect(() => {
     const autoplay = getInitialLearningPlayerPreferences().autoplay;
@@ -1626,9 +1655,6 @@ export function LearningWorkspace({
     }
   }, []);
 
-  const curriculumViewportWidth =
-    curriculumResizePreviewWidth ??
-    (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth);
   const curriculumAccessibleWidth = Math.max(
     CURRICULUM_MIN_WIDTH,
     curriculumResizePreviewWidth ?? curriculumWidth,
@@ -1850,12 +1876,6 @@ export function LearningWorkspace({
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
-        style={
-          {
-            "--learning-curriculum-width": `${curriculumViewportWidth}px`,
-            "--learning-curriculum-expanded-width": `${curriculumWidth}px`,
-          } as LearningWorkspaceStyle
-        }
       >
         <section className="learning-workspace__lesson-column">
           <div
@@ -1891,7 +1911,7 @@ export function LearningWorkspace({
               data-learning-lesson-content=""
               aria-labelledby="learning-lesson-title"
               style={
-                isDesktopLearningMinimizeViewport()
+                desktopLearningMinimizeViewport
                   ? undefined
                   : {
                       opacity: "var(--learning-player-content-opacity, 1)",
@@ -1948,9 +1968,12 @@ export function LearningWorkspace({
             aria-valuetext={
               curriculumCollapsed
                 ? "Course curriculum collapsed"
-                : `${Math.round(curriculumAccessibleWidth)} pixels wide${
+                  : `${Math.round(curriculumAccessibleWidth)} pixels wide${
                     curriculumResizing &&
-                    curriculumViewportWidth < CURRICULUM_MIN_WIDTH
+                    (curriculumResizePreviewWidth ??
+                      (curriculumCollapsed
+                        ? CURRICULUM_COLLAPSED_WIDTH
+                        : curriculumWidth)) < CURRICULUM_MIN_WIDTH
                       ? ", sliding closed"
                       : ""
                   }`

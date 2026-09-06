@@ -89,6 +89,18 @@ const isExcludedTarget = (target: EventTarget | null) =>
   target instanceof Element &&
   Boolean(target.closest("[data-video-player-mobile-sheet]"));
 
+const blurFocusedPlayerControl = () => {
+  const activeElement = document.activeElement;
+  if (
+    activeElement instanceof HTMLElement &&
+    activeElement.closest("[data-video-player-control-layer]")
+  ) {
+    // The control layer becomes aria-hidden and inert on the next render.
+    // Move focus out first so Chromium does not retain focus in hidden UI.
+    activeElement.blur();
+  }
+};
+
 export function useLessonPlayerMinimizeGesture({
   enabled,
   fullscreen,
@@ -292,6 +304,7 @@ export function useLessonPlayerMinimizeGesture({
     const geometry = getGeometry(element);
     motionElementRef.current = element;
     geometryRef.current = geometry;
+    blurFocusedPlayerControl();
     setControlsSuppressed(true);
     applyLearningPlayerMinimizeCornerRadius();
     const clipSurface = getLearningMotionSurfaceElement();
@@ -417,6 +430,7 @@ export function useLessonPlayerMinimizeGesture({
         }
 
         gesture.active = true;
+        blurFocusedPlayerControl();
         setControlsSuppressed(true);
         suppressClickRef.current = true;
         try {

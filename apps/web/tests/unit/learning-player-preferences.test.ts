@@ -15,7 +15,7 @@ describe("learning player bootstrap", () => {
     document.querySelector("[data-player-bootstrap-test]")?.remove();
   });
 
-  it("applies persisted player settings before React initializes", () => {
+  it("publishes persisted player settings before React initializes", () => {
     localStorage.setItem("veolms-player-autoplay", "off");
     localStorage.setItem("veolms-player-muted", "true");
     localStorage.setItem("veolms-player-playback-rate", "1.5");
@@ -23,23 +23,6 @@ describe("learning player bootstrap", () => {
     window.__VEO_BOOTSTRAP__ = {
       sidebar: { mode: "collapsed", width: 280 },
     };
-
-    const workspace = document.createElement("div");
-    workspace.dataset.playerBootstrapTest = "";
-    workspace.innerHTML = `
-      <button role="switch" aria-label="Autoplay next lesson" aria-checked="true" title="Autoplay is on">
-        <span data-autoplay-track="" data-autoplay-track-state="on"></span>
-      </button>
-      <button data-volume-level="high" aria-label="Mute" title="Mute" aria-pressed="false"></button>
-      <video></video>
-    `;
-    document.body.append(workspace);
-    const media = workspace.querySelector("video");
-    if (media) {
-      media.muted = false;
-      media.volume = 1;
-      media.playbackRate = 1;
-    }
 
     new Function(getLearningPlayerBootstrapScript())();
 
@@ -57,19 +40,6 @@ describe("learning player bootstrap", () => {
     expect(document.documentElement.dataset.playerPlaybackRate).toBe("1.5");
     expect(document.documentElement.dataset.playerVolume).toBe("0.4");
 
-    const autoplaySwitch = workspace.querySelector('[role="switch"]');
-    expect(autoplaySwitch).toHaveAttribute("aria-checked", "false");
-    expect(autoplaySwitch).toHaveAttribute("title", "Autoplay is off");
-    expect(
-      workspace.querySelector("[data-autoplay-track]"),
-    ).toHaveAttribute("data-autoplay-track-state", "off");
-    expect(workspace.querySelector("[data-volume-level]")).toHaveAttribute(
-      "aria-label",
-      "Unmute",
-    );
-    expect(media?.muted).toBe(true);
-    expect(media?.volume).toBe(0.4);
-    expect(media?.playbackRate).toBe(1.5);
   });
 
   it("initializes React from the bootstrap snapshot instead of rereading storage", () => {

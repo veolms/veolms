@@ -214,16 +214,7 @@ function AutoplayToggle({
   onEnabledChange: (enabled: boolean) => void;
 }) {
   const { icons } = usePlayerTheme();
-  const bootstrappedAutoplay =
-    typeof document === "undefined"
-      ? undefined
-      : document.documentElement.dataset.playerAutoplay;
-  const shownEnabled =
-    bootstrappedAutoplay === "off"
-      ? false
-      : bootstrappedAutoplay === "on"
-        ? true
-        : enabled;
+  const shownEnabled = enabled;
   const OnIcon = icons.play;
   const OffIcon = icons.pause;
   return (
