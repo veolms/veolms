@@ -29,6 +29,7 @@ export interface CourseCatalogueProps {
   sort: CourseSort;
   onSortChange: (sort: CourseSort) => void;
   visibleCourses: readonly Course[];
+  totalCoursesCount?: number;
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course, options?: CourseOpenOptions) => void;
   courseMenu: string | null;
@@ -58,6 +59,7 @@ export function CourseCatalogue({
   sort,
   onSortChange,
   visibleCourses,
+  totalCoursesCount,
   onWishlist,
   onOpenCourse,
   courseMenu,
@@ -74,6 +76,13 @@ export function CourseCatalogue({
     () => new Set(),
   );
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  const isFiltered =
+    Boolean(search.trim()) ||
+    enrollmentFilter !== "all" ||
+    statusFilter !== "all";
+  const hasCourses =
+    totalCoursesCount !== undefined ? totalCoursesCount > 0 : isFiltered;
 
   const isCourseDeleting = (courseId: string) =>
     Boolean(deletingCourseIds?.has(courseId) || localDeletingIds.has(courseId));
@@ -282,21 +291,38 @@ export function CourseCatalogue({
           <h2 className="mt-3 text-base font-semibold text-(--text)">
             {activeSection === "Wishlist"
               ? "Your wishlist is empty"
-              : "No courses found"}
+              : hasCourses
+                ? "No courses found"
+                : "No courses yet"}
           </h2>
           <p className="mt-1.5 max-w-sm text-[0.82rem] leading-6 text-(--muted)">
             {activeSection === "Wishlist"
               ? "Save a not-enrolled course with its heart button and it will appear here."
-              : "Try a different search or filter."}
+              : hasCourses
+                ? "Try a different search or filter."
+                : role === "creator"
+                  ? "You haven't created any courses yet. Create your first course to get started."
+                  : "You don't have any courses available to you yet."}
           </p>
-          <button
-            type="button"
-            className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            data-control-radius-action
-            onClick={onResetCatalogue}
-          >
-            View all courses
-          </button>
+          {activeSection === "Wishlist" || hasCourses ? (
+            <button
+              type="button"
+              className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              data-control-radius-action
+              onClick={onResetCatalogue}
+            >
+              View all courses
+            </button>
+          ) : role === "creator" ? (
+            <button
+              type="button"
+              className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              data-control-radius-action
+              onClick={() => onNavigatePage("Create Course")}
+            >
+              Create course
+            </button>
+          ) : null}
         </div>
       )}
 
