@@ -155,8 +155,8 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
 
     // Category should be visible in metadata
     expect(screen.getByText("Web Development")).toBeVisible();
-    // Top row level badge should be present
-    expect(screen.getByText("ADVANCED")).toBeVisible();
+    // Top row level badge should NOT be present (difficulty tag removed from overview/preview)
+    expect(screen.queryByText("ADVANCED")).toBeNull();
     // Category should NOT be an aria-label badge in the top row
     expect(screen.queryByLabelText("Category: Web Development")).toBeNull();
   });
@@ -179,7 +179,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
     );
 
     expect(screen.queryByText("Web Development")).toBeNull();
-    expect(screen.getByText("ADVANCED")).toBeVisible();
+    expect(screen.queryByText("ADVANCED")).toBeNull();
   });
 
   it("omits language from metadata row while preserving resolution helper for future use", () => {
