@@ -2085,9 +2085,11 @@ export function CourseCreatePage({
     null;
 
   const initialStep =
-    parseWizardTab(searchParams.get("tab")) ||
-    parseWizardTab(searchParams.get("step")) ||
-    "basics";
+    activeEditId
+      ? parseWizardTab(searchParams.get("tab")) ||
+        parseWizardTab(searchParams.get("step")) ||
+        "basics"
+      : "basics";
   const [activeStep, setActiveStep] =
     useState<CourseWizardStepId>(initialStep);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
@@ -2233,20 +2235,6 @@ export function CourseCreatePage({
       window.history.replaceState(null, "", currentUrl.toString());
     }
   }, [activeStep]);
-
-  // Keep state synced if URL params change (e.g. popstate / back-forward navigation)
-  useEffect(() => {
-    const tabFromUrl =
-      parseWizardTab(searchParams.get("tab")) ||
-      parseWizardTab(searchParams.get("step"));
-    if (tabFromUrl && tabFromUrl !== activeStep) {
-      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-      const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === tabFromUrl);
-      if (targetIdx > currentIdx) setSlideDirection("right");
-      else if (targetIdx < currentIdx) setSlideDirection("left");
-      setActiveStep(tabFromUrl);
-    }
-  }, [searchParams]);
 
   // Basics server-confirmed baseline and local draft states
   const [serverBasics, setServerBasics] =
@@ -2525,6 +2513,24 @@ export function CourseCreatePage({
       titleInputRef.current?.focus();
     }
   }, [currentCourseId, isCourseTitleFilled, activeStep]);
+
+  // Keep state synced if URL params change (e.g. popstate / back-forward navigation)
+  useEffect(() => {
+    const tabFromUrl =
+      parseWizardTab(searchParams.get("tab")) ||
+      parseWizardTab(searchParams.get("step"));
+    if (
+      tabFromUrl &&
+      tabFromUrl !== activeStep &&
+      (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")
+    ) {
+      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
+      const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === tabFromUrl);
+      if (targetIdx > currentIdx) setSlideDirection("right");
+      else if (targetIdx < currentIdx) setSlideDirection("left");
+      setActiveStep(tabFromUrl);
+    }
+  }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
 
   const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
@@ -4440,7 +4446,6 @@ export function CourseCreatePage({
             .filter(Boolean) as CourseIncludeItem[];
           setServerIncludes(reorderedServer);
           markExtrasControlSaved("inclusions");
-          setToastMessage("Inclusions reordered successfully.");
         } catch (err: unknown) {
           markExtrasControlFailed("inclusions");
           // Rollback to previous order on failure
@@ -5211,9 +5216,6 @@ export function CourseCreatePage({
             : s,
         );
       });
-      setToastMessage(
-        `Section "${createdSection.title}" created successfully.`,
-      );
     } catch (err: unknown) {
       // Rollback temporary section on failure
       setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
@@ -5266,7 +5268,6 @@ export function CourseCreatePage({
               : s,
           ),
         );
-        setToastMessage(`Section updated to "${trimmedTitle}".`);
         markCurriculumItemSaved(sectionId);
       } catch (err: unknown) {
         const errorMsg =
@@ -5404,7 +5405,6 @@ export function CourseCreatePage({
             },
           });
           setCourseVersion((prev) => prev + 1);
-          setToastMessage("Sections reordered successfully.");
         } catch (err: unknown) {
           // Rollback to previous sections order on failure
           setSections(initial.previousSections);
@@ -5580,7 +5580,6 @@ export function CourseCreatePage({
           };
         }),
       );
-      setToastMessage(`Lesson "${newLessonTitle}" created successfully.`);
     } catch (err: unknown) {
       // Rollback temporary lesson on failure
       setSections((prev) =>
@@ -5702,9 +5701,6 @@ export function CourseCreatePage({
 
       // 2. Check whether it is dirty
       if (!isLessonDirty(les)) {
-        if (options?.showCleanToast) {
-          setToastMessage("No changes to save.");
-        }
         return true;
       }
 
@@ -5767,7 +5763,6 @@ export function CourseCreatePage({
             return next;
           });
 
-          setToastMessage(`Lesson "${trimmedTitle}" updated successfully.`);
           markCurriculumItemSaved(lessonId);
           return true;
         } catch (err: unknown) {
@@ -7464,7 +7459,6 @@ export function CourseCreatePage({
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
     if (
-      isAnyApiInProgress ||
       actionLoading !== null ||
       isSavingAllDirtyLessonsRef.current
     ) {
@@ -7913,7 +7907,10 @@ export function CourseCreatePage({
         className="course-wizard-tab-content w-full min-h-0 flex-1 flex flex-col"
         stateAttribute="data-wizard-step"
         labelledBy={`course-wizard-tab-${activeStep}`}
-        disabled={isAnyApiInProgress}
+        disabled={
+          actionLoading !== null ||
+          (!isDownstreamUnlocked && activeStep === "basics")
+        }
         spaceBetween={32}
       >
         {(panelStep) =>
@@ -11627,14 +11624,14 @@ export function CourseCreatePage({
                 paddingRight: "14px",
               }}
               className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                activeStep === "basics" || isAnyApiInProgress
+                activeStep === "basics" || actionLoading !== null
                   ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
                   : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
               }`}
               onClick={() => {
                 if (previousStepId) void navigateToStep(previousStepId);
               }}
-              disabled={activeStep === "basics" || isAnyApiInProgress}
+              disabled={activeStep === "basics" || actionLoading !== null}
               aria-label="Previous Step"
             >
               <CaretLeft size={15} />
@@ -12163,14 +12160,14 @@ export function CourseCreatePage({
             gap: "6px",
           }}
           className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
-            activeStep === "basics" || isAnyApiInProgress
+            activeStep === "basics" || actionLoading !== null
               ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
           }`}
           onClick={() => {
             if (previousStepId) void navigateToStep(previousStepId);
           }}
-          disabled={activeStep === "basics" || isAnyApiInProgress}
+          disabled={activeStep === "basics" || actionLoading !== null}
           aria-label="Previous Step"
         >
           <CaretLeft size={14} />
