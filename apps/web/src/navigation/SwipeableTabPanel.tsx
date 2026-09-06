@@ -218,7 +218,6 @@ export function SwipeableTabPanel<T extends string>({
   const swiperRef = useRef<SwiperInstance | null>(null);
   const onTabChangeRef = useRef(onTabChange);
   const activeTabRef = useRef(activeTab);
-  const headerClickIndexRef = useRef<number | null>(null);
   const tabPointerTypeRef = useRef<string | null>(null);
   const touchActiveRef = useRef(false);
 
@@ -264,15 +263,29 @@ export function SwipeableTabPanel<T extends string>({
       const destination = tabs[swiper.activeIndex];
       if (!destination) return;
 
-      updateIndicatorForTab(destination);
-      revealTab(destination, "smooth");
-      if (destination === activeTabRef.current) return;
-
-      if (headerClickIndexRef.current === swiper.activeIndex) {
-        headerClickIndexRef.current = null;
+      if (destination === activeTabRef.current) {
+        updateIndicatorForTab(destination);
+        revealTab(destination, "smooth");
         return;
       }
+
       onTabChangeRef.current(destination);
+
+      // Defensive snap-back: if onTabChange is rejected or fails to commit,
+      // restore Swiper position and indicator back to activeTab.
+      window.requestAnimationFrame(() => {
+        if (swiperRef.current) {
+          const expectedIndex = tabs.indexOf(activeTabRef.current);
+          if (
+            expectedIndex >= 0 &&
+            swiperRef.current.activeIndex !== expectedIndex
+          ) {
+            swiperRef.current.slideTo(expectedIndex, 0);
+            updateIndicatorForTab(activeTabRef.current);
+            revealTab(activeTabRef.current, "auto");
+          }
+        }
+      });
     },
     [revealTab, tabs, updateIndicatorForTab],
   );
@@ -305,7 +318,10 @@ export function SwipeableTabPanel<T extends string>({
     const targetIndex = tabs.indexOf(activeTab);
     if (!swiper || targetIndex < 0) return;
     if (swiper.activeIndex !== targetIndex) {
-      swiper.slideTo(targetIndex);
+      const pointerType = tabPointerTypeRef.current;
+      tabPointerTypeRef.current = null;
+      const animate = pointerType === "touch" || pointerType === "pen";
+      swiper.slideTo(targetIndex, animate ? swiper.params.speed : 0);
     }
     swiper.updateAutoHeight();
     const frame = window.requestAnimationFrame(() => {
@@ -348,27 +364,8 @@ export function SwipeableTabPanel<T extends string>({
       tabPointerTypeRef.current = null;
     };
 
-    const handleTabClick = (event: MouseEvent) => {
-      const pointerType = tabPointerTypeRef.current;
-      tabPointerTypeRef.current = null;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
-      if (!tabButton || !tabList.contains(tabButton)) return;
-      const tab = tabButton.dataset.swipeTabId as T | undefined;
-      const tabIndex = tab ? tabs.indexOf(tab) : -1;
-      const swiper = swiperRef.current;
-      if (tabIndex < 0 || !swiper || swiper.activeIndex === tabIndex) return;
-
-      headerClickIndexRef.current = tabIndex;
-      updateIndicatorForTab(tab!);
-      const animate = pointerType === "touch" || pointerType === "pen";
-      swiper.slideTo(tabIndex, animate ? swiper.params.speed : 0);
-    };
-
     tabList.addEventListener("pointerdown", handleTabPointerDown, true);
     tabList.addEventListener("pointercancel", handleTabPointerCancel, true);
-    tabList.addEventListener("click", handleTabClick, true);
     return () => {
       tabList.removeEventListener("pointerdown", handleTabPointerDown, true);
       tabList.removeEventListener(
@@ -376,9 +373,8 @@ export function SwipeableTabPanel<T extends string>({
         handleTabPointerCancel,
         true,
       );
-      tabList.removeEventListener("click", handleTabClick, true);
     };
-  }, [tabListRef, tabs, updateIndicatorForTab]);
+  }, [tabListRef]);
 
   useEffect(() => {
     const tabList = tabListRef.current;

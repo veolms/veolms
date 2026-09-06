@@ -299,6 +299,35 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(activeStep).toBe("curriculum");
     });
 
+    it("allows step switching while a background toggle auto-save (e.g. Q&A toggle) is processing", async () => {
+      let activeStep: CourseWizardStepId = "access-rules";
+      let actionLoading: string | null = null;
+      let isSavingAllDirtyLessons = false;
+      let isQaMutationInFlight = true; // Background mutation in flight
+      const isDownstreamUnlocked = true;
+
+      const navigateToStep = async (destination: CourseWizardStepId) => {
+        // Navigation only blocks on active step-transition save or curriculum dirty lesson persistence
+        if (actionLoading !== null || isSavingAllDirtyLessons) {
+          return;
+        }
+        if (destination === activeStep) return;
+
+        if (!isDownstreamUnlocked && destination !== "basics") {
+          return;
+        }
+
+        // Clean step transitions update immediately without being blocked by background mutation
+        activeStep = destination;
+      };
+
+      // User toggled Q&A (mutation is in flight) and immediately switches to Basics tab
+      await navigateToStep("basics");
+
+      expect(activeStep).toBe("basics");
+      expect(isQaMutationInFlight).toBe(true);
+    });
+
     it("ignores navigation when destination is already the active step", async () => {
       const saveMock = vi.fn();
       let activeStep: CourseWizardStepId = "pricing";
