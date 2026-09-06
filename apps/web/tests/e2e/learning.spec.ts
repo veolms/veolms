@@ -1266,7 +1266,7 @@ test("tablet browser back closes each bottom drawer before navigating", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 800, height: 1000 });
-  await openApp(page, "/");
+  await openApp(page, "/home");
   await openApp(
     page,
     "/learn/backend-nodejs/career-opportunities-15?from=courses",
@@ -1316,7 +1316,7 @@ test("browser back closes the topmost profile popup before its More drawer", asy
   page,
 }) => {
   await page.setViewportSize({ width: 800, height: 1000 });
-  await openApp(page, "/");
+  await openApp(page, "/home");
   await openApp(
     page,
     "/learn/backend-nodejs/career-opportunities-15?from=courses",

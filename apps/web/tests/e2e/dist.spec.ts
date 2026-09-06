@@ -462,7 +462,7 @@ test("compiled client serves direct routes and bundled course artwork", async ({
   expect(catalogueHtml).toContain("Student navigation");
   expect(catalogueHtml).not.toBe(settingsHtml);
 
-  await openApp(page, "/");
+  await openApp(page, "/home");
   await expect(
     page.getByRole("heading", { name: /Good evening, Ashi/ }),
   ).toBeVisible();

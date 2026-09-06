@@ -295,6 +295,17 @@ export default function AcademyLayout() {
 
   const { signOut } = useSignOut();
 
+  useLayoutEffect(() => {
+    if (normalizeNavigationPath(location.pathname) !== "/") return;
+
+    // The root document already renders the catalogue. Replace only the
+    // client-side URL so navigating to /courses does not request the document
+    // again or briefly mount the future home page.
+    void navigate(`/courses${location.search}${location.hash}`, {
+      replace: true,
+    });
+  }, [location.hash, location.pathname, location.search, navigate]);
+
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
