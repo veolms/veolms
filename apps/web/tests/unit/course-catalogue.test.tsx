@@ -260,16 +260,97 @@ describe("CourseCatalogue", () => {
     expect(skeletonContainer).toBeVisible();
     expect(screen.getAllByTestId("course-card-skeleton")).toHaveLength(6);
     expect(screen.queryByText("No courses found")).toBeNull();
+    expect(screen.queryByText("No courses yet")).toBeNull();
   });
 
-  it("renders empty state when isLoading is false and visibleCourses is empty", () => {
+  it("renders student zero-course empty state when visibleCourses is empty and no filters/search are active", () => {
     renderCatalogue({
       isLoading: false,
+      role: "student",
       visibleCourses: [],
+      totalCoursesCount: 0,
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses yet")).toBeVisible();
+    expect(
+      screen.getByText("You don't have any courses available to you yet."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Create course" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "View all courses" }),
+    ).toBeNull();
+  });
+
+  it("renders creator zero-course empty state with Create course button when visibleCourses is empty and no courses exist", () => {
+    const { onNavigatePage } = renderCatalogue({
+      isLoading: false,
+      role: "creator",
+      visibleCourses: [],
+      totalCoursesCount: 0,
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses yet")).toBeVisible();
+    expect(
+      screen.getByText(
+        "You haven't created any courses yet. Create your first course to get started.",
+      ),
+    ).toBeVisible();
+
+    const createButton = screen.getByRole("button", { name: "Create course" });
+    expect(createButton).toBeVisible();
+    fireEvent.click(createButton);
+    expect(onNavigatePage).toHaveBeenCalledWith("Create Course");
+    expect(
+      screen.queryByRole("button", { name: "View all courses" }),
+    ).toBeNull();
+  });
+
+  it("renders search/filter empty state when courses exist but search/filter returns zero results", () => {
+    const { onResetCatalogue } = renderCatalogue({
+      isLoading: false,
+      role: "student",
+      search: "non-existent course",
+      visibleCourses: [],
+      totalCoursesCount: 5,
     });
 
     expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
     expect(screen.getByText("No courses found")).toBeVisible();
+    expect(
+      screen.getByText("Try a different search or filter."),
+    ).toBeVisible();
+
+    const viewAllButton = screen.getByRole("button", {
+      name: "View all courses",
+    });
+    expect(viewAllButton).toBeVisible();
+    fireEvent.click(viewAllButton);
+    expect(onResetCatalogue).toHaveBeenCalled();
+  });
+
+  it("renders search/filter empty state for creator when filters produce zero results even if total courses exist", () => {
+    const { onResetCatalogue } = renderCatalogue({
+      isLoading: false,
+      role: "creator",
+      enrollmentFilter: "draft",
+      visibleCourses: [],
+      totalCoursesCount: 3,
+    });
+
+    expect(screen.getByText("No courses found")).toBeVisible();
+    expect(
+      screen.getByText("Try a different search or filter."),
+    ).toBeVisible();
+    const viewAllButton = screen.getByRole("button", {
+      name: "View all courses",
+    });
+    expect(viewAllButton).toBeVisible();
+    fireEvent.click(viewAllButton);
+    expect(onResetCatalogue).toHaveBeenCalled();
   });
 
   it("renders CourseThumbnailPlaceholder when a course has no thumbnail", () => {

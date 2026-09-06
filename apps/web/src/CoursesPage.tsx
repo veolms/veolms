@@ -1666,6 +1666,21 @@ export function CoursesPage({
     publishedCoursesData?.courses,
   ]);
 
+  const totalCoursesCount = useMemo(() => {
+    if (effectiveRole !== "creator") {
+      return publishedCoursesData?.courses?.length ?? 0;
+    }
+    return (
+      (myCoursesData?.courses?.length ?? 0) +
+      (deletedCoursesData?.courses?.length ?? 0)
+    );
+  }, [
+    deletedCoursesData?.courses?.length,
+    effectiveRole,
+    myCoursesData?.courses?.length,
+    publishedCoursesData?.courses?.length,
+  ]);
+
   const handleDeleteCourse = async (course: Course) => {
     setDeletingCourseIds((prev) => new Set(prev).add(course.id));
     try {
@@ -3296,6 +3311,7 @@ export function CoursesPage({
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         visibleCourses={visibleCourses}
+        totalCoursesCount={totalCoursesCount}
         onWishlist={toggleWishlist}
         onOpenCourse={onOpenCourse}
         courseMenu={courseMenu}
