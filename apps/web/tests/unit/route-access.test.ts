@@ -4,6 +4,8 @@ import {
   MFA_CHALLENGE_PATH,
   buildLoginPath,
   isCoursesPublicPath,
+  hasCourseAuthorRole,
+  isCourseAuthorPath,
   isLearningPath,
   isPublicAcademyPath,
   isSettingsPath,
@@ -12,11 +14,34 @@ import {
   resolveAcademyLandingDestination,
   resolveSessionAccess,
   shouldBlockAcademyRender,
+  shouldRedirectFromCourseAuthorPath,
   sanitizeReturnTo,
   shouldRedirectToMfaChallenge,
 } from "../../src/routing/routeAccess.ts";
 
 describe("route access policy", () => {
+  it("restricts course authoring to creator-capable roles", () => {
+    expect(isCourseAuthorPath("/courses/create?edit=course-id")).toBe(true);
+    expect(hasCourseAuthorRole(["student"])).toBe(false);
+    expect(hasCourseAuthorRole(["INSTRUCTOR"])).toBe(true);
+    expect(hasCourseAuthorRole(["admin"])).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", ["student"]),
+    ).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", undefined),
+    ).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/courses/create", [
+        "student",
+        "creator",
+      ]),
+    ).toBe(false);
+    expect(shouldRedirectFromCourseAuthorPath("/courses", ["student"])).toBe(
+      false,
+    );
+  });
+
   it("treats courses, lessons, and settings as public academy routes", () => {
     expect(isCoursesPublicPath("/courses")).toBe(true);
     expect(isCoursesPublicPath("/courses/demo/overview")).toBe(true);

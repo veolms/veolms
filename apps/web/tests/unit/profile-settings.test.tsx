@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
+import { autosyncManager, getAutosyncDraftKey } from "../../src/lib/autosync";
 import { renderWithQueryClient } from "./test-utils.tsx";
 
 const authMocks = vi.hoisted(() => ({
@@ -11,6 +12,8 @@ const authMocks = vi.hoisted(() => ({
   useUpdateProfile: vi.fn(),
   useVerifyEmail: vi.fn(),
   useVerifyPhoneNumber: vi.fn(),
+  authService: { updateProfile: vi.fn() },
+  authKeys: { me: () => ["auth", "me"] },
   sendEmailVerification: vi.fn(),
   sendPhoneVerification: vi.fn(),
   mutateAsync: vi.fn(),
@@ -25,6 +28,8 @@ vi.mock("../../src/services/auth", () => ({
   useUpdateProfile: authMocks.useUpdateProfile,
   useVerifyEmail: authMocks.useVerifyEmail,
   useVerifyPhoneNumber: authMocks.useVerifyPhoneNumber,
+  authService: authMocks.authService,
+  authKeys: authMocks.authKeys,
 }));
 
 const profileUser = {
@@ -77,6 +82,11 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       isFetched: true,
     });
     authMocks.mutateAsync.mockReset();
+    authMocks.authService.updateProfile.mockReset();
+    authMocks.authService.updateProfile.mockImplementation(
+      (...args: Parameters<typeof authMocks.mutateAsync>) =>
+        authMocks.mutateAsync(...args),
+    );
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPhoneVerification.mockReset();
     authMocks.verifyEmail.mockReset();
@@ -136,7 +146,12 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     expect(
       screen.getByRole("checkbox", { name: /show email/i }),
     ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Discard" }),
+    ).not.toBeInTheDocument();
   });
 
   it("requires acknowledgement before publishing a verified mobile number", async () => {
@@ -189,10 +204,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
   });
 
   it("shows missing social links inline instead of using a toast", () => {
-    const setNotice = vi.fn();
-    renderWithQueryClient(
-      <ProfileSettings role="student" setNotice={setNotice} />,
-    );
+    renderWithQueryClient(<ProfileSettings role="student" />);
 
     fireEvent.click(
       screen.getByRole("checkbox", {
@@ -200,7 +212,6 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       }),
     );
 
-    expect(setNotice).not.toHaveBeenCalled();
     expect(
       screen.getByText("Add your LinkedIn link before showing it publicly."),
     ).toBeInTheDocument();
@@ -363,13 +374,15 @@ describe("ProfileSettings mobile visibility confirmation", () => {
 
     expect(screen.getByLabelText("Display name")).toHaveValue("");
     expect(screen.getByLabelText("Username")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(
-      screen.getByText("Sign in to edit and save your profile."),
+      screen.queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Sign in to edit your profile."),
     ).toBeInTheDocument();
   });
 
-  it("saves profile edits only after the explicit save action", async () => {
+  it("autosaves profile edits after the debounce window", async () => {
     const updatedProfile = {
       ...profileUser,
       displayName: "Nilesh Kumar",
@@ -390,13 +403,13 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       target: { value: "Building useful products." },
     });
 
-    const save = screen.getByRole("button", { name: "Save changes" });
-    expect(save).toBeEnabled();
-    expect(authMocks.mutateAsync).not.toHaveBeenCalled();
-
-    fireEvent.click(save);
-
-    await waitFor(() => expect(authMocks.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
+    await waitFor(
+      () => expect(authMocks.mutateAsync).toHaveBeenCalledTimes(1),
+      { timeout: 2_000 },
+    );
     expect(authMocks.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         displayName: "Nilesh Kumar",
@@ -404,9 +417,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
         bio: "Building useful products.",
       }),
     );
-    expect(
-      await screen.findByText("Your profile is up to date."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
   it("persists email visibility through the profile update payload", async () => {
@@ -421,14 +432,102 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       name: "Show email address on your public profile",
     });
     fireEvent.click(emailVisibility);
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-    await waitFor(() =>
-      expect(authMocks.mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ emailPublic: true }),
-      ),
+    await waitFor(
+      () =>
+        expect(authMocks.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ emailPublic: true }),
+        ),
+      { timeout: 2_000 },
     );
     expect(emailVisibility).toBeChecked();
+  });
+
+  it("restores a local draft after a failed server sync", async () => {
+    authMocks.mutateAsync.mockRejectedValue(new Error("Network unavailable"));
+    const firstRender = renderWithQueryClient(
+      <ProfileSettings role="student" />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Draft that must survive" },
+    });
+
+    const draftKey = getAutosyncDraftKey({
+      entity: "profile",
+      entityId: profileUser.id,
+      scope: "settings",
+    });
+    await waitFor(
+      () => {
+        const stored = localStorage.getItem(draftKey);
+        expect(stored).not.toBeNull();
+        expect(stored).toContain("Draft that must survive");
+      },
+      { timeout: 2_000 },
+    );
+    await waitFor(() =>
+      expect(authMocks.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ displayName: "Draft that must survive" }),
+      ),
+    );
+
+    firstRender.unmount();
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    expect(screen.getByLabelText("Display name")).toHaveValue(
+      "Draft that must survive",
+    );
+  });
+
+  it("keeps an offline draft local and syncs it after reconnecting", async () => {
+    authMocks.mutateAsync.mockResolvedValue(profileUser);
+    const onlineSpy = vi
+      .spyOn(navigator, "onLine", "get")
+      .mockReturnValue(false);
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Offline profile draft" },
+    });
+
+    const draftKey = getAutosyncDraftKey({
+      entity: "profile",
+      entityId: profileUser.id,
+      scope: "settings",
+    });
+    await waitFor(() =>
+      expect(localStorage.getItem(draftKey)).toContain("Offline profile draft"),
+    );
+    expect(authMocks.mutateAsync).not.toHaveBeenCalled();
+
+    onlineSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event("online"));
+    await waitFor(
+      () =>
+        expect(authMocks.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ displayName: "Offline profile draft" }),
+        ),
+      { timeout: 2_000 },
+    );
+    onlineSpy.mockRestore();
+  });
+
+  it("flushes pending edits immediately when navigation requests a sync", async () => {
+    authMocks.mutateAsync.mockResolvedValue({
+      ...profileUser,
+      displayName: "Navigation-safe profile",
+    });
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Navigation-safe profile" },
+    });
+    await autosyncManager.flushAll();
+
+    expect(authMocks.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: "Navigation-safe profile" }),
+    );
   });
 
   it("rejects profile photos larger than 2 MB before reading them", () => {

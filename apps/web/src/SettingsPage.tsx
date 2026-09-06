@@ -20,10 +20,7 @@ import {
 } from "./accessibility/rovingTabFocus";
 import type { DisplayMode } from "./settings/AppearanceSettings";
 import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
-import type {
-  ProfilePreferences,
-  ProfileRole,
-} from "./settings/profilePreferences";
+import type { ProfilePreferences, ProfileRole } from "./settings/profileTypes";
 import type {
   PageTabColors,
   SidebarMode,
@@ -31,7 +28,6 @@ import type {
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
 import type { NavigationItemWithMetadata } from "./shell/navigation";
-import type { ToastMessage } from "./ToastNotification";
 import {
   normalizeSettingsTab,
   readSettingsTab,
@@ -116,7 +112,6 @@ export interface SettingsPageProps {
   onNavigatePage?: NavigateTo;
   onExitSettings?: () => void;
   onProfileSaved?: (profile: ProfilePreferences) => void;
-  setNotice?: (message: ToastMessage) => void;
   theme: DisplayMode;
   onThemeChange: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
@@ -144,9 +139,7 @@ const SettingsTabContent = memo(function SettingsTabContent({
       return (
         <ProfileSettings
           role={pageProps.role}
-          onNavigatePage={pageProps.onNavigatePage}
           onProfileSaved={pageProps.onProfileSaved}
-          setNotice={pageProps.setNotice}
           isAuthenticated={pageProps.isAuthenticated}
         />
       );
@@ -201,7 +194,6 @@ export function SettingsPage({
   onNavigatePage,
   onExitSettings,
   onProfileSaved,
-  setNotice,
   theme,
   onThemeChange,
   academyTheme,
@@ -235,7 +227,6 @@ export function SettingsPage({
       onNavigatePage,
       onExitSettings,
       onProfileSaved,
-      setNotice,
       theme,
       onThemeChange,
       academyTheme,
@@ -266,24 +257,28 @@ export function SettingsPage({
       onThemeChange,
       pageTabColors,
       role,
-      setNotice,
       sidebarMode,
       sidebarPreferences,
       theme,
     ],
   );
-  const navigateTab = (id: SettingsTab) => {
-    rememberSettingsTab(id);
-    window.requestAnimationFrame(() => {
-      window.setTimeout(
-        () =>
-          onNavigatePage?.(`/settings/${id}`, {
-            preserveScroll: true,
-          }),
-        0,
-      );
-    });
-  };
+  const navigateTab = useCallback(
+    (id: SettingsTab) => {
+      rememberSettingsTab(id);
+      window.requestAnimationFrame(() => {
+        window.setTimeout(
+          () =>
+            onNavigatePage?.(`/settings/${id}`, {
+              preserveScroll: true,
+            }),
+          0,
+        );
+      });
+    },
+    [onNavigatePage],
+  );
+
+  const leaveSettings = useCallback(() => onExitSettings?.(), [onExitSettings]);
 
   const renderSettingsTab = (panelTab: SettingsTab) => (
     <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />
@@ -351,12 +346,12 @@ export function SettingsPage({
       if (transientSurfaceIsOpen) return;
 
       event.preventDefault();
-      onExitSettings?.();
+      leaveSettings();
     };
 
     document.addEventListener("keydown", exitSettings);
     return () => document.removeEventListener("keydown", exitSettings);
-  }, [onExitSettings]);
+  }, [leaveSettings]);
 
   useEffect(() => {
     const navigateSettingsTab = (event: KeyboardEvent) => {
@@ -445,7 +440,7 @@ export function SettingsPage({
       <SwipeableTabPanel
         tabs={SETTINGS_TAB_IDS}
         activeTab={activeTab}
-        onTabChange={navigateTab}
+        onTabChange={(nextTab) => void navigateTab(nextTab)}
         tabListRef={tabListRef}
         id="settings-tab-panel"
         className="settings-tab-content pb-8"

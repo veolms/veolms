@@ -26,8 +26,8 @@ import type {
   UserProfileResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { autosyncManager } from "../../lib/autosync";
 import { authStore } from "../../store/auth.store";
-import { clearStoredProfilePreferences } from "../../settings/profilePreferences";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
@@ -280,7 +280,6 @@ export function useLogout() {
     onSuccess: () => {
       authStore.clearAuth();
       clearCoursePlayerSessions();
-      clearStoredProfilePreferences();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
@@ -297,7 +296,6 @@ export function useDeactivateAccount() {
     onSuccess: () => {
       authStore.clearAuth();
       clearCoursePlayerSessions();
-      clearStoredProfilePreferences();
 
       // A deactivated account must not leave protected data in the client
       // cache, especially if another account signs in in the same tab.
@@ -311,16 +309,12 @@ export function useSignOut() {
   const logoutMutationRef = useRef(logoutMutation);
   logoutMutationRef.current = logoutMutation;
 
-  const signOut = useCallback(() => {
-    void logoutMutationRef.current
-      .mutateAsync()
-      .catch(() => undefined)
-      .finally(() => {
-        // Redirect even when the API request cannot complete. This prevents a
-        // stale authenticated shell from trapping the user in the workspace.
-        clearStoredProfilePreferences();
-        if (typeof window !== "undefined") window.location.href = "/";
-      });
+  const signOut = useCallback(async () => {
+    await autosyncManager.requireSynced();
+    await logoutMutationRef.current.mutateAsync().catch(() => undefined);
+    // Redirect even when the API request cannot complete. This prevents a
+    // stale authenticated shell from trapping the user in the workspace.
+    if (typeof window !== "undefined") window.location.href = "/";
   }, []);
 
   return { isPending: logoutMutation.isPending, signOut };

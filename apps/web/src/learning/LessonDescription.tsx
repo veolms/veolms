@@ -23,7 +23,6 @@ Keep this nearby while you watch, then try the exercise at the end of the lesson
 
 \`\`\`javascript
 const journey = ["discover", "decide", "delight"];
-console.log(journey.join(" → "));
 \`\`\`
 
 See the [Nielsen Norman Group glossary](https://www.nngroup.com/articles/definition-user-experience/) for terms used in this lesson.
@@ -95,9 +94,7 @@ export function LessonDescription() {
       data-lesson-description
       data-expanded={expanded ? "true" : "false"}
       aria-label={
-        expanded
-          ? "Lesson description"
-          : "Show more of the lesson description"
+        expanded ? "Lesson description" : "Show more of the lesson description"
       }
       aria-expanded={expanded}
       role={expanded ? undefined : "button"}
@@ -159,9 +156,7 @@ export function LessonDescription() {
         )}
       </div>
       {expanded && (
-        <p
-          className={`relative z-10 mt-5 ${DESCRIPTION_PREVIEW_TYPOGRAPHY}`}
-        >
+        <p className={`relative z-10 mt-5 ${DESCRIPTION_PREVIEW_TYPOGRAPHY}`}>
           <button
             ref={showLessRef}
             type="button"
