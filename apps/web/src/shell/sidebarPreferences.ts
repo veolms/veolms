@@ -165,6 +165,21 @@ export const getInitialSidebarShellState = (): SidebarShellState => {
     };
   }
 
+  // The bootstrap object can be replaced while the SPA fallback is being
+  // swapped for a deep-link route in development. The head script has
+  // already applied the same value to the document, so preserve that geometry
+  // before consulting storage or falling back to the default width.
+  const root = document.documentElement;
+  const rootWidth = Number.parseFloat(
+    root.style.getPropertyValue("--sidebar-width"),
+  );
+  if (Number.isFinite(rootWidth) && isSidebarMode(root.dataset.sidebarState)) {
+    return {
+      mode: root.dataset.sidebarState,
+      width: clampSidebarWidth(rootWidth, SIDEBAR_MAX_WIDTH_LIMIT),
+    };
+  }
+
   return {
     mode: getInitialSidebarMode(),
     width: getInitialSidebarWidth(getStoredSidebarMaxWidth()),
