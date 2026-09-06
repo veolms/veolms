@@ -7,6 +7,9 @@ import { defineConfig, loadEnv } from "vite";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
+const axiosBrowserEntry = fileURLToPath(
+  new URL("./node_modules/axios/dist/esm/axios.js", import.meta.url),
+);
 
 const shellPhosphorIcons = new Set([
   "Bell",
@@ -86,6 +89,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": webSourceRoot,
+        // Axios' package ESM entry currently resolves its Node platform in
+        // Vite, which exposes the Node-only `process` global to the browser.
+        axios: axiosBrowserEntry,
       },
       dedupe: ["@tiptap/core", "@tiptap/pm"],
     },

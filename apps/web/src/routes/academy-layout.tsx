@@ -70,8 +70,8 @@ import {
   scrollApplicationTo,
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
-import { flushProfileAutosave } from "../settings/profileAutosave";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
+import { autosyncManager } from "../lib/autosync";
 import {
   getNumberShortcutIndex,
   isEditingShortcutTarget,
@@ -262,7 +262,12 @@ export default function AcademyLayout() {
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
-      signOut();
+      void signOut().catch(() => {
+        // A critical sync barrier must be allowed to stop logout. Return to
+        // the previous screen so an offline/blocked draft is not stranded on
+        // a route with no actionable UI.
+        void navigate(-1);
+      });
       return;
     }
     const destination =
@@ -325,12 +330,7 @@ export default function AcademyLayout() {
         }
       };
 
-      if (isSettingsPath(locationPathRef.current)) {
-        void flushProfileAutosave().then(performNavigation);
-        return;
-      }
-
-      performNavigation();
+      void autosyncManager.flushAll().then(performNavigation);
     },
     [navigate],
   );
@@ -345,7 +345,9 @@ export default function AcademyLayout() {
       top: destination.top,
     };
     locationPathRef.current = destination.path;
-    void navigate(destination.path, { preventScrollReset: true });
+    void autosyncManager
+      .flushAll()
+      .then(() => navigate(destination.path, { preventScrollReset: true }));
   }, [navigate]);
 
   useEffect(() => {

@@ -65,7 +65,7 @@ import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
 import { useCurrentUser, useSignOut } from "./services/auth";
-import { flushProfileAutosave } from "./settings/profileAutosave";
+import { autosyncManager } from "./lib/autosync";
 import { useAuthStore } from "./store/auth.store";
 import {
   useCourses,
@@ -734,10 +734,14 @@ export function CoursesPage({
     [role, userRoles],
   );
   const { isPending: isSigningOut, signOut } = useSignOut();
-  const signOutAfterProfileAutosave = useCallback(async () => {
-    await flushProfileAutosave();
-    signOut();
-  }, [signOut]);
+  const signOutAfterSync = useCallback(async () => {
+    try {
+      await autosyncManager.requireSynced();
+      await signOut();
+    } catch {
+      setNotice("Couldn't sign out yet. Please try again.");
+    }
+  }, [setNotice, signOut]);
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const { data: publishedCoursesData } = useCourses({
     enabled: shouldLoadCourseSurface && role === "student",
@@ -4513,7 +4517,7 @@ export function CoursesPage({
         isOpen={logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void signOutAfterProfileAutosave()}
+        onConfirm={() => void signOutAfterSync()}
       />
 
       {notice && (

@@ -12,10 +12,7 @@ import {
 } from "./accessibility/rovingTabFocus";
 import type { DisplayMode } from "./settings/AppearanceSettings";
 import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
-import type {
-  ProfilePreferences,
-  ProfileRole,
-} from "./settings/profilePreferences";
+import type { ProfilePreferences, ProfileRole } from "./settings/profileTypes";
 import type {
   PageTabColors,
   SidebarMode,
@@ -38,7 +35,6 @@ import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { LearningSettings } from "./settings/LearningSettings";
 import { NotificationSettings } from "./settings/NotificationSettings";
 import { ProfileSettings } from "./settings/ProfileSettings";
-import { flushProfileAutosave } from "./settings/profileAutosave";
 import { SecuritySettings } from "./settings/SecuritySettings";
 import { useAuthStore } from "./store/auth.store";
 import { SidebarSettings } from "./settings/SidebarSettings";
@@ -200,7 +196,6 @@ export function SettingsPage({
   // for a signed-out user.
   const canEditAuthenticatedSettings = isAuthenticated && storeIsAuthenticated;
   const tabListRef = useRef<HTMLElement>(null);
-  const flushBeforeNavigation = useCallback(() => flushProfileAutosave(), []);
   const pageProps: SettingsPageProps = {
     tab,
     role,
@@ -224,16 +219,13 @@ export function SettingsPage({
   };
   const navigateTab = useCallback(
     async (id: SettingsTab) => {
-      await flushBeforeNavigation();
       rememberSettingsTab(id);
       onNavigatePage?.(`/settings/${id}`, { preserveScroll: true });
     },
-    [flushBeforeNavigation, onNavigatePage],
+    [onNavigatePage],
   );
 
-  const leaveSettings = useCallback(() => {
-    void flushBeforeNavigation().then(() => onExitSettings?.());
-  }, [flushBeforeNavigation, onExitSettings]);
+  const leaveSettings = useCallback(() => onExitSettings?.(), [onExitSettings]);
 
   const renderSettingsTab = (panelTab: SettingsTab) => (
     <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />

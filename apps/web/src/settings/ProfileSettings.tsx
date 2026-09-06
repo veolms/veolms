@@ -40,29 +40,25 @@ import {
 } from "../auth/identifier";
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
-import {
-  clearStoredProfileDraft,
-  getDefaultProfileIdentity,
-  getStoredProfileDraft,
-  saveProfileDraft,
-} from "./profilePreferences";
-import { registerProfileAutosaveFlush } from "./profileAutosave";
 import type {
   ProfileIdentity,
   ProfilePreferences,
   ProfileRole,
-} from "./profilePreferences";
+} from "./profileTypes";
+import { getDefaultProfileIdentity } from "./profileTypes";
 import {
   useCurrentUser,
   useSendEmailVerificationOtp,
   useSendPhoneVerificationOtp,
-  useUpdateProfile,
   useVerifyEmail,
   useVerifyPhoneNumber,
 } from "../services/auth";
-import { useAuthStore, type AuthUser } from "../store/auth.store";
+import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
 import type { ProfileUpdateRequest } from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
+import { AutosaveStatus, useAutosync } from "../lib/autosync";
+import { authKeys, authService } from "../services/auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -75,11 +71,7 @@ type EditableProfile = ProfilePreferences & {
 };
 
 type SocialVisibilityField = "linkedin" | "github" | "portfolio";
-type AutosaveStatus =
-  "idle" | "pending" | "syncing" | "saved" | "offline" | "blocked" | "error";
-
 const SIGN_IN_REQUIRED_MESSAGE = "Sign in to edit your profile.";
-const PROFILE_AUTOSAVE_DEBOUNCE_MS = 900;
 
 const MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024;
 
@@ -389,22 +381,97 @@ export function ProfileSettings({
   const activeUser =
     userProfileFetched && !userProfileError ? userProfile : storeUser;
   const canEdit = isAuthenticated && Boolean(activeUser);
+  const queryClient = useQueryClient();
   const sendPhoneVerificationMutation = useSendPhoneVerificationOtp();
   const verifyPhoneNumberMutation = useVerifyPhoneNumber();
   const sendEmailVerificationMutation = useSendEmailVerificationOtp();
   const verifyEmailMutation = useVerifyEmail();
-  const updateProfileMutation = useUpdateProfile();
 
   const initialIdentity = useMemo(
     () => getDefaultProfileIdentity(role),
     [role],
   );
-  const [savedProfile, setSavedProfile] = useState<EditableProfile>(() =>
-    toEditableProfile(initialIdentity),
+  const serverProfile = useMemo(
+    () =>
+      toEditableProfile(
+        activeUser
+          ? profileIdentityFromUser(activeUser, role)
+          : initialIdentity,
+      ),
+    [activeUser, initialIdentity, role],
   );
-  const [draftProfile, setDraftProfile] = useState<EditableProfile>(() =>
-    toEditableProfile(initialIdentity),
+  const autosyncKey = useMemo(
+    () => ({
+      entity: "profile",
+      entityId: activeUser?.id ?? "anonymous",
+      scope: "settings",
+    }),
+    [activeUser?.id],
   );
+  const syncProfile = useCallback(
+    async (
+      draft: EditableProfile,
+      { previousValue }: { previousValue: EditableProfile },
+    ) => {
+      const { payload } = buildProfileUpdatePayload(draft, previousValue);
+      if (!payload) {
+        throw new Error("Complete the required profile fields before syncing.");
+      }
+      return authService.updateProfile(payload);
+    },
+    [],
+  );
+  const validateProfile = useCallback(
+    (
+      draft: EditableProfile,
+      { previousValue }: { previousValue: EditableProfile },
+    ) => {
+      const { payload, hasInvalidFields } = buildProfileUpdatePayload(
+        draft,
+        previousValue,
+      );
+      return {
+        valid: Boolean(payload) && !hasInvalidFields,
+        message: hasInvalidFields
+          ? "Complete the required profile fields before syncing it."
+          : undefined,
+      };
+    },
+    [],
+  );
+  const handleProfileSynced = useCallback(
+    (updatedUser: Awaited<ReturnType<typeof authService.updateProfile>>) => {
+      const nextProfile = toEditableProfile(
+        profileIdentityFromUser(updatedUser, role),
+      );
+      authStore.setUser(updatedUser);
+      queryClient.setQueryData(authKeys.me(), updatedUser);
+      setMobileCountryId(
+        findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ??
+          DEFAULT_COUNTRY_ID,
+      );
+      onProfileSaved?.(nextProfile);
+      return nextProfile;
+    },
+    [onProfileSaved, queryClient, role],
+  );
+  const {
+    value: draftProfile,
+    update,
+    mergeFromServer,
+    status: autosaveStatus,
+  } = useAutosync<
+    EditableProfile,
+    Awaited<ReturnType<typeof authService.updateProfile>>
+  >({
+    key: autosyncKey,
+    initialValue: serverProfile,
+    enabled: canEdit,
+    sync: syncProfile,
+    validate: validateProfile,
+    isEqual: profilesMatch,
+    onSynced: handleProfileSynced,
+  });
   const [nameError, setNameError] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -417,8 +484,6 @@ export function ProfileSettings({
   const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
     null,
   );
-  const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
-  const [autosaveError, setAutosaveError] = useState("");
   const [verificationRequested, setVerificationRequested] = useState(false);
   const [verificationPhone, setVerificationPhone] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -463,27 +528,12 @@ export function ProfileSettings({
   const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] =
     useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobileVisibilityDialogRef = useRef<HTMLDialogElement>(null);
   const verificationDialogRef = useRef<HTMLDivElement>(null);
   const verificationCloseButtonRef = useRef<HTMLButtonElement>(null);
   const verificationCancelButtonRef = useRef<HTMLButtonElement>(null);
   const verificationSubmitButtonRef = useRef<HTMLButtonElement>(null);
-  const draftProfileRef = useRef(draftProfile);
-  const savedProfileRef = useRef(savedProfile);
-  const autosaveTimerRef = useRef<number | null>(null);
-  const autosaveInFlightRef = useRef<Promise<void> | null>(null);
-  const skipDraftPersistenceRef = useRef(true);
-  const updateProfileMutationRef = useRef(updateProfileMutation);
-
-  draftProfileRef.current = draftProfile;
-  savedProfileRef.current = savedProfile;
-  updateProfileMutationRef.current = updateProfileMutation;
-
-  const isDirty = !profilesMatch(draftProfile, savedProfile);
   const displayName = draftProfile.displayName.trim() || "Your name";
   const username = draftProfile.username?.trim() || "username";
   const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
@@ -493,164 +543,8 @@ export function ProfileSettings({
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
   const mobileCountry: CountryOption =
     findCountry(mobileCountryId) ?? getDefaultCountry();
-  const profileStorageUserId = activeUser?.id ?? null;
-
-  const syncProfileChanges = useCallback(async (): Promise<void> => {
-    if (!canEdit || !profileStorageUserId) return;
-
-    const inFlight = autosaveInFlightRef.current;
-    if (inFlight) await inFlight;
-
-    if (!isOnline) {
-      setAutosaveStatus("offline");
-      return;
-    }
-
-    const draft = draftProfileRef.current;
-    const saved = savedProfileRef.current;
-    const { payload, hasInvalidFields } = buildProfileUpdatePayload(
-      draft,
-      saved,
-    );
-    if (!payload) {
-      setAutosaveStatus(
-        hasInvalidFields || !profilesMatch(draft, saved) ? "blocked" : "saved",
-      );
-      return;
-    }
-
-    setAutosaveStatus("syncing");
-    setAutosaveError("");
-    const snapshot = draft;
-    const request = updateProfileMutationRef.current
-      .mutateAsync(payload)
-      .then((updatedUser) => {
-        const nextProfile = toEditableProfile(
-          profileIdentityFromUser(updatedUser, role),
-        );
-        savedProfileRef.current = nextProfile;
-        setSavedProfile(nextProfile);
-        setMobileCountryId(
-          findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ??
-            DEFAULT_COUNTRY_ID,
-        );
-
-        if (profilesMatch(draftProfileRef.current, snapshot)) {
-          draftProfileRef.current = nextProfile;
-          setDraftProfile(nextProfile);
-          clearStoredProfileDraft(role, profileStorageUserId);
-          setAutosaveStatus("saved");
-        } else {
-          setAutosaveStatus("pending");
-        }
-        onProfileSaved?.(nextProfile);
-      })
-      .catch((error: unknown) => {
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String(error.message)
-            : "We couldn't sync your profile yet.";
-        setAutosaveError(message);
-        setAutosaveStatus("error");
-      })
-      .finally(() => {
-        if (autosaveInFlightRef.current === request) {
-          autosaveInFlightRef.current = null;
-        }
-      });
-
-    autosaveInFlightRef.current = request;
-    await request;
-  }, [canEdit, isOnline, onProfileSaved, profileStorageUserId, role]);
-
-  const scheduleAutosave = useCallback(() => {
-    if (autosaveTimerRef.current !== null) {
-      window.clearTimeout(autosaveTimerRef.current);
-    }
-    if (!canEdit || !profileStorageUserId) return;
-    if (!isOnline) {
-      setAutosaveStatus("offline");
-      return;
-    }
-
-    autosaveTimerRef.current = window.setTimeout(() => {
-      autosaveTimerRef.current = null;
-      void syncProfileChanges();
-    }, PROFILE_AUTOSAVE_DEBOUNCE_MS);
-  }, [canEdit, isOnline, profileStorageUserId, syncProfileChanges]);
-
-  const flushProfileAutosave = useCallback(async (): Promise<void> => {
-    if (autosaveTimerRef.current !== null) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-    await syncProfileChanges();
-  }, [syncProfileChanges]);
-
-  useEffect(
-    () => registerProfileAutosaveFlush(flushProfileAutosave),
-    [flushProfileAutosave],
-  );
 
   useEffect(() => {
-    if (skipDraftPersistenceRef.current) {
-      skipDraftPersistenceRef.current = false;
-      return;
-    }
-    if (!canEdit || !profileStorageUserId) return;
-
-    saveProfileDraft(role, profileStorageUserId, draftProfile);
-    if (profilesMatch(draftProfile, savedProfile)) {
-      clearStoredProfileDraft(role, profileStorageUserId);
-      setAutosaveStatus("saved");
-      return;
-    }
-
-    setAutosaveError("");
-    if (!isOnline) {
-      setAutosaveStatus("offline");
-      return;
-    }
-    setAutosaveStatus("pending");
-    scheduleAutosave();
-  }, [
-    canEdit,
-    draftProfile,
-    isOnline,
-    profileStorageUserId,
-    role,
-    savedProfile,
-    scheduleAutosave,
-  ]);
-
-  useEffect(
-    () => () => {
-      if (autosaveTimerRef.current !== null) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const serverIdentity = activeUser
-      ? profileIdentityFromUser(activeUser, role)
-      : getDefaultProfileIdentity(role);
-    const serverProfile = toEditableProfile(serverIdentity);
-    const storedDraft =
-      canEdit && activeUser?.id
-        ? getStoredProfileDraft(role, activeUser.id)
-        : null;
-    const restoredProfile = storedDraft
-      ? toEditableProfile({ ...serverIdentity, ...storedDraft })
-      : serverProfile;
-
-    skipDraftPersistenceRef.current = true;
-    savedProfileRef.current = serverProfile;
-    draftProfileRef.current = restoredProfile;
-    setSavedProfile(serverProfile);
-    setDraftProfile(restoredProfile);
     setNameError("");
     setUsernameError("");
     setEmailError("");
@@ -659,25 +553,22 @@ export function ProfileSettings({
     setPhotoError("");
     setBlockedControl("");
     setActiveLockedControl(null);
-    setAutosaveStatus(
-      storedDraft && !profilesMatch(restoredProfile, serverProfile)
-        ? "pending"
-        : "idle",
-    );
-    setAutosaveError("");
     setVerificationRequested(false);
     setVerificationPhone("");
     setVerificationCode("");
     setEmailVerificationRequested(false);
     setEmailVerificationCode("");
     setEmailVerifiedLocally(false);
+    setMobileVisibilityPromptOpen(false);
+    setMobileVisibilityAcknowledged(false);
+  }, [activeUser, role]);
+
+  useEffect(() => {
     setMobileCountryId(
       findCountryByPhoneNumber(serverProfile.mobileNumber ?? "")?.id ??
         DEFAULT_COUNTRY_ID,
     );
-    setMobileVisibilityPromptOpen(false);
-    setMobileVisibilityAcknowledged(false);
-  }, [activeUser, canEdit, role]);
+  }, [serverProfile.mobileNumber]);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -756,18 +647,7 @@ export function ProfileSettings({
     };
   }, [dismissVerificationModal, verificationModalOpen]);
 
-  useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(navigator.onLine);
-    window.addEventListener("online", updateOnlineStatus);
-    window.addEventListener("offline", updateOnlineStatus);
-    return () => {
-      window.removeEventListener("online", updateOnlineStatus);
-      window.removeEventListener("offline", updateOnlineStatus);
-    };
-  }, []);
-
   const updateText = (field: keyof EditableProfile, value: string) => {
-    setAutosaveStatus("pending");
     if (
       field === "linkedinUrl" ||
       field === "githubUrl" ||
@@ -786,7 +666,7 @@ export function ProfileSettings({
         return next;
       });
     }
-    setDraftProfile((current) => {
+    update((current) => {
       const nextProfile = { ...current, [field]: value };
       if (field === "linkedinUrl" && !value.trim()) {
         nextProfile.linkedinPublic = false;
@@ -812,7 +692,7 @@ export function ProfileSettings({
   };
 
   const updateMobileNumber = (value: string) => {
-    setDraftProfile((current) => ({
+    update((current) => ({
       ...current,
       mobileNumber: value,
       mobileVerified:
@@ -820,7 +700,6 @@ export function ProfileSettings({
       mobilePublic:
         current.mobileNumber === value ? current.mobilePublic : false,
     }));
-    setAutosaveStatus("pending");
     setVerificationRequested(false);
     setVerificationPhone("");
     setVerificationCode("");
@@ -849,8 +728,7 @@ export function ProfileSettings({
       | "websitePublic",
     value: boolean,
   ) => {
-    setAutosaveStatus("pending");
-    setDraftProfile((current) => ({ ...current, [field]: value }));
+    update({ [field]: value } as Partial<EditableProfile>);
   };
 
   const requestEmailVisibilityChange = (value: boolean) => {
@@ -895,28 +773,6 @@ export function ProfileSettings({
 
   const showBlockedControlFeedback = (label: string) => {
     setBlockedControl(label);
-  };
-
-  const handleDiscard = () => {
-    setDraftProfile(savedProfile);
-    setNameError("");
-    setUsernameError("");
-    setEmailError("");
-    setAutosaveStatus("saved");
-    setAutosaveError("");
-    if (profileStorageUserId) {
-      clearStoredProfileDraft(role, profileStorageUserId);
-    }
-    setSocialVisibilityErrors({});
-    setEmailVerificationRequested(false);
-    setEmailVerificationCode("");
-    setVerificationRequested(false);
-    setVerificationPhone("");
-    setVerificationCode("");
-    setMobileCountryId(
-      findCountryByPhoneNumber(savedProfile.mobileNumber ?? "")?.id ??
-        DEFAULT_COUNTRY_ID,
-    );
   };
 
   const closeMobileVisibilityPrompt = () => {
@@ -1017,25 +873,17 @@ export function ProfileSettings({
     setMobileError("");
     try {
       await verifyPhoneNumberMutation.mutateAsync({ phoneNo, code });
-      setSavedProfile((current) => ({
-        ...current,
+      mergeFromServer({
         mobileNumber: phoneNo,
         mobileVerified: true,
         mobilePublic: false,
-      }));
-      setDraftProfile((current) => ({
-        ...current,
-        mobileNumber: phoneNo,
-        mobileVerified: true,
-        mobilePublic: false,
-      }));
+      });
       setMobileCountryId(
         findCountryByPhoneNumber(phoneNo)?.id ?? mobileCountryId,
       );
       setVerificationRequested(false);
       setVerificationPhone("");
       setVerificationCode("");
-      setAutosaveStatus("saved");
     } catch (error) {
       const message =
         error && typeof error === "object" && "message" in error
@@ -1058,7 +906,6 @@ export function ProfileSettings({
       setEmailVerifiedLocally(true);
       setEmailVerificationRequested(false);
       setEmailVerificationCode("");
-      setAutosaveStatus("saved");
     } catch (error) {
       const message =
         error && typeof error === "object" && "message" in error
@@ -1088,7 +935,7 @@ export function ProfileSettings({
         );
         return;
       }
-      setDraftProfile((current) => ({
+      update((current) => ({
         ...current,
         avatarDataUrl: reader.result as string,
       }));
@@ -1722,40 +1569,13 @@ export function ProfileSettings({
             </section>
 
             <div className="settings-profile__form-footer">
-              <p role="status" aria-live="polite">
-                {!activeUser
-                  ? "Sign in to edit and save your profile."
-                  : !isOnline
-                    ? "Offline — saved on this device. It will sync when you reconnect."
-                    : autosaveStatus === "syncing"
-                      ? "Saving your profile automatically…"
-                      : autosaveStatus === "error"
-                        ? `${autosaveError || "Couldn't sync your profile yet."} Your local draft is kept locally.`
-                        : autosaveStatus === "blocked"
-                          ? "Draft saved on this device. Complete the required fields to sync it."
-                          : autosaveStatus === "pending"
-                            ? "Draft saved locally. Syncing automatically…"
-                            : autosaveStatus === "saved"
-                              ? "All profile changes are saved."
-                              : "Changes save automatically."}
-              </p>
-              <LockedProfileControl
-                label="discarding profile changes"
-                locked={!canEdit}
-                onBlocked={showBlockedControlFeedback}
-                className="inline-flex shrink-0"
-              >
-                <button
-                  type="button"
-                  className="settings-profile__secondary-action"
-                  onClick={handleDiscard}
-                  disabled={
-                    !canEdit || !isDirty || updateProfileMutation.isPending
-                  }
-                >
-                  Discard
-                </button>
-              </LockedProfileControl>
+              {!activeUser ? (
+                <p role="status" aria-live="polite">
+                  Sign in to edit your profile.
+                </p>
+              ) : (
+                <AutosaveStatus status={autosaveStatus} />
+              )}
             </div>
           </div>
         </div>
