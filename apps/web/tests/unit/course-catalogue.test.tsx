@@ -325,4 +325,36 @@ describe("CourseCatalogue", () => {
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/thumb.jpg");
   });
+
+  it("renders deleting state on CourseCard when deletingCourseIds contains course id", () => {
+    const course: Course = {
+      id: "deleting-course-id",
+      title: "Course Under Deletion",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "/test.webp",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      role: "creator",
+      visibleCourses: [course],
+      deletingCourseIds: new Set([course.id]),
+    });
+
+    const card = screen.getByRole("article");
+    expect(card).toHaveAttribute("data-deleting", "true");
+    expect(card).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("course-deleting-tag")).toBeInTheDocument();
+    expect(screen.getByTestId("course-deleting-tag")).toHaveTextContent("Deleting...");
+    expect(screen.getByTestId("course-deleting-overlay")).toBeInTheDocument();
+    expect(screen.getByText("Moving to Bin...")).toBeInTheDocument();
+  });
 });

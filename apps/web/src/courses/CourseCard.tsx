@@ -2,6 +2,7 @@ import {
   ArrowCounterClockwiseIcon as ArrowCounterClockwise,
   CertificateIcon as Certificate,
   ChartBarIcon as ChartBar,
+  CircleNotchIcon as CircleNotch,
   CopySimpleIcon as CopySimple,
   EyeIcon as Eye,
   FlagIcon as Flag,
@@ -74,6 +75,7 @@ export interface CourseCardProps {
   setNotice: (notice: string) => void;
   imagePriority?: boolean;
   isBin?: boolean;
+  isDeleting?: boolean;
 }
 
 export function CourseCard({
@@ -94,6 +96,7 @@ export function CourseCard({
   setNotice,
   imagePriority = false,
   isBin = false,
+  isDeleting = false,
 }: CourseCardProps) {
   const studentStatus = getStudentStatus(course);
   const progress = course.progress ?? 0;
@@ -139,6 +142,7 @@ export function CourseCard({
   };
 
   const openThumbnail = () => {
+    if (isDeleting) return;
     onOpen(course);
   };
 
@@ -169,9 +173,15 @@ export function CourseCard({
 
   return (
     <article
-      className="group relative min-w-0 overflow-visible rounded-xl border border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) transition-[background-color,box-shadow] duration-200 hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
-      aria-label={`${course.title}${role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
+      className={`group relative min-w-0 overflow-hidden rounded-xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
+        isDeleting
+          ? "border-(--border) bg-(--card-surface,var(--surface)) opacity-60 pointer-events-none select-none"
+          : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
+      }`}
+      aria-label={`${course.title}${isDeleting ? ", deleting..." : role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
+      aria-busy={isDeleting}
       data-course-card
+      data-deleting={isDeleting ? "true" : undefined}
     >
       <div
         className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)"
@@ -180,7 +190,7 @@ export function CourseCard({
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
-            alt=""
+            alt={course.title}
             className="h-full w-full object-cover"
             width={960}
             height={540}
@@ -198,6 +208,7 @@ export function CourseCard({
           aria-label={thumbnailActionLabel}
           title={thumbnailActionTooltip}
           onClick={openThumbnail}
+          disabled={isDeleting}
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
           <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full border-2 border-white bg-slate-950/55 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.32)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
@@ -205,7 +216,18 @@ export function CourseCard({
           </span>
         </button>
 
-        {role === "creator" ? (
+        {isDeleting ? (
+          <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
+            <span
+              className="course-tag inline-flex items-center gap-1.5 border border-red-500/25 bg-red-500/15 text-red-400 font-medium"
+              data-course-card-tag
+              data-testid="course-deleting-tag"
+            >
+              <CircleNotch size={11} className="animate-spin text-red-400" />
+              <span>Deleting...</span>
+            </span>
+          </div>
+        ) : role === "creator" ? (
           <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
             <span
               className={`course-tag ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
@@ -234,6 +256,7 @@ export function CourseCard({
                     : `Add ${course.title} to wishlist`
                 }
                 aria-pressed={wishlisted}
+                disabled={isDeleting}
                 onClick={() => onWishlist(course.id)}
               >
                 <Heart size={21} weight={wishlisted ? "fill" : "regular"} />
@@ -254,6 +277,10 @@ export function CourseCard({
           title="View Course Overview"
           data-course-card-curriculum
           onClick={(event) => {
+            if (isDeleting) {
+              event.preventDefault();
+              return;
+            }
             if (
               event.button !== 0 ||
               event.metaKey ||
@@ -288,12 +315,13 @@ export function CourseCard({
             </p>
           </div>
 
-          <CourseActionMenu
-            open={menuOpen}
-            onOpenChange={(open) => setMenuOpen(open ? course.id : null)}
-            ariaLabel={`Actions for ${course.title}`}
-            dataMenu=""
-          >
+          {!isDeleting && (
+            <CourseActionMenu
+              open={menuOpen}
+              onOpenChange={(open) => setMenuOpen(open ? course.id : null)}
+              ariaLabel={`Actions for ${course.title}`}
+              dataMenu=""
+            >
             {role === "creator" ? (
               isBin || course.deletedAt ? (
                 onRestoreRequested ? (
@@ -465,6 +493,7 @@ export function CourseCard({
               </>
             )}
           </CourseActionMenu>
+        )}
         </div>
 
         <div
@@ -523,9 +552,10 @@ export function CourseCard({
             <button
               type="button"
               disabled={
-                role === "creator" &&
-                Boolean(isBin || course.deletedAt) &&
-                !onRestoreRequested
+                isDeleting ||
+                (role === "creator" &&
+                  Boolean(isBin || course.deletedAt) &&
+                  !onRestoreRequested)
               }
               className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
                 role === "creator"
@@ -534,6 +564,7 @@ export function CourseCard({
               }`}
               data-control-radius-action
               onClick={() => {
+                if (isDeleting) return;
                 if (role === "creator") {
                   if (isBin || course.deletedAt) {
                     if (onRestoreRequested) {
@@ -601,6 +632,22 @@ export function CourseCard({
           )}
         </div>
       </div>
+
+      {isDeleting && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-[color-mix(in_srgb,var(--card-surface,var(--surface))_60%,transparent)] backdrop-blur-[2px] transition-opacity duration-200 pointer-events-auto"
+          role="status"
+          aria-live="polite"
+          data-testid="course-deleting-overlay"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) px-3.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
+            <CircleNotch size={14} className="animate-spin text-red-500 shrink-0" />
+            <span className="text-[0.78rem] font-semibold text-(--text)">
+              {isBin || course.deletedAt ? "Deleting..." : "Moving to Bin..."}
+            </span>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
