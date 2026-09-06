@@ -96,6 +96,13 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
+  // Guest-landing aliases immediately redirect into the academy. Keep their
+  // shell visible while the session request settles so static HTML is not
+  // replaced by a loading takeover.
+  if (isGuestLandingPath(path)) {
+    return <>{children}</>;
+  }
+
   if (
     (pending && authenticationRequired) ||
     shouldBlockAcademyRender(path, access)
