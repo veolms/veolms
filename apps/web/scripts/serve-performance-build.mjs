@@ -83,6 +83,14 @@ const resolveRequestPath = async (pathname) => {
       if (routeIndexDetails.isFile()) return routeIndex;
     }
   } catch {}
+  // Keep an unknown deep link on the neutral SPA shell. Serving the catalogue
+  // document here makes a direct learning URL visibly flash the wrong page
+  // while the client router is still loading.
+  const spaFallback = path.join(root, "__spa-fallback.html");
+  try {
+    const fallbackDetails = await stat(spaFallback);
+    if (fallbackDetails.isFile()) return spaFallback;
+  } catch {}
   return path.join(root, "index.html");
 };
 

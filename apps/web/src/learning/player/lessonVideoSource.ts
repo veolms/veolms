@@ -1,6 +1,7 @@
 import type { ExternalTextTrack, VideoSource } from "@veolms/video-player";
 import type { CourseVideo } from "../courseContent";
 import {
+  appendLearningHlsCacheVersion,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
 } from "./learningHlsConstants";
@@ -46,6 +47,9 @@ export function createLearningLessonVideoSource(options: {
       title: options.lessonTitle,
     },
     streaming: hls ? { ...LEARNING_HLS_STREAMING } : undefined,
+    networking: hls
+      ? { requestFilter: appendLearningHlsCacheVersion }
+      : undefined,
     textTracks: [...LEARNING_LESSON_TEXT_TRACKS],
   };
 }

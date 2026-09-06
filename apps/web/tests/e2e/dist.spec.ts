@@ -518,6 +518,15 @@ test("compiled learning document contains the complete static workspace", async 
   expect(learningHtml).toContain("learning-workspace");
   expect(learningHtml).not.toContain("Application Error");
 
+  const canonicalLearningDocument = await page.request.get(
+    "/learn/complete-backend-development-with-nodejs/career-opportunities",
+  );
+  expect(canonicalLearningDocument.ok()).toBe(true);
+  const canonicalLearningHtml = await canonicalLearningDocument.text();
+  expect(canonicalLearningHtml).toContain("Career Opportunities");
+  expect(canonicalLearningHtml).toContain("learning-workspace");
+  expect(canonicalLearningHtml).not.toContain("Application Error");
+
   await page.route("**/api/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
