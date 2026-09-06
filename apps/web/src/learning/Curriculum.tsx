@@ -87,17 +87,19 @@ export function Curriculum({
       }),
     );
   const expanded = controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
   const setExpanded = useCallback(
     (value: readonly number[] | ((current: readonly number[]) => readonly number[])) => {
       const resolveNext = (current: readonly number[]) =>
         typeof value === "function" ? value(current) : value;
       if (onExpandedSectionIdsChange) {
-        onExpandedSectionIdsChange(resolveNext(expanded));
+        onExpandedSectionIdsChange(resolveNext(expandedRef.current));
         return;
       }
       setUncontrolledExpandedSectionIds((current) => [...resolveNext(current)]);
     },
-    [expanded, onExpandedSectionIdsChange],
+    [onExpandedSectionIdsChange],
   );
   const storageBase = `veolms-learning-${persistenceKey}-curriculum`;
   const [lessonSearch, setLessonSearch] = useSessionStorageState(
@@ -129,6 +131,12 @@ export function Curriculum({
 
   useEffect(() => {
     if (expandAllSections || !hideHero || isExpandedControlled) return;
+    if (
+      expandedRef.current.length === 1 &&
+      expandedRef.current[0] === currentSection.id
+    ) {
+      return;
+    }
     setExpanded([currentSection.id]);
   }, [
     currentSection.id,
