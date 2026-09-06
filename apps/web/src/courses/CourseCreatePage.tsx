@@ -929,17 +929,6 @@ export function CourseWizardSkeleton({
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 pt-0.5 max-[768px]:hidden">
-            <div className="inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-[0.80rem] font-bold">
-              <Eye size={15} />
-              <span>Preview</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 h-8.5 px-4 rounded-lg bg-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-white text-[0.80rem] font-bold">
-              <FloppyDisk size={15} weight="bold" />
-              <span>Save Changes</span>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -1052,7 +1041,7 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Right Column: Live Course Preview */}
-            <div className="flex flex-col gap-5 sticky top-0 self-start">
+            <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
               <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                 <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
@@ -6529,7 +6518,7 @@ export function CourseCreatePage({
 
   return (
     <div
-      className="relative flex w-full flex-col p-0 text-[--text] box-border max-[768px]:pb-0"
+      className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
     >
       {/* Wizard Header */}
@@ -6588,234 +6577,6 @@ export function CourseCreatePage({
               </p>
             </div>
           </div>
-
-          {/* Top Actions in Header (Desktop / Tablet) */}
-          <div className="flex items-center gap-2.5 shrink-0 pt-0.5 max-[768px]:hidden">
-            {/* Preview Button (Ghost / Secondary) */}
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                isAnyApiInProgress || isPreviewLoading
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={handlePreviewAction}
-              disabled={isAnyApiInProgress || isPreviewLoading}
-            >
-              {isPreviewLoading ? (
-                <>
-                  <CircleNotch
-                    size={14}
-                    className="animate-spin text-(--accent)"
-                  />
-                  <span>Opening...</span>
-                </>
-              ) : (
-                <>
-                  <Eye size={15} />
-                  <span>Preview</span>
-                </>
-              )}
-            </button>
-
-            {/* Previous Button (Ghost / Secondary) */}
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                activeStep === "basics" || isAnyApiInProgress
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={() => {
-                if (previousStepId) void navigateToStep(previousStepId);
-              }}
-              disabled={activeStep === "basics" || isAnyApiInProgress}
-              aria-label="Previous Step"
-            >
-              <CaretLeft size={15} />
-              <span>Previous</span>
-            </button>
-
-            {/* Next Button / Validate on Publish */}
-            {activeStep === "publish" ? (
-              <button
-                type="button"
-                style={{
-                  fontSize: "0.80rem",
-                  fontWeight: 700,
-                  height: "34px",
-                  borderRadius: "8px",
-                  gap: "6px",
-                  paddingLeft: "16px",
-                  paddingRight: "16px",
-                }}
-                className="inline-flex items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:opacity-60 disabled:cursor-not-allowed"
-                onClick={handleValidateCourseAction}
-                disabled={actionLoading !== null || isValidating}
-              >
-                {actionLoading === "validate" || isValidating ? (
-                  <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span>Validating...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={15} weight="bold" />
-                    <span>Validate</span>
-                  </>
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                style={{
-                  fontSize: "0.80rem",
-                  fontWeight: 700,
-                  height: "34px",
-                  borderRadius: "8px",
-                  gap: "6px",
-                  paddingLeft: "16px",
-                  paddingRight: "16px",
-                }}
-                className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                  actionLoading !== null ||
-                  (!isDownstreamUnlocked && activeStep === "basics")
-                    ? "!opacity-40 !cursor-not-allowed !shadow-none"
-                    : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
-                }`}
-                onClick={() => {
-                  if (nextStepId) void navigateToStep(nextStepId);
-                }}
-                title={
-                  !isDownstreamUnlocked && activeStep === "basics"
-                    ? "Add a course title to continue."
-                    : undefined
-                }
-                disabled={
-                  actionLoading !== null ||
-                  (!isDownstreamUnlocked && activeStep === "basics")
-                }
-                aria-label="Next Step"
-              >
-                {actionLoading === "save" ? (
-                  <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-white"
-                    />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Next</span>
-                    <CaretRight size={15} weight="bold" />
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Publish CTA only when on publish step */}
-            {activeStep === "publish" && (
-              <>
-                {isPublished && (
-                  <button
-                    type="button"
-                    style={{
-                      fontSize: "0.80rem",
-                      fontWeight: 700,
-                      height: "34px",
-                      borderRadius: "8px",
-                      gap: "6px",
-                      paddingLeft: "14px",
-                      paddingRight: "14px",
-                    }}
-                    className="inline-flex items-center justify-center border border-red-500/30 text-red-400 bg-red-500/10 cursor-pointer transition-all duration-150 hover:bg-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={actionLoading !== null}
-                    onClick={() => setIsUnpublishModalOpen(true)}
-                    title="Unpublish this course and return it to draft state"
-                  >
-                    {actionLoading === "unpublish" ? (
-                      <>
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-red-400"
-                        />
-                        <span>Unpublishing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={15} weight="bold" />
-                        <span>Unpublish</span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "18px",
-                    paddingRight: "18px",
-                  }}
-                  className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                    !isCourseReadyToPublish
-                      ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                      : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
-                  }`}
-                  disabled={actionLoading !== null || !isCourseReadyToPublish}
-                  onClick={handleFinalPublishCourse}
-                  title={
-                    !isCourseReadyToPublish
-                      ? "Please resolve incomplete sections before publishing."
-                      : undefined
-                  }
-                >
-                  {actionLoading === "publish" ? (
-                    <>
-                      <CircleNotch
-                        size={15}
-                        className="animate-spin text-white"
-                      />
-                      <span>
-                        {isPublished ? "Updating..." : "Publishing..."}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Lightning size={15} weight="bold" />
-                      <span>{isPublished ? "Update Course" : "Publish"}</span>
-                    </>
-                  )}
-                </button>
-              </>
-            )}
-          </div>
         </div>
 
         {/* Publish validation error toast if any */}
@@ -6830,7 +6591,7 @@ export function CourseCreatePage({
       {/* Wizard Steps Navigation */}
       <nav
         ref={stepsNavRef}
-        className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] max-[768px]:w-full max-[768px]:box-border [&::after]:hidden!"
+        className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] [&::after]:hidden!"
         aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
         role="tablist"
         onMouseDown={handleNavMouseDown}
@@ -6899,7 +6660,7 @@ export function CourseCreatePage({
         }}
         tabListRef={stepsNavRef}
         id="course-wizard-tab-panel"
-        className="course-wizard-tab-content w-full min-h-0"
+        className="course-wizard-tab-content w-full min-h-0 flex-1 flex flex-col"
         stateAttribute="data-wizard-step"
         labelledBy={`course-wizard-tab-${activeStep}`}
         disabled={isAnyApiInProgress}
@@ -7352,7 +7113,7 @@ export function CourseCreatePage({
             </div>
 
             {/* Right Column: Live Course Preview */}
-            <div className="flex flex-col gap-5 sticky top-0 self-start">
+            <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
               <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                 <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
@@ -10359,6 +10120,244 @@ export function CourseCreatePage({
           </div>
         )}
       </SwipeableTabPanel>
+
+      {/* Sticky Bottom Action Bar (Desktop / Tablet) */}
+      <div
+        className="course-wizard-sticky-bottom-bar"
+        data-testid="course-wizard-sticky-bottom-bar"
+      >
+        <div className="flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
+          {/* Left: Preview Button */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              style={{
+                fontSize: "0.80rem",
+                fontWeight: 700,
+                height: "34px",
+                borderRadius: "8px",
+                gap: "6px",
+                paddingLeft: "14px",
+                paddingRight: "14px",
+              }}
+              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                isAnyApiInProgress || isPreviewLoading
+                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              }`}
+              onClick={handlePreviewAction}
+              disabled={isAnyApiInProgress || isPreviewLoading}
+            >
+              {isPreviewLoading ? (
+                <>
+                  <CircleNotch
+                    size={14}
+                    className="animate-spin text-(--accent)"
+                  />
+                  <span>Opening...</span>
+                </>
+              ) : (
+                <>
+                  <Eye size={15} />
+                  <span>Preview</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Right: Previous & Next / Validate / Publish Actions */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
+            {/* Previous Button */}
+            <button
+              type="button"
+              style={{
+                fontSize: "0.80rem",
+                fontWeight: 700,
+                height: "34px",
+                borderRadius: "8px",
+                gap: "6px",
+                paddingLeft: "14px",
+                paddingRight: "14px",
+              }}
+              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                activeStep === "basics" || isAnyApiInProgress
+                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+              }`}
+              onClick={() => {
+                if (previousStepId) void navigateToStep(previousStepId);
+              }}
+              disabled={activeStep === "basics" || isAnyApiInProgress}
+              aria-label="Previous Step"
+            >
+              <CaretLeft size={15} />
+              <span>Previous</span>
+            </button>
+
+            {/* Next Button / Validate on Publish */}
+            {activeStep === "publish" ? (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "16px",
+                  paddingRight: "16px",
+                }}
+                className="inline-flex items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={handleValidateCourseAction}
+                disabled={actionLoading !== null || isValidating}
+              >
+                {actionLoading === "validate" || isValidating ? (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span>Validating...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={15} weight="bold" />
+                    <span>Validate</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "16px",
+                  paddingRight: "16px",
+                }}
+                className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                  actionLoading !== null ||
+                  (!isDownstreamUnlocked && activeStep === "basics")
+                    ? "!opacity-40 !cursor-not-allowed !shadow-none"
+                    : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                }`}
+                onClick={() => {
+                  if (nextStepId) void navigateToStep(nextStepId);
+                }}
+                title={
+                  !isDownstreamUnlocked && activeStep === "basics"
+                    ? "Add a course title to continue."
+                    : undefined
+                }
+                disabled={
+                  actionLoading !== null ||
+                  (!isDownstreamUnlocked && activeStep === "basics")
+                }
+                aria-label="Next Step"
+              >
+                {actionLoading === "save" ? (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-white"
+                    />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Next</span>
+                    <CaretRight size={15} weight="bold" />
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Publish CTA Button only when on publish step */}
+            {activeStep === "publish" && (
+              <>
+                {isPublished && (
+                  <button
+                    type="button"
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "14px",
+                      paddingRight: "14px",
+                    }}
+                    className="inline-flex items-center justify-center border border-red-500/30 text-red-400 bg-red-500/10 cursor-pointer transition-all duration-150 hover:bg-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={actionLoading !== null}
+                    onClick={() => setIsUnpublishModalOpen(true)}
+                    title="Unpublish this course and return it to draft state"
+                  >
+                    {actionLoading === "unpublish" ? (
+                      <>
+                        <CircleNotch
+                          size={14}
+                          className="animate-spin text-red-400"
+                        />
+                        <span>Unpublishing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={15} weight="bold" />
+                        <span>Unpublish</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  style={{
+                    fontSize: "0.80rem",
+                    fontWeight: 700,
+                    height: "34px",
+                    borderRadius: "8px",
+                    gap: "6px",
+                    paddingLeft: "18px",
+                    paddingRight: "18px",
+                  }}
+                  className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                    !isCourseReadyToPublish
+                      ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                      : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                  }`}
+                  disabled={actionLoading !== null || !isCourseReadyToPublish}
+                  onClick={handleFinalPublishCourse}
+                  title={
+                    !isCourseReadyToPublish
+                      ? "Please resolve incomplete sections before publishing."
+                      : undefined
+                  }
+                >
+                  {actionLoading === "publish" ? (
+                    <>
+                      <CircleNotch
+                        size={15}
+                        className="animate-spin text-white"
+                      />
+                      <span>
+                        {isPublished ? "Updating..." : "Publishing..."}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Lightning size={15} weight="bold" />
+                      <span>{isPublished ? "Update Course" : "Publish"}</span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Mobile Sticky / Fixed Bottom Action Bar */}
       <div
