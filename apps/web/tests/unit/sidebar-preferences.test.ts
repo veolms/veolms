@@ -161,6 +161,16 @@ describe("sidebar shell bootstrap", () => {
       width: 412,
     });
   });
+
+  it("keeps the document bootstrap geometry when the snapshot is unavailable", () => {
+    document.documentElement.dataset.sidebarState = "expanded";
+    document.documentElement.style.setProperty("--sidebar-width", "248px");
+
+    expect(getInitialSidebarShellState()).toEqual({
+      mode: "expanded",
+      width: 248,
+    });
+  });
 });
 
 describe("sidebar glow intensity", () => {

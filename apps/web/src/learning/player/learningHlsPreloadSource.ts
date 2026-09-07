@@ -1,5 +1,6 @@
 import { readResumePosition } from "./lessonPlayerPersistence";
 import {
+  appendLearningHlsCacheVersion,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
 } from "./learningHlsConstants";
@@ -34,5 +35,6 @@ export function createLearningHlsPreloadSource(options: {
     kind: "hls" as const,
     startTime,
     streaming: { ...LEARNING_HLS_STREAMING },
+    networking: { requestFilter: appendLearningHlsCacheVersion },
   };
 }

@@ -12,6 +12,7 @@ import {
   getLessonSlug,
   resolveLessonIdentifier,
 } from "../../src/learning/courseContent";
+import { appendLearningHlsCacheVersion } from "../../src/learning/player/learningHlsConstants";
 
 describe("learning HLS bootstrap", () => {
   it("uses the prerendered lecture's HLS URL", () => {
@@ -55,5 +56,22 @@ describe("learning HLS bootstrap", () => {
     expect(script).toContain("import(");
     expect(script).toContain(EARLY_HLS_PRELOAD_URL_PLACEHOLDER);
     expect(script).not.toContain(LEARNING_HLS_MEDIA_KEY_META_NAME);
+  });
+
+  it("bypasses stale browser caches for HLS manifests and segments", () => {
+    const request = {
+      type: "segment" as const,
+      uris: [
+        "https://cdn.example.com/course-hls/lesson/segment_00000.ts",
+        "https://cdn.example.com/course-hls/lesson/index.m3u8?token=test",
+      ],
+    } as Parameters<typeof appendLearningHlsCacheVersion>[0];
+
+    appendLearningHlsCacheVersion(request);
+
+    expect(request.uris).toEqual([
+      "https://cdn.example.com/course-hls/lesson/segment_00000.ts?veo_hls_cache=cors-v2",
+      "https://cdn.example.com/course-hls/lesson/index.m3u8?token=test&veo_hls_cache=cors-v2",
+    ]);
   });
 });

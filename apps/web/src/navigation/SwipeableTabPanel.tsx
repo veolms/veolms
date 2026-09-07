@@ -100,6 +100,16 @@ const syncSwipeCompletionRatio = (swiper: SwiperInstance) => {
   swiper.params.longSwipesRatio = ratio;
 };
 
+const isUsableSwiper = (
+  swiper: SwiperInstance | null,
+): swiper is SwiperInstance =>
+  Boolean(swiper && !swiper.destroyed && swiper.params && swiper.el);
+
+const updateSwiperAutoHeight = (swiper: SwiperInstance | null) => {
+  if (!isUsableSwiper(swiper)) return;
+  swiper.updateAutoHeight();
+};
+
 interface SwipeableTabPanelProps<T extends string> {
   tabs: readonly T[];
   activeTab: T;
@@ -341,33 +351,40 @@ export function SwipeableTabPanel<T extends string>({
   useLayoutEffect(() => {
     const swiper = swiperRef.current;
     const targetIndex = tabs.indexOf(activeTab);
-    if (!swiper || targetIndex < 0) return;
+    if (!isUsableSwiper(swiper) || targetIndex < 0) return;
     if (swiper.activeIndex !== targetIndex) {
       const pointerType = tabPointerTypeRef.current;
       tabPointerTypeRef.current = null;
       const animate = pointerType === "touch" || pointerType === "pen";
       swiper.slideTo(targetIndex, animate ? swiper.params.speed : 0);
     }
-    swiper.updateAutoHeight();
+    updateSwiperAutoHeight(swiper);
     const frame = window.requestAnimationFrame(() => {
-      if (swiperRef.current) {
-        swiperRef.current.updateAutoHeight();
-      }
+      updateSwiperAutoHeight(swiperRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeTab, tabs]);
 
   useEffect(() => {
     const swiper = swiperRef.current;
-    if (!swiper || typeof ResizeObserver === "undefined") return undefined;
+    if (!isUsableSwiper(swiper) || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    let disposed = false;
     const observer = new ResizeObserver(() => {
-      swiper.updateAutoHeight();
+      // ResizeObserver callbacks can be queued while a route transition is
+      // destroying the Swiper instance. Swiper clears params during destroy,
+      // so never update a disposed instance.
+      if (!disposed) updateSwiperAutoHeight(swiper);
     });
     const activeSlide = swiper.slides?.[swiper.activeIndex];
     if (activeSlide) {
       observer.observe(activeSlide);
     }
-    return () => observer.disconnect();
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
   }, [activeTab]);
 
   useEffect(() => {
@@ -467,13 +484,13 @@ export function SwipeableTabPanel<T extends string>({
   );
 
   useEffect(() => {
-    if (swiperRef.current) {
+    if (isUsableSwiper(swiperRef.current)) {
       swiperRef.current.allowTouchMove = !disabled;
     }
   }, [disabled]);
 
   useEffect(() => {
-    if (swiperRef.current && spaceBetween !== undefined) {
+    if (isUsableSwiper(swiperRef.current) && spaceBetween !== undefined) {
       swiperRef.current.params.spaceBetween = spaceBetween;
       swiperRef.current.update();
     }

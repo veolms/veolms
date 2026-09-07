@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import type { CourseOverviewResponse } from "@veolms/contracts";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -50,6 +51,7 @@ import {
 } from "./learningPlayerPreferences";
 import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
 import {
+  adaptCourseOverviewToLearningSections,
   createCurriculumSections,
   createLessonsById,
   getCourseVideoForLesson,
@@ -65,7 +67,6 @@ import {
   getPublicPreviewLessonNumbers,
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
-import { useCourseOverview } from "../services/courses";
 import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -202,6 +203,7 @@ const getInitialFloatingLessonDrawerWidth = () => {
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
+  courseOverview?: CourseOverviewResponse;
   lessonId: number;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -275,6 +277,7 @@ interface CurriculumScreenSwipeStartEvent {
 
 export function LearningWorkspace({
   courseSlug,
+  courseOverview,
   lessonId,
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -290,9 +293,6 @@ export function LearningWorkspace({
   registerPersistentPlayer,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { data: courseOverview } = useCourseOverview(courseSlug, {
-    enabled: Boolean(courseSlug) && !isAuthenticated,
-  });
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -552,11 +552,13 @@ export function LearningWorkspace({
 
   const curriculumSections = useMemo(
     () =>
+      adaptCourseOverviewToLearningSections(courseOverview) ??
       createCurriculumSections(
         curriculumTestPreferences.sectionCount,
         curriculumTestPreferences.lectureCount,
       ),
     [
+      courseOverview,
       curriculumTestPreferences.lectureCount,
       curriculumTestPreferences.sectionCount,
     ],

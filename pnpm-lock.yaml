@@ -138,6 +138,9 @@ importers:
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../../packages/fleet-types
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       kysely:
         specifier: 'catalog:'
         version: 0.29.4
@@ -491,6 +494,9 @@ importers:
       '@veolms/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types
@@ -504,6 +510,12 @@ importers:
 
   packages/fleet-provider-local:
     dependencies:
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../config
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types
@@ -519,6 +531,10 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.13
+        version: 24.13.3
 
   packages/storage:
     dependencies:
