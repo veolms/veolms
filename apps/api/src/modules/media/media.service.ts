@@ -274,6 +274,66 @@ export function createMediaService({
     return { should202: true, jobId };
   }
 
+  async function retryTranscodeJob(
+    mediaId: string,
+    ownerId: string,
+    logger?: FastifyBaseLogger,
+  ) {
+    const media = await mediaRepo.findMediaAssetById(
+      database,
+      mediaId,
+      ownerId,
+    );
+    if (!media || media.type !== "video") {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+    if (media.status !== "failed" && media.status !== "uploaded") {
+      throw new AppError(
+        409,
+        "MEDIA_NOT_RETRYABLE",
+        "This video is not in a retryable state.",
+      );
+    }
+
+    const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
+    if (!job) return queueTranscodeJob(mediaId, ownerId, logger);
+    if (["queued", "provisioning", "processing"].includes(job.status)) {
+      return { should202: true, jobId: job.id };
+    }
+
+    await mediaRepo.updateVideoJobStatus(database, job.id, {
+      status: "queued",
+      progress_percent: 0,
+      error_message: null,
+      failed_at: null,
+    });
+    await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
+
+    try {
+      await services.videoDispatch.dispatch({
+        action: "claim",
+        jobId: job.id,
+        videoId: mediaId,
+        videoKey: media.storage_key,
+        outputPrefix: job.output_prefix,
+        qualities: job.qualities,
+        videoSize: Number(media.size_bytes),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Dispatch failed.";
+      await mediaRepo.updateVideoJobStatus(database, job.id, {
+        status: "failed",
+        error_message: message,
+        failed_at: new Date(),
+      });
+      await mediaRepo.updateMediaAssetStatus(database, mediaId, "failed");
+      throw error;
+    }
+    logger?.info({ jobId: job.id, mediaId }, "Video transcoding retry queued");
+    return { should202: true, jobId: job.id };
+  }
+
   /**
    * Retrieves a single media asset by ID with optional owner verification.
    * Inter-module API method (Rule 11 compliance).
@@ -312,6 +372,10 @@ export function createMediaService({
       );
     }
 
+    const workerProgress = job.worker_id
+      ? await mediaRepo.findWorkerProgressByWorkerId(database, job.worker_id)
+      : undefined;
+
     if (job.status === "completed" && media.status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
     } else if (job.status === "failed" && media.status !== "failed") {
@@ -320,7 +384,18 @@ export function createMediaService({
 
     return {
       status: job.status,
-      progressPercent: Number(job.progress_percent),
+      // The worker reports live FFmpeg progress to worker_monitoring. The
+      // video_jobs value is the durable fallback used before a worker is
+      // assigned and after the worker is released.
+      progressPercent: Math.max(
+        0,
+        Math.min(
+          100,
+          Math.floor(
+            Number(workerProgress?.progress_percent ?? job.progress_percent),
+          ),
+        ),
+      ),
       error: job.error_message,
     };
   }
@@ -355,12 +430,19 @@ export function createMediaService({
 
     const file = await services.storage.getObject(media.storage_key);
     if (!file) {
-      throw new AppError(404, "FILE_NOT_FOUND", "Media file not found in storage.");
+      throw new AppError(
+        404,
+        "FILE_NOT_FOUND",
+        "Media file not found in storage.",
+      );
     }
     return {
       stream: file.body,
-      contentType: media.mime_type || file.contentType || "application/octet-stream",
-      contentLength: file.contentLength ?? (media.size_bytes ? Number(media.size_bytes) : undefined),
+      contentType:
+        media.mime_type || file.contentType || "application/octet-stream",
+      contentLength:
+        file.contentLength ??
+        (media.size_bytes ? Number(media.size_bytes) : undefined),
       filename: media.original_filename,
       isPublic,
     };
@@ -370,6 +452,7 @@ export function createMediaService({
     presignMediaUpload,
     confirmUpload,
     queueTranscodeJob,
+    retryTranscodeJob,
     getMediaAsset,
     getMediaAssets,
     getVideoJobProgress,

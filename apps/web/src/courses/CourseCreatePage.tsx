@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
 import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
+import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
+import {
+  LessonResourceManager,
+  toLessonResourceItem,
+  type LessonResourceItem,
+} from "./lesson-resources/LessonResourceManager";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import {
@@ -67,7 +73,6 @@ import {
   isEditingShortcutTarget,
 } from "../keyboardShortcuts";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
-
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
   coursesService,
@@ -79,10 +84,12 @@ import {
   useCreateCourse,
   useCreateCourseInclude,
   useCreateLesson,
+  useCreateLessonResource,
   useCreateSection,
   useDeleteCategory,
   useDeleteCourseInclude,
   useDeleteLesson,
+  useDeleteLessonResource,
   useDeleteSection,
   useReorderCourseIncludes,
   useReorderLessons,
@@ -102,6 +109,8 @@ import type {
   Category,
   CourseEditorDataResponse,
   CourseIncludeItem,
+  CreateLessonResourceRequest,
+  LessonResource,
 } from "@veolms/contracts";
 import {
   CourseOverviewPage,
@@ -118,12 +127,7 @@ import type { CourseSection, Lesson } from "../learning/courseContent";
 const EMPTY_CATEGORIES: Category[] = [];
 
 export type CourseWizardStepId =
-  | "basics"
-  | "curriculum"
-  | "access-rules"
-  | "pricing"
-  | "extras"
-  | "publish";
+  "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
 
 type WizardStepIcon = ComponentType<{
   size?: number;
@@ -247,7 +251,10 @@ export const BasicsFieldStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -272,7 +279,11 @@ export const BasicsFieldStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -305,7 +316,10 @@ export const AccessRulesControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -330,7 +344,11 @@ export const AccessRulesControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -362,7 +380,10 @@ export const PricingControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -387,7 +408,11 @@ export const PricingControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -397,9 +422,7 @@ export const PricingControlStatusIndicator = ({
 };
 
 export type ExtrasControlKey =
-  | "enableCertificate"
-  | "inclusions"
-  | (string & {});
+  "enableCertificate" | "inclusions" | (string & {});
 
 export const ExtrasControlStatusIndicator = ({
   status,
@@ -417,7 +440,10 @@ export const ExtrasControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -442,7 +468,11 @@ export const ExtrasControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -469,7 +499,10 @@ export const CurriculumItemStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -494,7 +527,11 @@ export const CurriculumItemStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -521,7 +558,10 @@ export const PublishControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch size={12} className="animate-spin text-(--accent) shrink-0" />
+        <CircleNotch
+          size={12}
+          className="animate-spin text-(--accent) shrink-0"
+        />
         <span>Saving...</span>
       </span>
     );
@@ -546,7 +586,11 @@ export const PublishControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
+        <WarningCircle
+          size={12}
+          weight="fill"
+          className="shrink-0 text-rose-500"
+        />
         <span>Save failed</span>
       </span>
     );
@@ -867,6 +911,7 @@ export const checkIsCurriculumDirty = (
       title: string;
       description?: string;
       contentType: "video" | "document";
+      contentMediaId?: string | null;
       isPublished?: boolean;
       isPreview?: boolean;
       isPendingCreation?: boolean;
@@ -874,6 +919,7 @@ export const checkIsCurriculumDirty = (
         title: string;
         description: string;
         contentType: "video" | "document";
+        contentMediaId?: string | null;
         isPublished?: boolean;
         isPreview?: boolean;
       };
@@ -896,6 +942,7 @@ export const checkIsCurriculumDirty = (
         title: les.title,
         description: les.description || "",
         contentType: les.contentType,
+        contentMediaId: les.contentMediaId ?? null,
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
         isPreview: les.isPreview !== undefined ? les.isPreview : false,
       };
@@ -908,6 +955,7 @@ export const checkIsCurriculumDirty = (
         les.title.trim() !== init.title.trim() ||
         (les.description || "") !== (init.description || "") ||
         les.contentType !== init.contentType ||
+        (les.contentMediaId ?? null) !== (init.contentMediaId ?? null) ||
         isPub !== initPub ||
         isPrev !== initPrev
       );
@@ -1212,8 +1260,9 @@ export function buildPricingPayload(state: PricingFormState) {
   const sellNum = Math.round(parseFloat(rawSell));
   const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
 
-  const price = origNum && origNum > 0 ? origNum : (isNaN(sellNum) ? 0 : sellNum);
-  const salePrice = origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
+  const price = origNum && origNum > 0 ? origNum : isNaN(sellNum) ? 0 : sellNum;
+  const salePrice =
+    origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
 
   return {
     pricingType: "paid" as const,
@@ -1245,6 +1294,7 @@ export interface BuildLocalPreviewParams {
       title: string;
       description?: string | null;
       contentType: "video" | "document";
+      contentMediaId?: string | null;
       isPreview?: boolean;
       isPublished?: boolean;
       resources?: Array<{
@@ -1317,11 +1367,13 @@ export function buildLocalPreviewData({
     shortDescription: shortDescription.trim() || null,
     description: courseDescription.trim() || null,
     difficulty: difficultyLevel ? difficultyLevel : null,
-    status: isPublished ? "published" : (editorData?.course?.status || "draft"),
+    status: isPublished ? "published" : editorData?.course?.status || "draft",
     creatorId: editorData?.course?.creatorId || null,
     categoryId: categoryId || null,
-    thumbnailMediaId: thumbnailMediaId ?? (editorData?.course?.thumbnailMediaId || null),
-    trailerMediaId: trailerMediaId ?? (editorData?.course?.trailerMediaId || null),
+    thumbnailMediaId:
+      thumbnailMediaId ?? (editorData?.course?.thumbnailMediaId || null),
+    trailerMediaId:
+      trailerMediaId ?? (editorData?.course?.trailerMediaId || null),
     instructorAlias: instructorAlias.trim() || null,
     version: courseVersion,
     createdAt: editorData?.course?.createdAt || now,
@@ -1345,6 +1397,7 @@ export function buildLocalPreviewData({
         title: les.title,
         description: les.description || null,
         contentType: les.contentType,
+        contentMediaId: les.contentMediaId ?? null,
         position: lesIdx,
         isPreview: Boolean(les.isPreview),
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
@@ -1389,19 +1442,18 @@ export function buildLocalPreviewData({
     estimatedDuration: editorData?.settings?.estimatedDuration ?? null,
   };
 
-  const includesData: CourseEditorDataResponse["includes"] =
-    manualIncludesDraft
-      .filter((inc) => Boolean(inc.text.trim()))
-      .map((inc, index) => ({
-        id: inc.id,
-        courseId: currentCourseId,
-        text: inc.text.trim(),
-        icon: null,
-        position: index,
-        createdAt:
-          editorData?.includes?.find((i) => i.id === inc.id)?.createdAt || now,
-        updatedAt: now,
-      }));
+  const includesData: CourseEditorDataResponse["includes"] = manualIncludesDraft
+    .filter((inc) => Boolean(inc.text.trim()))
+    .map((inc, index) => ({
+      id: inc.id,
+      courseId: currentCourseId,
+      text: inc.text.trim(),
+      icon: null,
+      position: index,
+      createdAt:
+        editorData?.includes?.find((i) => i.id === inc.id)?.createdAt || now,
+      updatedAt: now,
+    }));
 
   return {
     course: courseData,
@@ -1487,7 +1539,9 @@ export function CourseWizardSkeleton({
       {/* Wizard Steps Navigation Bar */}
       <nav
         className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-        aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
+        aria-label={
+          isEditing ? "Course editing steps" : "Course creation steps"
+        }
       >
         {WIZARD_STEPS.map((step) => {
           const Icon = step.Icon;
@@ -1635,7 +1689,8 @@ export function CourseWizardSkeleton({
                   Course Curriculum
                 </h2>
                 <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
-                  Organize your course into sections and lessons. You can reorder them anytime.
+                  Organize your course into sections and lessons. You can
+                  reorder them anytime.
                 </p>
               </div>
               <div className="inline-flex items-center justify-center gap-1.5 h-[34px] px-4 rounded-lg bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-white text-[0.80rem] font-bold max-[768px]:self-start">
@@ -1649,7 +1704,10 @@ export function CourseWizardSkeleton({
               {/* Section Header */}
               <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
                 <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                  <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                  <DotsSixVertical
+                    size={18}
+                    className="text-(--muted) opacity-40 shrink-0"
+                  />
                   <CaretDown size={16} className="text-(--muted) shrink-0" />
                   <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
                   <div className="h-4.5 flex-1 max-w-36 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
@@ -1667,8 +1725,15 @@ export function CourseWizardSkeleton({
                 {/* Lesson 1 */}
                 <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
-                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <DotsSixVertical
+                      size={16}
+                      className="text-(--muted) opacity-40 shrink-0"
+                    />
+                    <PlayCircle
+                      size={20}
+                      className="text-(--accent) opacity-60 shrink-0"
+                      weight="fill"
+                    />
                     <div className="h-4 flex-1 max-w-64 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
@@ -1681,8 +1746,15 @@ export function CourseWizardSkeleton({
                 {/* Lesson 2 */}
                 <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
-                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <DotsSixVertical
+                      size={16}
+                      className="text-(--muted) opacity-40 shrink-0"
+                    />
+                    <PlayCircle
+                      size={20}
+                      className="text-(--accent) opacity-60 shrink-0"
+                      weight="fill"
+                    />
                     <div className="h-4 flex-1 max-w-48 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
@@ -1695,8 +1767,15 @@ export function CourseWizardSkeleton({
                 {/* Lesson 3 */}
                 <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical size={16} className="text-(--muted) opacity-40 shrink-0" />
-                    <PlayCircle size={20} className="text-(--accent) opacity-60 shrink-0" weight="fill" />
+                    <DotsSixVertical
+                      size={16}
+                      className="text-(--muted) opacity-40 shrink-0"
+                    />
+                    <PlayCircle
+                      size={20}
+                      className="text-(--accent) opacity-60 shrink-0"
+                      weight="fill"
+                    />
                     <div className="h-4 flex-1 max-w-56 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
@@ -1720,7 +1799,10 @@ export function CourseWizardSkeleton({
             <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden">
               <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
                 <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                  <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                  <DotsSixVertical
+                    size={18}
+                    className="text-(--muted) opacity-40 shrink-0"
+                  />
                   <CaretRight size={16} className="text-(--muted) shrink-0" />
                   <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
                   <div className="h-4.5 flex-1 max-w-44 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
@@ -1760,7 +1842,8 @@ export function CourseWizardSkeleton({
                         Everyone
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Anyone with access to the platform can access this course.
+                        Anyone with access to the platform can access this
+                        course.
                       </p>
                     </div>
                   </div>
@@ -1778,7 +1861,8 @@ export function CourseWizardSkeleton({
                         </span>
                       </div>
                       <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Only users who meet the selected requirements can access this course.
+                        Only users who meet the selected requirements can access
+                        this course.
                       </p>
                     </div>
                   </div>
@@ -1820,7 +1904,8 @@ export function CourseWizardSkeleton({
                         Fixed duration
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Set a specific number of days or months learners have access.
+                        Set a specific number of days or months learners have
+                        access.
                       </p>
                     </div>
                   </div>
@@ -1846,8 +1931,12 @@ export function CourseWizardSkeleton({
                       <ChatCircleText size={20} weight="fill" />
                     </div>
                     <div>
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Comments</strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">Allow learners to comment on course content.</p>
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                        Comments
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                        Allow learners to comment on course content.
+                      </p>
                     </div>
                   </div>
                   <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
@@ -1859,8 +1948,13 @@ export function CourseWizardSkeleton({
                       <DownloadSimple size={20} weight="bold" />
                     </div>
                     <div>
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">Downloads</strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">Allow learners to download lesson resources for offline access.</p>
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                        Downloads
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                        Allow learners to download lesson resources for offline
+                        access.
+                      </p>
                     </div>
                   </div>
                   <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
@@ -1939,7 +2033,8 @@ export function CourseWizardSkeleton({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex flex-col gap-2">
                       <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Price (INR) <span className="text-[#ff5252] ml-0.5">*</span>
+                        Price (INR){" "}
+                        <span className="text-[#ff5252] ml-0.5">*</span>
                       </label>
                       <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
                         <div className="h-4 w-16 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
@@ -2047,7 +2142,8 @@ export function CourseWizardSkeleton({
                             On course completion
                           </strong>
                           <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when the learner completes all lessons.
+                            Issue certificate when the learner completes all
+                            lessons.
                           </p>
                         </div>
                       </div>
@@ -2064,11 +2160,14 @@ export function CourseWizardSkeleton({
                               <div className="w-[76px] h-8 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex items-center justify-center text-(--muted) text-[0.86rem] font-semibold">
                                 95
                               </div>
-                              <span className="text-(--text) text-[0.86rem] font-bold">%</span>
+                              <span className="text-(--text) text-[0.86rem] font-bold">
+                                %
+                              </span>
                             </div>
                           </div>
                           <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when learner reaches the selected percentage.
+                            Issue certificate when learner reaches the selected
+                            percentage.
                           </p>
                         </div>
                       </div>
@@ -2096,7 +2195,9 @@ export function CourseWizardSkeleton({
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">Sections</span>
+                      <span className="text-(--muted) text-[0.74rem] font-medium">
+                        Sections
+                      </span>
                     </div>
                   </div>
 
@@ -2106,7 +2207,9 @@ export function CourseWizardSkeleton({
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">Lessons</span>
+                      <span className="text-(--muted) text-[0.74rem] font-medium">
+                        Lessons
+                      </span>
                     </div>
                   </div>
 
@@ -2116,7 +2219,9 @@ export function CourseWizardSkeleton({
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-8 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">Content length</span>
+                      <span className="text-(--muted) text-[0.74rem] font-medium">
+                        Content length
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2132,27 +2237,38 @@ export function CourseWizardSkeleton({
                     </span>
                   </div>
                   <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-                    Perks and benefits your learners will receive upon enrolling (max 6 items). Click suggestions below or add custom inclusions.
+                    Perks and benefits your learners will receive upon enrolling
+                    (max 6 items). Click suggestions below or add custom
+                    inclusions.
                   </p>
 
                   {/* Inclusion items */}
                   <div className="flex flex-col gap-2.5">
                     <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <DotsSixVertical
+                        size={18}
+                        className="text-(--muted) opacity-40 shrink-0"
+                      />
                       <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
                       <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
                         <Trash size={14} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <DotsSixVertical
+                        size={18}
+                        className="text-(--muted) opacity-40 shrink-0"
+                      />
                       <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
                       <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
                         <Trash size={14} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical size={18} className="text-(--muted) opacity-40 shrink-0" />
+                      <DotsSixVertical
+                        size={18}
+                        className="text-(--muted) opacity-40 shrink-0"
+                      />
                       <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
                       <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
                         <Trash size={14} />
@@ -2199,7 +2315,9 @@ export function CourseWizardSkeleton({
                 <div className="flex flex-col gap-4">
                   {/* Status row */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">Course status</label>
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
+                      Course status
+                    </label>
                     <div className="flex items-center mt-0.5">
                       <span className="inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
                         Draft
@@ -2209,7 +2327,9 @@ export function CourseWizardSkeleton({
 
                   {/* Visibility */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">Course visibility</label>
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
+                      Course visibility
+                    </label>
                     <div className="h-10 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3.5 flex items-center justify-between bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
                       <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                       <CaretDown size={14} className="text-(--muted)" />
@@ -2218,12 +2338,16 @@ export function CourseWizardSkeleton({
 
                   {/* Schedule */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">Publish on</label>
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
+                      Publish on
+                    </label>
                     <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
                       <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
                         <div className="w-2 h-2 rounded-full bg-(--accent)" />
                       </div>
-                      <strong className="text-(--text) text-[0.88rem] font-[650]">Publish immediately</strong>
+                      <strong className="text-(--text) text-[0.88rem] font-[650]">
+                        Publish immediately
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -2242,14 +2366,26 @@ export function CourseWizardSkeleton({
 
                 <div className="flex flex-col gap-2.5">
                   {/* Step Checklist Items */}
-                  {["Basics", "Curriculum", "Access Rules", "Pricing", "Extras"].map((stepTitle) => (
+                  {[
+                    "Basics",
+                    "Curriculum",
+                    "Access Rules",
+                    "Pricing",
+                    "Extras",
+                  ].map((stepTitle) => (
                     <div
                       key={stepTitle}
                       className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                     >
                       <div className="flex items-center gap-3">
-                        <CheckCircle size={20} weight="fill" className="text-green-500 opacity-80" />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">{stepTitle}</strong>
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className="text-green-500 opacity-80"
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          {stepTitle}
+                        </strong>
                       </div>
                       <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
                         <span>Ready</span>
@@ -2306,14 +2442,12 @@ export function CourseCreatePage({
     searchParams.get("courseId") ||
     null;
 
-  const initialStep =
-    activeEditId
-      ? parseWizardTab(searchParams.get("tab")) ||
-        parseWizardTab(searchParams.get("step")) ||
-        "basics"
-      : "basics";
-  const [activeStep, setActiveStep] =
-    useState<CourseWizardStepId>(initialStep);
+  const initialStep = activeEditId
+    ? parseWizardTab(searchParams.get("tab")) ||
+      parseWizardTab(searchParams.get("step")) ||
+      "basics"
+    : "basics";
+  const [activeStep, setActiveStep] = useState<CourseWizardStepId>(initialStep);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
@@ -2792,8 +2926,10 @@ export function CourseCreatePage({
     }
   }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
 
-  const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
-    useCategories();
+  const {
+    data: serverCategories = EMPTY_CATEGORIES,
+    isLoading: isLoadingCategories,
+  } = useCategories();
   const {
     data: editorData,
     isLoading: isLoadingEditor,
@@ -2826,8 +2962,10 @@ export function CourseCreatePage({
   const deleteSectionMutation = useDeleteSection();
   const reorderSectionsMutation = useReorderSections();
   const createLessonMutation = useCreateLesson();
+  const createLessonResourceMutation = useCreateLessonResource();
   const updateLessonMutation = useUpdateLesson();
   const deleteLessonMutation = useDeleteLesson();
+  const deleteLessonResourceMutation = useDeleteLessonResource();
   const reorderLessonsMutation = useReorderLessons();
   const [isCreatingSection, setIsCreatingSection] = useState(false);
   const [creatingLessonSectionId, setCreatingLessonSectionId] = useState<
@@ -2900,7 +3038,8 @@ export function CourseCreatePage({
     basicsSaveFailed ||
     Object.values(basicsFieldStatus).some((status) => status === "failed");
 
-  const basicsOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+  const basicsOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
     if (isAnyBasicsSaving) return "saving";
     if (hasBasicsFieldFailed) return "failed";
     if (showBasicsSavedBriefly) return "saved";
@@ -3047,18 +3186,11 @@ export function CourseCreatePage({
   };
 
   // Curriculum Data interfaces
-  interface LessonResourceItem {
-    id: string;
-    name: string;
-    type: "PDF" | "TXT" | "DOC" | "DOCX" | "ZIP" | "PNG" | "MP4";
-    size: string;
-    mediaAssetId?: string;
-  }
-
   interface LessonSnapshot {
     title: string;
     description: string;
     contentType: "video" | "document";
+    contentMediaId?: string | null;
     isPublished?: boolean;
     isPreview?: boolean;
   }
@@ -3068,6 +3200,7 @@ export function CourseCreatePage({
     title: string;
     description: string;
     contentType: "video" | "document";
+    contentMediaId?: string | null;
     isExpanded: boolean;
     isPublished?: boolean;
     isPreview?: boolean;
@@ -3091,6 +3224,7 @@ export function CourseCreatePage({
         title: les.title,
         description: les.description || "",
         contentType: les.contentType,
+        contentMediaId: les.contentMediaId ?? null,
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
         isPreview: les.isPreview !== undefined ? les.isPreview : false,
       }
@@ -3108,6 +3242,7 @@ export function CourseCreatePage({
       les.title.trim() !== init.title.trim() ||
       (les.description || "") !== (init.description || "") ||
       les.contentType !== init.contentType ||
+      (les.contentMediaId ?? null) !== (init.contentMediaId ?? null) ||
       isPub !== initPub ||
       isPrev !== initPrev
     );
@@ -3257,15 +3392,17 @@ export function CourseCreatePage({
     curriculumSaveFailed ||
     Object.values(curriculumItemStatus).some((status) => status === "failed");
 
-  const curriculumOverallStatus = useMemo(
-    (): "saving" | "failed" | "saved" | null => {
-      if (isAnyCurriculumSaving) return "saving";
-      if (hasCurriculumItemFailed) return "failed";
-      if (showCurriculumSavedBriefly) return "saved";
-      return null;
-    },
-    [isAnyCurriculumSaving, hasCurriculumItemFailed, showCurriculumSavedBriefly],
-  );
+  const curriculumOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
+    if (isAnyCurriculumSaving) return "saving";
+    if (hasCurriculumItemFailed) return "failed";
+    if (showCurriculumSavedBriefly) return "saved";
+    return null;
+  }, [
+    isAnyCurriculumSaving,
+    hasCurriculumItemFailed,
+    showCurriculumSavedBriefly,
+  ]);
 
   // Access Rules Step server-confirmed and draft states
   const [accessRulesExists, setAccessRulesExists] = useState(false);
@@ -3447,12 +3584,17 @@ export function CourseCreatePage({
     accessRulesSaveFailed ||
     Object.values(accessControlStatus).some((status) => status === "failed");
 
-  const accessRulesOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+  const accessRulesOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
     if (isAnyAccessRulesSaving) return "saving";
     if (hasAccessControlFailed) return "failed";
     if (showAccessRulesSavedBriefly) return "saved";
     return null;
-  }, [isAnyAccessRulesSaving, hasAccessControlFailed, showAccessRulesSavedBriefly]);
+  }, [
+    isAnyAccessRulesSaving,
+    hasAccessControlFailed,
+    showAccessRulesSavedBriefly,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -3513,9 +3655,9 @@ export function CourseCreatePage({
   }, [pricingValidationError]);
 
   // Immediate persistence states for Pricing interactive controls
-  const [savingPricingControls, setSavingPricingControls] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [savingPricingControls, setSavingPricingControls] = useState<
+    Set<string>
+  >(() => new Set());
   const savingPricingControlsRef = useRef<Set<string>>(new Set());
   const pricingControlVersionsRef = useRef<{
     pricingType: number;
@@ -3532,9 +3674,9 @@ export function CourseCreatePage({
     currency: 0,
     pricingDetails: 0,
   });
-  const pricingDebounceTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const pricingDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const inFlightPricingPromiseRef = useRef<Promise<unknown> | null>(null);
 
   const markPricingControlSaving = (controlKey: string, isSaving: boolean) => {
@@ -3677,7 +3819,8 @@ export function CourseCreatePage({
     pricingSaveFailed ||
     Object.values(pricingControlStatus).some((status) => status === "failed");
 
-  const pricingOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+  const pricingOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
     if (isAnyPricingSaving) return "saving";
     if (hasPricingControlFailed) return "failed";
     if (showPricingSavedBriefly) return "saved";
@@ -3855,15 +3998,13 @@ export function CourseCreatePage({
     publishSaveFailed ||
     Object.values(publishControlStatus).some((status) => status === "failed");
 
-  const publishOverallStatus = useMemo(
-    (): "saving" | "failed" | "saved" | null => {
-      if (isAnyPublishSaving) return "saving";
-      if (hasPublishControlFailed) return "failed";
-      if (showPublishSavedBriefly) return "saved";
-      return null;
-    },
-    [isAnyPublishSaving, hasPublishControlFailed, showPublishSavedBriefly],
-  );
+  const publishOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
+    if (isAnyPublishSaving) return "saving";
+    if (hasPublishControlFailed) return "failed";
+    if (showPublishSavedBriefly) return "saved";
+    return null;
+  }, [isAnyPublishSaving, hasPublishControlFailed, showPublishSavedBriefly]);
 
   // Extras Step server-confirmed and draft states
   const [serverExtras, setServerExtras] =
@@ -3876,7 +4017,11 @@ export function CourseCreatePage({
   manualIncludesDraftRef.current = manualIncludesDraft;
   const dragInitialIncludesStateRef = useRef<{
     includeIds: string[];
-    previousIncludes: Array<{ id: string; text: string; isPendingCreation?: boolean }>;
+    previousIncludes: Array<{
+      id: string;
+      text: string;
+      isPendingCreation?: boolean;
+    }>;
   } | null>(null);
   const deletingIncludeIdsRef = useRef<Set<string>>(new Set());
   const [deletingIncludeIds, setDeletingIncludeIds] = useState<Set<string>>(
@@ -4000,7 +4145,9 @@ export function CourseCreatePage({
     if (
       savingIncludeIds.has(controlKey) ||
       deletingIncludeIds.has(controlKey) ||
-      manualIncludesDraft.some((m) => m.id === controlKey && m.isPendingCreation)
+      manualIncludesDraft.some(
+        (m) => m.id === controlKey && m.isPendingCreation,
+      )
     ) {
       return "saving";
     }
@@ -4021,7 +4168,8 @@ export function CourseCreatePage({
     extrasSaveFailed ||
     Object.values(extrasControlStatus).some((status) => status === "failed");
 
-  const extrasOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
+  const extrasOverallStatus = useMemo(():
+    "saving" | "failed" | "saved" | null => {
     if (isAnyExtrasSaving) return "saving";
     if (hasExtrasControlFailed) return "failed";
     if (showExtrasSavedBriefly) return "saved";
@@ -4135,7 +4283,12 @@ export function CourseCreatePage({
       let fixedVal = 30;
       let fixedUnit: DurationUnit = "Days";
 
-      if (hasAccessRules && isFixed && ar?.durationDays && ar.durationDays > 0) {
+      if (
+        hasAccessRules &&
+        isFixed &&
+        ar?.durationDays &&
+        ar.durationDays > 0
+      ) {
         const days = ar.durationDays;
         if (days % 365 === 0 && days >= 365) {
           fixedVal = days / 365;
@@ -4155,11 +4308,7 @@ export function CourseCreatePage({
       const confirmedAccessRules: AccessRulesFormState =
         normalizeAccessRulesState({
           accessType: (ar?.accessType as AccessType) || "everyone",
-          durationMode: hasAccessRules
-            ? isFixed
-              ? "fixed"
-              : "lifetime"
-            : "",
+          durationMode: hasAccessRules ? (isFixed ? "fixed" : "lifetime") : "",
           fixedDurationValue: fixedVal,
           fixedDurationUnit: fixedUnit,
           enableQA:
@@ -4323,6 +4472,10 @@ export function CourseCreatePage({
                   isDirty && existingLesson
                     ? existingLesson.contentType
                     : les.contentType;
+                const contentMediaId =
+                  isDirty && existingLesson
+                    ? (existingLesson.contentMediaId ?? null)
+                    : (les.contentMediaId ?? null);
                 const isPub =
                   isDirty && existingLesson
                     ? existingLesson.isPublished !== undefined
@@ -4345,6 +4498,7 @@ export function CourseCreatePage({
                   title,
                   description,
                   contentType,
+                  contentMediaId,
                   isExpanded: existingLesson
                     ? existingLesson.isExpanded
                     : false,
@@ -4354,15 +4508,13 @@ export function CourseCreatePage({
                     title: les.title,
                     description: desc,
                     contentType: les.contentType,
+                    contentMediaId: les.contentMediaId ?? null,
                     isPublished: isPub,
                     isPreview: isPrev,
                   },
-                  resources: (les.resources || []).map((res) => ({
-                    id: res.id,
-                    name: res.title || "Resource",
-                    type: "PDF" as const,
-                    size: "1.0 MB",
-                  })),
+                  resources: (les.resources || []).map((res) =>
+                    toLessonResourceItem(res),
+                  ),
                 };
               });
 
@@ -4483,7 +4635,9 @@ export function CourseCreatePage({
     clearExtrasControlStatus("inclusions");
     const truncated = text.slice(0, 25);
     setManualIncludesDraft((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, text: truncated } : item)),
+      prev.map((item) =>
+        item.id === id ? { ...item, text: truncated } : item,
+      ),
     );
   };
 
@@ -4540,9 +4694,7 @@ export function CourseCreatePage({
 
     // Normalize draft to trimmed before persisting
     setManualIncludesDraft((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, text: trimmed } : item,
-      ),
+      prev.map((item) => (item.id === id ? { ...item, text: trimmed } : item)),
     );
 
     savingIncludeIdsRef.current.add(id);
@@ -4556,9 +4708,7 @@ export function CourseCreatePage({
       });
 
       // Update serverIncludes baseline so saveExtrasStep does not duplicate it
-      setServerIncludes((prev) =>
-        prev.map((s) => (s.id === id ? updated : s)),
-      );
+      setServerIncludes((prev) => prev.map((s) => (s.id === id ? updated : s)));
       markExtrasControlSaved(id);
       markExtrasControlSaved("inclusions");
     } catch (err: unknown) {
@@ -5709,6 +5859,7 @@ export function CourseCreatePage({
       isExpanded: true,
       isPublished: true,
       isPreview: false,
+      contentMediaId: null,
       isPendingCreation: true,
       initialState: {
         title: newLessonTitle,
@@ -5835,6 +5986,7 @@ export function CourseCreatePage({
                       title: l.title,
                       description: l.description || "",
                       contentType: l.contentType,
+                      contentMediaId: l.contentMediaId ?? null,
                       isPublished:
                         l.isPublished !== undefined ? l.isPublished : true,
                       isPreview:
@@ -5986,6 +6138,7 @@ export function CourseCreatePage({
         title: trimmedTitle,
         description: les.description || "",
         contentType: les.contentType,
+        contentMediaId: les.contentMediaId ?? null,
         isPublished: isPublishedVal,
         isPreview: isPreviewVal,
       };
@@ -6051,9 +6204,7 @@ export function CourseCreatePage({
                 if (l.id !== lessonId) return l;
                 return {
                   ...l,
-                  isExpanded: options?.collapseOnSuccess
-                    ? false
-                    : l.isExpanded,
+                  isExpanded: options?.collapseOnSuccess ? false : l.isExpanded,
                   initialState: {
                     ...persistedSnapshot,
                   },
@@ -6086,10 +6237,7 @@ export function CourseCreatePage({
     });
   };
 
-  const handleLessonFieldBlur = async (
-    sectionId: string,
-    lessonId: string,
-  ) => {
+  const handleLessonFieldBlur = async (sectionId: string, lessonId: string) => {
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
     const les = sec?.lessons.find((l) => l.id === lessonId);
@@ -6116,6 +6264,34 @@ export function CourseCreatePage({
     await persistLesson(sectionId, lessonId, {
       collapseOnSuccess: false,
     });
+  };
+
+  const handleLessonMediaAttached = async (
+    sectionId: string,
+    lessonId: string,
+    mediaAssetId: string,
+  ) => {
+    const currentSections = sectionsRef.current || sections;
+    const currentLesson = currentSections
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((lesson) => lesson.id === lessonId);
+    const previousMediaAssetId = currentLesson?.contentMediaId ?? null;
+
+    handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
+    if (!currentLesson || currentLesson.isPendingCreation) return;
+
+    const persisted = await persistLesson(sectionId, lessonId, {
+      collapseOnSuccess: false,
+    });
+
+    if (!persisted) {
+      // The replacement is already transcoded, but the lesson binding did not
+      // persist. Restore the last known lesson asset so a save failure can
+      // never leave the editor pointing at an uncommitted replacement.
+      handleUpdateLesson(sectionId, lessonId, {
+        contentMediaId: previousMediaAssetId,
+      });
+    }
   };
 
   const saveAllDirtyLessons = async (
@@ -6238,10 +6414,7 @@ export function CourseCreatePage({
     }
 
     // Guard against re-entrancy if already collapsing or saving
-    if (
-      isCollapsingSectionRef.current ||
-      isSavingAllDirtyLessonsRef.current
-    ) {
+    if (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current) {
       return;
     }
 
@@ -6276,38 +6449,66 @@ export function CourseCreatePage({
     }
   };
 
-  const handleAddLessonResource = (sectionId: string, lessonId: string) => {
-    const newResId = `res-${Date.now()}`;
-    const sampleFiles = [
-      { name: "Lesson_Notes.pdf", type: "PDF" as const, size: "1.8 MB" },
-      { name: "Source_Code.txt", type: "TXT" as const, size: "850 B" },
-      { name: "Reference_Doc.pdf", type: "PDF" as const, size: "3.1 MB" },
-    ];
-    const chosen = sampleFiles[Math.floor(Math.random() * sampleFiles.length)]!;
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          lessons: sec.lessons.map((l) => {
-            if (l.id !== lessonId) return l;
-            return {
-              ...l,
-              resources: [...l.resources, { id: newResId, ...chosen }],
-            };
-          }),
-        };
-      }),
-    );
+  const handleCreateLessonResource = async (
+    lessonId: string,
+    payload: CreateLessonResourceRequest,
+  ): Promise<LessonResource> => {
+    if (!currentCourseId) {
+      throw new Error("Save the course before adding lesson resources.");
+    }
+    return await createLessonResourceMutation.mutateAsync({
+      courseId: currentCourseId,
+      lessonId,
+      payload,
+    });
   };
 
-  const handleRemoveLessonResource = (
+  const handleLessonResourceAdded = (
     sectionId: string,
     lessonId: string,
-    resourceId: string,
+    resource: LessonResourceItem,
   ) => {
-    setSections((prev) =>
-      prev.map((sec) => {
+    setSections((prev) => {
+      const next = prev.map((sec) => {
+        if (sec.id !== sectionId) return sec;
+        return {
+          ...sec,
+          lessons: sec.lessons.map((l) => {
+            if (l.id !== lessonId) return l;
+            if (l.resources.some((existing) => existing.id === resource.id)) {
+              return l;
+            }
+            return {
+              ...l,
+              resources: [...l.resources, resource],
+            };
+          }),
+        };
+      });
+      sectionsRef.current = next;
+      return next;
+    });
+  };
+
+  const handleDeleteLessonResource = async (
+    resourceId: string,
+  ): Promise<void> => {
+    if (!currentCourseId) {
+      throw new Error("Save the course before removing lesson resources.");
+    }
+    await deleteLessonResourceMutation.mutateAsync({
+      courseId: currentCourseId,
+      resourceId,
+    });
+  };
+
+  const handleLessonResourceRemoved = (
+    sectionId: string,
+    lessonId: string,
+    resource: LessonResourceItem,
+  ) => {
+    setSections((prev) => {
+      const next = prev.map((sec) => {
         if (sec.id !== sectionId) return sec;
         return {
           ...sec,
@@ -6315,12 +6516,14 @@ export function CourseCreatePage({
             if (l.id !== lessonId) return l;
             return {
               ...l,
-              resources: l.resources.filter((r) => r.id !== resourceId),
+              resources: l.resources.filter((r) => r.id !== resource.id),
             };
           }),
         };
-      }),
-    );
+      });
+      sectionsRef.current = next;
+      return next;
+    });
   };
 
   // Lesson Drag and Drop handlers
@@ -6977,10 +7180,7 @@ export function CourseCreatePage({
 
   const executeSerializedBasicsMetaMutation = async (
     controlKey:
-      | "title"
-      | "shortDescription"
-      | "courseDescription"
-      | "instructorAlias",
+      "title" | "shortDescription" | "courseDescription" | "instructorAlias",
     targetVersion: number,
     previousSnapshot: BasicsFormState,
   ) => {
@@ -7154,7 +7354,10 @@ export function CourseCreatePage({
 
     // Register the promise SYNCHRONOUSLY before the first await so any
     // concurrent caller that checks immediately after this line will find it.
-    const promise = createCourseMutation.mutateAsync({ title, instructorAlias });
+    const promise = createCourseMutation.mutateAsync({
+      title,
+      instructorAlias,
+    });
     inFlightCourseCreationPromiseRef.current = promise;
     try {
       const created = await promise;
@@ -7170,10 +7373,7 @@ export function CourseCreatePage({
 
   const persistBasicsField = async (
     fieldKey:
-      | "title"
-      | "shortDescription"
-      | "courseDescription"
-      | "instructorAlias",
+      "title" | "shortDescription" | "courseDescription" | "instructorAlias",
   ) => {
     const currentDraft = basicsDraftRef.current;
     const baseline = serverBasicsRef.current;
@@ -7219,7 +7419,8 @@ export function CourseCreatePage({
             basicsDraftRef.current = {
               ...basicsDraftRef.current,
               instructorAlias:
-                created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+                created.instructorAlias ??
+                basicsDraftRef.current.instructorAlias,
             };
             // Now that currentCourseId is established, persist the latest title
             // through the EXISTING COURSE update path (executeSerializedBasicsMetaMutation).
@@ -7235,7 +7436,8 @@ export function CourseCreatePage({
               ...basicsDraftRef.current,
               title: created.title,
               instructorAlias:
-                created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+                created.instructorAlias ??
+                basicsDraftRef.current.instructorAlias,
             };
             markBasicsFieldSaved("title");
           }
@@ -7361,7 +7563,7 @@ export function CourseCreatePage({
           err instanceof Error
             ? err.message
             : "Failed to update instructor name visibility.";
-          setToastMessage(errorMsg);
+        setToastMessage(errorMsg);
       }
     } finally {
       inFlightBasicsControlsRef.current.showInstructorName = Math.max(
@@ -7704,7 +7906,8 @@ export function CourseCreatePage({
 
     setIsSavingPricing(true);
     try {
-      const targetCourseId = await ensureCourseDraftForPricing(explicitCourseId);
+      const targetCourseId =
+        await ensureCourseDraftForPricing(explicitCourseId);
       const payload = buildPricingPayload(pricingDraftRef.current);
       const res = await upsertPricingMutation.mutateAsync({
         courseId: targetCourseId,
@@ -7848,10 +8051,7 @@ export function CourseCreatePage({
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
     cancelTitleCreationDebounce();
-    if (
-      actionLoading !== null ||
-      isSavingAllDirtyLessonsRef.current
-    ) {
+    if (actionLoading !== null || isSavingAllDirtyLessonsRef.current) {
       return;
     }
     if (destination === activeStep) {
@@ -8131,7 +8331,8 @@ export function CourseCreatePage({
             Unable to load course details
           </h2>
           <p className="m-0 mt-2 max-w-md text-[0.88rem] leading-relaxed text-(--muted)">
-            {editorError?.message || "There was an error communicating with the server to fetch this course."}
+            {editorError?.message ||
+              "There was an error communicating with the server to fetch this course."}
           </p>
           <div className="mt-5 flex items-center gap-3">
             <button
@@ -8230,7 +8431,9 @@ export function CourseCreatePage({
       <nav
         ref={stepsNavRef}
         className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] [&::after]:hidden!"
-        aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
+        aria-label={
+          isEditing ? "Course editing steps" : "Course creation steps"
+        }
         role="tablist"
         onMouseDown={handleNavMouseDown}
         onMouseLeave={handleNavMouseLeave}
@@ -8310,3428 +8513,3347 @@ export function CourseCreatePage({
         {(panelStep) =>
           panelStep === "basics" ? (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
-            {/* Left Column: Form Sections */}
-            <div className="flex flex-col gap-5">
-              {/* Basic Information Section */}
-              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                <div className="mb-4.5 flex items-center justify-between">
-                  <div>
-                    <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                      Basic Information
-                    </h2>
-                    <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
-                      {isEditing
-                        ? "Update the essential details of your course."
-                        : "Add the essential details of your course."}
-                    </p>
+              {/* Left Column: Form Sections */}
+              <div className="flex flex-col gap-5">
+                {/* Basic Information Section */}
+                <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                  <div className="mb-4.5 flex items-center justify-between">
+                    <div>
+                      <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                        Basic Information
+                      </h2>
+                      <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
+                        {isEditing
+                          ? "Update the essential details of your course."
+                          : "Add the essential details of your course."}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="relative flex flex-col gap-2 mb-5">
-                  {showTitleTooltip &&
-                    !isDownstreamUnlocked &&
-                    !isInitialCourseCreationPending && (
-                    <div
-                      role="tooltip"
-                      id="course-title-tooltip"
-                      data-testid="basics-title-tooltip"
-                      onClick={() => titleInputRef.current?.focus()}
-                      className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
-                    >
-                      <Info
-                        size={15}
-                        weight="fill"
-                        className="text-(--accent) shrink-0"
+                  <div className="relative flex flex-col gap-2 mb-5">
+                    {showTitleTooltip &&
+                      !isDownstreamUnlocked &&
+                      !isInitialCourseCreationPending && (
+                        <div
+                          role="tooltip"
+                          id="course-title-tooltip"
+                          data-testid="basics-title-tooltip"
+                          onClick={() => titleInputRef.current?.focus()}
+                          className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
+                        >
+                          <Info
+                            size={15}
+                            weight="fill"
+                            className="text-(--accent) shrink-0"
+                          />
+                          <span>
+                            Continue course creation by entering a course title
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Dismiss tooltip"
+                            className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowTitleTooltip(false);
+                            }}
+                          >
+                            <X size={13} />
+                          </button>
+                          <div
+                            className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
+                            aria-hidden="true"
+                          />
+                        </div>
+                      )}
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="course-title"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Course Title{" "}
+                        <span className="text-[#ff5252] ml-0.5">*</span>
+                      </label>
+                      <BasicsFieldStatusIndicator
+                        status={getBasicsFieldDisplayStatus("title")}
+                        testId="basics-field-status-title"
                       />
-                      <span>
-                        Continue course creation by entering a course title
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="Dismiss tooltip"
-                        className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        id="course-title"
+                        ref={titleInputRef}
+                        autoFocus={!currentCourseId}
+                        type="text"
+                        maxLength={120}
+                        placeholder="e.g. Complete Backend with Node.js"
+                        disabled={isInitialCourseCreationPending}
+                        value={courseTitle}
+                        onChange={(e) => {
+                          if (isInitialCourseCreationPending) return;
+                          const val = e.target.value.slice(0, 120);
+                          setCourseTitle(val);
+                          clearBasicsFieldStatus("title");
+                          if (val.trim()) {
+                            setShowTitleTooltip(false);
+                          }
+
+                          // 1-second debounce for brand-new courses only
+                          if (
+                            !currentCourseIdRef.current &&
+                            !currentCourseId &&
+                            !isEditing
+                          ) {
+                            cancelTitleCreationDebounce();
+                            if (val.trim()) {
+                              titleCreationDebounceTimerRef.current =
+                                setTimeout(() => {
+                                  titleCreationDebounceTimerRef.current = null;
+                                  void persistBasicsField("title");
+                                }, 1000);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (isInitialCourseCreationPending) {
+                            e.preventDefault();
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            // Pressing Enter triggers immediate creation, cancelling pending debounce
+                            if (
+                              !currentCourseIdRef.current &&
+                              !currentCourseId &&
+                              !isEditing
+                            ) {
+                              cancelTitleCreationDebounce();
+                              void persistBasicsField("title");
+                            }
+                          }
+                        }}
+                        onFocus={() => {
                           setShowTitleTooltip(false);
                         }}
-                      >
-                        <X size={13} />
-                      </button>
-                      <div
-                        className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="course-title"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Course Title{" "}
-                      <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
-                    <BasicsFieldStatusIndicator
-                      status={getBasicsFieldDisplayStatus("title")}
-                      testId="basics-field-status-title"
-                    />
-                  </div>
-                  <div className="relative flex items-center">
-                    <input
-                      id="course-title"
-                      ref={titleInputRef}
-                      autoFocus={!currentCourseId}
-                      type="text"
-                      maxLength={120}
-                      placeholder="e.g. Complete Backend with Node.js"
-                      disabled={isInitialCourseCreationPending}
-                      value={courseTitle}
-                      onChange={(e) => {
-                        if (isInitialCourseCreationPending) return;
-                        const val = e.target.value.slice(0, 120);
-                        setCourseTitle(val);
-                        clearBasicsFieldStatus("title");
-                        if (val.trim()) {
-                          setShowTitleTooltip(false);
-                        }
-
-                        // 1-second debounce for brand-new courses only
-                        if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
+                        onBlur={() => {
+                          if (isInitialCourseCreationPending) return;
                           cancelTitleCreationDebounce();
-                          if (val.trim()) {
-                            titleCreationDebounceTimerRef.current = setTimeout(() => {
-                              titleCreationDebounceTimerRef.current = null;
-                              void persistBasicsField("title");
-                            }, 1000);
+                          void persistBasicsField("title");
+                          if (!currentCourseId && !courseTitle.trim()) {
+                            setShowTitleTooltip(true);
                           }
+                        }}
+                        aria-describedby={
+                          showTitleTooltip && !isDownstreamUnlocked
+                            ? "course-title-tooltip"
+                            : !isDownstreamUnlocked
+                              ? "basics-title-helper"
+                              : undefined
                         }
-                      }}
-                      onKeyDown={(e) => {
-                        if (isInitialCourseCreationPending) {
-                          e.preventDefault();
-                          return;
-                        }
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          // Pressing Enter triggers immediate creation, cancelling pending debounce
-                          if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
-                            cancelTitleCreationDebounce();
-                            void persistBasicsField("title");
-                          }
-                        }
-                      }}
-                      onFocus={() => {
-                        setShowTitleTooltip(false);
-                      }}
-                      onBlur={() => {
-                        if (isInitialCourseCreationPending) return;
-                        cancelTitleCreationDebounce();
-                        void persistBasicsField("title");
-                        if (!currentCourseId && !courseTitle.trim()) {
-                          setShowTitleTooltip(true);
-                        }
-                      }}
-                      aria-describedby={
-                        showTitleTooltip && !isDownstreamUnlocked
-                          ? "course-title-tooltip"
-                          : !isDownstreamUnlocked
-                            ? "basics-title-helper"
-                            : undefined
-                      }
-                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                      {courseTitle.length} / 120
-                    </span>
-                  </div>
-                  {!isDownstreamUnlocked && (
-                    <p
-                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
-                      role="status"
-                      data-testid="basics-title-helper"
-                    >
-                      {createCourseMutation.isPending || isInitialCourseCreationPending ? (
-                        <>
-                          <CircleNotch
-                            size={13}
-                            className="animate-spin text-(--accent) shrink-0"
-                          />
-                          <span>Creating course…</span>
-                        </>
-                      ) : (
-                        "Add a course title to continue."
-                      )}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2 mb-5">
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="course-short-description"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Short Description
-                    </label>
-                    <BasicsFieldStatusIndicator
-                      status={getBasicsFieldDisplayStatus("shortDescription")}
-                      testId="basics-field-status-shortDescription"
-                    />
-                  </div>
-                  <div className="relative flex items-center">
-                    <textarea
-                      id="course-short-description"
-                      rows={2}
-                      maxLength={150}
-                      placeholder="A concise summary of your course (shown in course cards and search)..."
-                      disabled={!isDownstreamUnlocked}
-                      value={shortDescription}
-                      onChange={(e) => {
-                        setShortDescription(e.target.value.slice(0, 150));
-                        clearBasicsFieldStatus("shortDescription");
-                      }}
-                      onBlur={() => {
-                        void persistBasicsField("shortDescription");
-                      }}
-                      className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
-                    />
-                    <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                      {shortDescription.length} / 150
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="flex flex-col gap-2 mb-5"
-                  onBlur={() => {
-                    void persistBasicsField("courseDescription");
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="course-description"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Course Description{" "}
-                      <span className="text-[#ff5252] ml-0.5">*</span>
-                    </label>
-                    <BasicsFieldStatusIndicator
-                      status={getBasicsFieldDisplayStatus("courseDescription")}
-                      testId="basics-field-status-courseDescription"
-                    />
-                  </div>
-                  <RichTextEditor
-                    id="course-description"
-                    disabled={!isDownstreamUnlocked}
-                    value={courseDescription}
-                    onChange={(val) => {
-                      setCourseDescription(val);
-                      clearBasicsFieldStatus("courseDescription");
-                    }}
-                    placeholder="Describe what your course is about, what students will learn, and who this course is for..."
-                    maxLength={1500}
-                  />
-                </div>
-
-                {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
-                <div className="flex flex-col gap-2 mb-4.5">
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="instructor-alias"
-                      className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                    >
-                      Instructor Alias
-                    </label>
-                    <BasicsFieldStatusIndicator
-                      status={getBasicsFieldDisplayStatus("instructorAlias")}
-                      testId="basics-field-status-instructorAlias"
-                    />
-                  </div>
-                  <input
-                    id="instructor-alias"
-                    type="text"
-                    maxLength={100}
-                    placeholder="e.g. Alex Rivera or Design Guild"
-                    disabled={!isDownstreamUnlocked}
-                    value={instructorAlias}
-                    onChange={(e) => {
-                      setInstructorAlias(e.target.value);
-                      clearBasicsFieldStatus("instructorAlias");
-                    }}
-                    onBlur={() => {
-                      void persistBasicsField("instructorAlias");
-                    }}
-                    className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                  <p className="m-0 text-(--muted) text-[0.78rem]">
-                    Optional custom name shown to students instead of your account name.
-                  </p>
-                </div>
-
-                {/* Show Instructor Name Settings Row */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex flex-col min-w-0 pr-3">
-                    <div className="flex items-center gap-2">
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Show Instructor Name
-                      </strong>
-                      <BasicsFieldStatusIndicator
-                        status={getBasicsFieldDisplayStatus("showInstructorName")}
-                        testId="basics-field-status-showInstructorName"
+                        className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                       />
-                    </div>
-                    <p className="m-0 text-(--muted) text-[0.8rem]">
-                      Control whether the instructor name is shown to students.
-                    </p>
-                  </div>
-                  <SettingsToggle
-                    checked={showInstructorName}
-                    disabled={
-                      !isDownstreamUnlocked ||
-                      isBasicsControlSaving("showInstructorName")
-                    }
-                    onChange={() =>
-                      void handleShowInstructorNameChange(!showInstructorName)
-                    }
-                    label="Toggle Show Instructor Name"
-                  />
-                </div>
-              </section>
-
-              {/* Course Media Section */}
-              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                <div className="mb-4.5">
-                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                    Course Media
-                  </h2>
-                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                    Add media that best represents your course.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Hidden Thumbnail File Input */}
-                  <input
-                    type="file"
-                    ref={thumbnailInputRef}
-                    disabled={!isDownstreamUnlocked || isBasicsSaving}
-                    onChange={handleThumbnailFileSelect}
-                    accept="image/*"
-                    style={{ display: "none" }}
-                  />
-
-                  {/* Hidden Video Trailer File Input */}
-                  <input
-                    type="file"
-                    ref={videoTrailerInputRef}
-                    disabled={!isDownstreamUnlocked || isBasicsSaving}
-                    onChange={handleVideoTrailerFileSelect}
-                    accept="video/*"
-                    style={{ display: "none" }}
-                  />
-
-                  {/* Thumbnail Upload */}
-                  <div className="flex flex-col min-w-0">
-                    <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                      Thumbnail <span className="text-[#ff5252] ml-0.5">*</span>
-                    </h3>
-                    <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                      Upload a thumbnail for your course.
-                    </p>
-                    {thumbnail ? (
-                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                        <img
-                          src={thumbnail}
-                          alt="Course thumbnail preview"
-                          className="w-full h-full object-cover block"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 700,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "16px",
-                              paddingRight: "16px",
-                            }}
-                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={triggerThumbnailUpload}
-                          >
-                            <ImageIcon size={15} /> Change Image
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 500,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "14px",
-                              paddingRight: "14px",
-                            }}
-                            className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={handleRemoveThumbnail}
-                            title="Remove Thumbnail"
-                          >
-                            <Trash size={15} /> Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                        <div className="mb-2 text-(--muted)">
-                          <ImageIcon size={30} weight="light" />
-                        </div>
-                        <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 700,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "16px",
-                              paddingRight: "16px",
-                            }}
-                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={triggerThumbnailUpload}
-                          >
-                            <UploadSimple size={15} /> Upload
-                          </button>
-                        </div>
-                        <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                          Recommended: 1280x720px (16:9)
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Video Trailer Upload */}
-                  <div className="flex flex-col min-w-0">
-                    <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                      Video Trailer (Optional)
-                    </h3>
-                    <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                      Add a trailer video to your course.
-                    </p>
-                    {videoTrailer ? (
-                      <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                        <video
-                          src={videoTrailer}
-                          className="w-full h-full object-cover block"
-                          controls
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 700,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "16px",
-                              paddingRight: "16px",
-                            }}
-                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={triggerVideoTrailerUpload}
-                          >
-                            <PlayCircle size={15} /> Change Video
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 500,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "14px",
-                              paddingRight: "14px",
-                            }}
-                            className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={handleRemoveVideoTrailer}
-                            title="Remove Video Trailer"
-                          >
-                            <Trash size={15} /> Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                        <div className="mb-2 text-(--muted)">
-                          <PlayCircle size={30} weight="light" />
-                        </div>
-                        <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 700,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "16px",
-                              paddingRight: "16px",
-                            }}
-                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={triggerVideoTrailerUpload}
-                          >
-                            <UploadSimple size={15} /> Upload
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!isDownstreamUnlocked || isBasicsSaving}
-                            style={{
-                              fontSize: "0.80rem",
-                              fontWeight: 500,
-                              height: "34px",
-                              borderRadius: "8px",
-                              gap: "6px",
-                              paddingLeft: "14px",
-                              paddingRight: "14px",
-                            }}
-                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => {
-                              // Select from media action
-                            }}
-                          >
-                            <PlayCircle size={15} /> Select from Media
-                          </button>
-                        </div>
-                        <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                          Recommended: 16:9 video
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            {/* Right Column: Live Course Preview */}
-            <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
-              <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
-                <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
-                  Course Preview
-                </h2>
-                <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
-                  This is how your course will appear to students.
-                </p>
-
-                <div
-                  className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
-                    !thumbnail
-                      ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
-                      : ""
-                  }`}
-                  onClick={!thumbnail ? triggerThumbnailUpload : undefined}
-                  title={!thumbnail ? "Click to upload thumbnail" : undefined}
-                  role={!thumbnail ? "button" : undefined}
-                  tabIndex={!thumbnail ? 0 : undefined}
-                  onKeyDown={
-                    !thumbnail
-                      ? (e) => {
-                          if (e.key === "Enter" || e.key === "") {
-                            triggerThumbnailUpload();
-                          }
-                        }
-                      : undefined
-                  }
-                >
-                  {thumbnail ? (
-                    <div className="relative w-full h-full">
-                      <img
-                        src={thumbnail}
-                        alt="Course Thumbnail"
-                        className="w-full h-full object-cover block"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
-                      <div className="flex items-center justify-center text-(--muted) opacity-60">
-                        <ImageIcon size={32} weight="light" />
-                      </div>
-                      <span className="text-(--muted) opacity-70">
-                        Course thumbnail will appear here
-                      </span>
-                      <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
-                        Click to upload
+                      <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                        {courseTitle.length} / 120
                       </span>
                     </div>
-                  )}
-                </div>
-
-                <div className="mt-4">
-                  <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
-                    {courseTitle.trim() ? courseTitle : "Course Title"}
-                  </h3>
-
-                  <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
-                    <span className="flex items-center gap-1.25">
-                      <BookOpen size={15} /> {totalSections} Sections
-                    </span>
-                    <span className="flex items-center gap-1.25">
-                      <BookOpen size={15} /> {totalLessons} Lessons
-                    </span>
-                    <span className="flex items-center gap-1.25">0h 0m</span>
-                  </div>
-
-                  <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
-                    <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
-                      About this course
-                    </h4>
-                    {courseDescription.trim() ? (
-                      <RenderMarkdown content={courseDescription} />
-                    ) : (
-                      <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
-                        This is a short description of your course. It will
-                        appear here on the course card.
+                    {!isDownstreamUnlocked && (
+                      <p
+                        className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                        role="status"
+                        data-testid="basics-title-helper"
+                      >
+                        {createCourseMutation.isPending ||
+                        isInitialCourseCreationPending ? (
+                          <>
+                            <CircleNotch
+                              size={13}
+                              className="animate-spin text-(--accent) shrink-0"
+                            />
+                            <span>Creating course…</span>
+                          </>
+                        ) : (
+                          "Add a course title to continue."
+                        )}
                       </p>
                     )}
                   </div>
-                </div>
-              </section>
-            </div>
-          </div>
-        ) : panelStep === "curriculum" ? (
-          <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
-            {/* Header row */}
-            <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
-              <div className="">
-                <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
-                  Course Curriculum
-                </h2>
-                <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
-                  Organize your course into sections and lessons. You can
-                  reorder them anytime.
-                </p>
-              </div>
-              <div className="flex items-center gap-2.5">
-                {(isReorderingSections ||
-                  reorderSectionsMutation.isPending) && (
-                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                    <CircleNotch
-                      size={13}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span>Saving section order...</span>
-                  </span>
-                )}
-                <button
-                  type="button"
-                  disabled={
-                    isCreatingSection ||
-                    createSectionMutation.isPending ||
-                    createCourseMutation.isPending ||
-                    isReorderingSections ||
-                    reorderSectionsMutation.isPending
-                  }
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "16px",
-                    paddingRight: "16px",
-                  }}
-                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
-                  onClick={handleAddSection}
-                >
-                  {isCreatingSection ||
-                  createSectionMutation.isPending ||
-                  createCourseMutation.isPending ? (
-                    <>
-                      <CircleNotch size={15} className="animate-spin" />
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={15} weight="bold" />
-                      <span>Add Section</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
 
-            {/* Sections list or Empty State */}
-            {sections.length === 0 ? (
-              <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
-                  <BookOpen size={24} weight="bold" />
-                </div>
-                <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
-                  No sections added yet
-                </h3>
-                <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
-                  Add your first section to start building your course
-                  curriculum.
-                </p>
-                <button
-                  type="button"
-                  disabled={
-                    isCreatingSection ||
-                    createSectionMutation.isPending ||
-                    createCourseMutation.isPending ||
-                    isReorderingSections ||
-                    reorderSectionsMutation.isPending
-                  }
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "16px",
-                    paddingRight: "16px",
-                    marginTop: "18px",
-                  }}
-                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
-                  onClick={handleAddSection}
-                >
-                  {isCreatingSection ||
-                  createSectionMutation.isPending ||
-                  createCourseMutation.isPending ? (
-                    <>
-                      <CircleNotch size={15} className="animate-spin" />
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={15} weight="bold" />
-                      <span>Add Section</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : (
-              sections.map((sec, secIndex) => (
-                <div
-                  key={sec.id}
-                  className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                    deletingSectionId === sec.id
-                      ? "opacity-45 pointer-events-none border-red-500/30"
-                      : draggedSectionIndex === secIndex
-                        ? "opacity-35 border-dashed border-(--accent)"
-                        : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
-                  }`}
-                  draggable={
-                    dragEnabledSectionId === sec.id &&
-                    !sec.isPendingCreation &&
-                    !updatingSectionId &&
-                    !deletingSectionId &&
-                    !isReorderingSections &&
-                    !reorderSectionsMutation.isPending
-                  }
-                  onDragStart={(e) => handleSectionDragStart(e, secIndex, sec)}
-                  onDragOver={(e) => handleSectionDragOver(e, secIndex)}
-                  onDragEnd={handleSectionDragEnd}
-                >
-                  {/* Section Header */}
-                  <div
-                    className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
-                    onClick={() => handleToggleSectionExpand(sec.id)}
-                    title="Click to toggle section"
-                  >
-                    <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                      <span
-                        className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
-                          sec.isPendingCreation ||
-                          isReorderingSections ||
-                          reorderSectionsMutation.isPending
-                            ? "opacity-25 cursor-not-allowed pointer-events-none"
-                            : "cursor-grab opacity-60 hover:opacity-100"
-                        }`}
-                        title={
-                          sec.isPendingCreation
-                            ? "Creating section..."
-                            : isReorderingSections ||
-                                reorderSectionsMutation.isPending
-                              ? "Reordering in progress..."
-                              : "Drag to reorder section"
-                        }
-                        onMouseEnter={() => {
-                          if (
-                            !sec.isPendingCreation &&
-                            !isReorderingSections &&
-                            !reorderSectionsMutation.isPending
-                          ) {
-                            setDragEnabledSectionId(sec.id);
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (draggedSectionIndex === null)
-                            setDragEnabledSectionId(null);
-                        }}
-                        onMouseDown={() => {
-                          if (
-                            !sec.isPendingCreation &&
-                            !isReorderingSections &&
-                            !reorderSectionsMutation.isPending
-                          ) {
-                            setDragEnabledSectionId(sec.id);
-                          }
-                        }}
-                        onMouseUp={() => {
-                          if (draggedSectionIndex === null)
-                            setDragEnabledSectionId(null);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
+                  <div className="flex flex-col gap-2 mb-5">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="course-short-description"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
                       >
-                        <DotsSixVertical size={18} />
-                      </span>
-                      <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
-                        <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
-                          Section {secIndex + 1}
-                        </span>
-                        {sec.isEditingTitle ? (
-                          <div
-                            className="flex items-center gap-2 max-[768px]:w-full"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <input
-                              type="text"
-                              className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                              defaultValue={sec.title}
-                              autoFocus
-                              disabled={
-                                sec.isPendingCreation ||
-                                updatingSectionId === sec.id
-                              }
-                              onClick={(e) => e.stopPropagation()}
-                              onBlur={(e) =>
-                                handleSaveSectionTitle(sec.id, e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  (e.target as HTMLInputElement).blur();
-                                }
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <span
-                            className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
-                              sec.isPendingCreation ||
-                              updatingSectionId === sec.id ||
-                              deletingSectionId === sec.id
-                                ? "opacity-60 pointer-events-none"
-                                : ""
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (
-                                sec.isPendingCreation ||
-                                updatingSectionId === sec.id ||
-                                deletingSectionId === sec.id
-                              )
-                                return;
-                              handleStartEditSectionTitle(sec.id);
-                            }}
-                            title={
-                              sec.isPendingCreation
-                                ? "Creating section..."
-                                : "Click to edit section title"
-                            }
-                          >
-                            {sec.title}
-                          </span>
-                        )}
-                        <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
-                          {sec.lessons.length}{" "}
-                          {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
-                        </span>
-                      </div>
+                        Short Description
+                      </label>
+                      <BasicsFieldStatusIndicator
+                        status={getBasicsFieldDisplayStatus("shortDescription")}
+                        testId="basics-field-status-shortDescription"
+                      />
                     </div>
-                    <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                      {sec.isPendingCreation ? (
-                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                          <CircleNotch
-                            size={12}
-                            className="animate-spin text-(--accent)"
-                          />
-                          <span>Creating...</span>
-                        </span>
-                      ) : deletingSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                          <CircleNotch
-                            size={12}
-                            className="animate-spin text-red-400"
-                          />
-                          <span>Deleting...</span>
-                        </span>
-                      ) : reorderingLessonsSectionId === sec.id ? (
-                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                          <CircleNotch
-                            size={12}
-                            className="animate-spin text-(--accent)"
-                          />
-                          <span>Saving order...</span>
-                        </span>
-                      ) : (
-                        <CurriculumItemStatusIndicator
-                          status={getCurriculumItemDisplayStatus(sec.id)}
-                          testId={`curriculum-status-section-${sec.id}`}
-                        />
-                      )}
-                      <button
-                        type="button"
-                        disabled={
-                          sec.isPendingCreation ||
-                          updatingSectionId === sec.id ||
-                          deletingSectionId === sec.id
-                        }
-                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                        aria-label="Edit section title"
-                        title="Edit section title"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartEditSectionTitle(sec.id);
+                    <div className="relative flex items-center">
+                      <textarea
+                        id="course-short-description"
+                        rows={2}
+                        maxLength={150}
+                        placeholder="A concise summary of your course (shown in course cards and search)..."
+                        disabled={!isDownstreamUnlocked}
+                        value={shortDescription}
+                        onChange={(e) => {
+                          setShortDescription(e.target.value.slice(0, 150));
+                          clearBasicsFieldStatus("shortDescription");
                         }}
-                      >
-                        {updatingSectionId === sec.id ? (
-                          <CircleNotch
-                            size={14}
-                            className="animate-spin text-(--accent)"
-                          />
-                        ) : (
-                          <PencilSimple size={15} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={
-                          sec.isPendingCreation ||
-                          deletingSectionId === sec.id ||
-                          updatingSectionId === sec.id
-                        }
-                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                        aria-label="Delete section"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteSection(sec.id);
+                        onBlur={() => {
+                          void persistBasicsField("shortDescription");
                         }}
-                      >
-                        {deletingSectionId === sec.id ? (
-                          <CircleNotch
-                            size={14}
-                            className="animate-spin text-red-400"
-                          />
-                        ) : (
-                          <Trash size={15} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={deletingSectionId === sec.id}
-                        className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
-                          sec.isExpanded ? "is-expanded [&>svg]:rotate-180" : ""
-                        }`}
-                        aria-label={
-                          sec.isExpanded ? "Collapse section" : "Expand section"
-                        }
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleSectionExpand(sec.id);
-                        }}
-                      >
-                        <CaretDown size={15} />
-                      </button>
+                        className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
+                      />
+                      <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                        {shortDescription.length} / 150
+                      </span>
                     </div>
                   </div>
 
-                  {/* Section Body with CSS expand transition */}
                   <div
-                    className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                      sec.isExpanded
-                        ? "is-open grid-rows-[1fr]"
-                        : "grid-rows-[0fr]"
-                    }`}
+                    className="flex flex-col gap-2 mb-5"
+                    onBlur={() => {
+                      void persistBasicsField("courseDescription");
+                    }}
                   >
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="course-description"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Course Description{" "}
+                        <span className="text-[#ff5252] ml-0.5">*</span>
+                      </label>
+                      <BasicsFieldStatusIndicator
+                        status={getBasicsFieldDisplayStatus(
+                          "courseDescription",
+                        )}
+                        testId="basics-field-status-courseDescription"
+                      />
+                    </div>
+                    <RichTextEditor
+                      id="course-description"
+                      disabled={!isDownstreamUnlocked}
+                      value={courseDescription}
+                      onChange={(val) => {
+                        setCourseDescription(val);
+                        clearBasicsFieldStatus("courseDescription");
+                      }}
+                      placeholder="Describe what your course is about, what students will learn, and who this course is for..."
+                      maxLength={1500}
+                    />
+                  </div>
+
+                  {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
+                  <div className="flex flex-col gap-2 mb-4.5">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="instructor-alias"
+                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                      >
+                        Instructor Alias
+                      </label>
+                      <BasicsFieldStatusIndicator
+                        status={getBasicsFieldDisplayStatus("instructorAlias")}
+                        testId="basics-field-status-instructorAlias"
+                      />
+                    </div>
+                    <input
+                      id="instructor-alias"
+                      type="text"
+                      maxLength={100}
+                      placeholder="e.g. Alex Rivera or Design Guild"
+                      disabled={!isDownstreamUnlocked}
+                      value={instructorAlias}
+                      onChange={(e) => {
+                        setInstructorAlias(e.target.value);
+                        clearBasicsFieldStatus("instructorAlias");
+                      }}
+                      onBlur={() => {
+                        void persistBasicsField("instructorAlias");
+                      }}
+                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                    <p className="m-0 text-(--muted) text-[0.78rem]">
+                      Optional custom name shown to students instead of your
+                      account name.
+                    </p>
+                  </div>
+
+                  {/* Show Instructor Name Settings Row */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex flex-col min-w-0 pr-3">
+                      <div className="flex items-center gap-2">
+                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                          Show Instructor Name
+                        </strong>
+                        <BasicsFieldStatusIndicator
+                          status={getBasicsFieldDisplayStatus(
+                            "showInstructorName",
+                          )}
+                          testId="basics-field-status-showInstructorName"
+                        />
+                      </div>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                        Control whether the instructor name is shown to
+                        students.
+                      </p>
+                    </div>
+                    <SettingsToggle
+                      checked={showInstructorName}
+                      disabled={
+                        !isDownstreamUnlocked ||
+                        isBasicsControlSaving("showInstructorName")
+                      }
+                      onChange={() =>
+                        void handleShowInstructorNameChange(!showInstructorName)
+                      }
+                      label="Toggle Show Instructor Name"
+                    />
+                  </div>
+                </section>
+
+                {/* Course Media Section */}
+                <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                  <div className="mb-4.5">
+                    <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                      Course Media
+                    </h2>
+                    <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                      Add media that best represents your course.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Hidden Thumbnail File Input */}
+                    <input
+                      type="file"
+                      ref={thumbnailInputRef}
+                      disabled={!isDownstreamUnlocked || isBasicsSaving}
+                      onChange={handleThumbnailFileSelect}
+                      accept="image/*"
+                      style={{ display: "none" }}
+                    />
+
+                    {/* Hidden Video Trailer File Input */}
+                    <input
+                      type="file"
+                      ref={videoTrailerInputRef}
+                      disabled={!isDownstreamUnlocked || isBasicsSaving}
+                      onChange={handleVideoTrailerFileSelect}
+                      accept="video/*"
+                      style={{ display: "none" }}
+                    />
+
+                    {/* Thumbnail Upload */}
+                    <div className="flex flex-col min-w-0">
+                      <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
+                        Thumbnail{" "}
+                        <span className="text-[#ff5252] ml-0.5">*</span>
+                      </h3>
+                      <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                        Upload a thumbnail for your course.
+                      </p>
+                      {thumbnail ? (
+                        <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                          <img
+                            src={thumbnail}
+                            alt="Course thumbnail preview"
+                            className="w-full h-full object-cover block"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 700,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "16px",
+                                paddingRight: "16px",
+                              }}
+                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={triggerThumbnailUpload}
+                            >
+                              <ImageIcon size={15} /> Change Image
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 500,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "14px",
+                                paddingRight: "14px",
+                              }}
+                              className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={handleRemoveThumbnail}
+                              title="Remove Thumbnail"
+                            >
+                              <Trash size={15} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                          <div className="mb-2 text-(--muted)">
+                            <ImageIcon size={30} weight="light" />
+                          </div>
+                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 700,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "16px",
+                                paddingRight: "16px",
+                              }}
+                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={triggerThumbnailUpload}
+                            >
+                              <UploadSimple size={15} /> Upload
+                            </button>
+                          </div>
+                          <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                            Recommended: 1280x720px (16:9)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Video Trailer Upload */}
+                    <div className="flex flex-col min-w-0">
+                      <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
+                        Video Trailer (Optional)
+                      </h3>
+                      <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                        Add a trailer video to your course.
+                      </p>
+                      {videoTrailer ? (
+                        <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                          <video
+                            src={videoTrailer}
+                            className="w-full h-full object-cover block"
+                            controls
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 700,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "16px",
+                                paddingRight: "16px",
+                              }}
+                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={triggerVideoTrailerUpload}
+                            >
+                              <PlayCircle size={15} /> Change Video
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 500,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "14px",
+                                paddingRight: "14px",
+                              }}
+                              className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={handleRemoveVideoTrailer}
+                              title="Remove Video Trailer"
+                            >
+                              <Trash size={15} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                          <div className="mb-2 text-(--muted)">
+                            <PlayCircle size={30} weight="light" />
+                          </div>
+                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 700,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "16px",
+                                paddingRight: "16px",
+                              }}
+                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={triggerVideoTrailerUpload}
+                            >
+                              <UploadSimple size={15} /> Upload
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              style={{
+                                fontSize: "0.80rem",
+                                fontWeight: 500,
+                                height: "34px",
+                                borderRadius: "8px",
+                                gap: "6px",
+                                paddingLeft: "14px",
+                                paddingRight: "14px",
+                              }}
+                              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => {
+                                // Select from media action
+                              }}
+                            >
+                              <PlayCircle size={15} /> Select from Media
+                            </button>
+                          </div>
+                          <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                            Recommended: 16:9 video
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Right Column: Live Course Preview */}
+              <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
+                <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
+                  <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
+                    Course Preview
+                  </h2>
+                  <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
+                    This is how your course will appear to students.
+                  </p>
+
+                  <div
+                    className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
+                      !thumbnail
+                        ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
+                        : ""
+                    }`}
+                    onClick={!thumbnail ? triggerThumbnailUpload : undefined}
+                    title={!thumbnail ? "Click to upload thumbnail" : undefined}
+                    role={!thumbnail ? "button" : undefined}
+                    tabIndex={!thumbnail ? 0 : undefined}
+                    onKeyDown={
+                      !thumbnail
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === "") {
+                              triggerThumbnailUpload();
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    {thumbnail ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={thumbnail}
+                          alt="Course Thumbnail"
+                          className="w-full h-full object-cover block"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
+                        <div className="flex items-center justify-center text-(--muted) opacity-60">
+                          <ImageIcon size={32} weight="light" />
+                        </div>
+                        <span className="text-(--muted) opacity-70">
+                          Course thumbnail will appear here
+                        </span>
+                        <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
+                          Click to upload
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
+                      {courseTitle.trim() ? courseTitle : "Course Title"}
+                    </h3>
+
+                    <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
+                      <span className="flex items-center gap-1.25">
+                        <BookOpen size={15} /> {totalSections} Sections
+                      </span>
+                      <span className="flex items-center gap-1.25">
+                        <BookOpen size={15} /> {totalLessons} Lessons
+                      </span>
+                      <span className="flex items-center gap-1.25">0h 0m</span>
+                    </div>
+
+                    <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
+                      <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
+                        About this course
+                      </h4>
+                      {courseDescription.trim() ? (
+                        <RenderMarkdown content={courseDescription} />
+                      ) : (
+                        <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
+                          This is a short description of your course. It will
+                          appear here on the course card.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          ) : panelStep === "curriculum" ? (
+            <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
+              {/* Header row */}
+              <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
+                <div className="">
+                  <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
+                    Course Curriculum
+                  </h2>
+                  <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
+                    Organize your course into sections and lessons. You can
+                    reorder them anytime.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  {(isReorderingSections ||
+                    reorderSectionsMutation.isPending) && (
+                    <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                      <CircleNotch
+                        size={13}
+                        className="animate-spin text-(--accent)"
+                      />
+                      <span>Saving section order...</span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={
+                      isCreatingSection ||
+                      createSectionMutation.isPending ||
+                      createCourseMutation.isPending ||
+                      isReorderingSections ||
+                      reorderSectionsMutation.isPending
+                    }
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "16px",
+                      paddingRight: "16px",
+                    }}
+                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                    onClick={handleAddSection}
+                  >
+                    {isCreatingSection ||
+                    createSectionMutation.isPending ||
+                    createCourseMutation.isPending ? (
+                      <>
+                        <CircleNotch size={15} className="animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={15} weight="bold" />
+                        <span>Add Section</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sections list or Empty State */}
+              {sections.length === 0 ? (
+                <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
+                    <BookOpen size={24} weight="bold" />
+                  </div>
+                  <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
+                    No sections added yet
+                  </h3>
+                  <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
+                    Add your first section to start building your course
+                    curriculum.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={
+                      isCreatingSection ||
+                      createSectionMutation.isPending ||
+                      createCourseMutation.isPending ||
+                      isReorderingSections ||
+                      reorderSectionsMutation.isPending
+                    }
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "16px",
+                      paddingRight: "16px",
+                      marginTop: "18px",
+                    }}
+                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={handleAddSection}
+                  >
+                    {isCreatingSection ||
+                    createSectionMutation.isPending ||
+                    createCourseMutation.isPending ? (
+                      <>
+                        <CircleNotch size={15} className="animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={15} weight="bold" />
+                        <span>Add Section</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                sections.map((sec, secIndex) => (
+                  <div
+                    key={sec.id}
+                    className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                      deletingSectionId === sec.id
+                        ? "opacity-45 pointer-events-none border-red-500/30"
+                        : draggedSectionIndex === secIndex
+                          ? "opacity-35 border-dashed border-(--accent)"
+                          : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                    }`}
+                    draggable={
+                      dragEnabledSectionId === sec.id &&
+                      !sec.isPendingCreation &&
+                      !updatingSectionId &&
+                      !deletingSectionId &&
+                      !isReorderingSections &&
+                      !reorderSectionsMutation.isPending
+                    }
+                    onDragStart={(e) =>
+                      handleSectionDragStart(e, secIndex, sec)
+                    }
+                    onDragOver={(e) => handleSectionDragOver(e, secIndex)}
+                    onDragEnd={handleSectionDragEnd}
+                  >
+                    {/* Section Header */}
                     <div
-                      className={`min-h-0 overflow-hidden border-t border-transparent transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                      className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
+                      onClick={() => handleToggleSectionExpand(sec.id)}
+                      title="Click to toggle section"
+                    >
+                      <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                        <span
+                          className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
+                            sec.isPendingCreation ||
+                            isReorderingSections ||
+                            reorderSectionsMutation.isPending
+                              ? "opacity-25 cursor-not-allowed pointer-events-none"
+                              : "cursor-grab opacity-60 hover:opacity-100"
+                          }`}
+                          title={
+                            sec.isPendingCreation
+                              ? "Creating section..."
+                              : isReorderingSections ||
+                                  reorderSectionsMutation.isPending
+                                ? "Reordering in progress..."
+                                : "Drag to reorder section"
+                          }
+                          onMouseEnter={() => {
+                            if (
+                              !sec.isPendingCreation &&
+                              !isReorderingSections &&
+                              !reorderSectionsMutation.isPending
+                            ) {
+                              setDragEnabledSectionId(sec.id);
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (draggedSectionIndex === null)
+                              setDragEnabledSectionId(null);
+                          }}
+                          onMouseDown={() => {
+                            if (
+                              !sec.isPendingCreation &&
+                              !isReorderingSections &&
+                              !reorderSectionsMutation.isPending
+                            ) {
+                              setDragEnabledSectionId(sec.id);
+                            }
+                          }}
+                          onMouseUp={() => {
+                            if (draggedSectionIndex === null)
+                              setDragEnabledSectionId(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DotsSixVertical size={18} />
+                        </span>
+                        <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
+                          <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
+                            Section {secIndex + 1}
+                          </span>
+                          {sec.isEditingTitle ? (
+                            <div
+                              className="flex items-center gap-2 max-[768px]:w-full"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="text"
+                                className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                defaultValue={sec.title}
+                                autoFocus
+                                disabled={
+                                  sec.isPendingCreation ||
+                                  updatingSectionId === sec.id
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                onBlur={(e) =>
+                                  handleSaveSectionTitle(sec.id, e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                                sec.isPendingCreation ||
+                                updatingSectionId === sec.id ||
+                                deletingSectionId === sec.id
+                                  ? "opacity-60 pointer-events-none"
+                                  : ""
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (
+                                  sec.isPendingCreation ||
+                                  updatingSectionId === sec.id ||
+                                  deletingSectionId === sec.id
+                                )
+                                  return;
+                                handleStartEditSectionTitle(sec.id);
+                              }}
+                              title={
+                                sec.isPendingCreation
+                                  ? "Creating section..."
+                                  : "Click to edit section title"
+                              }
+                            >
+                              {sec.title}
+                            </span>
+                          )}
+                          <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
+                            {sec.lessons.length}{" "}
+                            {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                        {sec.isPendingCreation ? (
+                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                            <CircleNotch
+                              size={12}
+                              className="animate-spin text-(--accent)"
+                            />
+                            <span>Creating...</span>
+                          </span>
+                        ) : deletingSectionId === sec.id ? (
+                          <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                            <CircleNotch
+                              size={12}
+                              className="animate-spin text-red-400"
+                            />
+                            <span>Deleting...</span>
+                          </span>
+                        ) : reorderingLessonsSectionId === sec.id ? (
+                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                            <CircleNotch
+                              size={12}
+                              className="animate-spin text-(--accent)"
+                            />
+                            <span>Saving order...</span>
+                          </span>
+                        ) : (
+                          <CurriculumItemStatusIndicator
+                            status={getCurriculumItemDisplayStatus(sec.id)}
+                            testId={`curriculum-status-section-${sec.id}`}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          disabled={
+                            sec.isPendingCreation ||
+                            updatingSectionId === sec.id ||
+                            deletingSectionId === sec.id
+                          }
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                          aria-label="Edit section title"
+                          title="Edit section title"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEditSectionTitle(sec.id);
+                          }}
+                        >
+                          {updatingSectionId === sec.id ? (
+                            <CircleNotch
+                              size={14}
+                              className="animate-spin text-(--accent)"
+                            />
+                          ) : (
+                            <PencilSimple size={15} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            sec.isPendingCreation ||
+                            deletingSectionId === sec.id ||
+                            updatingSectionId === sec.id
+                          }
+                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                          aria-label="Delete section"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSection(sec.id);
+                          }}
+                        >
+                          {deletingSectionId === sec.id ? (
+                            <CircleNotch
+                              size={14}
+                              className="animate-spin text-red-400"
+                            />
+                          ) : (
+                            <Trash size={15} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingSectionId === sec.id}
+                          className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
+                            sec.isExpanded
+                              ? "is-expanded [&>svg]:rotate-180"
+                              : ""
+                          }`}
+                          aria-label={
+                            sec.isExpanded
+                              ? "Collapse section"
+                              : "Expand section"
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSectionExpand(sec.id);
+                          }}
+                        >
+                          <CaretDown size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Section Body with CSS expand transition */}
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         sec.isExpanded
-                          ? "px-4 pt-3 pb-4 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)]"
-                          : "px-4 py-0"
+                          ? "is-open grid-rows-[1fr]"
+                          : "grid-rows-[0fr]"
                       }`}
                     >
-                      <div className="flex flex-col gap-2.5">
-                        {sec.lessons.map((les, lesIndex) => (
-                          <div
-                            key={les.id}
-                            className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                              draggedLessonState?.sectionId === sec.id &&
-                              draggedLessonState?.lessonIndex === lesIndex
-                                ? "opacity-35 border-dashed border-(--accent)"
-                                : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-                            }`}
-                            draggable={
-                              dragEnabledLessonId === les.id &&
-                              !les.isPendingCreation &&
-                              !reorderingLessonsSectionId &&
-                              !reorderLessonsMutation.isPending
-                            }
-                            onDragStart={(e) =>
-                              handleLessonDragStart(e, sec.id, lesIndex, les)
-                            }
-                            onDragOver={(e) =>
-                              handleLessonDragOver(e, sec.id, lesIndex)
-                            }
-                            onDragEnd={handleLessonDragEnd}
-                          >
-                            {/* Lesson Header */}
+                      <div
+                        className={`min-h-0 overflow-hidden border-t border-transparent transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                          sec.isExpanded
+                            ? "px-4 pt-3 pb-4 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                            : "px-4 py-0"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-2.5">
+                          {sec.lessons.map((les, lesIndex) => (
                             <div
-                              className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
-                              onClick={() =>
-                                handleToggleLessonExpand(sec.id, les.id)
-                              }
-                              title="Click to toggle lesson editor"
-                            >
-                              <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                                <span
-                                  className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
-                                    les.isPendingCreation ||
-                                    reorderingLessonsSectionId ||
-                                    reorderLessonsMutation.isPending
-                                      ? "opacity-25 cursor-not-allowed pointer-events-none"
-                                      : "cursor-grab opacity-60 hover:opacity-100"
-                                  }`}
-                                  title={
-                                    les.isPendingCreation
-                                      ? "Creating lesson..."
-                                      : reorderingLessonsSectionId ||
-                                          reorderLessonsMutation.isPending
-                                        ? "Reordering in progress..."
-                                        : "Drag to reorder lesson"
-                                  }
-                                  onMouseEnter={() => {
-                                    if (
-                                      !les.isPendingCreation &&
-                                      !reorderingLessonsSectionId &&
-                                      !reorderLessonsMutation.isPending
-                                    ) {
-                                      setDragEnabledLessonId(les.id);
-                                    }
-                                  }}
-                                  onMouseLeave={() => {
-                                    if (!draggedLessonState)
-                                      setDragEnabledLessonId(null);
-                                  }}
-                                  onMouseDown={() => {
-                                    if (
-                                      !les.isPendingCreation &&
-                                      !reorderingLessonsSectionId &&
-                                      !reorderLessonsMutation.isPending
-                                    ) {
-                                      setDragEnabledLessonId(les.id);
-                                    }
-                                  }}
-                                  onMouseUp={() => {
-                                    if (!draggedLessonState)
-                                      setDragEnabledLessonId(null);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <DotsSixVertical size={18} />
-                                </span>
-                                <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
-                                  {lesIndex + 1}
-                                </span>
-                                <span className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words">
-                                  {les.title}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                                {les.isPendingCreation ? (
-                                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                    <CircleNotch
-                                      size={12}
-                                      className="animate-spin text-(--accent)"
-                                    />
-                                    <span>Creating...</span>
-                                  </span>
-                                ) : deletingLessonId === les.id ? (
-                                  <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                                    <CircleNotch
-                                      size={12}
-                                      className="animate-spin text-red-400"
-                                    />
-                                    <span>Deleting...</span>
-                                  </span>
-                                ) : (
-                                  <CurriculumItemStatusIndicator
-                                    status={getCurriculumItemDisplayStatus(les.id)}
-                                    testId={`curriculum-status-lesson-${les.id}`}
-                                  />
-                                )}
-                                {les.isPublished === false && (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
-                                    title="Draft mode: This lesson is not published and is hidden from students."
-                                  >
-                                    <EyeSlash size={13} weight="bold" />{" "}
-                                    Unpublished
-                                  </span>
-                                )}
-                                {les.isPreview === true && (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
-                                    title="Free Preview: Anyone can view this lesson without enrolling."
-                                  >
-                                    Preview
-                                  </span>
-                                )}
-                                {les.contentType === "video" ? (
-                                  <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                    <PlayCircle size={13} weight="fill" /> Video
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-                                    <FileText size={13} weight="fill" />{" "}
-                                    Document
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={
-                                    les.isPendingCreation ||
-                                    deletingLessonId === les.id
-                                  }
-                                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                  aria-label="Delete lesson"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteLesson(sec.id, les.id);
-                                  }}
-                                >
-                                  {deletingLessonId === les.id ? (
-                                    <CircleNotch
-                                      size={14}
-                                      className="animate-spin text-red-400"
-                                    />
-                                  ) : (
-                                    <Trash size={15} />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
-                                    les.isExpanded
-                                      ? "is-expanded [&>svg]:rotate-180"
-                                      : ""
-                                  }`}
-                                  aria-label={
-                                    les.isExpanded
-                                      ? "Collapse lesson editor"
-                                      : "Expand lesson editor"
-                                  }
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleLessonExpand(sec.id, les.id);
-                                  }}
-                                >
-                                  <CaretDown size={15} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Expanded Lesson Editor with CSS transition */}
-                            <div
-                              className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                les.isExpanded
-                                  ? "is-open grid-rows-[1fr]"
-                                  : "grid-rows-[0fr]"
+                              key={les.id}
+                              className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                                draggedLessonState?.sectionId === sec.id &&
+                                draggedLessonState?.lessonIndex === lesIndex
+                                  ? "opacity-35 border-dashed border-(--accent)"
+                                  : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                               }`}
-                              draggable={false}
-                              onMouseDown={(e) => e.stopPropagation()}
+                              draggable={
+                                dragEnabledLessonId === les.id &&
+                                !les.isPendingCreation &&
+                                !reorderingLessonsSectionId &&
+                                !reorderLessonsMutation.isPending
+                              }
+                              onDragStart={(e) =>
+                                handleLessonDragStart(e, sec.id, lesIndex, les)
+                              }
+                              onDragOver={(e) =>
+                                handleLessonDragOver(e, sec.id, lesIndex)
+                              }
+                              onDragEnd={handleLessonDragEnd}
                             >
+                              {/* Lesson Header */}
                               <div
-                                className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                  les.isExpanded
-                                    ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
-                                    : "px-5 py-0 max-[768px]:p-0"
-                                }`}
+                                className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
+                                onClick={() =>
+                                  handleToggleLessonExpand(sec.id, les.id)
+                                }
+                                title="Click to toggle lesson editor"
                               >
-                                <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
-                                  {/* Left column */}
-                                  <div className="flex flex-col gap-4.5">
-                                    {/* Lesson Title */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <label
-                                        htmlFor={`les-title-${les.id}`}
-                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                      >
-                                        Lesson Title{""}
-                                        <span className="text-[#ff5252] ml-0.5">
-                                          *
-                                        </span>
-                                      </label>
-                                      <div className="relative flex items-center">
-                                        <input
-                                          id={`les-title-${les.id}`}
-                                          type="text"
-                                          maxLength={120}
-                                          value={les.title}
-                                          disabled={
-                                            les.isPendingCreation ||
-                                            savingLessonId === les.id
-                                          }
-                                          onChange={(e) =>
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              title: e.target.value,
-                                            })
-                                          }
-                                          onBlur={() => {
-                                            void handleLessonFieldBlur(
-                                              sec.id,
-                                              les.id,
-                                            );
-                                          }}
-                                          placeholder="e.g. Introduction to React Hooks"
-                                          className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                                        />
-                                        <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                                          {les.title.length} / 120
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    {/* Lesson Description Rich Editor */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <label
-                                        id={`les-desc-label-${les.id}`}
-                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                      >
-                                        Lesson Description
-                                      </label>
-                                      <div
-                                        className={
-                                          les.isPendingCreation
-                                            ? "opacity-60 pointer-events-none"
-                                            : ""
-                                        }
-                                        onBlur={(e) => {
-                                          if (
-                                            !e.currentTarget.contains(
-                                              e.relatedTarget as Node,
-                                            )
-                                          ) {
-                                            void handleLessonFieldBlur(
-                                              sec.id,
-                                              les.id,
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        <RichTextEditor
-                                          value={les.description}
-                                          onChange={(val) =>
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              description: val,
-                                            })
-                                          }
-                                          placeholder="Add a detailed description of what students will learn in this lesson..."
-                                          maxLength={1500}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Right column */}
-                                  <div className="flex flex-col gap-4.5">
-                                    {/* Content Type Selector */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                        Content Type{""}
-                                        <span className="text-[#ff5252] ml-0.5">
-                                          *
-                                        </span>
-                                      </label>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div
-                                          className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                            les.isPendingCreation
-                                              ? "opacity-60 cursor-not-allowed"
-                                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                          } ${
-                                            les.contentType === "video"
-                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                          }`}
-                                          onClick={() => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                contentType: "video",
-                                              },
-                                            );
-                                          }}
-                                        >
-                                          <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
-                                          >
-                                            {les.contentType === "video" && (
-                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                            )}
-                                          </div>
-                                          <div className="flex items-center justify-center text-(--accent) mt-px">
-                                            <Video size={18} weight="fill" />
-                                          </div>
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                              Video
-                                            </span>
-                                            <span className="text-(--muted) text-[0.75rem]">
-                                              Upload or select a video
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        <div
-                                          className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                            les.isPendingCreation
-                                              ? "opacity-60 cursor-not-allowed"
-                                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                          } ${
-                                            les.contentType === "document"
-                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                          }`}
-                                          onClick={() => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                contentType: "document",
-                                              },
-                                            );
-                                          }}
-                                        >
-                                          <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
-                                          >
-                                            {les.contentType === "document" && (
-                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                            )}
-                                          </div>
-                                          <div className="flex items-center justify-center text-(--accent) mt-px">
-                                            <FileText size={18} weight="fill" />
-                                          </div>
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                              Document / PDF
-                                            </span>
-                                            <span className="text-(--muted) text-[0.75rem]">
-                                              Upload PDF or document
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Content Source Controls (Video or Document) */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                        {les.contentType === "video"
-                                          ? "Video Source"
-                                          : "Document / PDF Source"}
-                                        {""}
-                                        <span className="text-[#ff5252] ml-0.5">
-                                          *
-                                        </span>
-                                      </label>
-                                      <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
-                                        <button
-                                          type="button"
-                                          disabled={les.isPendingCreation}
-                                          style={{
-                                            fontSize: "0.80rem",
-                                            fontWeight: 700,
-                                            height: "34px",
-                                            borderRadius: "8px",
-                                            gap: "6px",
-                                            paddingLeft: "16px",
-                                            paddingRight: "16px",
-                                          }}
-                                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                        >
-                                          <UploadSimple size={15} />
-                                          Upload New
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={les.isPendingCreation}
-                                          style={{
-                                            fontSize: "0.80rem",
-                                            fontWeight: 500,
-                                            height: "34px",
-                                            borderRadius: "8px",
-                                            gap: "6px",
-                                            paddingLeft: "14px",
-                                            paddingRight: "14px",
-                                          }}
-                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                        >
-                                          {les.contentType === "video" ? (
-                                            <PlayCircle
-                                              size={15}
-                                              className="text-(--text-secondary)"
-                                            />
-                                          ) : (
-                                            <FileText
-                                              size={15}
-                                              className="text-(--text-secondary)"
-                                            />
-                                          )}
-                                          Select from Media
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Lesson Publishing Status */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                        Publishing Status
-                                      </label>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div
-                                          className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                            les.isPendingCreation
-                                              ? "opacity-60 cursor-not-allowed"
-                                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                          } ${
-                                            les.isPublished !== false
-                                              ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                          }`}
-                                          onClick={() => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                isPublished: true,
-                                              },
-                                            );
-                                          }}
-                                        >
-                                          <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                                              les.isPublished !== false
-                                                ? "border-(--accent)"
-                                                : "border-(--muted)"
-                                            }`}
-                                          >
-                                            {les.isPublished !== false && (
-                                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                            )}
-                                          </div>
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                              Published
-                                            </span>
-                                            <span className="text-(--muted) text-[0.75rem]">
-                                              Visible to enrolled students
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        <div
-                                          className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                            les.isPendingCreation
-                                              ? "opacity-60 cursor-not-allowed"
-                                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                          } ${
-                                            les.isPublished === false
-                                              ? "is-selected border-[#f59e0b] bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))]"
-                                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                          }`}
-                                          onClick={() => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                isPublished: false,
-                                              },
-                                            );
-                                          }}
-                                        >
-                                          <div
-                                            className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                                              les.isPublished === false
-                                                ? "border-[#f59e0b]"
-                                                : "border-(--muted)"
-                                            }`}
-                                          >
-                                            {les.isPublished === false && (
-                                              <div className="w-2 h-2 rounded-full bg-[#f59e0b]" />
-                                            )}
-                                          </div>
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                              Draft (Hidden)
-                                            </span>
-                                            <span className="text-(--muted) text-[0.75rem]">
-                                              Hidden from students
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Free Preview Toggle */}
-                                    <div
-                                      className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-5 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                                  <span
+                                    className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
+                                      les.isPendingCreation ||
+                                      reorderingLessonsSectionId ||
+                                      reorderLessonsMutation.isPending
+                                        ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                        : "cursor-grab opacity-60 hover:opacity-100"
+                                    }`}
+                                    title={
+                                      les.isPendingCreation
+                                        ? "Creating lesson..."
+                                        : reorderingLessonsSectionId ||
+                                            reorderLessonsMutation.isPending
+                                          ? "Reordering in progress..."
+                                          : "Drag to reorder lesson"
+                                    }
+                                    onMouseEnter={() => {
+                                      if (
+                                        !les.isPendingCreation &&
+                                        !reorderingLessonsSectionId &&
+                                        !reorderLessonsMutation.isPending
+                                      ) {
+                                        setDragEnabledLessonId(les.id);
+                                      }
+                                    }}
+                                    onMouseLeave={() => {
+                                      if (!draggedLessonState)
+                                        setDragEnabledLessonId(null);
+                                    }}
+                                    onMouseDown={() => {
+                                      if (
+                                        !les.isPendingCreation &&
+                                        !reorderingLessonsSectionId &&
+                                        !reorderLessonsMutation.isPending
+                                      ) {
+                                        setDragEnabledLessonId(les.id);
+                                      }
+                                    }}
+                                    onMouseUp={() => {
+                                      if (!draggedLessonState)
+                                        setDragEnabledLessonId(null);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <DotsSixVertical size={18} />
+                                  </span>
+                                  <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
+                                    {lesIndex + 1}
+                                  </span>
+                                  <span className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words">
+                                    {les.title}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                  {les.isPendingCreation ? (
+                                    <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                      <CircleNotch
+                                        size={12}
+                                        className="animate-spin text-(--accent)"
+                                      />
+                                      <span>Creating...</span>
+                                    </span>
+                                  ) : deletingLessonId === les.id ? (
+                                    <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                      <CircleNotch
+                                        size={12}
+                                        className="animate-spin text-red-400"
+                                      />
+                                      <span>Deleting...</span>
+                                    </span>
+                                  ) : (
+                                    <CurriculumItemStatusIndicator
+                                      status={getCurriculumItemDisplayStatus(
+                                        les.id,
+                                      )}
+                                      testId={`curriculum-status-lesson-${les.id}`}
+                                    />
+                                  )}
+                                  {les.isPublished === false && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
+                                      title="Draft mode: This lesson is not published and is hidden from students."
                                     >
-                                      <div className="pr-3">
-                                        <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
-                                          Free Preview
-                                        </strong>
-                                        <p className="m-0 text-(--muted) text-[0.78rem]">
-                                          Allow prospective students to view
-                                          this lesson before enrolling or
-                                          purchasing.
-                                        </p>
+                                      <EyeSlash size={13} weight="bold" />{" "}
+                                      Unpublished
+                                    </span>
+                                  )}
+                                  {les.isPreview === true && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
+                                      title="Free Preview: Anyone can view this lesson without enrolling."
+                                    >
+                                      Preview
+                                    </span>
+                                  )}
+                                  {les.contentType === "video" ? (
+                                    <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                      <PlayCircle size={13} weight="fill" />{" "}
+                                      Video
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
+                                      <FileText size={13} weight="fill" />{" "}
+                                      Document
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      les.isPendingCreation ||
+                                      deletingLessonId === les.id
+                                    }
+                                    className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    aria-label="Delete lesson"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteLesson(sec.id, les.id);
+                                    }}
+                                  >
+                                    {deletingLessonId === les.id ? (
+                                      <CircleNotch
+                                        size={14}
+                                        className="animate-spin text-red-400"
+                                      />
+                                    ) : (
+                                      <Trash size={15} />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                      les.isExpanded
+                                        ? "is-expanded [&>svg]:rotate-180"
+                                        : ""
+                                    }`}
+                                    aria-label={
+                                      les.isExpanded
+                                        ? "Collapse lesson editor"
+                                        : "Expand lesson editor"
+                                    }
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleLessonExpand(sec.id, les.id);
+                                    }}
+                                  >
+                                    <CaretDown size={15} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded Lesson Editor with CSS transition */}
+                              <div
+                                className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                  les.isExpanded
+                                    ? "is-open grid-rows-[1fr]"
+                                    : "grid-rows-[0fr]"
+                                }`}
+                                draggable={false}
+                                onMouseDown={(e) => e.stopPropagation()}
+                              >
+                                <div
+                                  className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                    les.isExpanded
+                                      ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
+                                      : "px-5 py-0 max-[768px]:p-0"
+                                  }`}
+                                >
+                                  <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
+                                    {/* Left column */}
+                                    <div className="flex flex-col gap-4.5">
+                                      {/* Lesson Title */}
+                                      <div className="flex flex-col gap-2 mb-5">
+                                        <label
+                                          htmlFor={`les-title-${les.id}`}
+                                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                        >
+                                          Lesson Title{""}
+                                          <span className="text-[#ff5252] ml-0.5">
+                                            *
+                                          </span>
+                                        </label>
+                                        <div className="relative flex items-center">
+                                          <input
+                                            id={`les-title-${les.id}`}
+                                            type="text"
+                                            maxLength={120}
+                                            value={les.title}
+                                            disabled={
+                                              les.isPendingCreation ||
+                                              savingLessonId === les.id
+                                            }
+                                            onChange={(e) =>
+                                              handleUpdateLesson(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  title: e.target.value,
+                                                },
+                                              )
+                                            }
+                                            onBlur={() => {
+                                              void handleLessonFieldBlur(
+                                                sec.id,
+                                                les.id,
+                                              );
+                                            }}
+                                            placeholder="e.g. Introduction to React Hooks"
+                                            className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                                          />
+                                          <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                                            {les.title.length} / 120
+                                          </span>
+                                        </div>
                                       </div>
-                                      <SettingsToggle
-                                        checked={les.isPreview === true}
-                                        onChange={(checked) => {
-                                          if (les.isPendingCreation) return;
-                                          void handleLessonDiscreteChange(
+
+                                      {/* Lesson Description Rich Editor */}
+                                      <div className="flex flex-col gap-2 mb-5">
+                                        <label
+                                          id={`les-desc-label-${les.id}`}
+                                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                        >
+                                          Lesson Description
+                                        </label>
+                                        <div
+                                          className={
+                                            les.isPendingCreation
+                                              ? "opacity-60 pointer-events-none"
+                                              : ""
+                                          }
+                                          onBlur={(e) => {
+                                            if (
+                                              !e.currentTarget.contains(
+                                                e.relatedTarget as Node,
+                                              )
+                                            ) {
+                                              void handleLessonFieldBlur(
+                                                sec.id,
+                                                les.id,
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <RichTextEditor
+                                            value={les.description}
+                                            onChange={(val) =>
+                                              handleUpdateLesson(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  description: val,
+                                                },
+                                              )
+                                            }
+                                            placeholder="Add a detailed description of what students will learn in this lesson..."
+                                            maxLength={1500}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Right column */}
+                                    <div className="flex flex-col gap-4.5">
+                                      {/* Content Type Selector */}
+                                      <div className="flex flex-col gap-2 mb-5">
+                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                          Content Type{""}
+                                          <span className="text-[#ff5252] ml-0.5">
+                                            *
+                                          </span>
+                                        </label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          <div
+                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                              les.isPendingCreation
+                                                ? "opacity-60 cursor-not-allowed"
+                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                            } ${
+                                              les.contentType === "video"
+                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                            }`}
+                                            onClick={() => {
+                                              if (les.isPendingCreation) return;
+                                              void handleLessonDiscreteChange(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  contentType: "video",
+                                                },
+                                              );
+                                            }}
+                                          >
+                                            <div
+                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
+                                            >
+                                              {les.contentType === "video" && (
+                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                              )}
+                                            </div>
+                                            <div className="flex items-center justify-center text-(--accent) mt-px">
+                                              <Video size={18} weight="fill" />
+                                            </div>
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
+                                                Video
+                                              </span>
+                                              <span className="text-(--muted) text-[0.75rem]">
+                                                Upload or select a video
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div
+                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                              les.isPendingCreation
+                                                ? "opacity-60 cursor-not-allowed"
+                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                            } ${
+                                              les.contentType === "document"
+                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                            }`}
+                                            onClick={() => {
+                                              if (les.isPendingCreation) return;
+                                              void handleLessonDiscreteChange(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  contentType: "document",
+                                                  contentMediaId: null,
+                                                },
+                                              );
+                                            }}
+                                          >
+                                            <div
+                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
+                                            >
+                                              {les.contentType ===
+                                                "document" && (
+                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                              )}
+                                            </div>
+                                            <div className="flex items-center justify-center text-(--accent) mt-px">
+                                              <FileText
+                                                size={18}
+                                                weight="fill"
+                                              />
+                                            </div>
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
+                                                Document / PDF
+                                              </span>
+                                              <span className="text-(--muted) text-[0.75rem]">
+                                                Upload PDF or document
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Content Source Controls (Video or Document) */}
+                                      <div className="flex flex-col gap-2 mb-5">
+                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                          {les.contentType === "video"
+                                            ? "Video Source"
+                                            : "Document / PDF Source"}
+                                          {""}
+                                          <span className="text-[#ff5252] ml-0.5">
+                                            *
+                                          </span>
+                                        </label>
+                                        {les.contentType === "video" ? (
+                                          <LessonVideoUpload
+                                            mediaAssetId={les.contentMediaId}
+                                            disabled={les.isPendingCreation}
+                                            onMediaAttached={(mediaAssetId) =>
+                                              handleLessonMediaAttached(
+                                                sec.id,
+                                                les.id,
+                                                mediaAssetId,
+                                              )
+                                            }
+                                          />
+                                        ) : (
+                                          <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
+                                            <button
+                                              type="button"
+                                              disabled={les.isPendingCreation}
+                                              style={{
+                                                fontSize: "0.80rem",
+                                                fontWeight: 700,
+                                                height: "34px",
+                                                borderRadius: "8px",
+                                                gap: "6px",
+                                                paddingLeft: "16px",
+                                                paddingRight: "16px",
+                                              }}
+                                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                            >
+                                              <UploadSimple size={15} />
+                                              Upload New
+                                            </button>
+                                            <button
+                                              type="button"
+                                              disabled={les.isPendingCreation}
+                                              style={{
+                                                fontSize: "0.80rem",
+                                                fontWeight: 500,
+                                                height: "34px",
+                                                borderRadius: "8px",
+                                                gap: "6px",
+                                                paddingLeft: "14px",
+                                                paddingRight: "14px",
+                                              }}
+                                              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                            >
+                                              <FileText
+                                                size={15}
+                                                className="text-(--text-secondary)"
+                                              />
+                                              Select from Media
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Lesson Publishing Status */}
+                                      <div className="flex flex-col gap-2 mb-5">
+                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                          Publishing Status
+                                        </label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          <div
+                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                              les.isPendingCreation
+                                                ? "opacity-60 cursor-not-allowed"
+                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                            } ${
+                                              les.isPublished !== false
+                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                            }`}
+                                            onClick={() => {
+                                              if (les.isPendingCreation) return;
+                                              void handleLessonDiscreteChange(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  isPublished: true,
+                                                },
+                                              );
+                                            }}
+                                          >
+                                            <div
+                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                                les.isPublished !== false
+                                                  ? "border-(--accent)"
+                                                  : "border-(--muted)"
+                                              }`}
+                                            >
+                                              {les.isPublished !== false && (
+                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
+                                                Published
+                                              </span>
+                                              <span className="text-(--muted) text-[0.75rem]">
+                                                Visible to enrolled students
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div
+                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                              les.isPendingCreation
+                                                ? "opacity-60 cursor-not-allowed"
+                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                            } ${
+                                              les.isPublished === false
+                                                ? "is-selected border-[#f59e0b] bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))]"
+                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                            }`}
+                                            onClick={() => {
+                                              if (les.isPendingCreation) return;
+                                              void handleLessonDiscreteChange(
+                                                sec.id,
+                                                les.id,
+                                                {
+                                                  isPublished: false,
+                                                },
+                                              );
+                                            }}
+                                          >
+                                            <div
+                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                                les.isPublished === false
+                                                  ? "border-[#f59e0b]"
+                                                  : "border-(--muted)"
+                                              }`}
+                                            >
+                                              {les.isPublished === false && (
+                                                <div className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
+                                                Draft (Hidden)
+                                              </span>
+                                              <span className="text-(--muted) text-[0.75rem]">
+                                                Hidden from students
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Free Preview Toggle */}
+                                      <div
+                                        className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-5 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                      >
+                                        <div className="pr-3">
+                                          <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
+                                            Free Preview
+                                          </strong>
+                                          <p className="m-0 text-(--muted) text-[0.78rem]">
+                                            Allow prospective students to view
+                                            this lesson before enrolling or
+                                            purchasing.
+                                          </p>
+                                        </div>
+                                        <SettingsToggle
+                                          checked={les.isPreview === true}
+                                          onChange={(checked) => {
+                                            if (les.isPendingCreation) return;
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                isPreview: checked,
+                                              },
+                                            );
+                                          }}
+                                          label="Toggle Free Preview"
+                                        />
+                                      </div>
+
+                                      {/* Lesson Resources */}
+                                      <LessonResourceManager
+                                        courseId={currentCourseId}
+                                        lessonId={les.id}
+                                        resources={les.resources}
+                                        disabled={
+                                          les.isPendingCreation ||
+                                          createLessonResourceMutation.isPending ||
+                                          deleteLessonResourceMutation.isPending
+                                        }
+                                        onCreateResource={(payload) =>
+                                          handleCreateLessonResource(
+                                            les.id,
+                                            payload,
+                                          )
+                                        }
+                                        onResourceAdded={(resource) =>
+                                          handleLessonResourceAdded(
                                             sec.id,
                                             les.id,
-                                            {
-                                              isPreview: checked,
-                                            },
-                                          );
-                                        }}
-                                        label="Toggle Free Preview"
+                                            resource,
+                                          )
+                                        }
+                                        onDeleteResource={(resourceId) =>
+                                          handleDeleteLessonResource(resourceId)
+                                        }
+                                        onResourceRemoved={(resource) =>
+                                          handleLessonResourceRemoved(
+                                            sec.id,
+                                            les.id,
+                                            resource,
+                                          )
+                                        }
                                       />
-                                    </div>
-
-                                    {/* Lesson Resources Table */}
-                                    <div className="flex flex-col gap-2 mb-5">
-                                      <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-2.5">
-                                        <label className="flex items-center gap-1.5 text-(--text-secondary) text-[0.84rem] font-semibold">
-                                          Lesson Resources
-                                        </label>
-                                        <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
-                                          <button
-                                            type="button"
-                                            disabled={les.isPendingCreation}
-                                            style={{
-                                              fontSize: "0.80rem",
-                                              fontWeight: 700,
-                                              height: "34px",
-                                              borderRadius: "8px",
-                                              gap: "6px",
-                                              paddingLeft: "16px",
-                                              paddingRight: "16px",
-                                            }}
-                                            className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                            onClick={() =>
-                                              handleAddLessonResource(
-                                                sec.id,
-                                                les.id,
-                                              )
-                                            }
-                                          >
-                                            <UploadSimple size={15} />
-                                            Upload New
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={les.isPendingCreation}
-                                            style={{
-                                              fontSize: "0.80rem",
-                                              fontWeight: 500,
-                                              height: "34px",
-                                              borderRadius: "8px",
-                                              gap: "6px",
-                                              paddingLeft: "14px",
-                                              paddingRight: "14px",
-                                            }}
-                                            className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                            onClick={() =>
-                                              handleAddLessonResource(
-                                                sec.id,
-                                                les.id,
-                                              )
-                                            }
-                                          >
-                                            <PlayCircle
-                                              size={15}
-                                              className="text-(--text-secondary)"
-                                            />
-                                            Select from Media
-                                          </button>
-                                        </div>
-                                      </div>
-
-                                      {les.resources.length > 0 ? (
-                                        <div className="w-full flex flex-col gap-2">
-                                          {/* Mobile view: Resource Card List (no side-scroll needed, delete icon always visible) */}
-                                          <div className="flex flex-col gap-2 sm:hidden">
-                                            {les.resources.map((res) => (
-                                              <div
-                                                key={res.id}
-                                                className="flex items-center justify-between gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl px-3 py-2.5 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]"
-                                              >
-                                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                                  <FileText
-                                                    size={18}
-                                                    weight="fill"
-                                                    className="text-red-400 shrink-0"
-                                                  />
-                                                  <div className="flex flex-col min-w-0 flex-1">
-                                                    <span className="text-(--text) text-[0.82rem] font-semibold truncate">
-                                                      {res.name}
-                                                    </span>
-                                                    <span className="text-(--muted) text-[0.72rem] flex items-center gap-1.5 mt-0.5">
-                                                      <span className="uppercase text-(--text-secondary) font-bold">
-                                                        {res.type}
-                                                      </span>
-                                                      <span>•</span>
-                                                      <span>{res.size}</span>
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                                <button
-                                                  type="button"
-                                                  disabled={
-                                                    les.isPendingCreation
-                                                  }
-                                                  className="inline-flex w-7 h-7 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                  onClick={() =>
-                                                    handleRemoveLessonResource(
-                                                      sec.id,
-                                                      les.id,
-                                                      res.id,
-                                                    )
-                                                  }
-                                                  aria-label="Remove resource"
-                                                  title="Remove resource"
-                                                >
-                                                  <X size={15} weight="bold" />
-                                                </button>
-                                              </div>
-                                            ))}
-                                          </div>
-
-                                          {/* Desktop / Tablet view: Structured Data Table */}
-                                          <div className="hidden sm:block w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
-                                            <table className="w-full border-collapse text-left">
-                                              <thead>
-                                                <tr className="bg-[color-mix(in_srgb,var(--text)_4%,transparent)] border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
-                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
-                                                    File Name
-                                                  </th>
-                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
-                                                    Type
-                                                  </th>
-                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase">
-                                                    Size
-                                                  </th>
-                                                  <th className="px-4 py-2.5 text-(--muted) text-[0.74rem] font-bold tracking-wider uppercase text-right pr-4">
-                                                    Actions
-                                                  </th>
-                                                </tr>
-                                              </thead>
-                                              <tbody>
-                                                {les.resources.map((res) => (
-                                                  <tr
-                                                    key={res.id}
-                                                    className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] last:border-b-0 hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] transition-colors"
-                                                  >
-                                                    <td className="px-4 py-3 text-(--text) text-[0.82rem] font-semibold">
-                                                      <div className="flex items-center gap-2.5">
-                                                        <FileText
-                                                          size={16}
-                                                          weight="fill"
-                                                          className="text-red-400 shrink-0"
-                                                        />
-                                                        <span>{res.name}</span>
-                                                      </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-(--text-secondary) text-[0.80rem] font-medium">
-                                                      {res.type}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-(--muted) text-[0.80rem]">
-                                                      {res.size}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right pr-4">
-                                                      <button
-                                                        type="button"
-                                                        disabled={
-                                                          les.isPendingCreation
-                                                        }
-                                                        className="inline-flex w-7 h-7 items-center justify-center rounded-lg text-(--muted) hover:text-red-400 hover:bg-red-500/10 transition-colors border-0 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        onClick={() =>
-                                                          handleRemoveLessonResource(
-                                                            sec.id,
-                                                            les.id,
-                                                            res.id,
-                                                          )
-                                                        }
-                                                        aria-label="Remove resource"
-                                                        title="Remove resource"
-                                                      >
-                                                        <X
-                                                          size={14}
-                                                          weight="bold"
-                                                        />
-                                                      </button>
-                                                    </td>
-                                                  </tr>
-                                                ))}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                                          No resources added to this lesson yet.
-                                        </p>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Add Lesson Action */}
-                      <div className="mt-3.5">
-                        <button
-                          type="button"
-                          disabled={
-                            sec.isPendingCreation ||
-                            creatingLessonSectionId === sec.id ||
-                            createLessonMutation.isPending
-                          }
-                          className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
-                          onClick={() => handleAddLesson(sec.id)}
-                        >
-                          {creatingLessonSectionId === sec.id ? (
-                            <>
-                              <CircleNotch
-                                size={14}
-                                className="animate-spin text-(--accent)"
-                              />
-                              <span>Adding Lesson...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={16} /> Add Lesson
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : panelStep === "access-rules" ? (
-          <div className="flex w-full flex-col gap-5">
-            {/* Top Grid: 1. Who can access & 2. Access duration */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-              {/* Card 1: Who can access this course? */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5 flex items-center justify-between">
-                  <div>
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      1. Who can access this course?
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Choose who is allowed to access this course.
-                    </p>
-                  </div>
-                  <AccessRulesControlStatusIndicator
-                    status={getAccessControlDisplayStatus("accessType")}
-                    testId="access-rules-status-accessType"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {/* Radio option: Everyone */}
-                  <label
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isAccessRulesSaving ||
-                      savingAccessControls.has("accessType")
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    } ${
-                      accessRules.accessType === "everyone"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    }`}
-                    onClick={() => {
-                      if (
-                        !isAccessRulesSaving &&
-                        !savingAccessControls.has("accessType")
-                      ) {
-                        handleAccessTypeChange("everyone");
-                      }
-                    }}
-                  >
-                    <div
-                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        accessRules.accessType === "everyone"
-                          ? "border-(--accent)"
-                          : "border-(--muted)"
-                      }`}
-                    >
-                      {accessRules.accessType === "everyone" && (
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Everyone
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Anyone with access to the platform can access this
-                        course.
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Radio option: Restricted access (Coming soon - Disabled) */}
-                  <div
-                    className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    aria-disabled="true"
-                  >
-                    <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
-                    <div className="flex flex-1 flex-col gap-0.75 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
-                          Restricted access
-                        </strong>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                          Coming soon
-                        </span>
-                      </div>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Only users who meet the selected requirements can access
-                        this course.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Access duration */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5 flex items-center justify-between">
-                  <div>
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      2. Access duration
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Set how long learners can access this course.
-                    </p>
-                  </div>
-                  <AccessRulesControlStatusIndicator
-                    status={getAccessControlDisplayStatus("durationMode")}
-                    testId="access-rules-status-durationMode"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {/* Option 1: Lifetime access */}
-                  <div
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isAccessRulesSaving ||
-                      savingAccessControls.has("durationMode")
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    } ${
-                      accessRules.durationMode === "lifetime"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    }`}
-                    onClick={() =>
-                      !isAccessRulesSaving &&
-                      !savingAccessControls.has("durationMode") &&
-                      handleDurationModeChange("lifetime")
-                    }
-                  >
-                    <div
-                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        accessRules.durationMode === "lifetime"
-                          ? "border-(--accent)"
-                          : "border-(--muted)"
-                      }`}
-                    >
-                      {accessRules.durationMode === "lifetime" && (
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Lifetime access
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Learners can access this course forever.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Option 2: Fixed duration */}
-                  <div
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isAccessRulesSaving ||
-                      savingAccessControls.has("durationMode")
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    } ${
-                      accessRules.durationMode === "fixed"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    }`}
-                    onClick={() =>
-                      !isAccessRulesSaving &&
-                      !savingAccessControls.has("durationMode") &&
-                      handleDurationModeChange("fixed")
-                    }
-                  >
-                    <div
-                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        accessRules.durationMode === "fixed"
-                          ? "border-(--accent)"
-                          : "border-(--muted)"
-                      }`}
-                    >
-                      {accessRules.durationMode === "fixed" && (
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Fixed duration
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Set a duration for how long learners can access this
-                        course.
-                      </p>
-
-                      {accessRules.durationMode === "fixed" && (
-                        <div
-                          className="flex items-center gap-2.5 mt-3 flex-wrap"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="number"
-                            disabled={
-                              isAccessRulesSaving ||
-                              savingAccessControls.has("durationMode")
-                            }
-                            className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
-                            min={1}
-                            value={accessRules.fixedDurationValue}
-                            onChange={(e) =>
-                              handleFixedDurationValueChange(
-                                parseInt(e.target.value, 10),
-                              )
-                            }
-                            onBlur={() => {
-                              void flushFixedDurationPersistence();
-                            }}
-                          />
-                          <ThemedSelect
-                            disabled={
-                              isAccessRulesSaving ||
-                              savingAccessControls.has("durationMode") ||
-                              savingAccessControls.has("fixedDuration")
-                            }
-                            value={accessRules.fixedDurationUnit}
-                            onValueChange={(val) =>
-                              handleFixedDurationUnitChange(val as DurationUnit)
-                            }
-                            options={[
-                              ["Days", "Days"],
-                              ["Weeks", "Weeks"],
-                              ["Months", "Months"],
-                              ["Years", "Years"],
-                            ]}
-                            ariaLabel="Select duration unit"
-                            triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
-                          />
-                          <AccessRulesControlStatusIndicator
-                            status={getAccessControlDisplayStatus("fixedDuration")}
-                            testId="access-rules-status-fixedDuration"
-                          />
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Bottom Card: 3. Learner interactions */}
-            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
-              <div className="mb-4.5">
-                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                  3. Learner interactions
-                </h3>
-                <p className="m-0 text-(--muted) text-[0.83rem]">
-                  Manage how learners can interact within this course.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {/* Toggle 1: Q&A */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                      <Question size={20} weight="bold" />
-                    </div>
-                    <div className="min-w-0">
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Q&A
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Allow learners to ask questions about lessons.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <AccessRulesControlStatusIndicator
-                      status={getAccessControlDisplayStatus("enableQA")}
-                      testId="access-rules-status-enableQA"
-                    />
-                    <SettingsToggle
-                      checked={accessRules.enableQA}
-                      disabled={
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("enableQA")
-                      }
-                      onChange={handleToggleQA}
-                      label="Toggle Q&A"
-                    />
-                  </div>
-                </div>
-
-                {/* Toggle 2: Comments */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                      <ChatCircleText size={20} weight="fill" />
-                    </div>
-                    <div className="min-w-0">
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Comments
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Allow learners to comment on course content.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <AccessRulesControlStatusIndicator
-                      status={getAccessControlDisplayStatus("enableComments")}
-                      testId="access-rules-status-enableComments"
-                    />
-                    <SettingsToggle
-                      checked={accessRules.enableComments}
-                      disabled={
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("enableComments")
-                      }
-                      onChange={handleToggleComments}
-                      label="Toggle Comments"
-                    />
-                  </div>
-                </div>
-
-                {/* Toggle 3: Downloads */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                      <DownloadSimple size={20} weight="bold" />
-                    </div>
-                    <div className="min-w-0">
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Downloads
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Allow learners to download lesson resources for offline
-                        access.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <AccessRulesControlStatusIndicator
-                      status={getAccessControlDisplayStatus("enableDownloads")}
-                      testId="access-rules-status-enableDownloads"
-                    />
-                    <SettingsToggle
-                      checked={accessRules.enableDownloads}
-                      disabled={
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("enableDownloads")
-                      }
-                      onChange={handleToggleDownloads}
-                      label="Toggle Downloads"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : panelStep === "pricing" ? (
-          <div className="flex w-full flex-col gap-5">
-            {pricingValidationError && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
-                <WarningCircle size={18} weight="bold" className="shrink-0" />
-                <span>{pricingValidationError}</span>
-              </div>
-            )}
-
-            {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-              {/* Card 1: Course pricing */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-                <div className="flex items-center justify-between mb-4.5">
-                  <div>
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      1. Course pricing
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Choose how you want to sell this course.
-                    </p>
-                  </div>
-                  <PricingControlStatusIndicator
-                    status={getPricingControlDisplayStatus("pricingType")}
-                    testId="pricing-field-status-pricingType"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {/* Radio Option: Free */}
-                  <div
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isSavingPricing || isPricingControlSaving("pricingType")
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    } ${
-                      pricing.pricingType === "free"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    }`}
-                    onClick={() =>
-                      !isSavingPricing &&
-                      !isPricingControlSaving("pricingType") &&
-                      handlePricingTypeChange("free")
-                    }
-                  >
-                    <div
-                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        pricing.pricingType === "free"
-                          ? "border-(--accent)"
-                          : "border-(--muted)"
-                      }`}
-                    >
-                      {pricing.pricingType === "free" && (
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Free
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Anyone who can access the course can enroll for free.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Radio Option: Paid */}
-                  <div
-                    className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                      isSavingPricing || isPricingControlSaving("pricingType")
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    } ${
-                      pricing.pricingType === "paid"
-                        ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                        : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    }`}
-                    onClick={() =>
-                      !isSavingPricing &&
-                      !isPricingControlSaving("pricingType") &&
-                      handlePricingTypeChange("paid")
-                    }
-                  >
-                    <div
-                      className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                        pricing.pricingType === "paid"
-                          ? "border-(--accent)"
-                          : "border-(--muted)"
-                      }`}
-                    >
-                      {pricing.pricingType === "paid" && (
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                      )}
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Paid
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Learners must purchase the course to get access.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Price details */}
-              <div
-                className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
-                  pricing.pricingType === "free"
-                    ? "is-disabled opacity-55 pointer-events-none"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center justify-between mb-4.5">
-                  <div>
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      2. Price details
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Set the pricing for your course.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.75">
-                  {/* Currency Combobox Field */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        id="currency-label"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Currency <span className="text-[#ff5252] ml-0.5">*</span>
-                      </label>
-                      <PricingControlStatusIndicator
-                        status={getPricingControlDisplayStatus("currency")}
-                        testId="pricing-field-status-currency"
-                      />
-                    </div>
-                    <ThemedSelect
-                      value={pricing.currency || "INR"}
-                      onValueChange={handleCurrencyChange}
-                      options={currencyOptions}
-                      disabled={
-                        pricing.pricingType === "free" ||
-                        isSavingPricing ||
-                        isPricingControlSaving("pricingType") ||
-                        isPricingControlSaving("currency")
-                      }
-                      ariaLabel="Select currency"
-                      searchable
-                      searchPlaceholder="Search currencies by name or code..."
-                      triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
-                    />
-                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                      Choose the currency for course pricing.
-                    </p>
-                  </div>
-
-                  {/* Selling Price Field */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="selling-price"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Selling price{" "}
-                        <span className="text-[#ff5252] ml-0.5">*</span>
-                      </label>
-                      <PricingControlStatusIndicator
-                        status={getPricingControlDisplayStatus("sellingPrice")}
-                        testId="pricing-field-status-sellingPrice"
-                      />
-                    </div>
-                    <div className="relative flex items-center w-full">
-                      <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                        {getCurrencySymbol(pricing.currency || "INR")}
-                      </span>
-                      <input
-                        id="selling-price"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        disabled={
-                          pricing.pricingType === "free" ||
-                          isSavingPricing ||
-                          isPricingControlSaving("pricingType")
-                        }
-                        value={pricing.sellingPrice}
-                        onChange={(e) =>
-                          handleSellingPriceChange(e.target.value)
-                        }
-                        onBlur={() => {
-                          void flushPricingPersistence();
-                        }}
-                        placeholder="1999"
-                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                      This is the price learners will pay.
-                    </p>
-                  </div>
-
-                  {/* Original Price Field */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="original-price"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Original price
-                      </label>
-                      <PricingControlStatusIndicator
-                        status={getPricingControlDisplayStatus("originalPrice")}
-                        testId="pricing-field-status-originalPrice"
-                      />
-                    </div>
-                    <div className="relative flex items-center w-full">
-                      <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                        {getCurrencySymbol(pricing.currency || "INR")}
-                      </span>
-                      <input
-                        id="original-price"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        disabled={
-                          pricing.pricingType === "free" ||
-                          isSavingPricing ||
-                          isPricingControlSaving("pricingType")
-                        }
-                        value={pricing.originalPrice}
-                        onChange={(e) =>
-                          handleOriginalPriceChange(e.target.value)
-                        }
-                        onBlur={() => {
-                          void flushPricingPersistence();
-                        }}
-                        placeholder="2999"
-                        className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                      Enter original price to show discount.
-                    </p>
-                  </div>
-
-                  {/* Dynamic Discount Calculation Badge */}
-                  {(() => {
-                    const sell = parseFloat(
-                      pricing.sellingPrice.replace(/,/g, ""),
-                    );
-                    const orig = parseFloat(
-                      pricing.originalPrice.replace(/,/g, ""),
-                    );
-                    let discountPercent = 0;
-                    let isValidDiscount = false;
-
-                    if (
-                      !isNaN(sell) &&
-                      !isNaN(orig) &&
-                      sell > 0 &&
-                      orig > sell
-                    ) {
-                      discountPercent = Math.round(
-                        ((orig - sell) / orig) * 100,
-                      );
-                      isValidDiscount = discountPercent > 0;
-                    }
-
-                    return (
-                      <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <div
-                          className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
-                            isValidDiscount && pricing.pricingType === "paid"
-                              ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-                          }`}
-                        >
-                          <Tag size={15} weight="bold" className="shrink-0" />
-                          <span className="whitespace-nowrap leading-none">
-                            {isValidDiscount && pricing.pricingType === "paid"
-                              ? `${discountPercent}% OFF`
-                              : "0% OFF"}
-                          </span>
-                        </div>
-                        <span className="text-(--muted) text-[0.8rem] leading-tight">
-                          Discount is calculated automatically.
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Card: Coupons Banner */}
-            <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
-              <div className="flex items-center gap-3.5">
-                <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                  <Info size={20} weight="bold" />
-                </div>
-                <div>
-                  <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
-                    Coupons
-                  </strong>
-                  <p className="m-0 text-(--muted) text-[0.82rem]">
-                    Create and manage coupon codes separately from the Coupons
-                    section.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                style={{
-                  fontSize: "0.80rem",
-                  fontWeight: 700,
-                  height: "34px",
-                  borderRadius: "8px",
-                  gap: "6px",
-                  paddingLeft: "18px",
-                  paddingRight: "18px",
-                }}
-                className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
-                onClick={() => {
-                  if (onNavigatePage) {
-                    onNavigatePage("settings");
-                  }
-                }}
-              >
-                Go to Coupons <ArrowUpRight size={15} weight="bold" />
-              </button>
-            </div>
-          </div>
-        ) : panelStep === "extras" ? (
-          <div className="flex w-full flex-col gap-5">
-            {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-              {/* Card 1: Certificates */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    1. Certificates
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Configure how certificates will be issued for this course.
-                  </p>
-                </div>
-
-                {/* Enable Certificate Toggle Row */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
-                  <div className="flex flex-col min-w-0 pr-3">
-                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                      Enable certificate
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem]">
-                      Issue certificates to learners on course completion.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <ExtrasControlStatusIndicator
-                      status={getExtrasControlDisplayStatus("enableCertificate")}
-                      testId="extras-field-status-enableCertificate"
-                    />
-                    <SettingsToggle
-                      checked={extras.enableCertificate}
-                      disabled={isSavingCertificate}
-                      onChange={handleToggleCertificate}
-                      label="Toggle certificate"
-                    />
-                  </div>
-                </div>
-
-                {/* Certificate Configuration Controls */}
-                <div
-                  className={`flex flex-col gap-4.5 transition-opacity duration-200 ${
-                    !extras.enableCertificate
-                      ? "is-disabled opacity-50 pointer-events-none"
-                      : ""
-                  }`}
-                >
-                  {/* Template Selector */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Certificate template
-                      </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
-                      </span>
-                    </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                      Choose from pre-designed certificate templates.
-                    </p>
-                    <div className="opacity-60 cursor-not-allowed pointer-events-none">
-                      <ThemedSelect
-                        value={extras.certificateTemplate}
-                        onValueChange={handleCertificateTemplateChange}
-                        options={[
-                          ["purple-certificate", "Modern Purple Certificate"],
-                          ["blue-certificate", "Classic Blue Certificate"],
-                          ["dark-certificate", "Minimal Dark Certificate"],
-                        ]}
-                        ariaLabel="Select certificate template"
-                        className="w-full"
-                        disabled
-                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Certificate Issuance Options */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Certificate issuance
-                      </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
-                      </span>
-                    </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                      Choose when the certificate should be issued.
-                    </p>
-
-                    <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
-                      {/* Option 1: On course completion */}
-                      <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                          extras.issuanceType === "completion"
-                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                        }`}
-                      >
-                        <div
-                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                            extras.issuanceType === "completion"
-                              ? "border-(--accent)"
-                              : "border-(--muted)"
-                          }`}
-                        >
-                          {extras.issuanceType === "completion" && (
-                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                          )}
-                        </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                            On course completion
-                          </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when the learner completes all
-                            lessons.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Option 2: Minimum completion percentage */}
-                      <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                          extras.issuanceType === "percentage"
-                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                        }`}
-                      >
-                        <div
-                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                            extras.issuanceType === "percentage"
-                              ? "border-(--accent)"
-                              : "border-(--muted)"
-                          }`}
-                        >
-                          {extras.issuanceType === "percentage" && (
-                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                          )}
-                        </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <div className="flex items-center justify-between w-full">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              Minimum completion percentage
-                            </strong>
-                            {extras.issuanceType === "percentage" && (
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number"
-                                  disabled
-                                  className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
-                                  min={1}
-                                  max={100}
-                                  value={extras.minCompletionPercentage}
-                                  readOnly
-                                />
-                                <span className="text-(--text) text-[0.86rem] font-bold">
-                                  %
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when learner reaches the selected
-                            percentage.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Option 3: Custom rule */}
-                      <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                          extras.issuanceType === "custom"
-                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                        }`}
-                      >
-                        <div
-                          className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                            extras.issuanceType === "custom"
-                              ? "border-(--accent)"
-                              : "border-(--muted)"
-                          }`}
-                        >
-                          {extras.issuanceType === "custom" && (
-                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                          )}
-                        </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                            Custom rule
-                          </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Define your own custom rule for certificate
-                            issuance.
-                          </p>
-
-                          {extras.issuanceType === "custom" && (
-                            <div className="mt-2 w-full">
-                              <input
-                                type="text"
-                                disabled
-                                readOnly
-                                className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
-                                value={extras.customRuleText}
-                                placeholder="e.g. Complete all quizzes with > 80% score"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Delivery Toggle Row */}
-                  <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <strong className="text-(--text) text-[0.88rem] font-[650]">
-                          Delivery
-                        </strong>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                          Coming soon
-                        </span>
-                      </div>
-                      <p className="m-0 text-(--muted) text-[0.78rem]">
-                        Automatically email the certificate to learners.
-                      </p>
-                    </div>
-                    <div className="pointer-events-none">
-                      <SettingsToggle
-                        checked={extras.autoEmailCertificate}
-                        onChange={handleToggleAutoEmailCertificate}
-                        label="Toggle certificate delivery"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: This course includes */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    2. This course includes
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    These details are calculated from your curriculum.
-                  </p>
-                </div>
-
-                {/* Derived Live Stats Summary Grid */}
-                <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                      <BookOpen size={20} weight="fill" />
-                    </div>
-                    <div className="flex flex-col">
-                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                        {totalSections}
-                      </strong>
-                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                        Sections
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                      <PlayCircle size={20} weight="fill" />
-                    </div>
-                    <div className="flex flex-col">
-                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                        {totalLessons}
-                      </strong>
-                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                        Lessons
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                      <Clock size={20} weight="bold" />
-                    </div>
-                    <div className="flex flex-col">
-                      <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                        0m
-                      </strong>
-                      <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                        Content length
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Divider between Stats & Inclusions */}
-                <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
-
-                {/* Additional Inclusions Section */}
-                <div className="flex flex-col gap-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
-                        Course inclusions
-                      </h4>
-                      {isReorderingIncludes ||
-                      reorderIncludesMutation.isPending ? (
-                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                          <CircleNotch
-                            size={12}
-                            className="animate-spin text-(--accent)"
-                          />
-                          <span>Saving inclusion order...</span>
-                        </span>
-                      ) : (
-                        <ExtrasControlStatusIndicator
-                          status={extrasControlStatus["inclusions"] ?? null}
-                          testId="extras-field-status-inclusions"
-                        />
-                      )}
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
-                        manualIncludesDraft.length >= 6
-                          ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                          : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-                      }`}
-                    >
-                      {manualIncludesDraft.length} / 6
-                    </span>
-                  </div>
-                  <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-                    Perks and benefits your learners will receive upon enrolling (max 6 items). Click suggestions below or add custom inclusions.
-                  </p>
-
-                  {/* Active Inclusions List */}
-                  <div className="flex flex-col gap-2.5">
-                    {manualIncludesDraft.length === 0 ? (
-                      <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
-                        No inclusions added yet. Choose from the suggested perks below or add a custom benefit.
-                      </div>
-                    ) : (
-                      manualIncludesDraft.map((item, index) => (
-                        <div
-                          key={item.id}
-                          draggable={
-                            !isReorderingIncludes &&
-                            !reorderIncludesMutation.isPending &&
-                            !isExtrasSaving &&
-                            !item.isPendingCreation &&
-                            !deletingIncludeIds.has(item.id) &&
-                            !savingIncludeIds.has(item.id) &&
-                            dragEnabledInclusionId === item.id
-                          }
-                          onDragStart={(e) =>
-                            handleInclusionDragStart(e, index, item.text)
-                          }
-                          onDragOver={(e) => handleInclusionDragOver(e, index)}
-                          onDragEnd={handleInclusionDragEnd}
-                          className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
-                            item.isPendingCreation ||
-                            deletingIncludeIds.has(item.id) ||
-                            savingIncludeIds.has(item.id)
-                              ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
-                              : isReorderingIncludes || isExtrasSaving
-                                ? "opacity-60"
-                                : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
-                          }`}
-                        >
-                          {item.isPendingCreation ? (
-                            <span
-                              className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
-                              title="Adding inclusion..."
-                            >
-                              <CircleNotch
-                                size={18}
-                                className="animate-spin text-(--accent)"
-                              />
-                            </span>
-                          ) : (
-                            <span
-                              className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
-                                isReorderingIncludes ||
-                                reorderIncludesMutation.isPending ||
-                                isExtrasSaving ||
-                                deletingIncludeIds.has(item.id) ||
-                                savingIncludeIds.has(item.id)
-                                  ? "opacity-30 cursor-not-allowed pointer-events-none"
-                                  : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
-                              }`}
-                              onMouseEnter={() => {
-                                if (
-                                  !isReorderingIncludes &&
-                                  !reorderIncludesMutation.isPending &&
-                                  !isExtrasSaving &&
-                                  !deletingIncludeIds.has(item.id) &&
-                                  !savingIncludeIds.has(item.id)
-                                ) {
-                                  setDragEnabledInclusionId(item.id);
-                                }
-                              }}
-                              onMouseLeave={() =>
-                                setDragEnabledInclusionId(null)
-                              }
-                              title={
-                                isReorderingIncludes
-                                  ? "Saving order..."
-                                  : deletingIncludeIds.has(item.id)
-                                    ? "Deleting..."
-                                    : savingIncludeIds.has(item.id)
-                                      ? "Saving..."
-                                      : "Drag to reorder"
-                              }
-                            >
-                              <DotsSixVertical size={18} />
-                            </span>
-                          )}
-                          <input
-                            type="text"
-                            disabled={
-                              isReorderingIncludes ||
-                              reorderIncludesMutation.isPending ||
-                              isExtrasSaving ||
-                              item.isPendingCreation ||
-                              deletingIncludeIds.has(item.id) ||
-                              savingIncludeIds.has(item.id)
-                            }
-                            className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
-                            value={item.text}
-                            onFocus={() => setFocusedInclusionId(item.id)}
-                            onBlur={() => {
-                              void handleManualInclusionBlur(item.id);
-                            }}
-                            onChange={(e) =>
-                              handleUpdateManualInclusionText(
-                                item.id,
-                                e.target.value.slice(0, 25),
-                              )
-                            }
-                            placeholder="e.g. Personal guidance"
-                            maxLength={25}
-                          />
-                          {getExtrasControlDisplayStatus(item.id) ? (
-                            <ExtrasControlStatusIndicator
-                              status={getExtrasControlDisplayStatus(item.id)}
-                              testId={`extras-field-status-inclusion-${item.id}`}
-                            />
-                          ) : focusedInclusionId === item.id ? (
-                            <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
-                              {item.text.length} / 25
-                            </span>
-                          ) : null}
+                        {/* Add Lesson Action */}
+                        <div className="mt-3.5">
                           <button
                             type="button"
                             disabled={
-                              isReorderingIncludes ||
-                              reorderIncludesMutation.isPending ||
-                              isExtrasSaving ||
-                              item.isPendingCreation ||
-                              deletingIncludeIds.has(item.id) ||
-                              savingIncludeIds.has(item.id)
+                              sec.isPendingCreation ||
+                              creatingLessonSectionId === sec.id ||
+                              createLessonMutation.isPending
                             }
-                            onClick={() => handleDeleteManualInclusion(item.id)}
-                            className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
-                            aria-label={
-                              deletingIncludeIds.has(item.id)
-                                ? "Deleting inclusion..."
-                                : "Remove inclusion"
-                            }
-                            title={
-                              deletingIncludeIds.has(item.id)
-                                ? "Deleting..."
-                                : "Remove inclusion"
-                            }
+                            className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
+                            onClick={() => handleAddLesson(sec.id)}
                           >
-                            {deletingIncludeIds.has(item.id) ? (
-                              <CircleNotch
-                                size={14}
-                                className="animate-spin text-red-500"
-                              />
+                            {creatingLessonSectionId === sec.id ? (
+                              <>
+                                <CircleNotch
+                                  size={14}
+                                  className="animate-spin text-(--accent)"
+                                />
+                                <span>Adding Lesson...</span>
+                              </>
                             ) : (
-                              <Trash size={15} />
+                              <>
+                                <Plus size={16} /> Add Lesson
+                              </>
                             )}
                           </button>
                         </div>
-                      ))
-                    )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : panelStep === "access-rules" ? (
+            <div className="flex w-full flex-col gap-5">
+              {/* Top Grid: 1. Who can access & 2. Access duration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                {/* Card 1: Who can access this course? */}
+                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5 flex items-center justify-between">
+                    <div>
+                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        1. Who can access this course?
+                      </h3>
+                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                        Choose who is allowed to access this course.
+                      </p>
+                    </div>
+                    <AccessRulesControlStatusIndicator
+                      status={getAccessControlDisplayStatus("accessType")}
+                      testId="access-rules-status-accessType"
+                    />
                   </div>
 
-                  {/* Suggested quick-add chips */}
-                  {manualIncludesDraft.length < 6 && suggestedInclusions.length > 0 && (
-                    <div className="flex flex-col gap-2 mt-1">
-                      <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
-                        Suggested perks (click to add)
+                  <div className="flex flex-col gap-3">
+                    {/* Radio option: Everyone */}
+                    <label
+                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("accessType")
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      } ${
+                        accessRules.accessType === "everyone"
+                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      }`}
+                      onClick={() => {
+                        if (
+                          !isAccessRulesSaving &&
+                          !savingAccessControls.has("accessType")
+                        ) {
+                          handleAccessTypeChange("everyone");
+                        }
+                      }}
+                    >
+                      <div
+                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          accessRules.accessType === "everyone"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
+                        }`}
+                      >
+                        {accessRules.accessType === "everyone" && (
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.75">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          Everyone
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Anyone with access to the platform can access this
+                          course.
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Radio option: Restricted access (Coming soon - Disabled) */}
+                    <div
+                      className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      aria-disabled="true"
+                    >
+                      <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                      <div className="flex flex-1 flex-col gap-0.75 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
+                            Restricted access
+                          </strong>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            Coming soon
+                          </span>
+                        </div>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Only users who meet the selected requirements can
+                          access this course.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Access duration */}
+                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5 flex items-center justify-between">
+                    <div>
+                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        2. Access duration
+                      </h3>
+                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                        Set how long learners can access this course.
+                      </p>
+                    </div>
+                    <AccessRulesControlStatusIndicator
+                      status={getAccessControlDisplayStatus("durationMode")}
+                      testId="access-rules-status-durationMode"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {/* Option 1: Lifetime access */}
+                    <div
+                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("durationMode")
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      } ${
+                        accessRules.durationMode === "lifetime"
+                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      }`}
+                      onClick={() =>
+                        !isAccessRulesSaving &&
+                        !savingAccessControls.has("durationMode") &&
+                        handleDurationModeChange("lifetime")
+                      }
+                    >
+                      <div
+                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          accessRules.durationMode === "lifetime"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
+                        }`}
+                      >
+                        {accessRules.durationMode === "lifetime" && (
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.75">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          Lifetime access
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Learners can access this course forever.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Option 2: Fixed duration */}
+                    <div
+                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        isAccessRulesSaving ||
+                        savingAccessControls.has("durationMode")
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      } ${
+                        accessRules.durationMode === "fixed"
+                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      }`}
+                      onClick={() =>
+                        !isAccessRulesSaving &&
+                        !savingAccessControls.has("durationMode") &&
+                        handleDurationModeChange("fixed")
+                      }
+                    >
+                      <div
+                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          accessRules.durationMode === "fixed"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
+                        }`}
+                      >
+                        {accessRules.durationMode === "fixed" && (
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.75">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          Fixed duration
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Set a duration for how long learners can access this
+                          course.
+                        </p>
+
+                        {accessRules.durationMode === "fixed" && (
+                          <div
+                            className="flex items-center gap-2.5 mt-3 flex-wrap"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="number"
+                              disabled={
+                                isAccessRulesSaving ||
+                                savingAccessControls.has("durationMode")
+                              }
+                              className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
+                              min={1}
+                              value={accessRules.fixedDurationValue}
+                              onChange={(e) =>
+                                handleFixedDurationValueChange(
+                                  parseInt(e.target.value, 10),
+                                )
+                              }
+                              onBlur={() => {
+                                void flushFixedDurationPersistence();
+                              }}
+                            />
+                            <ThemedSelect
+                              disabled={
+                                isAccessRulesSaving ||
+                                savingAccessControls.has("durationMode") ||
+                                savingAccessControls.has("fixedDuration")
+                              }
+                              value={accessRules.fixedDurationUnit}
+                              onValueChange={(val) =>
+                                handleFixedDurationUnitChange(
+                                  val as DurationUnit,
+                                )
+                              }
+                              options={[
+                                ["Days", "Days"],
+                                ["Weeks", "Weeks"],
+                                ["Months", "Months"],
+                                ["Years", "Years"],
+                              ]}
+                              ariaLabel="Select duration unit"
+                              triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
+                            />
+                            <AccessRulesControlStatusIndicator
+                              status={getAccessControlDisplayStatus(
+                                "fixedDuration",
+                              )}
+                              testId="access-rules-status-fixedDuration"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Card: 3. Learner interactions */}
+              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
+                <div className="mb-4.5">
+                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                    3. Learner interactions
+                  </h3>
+                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                    Manage how learners can interact within this course.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {/* Toggle 1: Q&A */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                        <Question size={20} weight="bold" />
+                      </div>
+                      <div className="min-w-0">
+                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                          Q&A
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem]">
+                          Allow learners to ask questions about lessons.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <AccessRulesControlStatusIndicator
+                        status={getAccessControlDisplayStatus("enableQA")}
+                        testId="access-rules-status-enableQA"
+                      />
+                      <SettingsToggle
+                        checked={accessRules.enableQA}
+                        disabled={
+                          isAccessRulesSaving ||
+                          savingAccessControls.has("enableQA")
+                        }
+                        onChange={handleToggleQA}
+                        label="Toggle Q&A"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Toggle 2: Comments */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                        <ChatCircleText size={20} weight="fill" />
+                      </div>
+                      <div className="min-w-0">
+                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                          Comments
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem]">
+                          Allow learners to comment on course content.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <AccessRulesControlStatusIndicator
+                        status={getAccessControlDisplayStatus("enableComments")}
+                        testId="access-rules-status-enableComments"
+                      />
+                      <SettingsToggle
+                        checked={accessRules.enableComments}
+                        disabled={
+                          isAccessRulesSaving ||
+                          savingAccessControls.has("enableComments")
+                        }
+                        onChange={handleToggleComments}
+                        label="Toggle Comments"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Toggle 3: Downloads */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                        <DownloadSimple size={20} weight="bold" />
+                      </div>
+                      <div className="min-w-0">
+                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                          Downloads
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem]">
+                          Allow learners to download lesson resources for
+                          offline access.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <AccessRulesControlStatusIndicator
+                        status={getAccessControlDisplayStatus(
+                          "enableDownloads",
+                        )}
+                        testId="access-rules-status-enableDownloads"
+                      />
+                      <SettingsToggle
+                        checked={accessRules.enableDownloads}
+                        disabled={
+                          isAccessRulesSaving ||
+                          savingAccessControls.has("enableDownloads")
+                        }
+                        onChange={handleToggleDownloads}
+                        label="Toggle Downloads"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : panelStep === "pricing" ? (
+            <div className="flex w-full flex-col gap-5">
+              {pricingValidationError && (
+                <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
+                  <WarningCircle size={18} weight="bold" className="shrink-0" />
+                  <span>{pricingValidationError}</span>
+                </div>
+              )}
+
+              {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                {/* Card 1: Course pricing */}
+                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
+                  <div className="flex items-center justify-between mb-4.5">
+                    <div>
+                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        1. Course pricing
+                      </h3>
+                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                        Choose how you want to sell this course.
+                      </p>
+                    </div>
+                    <PricingControlStatusIndicator
+                      status={getPricingControlDisplayStatus("pricingType")}
+                      testId="pricing-field-status-pricingType"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {/* Radio Option: Free */}
+                    <div
+                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        isSavingPricing || isPricingControlSaving("pricingType")
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      } ${
+                        pricing.pricingType === "free"
+                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      }`}
+                      onClick={() =>
+                        !isSavingPricing &&
+                        !isPricingControlSaving("pricingType") &&
+                        handlePricingTypeChange("free")
+                      }
+                    >
+                      <div
+                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          pricing.pricingType === "free"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
+                        }`}
+                      >
+                        {pricing.pricingType === "free" && (
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.75">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          Free
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Anyone who can access the course can enroll for free.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Radio Option: Paid */}
+                    <div
+                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                        isSavingPricing || isPricingControlSaving("pricingType")
+                          ? "opacity-60 cursor-not-allowed"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      } ${
+                        pricing.pricingType === "paid"
+                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                      }`}
+                      onClick={() =>
+                        !isSavingPricing &&
+                        !isPricingControlSaving("pricingType") &&
+                        handlePricingTypeChange("paid")
+                      }
+                    >
+                      <div
+                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                          pricing.pricingType === "paid"
+                            ? "border-(--accent)"
+                            : "border-(--muted)"
+                        }`}
+                      >
+                        {pricing.pricingType === "paid" && (
+                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.75">
+                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          Paid
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Learners must purchase the course to get access.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Price details */}
+                <div
+                  className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
+                    pricing.pricingType === "free"
+                      ? "is-disabled opacity-55 pointer-events-none"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4.5">
+                    <div>
+                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        2. Price details
+                      </h3>
+                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                        Set the pricing for your course.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.75">
+                    {/* Currency Combobox Field */}
+                    <div className="flex flex-col gap-2 mb-5">
+                      <div className="flex items-center justify-between">
+                        <label
+                          id="currency-label"
+                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                        >
+                          Currency{" "}
+                          <span className="text-[#ff5252] ml-0.5">*</span>
+                        </label>
+                        <PricingControlStatusIndicator
+                          status={getPricingControlDisplayStatus("currency")}
+                          testId="pricing-field-status-currency"
+                        />
+                      </div>
+                      <ThemedSelect
+                        value={pricing.currency || "INR"}
+                        onValueChange={handleCurrencyChange}
+                        options={currencyOptions}
+                        disabled={
+                          pricing.pricingType === "free" ||
+                          isSavingPricing ||
+                          isPricingControlSaving("pricingType") ||
+                          isPricingControlSaving("currency")
+                        }
+                        ariaLabel="Select currency"
+                        searchable
+                        searchPlaceholder="Search currencies by name or code..."
+                        triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
+                      />
+                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                        Choose the currency for course pricing.
+                      </p>
+                    </div>
+
+                    {/* Selling Price Field */}
+                    <div className="flex flex-col gap-2 mb-5">
+                      <div className="flex items-center justify-between">
+                        <label
+                          htmlFor="selling-price"
+                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                        >
+                          Selling price{" "}
+                          <span className="text-[#ff5252] ml-0.5">*</span>
+                        </label>
+                        <PricingControlStatusIndicator
+                          status={getPricingControlDisplayStatus(
+                            "sellingPrice",
+                          )}
+                          testId="pricing-field-status-sellingPrice"
+                        />
+                      </div>
+                      <div className="relative flex items-center w-full">
+                        <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                          {getCurrencySymbol(pricing.currency || "INR")}
+                        </span>
+                        <input
+                          id="selling-price"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          disabled={
+                            pricing.pricingType === "free" ||
+                            isSavingPricing ||
+                            isPricingControlSaving("pricingType")
+                          }
+                          value={pricing.sellingPrice}
+                          onChange={(e) =>
+                            handleSellingPriceChange(e.target.value)
+                          }
+                          onBlur={() => {
+                            void flushPricingPersistence();
+                          }}
+                          placeholder="1999"
+                          className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                        This is the price learners will pay.
+                      </p>
+                    </div>
+
+                    {/* Original Price Field */}
+                    <div className="flex flex-col gap-2 mb-5">
+                      <div className="flex items-center justify-between">
+                        <label
+                          htmlFor="original-price"
+                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                        >
+                          Original price
+                        </label>
+                        <PricingControlStatusIndicator
+                          status={getPricingControlDisplayStatus(
+                            "originalPrice",
+                          )}
+                          testId="pricing-field-status-originalPrice"
+                        />
+                      </div>
+                      <div className="relative flex items-center w-full">
+                        <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                          {getCurrencySymbol(pricing.currency || "INR")}
+                        </span>
+                        <input
+                          id="original-price"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          disabled={
+                            pricing.pricingType === "free" ||
+                            isSavingPricing ||
+                            isPricingControlSaving("pricingType")
+                          }
+                          value={pricing.originalPrice}
+                          onChange={(e) =>
+                            handleOriginalPriceChange(e.target.value)
+                          }
+                          onBlur={() => {
+                            void flushPricingPersistence();
+                          }}
+                          placeholder="2999"
+                          className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                        Enter original price to show discount.
+                      </p>
+                    </div>
+
+                    {/* Dynamic Discount Calculation Badge */}
+                    {(() => {
+                      const sell = parseFloat(
+                        pricing.sellingPrice.replace(/,/g, ""),
+                      );
+                      const orig = parseFloat(
+                        pricing.originalPrice.replace(/,/g, ""),
+                      );
+                      let discountPercent = 0;
+                      let isValidDiscount = false;
+
+                      if (
+                        !isNaN(sell) &&
+                        !isNaN(orig) &&
+                        sell > 0 &&
+                        orig > sell
+                      ) {
+                        discountPercent = Math.round(
+                          ((orig - sell) / orig) * 100,
+                        );
+                        isValidDiscount = discountPercent > 0;
+                      }
+
+                      return (
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <div
+                            className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
+                              isValidDiscount && pricing.pricingType === "paid"
+                                ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
+                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                            }`}
+                          >
+                            <Tag size={15} weight="bold" className="shrink-0" />
+                            <span className="whitespace-nowrap leading-none">
+                              {isValidDiscount && pricing.pricingType === "paid"
+                                ? `${discountPercent}% OFF`
+                                : "0% OFF"}
+                            </span>
+                          </div>
+                          <span className="text-(--muted) text-[0.8rem] leading-tight">
+                            Discount is calculated automatically.
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Card: Coupons Banner */}
+              <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                    <Info size={20} weight="bold" />
+                  </div>
+                  <div>
+                    <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
+                      Coupons
+                    </strong>
+                    <p className="m-0 text-(--muted) text-[0.82rem]">
+                      Create and manage coupon codes separately from the Coupons
+                      section.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  style={{
+                    fontSize: "0.80rem",
+                    fontWeight: 700,
+                    height: "34px",
+                    borderRadius: "8px",
+                    gap: "6px",
+                    paddingLeft: "18px",
+                    paddingRight: "18px",
+                  }}
+                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
+                  onClick={() => {
+                    if (onNavigatePage) {
+                      onNavigatePage("settings");
+                    }
+                  }}
+                >
+                  Go to Coupons <ArrowUpRight size={15} weight="bold" />
+                </button>
+              </div>
+            </div>
+          ) : panelStep === "extras" ? (
+            <div className="flex w-full flex-col gap-5">
+              {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                {/* Card 1: Certificates */}
+                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5">
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      1. Certificates
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Configure how certificates will be issued for this course.
+                    </p>
+                  </div>
+
+                  {/* Enable Certificate Toggle Row */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
+                    <div className="flex flex-col min-w-0 pr-3">
+                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                        Enable certificate
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                        Issue certificates to learners on course completion.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <ExtrasControlStatusIndicator
+                        status={getExtrasControlDisplayStatus(
+                          "enableCertificate",
+                        )}
+                        testId="extras-field-status-enableCertificate"
+                      />
+                      <SettingsToggle
+                        checked={extras.enableCertificate}
+                        disabled={isSavingCertificate}
+                        onChange={handleToggleCertificate}
+                        label="Toggle certificate"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Certificate Configuration Controls */}
+                  <div
+                    className={`flex flex-col gap-4.5 transition-opacity duration-200 ${
+                      !extras.enableCertificate
+                        ? "is-disabled opacity-50 pointer-events-none"
+                        : ""
+                    }`}
+                  >
+                    {/* Template Selector */}
+                    <div className="flex flex-col gap-2 mb-5">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                          Certificate template
+                        </label>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          Coming soon
+                        </span>
+                      </div>
+                      <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                        Choose from pre-designed certificate templates.
+                      </p>
+                      <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                        <ThemedSelect
+                          value={extras.certificateTemplate}
+                          onValueChange={handleCertificateTemplateChange}
+                          options={[
+                            ["purple-certificate", "Modern Purple Certificate"],
+                            ["blue-certificate", "Classic Blue Certificate"],
+                            ["dark-certificate", "Minimal Dark Certificate"],
+                          ]}
+                          ariaLabel="Select certificate template"
+                          className="w-full"
+                          disabled
+                          triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Certificate Issuance Options */}
+                    <div className="flex flex-col gap-2 mb-5">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                          Certificate issuance
+                        </label>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          Coming soon
+                        </span>
+                      </div>
+                      <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                        Choose when the certificate should be issued.
+                      </p>
+
+                      <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
+                        {/* Option 1: On course completion */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            extras.issuanceType === "completion"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                        >
+                          <div
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              extras.issuanceType === "completion"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
+                            }`}
+                          >
+                            {extras.issuanceType === "completion" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              On course completion
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Issue certificate when the learner completes all
+                              lessons.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Option 2: Minimum completion percentage */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            extras.issuanceType === "percentage"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                        >
+                          <div
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              extras.issuanceType === "percentage"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
+                            }`}
+                          >
+                            {extras.issuanceType === "percentage" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <div className="flex items-center justify-between w-full">
+                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                Minimum completion percentage
+                              </strong>
+                              {extras.issuanceType === "percentage" && (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    disabled
+                                    className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
+                                    min={1}
+                                    max={100}
+                                    value={extras.minCompletionPercentage}
+                                    readOnly
+                                  />
+                                  <span className="text-(--text) text-[0.86rem] font-bold">
+                                    %
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Issue certificate when learner reaches the
+                              selected percentage.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Option 3: Custom rule */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            extras.issuanceType === "custom"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                        >
+                          <div
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              extras.issuanceType === "custom"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
+                            }`}
+                          >
+                            {extras.issuanceType === "custom" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              Custom rule
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Define your own custom rule for certificate
+                              issuance.
+                            </p>
+
+                            {extras.issuanceType === "custom" && (
+                              <div className="mt-2 w-full">
+                                <input
+                                  type="text"
+                                  disabled
+                                  readOnly
+                                  className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
+                                  value={extras.customRuleText}
+                                  placeholder="e.g. Complete all quizzes with > 80% score"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Delivery Toggle Row */}
+                    <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <strong className="text-(--text) text-[0.88rem] font-[650]">
+                            Delivery
+                          </strong>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            Coming soon
+                          </span>
+                        </div>
+                        <p className="m-0 text-(--muted) text-[0.78rem]">
+                          Automatically email the certificate to learners.
+                        </p>
+                      </div>
+                      <div className="pointer-events-none">
+                        <SettingsToggle
+                          checked={extras.autoEmailCertificate}
+                          onChange={handleToggleAutoEmailCertificate}
+                          label="Toggle certificate delivery"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: This course includes */}
+                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5">
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      2. This course includes
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      These details are calculated from your curriculum.
+                    </p>
+                  </div>
+
+                  {/* Derived Live Stats Summary Grid */}
+                  <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
+                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                        <BookOpen size={20} weight="fill" />
+                      </div>
+                      <div className="flex flex-col">
+                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                          {totalSections}
+                        </strong>
+                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                          Sections
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                        <PlayCircle size={20} weight="fill" />
+                      </div>
+                      <div className="flex flex-col">
+                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                          {totalLessons}
+                        </strong>
+                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                          Lessons
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                        <Clock size={20} weight="bold" />
+                      </div>
+                      <div className="flex flex-col">
+                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                          0m
+                        </strong>
+                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                          Content length
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Divider between Stats & Inclusions */}
+                  <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
+
+                  {/* Additional Inclusions Section */}
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                          Course inclusions
+                        </h4>
+                        {isReorderingIncludes ||
+                        reorderIncludesMutation.isPending ? (
+                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                            <CircleNotch
+                              size={12}
+                              className="animate-spin text-(--accent)"
+                            />
+                            <span>Saving inclusion order...</span>
+                          </span>
+                        ) : (
+                          <ExtrasControlStatusIndicator
+                            status={extrasControlStatus["inclusions"] ?? null}
+                            testId="extras-field-status-inclusions"
+                          />
+                        )}
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
+                          manualIncludesDraft.length >= 6
+                            ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                            : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+                        }`}
+                      >
+                        {manualIncludesDraft.length} / 6
                       </span>
-                      <div className="flex flex-wrap gap-2">
-                        {suggestedInclusions
-                          .slice(0, 6 - manualIncludesDraft.length)
-                          .map((suggestion) => (
+                    </div>
+                    <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
+                      Perks and benefits your learners will receive upon
+                      enrolling (max 6 items). Click suggestions below or add
+                      custom inclusions.
+                    </p>
+
+                    {/* Active Inclusions List */}
+                    <div className="flex flex-col gap-2.5">
+                      {manualIncludesDraft.length === 0 ? (
+                        <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
+                          No inclusions added yet. Choose from the suggested
+                          perks below or add a custom benefit.
+                        </div>
+                      ) : (
+                        manualIncludesDraft.map((item, index) => (
+                          <div
+                            key={item.id}
+                            draggable={
+                              !isReorderingIncludes &&
+                              !reorderIncludesMutation.isPending &&
+                              !isExtrasSaving &&
+                              !item.isPendingCreation &&
+                              !deletingIncludeIds.has(item.id) &&
+                              !savingIncludeIds.has(item.id) &&
+                              dragEnabledInclusionId === item.id
+                            }
+                            onDragStart={(e) =>
+                              handleInclusionDragStart(e, index, item.text)
+                            }
+                            onDragOver={(e) =>
+                              handleInclusionDragOver(e, index)
+                            }
+                            onDragEnd={handleInclusionDragEnd}
+                            className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
+                              item.isPendingCreation ||
+                              deletingIncludeIds.has(item.id) ||
+                              savingIncludeIds.has(item.id)
+                                ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                                : isReorderingIncludes || isExtrasSaving
+                                  ? "opacity-60"
+                                  : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                            }`}
+                          >
+                            {item.isPendingCreation ? (
+                              <span
+                                className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
+                                title="Adding inclusion..."
+                              >
+                                <CircleNotch
+                                  size={18}
+                                  className="animate-spin text-(--accent)"
+                                />
+                              </span>
+                            ) : (
+                              <span
+                                className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
+                                  isReorderingIncludes ||
+                                  reorderIncludesMutation.isPending ||
+                                  isExtrasSaving ||
+                                  deletingIncludeIds.has(item.id) ||
+                                  savingIncludeIds.has(item.id)
+                                    ? "opacity-30 cursor-not-allowed pointer-events-none"
+                                    : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
+                                }`}
+                                onMouseEnter={() => {
+                                  if (
+                                    !isReorderingIncludes &&
+                                    !reorderIncludesMutation.isPending &&
+                                    !isExtrasSaving &&
+                                    !deletingIncludeIds.has(item.id) &&
+                                    !savingIncludeIds.has(item.id)
+                                  ) {
+                                    setDragEnabledInclusionId(item.id);
+                                  }
+                                }}
+                                onMouseLeave={() =>
+                                  setDragEnabledInclusionId(null)
+                                }
+                                title={
+                                  isReorderingIncludes
+                                    ? "Saving order..."
+                                    : deletingIncludeIds.has(item.id)
+                                      ? "Deleting..."
+                                      : savingIncludeIds.has(item.id)
+                                        ? "Saving..."
+                                        : "Drag to reorder"
+                                }
+                              >
+                                <DotsSixVertical size={18} />
+                              </span>
+                            )}
+                            <input
+                              type="text"
+                              disabled={
+                                isReorderingIncludes ||
+                                reorderIncludesMutation.isPending ||
+                                isExtrasSaving ||
+                                item.isPendingCreation ||
+                                deletingIncludeIds.has(item.id) ||
+                                savingIncludeIds.has(item.id)
+                              }
+                              className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
+                              value={item.text}
+                              onFocus={() => setFocusedInclusionId(item.id)}
+                              onBlur={() => {
+                                void handleManualInclusionBlur(item.id);
+                              }}
+                              onChange={(e) =>
+                                handleUpdateManualInclusionText(
+                                  item.id,
+                                  e.target.value.slice(0, 25),
+                                )
+                              }
+                              placeholder="e.g. Personal guidance"
+                              maxLength={25}
+                            />
+                            {getExtrasControlDisplayStatus(item.id) ? (
+                              <ExtrasControlStatusIndicator
+                                status={getExtrasControlDisplayStatus(item.id)}
+                                testId={`extras-field-status-inclusion-${item.id}`}
+                              />
+                            ) : focusedInclusionId === item.id ? (
+                              <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
+                                {item.text.length} / 25
+                              </span>
+                            ) : null}
                             <button
-                              key={suggestion}
                               type="button"
                               disabled={
                                 isReorderingIncludes ||
                                 reorderIncludesMutation.isPending ||
                                 isExtrasSaving ||
-                                manualIncludesDraft.length >= 6
+                                item.isPendingCreation ||
+                                deletingIncludeIds.has(item.id) ||
+                                savingIncludeIds.has(item.id)
                               }
                               onClick={() =>
-                                handleAddManualInclusion(suggestion)
+                                handleDeleteManualInclusion(item.id)
                               }
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                              className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
+                              aria-label={
+                                deletingIncludeIds.has(item.id)
+                                  ? "Deleting inclusion..."
+                                  : "Remove inclusion"
+                              }
+                              title={
+                                deletingIncludeIds.has(item.id)
+                                  ? "Deleting..."
+                                  : "Remove inclusion"
+                              }
                             >
-                              <Plus size={13} weight="bold" />
-                              <span>{suggestion}</span>
+                              {deletingIncludeIds.has(item.id) ? (
+                                <CircleNotch
+                                  size={14}
+                                  className="animate-spin text-red-500"
+                                />
+                              ) : (
+                                <Trash size={15} />
+                              )}
                             </button>
-                          ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Suggested quick-add chips */}
+                    {manualIncludesDraft.length < 6 &&
+                      suggestedInclusions.length > 0 && (
+                        <div className="flex flex-col gap-2 mt-1">
+                          <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
+                            Suggested perks (click to add)
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {suggestedInclusions
+                              .slice(0, 6 - manualIncludesDraft.length)
+                              .map((suggestion) => (
+                                <button
+                                  key={suggestion}
+                                  type="button"
+                                  disabled={
+                                    isReorderingIncludes ||
+                                    reorderIncludesMutation.isPending ||
+                                    isExtrasSaving ||
+                                    manualIncludesDraft.length >= 6
+                                  }
+                                  onClick={() =>
+                                    handleAddManualInclusion(suggestion)
+                                  }
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                >
+                                  <Plus size={13} weight="bold" />
+                                  <span>{suggestion}</span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Add inclusion button */}
+                    <button
+                      type="button"
+                      disabled={
+                        isReorderingIncludes ||
+                        reorderIncludesMutation.isPending ||
+                        isExtrasSaving ||
+                        manualIncludesDraft.length >= 6
+                      }
+                      onClick={() => handleAddManualInclusion()}
+                      className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
+                        manualIncludesDraft.length >= 6 ||
+                        isReorderingIncludes ||
+                        isExtrasSaving
+                          ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
+                          : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
+                      }`}
+                      title={
+                        isReorderingIncludes
+                          ? "Saving inclusion order..."
+                          : manualIncludesDraft.length >= 6
+                            ? "Maximum 6 inclusions reached"
+                            : "Add custom inclusion"
+                      }
+                    >
+                      <Plus size={15} weight="bold" />
+                      <span>
+                        {manualIncludesDraft.length >= 6
+                          ? "Maximum 6 inclusions reached"
+                          : "Add custom inclusion"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : panelStep === "publish" ? (
+            <div className="flex w-full flex-col gap-5">
+              {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
+              <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                {/* Card 1: Publish settings */}
+                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5">
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      1. Publish settings
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Choose when and how your course becomes visible.
+                    </p>
+                  </div>
+
+                  {/* Informational Course Status Display */}
+                  <div className="flex flex-col gap-1.5 mb-4.5">
+                    <label className="text-(--text) text-[0.86rem] font-[650]">
+                      Course status
+                    </label>
+                    <div className="flex items-center mt-0.5">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
+                          isPublished
+                            ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
+                            : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                        }`}
+                      >
+                        {isPublished ? "Published" : "Draft"}
+                      </span>
+                    </div>
+                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
+                      {isPublished
+                        ? "Your course is currently published and visible to students according to your settings."
+                        : "Your course is currently a draft and hasn't been published yet."}
+                    </p>
+                  </div>
+                  {/* Course visibility select */}
+                  <div className="flex flex-col gap-1.5 mb-4.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-(--text) text-[0.86rem] font-[650]">
+                        Course visibility
+                      </label>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
+                    <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                      <ThemedSelect
+                        disabled
+                        value={publishSettings.visibility}
+                        onValueChange={(val) =>
+                          setPublishSettings((prev) => ({
+                            ...prev,
+                            visibility: val as CourseVisibility,
+                          }))
+                        }
+                        options={[
+                          [
+                            "public",
+                            "Public — Anyone on the platform can discover and enroll in this course.",
+                          ],
+                          [
+                            "private",
+                            "Private — Only invited students can access this course.",
+                          ],
+                          [
+                            "unlisted",
+                            "Unlisted — Only users with a direct link can view this course.",
+                          ],
+                        ]}
+                        ariaLabel="Select course visibility (Coming soon)"
+                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--muted) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Publish on radio options */}
+                  <div className="flex flex-col gap-1.5 mb-4.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-(--text) text-[0.86rem] font-[650]">
+                        Publish on
+                      </label>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        Coming soon
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 opacity-60 pointer-events-none cursor-not-allowed select-none">
+                      {/* Option 1: Publish immediately */}
+                      <div
+                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                          publishSettings.scheduleOption === "now"
+                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                        }`}
+                      >
+                        <div
+                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                            publishSettings.scheduleOption === "now"
+                              ? "border-(--accent)"
+                              : "border-(--muted)"
+                          }`}
+                        >
+                          {publishSettings.scheduleOption === "now" && (
+                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-0.75">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            Publish immediately
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Make this course live immediately upon saving.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Option 2: Schedule for later */}
+                      <div
+                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                          publishSettings.scheduleOption === "later"
+                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                        }`}
+                      >
+                        <div
+                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                            publishSettings.scheduleOption === "later"
+                              ? "border-(--accent)"
+                              : "border-(--muted)"
+                          }`}
+                        >
+                          {publishSettings.scheduleOption === "later" && (
+                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-0.75">
+                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            Schedule for a future date
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Set a specific date and time when this course should
+                            go live.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Pre-publish Checklist */}
+                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                  <div className="mb-4.5">
+                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      2. Pre-publish Checklist
+                    </h3>
+                    <p className="m-0 text-(--muted) text-[0.83rem]">
+                      Review all required items before publishing your course.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 mb-5">
+                    {/* Checklist Item: Basics */}
+                    <div
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      onClick={() => {
+                        void navigateToStep("basics");
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className={
+                            isBasicsValid
+                              ? "is-valid text-green-500"
+                              : "is-invalid text-rose-400/50"
+                          }
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          Basics
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>
+                          {isBasicsValid ? "Completed" : "Incomplete"}
+                        </span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+
+                    {/* Checklist Item: Curriculum */}
+                    <div
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      onClick={() => {
+                        void navigateToStep("curriculum");
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className={
+                            isCurriculumValid
+                              ? "is-valid text-green-500"
+                              : "is-invalid text-rose-400/50"
+                          }
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          Curriculum
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>
+                          {totalSections} Sections, {totalLessons} Lessons
+                        </span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+
+                    {/* Checklist Item: Access Rules */}
+                    <div
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      onClick={() => {
+                        void navigateToStep("access-rules");
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className={
+                            isAccessRulesValid
+                              ? "is-valid text-green-500"
+                              : "is-invalid text-rose-400/50"
+                          }
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          Access Rules
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>
+                          {accessRules.accessType === "everyone"
+                            ? "Everyone"
+                            : "Restricted Access"}
+                        </span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+
+                    {/* Checklist Item: Pricing */}
+                    <div
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      onClick={() => {
+                        void navigateToStep("pricing");
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className={
+                            isPricingValid
+                              ? "is-valid text-green-500"
+                              : "is-invalid text-rose-400/50"
+                          }
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          Pricing
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>
+                          {pricing.pricingType === "free"
+                            ? "Free"
+                            : `₹${pricing.sellingPrice}`}
+                        </span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+
+                    {/* Checklist Item: Extras */}
+                    <div
+                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                      onClick={() => {
+                        void navigateToStep("extras");
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle
+                          size={20}
+                          weight="fill"
+                          className={
+                            isExtrasValid
+                              ? "is-valid text-green-500"
+                              : "is-invalid text-rose-400/50"
+                          }
+                        />
+                        <strong className="text-(--text) text-[0.9rem] font-[650]">
+                          Extras
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
+                        <span>
+                          {extras.enableCertificate
+                            ? "Certificate Enabled"
+                            : "Disabled"}
+                        </span>
+                        <CaretRight size={16} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ready-to-publish State Box */}
+                  {isCourseReadyToPublish ? (
+                    <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                      <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
+                        <BookOpen size={24} weight="fill" />
+                      </div>
+                      <div>
+                        <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                          Your course is ready to be published!
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          Once published, students can see and enroll in this
+                          course according to your settings.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
+                      <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
+                        <Info size={24} weight="bold" />
+                      </div>
+                      <div>
+                        <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                          Course needs attention
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.8rem]">
+                          Please fix incomplete sections highlighted above
+                          before publishing.
+                        </p>
                       </div>
                     </div>
                   )}
-
-                  {/* Add inclusion button */}
-                  <button
-                    type="button"
-                    disabled={
-                      isReorderingIncludes ||
-                      reorderIncludesMutation.isPending ||
-                      isExtrasSaving ||
-                      manualIncludesDraft.length >= 6
-                    }
-                    onClick={() => handleAddManualInclusion()}
-                    className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
-                      manualIncludesDraft.length >= 6 ||
-                      isReorderingIncludes ||
-                      isExtrasSaving
-                        ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
-                        : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
-                    }`}
-                    title={
-                      isReorderingIncludes
-                        ? "Saving inclusion order..."
-                        : manualIncludesDraft.length >= 6
-                          ? "Maximum 6 inclusions reached"
-                          : "Add custom inclusion"
-                    }
-                  >
-                    <Plus size={15} weight="bold" />
-                    <span>
-                      {manualIncludesDraft.length >= 6
-                        ? "Maximum 6 inclusions reached"
-                        : "Add custom inclusion"}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : panelStep === "publish" ? (
-          <div className="flex w-full flex-col gap-5">
-            {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
-            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-              {/* Card 1: Publish settings */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    1. Publish settings
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Choose when and how your course becomes visible.
-                  </p>
-                </div>
-
-                {/* Informational Course Status Display */}
-                <div className="flex flex-col gap-1.5 mb-4.5">
-                  <label className="text-(--text) text-[0.86rem] font-[650]">
-                    Course status
-                  </label>
-                  <div className="flex items-center mt-0.5">
-                    <span
-                      className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
-                        isPublished
-                          ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
-                          : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-                      }`}
-                    >
-                      {isPublished ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                  <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
-                    {isPublished
-                      ? "Your course is currently published and visible to students according to your settings."
-                      : "Your course is currently a draft and hasn't been published yet."}
-                  </p>
-                </div>
-                {/* Course visibility select */}
-                <div className="flex flex-col gap-1.5 mb-4.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
-                      Course visibility
-                    </label>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                      Coming soon
-                    </span>
-                  </div>
-                  <div className="opacity-60 cursor-not-allowed pointer-events-none">
-                    <ThemedSelect
-                      disabled
-                      value={publishSettings.visibility}
-                      onValueChange={(val) =>
-                        setPublishSettings((prev) => ({
-                          ...prev,
-                          visibility: val as CourseVisibility,
-                        }))
-                      }
-                      options={[
-                        [
-                          "public",
-                          "Public — Anyone on the platform can discover and enroll in this course.",
-                        ],
-                        [
-                          "private",
-                          "Private — Only invited students can access this course.",
-                        ],
-                        [
-                          "unlisted",
-                          "Unlisted — Only users with a direct link can view this course.",
-                        ],
-                      ]}
-                      ariaLabel="Select course visibility (Coming soon)"
-                      triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--muted) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                {/* Publish on radio options */}
-                <div className="flex flex-col gap-1.5 mb-4.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
-                      Publish on
-                    </label>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                      Coming soon
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 opacity-60 pointer-events-none cursor-not-allowed select-none">
-                    {/* Option 1: Publish immediately */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
-                        publishSettings.scheduleOption === "now"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                    >
-                      <div
-                        className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                          publishSettings.scheduleOption === "now"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {publishSettings.scheduleOption === "now" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Publish immediately
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Make this course live immediately upon saving.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Option 2: Schedule for later */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
-                        publishSettings.scheduleOption === "later"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                    >
-                      <div
-                        className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                          publishSettings.scheduleOption === "later"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {publishSettings.scheduleOption === "later" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Schedule for a future date
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Set a specific date and time when this course should
-                          go live.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
-              {/* Card 2: Pre-publish Checklist */}
+              {/* Bottom Card 3: What happens after publishing? */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    2. Pre-publish Checklist
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Review all required items before publishing your course.
-                  </p>
-                </div>
+                <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
+                  3. What happens after publishing?
+                </h3>
 
-                <div className="flex flex-col gap-2.5 mb-5">
-                  {/* Checklist Item: Basics */}
-                  <div
-                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => {
-                      void navigateToStep("basics");
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        className={
-                          isBasicsValid
-                            ? "is-valid text-green-500"
-                            : "is-invalid text-rose-400/50"
-                        }
-                      />
-                      <strong className="text-(--text) text-[0.9rem] font-[650]">
-                        Basics
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                      <span>{isBasicsValid ? "Completed" : "Incomplete"}</span>
-                      <CaretRight size={16} />
-                    </div>
-                  </div>
-
-                  {/* Checklist Item: Curriculum */}
-                  <div
-                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => {
-                      void navigateToStep("curriculum");
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        className={
-                          isCurriculumValid
-                            ? "is-valid text-green-500"
-                            : "is-invalid text-rose-400/50"
-                        }
-                      />
-                      <strong className="text-(--text) text-[0.9rem] font-[650]">
-                        Curriculum
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                      <span>
-                        {totalSections} Sections, {totalLessons} Lessons
-                      </span>
-                      <CaretRight size={16} />
-                    </div>
-                  </div>
-
-                  {/* Checklist Item: Access Rules */}
-                  <div
-                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => {
-                      void navigateToStep("access-rules");
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        className={
-                          isAccessRulesValid
-                            ? "is-valid text-green-500"
-                            : "is-invalid text-rose-400/50"
-                        }
-                      />
-                      <strong className="text-(--text) text-[0.9rem] font-[650]">
-                        Access Rules
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                      <span>
-                        {accessRules.accessType === "everyone"
-                          ? "Everyone"
-                          : "Restricted Access"}
-                      </span>
-                      <CaretRight size={16} />
-                    </div>
-                  </div>
-
-                  {/* Checklist Item: Pricing */}
-                  <div
-                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => {
-                      void navigateToStep("pricing");
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        className={
-                          isPricingValid
-                            ? "is-valid text-green-500"
-                            : "is-invalid text-rose-400/50"
-                        }
-                      />
-                      <strong className="text-(--text) text-[0.9rem] font-[650]">
-                        Pricing
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                      <span>
-                        {pricing.pricingType === "free"
-                          ? "Free"
-                          : `₹${pricing.sellingPrice}`}
-                      </span>
-                      <CaretRight size={16} />
-                    </div>
-                  </div>
-
-                  {/* Checklist Item: Extras */}
-                  <div
-                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                    onClick={() => {
-                      void navigateToStep("extras");
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        className={
-                          isExtrasValid
-                            ? "is-valid text-green-500"
-                            : "is-invalid text-rose-400/50"
-                        }
-                      />
-                      <strong className="text-(--text) text-[0.9rem] font-[650]">
-                        Extras
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                      <span>
-                        {extras.enableCertificate
-                          ? "Certificate Enabled"
-                          : "Disabled"}
-                      </span>
-                      <CaretRight size={16} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ready-to-publish State Box */}
-                {isCourseReadyToPublish ? (
-                  <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
-                      <BookOpen size={24} weight="fill" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Feature 1: Visible to students */}
+                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
+                      <Eye size={22} weight="bold" />
                     </div>
                     <div>
-                      <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
-                        Your course is ready to be published!
+                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                        Visible to students
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Once published, students can see and enroll in this
-                        course according to your settings.
+                        Students will be able to discover your course on the
+                        platform.
                       </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
-                    <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
-                      <Info size={24} weight="bold" />
+
+                  {/* Feature 2: Enrollment starts */}
+                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
+                      <UserPlus size={22} weight="bold" />
                     </div>
                     <div>
-                      <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
-                        Course needs attention
+                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                        Enrollment starts
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Please fix incomplete sections highlighted above before
-                        publishing.
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Students who meet the access rules can enroll in your
+                        course.
                       </p>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Bottom Card 3: What happens after publishing? */}
-            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-              <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
-                3. What happens after publishing?
-              </h3>
+                  {/* Feature 3: Track performance */}
+                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
+                      <PlayCircle size={22} weight="fill" />
+                    </div>
+                    <div>
+                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                        Track performance
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Monitor enrollments, progress, and engagement in
+                        real-time.
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Feature 1: Visible to students */}
-                <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
-                    <Eye size={22} weight="bold" />
-                  </div>
-                  <div>
-                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                      Visible to students
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                      Students will be able to discover your course on the
-                      platform.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Feature 2: Enrollment starts */}
-                <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
-                    <UserPlus size={22} weight="bold" />
-                  </div>
-                  <div>
-                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                      Enrollment starts
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                      Students who meet the access rules can enroll in your
-                      course.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Feature 3: Track performance */}
-                <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
-                    <PlayCircle size={22} weight="fill" />
-                  </div>
-                  <div>
-                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                      Track performance
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                      Monitor enrollments, progress, and engagement in
-                      real-time.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Feature 4: Earn with every sale */}
-                <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-pink-500 bg-pink-500/[0.14]">
-                    <ChartBar size={22} weight="bold" />
-                  </div>
-                  <div>
-                    <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                      Earn with every sale
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                      Get paid for every successful enrollment.
-                    </p>
+                  {/* Feature 4: Earn with every sale */}
+                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-pink-500 bg-pink-500/[0.14]">
+                      <ChartBar size={22} weight="bold" />
+                    </div>
+                    <div>
+                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                        Earn with every sale
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                        Get paid for every successful enrollment.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
-            <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-              <div className="mb-4.5">
-                <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                  {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
-                </h2>
-                <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                  This section will allow configuring course {panelStep}.
-                </p>
-              </div>
-            </section>
-          </div>
-        )}
+          ) : (
+            <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                <div className="mb-4.5">
+                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                    {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
+                  </h2>
+                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                    This section will allow configuring course {panelStep}.
+                  </p>
+                </div>
+              </section>
+            </div>
+          )
+        }
       </SwipeableTabPanel>
 
       {/* Sticky Bottom Action Bar (Desktop / Tablet) */}
@@ -12539,7 +12661,12 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Action Bar */}
       <div
         className={`course-wizard-mobile-action-bar${
-          bottomNavHidden ? " is-scroll-hidden" : ""
+          bottomNavHidden ||
+          isPreviewModalOpen ||
+          isAddCategoryModalOpen ||
+          Boolean(categoryToDelete)
+            ? " is-scroll-hidden"
+            : ""
         }`}
       >
         {/* Preview Button */}
@@ -12562,10 +12689,7 @@ export function CourseCreatePage({
         >
           {isPreviewLoading ? (
             <>
-              <CircleNotch
-                size={14}
-                className="animate-spin text-(--accent)"
-              />
+              <CircleNotch size={14} className="animate-spin text-(--accent)" />
               <span>Opening...</span>
             </>
           ) : (
@@ -12795,7 +12919,11 @@ export function CourseCreatePage({
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_40%,transparent)] text-(--muted) text-[0.7rem] font-medium whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
-                      <CheckCircle size={12} weight="fill" className="text-(--accent)" />
+                      <CheckCircle
+                        size={12}
+                        weight="fill"
+                        className="text-(--accent)"
+                      />
                       Previewing saved version
                     </span>
                   )}
@@ -12813,9 +12941,15 @@ export function CourseCreatePage({
               {/* Informational banner when unsaved changes exist in editor */}
               {hasUnsavedChanges && currentCourseId && (
                 <div className="flex items-center gap-2 px-5 py-2 bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))] border-b border-[color-mix(in_srgb,#f59e0b_22%,transparent)] text-[#d97706] dark:text-[#fbbf24] text-[0.79rem] font-medium shrink-0 max-[640px]:px-3.5 max-[640px]:py-1.75">
-                  <Info size={15} className="shrink-0 text-[#f59e0b]" weight="bold" />
+                  <Info
+                    size={15}
+                    className="shrink-0 text-[#f59e0b]"
+                    weight="bold"
+                  />
                   <span className="leading-snug">
-                    This preview reflects the last saved version on the server. Save your current changes in the editor to update the preview.
+                    This preview reflects the last saved version on the server.
+                    Save your current changes in the editor to update the
+                    preview.
                   </span>
                 </div>
               )}
@@ -12824,7 +12958,10 @@ export function CourseCreatePage({
               <div className="flex-1 min-h-0 overflow-y-auto p-0 flex flex-col">
                 {!currentCourseId ? (
                   <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center text-(--muted) my-auto">
-                    <BookOpen size={44} className="mb-3.5 opacity-60 text-(--accent)" />
+                    <BookOpen
+                      size={44}
+                      className="mb-3.5 opacity-60 text-(--accent)"
+                    />
                     <h3 className="text-[1.15rem] font-bold text-(--text) mb-1.5">
                       No Saved Course Data
                     </h3>
@@ -12871,7 +13008,8 @@ export function CourseCreatePage({
                       Failed to Load Preview
                     </h3>
                     <p className="text-[0.86rem] max-w-[400px] mb-4 text-(--muted)">
-                      An error occurred while fetching the course preview from the server.
+                      An error occurred while fetching the course preview from
+                      the server.
                     </p>
                     <button
                       type="button"
