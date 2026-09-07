@@ -372,15 +372,6 @@ export function CourseCard({
                     label="Copy Course Link"
                     onClick={() => closeThen(() => void copyCourseLink())}
                   />
-                  <MenuAction
-                    Icon={PaperPlaneTilt}
-                    label="Duplicate Course"
-                    onClick={() =>
-                      closeThen(() =>
-                        setNotice(`${course.title} was duplicated as a draft.`),
-                      )
-                    }
-                  />
                   <MenuDivider />
                   <MenuAction
                     Icon={UploadSimple}

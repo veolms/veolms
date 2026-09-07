@@ -11639,40 +11639,42 @@ export function CourseCreatePage({
         <div className="relative flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
           {/* Left: Preview Button */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                isAnyApiInProgress || isPreviewLoading
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={handlePreviewAction}
-              disabled={isAnyApiInProgress || isPreviewLoading}
-            >
-              {isPreviewLoading ? (
-                <>
-                  <CircleNotch
-                    size={14}
-                    className="animate-spin text-(--accent)"
-                  />
-                  <span>Opening...</span>
-                </>
-              ) : (
-                <>
-                  <Eye size={15} />
-                  <span>Preview</span>
-                </>
-              )}
-            </button>
+            {!(activeStep === "publish" && isPublished) && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "14px",
+                  paddingRight: "14px",
+                }}
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                  isAnyApiInProgress || isPreviewLoading
+                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+                }`}
+                onClick={handlePreviewAction}
+                disabled={isAnyApiInProgress || isPreviewLoading}
+              >
+                {isPreviewLoading ? (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span>Opening...</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye size={15} />
+                    <span>Preview</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Center: True horizontal center save status */}
@@ -11936,31 +11938,33 @@ export function CourseCreatePage({
           {/* Right: Previous & Next / Validate / Publish Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
             {/* Previous Button */}
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                activeStep === "basics" || actionLoading !== null
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={() => {
-                if (previousStepId) void navigateToStep(previousStepId);
-              }}
-              disabled={activeStep === "basics" || actionLoading !== null}
-              aria-label="Previous Step"
-            >
-              <CaretLeft size={15} />
-              <span>Previous</span>
-            </button>
+            {!(activeStep === "publish" && isPublished) && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "14px",
+                  paddingRight: "14px",
+                }}
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                  activeStep === "basics" || actionLoading !== null
+                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+                }`}
+                onClick={() => {
+                  if (previousStepId) void navigateToStep(previousStepId);
+                }}
+                disabled={activeStep === "basics" || actionLoading !== null}
+                aria-label="Previous Step"
+              >
+                <CaretLeft size={15} />
+                <span>Previous</span>
+              </button>
+            )}
 
             {/* Next Button / Validate on Publish */}
             {activeStep === "publish" ? (
@@ -12080,47 +12084,47 @@ export function CourseCreatePage({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "18px",
-                    paddingRight: "18px",
-                  }}
-                  className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                    !isCourseReadyToPublish
-                      ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                      : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
-                  }`}
-                  disabled={actionLoading !== null || !isCourseReadyToPublish}
-                  onClick={handleFinalPublishCourse}
-                  title={
-                    !isCourseReadyToPublish
-                      ? "Please resolve incomplete sections before publishing."
-                      : undefined
-                  }
-                >
-                  {actionLoading === "publish" ? (
-                    <>
-                      <CircleNotch
-                        size={15}
-                        className="animate-spin text-white"
-                      />
-                      <span>
-                        {isPublished ? "Updating..." : "Publishing..."}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Lightning size={15} weight="bold" />
-                      <span>{isPublished ? "Update Course" : "Publish"}</span>
-                    </>
-                  )}
-                </button>
+                {!isPublished && (
+                  <button
+                    type="button"
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "18px",
+                      paddingRight: "18px",
+                    }}
+                    className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                      !isCourseReadyToPublish
+                        ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                        : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                    }`}
+                    disabled={actionLoading !== null || !isCourseReadyToPublish}
+                    onClick={handleFinalPublishCourse}
+                    title={
+                      !isCourseReadyToPublish
+                        ? "Please resolve incomplete sections before publishing."
+                        : undefined
+                    }
+                  >
+                    {actionLoading === "publish" ? (
+                      <>
+                        <CircleNotch
+                          size={15}
+                          className="animate-spin text-white"
+                        />
+                        <span>Publishing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lightning size={15} weight="bold" />
+                        <span>Publish</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -12440,63 +12444,67 @@ export function CourseCreatePage({
         }`}
       >
         {/* Preview Button */}
-        <button
-          type="button"
-          style={{
-            fontSize: "0.84rem",
-            fontWeight: 500,
-            height: "44px",
-            borderRadius: "12px",
-            gap: "6px",
-          }}
-          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
-            isAnyApiInProgress || isPreviewLoading
-              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-          }`}
-          onClick={handlePreviewAction}
-          disabled={isAnyApiInProgress || isPreviewLoading}
-        >
-          {isPreviewLoading ? (
-            <>
-              <CircleNotch
-                size={14}
-                className="animate-spin text-(--accent)"
-              />
-              <span>Opening...</span>
-            </>
-          ) : (
-            <>
-              <Eye size={14} />
-              <span>Preview</span>
-            </>
-          )}
-        </button>
+        {!(activeStep === "publish" && isPublished) && (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 500,
+              height: "44px",
+              borderRadius: "12px",
+              gap: "6px",
+            }}
+            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+              isAnyApiInProgress || isPreviewLoading
+                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+            }`}
+            onClick={handlePreviewAction}
+            disabled={isAnyApiInProgress || isPreviewLoading}
+          >
+            {isPreviewLoading ? (
+              <>
+                <CircleNotch
+                  size={14}
+                  className="animate-spin text-(--accent)"
+                />
+                <span>Opening...</span>
+              </>
+            ) : (
+              <>
+                <Eye size={14} />
+                <span>Preview</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Previous Button */}
-        <button
-          type="button"
-          style={{
-            fontSize: "0.84rem",
-            fontWeight: 500,
-            height: "44px",
-            borderRadius: "12px",
-            gap: "6px",
-          }}
-          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
-            activeStep === "basics" || actionLoading !== null
-              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-          }`}
-          onClick={() => {
-            if (previousStepId) void navigateToStep(previousStepId);
-          }}
-          disabled={activeStep === "basics" || actionLoading !== null}
-          aria-label="Previous Step"
-        >
-          <CaretLeft size={14} />
-          <span>Previous</span>
-        </button>
+        {!(activeStep === "publish" && isPublished) && (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 500,
+              height: "44px",
+              borderRadius: "12px",
+              gap: "6px",
+            }}
+            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+              activeStep === "basics" || actionLoading !== null
+                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+            }`}
+            onClick={() => {
+              if (previousStepId) void navigateToStep(previousStepId);
+            }}
+            disabled={activeStep === "basics" || actionLoading !== null}
+            aria-label="Previous Step"
+          >
+            <CaretLeft size={14} />
+            <span>Previous</span>
+          </button>
+        )}
 
         {/* Next Button / Validate on Publish */}
         {activeStep === "publish" ? (
@@ -12606,40 +12614,42 @@ export function CourseCreatePage({
               </button>
             )}
 
-            <button
-              type="button"
-              style={{
-                fontSize: "0.84rem",
-                fontWeight: 600,
-                height: "44px",
-                borderRadius: "14px",
-                gap: "6px",
-              }}
-              className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
-                !isCourseReadyToPublish
-                  ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                  : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
-              }`}
-              disabled={actionLoading !== null || !isCourseReadyToPublish}
-              onClick={handleFinalPublishCourse}
-              title={
-                !isCourseReadyToPublish
-                  ? "Please resolve incomplete sections before publishing."
-                  : undefined
-              }
-            >
-              {actionLoading === "publish" ? (
-                <>
-                  <CircleNotch size={15} className="animate-spin text-white" />
-                  <span>{isPublished ? "Updating..." : "Publishing..."}</span>
-                </>
-              ) : (
-                <>
-                  <Lightning size={15} weight="bold" />
-                  <span>{isPublished ? "Update Course" : "Publish"}</span>
-                </>
-              )}
-            </button>
+            {!isPublished && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  height: "44px",
+                  borderRadius: "14px",
+                  gap: "6px",
+                }}
+                className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+                  !isCourseReadyToPublish
+                    ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                    : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
+                }`}
+                disabled={actionLoading !== null || !isCourseReadyToPublish}
+                onClick={handleFinalPublishCourse}
+                title={
+                  !isCourseReadyToPublish
+                    ? "Please resolve incomplete sections before publishing."
+                    : undefined
+                }
+              >
+                {actionLoading === "publish" ? (
+                  <>
+                    <CircleNotch size={15} className="animate-spin text-white" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lightning size={15} weight="bold" />
+                    <span>Publish</span>
+                  </>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>
