@@ -25,7 +25,7 @@ This document defines all environment variables, defaults, and configuration opt
 | `AWS_REGION`                   | `string`           | `"us-east-1"`                   | Target AWS region.                                                           |
 | `EC2_IAM_INSTANCE_PROFILE`     | `string`           | `"VeoLMSWorkerInstanceProfile"` | IAM instance profile attached to EC2 instances.                              |
 | `EC2_USE_SPOT`                 | `boolean`          | `true`                          | Launch workers as EC2 Spot instances for cost reduction.                     |
-| `EC2_ALLOWED_INSTANCE_TYPES`   | `string`           | `undefined`                     | Optional comma-separated instance allowlist (e.g. `c7g.xlarge,c7g.2xlarge`). |
+| `EC2_ALLOWED_INSTANCE_TYPES`   | `string`           | `undefined`                     | Optional comma-separated instance allowlist (exact types like `c7g.large` or wildcards like `c7g.*,c8g.*`). |
 | `EC2_BOOT_MODE`                | `"fresh" \| "ami"` | `"fresh"`                       | Fast boot with pre-baked AMI or fresh bootstrap install.                     |
 | `S3_BUCKET` / `S3_BUCKET_NAME` | `string`           | _optional_                      | Primary video storage and HLS destination bucket.                            |
 | `SECURITY_GROUP_IDS`           | `string`           | _optional_                      | Security Group ID with outbound access and optional SSH port 22.             |

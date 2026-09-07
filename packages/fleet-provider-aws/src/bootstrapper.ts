@@ -81,16 +81,20 @@ while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/li
   sleep 1
 done
 
-# Install base dependencies
-echo "[bootstrapper] Installing prerequisites (curl, ca-certificates, awscli, ffmpeg)..."
-apt-get update -y
-apt-get install -y --no-install-recommends curl ca-certificates gnupg awscli ffmpeg
+# Install base dependencies if missing
+if ! command -v ffmpeg &> /dev/null || ! command -v node &> /dev/null || ! command -v aws &> /dev/null; then
+  echo "[bootstrapper] Installing prerequisites (curl, ca-certificates, awscli, ffmpeg)..."
+  apt-get update -y
+  apt-get install -y --no-install-recommends curl ca-certificates gnupg awscli ffmpeg
 
-# Install Node.js 22 LTS if missing
-if ! command -v node &> /dev/null; then
-  echo "[bootstrapper] Installing Node.js 22 LTS..."
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y nodejs
+  # Install Node.js 22 LTS if missing
+  if ! command -v node &> /dev/null; then
+    echo "[bootstrapper] Installing Node.js 22 LTS..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+  fi
+else
+  echo "[bootstrapper] Pre-installed dependencies found (FFmpeg, Node.js, AWS CLI) — skipping apt install."
 fi
 
 echo "[bootstrapper] System dependencies verified (node \$(node -v), ffmpeg \$(ffmpeg -version | head -n1))"

@@ -45,6 +45,7 @@ import {
   DescribeSecurityGroupsCommand,
   AuthorizeSecurityGroupIngressCommand,
   DescribeKeyPairsCommand,
+  DescribeImagesCommand,
 } from "@aws-sdk/client-ec2";
 import {
   LambdaClient,
@@ -890,6 +891,34 @@ export async function checkKeyPair(
   }
 }
 
+export async function findExistingWorkerAmi(
+  ec2: EC2Client,
+): Promise<{ amiId: string; name: string } | null> {
+  try {
+    const res = await ec2.send(
+      new DescribeImagesCommand({
+        Owners: ["self"],
+        Filters: [
+          { Name: "name", Values: ["veolms-worker-ami-*"] },
+          { Name: "state", Values: ["available"] },
+        ],
+      }),
+    );
+    const sorted = (res.Images || []).sort(
+      (a, b) =>
+        new Date(b.CreationDate || 0).getTime() -
+        new Date(a.CreationDate || 0).getTime(),
+    );
+    const latest = sorted[0];
+    if (latest?.ImageId) {
+      return { amiId: latest.ImageId, name: latest.Name || latest.ImageId };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export async function buildAndUploadWorkerBundle(
   s3BucketName: string,
   region: string,
@@ -1705,7 +1734,13 @@ function loadExistingConfig(repoRoot: string): Partial<SetupAnswers> {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : ["c7g.xlarge", "c7g.2xlarge", "c6i.xlarge"];
+    : [
+        "c7g.large",
+        "c7g.xlarge",
+        "c7g.2xlarge",
+        "c6i.large",
+        "c6i.xlarge",
+      ];
   const bootMode: BootMode =
     combined["EC2_BOOT_MODE"] === "ami" || combined["AMI_ID"] ? "ami" : "fresh";
   const amiId = combined["AMI_ID"] || null;
@@ -2379,31 +2414,118 @@ async function runSetupFlow(
 
   // ── Step 8: Allowed EC2 Instance Types ─────────────────────────────────────
   step(8, TOTAL_STEPS, "Allowed EC2 Instance Types");
+  info(
+    "VeoLMS selects compute-optimized worker instances (c7g/c8g/c6g on ARM64, c6i/c5 on x86_64)\n" +
+      "  tailored to video resolution, framerate, and codec requirements.",
+  );
   console.log(
     dim(
-      "  ARM64 Graviton: t4g.small, c7g.large, c7g.xlarge, c7g.2xlarge, c7g.4xlarge",
+      "  ARM64 Graviton: c7g.medium (1vCPU), c7g.large (2vCPU), c7g.xlarge (4vCPU), c7g.2xlarge (8vCPU), c7g.4xlarge (16vCPU)",
     ),
   );
   console.log(
-    dim("  x86_64:         t3.small,  c6i.large, c6i.xlarge, c6i.2xlarge"),
+    dim(
+      "  x86_64:         c6i.large (2vCPU),  c6i.xlarge (4vCPU), c6i.2xlarge (8vCPU), c6i.4xlarge (16vCPU)",
+    ),
   );
+
   const defaultInstanceTypes =
     initialDefaults?.allowedInstanceTypes?.join(",") ??
-    "c7g.xlarge,c7g.2xlarge,c6i.xlarge";
-  const instanceTypesInput = await ask(
+    "c7g.large,c7g.xlarge,c7g.2xlarge,c6i.large,c6i.xlarge";
+
+  type InstancePreset =
+    | "balanced"
+    | "graviton_wildcard"
+    | "unrestricted"
+    | "budget"
+    | "custom";
+
+  const presetChoice = await askChoice<InstancePreset>(
     rl,
-    "Allowed instance types (comma separated)",
-    defaultInstanceTypes,
+    "Which EC2 instance selection policy would you like to use?",
+    [
+      {
+        label:
+          "Balanced Graviton & x86 (Recommended) — c7g.large, c7g.xlarge, c7g.2xlarge, c6i.large, c6i.xlarge",
+        value: "balanced",
+      },
+      {
+        label:
+          "Full Graviton with Family Wildcards (c7g.*, c8g.*, c6g.*) — Full automatic Spot failover across Graviton 3/4/2",
+        value: "graviton_wildcard",
+      },
+      {
+        label:
+          "Unrestricted (All candidates) — Empty allowlist for maximum Spot availability across all types",
+        value: "unrestricted",
+      },
+      {
+        label:
+          "Budget-Capped / Small Only (Max 4 vCPU: c7g.medium, c7g.large, c7g.xlarge)",
+        value: "budget",
+      },
+      {
+        label:
+          "Custom allowlist — Enter comma-separated exact types or wildcards (e.g. c7g.*,c6i.xlarge)",
+        value: "custom",
+      },
+    ],
+    0,
   );
-  const allowedInstanceTypes = instanceTypesInput
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
-  ok(`Allowed: ${bold(allowedInstanceTypes.join(", "))}`);
+
+  let allowedInstanceTypes: readonly string[];
+  if (presetChoice === "balanced") {
+    allowedInstanceTypes = [
+      "c7g.large",
+      "c7g.xlarge",
+      "c7g.2xlarge",
+      "c6i.large",
+      "c6i.xlarge",
+    ];
+  } else if (presetChoice === "graviton_wildcard") {
+    allowedInstanceTypes = ["c7g.*", "c8g.*", "c6g.*"];
+  } else if (presetChoice === "unrestricted") {
+    allowedInstanceTypes = [];
+  } else if (presetChoice === "budget") {
+    allowedInstanceTypes = ["c7g.medium", "c7g.large", "c7g.xlarge"];
+  } else {
+    const instanceTypesInput = await ask(
+      rl,
+      "Allowed instance types (comma separated, supports * wildcards)",
+      defaultInstanceTypes,
+    );
+    allowedInstanceTypes = instanceTypesInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+
+  ok(
+    allowedInstanceTypes.length > 0
+      ? `Allowed: ${bold(allowedInstanceTypes.join(", "))}`
+      : `Allowed: ${bold("Unrestricted (all candidate tiers & fallbacks)")}`,
+  );
 
   // ── Step 9: EC2 Boot Mode ──────────────────────────────────────────────────
   step(9, TOTAL_STEPS, "EC2 Worker Boot Mode");
-  const defaultBootMode = initialDefaults?.bootMode ?? "fresh";
+
+  let amiId: string | null =
+    initialDefaults?.amiId ?? process.env["AMI_ID"] ?? null;
+  let customAmiName: string | null = initialDefaults?.amiName ?? null;
+
+  if (!amiId && targetEnv === "aws") {
+    const ec2Client = new EC2Client({ region });
+    const detected = await findExistingWorkerAmi(ec2Client);
+    if (detected) {
+      amiId = detected.amiId;
+      info(
+        `Detected existing pre-baked AMI in ${region}: ${bold(detected.name)} (${cyan(detected.amiId)})`,
+      );
+    }
+  }
+
+  const defaultBootMode =
+    initialDefaults?.bootMode ?? (amiId ? "ami" : "fresh");
   const bootMode = await askChoice(
     rl,
     "How should EC2 workers boot?",
@@ -2421,10 +2543,6 @@ async function runSetupFlow(
     ],
     defaultBootMode === "fresh" ? 0 : 1,
   );
-
-  let amiId: string | null =
-    initialDefaults?.amiId ?? process.env["AMI_ID"] ?? null;
-  let customAmiName: string | null = initialDefaults?.amiName ?? null;
 
   if (bootMode === "ami") {
     info("Pre-baked AMI selected.");
@@ -3018,8 +3136,10 @@ async function runUpdateFlow(
     existing.databaseUrl ?? "postgresql://veolms:veolms@localhost:5433/veolms";
   const allowedInstanceTypes: readonly string[] =
     existing.allowedInstanceTypes ?? [
+      "c7g.large",
       "c7g.xlarge",
       "c7g.2xlarge",
+      "c6i.large",
       "c6i.xlarge",
     ];
   const bootMode: BootMode = existing.bootMode ?? "ami";

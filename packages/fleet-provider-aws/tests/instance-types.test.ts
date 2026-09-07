@@ -98,6 +98,31 @@ describe("AWS Instance Type Selector", () => {
       );
     });
 
+    it("supports family wildcard patterns like c7g.* or c8g.*", () => {
+      assert.deepEqual(
+        filterAllowedInstanceTypes(candidates, ["c7g.*"]),
+        ["c7g.large"],
+      );
+      assert.deepEqual(
+        filterAllowedInstanceTypes(candidates, ["c7g.*", "c8g.*"]),
+        ["c7g.large", "c8g.large"],
+      );
+    });
+
+    it("supports global wildcard * to match all candidates", () => {
+      assert.deepEqual(
+        filterAllowedInstanceTypes(candidates, ["*"]),
+        candidates,
+      );
+    });
+
+    it("is case-insensitive and trims whitespace", () => {
+      assert.deepEqual(
+        filterAllowedInstanceTypes(candidates, [" C7G.* ", "  "]),
+        ["c7g.large"],
+      );
+    });
+
     it("falls back to the full candidate list when the allow-list has no overlap", () => {
       assert.deepEqual(
         filterAllowedInstanceTypes(candidates, ["t4g.small"]),
