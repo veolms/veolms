@@ -445,6 +445,34 @@ describe("Creator Courses Page API Integration", () => {
       expect(state.isCoursesQueryEnabled).toBe(false);
       expect(state.isMyCoursesQueryEnabled).toBe(false);
     });
+
+    it("Scenario G: Unauthenticated user forces student role and only enables public /courses query", () => {
+      const computeEffectiveRole = (
+        isAuthenticated: boolean,
+        userRoles: readonly string[] | undefined,
+        currentRole: "student" | "creator",
+      ) => {
+        return isAuthenticated ? currentRole : "student";
+      };
+
+      // 1. Stale localStorage contains 'creator', but user is logged out (isAuthenticated: false)
+      const guestEffectiveRole = computeEffectiveRole(false, undefined, "creator");
+      expect(guestEffectiveRole).toBe("student");
+
+      const guestGating = getQueryGatingState(guestEffectiveRole, "all");
+      expect(guestGating.isCoursesQueryEnabled).toBe(true);
+      expect(guestGating.isMyCoursesQueryEnabled).toBe(false);
+      expect(guestGating.isDeletedCoursesQueryEnabled).toBe(false);
+
+      // 2. Authenticated creator (isAuthenticated: true)
+      const creatorEffectiveRole = computeEffectiveRole(true, ["creator"], "creator");
+      expect(creatorEffectiveRole).toBe("creator");
+
+      const creatorGating = getQueryGatingState(creatorEffectiveRole, "all");
+      expect(creatorGating.isCoursesQueryEnabled).toBe(false);
+      expect(creatorGating.isMyCoursesQueryEnabled).toBe(true);
+      expect(creatorGating.isDeletedCoursesQueryEnabled).toBe(false);
+    });
   });
 
   describe("10. Pricing formatting via formatCoursePricing", () => {

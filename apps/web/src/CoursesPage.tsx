@@ -753,8 +753,8 @@ export function CoursesPage({
     [role, userRoles],
   );
   const effectiveRole = useMemo(
-    () => resolveWorkspaceRole(userRoles, role),
-    [role, userRoles],
+    () => (isAuthenticated ? resolveWorkspaceRole(userRoles, role) : "student"),
+    [isAuthenticated, role, userRoles],
   );
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const { isPending: isSigningOut, signOut } = useSignOut();
