@@ -39,6 +39,10 @@ const notificationPreferences: NotificationPreferencesResponse = {
 
 const serviceMocks = vi.hoisted(() => ({
   update: vi.fn(),
+  updateState: {
+    isError: false,
+    isPending: false,
+  },
 }));
 
 vi.mock("../../src/services/notifications", () => ({
@@ -47,8 +51,8 @@ vi.mock("../../src/services/notifications", () => ({
     isPending: false,
   }),
   useUpdateNotificationPreferences: () => ({
-    isError: false,
-    isPending: false,
+    isError: serviceMocks.updateState.isError,
+    isPending: serviceMocks.updateState.isPending,
     mutate: serviceMocks.update,
   }),
 }));
@@ -56,7 +60,11 @@ vi.mock("../../src/services/notifications", () => ({
 import { NotificationSettings } from "../../src/settings/NotificationSettings";
 
 describe("NotificationSettings", () => {
-  beforeEach(() => serviceMocks.update.mockReset());
+  beforeEach(() => {
+    serviceMocks.update.mockReset();
+    serviceMocks.updateState.isError = false;
+    serviceMocks.updateState.isPending = false;
+  });
 
   it("keeps delivery enabled when only course updates are disabled", () => {
     render(<NotificationSettings />);
@@ -125,5 +133,18 @@ describe("NotificationSettings", () => {
 
     fireEvent.click(screen.getByRole("switch", { name: "Course updates" }));
     expect(serviceMocks.update).not.toHaveBeenCalled();
+  });
+
+  it("does not show a success check when saving preferences fails", () => {
+    serviceMocks.updateState.isError = true;
+    const { container } = render(<NotificationSettings />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Save failed");
+    expect(
+      container.querySelector("svg[data-status-icon='success']"),
+    ).toBeNull();
+    expect(
+      container.querySelector("svg[data-status-icon='error']"),
+    ).not.toBeNull();
   });
 });

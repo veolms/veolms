@@ -31,6 +31,7 @@ const baseFleetManagerConfigSchema = z.object({
   PROVIDER: z.enum(["LOCAL", "DOCKER", "AWS"]).default("LOCAL"),
   POLL_INTERVAL_MS: z.coerce.number().int().min(500).default(2000),
   HEARTBEAT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).default(90),
+  PROVISIONING_TIMEOUT_SECONDS: z.coerce.number().int().min(30).default(600),
   MIN_CHECK_INTERVAL_SECONDS: z.coerce.number().int().min(5).default(15),
   MAX_CHECK_INTERVAL_SECONDS: z.coerce.number().int().min(30).default(300),
   DEFAULT_CHECK_INTERVAL_SECONDS: z.coerce.number().int().min(10).default(30),
@@ -53,6 +54,7 @@ const baseFleetManagerConfigSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  S3_BUILD_BUCKET: z.string().optional(),
 });
 
 export const fleetManagerConfigSchema = z.preprocess((raw) => {

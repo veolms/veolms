@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import * as os from "node:os";
 import { z } from "zod";
 
@@ -29,7 +30,10 @@ export function resolveDefaultUploadConcurrency(): DefaultUploadConcurrency {
 }
 
 const baseMediaWorkerConfigSchema = z.object({
-  WORKER_ID: z.string().uuid(),
+  WORKER_ID: z
+    .string()
+    .uuid()
+    .default(() => crypto.randomUUID()),
   JOB_ID: z.string().uuid().optional(),
   DATABASE_URL: z
     .string()
@@ -47,6 +51,7 @@ const baseMediaWorkerConfigSchema = z.object({
     .transform((value) => value === "true"),
   S3_BUCKET: z.string().default("veolms-media"),
   S3_BUCKET_NAME: z.string().optional(),
+  S3_BUILD_BUCKET: z.string().optional(),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-east-1"),
   AWS_REGION: z.string().optional(),
@@ -116,6 +121,7 @@ export function loadMediaWorkerConfig(
 ): MediaWorkerConfig {
   const resolvedEnv = {
     ...env,
+    WORKER_ID: env["WORKER_ID"] || undefined,
     S3_BUCKET: env["S3_BUCKET"] || env["S3_BUCKET_NAME"] || "veolms-media",
     S3_REGION: env["S3_REGION"] || env["AWS_REGION"] || "us-east-1",
   };

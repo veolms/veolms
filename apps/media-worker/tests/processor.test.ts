@@ -101,6 +101,7 @@ function buildFakeDb(options: {
   workerMonitoringThrows?: boolean;
   jobsSetCalls: unknown[];
   workersSetCalls: unknown[];
+  mediaAssetsSetCalls?: unknown[];
 }): Kysely<Database> {
   const {
     jobRow,
@@ -108,6 +109,7 @@ function buildFakeDb(options: {
     workerMonitoringThrows,
     jobsSetCalls,
     workersSetCalls,
+    mediaAssetsSetCalls,
   } = options;
 
   function makeTrx() {
@@ -121,6 +123,12 @@ function buildFakeDb(options: {
           return makeChain(
             () => ({ numUpdatedRows: 1n }),
             (payload) => jobsSetCalls.push(payload),
+          );
+        }
+        if (table === "media_assets") {
+          return makeChain(
+            () => ({ numUpdatedRows: 1n }),
+            (payload) => mediaAssetsSetCalls?.push(payload),
           );
         }
         if (table === "workers") {
@@ -229,6 +237,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
   it("requeues a failed job for retry when attempts remain below max_attempts", async () => {
     const jobsSetCalls: any[] = [];
     const workersSetCalls: any[] = [];
+    const mediaAssetsSetCalls: any[] = [];
     const recordedEvents: Array<{
       event: FleetEventType;
       jobId?: string | null;
@@ -238,6 +247,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
     const db = buildFakeDb({
       jobRow: {
         id: JOB_ID,
+        video_id: "media-123",
         status: "queued",
         worker_id: null,
         video_key: "raw/video.mp4",
@@ -258,6 +268,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
       workerMonitoringThrows: true,
       jobsSetCalls,
       workersSetCalls,
+      mediaAssetsSetCalls,
     });
 
     const ctx = buildCtx(db, recordedEvents);
@@ -278,6 +289,10 @@ describe("executeTranscodeJob — claim and retry logic", () => {
     assert.equal(workersSetCalls[1].status, "ready");
     assert.equal(workersSetCalls[1].job_id, null);
 
+    // Temporary retry failure keeps media_assets as "uploaded"
+    assert.equal(mediaAssetsSetCalls.length, 1);
+    assert.equal(mediaAssetsSetCalls[0].status, "uploaded");
+
     const jobFailedEvent = recordedEvents.find((e) => e.event === "job_failed");
     assert.ok(jobFailedEvent, "JOB_FAILED event should be recorded");
     assert.equal(jobFailedEvent?.metadata?.["willRetry"], true);
@@ -287,6 +302,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
   it("marks a job FAILED once max_attempts is reached", async () => {
     const jobsSetCalls: any[] = [];
     const workersSetCalls: any[] = [];
+    const mediaAssetsSetCalls: any[] = [];
     const recordedEvents: Array<{
       event: FleetEventType;
       jobId?: string | null;
@@ -296,6 +312,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
     const db = buildFakeDb({
       jobRow: {
         id: JOB_ID,
+        video_id: "media-123",
         status: "queued",
         worker_id: null,
         video_key: "raw/video.mp4",
@@ -316,6 +333,7 @@ describe("executeTranscodeJob — claim and retry logic", () => {
       workerMonitoringThrows: true,
       jobsSetCalls,
       workersSetCalls,
+      mediaAssetsSetCalls,
     });
 
     const ctx = buildCtx(db, recordedEvents);
@@ -329,6 +347,10 @@ describe("executeTranscodeJob — claim and retry logic", () => {
 
     assert.equal(workersSetCalls.length, 2);
     assert.equal(workersSetCalls[1].status, "failed");
+
+    // Permanent failure marks media_assets as "failed"
+    assert.equal(mediaAssetsSetCalls.length, 1);
+    assert.equal(mediaAssetsSetCalls[0].status, "failed");
 
     const jobFailedEvent = recordedEvents.find((e) => e.event === "job_failed");
     assert.equal(jobFailedEvent?.metadata?.["willRetry"], false);

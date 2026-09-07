@@ -6,6 +6,8 @@ import {
   createJobManager,
   type JobManager,
   type QueueJobParams,
+  type CancelJobParams,
+  type CancelJobResult,
 } from "./video-job-manager.ts";
 import {
   createMonitor,
@@ -39,6 +41,7 @@ export interface FleetManager {
   runTick(): Promise<void>;
   syncWakeupSchedule(): Promise<Date | null>;
   queueJob(params: QueueJobParams): Promise<Selectable<VideoJobTable>>;
+  cancelJob(params: CancelJobParams): Promise<CancelJobResult>;
   startServerfulLoop(signal?: AbortSignal): Promise<void>;
 }
 
@@ -72,6 +75,10 @@ export function createFleetManager(
 
     async queueJob(params: QueueJobParams): Promise<Selectable<VideoJobTable>> {
       return await jobManager.queueJob(params);
+    },
+
+    async cancelJob(params: CancelJobParams): Promise<CancelJobResult> {
+      return await jobManager.cancelJob(params);
     },
 
     async processNextJob(): Promise<boolean> {

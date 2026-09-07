@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   isDockerRunning,
   publishFfprobeLayer,
@@ -82,7 +83,7 @@ describe("Layer Builder & Docker Integration", () => {
     } as any;
 
     const tempZip = path.join(
-      import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname),
+      import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url)),
       "temp-layer-test.zip",
     );
     fs.writeFileSync(tempZip, Buffer.from("PK\x05\x06" + "\x00".repeat(18)));

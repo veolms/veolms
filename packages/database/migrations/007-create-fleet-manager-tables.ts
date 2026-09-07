@@ -133,6 +133,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
         'heartbeat_timeout',
         'job_completed',
         'job_failed',
+        'job_cancelled',
         'worker_termination_requested',
         'worker_terminated',
         'worker_error',

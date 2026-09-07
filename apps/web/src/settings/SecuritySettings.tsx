@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
@@ -29,6 +29,9 @@ import {
   useRevokeSession,
   useRevokeAllOtherSessions,
 } from "../services/auth";
+
+const subscribeToPasskeySupport = () => () => undefined;
+const getPasskeyServerSupport = () => false;
 
 function SettingsModalOverlay({
   labelledBy,
@@ -366,7 +369,11 @@ export function SecuritySettings({
     !totpEnabled &&
     !passkeyEnabled,
   );
-  const passkeyBrowserSupported = isPasskeySupported();
+  const passkeyBrowserSupported = useSyncExternalStore(
+    subscribeToPasskeySupport,
+    isPasskeySupported,
+    getPasskeyServerSupport,
+  );
 
   const handleRegisterPasskey = async () => {
     if (!isAuthenticated) return;

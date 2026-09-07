@@ -1,5 +1,9 @@
 import { test, expect } from "./app.fixture.ts";
-import { installBaselineState, openApp } from "./support.ts";
+import {
+  clickLearningMinimize,
+  installBaselineState,
+  openApp,
+} from "./support.ts";
 
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
@@ -69,11 +73,12 @@ test("Learning Space keeps course sessions usable across desktop and mobile", as
 
   await desktopSidebar.getByRole("button", { name: "Courses" }).click();
   await expect(page).toHaveURL(/\/courses$/);
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
   await expect(
     desktopLearningSpace.getByRole("button", {
       name: /Open The Ultimate TypeScript Course/,
     }),
-  ).not.toHaveAttribute("aria-current");
+  ).toHaveAttribute("aria-current", "page");
   await desktopLearningSpace
     .getByRole("button", { name: /Open The Ultimate TypeScript Course/ })
     .click();
@@ -179,4 +184,57 @@ test("Learning Space keeps course sessions usable across desktop and mobile", as
     /\/learn\/javascript-course\/tools-overview\?from=courses$/,
   );
   await expect(mobileMenu).toBeHidden();
+});
+
+test("Learning Space highlights the course while the mini player is playing", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+
+  const trigger = page.getByRole("button", { name: /Learning Space,/ });
+  await trigger.hover();
+  const session = page.getByRole("button", {
+    name: /Open Complete Backend with Node\.js/,
+  });
+  await expect(session).toHaveAttribute("aria-current", "page");
+
+  await clickLearningMinimize(page);
+  await expect(page).toHaveURL(/\/courses$/);
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+
+  await trigger.hover();
+  await expect(session).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("article", {
+      name: /Currently playing, Complete Backend with Node\.js/,
+    }),
+  ).toBeVisible();
+});
+
+test("mini player first section sits flush without rounded corners", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(
+    page,
+    "/learn/backend-nodejs/what-is-ui-ux-design?from=courses",
+  );
+  await clickLearningMinimize(page);
+  await expect(page.locator("[data-learning-mini-player]")).toBeVisible();
+
+  await page.getByRole("button", { name: "Expand curriculum menu" }).click();
+  const curriculum = page.locator(
+    "[data-learning-mini-player] .learning-curriculum",
+  );
+  const firstSection = page
+    .locator("[data-learning-mini-player] .learning-curriculum__section-toggle")
+    .first();
+  await expect(curriculum).toBeVisible();
+  await expect(firstSection).toBeVisible();
+  await expect(curriculum).toHaveCSS("border-radius", "0px");
+  await expect(firstSection).toHaveCSS("border-radius", "0px");
 });

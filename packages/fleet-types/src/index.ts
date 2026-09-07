@@ -5,3 +5,4 @@ export * from "./monitoring.ts";
 export * from "./provider.ts";
 export * from "./events.ts";
 export * from "./test-control.ts";
+export * from "./entrypoint.ts";

@@ -1,0 +1,187 @@
+name: Deploy Video Fleet Infrastructure & Artifacts
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - "apps/fleet-manager/**"
+      - "apps/media-worker/**"
+      - "packages/fleet-provider-aws/**"
+      - "packages/fleet-types/**"
+      - "packages/config/**"
+      - "packages/database/**"
+      - ".github/workflows/deploy-video-fleet-infra.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_worker:
+        description: "Build & upload media-worker bundle to S3"
+        type: boolean
+        default: true
+      deploy_lambda:
+        description: "Build & update AWS Lambda functions"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-video-fleet-infra-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-video-fleet:
+    name: Test & Deploy Video Fleet
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    environment:
+      name: development
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed components
+        id: changes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "worker_changed=${{ github.event.inputs.deploy_worker }}" >> "$GITHUB_OUTPUT"
+            echo "lambda_changed=${{ github.event.inputs.deploy_lambda }}" >> "$GITHUB_OUTPUT"
+            echo "Triggered via workflow_dispatch: worker=${{ github.event.inputs.deploy_worker }}, lambda=${{ github.event.inputs.deploy_lambda }}"
+          else
+            BEFORE_SHA="${{ github.event.before }}"
+            if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              BEFORE_SHA="HEAD~1"
+            fi
+
+            if ! git rev-parse --verify --quiet "$BEFORE_SHA^{commit}" >/dev/null 2>&1; then
+              git fetch origin "$BEFORE_SHA" || git fetch --unshallow || true
+            fi
+
+            DIFF=$(git diff --name-only "$BEFORE_SHA" HEAD)
+            echo "Changed files since $BEFORE_SHA:"
+            echo "$DIFF"
+
+            WORKER=false
+            LAMBDA=false
+
+            # Check if media worker or underlying transcode dependencies changed
+            if echo "$DIFF" | grep -qE '^(apps/media-worker/|packages/fleet-types/|packages/config/|packages/database/)'; then
+              WORKER=true
+            fi
+
+            # Check if fleet manager lambda, probe lambda, or aws provider changed
+            if echo "$DIFF" | grep -qE '^(apps/fleet-manager/|packages/fleet-provider-aws/|packages/fleet-types/|packages/config/|packages/database/)'; then
+              LAMBDA=true
+            fi
+
+            # If the workflow itself was updated, build and verify both
+            if echo "$DIFF" | grep -qE '^\.github/workflows/deploy-video-fleet-infra\.yml'; then
+              WORKER=true
+              LAMBDA=true
+            fi
+
+            echo "worker_changed=$WORKER" >> "$GITHUB_OUTPUT"
+            echo "lambda_changed=$LAMBDA" >> "$GITHUB_OUTPUT"
+            echo "Detected changes: worker=$WORKER, lambda=$LAMBDA"
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check video pipeline packages
+        run: |
+          pnpm --filter @veolms/fleet-types typecheck
+          pnpm --filter @veolms/config typecheck
+          pnpm --filter @veolms/database typecheck
+          pnpm --filter @veolms/media-worker typecheck
+          pnpm --filter @veolms/fleet-manager typecheck
+          pnpm --filter @veolms/fleet-provider-aws typecheck
+
+      - name: Run media-worker unit tests
+        run: pnpm --filter @veolms/media-worker test
+
+      - name: Run fleet-manager unit tests
+        run: pnpm --filter @veolms/fleet-manager test
+
+      - name: Run fleet-provider-aws unit tests
+        run: pnpm --filter @veolms/fleet-provider-aws test
+
+      - name: Configure AWS credentials
+        if: ${{ steps.changes.outputs.worker_changed == 'true' || steps.changes.outputs.lambda_changed == 'true' }}
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_FLEET_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: veolms-fleet-deploy-${{ github.run_id }}
+
+      - name: Build & upload Media Worker script to S3
+        if: ${{ steps.changes.outputs.worker_changed == 'true' }}
+        shell: bash
+        env:
+          S3_BUILD_BUCKET: ${{ vars.S3_BUILD_BUCKET || secrets.S3_BUILD_BUCKET }}
+          AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-1' }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${S3_BUILD_BUCKET:-}" ]; then
+            echo "::error::S3_BUILD_BUCKET variable or secret is required. Please set S3_BUILD_BUCKET in your GitHub repository secrets/variables."
+            exit 1
+          fi
+          echo "Building and uploading media worker bundle to S3..."
+          node apps/fleet-manager/scripts/upload-build-artifacts.ts --only-worker
+
+      - name: Build & update AWS Lambda functions
+        if: ${{ steps.changes.outputs.lambda_changed == 'true' }}
+        shell: bash
+        env:
+          S3_BUILD_BUCKET: ${{ vars.S3_BUILD_BUCKET || secrets.S3_BUILD_BUCKET }}
+          AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-1' }}
+          FLEET_MANAGER_LAMBDA_NAME: ${{ vars.FLEET_MANAGER_LAMBDA_NAME || 'veolms-fleet-manager' }}
+          PROBE_LAMBDA_NAME: ${{ vars.PROBE_LAMBDA_NAME || 'veolms-video-metadata-probe' }}
+          FLEET_MODE: ${{ vars.FLEET_MODE || 'serverless' }}
+          SETUP_PROBE_LAMBDA: ${{ vars.SETUP_PROBE_LAMBDA || 'true' }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${S3_BUILD_BUCKET:-}" ]; then
+            echo "::error::S3_BUILD_BUCKET variable or secret is required. Please set S3_BUILD_BUCKET in your GitHub repository secrets/variables."
+            exit 1
+          fi
+          echo "Building, uploading and updating Lambda functions..."
+          node apps/fleet-manager/scripts/upload-build-artifacts.ts --only-lambda --update-lambda
+
+      - name: Write Deployment Summary
+        shell: bash
+        run: |
+          cat << 'EOF' >> "$GITHUB_STEP_SUMMARY"
+          ## 🚀 VeoLMS Video Fleet CI/CD Deployment Summary
+
+          | Step | Status |
+          |---|---|
+          | **Tests & Quality Gate** | ✅ Passed |
+          | **Media Worker Uploaded** | ${{ steps.changes.outputs.worker_changed == 'true' && '✅ Uploaded to S3 (`bundles/media-worker.js`)' || '⏭️ Skipped (no worker changes)' }} |
+          | **Lambdas Updated** | ${{ steps.changes.outputs.lambda_changed == 'true' && '✅ Updated (`veolms-fleet-manager` & `veolms-video-metadata-probe`)' || '⏭️ Skipped (no lambda changes)' }} |
+          | **AWS Region** | `${{ vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-1' }}` |
+          | **S3 Build Bucket** | `${{ vars.S3_BUILD_BUCKET || secrets.S3_BUILD_BUCKET }}` |
+          EOF

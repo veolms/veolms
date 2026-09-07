@@ -1,3 +1,4 @@
+import { isMainModule } from "@veolms/fleet-types";
 import { runCli } from "./cli.ts";
 
 export * from "./cli.ts";
@@ -18,6 +19,6 @@ export function main(): void {
   });
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
+if (isMainModule(import.meta.url)) {
   main();
 }

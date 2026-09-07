@@ -61,6 +61,13 @@ const discussionsRouteBase = {
 } as const;
 
 export const routeDescriptors = {
+  "root-courses": {
+    kind: "shell",
+    page: "courses",
+    section: "Courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
   home: {
     kind: "shell",
     page: "home",
@@ -304,6 +311,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
 };
 
 const canonicalPathsByRouteId = {
+  "root-courses": "/",
   home: "/",
   "home-alias": "/home",
   dashboard: "/dashboard",
@@ -350,6 +358,15 @@ export const getEffectiveRouteId = (
   pathname: string,
 ): string => {
   const normalizedPath = normalizeNavigationPath(pathname);
+
+  if (routeId === "settings") {
+    if (normalizedPath === "/settings") return routeId;
+    const match =
+      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account)$/.exec(
+        normalizedPath,
+      );
+    return match?.[1] ? `settings-${match[1]}` : "home-fallback";
+  }
 
   if (routeId === "learning" || routeId === "legacy-learning") {
     const routePrefix = routeId === "learning" ? "learn" : "courses";

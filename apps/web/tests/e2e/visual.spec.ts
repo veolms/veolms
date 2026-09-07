@@ -4,7 +4,7 @@ import { installBaselineState, openApp, prepareVisualPage } from "./support.ts";
 test.describe("@visual", () => {
   test("student Home desktop · dark Graphite", async ({ page }) => {
     await installBaselineState(page);
-    await openApp(page, "/");
+    await openApp(page, "/home");
     await prepareVisualPage(page);
     await expect(page).toHaveScreenshot("student-home-dark.png", {
       fullPage: true,
@@ -35,7 +35,7 @@ test.describe("@visual", () => {
 
   test("creator Dashboard desktop · dark Graphite", async ({ page }) => {
     await installBaselineState(page, { local: { "veolms-role": "creator" } });
-    await openApp(page, "/");
+    await openApp(page, "/home");
     await prepareVisualPage(page);
     await expect(page).toHaveScreenshot("creator-dashboard-dark.png", {
       fullPage: true,

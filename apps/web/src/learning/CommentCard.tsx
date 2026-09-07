@@ -94,6 +94,12 @@ export function CommentCard({
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
   );
   const replyCount = unloadedReplyCount + localReplies.length;
+  const hasReplies = replyCount > 0;
+
+  const toggleReplies = () => {
+    if (!hasReplies) return;
+    setRepliesOpen((open) => !open);
+  };
 
   useEffect(() => {
     setLocalReplies(comment.thread ?? []);
@@ -144,11 +150,10 @@ export function CommentCard({
     <article
       id={`discussion-entry-${comment.id}`}
       data-discussion-entry={entryKind}
-      data-discussion-thread-trigger={onOpenThread ? "true" : undefined}
       data-deletion-pending={deletion.pending || undefined}
-      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${onOpenThread ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.pending ? "min-h-19" : ""}`}
+      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.pending ? "min-h-19" : ""}`}
       onClick={(event) => {
-        if (!onOpenThread) return;
+        if (!hasReplies) return;
         const target = event.target;
         if (
           target instanceof Element &&
@@ -158,7 +163,7 @@ export function CommentCard({
         ) {
           return;
         }
-        onOpenThread(comment.id);
+        toggleReplies();
       }}
     >
       <div
@@ -288,7 +293,10 @@ export function CommentCard({
                 {replyCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => setRepliesOpen((open) => !open)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleReplies();
+                    }}
                     aria-expanded={repliesOpen}
                     className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
                   >
@@ -305,7 +313,11 @@ export function CommentCard({
                   aria-label="Reply"
                   title="Reply"
                   data-reply-action
-                  onClick={() => {
+                  data-discussion-thread-trigger={
+                    onOpenThread ? "true" : undefined
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
                     if (onOpenThread) onOpenThread(comment.id, true);
                     else setReplyComposerOpen((open) => !open);
                   }}

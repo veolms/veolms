@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import * as os from "node:os";
 import type { Kysely } from "kysely";
 import { claimNextQueuedVideoJob, type Database } from "@veolms/database";
 import type { FleetEventType, FleetTestFault } from "@veolms/fleet-types";
@@ -50,17 +51,62 @@ export async function initMediaWorker(options: {
   const { config, db } = options;
   const workerId = config.WORKER_ID;
 
-  // 1. Mark worker status as READY
-  await db
-    .updateTable("workers")
-    .set({
-      status: "ready",
-      started_at: new Date(),
-      last_heartbeat_at: new Date(),
-      updated_at: new Date(),
-    })
-    .where("id", "=", workerId)
-    .execute();
+  // 1. Mark worker status as READY (or auto-register for local/testing runs)
+  if (typeof db?.selectFrom === "function") {
+    const existingWorker = await db
+      .selectFrom("workers")
+      .select("id")
+      .where("id", "=", workerId)
+      .executeTakeFirst();
+
+    if (!existingWorker) {
+      const cpus = os.cpus().length || 2;
+      const memoryMb = Math.floor(os.totalmem() / 1024 / 1024);
+      await db
+        .insertInto("workers")
+        .values({
+          id: workerId,
+          provider: "local",
+          provider_worker_id: `local-${process.pid}-${workerId.slice(0, 8)}`,
+          status: "ready",
+          cpu: cpus,
+          memory_mb: memoryMb,
+          storage_gb: 50,
+          region: "local",
+          job_id: null,
+          metadata: {},
+          architecture: process.arch === "arm64" ? "arm64" : "x86_64",
+          started_at: new Date(),
+          last_heartbeat_at: new Date(),
+          terminated_at: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        })
+        .execute();
+    } else {
+      await db
+        .updateTable("workers")
+        .set({
+          status: "ready",
+          started_at: new Date(),
+          last_heartbeat_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where("id", "=", workerId)
+        .execute();
+    }
+  } else {
+    await db
+      .updateTable("workers")
+      .set({
+        status: "ready",
+        started_at: new Date(),
+        last_heartbeat_at: new Date(),
+        updated_at: new Date(),
+      })
+      .where("id", "=", workerId)
+      .execute();
+  }
 
   const recordEvent = async (
     event: FleetEventType,

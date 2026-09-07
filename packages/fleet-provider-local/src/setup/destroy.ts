@@ -11,9 +11,16 @@
  * Triggered by:   pnpm fleet:destroy  (when FLEET_PROVIDER=local)
  */
 
+import type {
+  ProviderDestroyOptions,
+  ProviderDestroyResult,
+} from "@veolms/fleet-types";
 import { bold, cyan, green } from "@veolms/fleet-types/terminal";
+import { isMainModule } from "@veolms/fleet-types";
 
-export async function runLocalInfraDestroy(): Promise<void> {
+export async function destroyInfra(
+  _options?: ProviderDestroyOptions,
+): Promise<ProviderDestroyResult> {
   console.info(`
 ${bold(cyan("╔══════════════════════════════════════════════════════╗"))}
 ${bold(cyan("║"))}          ${bold("VeoLMS Local Provider Teardown")}             ${bold(cyan("║"))}
@@ -23,10 +30,19 @@ ${bold(cyan("╚═════════════════════�
   ${green("✔")} Any running worker processes are terminated by the Fleet
       Manager daemon directly — nothing further to clean up here.
 `);
+  return {
+    success: true,
+    provider: "local",
+    deletedResources: [],
+  };
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
-  runLocalInfraDestroy().catch((err: unknown) => {
+export const runDestroy = destroyInfra;
+export const runLocalInfraDestroy = destroyInfra;
+export default destroyInfra;
+
+if (isMainModule(import.meta.url)) {
+  destroyInfra().catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`\n✘ Local teardown failed: ${msg}\n`);
     process.exit(1);
