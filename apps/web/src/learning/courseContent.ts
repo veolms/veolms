@@ -4,11 +4,13 @@ import {
   CURRICULUM_SECTION_COUNT_DEFAULT,
   normalizeCurriculumSize,
 } from "./curriculumSize";
+import type { CourseOverviewResponse } from "@veolms/contracts";
 
 export interface CourseVideo {
   fileName: string;
   duration: number;
   src: string;
+  thumbnailSrc?: string;
 }
 
 export type LessonStatus = "done" | "active" | "todo";
@@ -40,7 +42,10 @@ export function resolveCourseMediaBaseUrl(configuredBaseUrl?: string) {
 }
 
 export const courseMediaBaseUrl = resolveCourseMediaBaseUrl(
-  import.meta.env.VITE_COURSE_MEDIA_BASE_URL,
+  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
+    (typeof process !== "undefined"
+      ? process.env.VITE_COURSE_MEDIA_BASE_URL
+      : undefined),
 );
 
 export function resolveCourseVideoSrc(
@@ -55,7 +60,12 @@ export function resolveCourseHlsBaseUrl(configuredBaseUrl?: string) {
   return normalizedBaseUrl ? `${normalizedBaseUrl}/course-hls` : "/course-hls";
 }
 
-export const courseHlsBaseUrl = resolveCourseHlsBaseUrl();
+export const courseHlsBaseUrl = resolveCourseHlsBaseUrl(
+  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
+    (typeof process !== "undefined"
+      ? process.env.VITE_COURSE_MEDIA_BASE_URL
+      : undefined),
+);
 
 export function getCourseVideoHlsSlug(fileName: string) {
   return fileName
@@ -74,10 +84,18 @@ export function resolveCourseHlsSrc(
   return `${baseUrl.replace(/\/+$/, "")}/${getCourseVideoHlsSlug(fileName)}/master.m3u8`;
 }
 
+export function resolveCourseVideoThumbnailSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/thumbnails/${getCourseVideoHlsSlug(fileName)}.webp`;
+}
+
 const courseVideo = (fileName: string, duration: number): CourseVideo => ({
   fileName,
   duration,
   src: resolveCourseHlsSrc(fileName),
+  thumbnailSrc: resolveCourseVideoThumbnailSrc(fileName),
 });
 
 export const courseVideos: CourseVideo[] = [
@@ -355,6 +373,51 @@ export const createLessonsById = (courseSections: readonly CourseSection[]) =>
       section.lessons.map((item): [number, Lesson] => [item[0], item]),
     ),
   );
+
+/**
+ * Converts the API overview curriculum into the compact learning-player
+ * representation. The numeric lesson IDs intentionally remain route-local:
+ * learning URLs and saved progress use the ordered lesson number, while the
+ * API's UUIDs stay inside the course service boundary.
+ */
+export function adaptCourseOverviewToLearningSections(
+  overview?: CourseOverviewResponse,
+): CourseSection[] | null {
+  const overviewSections = overview?.sections
+    ?.slice()
+    .sort((a, b) => a.position - b.position);
+  if (!overviewSections?.length) return null;
+
+  let nextLessonNumber = 1;
+  const adaptedSections = overviewSections.map((section, sectionIndex) => {
+    const lessons = (section.lessons ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .filter((lesson) => lesson.isPublished)
+      .map((lesson) => {
+        const lessonNumber = nextLessonNumber;
+        nextLessonNumber += 1;
+        return [
+          lessonNumber,
+          lesson.title || `Lesson ${lessonNumber}`,
+          formatMediaTime(getCourseVideoForLesson(lessonNumber).duration),
+          "todo" as const,
+          lesson.isPreview,
+        ] as Lesson;
+      });
+
+    return {
+      id: sectionIndex + 1,
+      title: section.title || `Section ${sectionIndex + 1}`,
+      progress: `0/${lessons.length}`,
+      lessons,
+    };
+  });
+
+  return adaptedSections.some((section) => section.lessons.length > 0)
+    ? adaptedSections
+    : null;
+}
 
 export const sections: CourseSection[] = createCurriculumSections(
   CURRICULUM_SECTION_COUNT_DEFAULT,

@@ -31,7 +31,6 @@ import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UserIcon as User } from "@phosphor-icons/react/User";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
@@ -63,8 +62,8 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
-import { useCurrentUser, useSignOut } from "./services/auth";
+import { autosyncManager } from "./lib/autosync";
+import { useCurrentUser, useSignOut, useLogout } from "./services/auth";
 import { useAuthStore } from "./store/auth.store";
 import {
   useCourses,
@@ -106,12 +105,13 @@ import {
   getWorkspaceRoleStorageKey,
 } from "./shell/workspaceRole";
 import {
+  SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MIN_WIDTH,
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getDefaultSidebarPreferences,
   getInitialSidebarPreferences,
-  getInitialSidebarWidth,
+  getInitialSidebarShellState,
 } from "./shell/sidebarPreferences";
 import {
   canStartSidebarTouchGesture,
@@ -194,7 +194,7 @@ import {
   DrawerTitle,
   type DrawerDismissThen,
 } from "@/components/ui/drawer";
-
+import type { ProfilePreferences } from "./settings/profileTypes";
 const CreatorDashboard = lazy(() =>
   import("./CreatorDashboard").then((module) => ({
     default: module.CreatorDashboard,
@@ -233,6 +233,7 @@ interface CoursesPageProps {
   settingsTab?: string;
   discussionTab?: string;
   courseSlug?: string;
+  miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
     discussionTab?: string;
@@ -422,9 +423,6 @@ function SidebarTooltipSurface() {
   );
 }
 
-const isSidebarMode = (value: string | null): value is SidebarMode =>
-  value === "expanded" || value === "collapsed" || value === "hidden";
-
 const procodrrLogoSvg = logoDarkSvg.replace(
   /fill="black"/g,
   'fill="currentColor"',
@@ -506,12 +504,10 @@ const isFocusedSidebarSwipeInput = (target: EventTarget | null) => {
 
 function LoginProfileButton({
   className,
-  iconSize,
   arrowSize,
   onLogin,
 }: {
   className: string;
-  iconSize: number;
   arrowSize: number;
   onLogin: () => void;
 }) {
@@ -522,12 +518,7 @@ function LoginProfileButton({
       aria-label="Login. Access Your Learning Journey"
       onClick={onLogin}
     >
-      <i
-        aria-hidden="true"
-        className="courses-profile__login-icon flex size-[43px] shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] text-(--accent) shadow-none"
-      >
-        <User size={iconSize} weight="duotone" />
-      </i>
+      <ShellProfileAvatar avatarUrl={null} />
       <span className="courses-profile__login-copy">
         <strong className="courses-profile__login-title">Login</strong>
         <small className="courses-profile__login-subtitle">
@@ -553,14 +544,20 @@ export function CoursesPage({
   settingsTab = "profile",
   discussionTab = "q-and-a",
   courseSlug,
+  miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>("student");
   const publicNavigationItems = getPublicNavigationItems();
+  const [savedShellProfiles, setSavedShellProfiles] = useState<
+    Record<CourseRole, ProfilePreferences | null>
+  >({ student: null, creator: null });
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarShellHydratedRef = useRef(false);
+
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [sidebarResizePreviewWidth, setSidebarResizePreviewWidth] = useState<
     number | null
@@ -629,7 +626,12 @@ export function CoursesPage({
     ...READING_MODE_DEFAULTS,
   });
   const readingModeEnabled = readingModePreferences.enabled;
-  const [, setCoursePlayerSessionVersion] = useState(0);
+  // Local course-player sessions are browser state, so keep the first render
+  // deterministic for SSR. The stored sessions are loaded in the effect
+  // below before they are used for the interactive Learning Space control.
+  const [storedCoursePlayerSessions, setStoredCoursePlayerSessions] = useState<
+    CoursePlayerSession[]
+  >([]);
   const [learningSpaceExpanded, setLearningSpaceExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState(() => {
     if (page === "home") return role === "creator" ? "Dashboard" : "Home";
@@ -706,7 +708,11 @@ export function CoursesPage({
   const isAuthenticated = Boolean(activeUser);
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
-    enabled: isAuthenticated,
+    // The learning route already has its static player content and does not
+    // need Learning Space sessions before the video can mount. Load these
+    // sessions when the panel is opened; keep the existing eager behavior on
+    // catalogue/home surfaces.
+    enabled: isAuthenticated && (!renderMain || learningSpaceExpanded),
   });
   const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
     activeUser?.id,
@@ -733,6 +739,14 @@ export function CoursesPage({
     [role, userRoles],
   );
   const { isPending: isSigningOut, signOut } = useSignOut();
+  const signOutAfterSync = useCallback(async () => {
+    try {
+      await autosyncManager.requireSynced();
+      await signOut();
+    } catch {
+      setNotice("Couldn't sign out yet. Please try again.");
+    }
+  }, [setNotice, signOut]);
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const { data: publishedCoursesData } = useCourses({
     enabled: shouldLoadCourseSurface && role === "student",
@@ -881,23 +895,9 @@ export function CoursesPage({
 
   useEffect(() => {
     try {
-      const storedSidebarMode = localStorage.getItem("veolms-sidebar-mode");
-      const legacySidebarCollapsed = localStorage.getItem(
-        "veolms-sidebar-collapsed",
-      );
-      setSidebarMode(
-        isSidebarMode(storedSidebarMode)
-          ? storedSidebarMode
-          : legacySidebarCollapsed !== null
-            ? legacySidebarCollapsed === "true"
-              ? "collapsed"
-              : "expanded"
-            : getResponsiveSidebarMode(
-                "expanded",
-                window.matchMedia(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY).matches,
-              ),
-      );
-      setSidebarWidth(getInitialSidebarWidth());
+      const shellState = getInitialSidebarShellState();
+      setSidebarMode(shellState.mode);
+      setSidebarWidth(shellState.width);
       const storedTheme = localStorage.getItem("veolms-theme");
       setTheme(
         storedTheme === "light" ||
@@ -933,6 +933,29 @@ export function CoursesPage({
       setStoredPreferencesReady(true);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    let shellState = { mode: sidebarMode, width: sidebarWidth };
+    const isInitialShellSync = !sidebarShellHydratedRef.current;
+    if (isInitialShellSync) {
+      sidebarShellHydratedRef.current = true;
+      shellState = getInitialSidebarShellState();
+      if (shellState.mode !== sidebarMode) setSidebarMode(shellState.mode);
+      if (shellState.width !== sidebarWidth) setSidebarWidth(shellState.width);
+    }
+
+    const root = document.documentElement;
+    root.dataset.sidebarState = shellState.mode;
+    root.style.setProperty("--sidebar-width", `${shellState.width}px`);
+    root.style.setProperty(
+      "--sidebar-expanded-width",
+      `${shellState.width}px`,
+    );
+    window.__VEO_BOOTSTRAP__ = {
+      ...window.__VEO_BOOTSTRAP__,
+      sidebar: shellState,
+    };
+  }, [sidebarMode, sidebarWidth]);
 
   const navigationHydrationKey = [
     activeUser ? `authenticated:${activeUser.id}` : "guest",
@@ -1171,7 +1194,8 @@ export function CoursesPage({
 
   useEffect(() => {
     const syncCoursePlayerSession = () =>
-      setCoursePlayerSessionVersion((version) => version + 1);
+      setStoredCoursePlayerSessions(getOpenCoursePlayerSessions());
+    syncCoursePlayerSession();
     const syncCoursePlayerStorage = (event: StorageEvent) => {
       if (event.key === COURSE_PLAYER_SESSIONS_STORAGE_KEY)
         syncCoursePlayerSession();
@@ -1319,6 +1343,9 @@ export function CoursesPage({
     const syncNavigationMode = () => {
       setCompactNavigation(media.matches);
       setCoarseNavigationInput(coarseInput.matches);
+      document.documentElement.dataset.navigationLayout = media.matches
+        ? "compact"
+        : "wide";
     };
     syncNavigationMode();
     media.addEventListener("change", syncNavigationMode);
@@ -2004,8 +2031,14 @@ export function CoursesPage({
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
+  // The first render is deterministic on both server and client. The layout
+  // effect above adopts the head bootstrap snapshot before the browser paints,
+  // so React owns the persisted shell mode and width without a hydration
+  // mismatch.
+  const renderedSidebarMode = sidebarMode;
+  const renderedSidebarWidth = sidebarWidth;
   const { collapsed: sidebarCollapsed, hidden: sidebarHidden } =
-    getSidebarPresentation(sidebarMode);
+    getSidebarPresentation(renderedSidebarMode);
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
   const sidebarVisuallyCollapsed =
     sidebarCollapsed && !sidebarPresentedAsOverlay;
@@ -3137,13 +3170,15 @@ export function CoursesPage({
     // When the API catalogue is empty, the visible courses are the local
     // catalogue, so its local player sessions are the correct source too.
     if (!isAuthenticated || !hasBackendCourses) {
-      return getOpenCoursePlayerSessions();
+      return storedCoursePlayerSessions;
     }
     // Avoid showing local records while an authenticated backend catalogue or
     // session request is still loading.
     return [];
   })();
-  const visibleLearningCourseId = isLearningSurface ? courseSlug : undefined;
+  const fullLearningCourseId = isLearningSurface ? courseSlug : undefined;
+  const panelActiveLearningCourseId =
+    fullLearningCourseId ?? miniPlayerCourseId ?? undefined;
   const activateLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const destination =
@@ -3166,7 +3201,7 @@ export function CoursesPage({
       onNavigatePage,
       upsertLearningSpaceSession,
     ],
-  );
+  );``
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
@@ -3242,7 +3277,6 @@ export function CoursesPage({
           isAuthenticated={isAuthenticated}
           onNavigatePage={onNavigatePage}
           onExitSettings={onExitSettings}
-          setNotice={setNotice}
           theme={theme}
           onThemeChange={(next, origin) => {
             if (next !== theme) themeRevealOriginRef.current = origin ?? null;
@@ -3254,7 +3288,7 @@ export function CoursesPage({
           onPageTabColorsChange={setPageTabColors}
           sidebarPreferences={sidebarPreferences}
           onSidebarPreferencesChange={setSidebarPreferences}
-          sidebarMode={sidebarMode}
+          sidebarMode={renderedSidebarMode}
           onSidebarModeChange={setSidebarMode}
           navigationItems={navigationItems}
           navigationVisibleItems={
@@ -3379,13 +3413,10 @@ export function CoursesPage({
     );
   };
 
-  if (!storedPreferencesReady) return <AppLoadingScreen />;
-
   return (
     <div
       ref={coursesAppRef}
       className={sidebarClassName}
-      suppressHydrationWarning
       onPointerDownCapture={(event) =>
         startSidebarScreenSwipe({
           pointerId: event.pointerId,
@@ -3400,7 +3431,6 @@ export function CoursesPage({
       }
       style={
         {
-          "--sidebar-expanded-width": `${sidebarResizePreviewWidth ?? sidebarWidth}px`,
           "--sidebar-resize-preview-width": `${sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH}px`,
           "--sidebar-overlay-swipe-offset": `${sidebarOverlaySwipeOffset ?? 0}px`,
         } as CSSProperties
@@ -3464,17 +3494,17 @@ export function CoursesPage({
                 aria-valuenow={Math.round(
                   sidebarResizePreviewWidth ??
                     (sidebarPresentedAsOverlay
-                      ? sidebarWidth
+                      ? renderedSidebarWidth
                       : sidebarCollapsed
                         ? SIDEBAR_COLLAPSED_WIDTH
-                        : sidebarWidth),
+                        : renderedSidebarWidth),
                 )}
                 aria-valuetext={
                   sidebarPresentedAsOverlay
-                    ? `${Math.round(sidebarResizePreviewWidth ?? sidebarWidth)} pixel temporary sidebar`
+                    ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
                     : sidebarCollapsed
                       ? "Collapsed sidebar"
-                      : `${Math.round(sidebarWidth)} pixels wide`
+                      : `${Math.round(renderedSidebarWidth)} pixels wide`
                 }
                 tabIndex={0}
                 onKeyDown={handleSidebarResizeKeyDown}
@@ -3573,7 +3603,8 @@ export function CoursesPage({
                     <LearningSpace
                       key={label}
                       sessions={learningSessions}
-                      activeCourseId={visibleLearningCourseId}
+                      activeCourseId={fullLearningCourseId}
+                      panelActiveCourseId={panelActiveLearningCourseId}
                       expanded={learningSpaceExpanded}
                       mobile={mobileSidebarNavigationActive}
                       mobileNavigationPlacement="sidebar"
@@ -3605,8 +3636,8 @@ export function CoursesPage({
                       aria-current={active ? "page" : undefined}
                       aria-keyshortcuts={
                         label === "Settings"
-                          ? `${navigationShortcutIndex} ${primaryShortcutModifier}+Comma Alt+ArrowUp Alt+ArrowDown`
-                          : `${navigationShortcutIndex} Alt+ArrowUp Alt+ArrowDown`
+                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
+                          : `${navigationIndex + 1} Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
                       }
                       data-navigation-label={label}
                       data-sortable="true"
@@ -3705,7 +3736,6 @@ export function CoursesPage({
               ) : (
                 <LoginProfileButton
                   className="courses-profile__button"
-                  iconSize={30}
                   arrowSize={16}
                   onLogin={() => onNavigatePage("/login")}
                 />
@@ -3859,8 +3889,16 @@ export function CoursesPage({
                         onPointerCancel={finishDockLongPress}
                       >
                         <Eye
+                          aria-hidden="true"
+                          data-reading-mode-icon="off"
                           size={20}
-                          weight={readingModeEnabled ? "fill" : "regular"}
+                          weight="regular"
+                        />
+                        <Eye
+                          aria-hidden="true"
+                          data-reading-mode-icon="on"
+                          size={20}
+                          weight="fill"
                         />
                       </button>
                     );
@@ -3968,72 +4006,74 @@ export function CoursesPage({
         </div>
       )}
 
-      <main
-        id="courses-main-scrollport"
-        ref={mainScrollportRef}
-        className={[
-          "courses-main",
-          renderMain
-            ? "courses-main--learning overflow-x-clip!"
-            : page !== "courses"
-              ? "student-surface-main"
-              : "",
-          !renderMain && page === "settings" ? "courses-main--settings" : "",
-          mobileSidebarNavigationActive
-            ? renderMain
-              ? "max-[640px]:pb-0!"
-              : "max-[640px]:pb-4!"
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <div
-          ref={learningMotionStageRef}
-          className={
+      <div className="courses-main-frame">
+        <main
+          id="courses-main-scrollport"
+          ref={mainScrollportRef}
+          className={[
+            "courses-main",
             renderMain
-              ? "grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1"
-              : "contents"
-          }
-          data-learning-motion-stage={renderMain ? "" : undefined}
+              ? "courses-main--learning overflow-x-clip!"
+              : page !== "courses"
+                ? "student-surface-main"
+                : "",
+            !renderMain && page === "settings" ? "courses-main--settings" : "",
+            mobileSidebarNavigationActive
+              ? renderMain
+                ? "max-[640px]:pb-0!"
+                : "max-[640px]:pb-4!"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
-          {renderMain ? (
-            learningBackground ? (
-              <div
-                className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
-                style={{
-                  contain: "strict",
-                  opacity: "var(--learning-background-reveal, 0)",
-                  transitionDuration:
-                    "var(--learning-background-reveal-duration, 0ms)",
-                }}
-                aria-hidden="true"
-                data-learning-background-surface=""
-                inert
-              >
-                {renderPageContent({
-                  surfaceCourseSlug: learningBackground.courseSlug,
-                  surfaceDiscussionTab: learningBackground.discussionTab,
-                  surfacePage: learningBackground.page,
-                  surfaceSection: learningBackground.section,
-                  surfaceSettingsTab: learningBackground.settingsTab,
+          <div
+            ref={learningMotionStageRef}
+            className={
+              renderMain
+                ? "grid min-h-full [&>*]:col-start-1 [&>*]:row-start-1"
+                : "contents"
+            }
+            data-learning-motion-stage={renderMain ? "" : undefined}
+          >
+            {renderMain ? (
+              learningBackground ? (
+                <div
+                  className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
+                  style={{
+                    contain: "strict",
+                    opacity: "var(--learning-background-reveal, 0)",
+                    transitionDuration:
+                      "var(--learning-background-reveal-duration, 0ms)",
+                  }}
+                  aria-hidden="true"
+                  data-learning-background-surface=""
+                  inert
+                >
+                  {renderPageContent({
+                    surfaceCourseSlug: learningBackground.courseSlug,
+                    surfaceDiscussionTab: learningBackground.discussionTab,
+                    surfacePage: learningBackground.page,
+                    surfaceSection: learningBackground.section,
+                    surfaceSettingsTab: learningBackground.settingsTab,
+                  })}
+                </div>
+              ) : null
+            ) : (
+              <div className="contents">{renderPageContent()}</div>
+            )}
+            {renderMain ? (
+              <div className="relative min-h-full">
+                {renderMain({
+                  mobileBottomNavigation:
+                    compactNavigation && !mobileSidebarNavigationActive,
+                  mobileBottomNavigationHidden: mobileBottomNavHidden,
                 })}
               </div>
-            ) : null
-          ) : (
-            <div className="contents">{renderPageContent()}</div>
-          )}
-          {renderMain ? (
-            <div className="relative min-h-full">
-              {renderMain({
-                mobileBottomNavigation:
-                  compactNavigation && !mobileSidebarNavigationActive,
-                mobileBottomNavigationHidden: mobileBottomNavHidden,
-              })}
-            </div>
-          ) : null}
-        </div>
-      </main>
+            ) : null}
+          </div>
+        </main>
+      </div>
 
       <FloatingScrollbar
         scrollportRef={mainScrollportRef}
@@ -4060,7 +4100,8 @@ export function CoursesPage({
                 <LearningSpace
                   key={label}
                   sessions={learningSessions}
-                  activeCourseId={visibleLearningCourseId}
+                  activeCourseId={fullLearningCourseId}
+                  panelActiveCourseId={panelActiveLearningCourseId}
                   expanded={learningSpaceExpanded}
                   mobile
                   iconColor={getNavigationIconColor(
@@ -4210,7 +4251,6 @@ export function CoursesPage({
               ) : (
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile"
-                  iconSize={30}
                   arrowSize={17}
                   onLogin={() => onNavigatePage("/login")}
                 />
@@ -4420,8 +4460,16 @@ export function CoursesPage({
                       onPointerCancel={finishDockLongPress}
                     >
                       <Eye
+                        aria-hidden="true"
+                        data-reading-mode-icon="off"
                         size={20}
-                        weight={readingModeEnabled ? "fill" : "regular"}
+                        weight="regular"
+                      />
+                      <Eye
+                        aria-hidden="true"
+                        data-reading-mode-icon="on"
+                        size={20}
+                        weight="fill"
                       />
                     </button>
                   );
@@ -4509,7 +4557,7 @@ export function CoursesPage({
         isOpen={logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={signOut}
+        onConfirm={() => void signOutAfterSync()}
       />
 
       {notice && (

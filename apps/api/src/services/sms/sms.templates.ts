@@ -1,5 +1,7 @@
 export interface SmsContent {
   text: string;
+  code?: string | undefined;
+  templateVariables?: Record<string, string> | undefined;
 }
 
 export interface OtpVerificationSmsInput {
@@ -11,6 +13,8 @@ export interface OtpVerificationSmsInput {
 /**
  * Mirrors `otpVerificationEmail` so the two channels quote the same validity
  * window. Kept deliberately terse to stay inside a single SMS segment.
+ * Includes explicit `code` and `templateVariables` for flow-based SMS gateways
+ * (like MSG91 Flow) that populate template placeholders.
  */
 export function otpVerificationSms({
   code,
@@ -21,5 +25,13 @@ export function otpVerificationSms({
     text: `${code} is your ${academyName} verification code. It expires in ${expiresInMinutes} minute${
       expiresInMinutes === 1 ? "" : "s"
     }.`,
+    code,
+    templateVariables: {
+      OTP: code,
+      otp: code,
+      code,
+      academyName,
+      expiresInMinutes: String(expiresInMinutes),
+    },
   };
 }

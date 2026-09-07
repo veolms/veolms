@@ -388,6 +388,35 @@
   box-shadow: var(--sidebar-menu-active-shadow);
 }
 
+/* The reading-mode bootstrap updates the root before React hydrates. Keep the
+   dock's icon and active surface on that same persisted state immediately,
+   while React catches up with the interactive button state. */
+.sidebar-appearance__reading-mode > [data-reading-mode-icon] {
+  display: none;
+}
+
+.sidebar-appearance__reading-mode > [data-reading-mode-icon="off"] {
+  display: block;
+}
+
+:root[data-reading-mode="true"] .sidebar-appearance__reading-mode {
+  color: var(--text);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+:root[data-reading-mode="true"]
+  .sidebar-appearance__reading-mode
+  > [data-reading-mode-icon="off"] {
+  display: none;
+}
+
+:root[data-reading-mode="true"]
+  .sidebar-appearance__reading-mode
+  > [data-reading-mode-icon="on"] {
+  display: block;
+}
+
 .sidebar-appearance > button > svg,
 .sidebar-palette-trigger > svg,
 .mobile-menu-sheet__appearance > button > svg {
@@ -955,6 +984,247 @@
   );
 }
 
+/* Static documents receive the persisted sidebar state from the head
+   bootstrap before React can add courses-app--collapsed. Mirror the compact
+   shell here so the narrow rail never briefly uses the expanded brand and
+   toggle layout during hydration. */
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar {
+  padding-inline: 10px;
+  padding-bottom: 0;
+}
+
+:root[data-sidebar-state="collapsed"]
+.courses-app:not(.courses-app--collapsed)
+  .courses-sidebar__brand {
+  min-height: 48px;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  padding-left: 0;
+  position: relative;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip {
+  display: none !important;
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip {
+  display: block !important;
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 3.4px);
+  width: 21px;
+  max-width: 21px;
+  height: 36px;
+  overflow: hidden;
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip
+  svg {
+  width: 156px;
+  max-width: none;
+  height: 38px;
+}
+
+@media (min-width: 641px) {
+  :root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+    .courses-app:not(.courses-app--collapsed)
+    .courses-logo-clip {
+    /* Match the settled desktop compact-logo slot before React adds its
+       collapsed class, so the mark does not jump down during hydration. */
+    top: 15px;
+    left: 19.375px;
+    transform: none;
+  }
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse {
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  right: auto;
+  z-index: 1;
+  transform: none;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse__asset {
+  /* Keep the pre-hydration icon on the same optical axis as the settled rail. */
+  transform: translateX(1.5px);
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse__asset
+  svg[data-sidebar-toggle-direction="left"]
+  > path:last-child {
+  /* The static pass still uses the expanded-side prop. Reorient only its
+     existing arrowhead; keep the shared SVG surface and icon geometry intact. */
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transform: translateX(41px) scaleX(-1);
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse {
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar:hover
+  .sidebar-collapse,
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar:focus-within
+  .sidebar-collapse {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav {
+  align-items: stretch;
+  margin: -4px -10px 0;
+  min-height: 0;
+  padding: 16px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 15px;
+  padding: 0 0 0 12.5px;
+  overflow: visible;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav button
+  > .courses-nav__text,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav button
+  > b,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav button
+  > .courses-nav__shortcut,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > span,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > svg,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button
+  > span {
+  display: none;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button {
+  height: 57px;
+  min-height: 57px;
+  gap: 0;
+  justify-content: flex-start;
+  padding: 7px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  img,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > .shell-profile-avatar {
+  width: 43px;
+  height: 43px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > .shell-profile-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance {
+  margin-top: 6px;
+}
+
+@media (min-width: 641px) {
+  :root[data-sidebar-state="collapsed"]
+    .courses-app:not(.courses-app--collapsed)
+    .courses-profile {
+    /* Match the settled compact rail's narrower dock wrapper before
+       hydration, preventing the profile and appearance controls from
+       stretching into the sidebar edges. */
+    margin-inline: -0.5px;
+  }
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance {
+  align-items: center;
+  flex-direction: column;
+  padding: 8px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button {
+  display: inline-flex;
+  width: 42px;
+  flex: 0 0 38px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-wrap {
+  width: 42px;
+  flex: 0 0 38px;
+}
+
 /* The glow belongs to the outer application shell rather than the sidebar box.
    Its own alpha controls the color strength while the navigation stays
    genuinely transparent. The rounded main surface sits above it, so the glow
@@ -1036,7 +1306,7 @@
   --sidebar-glow-opacity: 0;
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   .courses-app {
     isolation: isolate;
   }
@@ -1147,24 +1417,15 @@
     pointer-events: none;
   }
 
-  /* The fixed sidebar glass dissolves above and below the navigation instead
-     of exposing a rectangular edge in the surrounding shell. */
+  /* A full-height backdrop-filter surface exposes its rectangular compositor
+     boundary beside the main frame in Chromium at fractional display scales.
+     Blur the generated bokeh itself so the pinned sidebar has no raster edge. */
+  .courses-app:not(.courses-app--hidden) .courses-sidebar::before {
+    filter: blur(var(--sidebar-backdrop-blur));
+  }
+
   .courses-app:not(.courses-app--hidden) .courses-sidebar::after {
-    inset: -48px 0;
-    -webkit-mask-image: linear-gradient(
-      180deg,
-      transparent 0,
-      #000 72px,
-      #000 calc(100% - 72px),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      180deg,
-      transparent 0,
-      #000 72px,
-      #000 calc(100% - 72px),
-      transparent 100%
-    );
+    content: none;
   }
 
   /* The floating sidebar needs an internal glass layer as well: applying
@@ -1186,6 +1447,12 @@
     backdrop-filter: none;
   }
 
+  :root[data-sidebar-backdrop-blur="off"]
+    .courses-app:not(.courses-app--hidden)
+    .courses-sidebar::before {
+    filter: none;
+  }
+
   .courses-sidebar > * {
     z-index: 1;
   }
@@ -1194,6 +1461,7 @@
     z-index: 3;
   }
 
+  .courses-app > .courses-main-frame,
   .courses-app > .courses-main {
     z-index: 1;
   }
@@ -1221,7 +1489,7 @@
   backdrop-filter: blur(var(--sidebar-floating-base-blur)) saturate(1.2);
 }
 
-@media (min-width: 821px) {
+@media (min-width: 641px) {
   :root[data-content-layout="framed"] .courses-app--hidden .courses-sidebar {
     top: 11px;
     bottom: 9px;

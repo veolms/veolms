@@ -14,7 +14,10 @@ const isDirectPointer = (pointerType: string | null | undefined) =>
 
 interface LearningSpaceProps {
   sessions: readonly CoursePlayerSession[];
+  /** The course that owns the full Learning Space route, if one is open. */
   activeCourseId?: string | null;
+  /** The course whose player should be highlighted inside the panel. */
+  panelActiveCourseId?: string | null;
   expanded: boolean;
   collapsedSidebar?: boolean;
   mobile?: boolean;
@@ -29,6 +32,7 @@ interface LearningSpaceProps {
 export const LearningSpace = memo(function LearningSpace({
   sessions,
   activeCourseId,
+  panelActiveCourseId,
   expanded,
   collapsedSidebar = false,
   mobile = false,
@@ -52,6 +56,8 @@ export const LearningSpace = memo(function LearningSpace({
     triggerRef,
   });
   const active = Boolean(activeCourseId);
+  const highlightedPanelCourseId =
+    panelActiveCourseId === undefined ? activeCourseId : panelActiveCourseId;
   const emptyOpen = !active && sessions.length === 0 && expanded;
   const mostRecentSession = getMostRecentCoursePlayerSession(sessions);
 
@@ -169,7 +175,7 @@ export const LearningSpace = memo(function LearningSpace({
             panelId={panelId}
             panelRef={panelRef}
             sessions={sessions}
-            activeCourseId={activeCourseId}
+            activeCourseId={highlightedPanelCourseId}
             compact={floatingPanel.compact}
             compactColumns={floatingPanel.compactColumns}
             mobile={mobile}
