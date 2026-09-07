@@ -7265,10 +7265,33 @@ export function CourseCreatePage({
       }
     }
 
-    const isMetaDirty = !isBasicsMetaEqual(currentDraft, baseline);
+    // If a basics save is already in-flight (e.g. started by the description
+    // field's blur handler), await it before re-evaluating dirtiness.  Without
+    // this guard both blur and navigation call executeSerializedBasicsMetaMutation
+    // with the same courseVersion, producing an optimistic-lock conflict:
+    //   1. blur fires → inFlightBasicsPromiseRef set synchronously → run() reads
+    //      courseVersionRef but the stale-response guard skips updating it when
+    //      basicsVersionRef has already been bumped by the navigation path.
+    //   2. navigation's run() then reads the un-updated courseVersionRef and
+    //      sends a PUT with the old version → backend rejects with 409.
+    // Awaiting here joins the in-flight save, lets it complete (which updates
+    // courseVersionRef and serverBasicsRef), and then the isMetaDirty check
+    // below correctly finds nothing left to save.
+    if (inFlightBasicsPromiseRef.current) {
+      try {
+        await inFlightBasicsPromiseRef.current;
+      } catch {
+        // Ignored – isMetaDirty is re-evaluated below with fresh ref values.
+      }
+    }
+
+    const isMetaDirty = !isBasicsMetaEqual(
+      basicsDraftRef.current,
+      serverBasicsRef.current,
+    );
     if (isMetaDirty) {
-      if (!currentDraft.title.trim()) {
-        setCourseTitle(baseline.title);
+      if (!basicsDraftRef.current.title.trim()) {
+        setCourseTitle(serverBasicsRef.current.title);
         setToastMessage("Course title cannot be empty.");
         return false;
       }
