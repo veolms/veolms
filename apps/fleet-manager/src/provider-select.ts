@@ -105,8 +105,7 @@ function detectDockerSocketGid(): string | undefined {
   }
 }
 
-export async function runProviderSelection(): Promise<void> {
-}
+export async function runProviderSelection(): Promise<void> {}
 
 if (isMainModule(import.meta.url)) {
   runProviderSelection().catch((err: unknown) => {

@@ -271,7 +271,10 @@ export async function triggerTest(
             status: "uploaded",
           })
           .execute();
-      } else if (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0) {
+      } else if (
+        !existingMedia.size_bytes ||
+        Number(existingMedia.size_bytes) === 0
+      ) {
         try {
           await db
             .updateTable("media_assets")

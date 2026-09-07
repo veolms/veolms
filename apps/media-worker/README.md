@@ -31,17 +31,17 @@ The **Media Worker** is an ephemeral compute worker running on an EC2 instance o
 
 ## Configuration Variables
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string | _Required_ |
-| `WORKER_ID` | Unique worker UUID | Auto-generated UUID |
-| `JOB_ID` | Optional job UUID assigned at launch | _Optional_ |
-| `STORAGE_PROVIDER` | Storage provider (`s3` or `local`) | `s3` |
-| `S3_BUCKET` | S3 media bucket name | _Required for S3_ |
-| `HEARTBEAT_INTERVAL_MS` | Interval between PostgreSQL heartbeat writes | `15000` (15s) |
-| `PROGRESS_UPDATE_INTERVAL_MS` | Interval between progress writes & cancellation checks | `5000` (5s) |
-| `WORKER_IDLE_POLL_SECONDS` | Seconds to wait for new work before self-termination | `15` |
-| `SCRATCH_DIR` | Local directory for temporary transcode files | `/tmp/veolms-worker` |
+| Variable                      | Description                                            | Default              |
+| :---------------------------- | :----------------------------------------------------- | :------------------- |
+| `DATABASE_URL`                | PostgreSQL connection string                           | _Required_           |
+| `WORKER_ID`                   | Unique worker UUID                                     | Auto-generated UUID  |
+| `JOB_ID`                      | Optional job UUID assigned at launch                   | _Optional_           |
+| `STORAGE_PROVIDER`            | Storage provider (`s3` or `local`)                     | `s3`                 |
+| `S3_BUCKET`                   | S3 media bucket name                                   | _Required for S3_    |
+| `HEARTBEAT_INTERVAL_MS`       | Interval between PostgreSQL heartbeat writes           | `15000` (15s)        |
+| `PROGRESS_UPDATE_INTERVAL_MS` | Interval between progress writes & cancellation checks | `5000` (5s)          |
+| `WORKER_IDLE_POLL_SECONDS`    | Seconds to wait for new work before self-termination   | `15`                 |
+| `SCRATCH_DIR`                 | Local directory for temporary transcode files          | `/tmp/veolms-worker` |
 
 ---
 
@@ -51,4 +51,3 @@ The **Media Worker** is an ephemeral compute worker running on an EC2 instance o
 pnpm --filter @veolms/media-worker test
 pnpm --filter @veolms/media-worker typecheck
 ```
-

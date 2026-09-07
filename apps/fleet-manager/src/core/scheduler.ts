@@ -38,8 +38,7 @@ export function calculateNextCheckInterval(options: {
     return minInterval;
   }
 
-  const remainingPercent =
-    (100 - Math.min(100, Math.max(0, progress))) / 100;
+  const remainingPercent = (100 - Math.min(100, Math.max(0, progress))) / 100;
   const estimatedRemainingSec = Math.max(10, duration) * remainingPercent;
   const targetInterval = Math.round(estimatedRemainingSec / 2);
 

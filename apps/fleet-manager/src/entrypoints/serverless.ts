@@ -264,9 +264,9 @@ export async function runServerlessFleetCycle(
       const isUuid = (val?: string) =>
         Boolean(
           val &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              val,
-            ),
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            val,
+          ),
         );
 
       const videoId = isUuid(event.videoId)

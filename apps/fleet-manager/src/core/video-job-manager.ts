@@ -42,10 +42,7 @@ export interface CancelJobResult {
 export interface JobManager {
   claimNextJob(): Promise<Selectable<VideoJobTable> | null>;
   assignWorkerToJob(jobId: string, workerId: string): Promise<void>;
-  markJobCompleted(
-    jobId: string,
-    expectedWorkerId?: string,
-  ): Promise<boolean>;
+  markJobCompleted(jobId: string, expectedWorkerId?: string): Promise<boolean>;
   markJobFailed(
     jobId: string,
     errorMessage: string,
@@ -150,7 +147,9 @@ export function createJobManager(options: {
               if (meta.width) mediaUpdate.width = meta.width;
               if (meta.height) mediaUpdate.height = meta.height;
               if (meta.durationSeconds) {
-                mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+                mediaUpdate.duration_seconds = Math.round(
+                  Number(meta.durationSeconds),
+                );
               }
 
               await trx
@@ -182,13 +181,18 @@ export function createJobManager(options: {
                   status: "ready",
                   updated_at: new Date(),
                 };
-                if (existingJob.video_size && Number(existingJob.video_size) > 0) {
+                if (
+                  existingJob.video_size &&
+                  Number(existingJob.video_size) > 0
+                ) {
                   mediaUpdate.size_bytes = Number(existingJob.video_size);
                 }
                 if (meta.width) mediaUpdate.width = meta.width;
                 if (meta.height) mediaUpdate.height = meta.height;
                 if (meta.durationSeconds) {
-                  mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+                  mediaUpdate.duration_seconds = Math.round(
+                    Number(meta.durationSeconds),
+                  );
                 }
 
                 await trx
@@ -564,7 +568,6 @@ export function createJobManager(options: {
         return existingActive;
       }
 
-
       // 3. Ensure media_assets record exists so foreign key video_jobs.video_id -> media_assets.id is satisfied
       let existingMedia: any = undefined;
       try {
@@ -589,7 +592,6 @@ export function createJobManager(options: {
       const id = params.jobId ?? randomUUID();
       const now = new Date();
 
-
       // Fleet Manager resolves videoSize and videoMetadata from params or existing media_assets
       const videoSize =
         params.videoSize && params.videoSize > 0
@@ -604,7 +606,7 @@ export function createJobManager(options: {
         params.videoMetadata?.height ?? existingMedia?.height ?? null;
       const metaDuration = params.videoMetadata?.durationSeconds
         ? Math.round(params.videoMetadata.durationSeconds)
-        : existingMedia?.duration_seconds ?? null;
+        : (existingMedia?.duration_seconds ?? null);
 
       const persistedMetadata =
         params.videoMetadata || (metaWidth && metaHeight)
@@ -630,11 +632,15 @@ export function createJobManager(options: {
       if (existingMedia) {
         const mediaUpdates: Record<string, any> = {};
         if (metaWidth && !existingMedia.width) mediaUpdates.width = metaWidth;
-        if (metaHeight && !existingMedia.height) mediaUpdates.height = metaHeight;
+        if (metaHeight && !existingMedia.height)
+          mediaUpdates.height = metaHeight;
         if (metaDuration && !existingMedia.duration_seconds) {
           mediaUpdates.duration_seconds = metaDuration;
         }
-        if (videoSize > 0 && (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0)) {
+        if (
+          videoSize > 0 &&
+          (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0)
+        ) {
           mediaUpdates.size_bytes = videoSize;
         }
         if (Object.keys(mediaUpdates).length > 0) {

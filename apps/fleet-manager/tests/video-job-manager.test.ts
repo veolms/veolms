@@ -245,7 +245,11 @@ describe("Job Manager — queueJob insert values and duplicate protection", () =
     // Verify the update query constrained to cancellable states
     assert.deepEqual(jobUpdateFilters, [
       { col: "id", op: "=", val: "job-completed-1" },
-      { col: "status", op: "in", val: ["queued", "provisioning", "processing"] },
+      {
+        col: "status",
+        op: "in",
+        val: ["queued", "provisioning", "processing"],
+      },
     ]);
   });
 

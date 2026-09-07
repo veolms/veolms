@@ -1732,13 +1732,7 @@ function loadExistingConfig(repoRoot: string): Partial<SetupAnswers> {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : [
-        "c7g.large",
-        "c7g.xlarge",
-        "c7g.2xlarge",
-        "c6i.large",
-        "c6i.xlarge",
-      ];
+    : ["c7g.large", "c7g.xlarge", "c7g.2xlarge", "c6i.large", "c6i.xlarge"];
   const bootMode: BootMode =
     combined["EC2_BOOT_MODE"] === "ami" || combined["AMI_ID"] ? "ami" : "fresh";
   const amiId = combined["AMI_ID"] || null;
@@ -2432,11 +2426,7 @@ async function runSetupFlow(
     "c7g.large,c7g.xlarge,c7g.2xlarge,c6i.large,c6i.xlarge";
 
   type InstancePreset =
-    | "balanced"
-    | "graviton_wildcard"
-    | "unrestricted"
-    | "budget"
-    | "custom";
+    "balanced" | "graviton_wildcard" | "unrestricted" | "budget" | "custom";
 
   const presetChoice = await askChoice<InstancePreset>(
     rl,

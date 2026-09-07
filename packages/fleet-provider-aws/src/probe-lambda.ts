@@ -69,7 +69,10 @@ export interface FleetManagerEvaluationResult {
 }
 
 export function parseFleetManagerResponse(
-  invokeResponse: { readonly FunctionError?: string; readonly Payload?: Uint8Array },
+  invokeResponse: {
+    readonly FunctionError?: string;
+    readonly Payload?: Uint8Array;
+  },
   options: { readonly isCancellation?: boolean } = {},
 ): FleetManagerEvaluationResult {
   let targetResult: unknown = {};

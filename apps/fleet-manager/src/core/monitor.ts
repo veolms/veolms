@@ -46,7 +46,10 @@ export function createMonitor(options: {
         .where((eb) =>
           eb.or([
             eb("started_at", "<", cutoff),
-            eb.and([eb("started_at", "is", null), eb("created_at", "<", cutoff)]),
+            eb.and([
+              eb("started_at", "is", null),
+              eb("created_at", "<", cutoff),
+            ]),
           ]),
         )
         .execute();
