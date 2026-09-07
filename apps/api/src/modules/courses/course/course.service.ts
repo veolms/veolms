@@ -92,9 +92,9 @@ export function createCourseService({
   /**
    * Lists published courses with optional filtering.
    */
-  async function listPublishedCourses(
-    filters?: { creatorId?: string },
-  ): Promise<CourseSummary[]> {
+  async function listPublishedCourses(filters?: {
+    creatorId?: string;
+  }): Promise<CourseSummary[]> {
     const rows = await courseRepo.listPublishedCourses(database, filters);
     return rows.map((row) => {
       const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
@@ -313,10 +313,7 @@ export function createCourseService({
         shortDescription: c.short_description,
         description: c.description,
         difficulty: c.difficulty as
-          | "beginner"
-          | "intermediate"
-          | "advanced"
-          | null,
+          "beginner" | "intermediate" | "advanced" | null,
         status: c.status as "draft" | "published" | "archived",
         creatorId: c.creator_id as string,
         categoryId: c.category_id,
@@ -521,6 +518,13 @@ export function createCourseService({
     const lessonIds = lessons.map((l) => l.id);
     const resources =
       await curriculumService.listResourcesForLessons(lessonIds);
+    const resourceMediaAssets = await mediaService.getMediaAssets(
+      Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
+      creatorId,
+    );
+    const resourceMediaById = new Map(
+      resourceMediaAssets.map((media) => [media.id, media]),
+    );
 
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
@@ -538,15 +542,28 @@ export function createCourseService({
             position: les.position,
             isPreview: les.is_preview,
             isPublished: les.is_published,
-            resources: lesResources.map((res) => ({
-              id: res.id,
-              lessonId: res.lesson_id,
-              mediaAssetId: res.media_asset_id,
-              title: res.title,
-              description: res.description,
-              position: res.position,
-              createdAt: res.created_at.toISOString(),
-            })),
+            resources: lesResources.map((res) => {
+              const resourceMediaAsset = resourceMediaById.get(
+                res.media_asset_id,
+              );
+              return {
+                id: res.id,
+                lessonId: res.lesson_id,
+                mediaAssetId: res.media_asset_id,
+                title: res.title,
+                description: res.description,
+                position: res.position,
+                createdAt: res.created_at.toISOString(),
+                mediaAsset: resourceMediaAsset
+                  ? {
+                      originalFilename: resourceMediaAsset.original_filename,
+                      mimeType: resourceMediaAsset.mime_type,
+                      sizeBytes: Number(resourceMediaAsset.size_bytes),
+                      status: resourceMediaAsset.status,
+                    }
+                  : undefined,
+              };
+            }),
           };
         });
 

@@ -1,8 +1,5 @@
 import type { Kysely } from "kysely";
-import type {
-  Database,
-  MediaAssetStatus,
-} from "@veolms/database";
+import type { Database, MediaAssetStatus } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -147,7 +144,7 @@ export async function updateVideoJobStatus(
     status: VideoJobStatus;
     progress_percent?: number;
     error_message?: string | null;
-    failed_at?: Date;
+    failed_at?: Date | null;
   },
 ) {
   await database
@@ -169,6 +166,17 @@ export async function findVideoJobByVideoId(
     .selectAll()
     .where("video_id", "=", videoId)
     .orderBy("created_at", "desc")
+    .executeTakeFirst();
+}
+
+export async function findWorkerProgressByWorkerId(
+  database: Kysely<Database>,
+  workerId: string,
+) {
+  return await database
+    .selectFrom("worker_monitoring")
+    .select("progress_percent")
+    .where("worker_id", "=", workerId)
     .executeTakeFirst();
 }
 

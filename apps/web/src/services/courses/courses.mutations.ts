@@ -11,12 +11,14 @@ import type {
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
+  CreateLessonResourceRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   RestoreCourseResponse,
+  LessonResource,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseIncludeRequest,
@@ -328,6 +330,52 @@ export function useDeleteCourseLesson() {
   });
 }
 export const useDeleteLesson = useDeleteCourseLesson;
+
+export function useCreateLessonResource() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LessonResource,
+    ApiError,
+    {
+      courseId: string;
+      lessonId: string;
+      payload: CreateLessonResourceRequest;
+    }
+  >({
+    mutationFn: ({ courseId, lessonId, payload }) =>
+      coursesService.createLessonResource(courseId, lessonId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useDeleteLessonResource() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    { courseId: string; resourceId: string }
+  >({
+    mutationFn: ({ courseId, resourceId }) =>
+      coursesService.deleteLessonResource(courseId, resourceId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
 
 export function useReorderSectionLessons() {
   const queryClient = useQueryClient();

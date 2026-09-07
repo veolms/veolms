@@ -165,6 +165,18 @@
     visibility 0s linear 180ms;
 }
 
+/* When any modal dialog is open on small devices, remove Preview / Previous / Next actions */
+body:has([role="dialog"][aria-modal="true"]) .course-wizard-mobile-action-bar,
+body:has([data-modal-open]) .course-wizard-mobile-action-bar,
+body:has([data-lesson-video-modal]) .course-wizard-mobile-action-bar,
+body.modal-open .course-wizard-mobile-action-bar,
+body[data-modal-open="true"] .course-wizard-mobile-action-bar {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    RichTextEditor Scoped ProseMirror & Formatting Styles
    ───────────────────────────────────────────────────────────────────────────── */

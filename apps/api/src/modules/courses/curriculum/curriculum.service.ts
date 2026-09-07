@@ -433,6 +433,20 @@ export function createCurriculumService({
     if (!media) {
       throw new AppError(400, "INVALID_MEDIA", "Media asset not found.");
     }
+    if (media.status === "uploading") {
+      throw new AppError(
+        409,
+        "MEDIA_NOT_READY",
+        "Media upload is still in progress.",
+      );
+    }
+    if (media.status === "failed") {
+      throw new AppError(
+        409,
+        "MEDIA_NOT_READY",
+        "Media asset is not available.",
+      );
+    }
 
     const maxPos = await curriculumRepo.findMaxResourcePosition(
       database,
@@ -452,7 +466,21 @@ export function createCurriculumService({
       created_at: now,
     });
 
-    return { id: resourceId, position };
+    return {
+      id: resourceId,
+      lessonId,
+      mediaAssetId: payload.mediaAssetId,
+      title: payload.title,
+      description: payload.description ?? null,
+      position,
+      createdAt: now.toISOString(),
+      mediaAsset: {
+        originalFilename: media.original_filename,
+        mimeType: media.mime_type,
+        sizeBytes: Number(media.size_bytes),
+        status: media.status,
+      },
+    };
   }
 
   async function removeLessonResource(
@@ -503,7 +531,11 @@ export function createCurriculumService({
   }
 
   async function findResourceById(resourceId: string, courseId: string) {
-    return await curriculumRepo.findResourceById(database, resourceId, courseId);
+    return await curriculumRepo.findResourceById(
+      database,
+      resourceId,
+      courseId,
+    );
   }
 
   return {
