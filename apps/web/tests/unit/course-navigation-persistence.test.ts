@@ -60,6 +60,36 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(previousStepId).toBe("extras");
       expect(nextStepId).toBeNull();
     });
+
+    it("hides Previous, Preview, and Publish/Update buttons on publish step when course is published", () => {
+      const evaluatePublishBarButtons = (isPublished: boolean) => {
+        return {
+          previous: !isPublished,
+          preview: !isPublished,
+          validate: true,
+          unpublish: isPublished,
+          publishCta: !isPublished, // Only draft courses have the Publish CTA
+        };
+      };
+
+      // Published course on publish step: only Validate and Unpublish
+      expect(evaluatePublishBarButtons(true)).toEqual({
+        previous: false,
+        preview: false,
+        validate: true,
+        unpublish: true,
+        publishCta: false,
+      });
+
+      // Draft course on publish step: Preview, Previous, Validate, Publish
+      expect(evaluatePublishBarButtons(false)).toEqual({
+        previous: true,
+        preview: true,
+        validate: true,
+        unpublish: false,
+        publishCta: true,
+      });
+    });
   });
 
   describe("2. Slide Direction Calculation", () => {

@@ -3375,6 +3375,7 @@ export function CoursesPage({
             courseSlug={surfaceCourseSlug}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
+            role={role}
           />
         </Suspense>
       );

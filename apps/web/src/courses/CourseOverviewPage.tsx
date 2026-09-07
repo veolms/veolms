@@ -29,6 +29,7 @@ import {
   type CourseLevel,
   type CourseCategory,
   type CourseLifecycleStatus,
+  type CourseRole,
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
@@ -324,6 +325,7 @@ interface CourseHeroSectionProps {
   onToggleWishlist?: (event: MouseEvent<HTMLButtonElement>) => void;
   onNavigatePage?: NavigateTo;
   isReadOnlyPreview?: boolean;
+  isCreator?: boolean;
 }
 
 function CourseHeroSection({
@@ -342,6 +344,7 @@ function CourseHeroSection({
   onToggleWishlist,
   onNavigatePage,
   isReadOnlyPreview = false,
+  isCreator = false,
 }: CourseHeroSectionProps) {
   const price = pricing?.price ?? "Free";
   const originalPrice = pricing?.originalPrice;
@@ -352,6 +355,99 @@ function CourseHeroSection({
     "Certificate of completion",
   ];
   const priceSizeVariant = getPriceSizeVariant(price);
+
+  const isPreview = Boolean(isReadOnlyPreview);
+  const isCreatorNormal = Boolean(isCreator && !isPreview);
+  const isFree =
+    !pricing?.price ||
+    pricing.price.trim().toLowerCase() === "free" ||
+    pricing.price.trim() === "0" ||
+    pricing.price.trim() === "$0" ||
+    pricing.price.trim() === "₹0";
+
+  let ctaLabel = "Continue Learning";
+  let ctaIcon = (
+    <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
+  );
+  let ctaDisabled = false;
+  let ctaOnClick: (() => void) | undefined = () => {
+    if (onNavigatePage) {
+      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+    }
+  };
+
+  const showApplyCoupon = !isCreatorNormal && !isFree;
+
+  if (isCreatorNormal) {
+    // 1. Creator viewing their course normally:
+    // Show only "Continue Learning". Clicking it opens the existing Learning Space.
+    // Do not show Buy Now or Apply Coupon.
+    ctaLabel = "Continue Learning";
+    ctaIcon = (
+      <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
+    );
+    ctaDisabled = false;
+    ctaOnClick = () => {
+      if (onNavigatePage) {
+        onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+      }
+    };
+  } else if (isPreview) {
+    // 2. Creator Preview:
+    // Paid course: show existing price, "Apply Coupon", and "Buy Now" as demo UI.
+    // Free course: show "Free" and "Enroll for Free" as demo UI.
+    if (isFree) {
+      ctaLabel = "Enroll for Free";
+      ctaIcon = (
+        <BookOpen
+          size="1.15em"
+          weight="bold"
+          className="shrink-0"
+          aria-hidden="true"
+        />
+      );
+    } else {
+      ctaLabel = "Buy Now";
+      ctaIcon = (
+        <ShoppingBag
+          size="1.15em"
+          weight="bold"
+          className="shrink-0"
+          aria-hidden="true"
+        />
+      );
+    }
+    ctaDisabled = false;
+    ctaOnClick = undefined; // Demo UI: purchase/enrollment actions do not need real logic
+  } else {
+    // 3. Student:
+    // Paid course: show price and "Apply Coupon". Purchase/Buy Now action visibly disabled/non-functional.
+    // Free course: show "Free" and "Continue Learning", which opens existing Learning Space.
+    if (isFree) {
+      ctaLabel = "Continue Learning";
+      ctaIcon = (
+        <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
+      );
+      ctaDisabled = false;
+      ctaOnClick = () => {
+        if (onNavigatePage) {
+          onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        }
+      };
+    } else {
+      ctaLabel = "Buy Now";
+      ctaIcon = (
+        <ShoppingBag
+          size="1.15em"
+          weight="bold"
+          className="shrink-0"
+          aria-hidden="true"
+        />
+      );
+      ctaDisabled = true;
+      ctaOnClick = undefined;
+    }
+  }
 
   const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -457,105 +553,75 @@ function CourseHeroSection({
             aria-label="Course pricing and enrollment"
           >
             {/* Top Row: Prominent Price + Original Price + Discount (Left) and Favourite Button (Top Right) */}
-            <div className="flex items-start justify-between gap-3 w-full">
-              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
-                <span
-                  className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
-                >
-                  {price}
-                </span>
-                {originalPrice && (
-                  <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
-                    {originalPrice}
+            {!isCreatorNormal && (
+              <div className="flex items-start justify-between gap-3 w-full">
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
+                  <span
+                    className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
+                  >
+                    {isFree ? "Free" : price}
                   </span>
-                )}
-                {discount && (
-                  <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
-                    {discount}
-                  </span>
-                )}
-              </div>
+                  {!isFree && originalPrice && (
+                    <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
+                      {originalPrice}
+                    </span>
+                  )}
+                  {!isFree && discount && (
+                    <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
+                      {discount}
+                    </span>
+                  )}
+                </div>
 
-              <button
-                type="button"
-                className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
-                  wishlisted
-                    ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
-                    : ""
-                }`}
-                aria-label={
-                  wishlisted ? "Remove from wishlist" : "Add to wishlist"
-                }
-                aria-pressed={wishlisted}
-                disabled={isReadOnlyPreview}
-                onClick={onToggleWishlist}
-                title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
-              >
-                <Heart
-                  size={20}
-                  weight={wishlisted ? "fill" : "regular"}
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-
-            {/* Middle Row: Actions (Apply Coupon + Buy Now / Continue Learning) */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem] disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isReadOnlyPreview}
-              >
-                <Ticket
-                  size="1.15em"
-                  weight="bold"
-                  className="shrink-0"
-                  aria-hidden="true"
-                />
-                <span className="font-[750] truncate">Apply coupon</span>
-              </button>
-
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
-                disabled={isReadOnlyPreview}
-                onClick={() => {
-                  if (!isReadOnlyPreview && onNavigatePage) {
-                    onNavigatePage(
-                      `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-                    );
+                <button
+                  type="button"
+                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
+                    wishlisted
+                      ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
+                      : ""
+                  }`}
+                  aria-label={
+                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
                   }
-                }}
+                  aria-pressed={wishlisted}
+                  disabled={isPreview}
+                  onClick={onToggleWishlist}
+                  title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                >
+                  <Heart
+                    size={20}
+                    weight={wishlisted ? "fill" : "regular"}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Middle Row: Actions (Apply Coupon + Buy Now / Continue Learning / Enroll for Free) */}
+            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
+              {showApplyCoupon && (
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem]"
+                >
+                  <Ticket
+                    size="1.15em"
+                    weight="bold"
+                    className="shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="font-[750] truncate">Apply coupon</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none disabled:hover:translate-y-0"
+                disabled={ctaDisabled}
+                onClick={ctaOnClick}
               >
-                {course.enrolled ? (
-                  <Play
-                    size="1.15em"
-                    weight="fill"
-                    className="shrink-0"
-                    aria-hidden="true"
-                  />
-                ) : price.toLowerCase() === "free" ? (
-                  <BookOpen
-                    size="1.15em"
-                    weight="bold"
-                    className="shrink-0"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <ShoppingBag
-                    size="1.15em"
-                    weight="bold"
-                    className="shrink-0"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="font-[800] truncate">
-                  {price.toLowerCase() === "free"
-                    ? "Enroll for Free"
-                    : course.enrolled
-                      ? "Continue Learning"
-                      : "Buy Now"}
-                </span>
+                {ctaIcon}
+                <span className="font-[800] truncate">{ctaLabel}</span>
               </button>
             </div>
 
@@ -788,6 +854,8 @@ export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
+  role?: CourseRole;
+  isCreator?: boolean;
   // API Preview Data
   previewData?: CourseEditorDataResponse;
   categories?: Category[];
@@ -871,6 +939,7 @@ export function adaptCourseOverviewResponse(
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
+    creatorId: c.creatorId ?? overview.creator?.id ?? null,
   };
 
   const adaptedSections: CourseSection[] = (overview.sections || [])
@@ -987,6 +1056,7 @@ export function adaptPreviewDataToOverview(
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
+    creatorId: c.creatorId ?? null,
   };
 
   const adaptedSections: CourseSection[] = (previewData.sections || [])
@@ -1200,6 +1270,22 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     );
   }
 
+  const isCourseOwner = Boolean(
+    authUser?.id &&
+      (course?.creatorId === authUser.id ||
+        activeAdapted?.course.creatorId === authUser.id ||
+        apiOverview?.creator?.id === authUser.id ||
+        apiOverview?.course.creatorId === authUser.id),
+  );
+
+  const isCreator =
+    props.isCreator ??
+    (props.role === "creator"
+      ? true
+      : props.role === "student"
+        ? false
+        : isCourseOwner);
+
   return (
     <CourseOverviewContent
       {...props}
@@ -1208,6 +1294,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
       courseSlug={courseSlug}
       defaultInstructorName={defaultInstructorName}
       adaptedFromPreview={activeAdapted}
+      isCreator={isCreator}
     />
   );
 }
@@ -1217,6 +1304,7 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
   courseSlug: string | undefined;
   defaultInstructorName: string;
   adaptedFromPreview: AdaptedOverviewData | null;
+  isCreator?: boolean;
 };
 
 function CourseOverviewContent({
@@ -1238,6 +1326,7 @@ function CourseOverviewContent({
   customPricing,
   customTrailerMediaId,
   isReadOnlyPreview = false,
+  isCreator = false,
 }: CourseOverviewContentProps) {
   const locationHash =
     typeof window === "undefined" ? "" : window.location.hash;
@@ -1385,6 +1474,7 @@ function CourseOverviewContent({
         onToggleWishlist={toggleWishlist}
         onNavigatePage={onNavigatePage}
         isReadOnlyPreview={isReadOnlyPreview}
+        isCreator={isCreator}
       />
 
       {/* 2. About This Course */}

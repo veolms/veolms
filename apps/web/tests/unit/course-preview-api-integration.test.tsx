@@ -265,7 +265,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       />,
     );
 
-    expect(screen.getByText("Free")).toBeVisible();
+    expect(screen.getAllByText("Free")[0]).toBeVisible();
     expect(screen.getByText("Enroll for Free")).toBeVisible();
   });
 

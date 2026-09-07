@@ -51,6 +51,7 @@ export interface Course {
   deletedAt?: string;
   purgeAt?: string;
   isApi?: boolean;
+  creatorId?: string | null;
 }
 
 /**
