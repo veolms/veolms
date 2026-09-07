@@ -60,12 +60,14 @@ export function createServices({
   if (
     config.NODE_ENV === "production" &&
     !config.FLEET_MANAGER_TRIGGER_URL &&
-    !config.FLEET_MANAGER_LAMBDA_NAME
+    !config.FLEET_MANAGER_LAMBDA_NAME &&
+    !config.PROBE_LAMBDA_NAME
   ) {
     logger.warn(
-      "Neither FLEET_MANAGER_TRIGGER_URL nor FLEET_MANAGER_LAMBDA_NAME is set; Fleet Manager will rely solely on database reconciliation",
+      "Neither FLEET_MANAGER_TRIGGER_URL, PROBE_LAMBDA_NAME, nor FLEET_MANAGER_LAMBDA_NAME is set; Fleet Manager will rely solely on database reconciliation",
     );
   }
+
 
   if (config.NODE_ENV === "production") {
     if (config.EMAIL_TRANSPORT === "console") {
@@ -122,9 +124,10 @@ export function createServices({
     }),
     videoDispatch: createVideoDispatchService({
       triggerUrl: config.FLEET_MANAGER_TRIGGER_URL,
-      lambdaName: config.FLEET_MANAGER_LAMBDA_NAME,
+      lambdaName: config.PROBE_LAMBDA_NAME || config.FLEET_MANAGER_LAMBDA_NAME,
       logger,
     }),
+
     paymentGateway: createPaymentGateway(config),
   };
 }
