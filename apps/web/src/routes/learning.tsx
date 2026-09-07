@@ -32,8 +32,6 @@ import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 
-const COURSE_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -82,11 +80,8 @@ export default function LearningRoute() {
   const lastSyncedSessionRef = useRef<string | null>(null);
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
-  const resolvesLegacyCourseId = Boolean(
-    courseSlug && COURSE_ID_PATTERN.test(courseSlug),
-  );
   const { data: courseOverview } = useCourseOverview(courseSlug, {
-    enabled: resolvesLegacyCourseId,
+    enabled: Boolean(courseSlug),
   });
   const { data: publishedCoursesData } = useCourses({
     enabled: Boolean(activeUser),
