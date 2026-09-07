@@ -271,7 +271,7 @@ describe("CourseCard", () => {
     ["student", enrolledCourse],
     ["student", nonEnrolledCourse],
   ] as const)(
-    "opens course preview from the %s course menu",
+    "opens course overview from the %s course menu",
     async (role, course) => {
       const { onExplore, setMenuOpen } = renderCard({
         role,
@@ -279,7 +279,7 @@ describe("CourseCard", () => {
         menuOpen: true,
       });
 
-      fireEvent.click(screen.getByRole("menuitem", { name: "Course Preview" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Course Overview" }));
 
       expect(setMenuOpen).toHaveBeenCalledWith(null);
       await waitFor(() => expect(onExplore).toHaveBeenCalledWith(course));
