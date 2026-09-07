@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import type { Database, VideoJobTable } from "@veolms/database";
 import {
+  estimateJobHardware,
   resolveJobHardware,
   type FleetEventType,
   type FleetProvider,
@@ -117,17 +118,101 @@ export function createWorkerManager(options: {
     ): Promise<WorkerHandle> {
       const workerId = randomUUID();
 
-      if (job.video_size <= 0) {
+      // Fleet Manager finds/estimates the hardware profile and enriches the job
+      let jobToSize = { ...job };
+      if (
+        !jobToSize.hardware_profile ||
+        jobToSize.video_size <= 0 ||
+        !jobToSize.video_metadata
+      ) {
+        if (jobToSize.video_id) {
+          try {
+            const media = await db
+              .selectFrom("media_assets")
+              .selectAll()
+              .where("id", "=", jobToSize.video_id)
+              .executeTakeFirst();
+            if (media) {
+              const mediaSize = Number(media.size_bytes ?? 0);
+              const resolvedSize =
+                jobToSize.video_size > 0 ? jobToSize.video_size : mediaSize;
+              const meta: Record<string, unknown> =
+                (jobToSize.video_metadata as any) ?? {};
+              if (media.width && !meta["width"]) meta["width"] = media.width;
+              if (media.height && !meta["height"]) meta["height"] = media.height;
+              if (media.duration_seconds && !meta["durationSeconds"]) {
+                meta["durationSeconds"] = media.duration_seconds;
+              }
+              const hasMeta = Object.keys(meta).length > 0;
+              const hw = estimateJobHardware(resolvedSize, jobToSize.qualities, {
+                videoMetadata: hasMeta ? (meta as any) : undefined,
+                profile: jobToSize.hardware_profile,
+              });
+
+              try {
+                await db
+                  .updateTable("video_jobs")
+                  .set({
+                    hardware_profile: hw.profile,
+                    video_size: resolvedSize,
+                    ...(hasMeta ? { video_metadata: meta as any } : {}),
+                    updated_at: new Date(),
+                  })
+                  .where("id", "=", jobToSize.id)
+                  .execute();
+              } catch {
+                // Ignore update error
+              }
+
+              jobToSize = {
+                ...jobToSize,
+                hardware_profile: hw.profile,
+                video_size: resolvedSize,
+                video_metadata: hasMeta
+                  ? (meta as any)
+                  : jobToSize.video_metadata,
+              };
+            }
+          } catch {
+            // Ignore if media lookup fails
+          }
+        }
+
+        if (!jobToSize.hardware_profile) {
+          const hw = estimateJobHardware(
+            jobToSize.video_size,
+            jobToSize.qualities,
+            {
+              videoMetadata: (jobToSize.video_metadata as any) ?? undefined,
+            },
+          );
+          try {
+            await db
+              .updateTable("video_jobs")
+              .set({
+                hardware_profile: hw.profile,
+                updated_at: new Date(),
+              })
+              .where("id", "=", jobToSize.id)
+              .execute();
+            jobToSize.hardware_profile = hw.profile;
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      if (jobToSize.video_size <= 0) {
         // Falls back to baseline (qualities-only) sizing in
         // estimateJobHardware() — worth surfacing here since a large video
         // queued without a real size would otherwise be silently
         // under-provisioned instead of failing loudly.
         console.warn(
-          `[fleet-manager] Job ${job.id} has no video_size (${job.video_size}) — sizing worker from qualities alone.`,
+          `[fleet-manager] Job ${jobToSize.id} has no video_size (${jobToSize.video_size}) — sizing worker from qualities alone.`,
         );
       }
 
-      const spec = this.calculateWorkerSpec(job);
+      const spec = this.calculateWorkerSpec(jobToSize);
 
       // 1. Insert PENDING worker record
       await db
@@ -156,6 +241,7 @@ export function createWorkerManager(options: {
         cpu: spec.cpu,
         memoryMb: spec.memoryMb,
         qualities: job.qualities,
+        hardwareProfile: jobToSize.hardware_profile,
       });
 
       // 2. Call provider to launch worker
@@ -197,8 +283,11 @@ export function createWorkerManager(options: {
       });
 
       // 4. Initialize worker_monitoring schedule
-      const estimatedDuration =
-        resolveJobHardware(job).estimatedDurationSeconds;
+      const estimatedDuration = Math.max(
+        1,
+        Math.round(resolveJobHardware(job).estimatedDurationSeconds),
+      );
+
       const initialCheck = scheduler.calculateNextCheck({
         estimatedDurationSec: estimatedDuration,
         progressPercent: 0,

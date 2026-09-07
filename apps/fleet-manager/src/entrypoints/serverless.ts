@@ -254,23 +254,25 @@ export async function runServerlessFleetCycle(
       };
     }
 
-    // 2. If action is QUEUE and video parameters are provided, ensure job is queued (idempotent)
-    if (event.action === "queue" && event.videoKey) {
-      const videoKey = event.videoKey;
-      const isUuid = (val: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          val,
+    // 2. If video parameters are provided (from queue action, probe lambda forward, or claim),
+    // ensure job and media_assets are enriched with probed metadata and estimated hardware profile.
+    if (event.videoKey || (event.jobId && event.videoMetadata)) {
+      const videoKey = event.videoKey ?? "";
+      const isUuid = (val?: string) =>
+        Boolean(
+          val &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              val,
+            ),
         );
 
-      const videoId =
-        event.videoId && isUuid(event.videoId)
-          ? event.videoId
-          : event.jobId && isUuid(event.jobId)
-            ? event.jobId
-            : undefined;
+      const videoId = isUuid(event.videoId)
+        ? event.videoId
+        : isUuid(event.jobId)
+          ? event.jobId
+          : undefined;
 
-      const jobId =
-        event.jobId && isUuid(event.jobId) ? event.jobId : undefined;
+      const jobId = isUuid(event.jobId) ? event.jobId : undefined;
 
       const filename = videoKey.split(/[/\\]/).pop() || "video.mp4";
       const cleanFilename = filename.replace(/\.[^/.]+$/, "");

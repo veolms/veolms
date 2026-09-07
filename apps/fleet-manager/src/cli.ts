@@ -587,66 +587,27 @@ export async function runCli(
               ? "output/auto-demo/"
               : `transcoded/${cleanFilename}/`;
 
-          // 4. Add job to PostgreSQL queue from inside Fleet Manager!
+          // 4. Queue job in Fleet Manager — hardware profile is estimated by jobManager
           const db = getDb();
-          const existingMedia = await db
-            .selectFrom("media_assets")
-            .selectAll()
-            .where("storage_key", "=", videoKey)
-            .executeTakeFirst();
-
-          let videoId = existingMedia?.id;
-          if (!videoId) {
-            const ownerUser = await db
-              .selectFrom("users")
-              .select("id")
-              .limit(1)
-              .executeTakeFirst();
-            const ownerId =
-              ownerUser?.id ?? "00000000-0000-4000-8000-000000000001";
-            videoId = randomUUID();
-            await db
-              .insertInto("media_assets")
-              .values({
-                id: videoId,
-                owner_id: ownerId,
-                type: "video",
-                storage_provider: normalized === "local" ? "local" : "s3",
-                storage_key: videoKey,
-                original_filename: filename,
-                mime_type: "video/mp4",
-                size_bytes: videoSize ?? 0,
-                status: "ready",
-              })
-              .onConflict((oc: any) => oc.column("id").doNothing())
-              .execute();
-          }
-
-          const jobId = randomUUID();
-          await db
-            .insertInto("video_jobs")
-            .values({
-              id: jobId,
-              video_id: videoId,
-              status: "queued",
-              video_key: videoKey,
-              output_prefix: outputPrefix,
-              video_size: videoSize ?? 0,
-              qualities: [...qualities],
-              worker_id: null,
-              attempts: 0,
-              max_attempts: 3,
-              error_message: null,
-              created_at: new Date(),
-              started_at: null,
-              completed_at: null,
-              failed_at: null,
-              updated_at: new Date(),
-            })
-            .execute();
+          const cfg = loadFleetManagerConfig();
+          const jobManager = createJobManager({ db, config: cfg });
+          const queuedJob = await jobManager.queueJob({
+            videoKey,
+            outputPrefix,
+            qualities: [...qualities],
+            videoSize,
+          });
+          const jobId = queuedJob.id;
+          const videoId = queuedJob.video_id ?? randomUUID();
 
           console.info(`✓ Job [${jobId}] queued in PostgreSQL database.`);
           console.info(`  Video Key:     ${videoKey}`);
+          console.info(
+            `  Video Size:    ${queuedJob.video_size ?? 0} bytes`,
+          );
+          console.info(
+            `  Hardware:      ${queuedJob.hardware_profile ?? "default"}`,
+          );
           console.info(`  Output Prefix: ${outputPrefix}`);
           console.info(`  Qualities:     ${qualities.join(", ")}\n`);
 
@@ -657,7 +618,9 @@ export async function runCli(
             videoKey,
             outputPrefix,
             qualities,
-            videoSize,
+            videoSize: queuedJob.video_size
+              ? Number(queuedJob.video_size)
+              : videoSize,
             interactive: !isNonInteractive,
             nonInteractive: isNonInteractive,
             cwd: process.cwd(),

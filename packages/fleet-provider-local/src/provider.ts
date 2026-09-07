@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+const repoRoot =
+  typeof __dirname !== "undefined"
+    ? resolve(__dirname, "../../../..")
+    : process.cwd();
 
-const repoRoot = resolve(fileURLToPath(import.meta.url), "../../../..");
 import type {
   ExecutionResult,
   FleetProvider,

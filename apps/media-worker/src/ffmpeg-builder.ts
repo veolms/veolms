@@ -9,6 +9,10 @@ export interface VideoMetadata {
   width: number;
   height: number;
   fps?: number;
+  codec?: string;
+  bitrate?: number;
+  format?: string;
+  size?: number;
 }
 
 export interface GeneratedVariant {

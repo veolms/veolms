@@ -139,6 +139,7 @@ const serverConfigSchema = z.object({
   // Fleet Manager & Video Processing Dispatch
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
+  PROBE_LAMBDA_NAME: z.string().optional(),
   FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
   FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
 

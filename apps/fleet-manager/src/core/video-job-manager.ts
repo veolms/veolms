@@ -122,27 +122,39 @@ export function createJobManager(options: {
 
         if (numUpdated === 1n) {
           let videoId = updatedRow?.video_id;
-          if (!videoId) {
-            try {
-              const job = await trx
-                .selectFrom("video_jobs")
-                .selectAll()
-                .where("id", "=", jobId)
-                .executeTakeFirst();
-              videoId = job?.video_id;
-            } catch {
-              // Ignore if select not supported
+          let jobData: any = undefined;
+          try {
+            jobData = await trx
+              .selectFrom("video_jobs")
+              .selectAll()
+              .where("id", "=", jobId)
+              .executeTakeFirst();
+            if (!videoId) {
+              videoId = jobData?.video_id;
             }
+          } catch {
+            // Ignore if select not supported
           }
 
           if (videoId) {
             try {
+              const meta = (jobData?.video_metadata ?? {}) as any;
+              const mediaUpdate: Record<string, any> = {
+                status: "ready",
+                updated_at: new Date(),
+              };
+              if (jobData?.video_size && Number(jobData.video_size) > 0) {
+                mediaUpdate.size_bytes = Number(jobData.video_size);
+              }
+              if (meta.width) mediaUpdate.width = meta.width;
+              if (meta.height) mediaUpdate.height = meta.height;
+              if (meta.durationSeconds) {
+                mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+              }
+
               await trx
                 .updateTable("media_assets")
-                .set({
-                  status: "ready",
-                  updated_at: new Date(),
-                })
+                .set(mediaUpdate)
                 .where("id", "=", videoId)
                 .execute();
             } catch {
@@ -164,12 +176,23 @@ export function createJobManager(options: {
           if (existingJob?.status === "completed") {
             if (existingJob.video_id) {
               try {
+                const meta = (existingJob.video_metadata ?? {}) as any;
+                const mediaUpdate: Record<string, any> = {
+                  status: "ready",
+                  updated_at: new Date(),
+                };
+                if (existingJob.video_size && Number(existingJob.video_size) > 0) {
+                  mediaUpdate.size_bytes = Number(existingJob.video_size);
+                }
+                if (meta.width) mediaUpdate.width = meta.width;
+                if (meta.height) mediaUpdate.height = meta.height;
+                if (meta.durationSeconds) {
+                  mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+                }
+
                 await trx
                   .updateTable("media_assets")
-                  .set({
-                    status: "ready",
-                    updated_at: new Date(),
-                  })
+                  .set(mediaUpdate)
                   .where("id", "=", existingJob.video_id)
                   .execute();
               } catch {
@@ -301,6 +324,111 @@ export function createJobManager(options: {
           .where("id", "=", params.jobId)
           .executeTakeFirst();
         if (existingById) {
+          // If existing job lacks hardware_profile/video_size, or if new videoMetadata is provided,
+          // Fleet Manager estimates profile, updates video_jobs, and synchronizes media_assets
+          if (
+            !existingById.hardware_profile ||
+            existingById.video_size <= 0 ||
+            (params.videoMetadata && !existingById.video_metadata)
+          ) {
+            let media: any = undefined;
+            if (existingById.video_id) {
+              try {
+                media = await db
+                  .selectFrom("media_assets")
+                  .selectAll()
+                  .where("id", "=", existingById.video_id)
+                  .executeTakeFirst();
+              } catch {
+                // Ignore
+              }
+            }
+            const resolvedSize =
+              params.videoSize && params.videoSize > 0
+                ? params.videoSize
+                : existingById.video_size > 0
+                  ? existingById.video_size
+                  : media?.size_bytes && Number(media.size_bytes) > 0
+                    ? Number(media.size_bytes)
+                    : 0;
+
+            const metaParam = params.videoMetadata
+              ? (() => {
+                  const { rawStreams: _rawStreams, ...rest } =
+                    params.videoMetadata as any;
+                  return rest;
+                })()
+              : null;
+
+            const meta = (metaParam ??
+              existingById.video_metadata ??
+              (media && (media.width || media.duration_seconds)
+                ? {
+                    width: media.width,
+                    height: media.height,
+                    durationSeconds: media.duration_seconds,
+                  }
+                : null)) as any;
+
+            const hw = estimateJobHardware(
+              resolvedSize,
+              existingById.qualities,
+              { videoMetadata: meta },
+            );
+            try {
+              await db
+                .updateTable("video_jobs")
+                .set({
+                  hardware_profile: hw.profile,
+                  video_size: resolvedSize,
+                  ...(meta ? { video_metadata: meta } : {}),
+                  updated_at: new Date(),
+                })
+                .where("id", "=", existingById.id)
+                .execute();
+            } catch {
+              // Ignore
+            }
+
+            if (existingById.video_id) {
+              const mediaUpdates: Record<string, any> = {};
+              const metaW = meta?.width ?? media?.width;
+              const metaH = meta?.height ?? media?.height;
+              const metaDur = meta?.durationSeconds
+                ? Math.round(meta.durationSeconds)
+                : media?.duration_seconds;
+              if (metaW && !media?.width) mediaUpdates.width = metaW;
+              if (metaH && !media?.height) mediaUpdates.height = metaH;
+              if (metaDur && !media?.duration_seconds) {
+                mediaUpdates.duration_seconds = metaDur;
+              }
+              if (
+                resolvedSize > 0 &&
+                (!media?.size_bytes || Number(media.size_bytes) === 0)
+              ) {
+                mediaUpdates.size_bytes = resolvedSize;
+              }
+              if (Object.keys(mediaUpdates).length > 0) {
+                mediaUpdates.updated_at = new Date();
+                try {
+                  await db
+                    .updateTable("media_assets")
+                    .set(mediaUpdates)
+                    .where("id", "=", existingById.video_id)
+                    .execute();
+                } catch {
+                  // Ignore
+                }
+              }
+            }
+
+            return {
+              ...existingById,
+              hardware_profile: hw.profile,
+              video_size: resolvedSize,
+              ...(meta ? { video_metadata: meta } : {}),
+            };
+          }
           return existingById;
         }
       }
@@ -328,196 +456,245 @@ export function createJobManager(options: {
         .executeTakeFirst();
 
       if (existingActive) {
+        if (
+          !existingActive.hardware_profile ||
+          existingActive.video_size <= 0 ||
+          (params.videoMetadata && !existingActive.video_metadata)
+        ) {
+          let media: any = undefined;
+          if (existingActive.video_id) {
+            try {
+              media = await db
+                .selectFrom("media_assets")
+                .selectAll()
+                .where("id", "=", existingActive.video_id)
+                .executeTakeFirst();
+            } catch {
+              // Ignore
+            }
+          }
+          const resolvedSize =
+            params.videoSize && params.videoSize > 0
+              ? params.videoSize
+              : existingActive.video_size > 0
+                ? existingActive.video_size
+                : media?.size_bytes && Number(media.size_bytes) > 0
+                  ? Number(media.size_bytes)
+                  : 0;
+
+          const metaParam = params.videoMetadata
+            ? (() => {
+                const { rawStreams: _rawStreams, ...rest } =
+                  params.videoMetadata as any;
+                return rest;
+              })()
+            : null;
+
+          const meta = (metaParam ??
+            existingActive.video_metadata ??
+            (media && (media.width || media.duration_seconds)
+              ? {
+                  width: media.width,
+                  height: media.height,
+                  durationSeconds: media.duration_seconds,
+                }
+              : null)) as any;
+
+          const hw = estimateJobHardware(
+            resolvedSize,
+            existingActive.qualities,
+            { videoMetadata: meta },
+          );
+          try {
+            await db
+              .updateTable("video_jobs")
+              .set({
+                hardware_profile: hw.profile,
+                video_size: resolvedSize,
+                ...(meta ? { video_metadata: meta } : {}),
+                updated_at: new Date(),
+              })
+              .where("id", "=", existingActive.id)
+              .execute();
+          } catch {
+            // Ignore
+          }
+
+          if (existingActive.video_id) {
+            const mediaUpdates: Record<string, any> = {};
+            const metaW = meta?.width ?? media?.width;
+            const metaH = meta?.height ?? media?.height;
+            const metaDur = meta?.durationSeconds
+              ? Math.round(meta.durationSeconds)
+              : media?.duration_seconds;
+            if (metaW && !media?.width) mediaUpdates.width = metaW;
+            if (metaH && !media?.height) mediaUpdates.height = metaH;
+            if (metaDur && !media?.duration_seconds) {
+              mediaUpdates.duration_seconds = metaDur;
+            }
+            if (
+              resolvedSize > 0 &&
+              (!media?.size_bytes || Number(media.size_bytes) === 0)
+            ) {
+              mediaUpdates.size_bytes = resolvedSize;
+            }
+            if (Object.keys(mediaUpdates).length > 0) {
+              mediaUpdates.updated_at = new Date();
+              try {
+                await db
+                  .updateTable("media_assets")
+                  .set(mediaUpdates)
+                  .where("id", "=", existingActive.video_id)
+                  .execute();
+              } catch {
+                // Ignore
+              }
+            }
+          }
+
+          return {
+            ...existingActive,
+            hardware_profile: hw.profile,
+            video_size: resolvedSize,
+            ...(meta ? { video_metadata: meta } : {}),
+          };
+        }
         return existingActive;
       }
 
+
+      // 3. Ensure media_assets record exists so foreign key video_jobs.video_id -> media_assets.id is satisfied
+      let existingMedia: any = undefined;
+      try {
+        existingMedia = params.videoId
+          ? await db
+              .selectFrom("media_assets")
+              .selectAll()
+              .where("id", "=", params.videoId)
+              .executeTakeFirst()
+          : await db
+              .selectFrom("media_assets")
+              .selectAll()
+              .where("storage_key", "=", params.videoKey)
+              .executeTakeFirst();
+      } catch {
+        // Ignore in mock DB
+      }
+
+      const videoId: string =
+        params.videoId ?? existingMedia?.id ?? randomUUID();
+
       const id = params.jobId ?? randomUUID();
-      const videoSize = params.videoSize ?? 0;
       const now = new Date();
 
-      // Persist the probed metadata subset (minus ffprobe's raw per-stream
-      // dump) alongside the resolved profile tier. estimateJobHardware()
-      // is a pure function of (video_size, qualities, video_metadata), so
-      // every later reader (worker provisioning, the atomic claim query,
-      // the worker's own claim-time capacity check) recomputes the exact
-      // same cpu/memory/storage/duration from this persisted row — nothing
-      // else needs to be stored. hardware_profile itself is kept only for
-      // observability/filtering (see migration 008).
-      const persistedMetadata = params.videoMetadata
-        ? (() => {
-            const { rawStreams: _rawStreams, ...rest } = params.videoMetadata;
-            return rest;
-          })()
-        : null;
+
+      // Fleet Manager resolves videoSize and videoMetadata from params or existing media_assets
+      const videoSize =
+        params.videoSize && params.videoSize > 0
+          ? params.videoSize
+          : existingMedia?.size_bytes && Number(existingMedia.size_bytes) > 0
+            ? Number(existingMedia.size_bytes)
+            : 0;
+
+      const metaWidth =
+        params.videoMetadata?.width ?? existingMedia?.width ?? null;
+      const metaHeight =
+        params.videoMetadata?.height ?? existingMedia?.height ?? null;
+      const metaDuration = params.videoMetadata?.durationSeconds
+        ? Math.round(params.videoMetadata.durationSeconds)
+        : existingMedia?.duration_seconds ?? null;
+
+      const persistedMetadata =
+        params.videoMetadata || (metaWidth && metaHeight)
+          ? {
+              ...(params.videoMetadata
+                ? (() => {
+                    const { rawStreams: _rawStreams, ...rest } =
+                      params.videoMetadata;
+                    return rest;
+                  })()
+                : {}),
+              ...(metaWidth ? { width: metaWidth } : {}),
+              ...(metaHeight ? { height: metaHeight } : {}),
+              ...(metaDuration ? { durationSeconds: metaDuration } : {}),
+            }
+          : null;
+
+      // Fleet Manager finds and estimates the hardware profile for this job!
       const hardwareProfile = estimateJobHardware(videoSize, params.qualities, {
         videoMetadata: persistedMetadata,
       }).profile;
 
-      const metaWidth = params.videoMetadata?.width ?? null;
-      const metaHeight = params.videoMetadata?.height ?? null;
-      const metaDuration = params.videoMetadata?.durationSeconds
-        ? Math.round(params.videoMetadata.durationSeconds)
-        : null;
-
-      // Ensure media_assets record exists so foreign key video_jobs.video_id -> media_assets.id is satisfied
-      let videoId = params.videoId;
-      if (!videoId) {
-        const existingMedia = await db
-          .selectFrom("media_assets")
-          .selectAll()
-          .where("storage_key", "=", params.videoKey)
-          .executeTakeFirst();
-
-        if (existingMedia) {
-          videoId = existingMedia.id;
-          if (
-            (metaWidth && !existingMedia.width) ||
-            (metaHeight && !existingMedia.height) ||
-            (metaDuration && !existingMedia.duration_seconds)
-          ) {
-            try {
-              await db
-                .updateTable("media_assets")
-                .set({
-                  width: existingMedia.width ?? metaWidth,
-                  height: existingMedia.height ?? metaHeight,
-                  duration_seconds:
-                    existingMedia.duration_seconds ?? metaDuration,
-                  updated_at: new Date(),
-                })
-                .where("id", "=", videoId)
-                .execute();
-            } catch {
-              // Ignore update error
-            }
-          }
-        } else {
-          videoId = randomUUID();
-          const filename = params.videoKey.split(/[/\\]/).pop() || "video.mp4";
-          const defaultOwnerId = "00000000-0000-4000-8000-000000000001";
-          let ownerId = defaultOwnerId;
-          try {
-            const ownerUser = await db
-              .selectFrom("users")
-              .selectAll()
-              .where("id", "=", defaultOwnerId)
-              .executeTakeFirst();
-            if (ownerUser?.id) {
-              ownerId = ownerUser.id;
-            } else {
-              await db
-                .insertInto("users")
-                .values({
-                  id: defaultOwnerId,
-                  email: "creator@veolms.org",
-                  username: "creator",
-                  display_name: "VeoLMS Creator",
-                  email_verified_at: new Date(),
-                })
-                .execute();
-            }
-          } catch {
-            // Ignore mock DB / concurrent insert errors
-          }
+      if (existingMedia) {
+        const mediaUpdates: Record<string, any> = {};
+        if (metaWidth && !existingMedia.width) mediaUpdates.width = metaWidth;
+        if (metaHeight && !existingMedia.height) mediaUpdates.height = metaHeight;
+        if (metaDuration && !existingMedia.duration_seconds) {
+          mediaUpdates.duration_seconds = metaDuration;
+        }
+        if (videoSize > 0 && (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0)) {
+          mediaUpdates.size_bytes = videoSize;
+        }
+        if (Object.keys(mediaUpdates).length > 0) {
+          mediaUpdates.updated_at = new Date();
           try {
             await db
-              .insertInto("media_assets")
-              .values({
-                id: videoId,
-                owner_id: ownerId,
-                type: "video",
-                storage_provider: "s3",
-                storage_key: params.videoKey,
-                original_filename: filename,
-                mime_type: "video/mp4",
-                size_bytes: videoSize,
-                width: metaWidth,
-                height: metaHeight,
-                duration_seconds: metaDuration,
-                status: "uploaded",
-              })
+              .updateTable("media_assets")
+              .set(mediaUpdates)
+              .where("id", "=", videoId)
               .execute();
           } catch {
-            // Ignore if concurrently inserted
+            // Ignore update error
           }
         }
       } else {
-        const existingMedia = await db
-          .selectFrom("media_assets")
-          .selectAll()
-          .where("id", "=", videoId)
-          .executeTakeFirst();
+        const filename = params.videoKey.split(/[/\\]/).pop() || "video.mp4";
 
-        if (existingMedia) {
-          if (
-            (metaWidth && !existingMedia.width) ||
-            (metaHeight && !existingMedia.height) ||
-            (metaDuration && !existingMedia.duration_seconds)
-          ) {
-            try {
-              await db
-                .updateTable("media_assets")
-                .set({
-                  width: existingMedia.width ?? metaWidth,
-                  height: existingMedia.height ?? metaHeight,
-                  duration_seconds:
-                    existingMedia.duration_seconds ?? metaDuration,
-                  updated_at: new Date(),
-                })
-                .where("id", "=", videoId)
-                .execute();
-            } catch {
-              // Ignore update error
-            }
-          }
-        } else {
-          const filename = params.videoKey.split(/[/\\]/).pop() || "video.mp4";
-          const defaultOwnerId = "00000000-0000-4000-8000-000000000001";
-          let ownerId = defaultOwnerId;
-          try {
-            const ownerUser = await db
-              .selectFrom("users")
-              .selectAll()
-              .where("id", "=", defaultOwnerId)
-              .executeTakeFirst();
-            if (ownerUser?.id) {
-              ownerId = ownerUser.id;
-            } else {
-              await db
-                .insertInto("users")
-                .values({
-                  id: defaultOwnerId,
-                  email: "creator@veolms.org",
-                  username: "creator",
-                  display_name: "VeoLMS Creator",
-                  email_verified_at: new Date(),
-                })
-                .execute();
-            }
-          } catch {
-            // Ignore mock DB / concurrent insert errors
-          }
-          try {
+        const defaultOwnerId = "00000000-0000-4000-8000-000000000001";
+        let ownerId = defaultOwnerId;
+        try {
+          const ownerUser = await db
+            .selectFrom("users")
+            .selectAll()
+            .where("id", "=", defaultOwnerId)
+            .executeTakeFirst();
+          if (ownerUser?.id) {
+            ownerId = ownerUser.id;
+          } else {
             await db
-              .insertInto("media_assets")
+              .insertInto("users")
               .values({
-                id: videoId,
-                owner_id: ownerId,
-                type: "video",
-                storage_provider: "s3",
-                storage_key: params.videoKey,
-                original_filename: filename,
-                mime_type: "video/mp4",
-                size_bytes: videoSize,
-                width: metaWidth,
-                height: metaHeight,
-                duration_seconds: metaDuration,
-                status: "uploaded",
+                id: defaultOwnerId,
+                email: "creator@veolms.org",
+                username: "creator",
+                display_name: "VeoLMS Creator",
+                email_verified_at: new Date(),
               })
               .execute();
-          } catch {
-            // Ignore if concurrently inserted
           }
+        } catch {
+          // Ignore mock DB / concurrent insert errors
+        }
+        try {
+          await db
+            .insertInto("media_assets")
+            .values({
+              id: videoId,
+              owner_id: ownerId,
+              type: "video",
+              storage_provider: "s3",
+              storage_key: params.videoKey,
+              original_filename: filename,
+              mime_type: "video/mp4",
+              size_bytes: videoSize,
+              width: metaWidth,
+              height: metaHeight,
+              duration_seconds: metaDuration,
+              status: "uploaded",
+            })
+            .execute();
+        } catch {
+          // Ignore if concurrently inserted
         }
       }
 

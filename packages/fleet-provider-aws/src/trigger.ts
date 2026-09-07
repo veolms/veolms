@@ -12,10 +12,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
-import { fileURLToPath } from "node:url";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createDatabase } from "@veolms/database";
 import { loadFleetManagerConfig } from "@veolms/config";
 import {
+  estimateJobHardware,
   videoQualityLevelSchema,
   type VideoQualityLevel,
   type ProviderTriggerOptions,
@@ -169,7 +170,35 @@ export async function triggerTest(
   const filename = videoKey.split(/[/\\]/).pop() || "video.mp4";
   const cleanFilename = filename.replace(/\.[^/.]+$/, "");
   const outputPrefix = `transcoded/${cleanFilename}/`;
-  const videoSize = options.videoSize ?? 1024 * 1024;
+  let resolvedVideoSize = options.videoSize;
+  const s3Bucket =
+    process.env["S3_BUCKET"] ??
+    process.env["S3_BUCKET_NAME"] ??
+    process.env["STORAGE_BUCKET"];
+
+  if (!resolvedVideoSize && s3Bucket && !/^https?:\/\//i.test(videoKey)) {
+    try {
+      const endpoint =
+        process.env["AWS_ENDPOINT_URL"] || process.env["LOCALSTACK_ENDPOINT"];
+      const s3Client = new S3Client({
+        region,
+        ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+      });
+      const head = await s3Client.send(
+        new HeadObjectCommand({
+          Bucket: s3Bucket,
+          Key: videoKey,
+        }),
+      );
+      if (head.ContentLength) {
+        resolvedVideoSize = Number(head.ContentLength);
+      }
+    } catch {
+      // S3 head-object fallback
+    }
+  }
+  const videoSize = resolvedVideoSize ?? 1024 * 1024;
+  const hardwareProfile = estimateJobHardware(videoSize, qualities).profile;
   const jobId = options.jobId ?? randomUUID();
   let videoId = options.videoId;
 
@@ -189,6 +218,8 @@ export async function triggerTest(
   );
   console.info(`AWS Region:    ${region}`);
   console.info(`Video Key:     ${videoKey}`);
+  console.info(`Video Size:    ${videoSize} bytes`);
+  console.info(`Hardware:      ${hardwareProfile}`);
   console.info(`Qualities:     ${qualities.join(", ")}`);
   console.info(`Job ID:        ${jobId}`);
   console.info(
@@ -237,9 +268,22 @@ export async function triggerTest(
             original_filename: filename,
             mime_type: "video/mp4",
             size_bytes: videoSize,
-            status: "ready",
+            status: "uploaded",
           })
           .execute();
+      } else if (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0) {
+        try {
+          await db
+            .updateTable("media_assets")
+            .set({
+              size_bytes: videoSize,
+              updated_at: new Date(),
+            })
+            .where("id", "=", videoId)
+            .execute();
+        } catch {
+          // Ignore
+        }
       }
 
       await db
@@ -256,6 +300,7 @@ export async function triggerTest(
           attempts: 0,
           max_attempts: 3,
           error_message: null,
+          hardware_profile: hardwareProfile,
           created_at: new Date(),
           started_at: null,
           completed_at: null,

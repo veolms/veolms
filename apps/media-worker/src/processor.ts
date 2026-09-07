@@ -42,8 +42,10 @@ const repoRoot = resolveRepoRoot();
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
+  estimateJobHardware,
   resolveJobHardware,
   type JobHardwareRequirements,
+  type PersistedVideoMetadata,
   type VideoQualityLevel,
 } from "@veolms/fleet-types";
 import {
@@ -216,7 +218,7 @@ export async function probeVideoMetadata(
         "-v",
         "error",
         "-show_entries",
-        "format=duration:stream=width,height,r_frame_rate",
+        "format=duration,size,bit_rate,format_name:stream=width,height,codec_name,codec_type,r_frame_rate,avg_frame_rate",
         "-of",
         "json",
         videoPath,
@@ -227,17 +229,27 @@ export async function probeVideoMetadata(
     );
 
     const parsed = JSON.parse(stdout) as {
-      format?: { duration?: string };
+      format?: {
+        duration?: string;
+        size?: string;
+        bit_rate?: string;
+        format_name?: string;
+      };
       streams?: Array<{
+        codec_name?: string;
+        codec_type?: string;
         width?: number;
         height?: number;
         r_frame_rate?: string;
+        avg_frame_rate?: string;
       }>;
     };
 
     const durationSeconds = Number(parsed.format?.duration);
     const videoStream = parsed.streams?.find(
-      (s) => typeof s.width === "number" && typeof s.height === "number",
+      (s) =>
+        s.codec_type === "video" ||
+        (typeof s.width === "number" && typeof s.height === "number"),
     );
     const width = videoStream?.width;
     const height = videoStream?.height;
@@ -253,22 +265,32 @@ export async function probeVideoMetadata(
       );
     }
 
-    const fpsParts = (videoStream?.r_frame_rate ?? "").split("/", 2);
-    const fpsNumerator = Number(fpsParts[0]);
-    const fpsDenominator = Number(fpsParts[1]);
-    const fps =
-      Number.isFinite(fpsNumerator) &&
-      Number.isFinite(fpsDenominator) &&
-      fpsNumerator > 0 &&
-      fpsDenominator > 0
-        ? fpsNumerator / fpsDenominator
-        : undefined;
+    let fps: number | undefined;
+    const frameRateStr =
+      videoStream?.r_frame_rate || videoStream?.avg_frame_rate || "";
+    if (frameRateStr && frameRateStr !== "0/0") {
+      const [numStr, denStr] = frameRateStr.split("/", 2);
+      const num = Number(numStr);
+      const den = Number(denStr);
+      if (Number.isFinite(num) && Number.isFinite(den) && den > 0) {
+        fps = Math.round((num / den) * 100) / 100;
+      }
+    }
+
+    const bitrate = parsed.format?.bit_rate
+      ? Number(parsed.format.bit_rate)
+      : undefined;
+    const size = parsed.format?.size ? Number(parsed.format.size) : undefined;
 
     return {
       durationSeconds,
       width,
       height,
       fps,
+      codec: videoStream?.codec_name,
+      bitrate: Number.isFinite(bitrate) ? bitrate : undefined,
+      format: parsed.format?.format_name,
+      size: Number.isFinite(size) ? size : undefined,
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -396,7 +418,10 @@ export async function executeTranscodeJob(
     await db
       .updateTable("worker_monitoring")
       .set({
-        estimated_duration_sec: hardware.estimatedDurationSeconds,
+        estimated_duration_sec: Math.max(
+          1,
+          Math.round(hardware.estimatedDurationSeconds),
+        ),
         progress_percent: 0,
         last_progress_at: null,
         monitoring_attempts: 0,
@@ -511,7 +536,9 @@ export async function executeTranscodeJob(
       typeof mediaAsset.height === "number" &&
       mediaAsset.height > 0 &&
       mediaAsset.duration_seconds !== null &&
-      Number(mediaAsset.duration_seconds) > 0
+      Number(mediaAsset.duration_seconds) > 0 &&
+      mediaAsset.size_bytes !== null &&
+      Number(mediaAsset.size_bytes) > 0
     ) {
       console.info(
         `[media-worker] Reusing video metadata from database: ${mediaAsset.width}x${mediaAsset.height}, duration: ${mediaAsset.duration_seconds}s`,
@@ -520,6 +547,7 @@ export async function executeTranscodeJob(
         width: mediaAsset.width,
         height: mediaAsset.height,
         durationSeconds: Number(mediaAsset.duration_seconds),
+        size: Number(mediaAsset.size_bytes),
       };
     } else {
       console.info(`[media-worker] Probing video metadata from source file...`);
@@ -534,6 +562,32 @@ export async function executeTranscodeJob(
       ...new Set(job.qualities),
     ];
 
+    let videoSize = Number(job.video_size ?? 0);
+    try {
+      const s = await stat(inputVideoPath);
+      if (s.size > 0) {
+        videoSize = Number(s.size);
+      }
+    } catch {
+      if (sourceMetadata.size && videoSize === 0) {
+        videoSize = Number(sourceMetadata.size);
+      }
+    }
+
+    const persistedMetadata: PersistedVideoMetadata = {
+      width: sourceMetadata.width,
+      height: sourceMetadata.height,
+      durationSeconds: sourceMetadata.durationSeconds,
+      ...(sourceMetadata.fps ? { fps: sourceMetadata.fps } : {}),
+      ...(sourceMetadata.codec ? { codec: sourceMetadata.codec } : {}),
+      ...(sourceMetadata.bitrate ? { bitrate: sourceMetadata.bitrate } : {}),
+      ...(sourceMetadata.format ? { format: sourceMetadata.format } : {}),
+    };
+
+    const hardwareProfile = estimateJobHardware(videoSize, targetQualities, {
+      videoMetadata: persistedMetadata,
+    }).profile;
+
     // 4b. When necessary, cap the source to the largest requested quality
     // tier before splitting it into renditions. Sources already within that
     // cap skip this pass entirely to avoid an unnecessary full re-encode.
@@ -546,15 +600,32 @@ export async function executeTranscodeJob(
       crf: config.VIDEO_COMPRESSION_CRF,
     });
 
-    // 5b. Transition job to PROCESSING as FFmpeg is actually starting
+    // 5b. Transition job to PROCESSING as FFmpeg is actually starting and persist probed metadata
     await db
       .updateTable("video_jobs")
       .set({
         status: "processing",
+        video_size: videoSize,
+        video_metadata: persistedMetadata,
+        hardware_profile: hardwareProfile,
         updated_at: new Date(),
       })
       .where("id", "=", jobId)
       .execute();
+
+    if (job.video_id) {
+      await db
+        .updateTable("media_assets")
+        .set({
+          size_bytes: videoSize,
+          width: sourceMetadata.width,
+          height: sourceMetadata.height,
+          duration_seconds: Math.round(sourceMetadata.durationSeconds),
+          updated_at: new Date(),
+        })
+        .where("id", "=", job.video_id)
+        .execute();
+    }
 
     await recordEvent("job_started", jobId, {
       videoKey: job.video_key,
@@ -706,6 +777,9 @@ export async function executeTranscodeJob(
         .set({
           status: "completed",
           progress_percent: 100.0,
+          video_size: videoSize,
+          video_metadata: persistedMetadata,
+          hardware_profile: hardwareProfile,
           completed_at: new Date(),
           updated_at: new Date(),
         })
@@ -718,6 +792,10 @@ export async function executeTranscodeJob(
           .updateTable("media_assets")
           .set({
             status: "ready",
+            size_bytes: videoSize,
+            width: sourceMetadata.width,
+            height: sourceMetadata.height,
+            duration_seconds: Math.round(sourceMetadata.durationSeconds),
             updated_at: new Date(),
           })
           .where("id", "=", job.video_id)

@@ -8,7 +8,8 @@
     "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --log-override:empty-import-meta=silent --outfile=dist/media-worker.js && node -e \"fs.writeFileSync('dist/package.json', JSON.stringify({type:'commonjs'}))\"",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/**/*.test.ts",
-    "start": "node src/index.ts"
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=../../.env src/index.ts",
+    "start:bundle": "node --env-file-if-exists=.env --env-file-if-exists=../../.env dist/media-worker.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",

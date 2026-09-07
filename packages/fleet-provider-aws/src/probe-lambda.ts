@@ -1,5 +1,5 @@
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
-import { S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type {
   LambdaResponse,
   VideoJobEvent,
@@ -370,6 +370,28 @@ export async function processProbeAndForward(
     ...payload,
     ...(videoMetadata ? { videoMetadata } : {}),
   };
+
+  // If videoSize was missing, query S3 HeadObject for ContentLength
+  if (
+    !enrichedPayload.videoSize &&
+    s3Bucket &&
+    videoKey &&
+    !/^https?:\/\//i.test(videoKey)
+  ) {
+    try {
+      const head = await s3.send(
+        new HeadObjectCommand({
+          Bucket: s3Bucket,
+          Key: videoKey,
+        }),
+      );
+      if (head.ContentLength) {
+        enrichedPayload.videoSize = Number(head.ContentLength);
+      }
+    } catch {
+      // S3 HeadObject fallback
+    }
+  }
 
   // If videoSize was missing but ffprobe found file size, optionally backfill
   if (

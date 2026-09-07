@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createDatabase } from "@veolms/database";
 import { loadFleetManagerConfig } from "@veolms/config";
 import {
+  estimateJobHardware,
   isMainModule,
   resolveJobHardware,
   type ProviderTriggerOptions,
@@ -91,14 +92,25 @@ export async function triggerTest(
 
     // 2. Insert media asset and job if not already queued by fleet-manager
     let videoId = options.videoId;
+    let resolvedVideoSize = options.videoSize;
+    if (!resolvedVideoSize && existsSync(videoKey)) {
+      try {
+        resolvedVideoSize = statSync(videoKey).size;
+      } catch {
+        // Ignore
+      }
+    }
+    const videoSize = resolvedVideoSize ?? 0;
+    const hardwareProfile = estimateJobHardware(videoSize, qualities).profile;
+
     if (!options.jobId) {
-      let existingMedia = await db
+      const existingMedia = await db
         .selectFrom("media_assets")
         .selectAll()
         .where("storage_key", "=", videoKey)
         .executeTakeFirst();
 
-      videoId = existingMedia?.id ?? randomUUID();
+      videoId = existingMedia?.id ?? videoId ?? randomUUID();
       if (!existingMedia) {
         const ownerUser = await db
           .selectFrom("users")
@@ -106,9 +118,8 @@ export async function triggerTest(
           .limit(1)
           .executeTakeFirst();
 
-        let ownerId = ownerUser?.id;
-        if (!ownerId) {
-          ownerId = "00000000-0000-4000-8000-000000000001";
+        const ownerId = ownerUser?.id ?? "00000000-0000-4000-8000-000000000001";
+        if (!ownerUser) {
           await db
             .insertInto("users")
             .values({
@@ -133,10 +144,23 @@ export async function triggerTest(
             storage_key: videoKey,
             original_filename: filename,
             mime_type: "video/mp4",
-            size_bytes: 0,
-            status: "ready",
+            size_bytes: videoSize,
+            status: "uploaded",
           })
           .execute();
+      } else if (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0) {
+        try {
+          await db
+            .updateTable("media_assets")
+            .set({
+              size_bytes: videoSize,
+              updated_at: new Date(),
+            })
+            .where("id", "=", videoId)
+            .execute();
+        } catch {
+          // Ignore
+        }
       }
 
       await db
@@ -147,12 +171,13 @@ export async function triggerTest(
           status: "queued",
           video_key: videoKey,
           output_prefix: outputPrefix,
-          video_size: options.videoSize ?? 0,
+          video_size: videoSize,
           qualities: [...qualities],
           worker_id: null,
           attempts: 0,
           max_attempts: 3,
           error_message: null,
+          hardware_profile: hardwareProfile,
           created_at: new Date(),
           started_at: null,
           completed_at: null,
@@ -165,7 +190,7 @@ export async function triggerTest(
 
     // 4. Calculate hardware spec and insert Worker and Monitoring records
     const hw = resolveJobHardware({
-      video_size: options.videoSize ?? 0,
+      video_size: videoSize,
       qualities,
     });
 
@@ -197,7 +222,11 @@ export async function triggerTest(
         worker_id: workerId,
         next_check_at: new Date(Date.now() + 10000),
         last_check_at: null,
-        estimated_duration_sec: hw.estimatedDurationSeconds,
+
+        estimated_duration_sec: Math.max(
+          1,
+          Math.round(hw.estimatedDurationSeconds),
+        ),
         progress_percent: 0.0,
         last_progress_at: null,
         monitoring_attempts: 0,
