@@ -158,12 +158,20 @@ export function createMediaService({
       return { should202: false, jobId: null };
     }
 
-    if (media.status !== "uploaded" && media.status !== "ready") {
+    if (
+      media.status !== "uploaded" &&
+      media.status !== "ready" &&
+      media.status !== "failed"
+    ) {
       throw new AppError(
         400,
         "MEDIA_NOT_UPLOADED",
         "Video file must be uploaded and confirmed first.",
       );
+    }
+
+    if (media.status === "failed") {
+      await mediaRepo.updateMediaAssetStatus(database, media.id, "uploaded");
     }
 
     const existingJob = await mediaRepo.findVideoJobByVideoId(
@@ -194,6 +202,9 @@ export function createMediaService({
           { jobId: existingJob.id, videoId: media.id },
           "Video job already completed. Skipping duplicate trigger.",
         );
+        if (media.status !== "ready") {
+          await mediaRepo.updateMediaAssetStatus(database, media.id, "ready");
+        }
         return { should202: false, jobId: existingJob.id };
       }
     }
@@ -257,6 +268,7 @@ export function createMediaService({
         error_message: message,
         failed_at: new Date(),
       });
+      await mediaRepo.updateMediaAssetStatus(database, media.id, "failed");
     }
 
     return { should202: true, jobId };
@@ -298,6 +310,12 @@ export function createMediaService({
         "JOB_NOT_FOUND",
         "Video transcoding job not found.",
       );
+    }
+
+    if (job.status === "completed" && media.status !== "ready") {
+      await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
+    } else if (job.status === "failed" && media.status !== "failed") {
+      await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
     }
 
     return {

@@ -4,8 +4,41 @@ import { copyFile, cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+function resolveRepoRoot(): string {
+  try {
+    const metaUrl =
+      typeof import.meta !== "undefined" ? import.meta?.url : undefined;
+    if (metaUrl) {
+      let currentDir = dirname(fileURLToPath(metaUrl));
+      while (currentDir !== resolve(currentDir, "..")) {
+        if (
+          existsSync(join(currentDir, "pnpm-workspace.yaml")) ||
+          existsSync(join(currentDir, "turbo.json"))
+        ) {
+          return currentDir;
+        }
+        currentDir = dirname(currentDir);
+      }
+    }
+  } catch {
+    // Ignore URL parse error in bundled/cjs environments
+  }
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  let cwd = process.cwd();
+  while (cwd !== resolve(cwd, "..")) {
+    if (
+      existsSync(join(cwd, "pnpm-workspace.yaml")) ||
+      existsSync(join(cwd, "turbo.json"))
+    ) {
+      return cwd;
+    }
+    cwd = dirname(cwd);
+  }
+
+  return process.cwd();
+}
+
+const repoRoot = resolveRepoRoot();
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
@@ -664,20 +697,32 @@ export async function executeTranscodeJob(
       );
     }
 
-    // Mark the job complete and make the live worker ready for a compatible
-    // next claim in one transaction. Clearing job_id avoids monitor races
-    // against the just-completed job while the worker waits for more work.
+    // Mark the job complete, progress 100%, media asset ready, and make the live worker
+    // ready for a compatible next claim in one transaction. Clearing job_id avoids monitor
+    // races against the just-completed job while the worker waits for more work.
     await db.transaction().execute(async (trx) => {
       await trx
         .updateTable("video_jobs")
         .set({
           status: "completed",
+          progress_percent: 100.0,
           completed_at: new Date(),
           updated_at: new Date(),
         })
         .where("id", "=", jobId)
         .where("worker_id", "=", workerId)
         .execute();
+
+      if (job.video_id) {
+        await trx
+          .updateTable("media_assets")
+          .set({
+            status: "ready",
+            updated_at: new Date(),
+          })
+          .where("id", "=", job.video_id)
+          .execute();
+      }
 
       await trx
         .updateTable("workers")
@@ -777,6 +822,29 @@ export async function executeTranscodeJob(
         .where("id", "=", jobId)
         .where("worker_id", "=", workerId)
         .execute();
+
+      if (job.video_id) {
+        if (!shouldRetry) {
+          await trx
+            .updateTable("media_assets")
+            .set({
+              status: "failed",
+              updated_at: new Date(),
+            })
+            .where("id", "=", job.video_id)
+            .execute();
+        } else {
+          await trx
+            .updateTable("media_assets")
+            .set({
+              status: "uploaded",
+              updated_at: new Date(),
+            })
+            .where("id", "=", job.video_id)
+            .where("status", "!=", "ready")
+            .execute();
+        }
+      }
 
       await trx
         .updateTable("workers")

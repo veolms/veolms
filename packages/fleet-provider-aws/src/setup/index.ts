@@ -922,12 +922,16 @@ export async function buildAndUploadWorkerBundle(
     const fileContent = fsSync.readFileSync(outfile);
     const sizeKb = (fileContent.length / 1024).toFixed(1);
 
+    const cjsPackageJson = JSON.stringify({ type: "commonjs" });
+    fsSync.writeFileSync(path.join(distDir, "package.json"), cjsPackageJson);
+
     // Also write to apps/media-worker/dist for local availability
     const appDistDir = path.join(repoRoot, "apps/media-worker/dist");
     if (!fsSync.existsSync(appDistDir)) {
       fsSync.mkdirSync(appDistDir, { recursive: true });
     }
     fsSync.writeFileSync(path.join(appDistDir, "media-worker.js"), fileContent);
+    fsSync.writeFileSync(path.join(appDistDir, "package.json"), cjsPackageJson);
 
     // 1. Upload via AWS SDK v3 S3Client
     let uploaded = false;
