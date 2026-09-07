@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./setup": "./src/setup/index.ts",
-    "./destroy": "./src/setup/destroy.ts"
+    "./destroy": "./src/setup/destroy.ts",
+    "./trigger": "./src/trigger.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -13,6 +14,8 @@
     "test": "node --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "@veolms/config": "workspace:*",
+    "@veolms/database": "workspace:*",
     "@veolms/fleet-types": "workspace:*",
     "zod": "catalog:"
   }

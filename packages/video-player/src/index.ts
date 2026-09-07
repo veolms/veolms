@@ -13,6 +13,7 @@ export type {
   VideoEngineName,
   VideoLoadOptions,
   VideoMetadata,
+  VideoNetworkRequest,
   VideoNetworkingConfiguration,
   VideoQuality,
   VideoRequestFilter,

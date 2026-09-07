@@ -9,6 +9,13 @@ const reactRouterCli = path.resolve(
   scriptDirectory,
   "../node_modules/@react-router/dev/bin.cjs",
 );
+const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+
+try {
+  process.loadEnvFile(path.join(workspaceRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
 
 export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
   const firstSectionOnly = args.includes(FIRST_SECTION_FLAG);

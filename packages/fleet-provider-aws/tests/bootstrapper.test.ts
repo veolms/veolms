@@ -87,8 +87,41 @@ describe("EC2 UserData Bootstrapper Generator", () => {
 
     // And the download step (further down) must come after that real
     // resolution too, not accidentally reference an earlier empty default.
-    const downloadIndex = script.indexOf('aws s3 cp "s3://$BUCKET_NAME');
+    const downloadIndex = script.indexOf('aws s3 cp "s3://$BUILD_BUCKET');
     assert.ok(downloadIndex > realResolutionIndex);
+  });
+
+  it("uploads bootstrap.log and worker.log to S3_BUILD_BUCKET when configured", () => {
+    const script = generateUserDataScript({
+      workerId: "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44",
+      spec: {
+        cpu: 2,
+        memoryMb: 4096,
+        architecture: "arm64",
+        storageGb: 30,
+        region: "us-east-1",
+        environmentVariables: {
+          S3_BUILD_BUCKET: "my-custom-build-bucket",
+        },
+      },
+    });
+
+    assert.ok(script.includes('S3_BUILD_BUCKET="my-custom-build-bucket"'));
+    assert.ok(
+      script.includes(
+        '"s3://$LOG_BUCKET/worker-logs/d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44/bootstrap.log"',
+      ),
+    );
+    assert.ok(
+      script.includes(
+        '"s3://$LOG_BUCKET/worker-logs/d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44/worker.log"',
+      ),
+    );
+    assert.ok(
+      script.includes(
+        'aws s3 cp "s3://$BUILD_BUCKET/bundles/media-worker.js" /opt/veolms/worker.js',
+      ),
+    );
   });
 
   it("should encode UserData script to Base64", () => {

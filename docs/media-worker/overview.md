@@ -33,27 +33,8 @@ duration, and minimum hardware requirements.
 - Handles SIGTERM and SIGINT by aborting active FFmpeg work, stopping new
   uploads, returning the job to the retry flow, and closing the DB pool.
 
-## Supported output
+## Detailed Guides
 
-Each requested quality becomes a directory under the job's output prefix:
-
-```text
-<output-prefix>/
-  master.m3u8
-  1080p/
-    1080p.m3u8
-    segment_000.ts
-  720p/
-    720p.m3u8
-    segment_000.ts
-```
-
-See [Transcoding and storage](./transcoding-and-storage.md) for the exact
-FFmpeg and upload behaviour.
-
-## Important boundaries
-
-The worker owns media processing and job-result state. The fleet manager owns
-job creation, worker provisioning, monitoring, and provider termination. Both
-use the shared atomic claim helper so the same queued job cannot be processed
-twice.
+- For HLS rendition profiles, output directory formats, and incremental S3 upload mechanics, see **[Transcoding and Storage](./transcoding-and-storage.md)**.
+- For component boundaries, runtime data ownership, and worker compatibility checks, see **[Architecture](./architecture.md)**.
+- For the full step-by-step state transition flow from queue claim to completion, see **[Job Lifecycle](./job-lifecycle.md)**.

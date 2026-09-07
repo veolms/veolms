@@ -46,6 +46,8 @@ async function dispatch(): Promise<void> {
     destroyFn = await loadModuleFunction<() => Promise<void>>(
       packageName,
       [
+        "destroyInfra",
+        "runDestroy",
         "runAwsInfraDestroy",
         "runLocalInfraDestroy",
         "runInfraDestroy",

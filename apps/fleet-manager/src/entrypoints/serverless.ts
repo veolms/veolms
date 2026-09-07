@@ -32,6 +32,12 @@ export interface ServerlessFleetOptions {
 
 export interface ServerlessExecutionResult {
   readonly success: boolean;
+  readonly status?: string;
+  readonly cancelled?: boolean;
+  readonly filesDeleted?: boolean;
+  readonly jobId?: string;
+  readonly deletedKeys?: readonly string[];
+  readonly deletedPrefix?: string;
   readonly jobClaimed?: boolean;
   readonly monitorResult?: MonitorCycleResult;
   readonly nextWakeupScheduledAt?: string | null;
@@ -84,6 +90,9 @@ export function extractVideoJobEvent(rawEvent: unknown): VideoJobEvent {
       result.action = action;
     }
   }
+  if (typeof candidate.status === "string") {
+    result.status = candidate.status.toLowerCase();
+  }
   if (typeof candidate.jobId === "string") result.jobId = candidate.jobId;
   if (typeof candidate.videoId === "string") result.videoId = candidate.videoId;
   if (typeof candidate.videoKey === "string")
@@ -100,6 +109,24 @@ export function extractVideoJobEvent(rawEvent: unknown): VideoJobEvent {
   }
   if (candidate.videoMetadata && typeof candidate.videoMetadata === "object") {
     result.videoMetadata = candidate.videoMetadata as Record<string, unknown>;
+  }
+  const parseBool = (val: unknown): boolean | undefined => {
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") {
+      const lower = val.trim().toLowerCase();
+      if (lower === "true") return true;
+      if (lower === "false") return false;
+    }
+    return undefined;
+  };
+
+  const parsedDeleteFiles = parseBool(candidate.deleteFiles);
+  if (parsedDeleteFiles !== undefined) {
+    result.deleteFiles = parsedDeleteFiles;
+  }
+  const parsedDeleteMedia = parseBool(candidate.deleteMedia);
+  if (parsedDeleteMedia !== undefined) {
+    result.deleteMedia = parsedDeleteMedia;
   }
 
   return result as VideoJobEvent;
@@ -169,25 +196,85 @@ export async function runServerlessFleetCycle(
       config,
     });
 
-    // 1. If action is QUEUE and video parameters are provided, ensure job is queued (idempotent)
-    if (event.action === "queue" && event.videoKey) {
-      const videoKey = event.videoKey;
-      const isUuid = (val: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          val,
+    // 1. If status is CANCELLED:
+    if (event.status === "cancelled") {
+      let targetJobId = event.jobId;
+
+      if (!targetJobId && (event.videoId || event.videoKey)) {
+        const foundJob = await db
+          .selectFrom("video_jobs")
+          .select("id")
+          .where((eb) =>
+            eb.or([
+              ...(event.videoId ? [eb("video_id", "=", event.videoId)] : []),
+              ...(event.videoKey ? [eb("video_key", "=", event.videoKey)] : []),
+            ]),
+          )
+          .orderBy("created_at", "desc")
+          .executeTakeFirst();
+        targetJobId = foundJob?.id;
+      }
+
+      if (targetJobId) {
+        const shouldDeleteFiles =
+          event.deleteFiles !== false && event.deleteMedia !== false;
+        console.info(
+          `[serverless-fleet] Processing cancellation for job ${targetJobId} (deleteFiles: ${shouldDeleteFiles})...`,
         );
 
-      const videoId =
-        event.videoId && isUuid(event.videoId)
-          ? event.videoId
-          : event.jobId && isUuid(event.jobId)
-            ? event.jobId
-            : undefined;
+        const cancelResult = await fleet.cancelJob({
+          jobId: targetJobId,
+          deleteFiles: shouldDeleteFiles,
+        });
 
-      const jobId =
-        event.jobId && isUuid(event.jobId) ? event.jobId : undefined;
+        // Run monitoring cycle to reconcile cluster state and sync schedule
+        const monitorResult = await fleet.runMonitoringCycle();
+        const nextWakeup = await fleet.syncWakeupSchedule();
 
-      const filename = videoKey.split("/").pop() || "video.mp4";
+        return {
+          success: true,
+          status: "cancelled",
+          cancelled: cancelResult.cancelled,
+          filesDeleted: cancelResult.filesDeleted,
+          jobId: targetJobId,
+          deletedKeys: cancelResult.deletedKeys,
+          deletedPrefix: cancelResult.deletedPrefix,
+          monitorResult,
+          nextWakeupScheduledAt: nextWakeup ? nextWakeup.toISOString() : null,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      return {
+        success: false,
+        status: "cancelled",
+        cancelled: false,
+        error: "Job ID not found for cancellation",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // 2. If video parameters are provided (from queue action, probe lambda forward, or claim),
+    // ensure job and media_assets are enriched with probed metadata and estimated hardware profile.
+    if (event.videoKey || (event.jobId && event.videoMetadata)) {
+      const videoKey = event.videoKey ?? "";
+      const isUuid = (val?: string) =>
+        Boolean(
+          val &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              val,
+            ),
+        );
+
+      const videoId = isUuid(event.videoId)
+        ? event.videoId
+        : isUuid(event.jobId)
+          ? event.jobId
+          : undefined;
+
+      const jobId = isUuid(event.jobId) ? event.jobId : undefined;
+
+      const filename = videoKey.split(/[/\\]/).pop() || "video.mp4";
       const cleanFilename = filename.replace(/\.[^/.]+$/, "");
       const outputPrefix = event.outputPrefix ?? `transcoded/${cleanFilename}/`;
 
@@ -209,7 +296,7 @@ export async function runServerlessFleetCycle(
       });
     }
 
-    // 2. Run monitoring cycle first to clean up stale/timed-out workers and free capacity
+    // 3. Run monitoring cycle first to clean up stale/timed-out workers and free capacity
     const monitorResult = await fleet.runMonitoringCycle();
 
     if (event.action === "monitor") {
@@ -222,10 +309,10 @@ export async function runServerlessFleetCycle(
       };
     }
 
-    // 3. Claim and provision next queued job
+    // 4. Claim and provision next queued job
     const jobClaimed = await fleet.processNextJob();
 
-    // 4. Synchronize dynamic EventBridge wakeup schedule
+    // 5. Synchronize dynamic EventBridge wakeup schedule
     const nextWakeup = await fleet.syncWakeupSchedule();
 
     return {

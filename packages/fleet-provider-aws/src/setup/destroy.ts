@@ -9,7 +9,13 @@ import {
   red,
   yellow,
 } from "@veolms/fleet-types/terminal";
-import { resolveS3BucketName } from "../config.ts";
+import {
+  isMainModule,
+  type ProviderDestroyOptions,
+  type ProviderDestroyResult,
+} from "@veolms/fleet-types";
+import { resolveS3BucketName, resolveS3BuildBucketName } from "../config.ts";
+import { isNonInteractive } from "./common.ts";
 
 const ROLE_NAME = "VeoLMSWorkerRole";
 const INSTANCE_PROFILE_NAME = "VeoLMSWorkerInstanceProfile";
@@ -20,6 +26,8 @@ export interface DestroyOptions {
   readonly region?: string;
   readonly endpointUrl?: string | null;
   readonly s3BucketName?: string | null;
+  readonly s3BuildBucket?: string | null;
+  readonly nonInteractive?: boolean;
 }
 
 function exec(cmd: string): string | null {
@@ -51,30 +59,43 @@ async function destroyS3Bucket(
   // zero objects and skip the confirmation prompt below even when the
   // bucket holds real data. Counting `Contents` directly works identically
   // against real AWS and LocalStack.
-  // Note: the --query value must stay single-quoted — backticks inside a
-  // double-quoted shell argument trigger command substitution (`[]` is
-  // parsed as "run the command []"), which breaks the query and silently
-  // produces the same missing-count failure this replaced.
+  // We use JSON output to avoid shell quoting and escaping differences across platforms.
+  let objectCount = 0;
   const countRaw = exec(
-    `aws s3api list-objects-v2 --bucket "${bucketName}" --region ${region} --query 'length(Contents || \`[]\`)' --output text`,
+    `aws s3api list-objects-v2 --bucket "${bucketName}" --region ${region} --output json`,
   );
-  const objectCount = countRaw ? parseInt(countRaw, 10) || 0 : 0;
+  if (countRaw) {
+    try {
+      const parsed = JSON.parse(countRaw);
+      objectCount = Array.isArray(parsed.Contents) ? parsed.Contents.length : 0;
+    } catch {
+      objectCount = 0;
+    }
+  }
 
   if (objectCount > 0) {
+    const nonInteractiveMode = isNonInteractive();
+
     console.info(`
   ${bold(red("⚠ WARNING:"))} S3 bucket ${bold(bucketName)} contains ${bold(String(objectCount))} object(s)
   — transcoded videos, HLS playlists/segments, and worker bundles.
   Deleting this bucket will ${bold(red("PERMANENTLY DELETE ALL OF THAT DATA"))}.
   This cannot be undone.
 `);
-    const answer = await rl.question(
-      `  ${bold("?")} Type "yes" to permanently delete the bucket and all its data: `,
-    );
-    if (answer.trim().toLowerCase() !== "yes") {
-      console.info(
-        `  ${yellow("⚠")} Skipped — bucket ${bold(bucketName)} and its data were ${bold("NOT")} deleted.`,
+    if (!nonInteractiveMode) {
+      const answer = await rl.question(
+        `  ${bold("?")} Type "yes" to permanently delete the bucket and all its data: `,
       );
-      return;
+      if (answer.trim().toLowerCase() !== "yes") {
+        console.info(
+          `  ${yellow("⚠")} Skipped — bucket ${bold(bucketName)} and its data were ${bold("NOT")} deleted.`,
+        );
+        return;
+      }
+    } else {
+      console.info(
+        `  ${yellow("⚠")} Non-interactive mode: proceeding with bucket deletion.`,
+      );
     }
   } else {
     console.info(`  ${dim("Bucket is empty — no confirmation needed.")}`);
@@ -110,6 +131,10 @@ export async function runAwsInfraDestroy(
     options.s3BucketName !== undefined
       ? options.s3BucketName
       : resolveS3BucketName(process.env);
+  const s3BuildBucket =
+    options.s3BuildBucket !== undefined
+      ? options.s3BuildBucket
+      : resolveS3BuildBucketName(process.env);
 
   console.info(`
 ${bold(red("╔══════════════════════════════════════════════════════╗"))}
@@ -126,7 +151,12 @@ ${bold(red("╚═════════════════════�
   const rl = options.rl ?? readline.createInterface({ input, output });
 
   try {
-    await runDestroySteps(rl, { region, endpointUrl, s3BucketName });
+    await runDestroySteps(rl, {
+      region,
+      endpointUrl,
+      s3BucketName,
+      s3BuildBucket,
+    });
   } finally {
     if (ownRl) {
       rl.close();
@@ -140,14 +170,15 @@ async function runDestroySteps(
     readonly region: string;
     readonly endpointUrl: string | null;
     readonly s3BucketName: string | null;
+    readonly s3BuildBucket?: string | null;
   },
 ): Promise<void> {
-  const { region, s3BucketName } = config;
+  const { region, s3BucketName, s3BuildBucket } = config;
 
   // 1. Terminate any running EC2 instances
   console.info("[1/6] Terminating active EC2 worker instances...");
   const instanceIds = exec(
-    `aws ec2 describe-instances --region ${region} --filters "Name=tag:ManagedBy,Values=veolms-fleet-manager,veolms-infra-setup" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text`,
+    `aws ec2 describe-instances --region ${region} --filters "Name=tag:ManagedBy,Values=veolms-fleet-manager,veolms-infra-setup" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query "Reservations[*].Instances[*].InstanceId" --output text`,
   );
   if (instanceIds) {
     const termRes = exec(
@@ -243,7 +274,7 @@ async function runDestroySteps(
   console.info("\n[5/6] Deleting IAM Role & Policies...");
   const inlinePolicies = (
     exec(
-      `aws iam list-role-policies --role-name ${ROLE_NAME} --query 'PolicyNames' --output text`,
+      `aws iam list-role-policies --role-name ${ROLE_NAME} --query "PolicyNames" --output text`,
     ) ?? ""
   )
     .split(/\s+/)
@@ -262,7 +293,7 @@ async function runDestroySteps(
 
   const attachedPolicies = (
     exec(
-      `aws iam list-attached-role-policies --role-name ${ROLE_NAME} --query 'AttachedPolicies[*].PolicyArn' --output text`,
+      `aws iam list-attached-role-policies --role-name ${ROLE_NAME} --query "AttachedPolicies[*].PolicyArn" --output text`,
     ) ?? ""
   )
     .split(/\s+/)
@@ -322,11 +353,20 @@ async function runDestroySteps(
     );
   }
 
-  // 8. Delete S3 bucket — asks for confirmation if it still holds data
+  // 8. Delete S3 bucket(s) — asks for confirmation if it still holds data
   if (s3BucketName) {
     await destroyS3Bucket(rl, s3BucketName, region);
   } else {
-    console.info(`\n[8/8] No S3_BUCKET_NAME configured — skipping S3 cleanup.`);
+    console.info(
+      `\n[8/8] No S3_BUCKET configured — skipping S3 media bucket cleanup.`,
+    );
+  }
+
+  if (s3BuildBucket && s3BuildBucket !== s3BucketName) {
+    console.info(
+      `\nChecking dedicated S3 build bucket ${bold(s3BuildBucket)}...`,
+    );
+    await destroyS3Bucket(rl, s3BuildBucket, region);
   }
 
   console.info(`
@@ -336,8 +376,32 @@ ${bold(green("╚═════════════════════
 `);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
-  runAwsInfraDestroy().catch((err: unknown) => {
+export async function destroyInfra(
+  options: ProviderDestroyOptions = {},
+): Promise<ProviderDestroyResult> {
+  const isNonInteractive =
+    options.nonInteractive === true ||
+    options.interactive === false ||
+    process.env.CI === "true" ||
+    process.argv.includes("--yes") ||
+    process.argv.includes("-y") ||
+    process.argv.includes("--non-interactive");
+
+  await runAwsInfraDestroy({
+    nonInteractive: isNonInteractive,
+  });
+
+  return {
+    success: true,
+    provider: "aws",
+  };
+}
+
+export const runDestroy = destroyInfra;
+export default destroyInfra;
+
+if (isMainModule(import.meta.url)) {
+  destroyInfra().catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`\n✘ Destroy failed: ${msg}\n`);
     process.exit(1);
