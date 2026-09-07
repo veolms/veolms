@@ -50,6 +50,7 @@ import {
 } from "./learningPlayerPreferences";
 import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
 import {
+  type Lesson,
   createCurriculumSections,
   createLessonsById,
   getCourseVideoForLesson,
@@ -66,6 +67,7 @@ import {
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
+import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -290,8 +292,13 @@ export function LearningWorkspace({
   registerPersistentPlayer,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { data: courseOverview } = useCourseOverview(courseSlug, {
-    enabled: Boolean(courseSlug) && !isAuthenticated,
+  const isApiRoute = Boolean(courseSlug);
+  const {
+    data: courseOverview,
+    isLoading: isCourseOverviewLoading,
+    isError: isCourseOverviewError,
+  } = useCourseOverview(courseSlug, {
+    enabled: isApiRoute,
   });
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
@@ -325,7 +332,15 @@ export function LearningWorkspace({
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
   );
-  const courseTitle = getCourseTitle(courseSlug);
+  const courseTitle = useMemo(() => {
+    if (courseOverview?.course.title) {
+      return courseOverview.course.title;
+    }
+    if (isCourseOverviewError) {
+      return courseSlug || "";
+    }
+    return isApiRoute ? (courseSlug || "") : getCourseTitle(courseSlug);
+  }, [courseOverview?.course.title, courseSlug, isApiRoute, isCourseOverviewError]);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
@@ -550,17 +565,29 @@ export function LearningWorkspace({
     [],
   );
 
-  const curriculumSections = useMemo(
-    () =>
-      createCurriculumSections(
-        curriculumTestPreferences.sectionCount,
-        curriculumTestPreferences.lectureCount,
-      ),
-    [
-      curriculumTestPreferences.lectureCount,
+  const adaptedCurriculum = useMemo(() => {
+    if (!courseOverview) return null;
+    return adaptCourseOverviewToCurriculum(courseOverview);
+  }, [courseOverview]);
+
+  const curriculumSections = useMemo(() => {
+    if (adaptedCurriculum) {
+      return adaptedCurriculum.sections;
+    }
+    if (isApiRoute || isCourseOverviewError) {
+      return [];
+    }
+    return createCurriculumSections(
       curriculumTestPreferences.sectionCount,
-    ],
-  );
+      curriculumTestPreferences.lectureCount,
+    );
+  }, [
+    adaptedCurriculum,
+    isApiRoute,
+    isCourseOverviewError,
+    curriculumTestPreferences.lectureCount,
+    curriculumTestPreferences.sectionCount,
+  ]);
   const curriculumLessonsById = useMemo(
     () => createLessonsById(curriculumSections),
     [curriculumSections],
@@ -571,8 +598,14 @@ export function LearningWorkspace({
   const firstCurriculumLesson = firstCurriculumLessonId
     ? curriculumLessonsById.get(firstCurriculumLessonId)
     : undefined;
+  const fallbackEmptyLesson = useMemo<Lesson>(
+    () => [selectedLesson || 1, "", "", "todo"],
+    [selectedLesson],
+  );
   const currentLesson =
-    curriculumLessonsById.get(selectedLesson) || firstCurriculumLesson!;
+    curriculumLessonsById.get(selectedLesson) ||
+    firstCurriculumLesson ||
+    fallbackEmptyLesson;
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -585,7 +618,23 @@ export function LearningWorkspace({
     currentLessonIndex >= 0 && currentLessonIndex < lessonSequence.length - 1
       ? lessonSequence[currentLessonIndex + 1]
       : undefined;
-  const courseThumbnail = getCourseThumbnail(courseSlug);
+  const courseThumbnail = useMemo(() => {
+    if (courseOverview) {
+      return courseOverview.course.thumbnailMediaId
+        ? `/api/v1/media/${courseOverview.course.thumbnailMediaId}`
+        : undefined;
+    }
+    if (isCourseOverviewError) {
+      return undefined;
+    }
+    return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
+  }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
+  const selectedLessonDescription = useMemo(() => {
+    if (!adaptedCurriculum) return null;
+    return (
+      adaptedCurriculum.lessonsByNumber.get(selectedLesson)?.description ?? null
+    );
+  }, [adaptedCurriculum, selectedLesson]);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -1864,12 +1913,14 @@ export function LearningWorkspace({
       }
       onClickCapture={suppressCurriculumSwipeClick}
     >
-      <link
-        rel="preload"
-        as="image"
-        href={courseThumbnail}
-        fetchPriority="high"
-      />
+      {courseThumbnail ? (
+        <link
+          rel="preload"
+          as="image"
+          href={courseThumbnail}
+          fetchPriority="high"
+        />
+      ) : null}
       <main
         ref={mainRef}
         data-learning-motion-surface=""
@@ -1942,6 +1993,8 @@ export function LearningWorkspace({
                 persistenceKey={discussionPersistenceKey}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                lessonDescription={selectedLessonDescription}
+                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
               />
             </article>
           </div>
@@ -2004,6 +2057,7 @@ export function LearningWorkspace({
               courseThumbnail={courseThumbnail}
               focusRequest={curriculumFocusRequest}
               persistenceKey={coursePersistenceKey}
+              isLoading={isApiRoute && isCourseOverviewLoading}
             />
           </div>
         </div>
@@ -2156,6 +2210,7 @@ export function LearningWorkspace({
                 lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0
               }
               persistenceKey={coursePersistenceKey}
+              isLoading={isApiRoute && isCourseOverviewLoading}
               onClose={closeLessonDrawer}
               onLessonSearchOpen={
                 phoneLessonDrawer
