@@ -7,10 +7,8 @@ import {
   CaretDown,
   CheckCircle,
   Circle,
-  CircleNotch,
   Clock,
   FileText,
-  Globe,
   Heart,
   Play,
   PlayCircle,
@@ -31,14 +29,14 @@ import {
   type CourseLevel,
   type CourseCategory,
   type CourseLifecycleStatus,
-  type CoursePricing,
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
-import { RenderMarkdown } from "./RichTextEditor";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { createDiscussionDraft } from "../learning/discussion-editor/types";
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
@@ -670,7 +668,11 @@ function CourseAboutCard({ description }: CourseAboutCardProps) {
                 maxHeight: needsClamp && !expanded ? collapsedMaxHeight : "9999px",
               }}
             >
-              <RenderMarkdown content={description!.trim()} />
+              <DiscussionMarkdown
+                content={createDiscussionDraft(description!.trim())}
+                label="About this course"
+                className="[&>:first-child]:mt-0 max-w-none"
+              />
             </div>
 
             {/* Gradient fade — only shown when collapsed and clamp is active */}
