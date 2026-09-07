@@ -9,6 +9,7 @@ export const awsProviderConfigSchema = z.object({
     .transform((val) => val === "true"),
   S3_BUCKET: z.string().optional(),
   S3_BUCKET_NAME: z.string().optional(),
+  S3_BUILD_BUCKET: z.string().optional(),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("s3"),
   AMI_ID: z.string().optional(),
   SUBNET_ID: z.string().optional(),
@@ -34,12 +35,19 @@ export function resolveS3BucketName(
   return env["S3_BUCKET"] || env["S3_BUCKET_NAME"] || null;
 }
 
+export function resolveS3BuildBucketName(
+  env: Readonly<Record<string, string | undefined>>,
+): string | null {
+  return env["S3_BUILD_BUCKET"] || null;
+}
+
 export function loadAwsProviderConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): AwsProviderEnvironmentConfig {
   const resolvedEnv = {
     ...env,
     S3_BUCKET: resolveS3BucketName(env) ?? undefined,
+    S3_BUILD_BUCKET: resolveS3BuildBucketName(env) ?? undefined,
     KEY_NAME: env["KEY_NAME"] || env["EC2_KEY_NAME"],
     SECURITY_GROUP_IDS:
       env["SECURITY_GROUP_IDS"] ||

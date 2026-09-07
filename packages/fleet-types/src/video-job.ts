@@ -186,13 +186,17 @@ export function estimateJobHardware(
     | {
         durationSeconds?: number;
         videoMetadata?: PersistedVideoMetadata | null;
+        profile?: HardwareProfile | null;
       }
     | number,
 ): JobHardwareRequirements {
   const opts = typeof options === "object" ? options : undefined;
   const architecture = BASE_HARDWARE.architecture;
 
-  const profile = resolveMachineProfile(qualities, opts?.videoMetadata);
+  const profile =
+    opts?.profile && PROFILE_HARDWARE[opts.profile]
+      ? opts.profile
+      : resolveMachineProfile(qualities, opts?.videoMetadata);
   const {
     minCpu,
     minMemoryMb,
@@ -223,13 +227,14 @@ export function estimateJobHardware(
   // Default estimate assumes ~5 Mbps average source bitrate if duration is not known
   const estimatedDurationSeconds =
     typeof explicitDuration === "number" && explicitDuration > 0
-      ? explicitDuration
+      ? Math.max(1, Math.round(explicitDuration))
       : Math.max(
           BASE_HARDWARE.estimatedDurationSeconds,
           videoSizeBytes > 0
             ? Math.ceil(videoSizeBytes / ((5 * 1000 * 1000) / 8))
             : BASE_HARDWARE.estimatedDurationSeconds,
         );
+
 
   // 3. Storage formula: (video duration x total output bitrate) + source size + safety margin
   const sourceSizeGb = Math.max(videoSizeBytes, 0) / BYTES_PER_GB;
@@ -255,6 +260,7 @@ export interface JobHardwareFields {
   video_size: number;
   qualities: readonly VideoQualityLevel[];
   video_metadata?: PersistedVideoMetadata | Record<string, unknown> | null;
+  hardware_profile?: HardwareProfile | null;
 }
 
 /**
@@ -271,6 +277,7 @@ export function resolveJobHardware(
   return estimateJobHardware(job.video_size, job.qualities, {
     videoMetadata: (job.video_metadata ?? undefined) as
       PersistedVideoMetadata | undefined,
+    profile: job.hardware_profile,
   });
 }
 

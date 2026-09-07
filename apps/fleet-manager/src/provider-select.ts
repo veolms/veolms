@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as readline from "node:readline/promises";
+import { isMainModule } from "@veolms/fleet-types";
 import { bold, cyan, dim, green, yellow } from "@veolms/fleet-types/terminal";
 
 interface ProviderOption {
@@ -68,40 +69,59 @@ export async function runProviderSelection(): Promise<void> {
     console.info(`      ${dim(prov.description)}\n`);
   });
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
   let selectedIndex = -1;
 
-  while (selectedIndex < 0) {
-    const answer = (await rl.question(bold("Select provider [1-4]: "))).trim();
-    const parsed = parseInt(answer, 10);
-    if (
-      !Number.isNaN(parsed) &&
-      parsed >= 1 &&
-      parsed <= AVAILABLE_PROVIDERS.length
-    ) {
-      const chosen = AVAILABLE_PROVIDERS[parsed - 1];
-      if (!chosen) {
-        continue;
-      }
-      if (chosen.status === "planned") {
-        console.warn(
-          `\n  ${yellow(`⚠ ${chosen.name} is not yet implemented. Please select an available provider.`)}\n`,
-        );
-        continue;
-      }
-      selectedIndex = parsed - 1;
-    } else {
-      console.warn(
-        `  Invalid choice. Please enter a number between 1 and ${AVAILABLE_PROVIDERS.length}.`,
-      );
+  // Check CLI arguments for provider selection
+  for (const arg of process.argv.slice(2)) {
+    const val = arg.startsWith("--provider=")
+      ? arg.split("=")[1]?.trim().toLowerCase()
+      : arg.trim().toLowerCase();
+    const idx = AVAILABLE_PROVIDERS.findIndex(
+      (p, i) =>
+        p.id === val ||
+        p.name.toLowerCase() === val ||
+        String(i + 1) === val,
+    );
+    if (idx >= 0 && AVAILABLE_PROVIDERS[idx]?.status === "available") {
+      selectedIndex = idx;
+      break;
     }
   }
 
-  rl.close();
+  if (selectedIndex < 0) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    while (selectedIndex < 0) {
+      const answer = (await rl.question(bold("Select provider [1-4]: "))).trim();
+      const parsed = parseInt(answer, 10);
+      if (
+        !Number.isNaN(parsed) &&
+        parsed >= 1 &&
+        parsed <= AVAILABLE_PROVIDERS.length
+      ) {
+        const chosen = AVAILABLE_PROVIDERS[parsed - 1];
+        if (!chosen) {
+          continue;
+        }
+        if (chosen.status === "planned") {
+          console.warn(
+            `\n  ${yellow(`⚠ ${chosen.name} is not yet implemented. Please select an available provider.`)}\n`,
+          );
+          continue;
+        }
+        selectedIndex = parsed - 1;
+      } else {
+        console.warn(
+          `  Invalid choice. Please enter a number between 1 and ${AVAILABLE_PROVIDERS.length}.`,
+        );
+      }
+    }
+
+    rl.close();
+  }
 
   const selectedProvider = AVAILABLE_PROVIDERS[selectedIndex];
   if (!selectedProvider) {
@@ -179,7 +199,7 @@ export async function runProviderSelection(): Promise<void> {
   console.info(`\n      ${bold(cyan("pnpm fleet:infra"))}\n`);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
+if (isMainModule(import.meta.url)) {
   runProviderSelection().catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\n✘ Provider selection failed: ${message}\n`);

@@ -7,12 +7,14 @@ AWS infrastructure provider for the VeoLMS transcoding pipeline. Manages ephemer
 ## Features
 
 - **EC2 Spot & On-Demand Lifecycle**: Launches Graviton (`c7g.*`, `t4g.*`) or Intel/AMD (`c6i.*`, `t3.*`) workers tailored to the computed video job hardware requirements.
+- **Video Metadata Probe Lambda (`veolms-video-metadata-probe`)**: Pre-probes video resolution, duration, FPS, and codecs via `ffprobe` over presigned S3 URLs, forwarding enriched payloads to Fleet Manager.
+- **Direct Cancellation Forwarding**: Forwards cancellation events (`{ jobId, status: "cancelled" }`) directly from the Probe Lambda to Fleet Manager without probing.
 - **Dynamic Debian 13 AMI Resolution**: Resolves latest Debian point-release AMIs via AWS public SSM parameters (`/aws/service/debian/release/13/latest/${arch}`) with a 6-hour TTL cache.
-- **Pre-baked AMI Builder**: Interactive builder (`pnpm fleet:ami`) creates custom AMIs with Node.js 24, FFmpeg, and AWS CLI pre-installed for **<30s boot times**.
+- **Pre-baked AMI Builder**: Interactive builder (`pnpm fleet:build-ami`) creates custom AMIs with Node.js 24, FFmpeg, and AWS CLI pre-installed for **<30s boot times**.
 - **Trap-Protected UserData Bootstrapper**: Slices environment variables securely into `/opt/veolms/worker.env`, downloads the bundled media-worker from S3, and executes with a trap that automatically uploads logs to S3 and terminates the EC2 instance on any failure or exit.
 - **AWS EventBridge Scheduler Dynamic Triggers**: Creates one-shot `at(timestamp)` schedules targeting the Fleet Manager Lambda via `@aws-sdk/client-scheduler`, deleting them automatically when no active workers remain.
 - **Two-Way Cluster Discovery**: Lists and maps real EC2 instance states with tag filters (`tag:ManagedBy=veolms-fleet-manager`) for cluster reconciliation.
-- **S3 Output Verification**: Verifies `master.m3u8` playlists and segment uploads in S3 before marking jobs complete.
+- **S3 Output Verification & Cleanup**: Verifies `master.m3u8` playlists and segment uploads in S3 before marking jobs complete, and automatically purges S3 files on job cancellation.
 - **LocalStack Compatible**: Automatically detects LocalStack endpoints (`AWS_ENDPOINT_URL`) and falls back safely during local offline testing.
 
 ---
@@ -67,13 +69,16 @@ packages/fleet-provider-aws/
 
 ```bash
 # Interactive setup: provisions IAM roles, profiles, S3 bucket permissions, log groups, and builds bundles
-pnpm --filter @veolms/fleet-manager infra --provider=aws
+pnpm fleet:infra --provider=aws
 
 # Build custom pre-baked AMI for instant boot times
-pnpm --filter @veolms/fleet-provider-aws build:ami
+pnpm fleet:build-ami
+
+# Queue and trigger end-to-end transcode task
+pnpm fleet:queue:trigger --provider=aws --key=raw/video.mp4 --qty=240p
 
 # Teardown: safely terminates instances, deletes Lambda, log groups, and IAM roles
-pnpm --filter @veolms/fleet-manager destroy --provider=aws
+pnpm fleet:destroy --provider=aws
 ```
 
 ---

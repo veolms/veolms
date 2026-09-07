@@ -3,6 +3,7 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
+import { isMainModule } from "@veolms/fleet-types";
 import { bold, cyan, dim, green, yellow } from "@veolms/fleet-types/terminal";
 
 export interface BuildServerlessOptions {
@@ -299,11 +300,7 @@ export function parseBuildArgs(
   return options;
 }
 
-if (
-  process.argv[1] &&
-  (import.meta.url.endsWith(process.argv[1]) ||
-    import.meta.url === `file://${path.resolve(process.argv[1])}`)
-) {
+if (isMainModule(import.meta.url)) {
   try {
     const options = parseBuildArgs(process.argv.slice(2));
     bundleServerless(options);

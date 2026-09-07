@@ -54,7 +54,16 @@ export async function startServerfulFleetManager(
     config,
   });
 
-  const startPromise = fleet.startServerfulLoop(signal);
+  const startPromise = fleet.startServerfulLoop(signal).finally(async () => {
+    try {
+      await db.destroy();
+    } catch (destroyErr: unknown) {
+      console.error(
+        "[serverful-fleet] Error closing database connection:",
+        destroyErr,
+      );
+    }
+  });
 
   return { fleet, startPromise };
 }
