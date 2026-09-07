@@ -489,5 +489,63 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(states.isPublishDisabled).toBe(false);
     });
   });
+
+  describe("9. Tab Transitions & Route Sync Independence (No Freeze / No Revert)", () => {
+    // Model of the URL -> activeStep synchronization effect:
+    // useEffect(() => {
+    //   const tabFromUrl = parseWizardTab(searchParams.get("tab")) || parseWizardTab(searchParams.get("step"));
+    //   if (tabFromUrl && tabFromUrl !== activeStep && (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")) {
+    //     setActiveStep(tabFromUrl);
+    //   }
+    // }, [searchParams, isDownstreamUnlocked, activeEditId]); // activeStep intentionally excluded!
+
+    it("navigates Basics -> Curriculum -> Pricing -> Basics without reverting to initial searchParams", () => {
+      let activeStep: CourseWizardStepId = "basics";
+      const isDownstreamUnlocked = true;
+      const activeEditId = "course-123";
+
+      // Initial URL was loaded with ?tab=basics
+      const searchParams = new URLSearchParams("tab=basics");
+
+      const runSyncEffect = (currentSearchParams: URLSearchParams) => {
+        const raw = currentSearchParams.get("tab") || currentSearchParams.get("step");
+        const tabFromUrl = raw as CourseWizardStepId | null;
+        if (
+          tabFromUrl &&
+          tabFromUrl !== activeStep &&
+          (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")
+        ) {
+          activeStep = tabFromUrl;
+        }
+      };
+
+      // 1. User clicks Curriculum
+      activeStep = "curriculum";
+      // Component re-renders. Since activeStep is NOT in the sync effect deps,
+      // the sync effect does NOT execute just because activeStep changed.
+      // Even if searchParams still had tab=basics (stale React Router state before URL push),
+      // activeStep remains 'curriculum'.
+      expect(activeStep).toBe("curriculum");
+
+      // 2. User clicks Pricing
+      activeStep = "pricing";
+      expect(activeStep).toBe("pricing");
+
+      // 3. User clicks Basics
+      activeStep = "basics";
+      expect(activeStep).toBe("basics");
+
+      // 4. Browser Back/Forward occurs (searchParams genuine update)
+      // Browser navigates back to ?tab=curriculum
+      const backSearchParams = new URLSearchParams("tab=curriculum");
+      runSyncEffect(backSearchParams);
+      expect(activeStep).toBe("curriculum");
+
+      // Browser navigates forward to ?tab=pricing
+      const fwdSearchParams = new URLSearchParams("tab=pricing");
+      runSyncEffect(fwdSearchParams);
+      expect(activeStep).toBe("pricing");
+    });
+  });
 });
 

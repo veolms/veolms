@@ -2751,7 +2751,7 @@ export function CourseCreatePage({
     ) {
       setActiveStep(tabFromUrl);
     }
-  }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
+  }, [searchParams, isDownstreamUnlocked, activeEditId]);
 
   const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
     useCategories();
