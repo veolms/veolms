@@ -1,19 +1,21 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
-import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { createDiscussionDraft } from "../learning/discussion-editor/types";
+import {
+  CourseDescriptionEditor,
+  LessonDescriptionEditor,
+} from "./CourseDescriptionEditor";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import {
   ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   BookOpen,
-  Calendar,
   CaretDown,
   CaretLeft,
   CaretRight,
-  CaretUp,
   Certificate,
   ChartBar,
   ChatCircleText,
@@ -22,32 +24,21 @@ import {
   CircleNotch,
   Clock,
   DotsSixVertical,
-  DotsThreeVertical,
   DownloadSimple,
-  Export,
   Eye,
   EyeSlash,
   FileText,
-  Globe,
   Image as ImageIcon,
   Info,
   Lightning,
   ListBullets,
-  ListNumbers,
   LockKey,
-  Paperclip,
   PencilSimple,
   PlayCircle,
   Plus,
   Question,
-  Quotes,
-  Smiley,
   Sparkle,
-  Stack,
-  Star,
   Tag,
-  TextB,
-  TextItalic,
   Trash,
   UploadSimple,
   UserPlus,
@@ -112,7 +103,6 @@ import type {
   CourseOverviewPricingProps,
 } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
-import { sections as initialCourseSections } from "../learning/courseContent";
 import type { CourseSection, Lesson } from "../learning/courseContent";
 
 const EMPTY_CATEGORIES: Category[] = [];
@@ -2314,14 +2304,7 @@ export function CourseCreatePage({
       : "basics";
   const [activeStep, setActiveStep] =
     useState<CourseWizardStepId>(initialStep);
-  const [slideDirection, setSlideDirection] = useState<"right" | "left">(
-    "right",
-  );
 
-  const [indicatorStyle, setIndicatorStyle] = useState<{
-    left: number;
-    width: number;
-  }>({ left: 0, width: 0 });
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
   const navigateToStepRef = useRef<
@@ -2358,10 +2341,6 @@ export function CourseCreatePage({
     const updateIndicator = () => {
       const activeEl = tabRefs.current[activeStep];
       if (!activeEl) return;
-      setIndicatorStyle({
-        left: activeEl.offsetLeft,
-        width: activeEl.offsetWidth,
-      });
       const nav = stepsNavRef.current;
       if (nav) {
         const style = getComputedStyle(activeEl);
@@ -2502,16 +2481,6 @@ export function CourseCreatePage({
     setBasicsDraft((prev) => ({ ...prev, categoryId }));
     basicsDraftRef.current = { ...basicsDraftRef.current, categoryId };
   };
-  const setDifficultyLevel = (
-    difficulty: "beginner" | "intermediate" | "advanced" | "",
-  ) => {
-    setBasicsDraft((prev) => ({ ...prev, difficulty }));
-    basicsDraftRef.current = { ...basicsDraftRef.current, difficulty };
-  };
-  const setLanguage = (language: string) => {
-    setBasicsDraft((prev) => ({ ...prev, language }));
-    basicsDraftRef.current = { ...basicsDraftRef.current, language };
-  };
   const setInstructorAlias = (instructorAlias: string) => {
     setBasicsDraft((prev) => ({ ...prev, instructorAlias }));
     basicsDraftRef.current = { ...basicsDraftRef.current, instructorAlias };
@@ -2525,7 +2494,6 @@ export function CourseCreatePage({
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
 
   const [videoTrailer, setVideoTrailer] = useState<string | null>(null);
-  const [videoTrailerName, setVideoTrailerName] = useState<string>("");
   const videoTrailerInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleThumbnailFileSelect = (
@@ -2557,7 +2525,6 @@ export function CourseCreatePage({
     if (file) {
       const videoUrl = URL.createObjectURL(file);
       setVideoTrailer(videoUrl);
-      setVideoTrailerName(file.name);
     }
   };
 
@@ -2568,7 +2535,6 @@ export function CourseCreatePage({
   const handleRemoveVideoTrailer = (e: React.MouseEvent) => {
     e.stopPropagation();
     setVideoTrailer(null);
-    setVideoTrailerName("");
     if (videoTrailerInputRef.current) {
       videoTrailerInputRef.current.value = "";
     }
@@ -2752,7 +2718,6 @@ export function CourseCreatePage({
   } | null>(null);
 
   const isEditing = Boolean(activeEditId);
-  const isNewCourse = !currentCourseId && !isEditing;
   const isCourseTitleFilled = Boolean(courseTitle.trim());
   // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
   // course ID exists. A non-empty title alone (isCourseTitleFilled) is NOT
@@ -2784,10 +2749,6 @@ export function CourseCreatePage({
       tabFromUrl !== activeStep &&
       (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")
     ) {
-      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-      const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === tabFromUrl);
-      if (targetIdx > currentIdx) setSlideDirection("right");
-      else if (targetIdx < currentIdx) setSlideDirection("left");
       setActiveStep(tabFromUrl);
     }
   }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
@@ -2935,18 +2896,6 @@ export function CourseCreatePage({
     isValidating ||
     isPreviewLoading;
 
-  const categoryOptions = useMemo(() => {
-    const options: Array<readonly [string, string]> = [
-      ["", "Select a category"] as const,
-    ];
-    for (const cat of serverCategories) {
-      if (cat.id && cat.name) {
-        options.push([cat.id, cat.name] as const);
-      }
-    }
-    return options;
-  }, [serverCategories]);
-
   const selectedCategoryName = useMemo(() => {
     return serverCategories.find((c) => c.id === categoryId)?.name || "";
   }, [serverCategories, categoryId]);
@@ -3010,13 +2959,6 @@ export function CourseCreatePage({
       setCategoryToDelete(null);
     }
   };
-
-  const difficultyOptions = [
-    ["", "Select difficulty level"],
-    ["beginner", "Beginner"],
-    ["intermediate", "Intermediate"],
-    ["advanced", "Advanced"],
-  ] as const;
 
   const languageOptions = useMemo(() => {
     const codes = ISO6391.getAllCodes();
@@ -3499,7 +3441,6 @@ export function CourseCreatePage({
   isPricingDirtyRef.current = isPricingDirty;
 
   const pricing = pricingDraft;
-  const setPricing = setPricingDraft;
   const [pricingValidationError, setPricingValidationError] = useState<
     string | null
   >(null);
@@ -3779,73 +3720,6 @@ export function CourseCreatePage({
       }
     };
   }, []);
-
-  const clearPublishControlStatus = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => {
-      if (!prev[controlKey]) return prev;
-      const next = { ...prev };
-      delete next[controlKey];
-      return next;
-    });
-    setPublishSaveFailed(false);
-    if (publishSavedBrieflyTimerRef.current) {
-      clearTimeout(publishSavedBrieflyTimerRef.current);
-      publishSavedBrieflyTimerRef.current = null;
-    }
-    setShowPublishSavedBriefly(false);
-  };
-
-  const markPublishControlSaving = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saving" }));
-  };
-
-  const markPublishControlSaved = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
-    setPublishSaveFailed(false);
-    triggerPublishSavedBriefly();
-
-    publishControlTimersRef.current[controlKey] = setTimeout(() => {
-      setPublishControlStatus((prev) => {
-        if (prev[controlKey] !== "saved") return prev;
-        const next = { ...prev };
-        delete next[controlKey];
-        return next;
-      });
-      delete publishControlTimersRef.current[controlKey];
-    }, 1500);
-  };
-
-  const markPublishControlFailed = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
-    setPublishSaveFailed(true);
-    if (publishSavedBrieflyTimerRef.current) {
-      clearTimeout(publishSavedBrieflyTimerRef.current);
-      publishSavedBrieflyTimerRef.current = null;
-    }
-    setShowPublishSavedBriefly(false);
-  };
-
-  const getPublishControlDisplayStatus = (
-    controlKey: string,
-  ): "saving" | "saved" | "failed" | null => {
-    return publishControlStatus[controlKey] ?? null;
-  };
 
   const isAnyPublishSaving =
     isSavingPublish ||
@@ -7879,14 +7753,6 @@ export function CourseCreatePage({
       return;
     }
 
-    const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-    const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === destination);
-    if (targetIdx > currentIdx) {
-      setSlideDirection("right");
-    } else if (targetIdx < currentIdx) {
-      setSlideDirection("left");
-    }
-
     if (activeStep === "access-rules") {
       await flushFixedDurationPersistence();
     }
@@ -8503,8 +8369,10 @@ export function CourseCreatePage({
 
                 <div
                   className="flex flex-col gap-2 mb-5"
-                  onBlur={() => {
-                    void persistBasicsField("courseDescription");
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      void persistBasicsField("courseDescription");
+                    }
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -8520,7 +8388,7 @@ export function CourseCreatePage({
                       testId="basics-field-status-courseDescription"
                     />
                   </div>
-                  <RichTextEditor
+                  <CourseDescriptionEditor
                     id="course-description"
                     disabled={!isDownstreamUnlocked}
                     value={courseDescription}
@@ -8893,7 +8761,11 @@ export function CourseCreatePage({
                       About this course
                     </h4>
                     {courseDescription.trim() ? (
-                      <RenderMarkdown content={courseDescription} />
+                      <DiscussionMarkdown
+                        content={createDiscussionDraft(courseDescription.trim())}
+                        label="Course description preview"
+                        className="[&>:first-child]:mt-0 max-w-none"
+                      />
                     ) : (
                       <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
                         This is a short description of your course. It will
@@ -9536,7 +9408,9 @@ export function CourseCreatePage({
                                           }
                                         }}
                                       >
-                                        <RichTextEditor
+                                        <LessonDescriptionEditor
+                                          id={`lesson-description-${les.id}`}
+                                          disabled={les.isPendingCreation}
                                           value={les.description}
                                           onChange={(val) =>
                                             handleUpdateLesson(sec.id, les.id, {
