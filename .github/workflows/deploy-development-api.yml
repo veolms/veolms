@@ -122,11 +122,18 @@ jobs:
           service_name="$3"
           healthcheck_url="$4"
 
-          # Ensure Node/pnpm are on PATH for non-interactive SSH shells
-          export PATH="${HOME}/.local/share/pnpm:${HOME}/.nvm/versions/node/$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -n 1)/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
+          # Ensure Node/pnpm/pm2 are on PATH for non-interactive SSH shells
+          export PATH="${HOME}/.local/share/pnpm:${HOME}/.nvm/versions/node/$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -n 1)/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+
+          # Add safe.directory to avoid dubious ownership errors
+          git config --global --add safe.directory "${app_dir}" || true
 
           echo "==> Navigating to application directory: ${app_dir}"
           cd "${app_dir}"
+
+          if [ ! -f ".env" ]; then
+            echo "::warning::.env file not found in ${app_dir}. Verify your server environment configuration."
+          fi
 
           echo "==> Fetching latest commit (${deploy_sha})..."
           git fetch --prune origin development
@@ -148,11 +155,17 @@ jobs:
           pnpm --filter @veolms/api build
 
           echo "==> Restarting service: ${service_name}..."
-          if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files "${service_name}*" | grep -q "${service_name}"; then
+          if command -v systemctl >/dev/null 2>&1 && sudo systemctl list-unit-files "${service_name}*" 2>/dev/null | grep -q "${service_name}"; then
+            echo "--> Restarting via systemctl..."
             sudo systemctl restart "${service_name}"
-          elif command -v pm2 >/dev/null 2>&1; then
-            pm2 restart "${service_name}" --update-env || pm2 start "${service_name}"
+          elif sudo pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Restarting via sudo PM2..."
+            sudo pm2 restart "${service_name}" --update-env
+          elif pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Restarting via user PM2..."
+            pm2 restart "${service_name}" --update-env
           else
+            echo "--> Fallback: Restarting via sudo systemctl..."
             sudo systemctl restart "${service_name}"
           fi
 
