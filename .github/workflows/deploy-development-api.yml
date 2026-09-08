@@ -148,8 +148,6 @@ jobs:
           echo "==> Installing dependencies..."
           pnpm install --frozen-lockfile
 
-          echo "==> Running database migrations..."
-          pnpm db:migrate
 
           echo "==> Building API..."
           pnpm --filter @veolms/api build
