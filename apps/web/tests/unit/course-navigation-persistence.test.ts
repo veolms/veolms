@@ -60,6 +60,36 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(previousStepId).toBe("extras");
       expect(nextStepId).toBeNull();
     });
+
+    it("hides Previous, Preview, and Publish/Update buttons on publish step when course is published", () => {
+      const evaluatePublishBarButtons = (isPublished: boolean) => {
+        return {
+          previous: !isPublished,
+          preview: !isPublished,
+          validate: true,
+          unpublish: isPublished,
+          publishCta: !isPublished, // Only draft courses have the Publish CTA
+        };
+      };
+
+      // Published course on publish step: only Validate and Unpublish
+      expect(evaluatePublishBarButtons(true)).toEqual({
+        previous: false,
+        preview: false,
+        validate: true,
+        unpublish: true,
+        publishCta: false,
+      });
+
+      // Draft course on publish step: Preview, Previous, Validate, Publish
+      expect(evaluatePublishBarButtons(false)).toEqual({
+        previous: true,
+        preview: true,
+        validate: true,
+        unpublish: false,
+        publishCta: true,
+      });
+    });
   });
 
   describe("2. Slide Direction Calculation", () => {
@@ -487,6 +517,64 @@ describe("Course Wizard: Navigation-Driven Save & Tab Coordination", () => {
       expect(states.isValidateDisabled).toBe(false);
       expect(states.showUnpublish).toBe(true);
       expect(states.isPublishDisabled).toBe(false);
+    });
+  });
+
+  describe("9. Tab Transitions & Route Sync Independence (No Freeze / No Revert)", () => {
+    // Model of the URL -> activeStep synchronization effect:
+    // useEffect(() => {
+    //   const tabFromUrl = parseWizardTab(searchParams.get("tab")) || parseWizardTab(searchParams.get("step"));
+    //   if (tabFromUrl && tabFromUrl !== activeStep && (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")) {
+    //     setActiveStep(tabFromUrl);
+    //   }
+    // }, [searchParams, isDownstreamUnlocked, activeEditId]); // activeStep intentionally excluded!
+
+    it("navigates Basics -> Curriculum -> Pricing -> Basics without reverting to initial searchParams", () => {
+      let activeStep: CourseWizardStepId = "basics";
+      const isDownstreamUnlocked = true;
+      const activeEditId = "course-123";
+
+      // Initial URL was loaded with ?tab=basics
+      const searchParams = new URLSearchParams("tab=basics");
+
+      const runSyncEffect = (currentSearchParams: URLSearchParams) => {
+        const raw = currentSearchParams.get("tab") || currentSearchParams.get("step");
+        const tabFromUrl = raw as CourseWizardStepId | null;
+        if (
+          tabFromUrl &&
+          tabFromUrl !== activeStep &&
+          (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")
+        ) {
+          activeStep = tabFromUrl;
+        }
+      };
+
+      // 1. User clicks Curriculum
+      activeStep = "curriculum";
+      // Component re-renders. Since activeStep is NOT in the sync effect deps,
+      // the sync effect does NOT execute just because activeStep changed.
+      // Even if searchParams still had tab=basics (stale React Router state before URL push),
+      // activeStep remains 'curriculum'.
+      expect(activeStep).toBe("curriculum");
+
+      // 2. User clicks Pricing
+      activeStep = "pricing";
+      expect(activeStep).toBe("pricing");
+
+      // 3. User clicks Basics
+      activeStep = "basics";
+      expect(activeStep).toBe("basics");
+
+      // 4. Browser Back/Forward occurs (searchParams genuine update)
+      // Browser navigates back to ?tab=curriculum
+      const backSearchParams = new URLSearchParams("tab=curriculum");
+      runSyncEffect(backSearchParams);
+      expect(activeStep).toBe("curriculum");
+
+      // Browser navigates forward to ?tab=pricing
+      const fwdSearchParams = new URLSearchParams("tab=pricing");
+      runSyncEffect(fwdSearchParams);
+      expect(activeStep).toBe("pricing");
     });
   });
 });

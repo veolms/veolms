@@ -161,7 +161,7 @@ export function LessonResourceManager({
             ) : (
               <UploadSimple size={15} />
             )}
-            {isUploading ? "Uploading..." : "Upload New"}
+            {isUploading ? "Uploading..." : "Upload"}
           </button>
           <input
             ref={fileInputRef}

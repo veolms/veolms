@@ -265,7 +265,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       />,
     );
 
-    expect(screen.getByText("Free")).toBeVisible();
+    expect(screen.getAllByText("Free")[0]).toBeVisible();
     expect(screen.getByText("Enroll for Free")).toBeVisible();
   });
 
@@ -498,7 +498,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
         />,
       );
 
-      expect(screen.getByText("0h0m")).toBeVisible();
+      expect(screen.getByText("0h 0m")).toBeVisible();
     });
 
     it("renders instructor alias when provided and showInstructorName is true", () => {

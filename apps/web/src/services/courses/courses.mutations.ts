@@ -135,6 +135,9 @@ export function useCreateSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -160,6 +163,9 @@ export function useUpdateCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -181,6 +187,9 @@ export function useDeleteCourseSection() {
       });
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
       });
     },
   });
@@ -253,6 +262,9 @@ export function useReorderCourseSections() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -279,6 +291,9 @@ export function useCreateLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -304,6 +319,9 @@ export function useUpdateCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -325,6 +343,9 @@ export function useDeleteCourseLesson() {
       });
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
       });
     },
   });
@@ -451,6 +472,9 @@ export function useReorderSectionLessons() {
       });
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
       });
     },
   });

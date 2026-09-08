@@ -113,6 +113,13 @@ describe("LessonVideoUpload", () => {
     });
     expect(screen.getByText("Preparing…")).toBeInTheDocument();
     expect(screen.queryByText("0%")).toBeNull();
+    const progressBar = screen.getByRole("progressbar", {
+      name: "Video transcoding progress",
+    });
+    expect(progressBar).toHaveAttribute("aria-busy", "true");
+    expect(progressBar.firstElementChild).toHaveClass(
+      "lesson-video-progress-indeterminate",
+    );
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results.at(
       -1,
     )?.value as {
@@ -177,6 +184,60 @@ describe("LessonVideoUpload", () => {
     );
 
     expect(screen.getByText("42%")).toBeInTheDocument();
+  });
+
+  it("does not show ready before the SSE job reaches completed status", async () => {
+    const onProcessingComplete = vi.fn();
+    render(
+      <LessonVideoUpload
+        mediaAssetId="11111111-1111-4111-8111-111111111111"
+        onMediaAttached={vi.fn()}
+        onProcessingComplete={onProcessingComplete}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+
+    const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
+      ?.value as {
+      addEventListener: ReturnType<typeof vi.fn>;
+    };
+    const progressHandler = source.addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "progress",
+    )?.[1] as ((event: MessageEvent<string>) => void) | undefined;
+
+    progressHandler?.(
+      new MessageEvent("progress", {
+        data: JSON.stringify({
+          status: "processing",
+          progressPercent: 100,
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("100%")).toBeInTheDocument();
+      expect(screen.getByText("Video is being processed")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Video processing complete")).toBeNull();
+    expect(screen.getAllByText("Transcoding video").length).toBeGreaterThan(0);
+
+    progressHandler?.(
+      new MessageEvent("progress", {
+        data: JSON.stringify({
+          status: "completed",
+          progressPercent: 100,
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Video ready").length).toBeGreaterThan(0);
+      expect(screen.getByText("Video processing complete")).toBeInTheDocument();
+      expect(onProcessingComplete).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+      );
+    });
   });
 
   it("renders an already completed video as ready after the initial SSE snapshot", async () => {
@@ -290,6 +351,58 @@ describe("LessonVideoUpload", () => {
     });
     expect(screen.getByText("42%")).toBeInTheDocument();
     expect(screen.queryByText("Video processing failed")).toBeNull();
+  });
+
+  it("lets EventSource recover without creating a duplicate stream", async () => {
+    render(
+      <LessonVideoUpload
+        mediaAssetId="11111111-1111-4111-8111-111111111111"
+        onMediaAttached={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+
+    const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
+      ?.value as {
+      addEventListener: ReturnType<typeof vi.fn>;
+      readyState: number;
+    };
+    const errorHandler = source.addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "error",
+    )?.[1] as ((event: Event) => void) | undefined;
+
+    errorHandler?.(
+      new MessageEvent("error", {
+        data: JSON.stringify({ message: "Video transcoding job not found." }),
+      }),
+    );
+
+    // A job can be created just after upload confirmation. This expected
+    // transient response must not become a fatal Retry Status alert.
+    expect(screen.queryByText("Video transcoding job not found.")).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(mediaMocks.createVideoJobProgressEventSource).toHaveBeenCalledTimes(
+      1,
+    );
+
+    const progressHandler = source.addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "progress",
+    )?.[1] as ((event: MessageEvent<string>) => void) | undefined;
+    progressHandler?.(
+      new MessageEvent("progress", {
+        data: JSON.stringify({
+          status: "provisioning",
+          progressPercent: 0,
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Video transcoding job not found.")).toBeNull();
+      expect(screen.getByText("Waiting for transcoder")).toBeInTheDocument();
+    });
   });
 
   it("keeps the last known progress when the SSE stream closes", async () => {

@@ -2493,7 +2493,7 @@ describe("VideoPlayer integration", () => {
     }
   });
 
-  it("pins desktop controls until first play, then uses hover visibility", async () => {
+  it("pins desktop controls until first play, then hides after idle and reveals on movement", async () => {
     const restoreMatchMedia = installFinePointerMatchMedia();
     const engine = new FakeVideoEngine();
     const play = vi.spyOn(engine, "play");
@@ -2503,7 +2503,7 @@ describe("VideoPlayer integration", () => {
         source={videoSource}
         engineFactory={engineFactory}
         emptyTapBehavior="responsive"
-        controlsIdleDelay={5_000}
+        controlsIdleDelay={1_000}
         keepControlsVisibleUntilFirstPlay
       />
     );
@@ -2523,7 +2523,7 @@ describe("VideoPlayer integration", () => {
       expect(player).toHaveAttribute("data-controls-visible", "true");
 
       vi.useFakeTimers();
-      act(() => vi.advanceTimersByTime(5_100));
+      act(() => vi.advanceTimersByTime(1_100));
       expect(player).toHaveAttribute("data-controls-visible", "true");
 
       fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
@@ -2543,17 +2543,21 @@ describe("VideoPlayer integration", () => {
       });
       expect(play).toHaveBeenCalledOnce();
 
-      act(() => vi.advanceTimersByTime(5_100));
+      act(() => vi.advanceTimersByTime(999));
       expect(player).toHaveAttribute("data-controls-visible", "true");
+      act(() => vi.advanceTimersByTime(1));
+      expect(player).toHaveAttribute("data-controls-visible", "false");
 
       fireEvent.pointerMove(player, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "true");
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(player).toHaveAttribute("data-controls-visible", "false");
       fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "false");
 
       act(() => engine.pause());
       fireEvent.pointerEnter(playerPointerSurface!, { pointerType: "mouse" });
-      act(() => vi.advanceTimersByTime(5_100));
+      act(() => vi.advanceTimersByTime(1_100));
       expect(player).toHaveAttribute("data-controls-visible", "true");
       fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "false");

@@ -45,7 +45,7 @@ export const mediaService = {
   ): Promise<void> {
     if (typeof XMLHttpRequest === "undefined") {
       return Promise.reject(
-        new Error("Video uploads are only available in a browser."),
+        new Error("Media uploads are only available in a browser."),
       );
     }
 
@@ -113,10 +113,10 @@ export const mediaService = {
       });
 
       xhr.addEventListener("error", () =>
-        finish(() => reject(new Error("The video upload was interrupted."))),
+        finish(() => reject(new Error("The media upload was interrupted."))),
       );
       xhr.addEventListener("timeout", () =>
-        finish(() => reject(new Error("The video upload timed out."))),
+        finish(() => reject(new Error("The media upload timed out."))),
       );
       xhr.addEventListener("abort", () => {
         if (!settled) finish(() => reject(createAbortError()));
