@@ -69,7 +69,6 @@ import {
   coursesService,
   useCategories,
   useCourseEditor,
-  useCourseOverview,
   useCoursePreview,
   useCourseValidation,
   useCreateCategory,
@@ -3158,10 +3157,6 @@ export function CourseCreatePage({
     error: editorError,
     refetch: refetchEditor,
   } = useCourseEditor(currentCourseId);
-  const { data: courseOverviewData, refetch: refetchCourseOverview } =
-    useCourseOverview(currentCourseId, {
-      enabled: Boolean(currentCourseId),
-    });
   const isInitialLoadingCourse =
     isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   const {
@@ -6460,11 +6455,10 @@ export function CourseCreatePage({
     if (!currentCourseIdRef.current) return;
 
     // The media stream is the source of truth for the terminal state. Once it
-    // reports completion, refresh the derived editor/overview/preview data so
+    // reports completion, refresh the derived editor/preview data so
     // duration and readiness are reflected everywhere without polling.
     await Promise.allSettled([
       refetchEditor(),
-      refetchCourseOverview(),
       refetchPreview(),
     ]);
   };
@@ -6842,15 +6836,9 @@ export function CourseCreatePage({
     0,
   );
 
-  // Prefer the server-calculated duration, which is derived from the actual
-  // uploaded lesson media. Fall back to the editor value and the optional
-  // estimated duration while the overview is catching up after a media change.
+  // Prefer the server-calculated duration or estimated duration from editor data.
   const courseDurationSeconds =
-    courseOverviewData?.stats?.totalDurationSeconds ??
     editorData?.course?.totalDurationSeconds ??
-    (courseOverviewData?.settings?.estimatedDuration
-      ? courseOverviewData.settings.estimatedDuration * 60
-      : undefined) ??
     (editorData?.settings?.estimatedDuration
       ? editorData.settings.estimatedDuration * 60
       : undefined) ??
@@ -7358,18 +7346,6 @@ export function CourseCreatePage({
 
     if (activeStep === "basics") {
       await flushBasicsPersistence();
-    }
-
-    // Refresh the server-calculated duration once before opening the student
-    // preview so a just-completed video attachment is reflected immediately.
-    // This is an explicit refresh on user action, not polling.
-    if (currentCourseId) {
-      try {
-        await refetchCourseOverview();
-      } catch {
-        // The local preview remains usable when the optional duration refresh
-        // is temporarily unavailable.
-      }
     }
 
     setIsPreviewModalOpen(true);

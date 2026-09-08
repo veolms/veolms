@@ -715,13 +715,17 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const isEditingOrCreatingCourse = page === "course-create";
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
     // The learning route already has its static player content and does not
     // need Learning Space sessions before the video can mount. Load these
     // sessions when the panel is opened; keep the existing eager behavior on
     // catalogue/home surfaces.
-    enabled: isAuthenticated && (!renderMain || learningSpaceExpanded),
+    enabled:
+      isAuthenticated &&
+      !isEditingOrCreatingCourse &&
+      (!renderMain || learningSpaceExpanded),
   });
   const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
     activeUser?.id,
@@ -762,7 +766,8 @@ export function CoursesPage({
       setNotice("Couldn't sign out yet. Please try again.");
     }
   }, [setNotice, signOut]);
-  const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
+  const shouldLoadCourseSurface =
+    (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
 
   const {
