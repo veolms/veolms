@@ -167,6 +167,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
         isPublished: true,
         thumbnailMediaId: "thumb-asset-123",
         trailerMediaId: "trailer-asset-456",
+        totalDurationSeconds: 5400,
         sections: [],
         pricingDraft: {
           pricingType: "paid",
@@ -205,6 +206,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
       expect(result?.course.status).toBe("published");
       expect(result?.course.thumbnailMediaId).toBe("thumb-asset-123");
       expect(result?.course.trailerMediaId).toBe("trailer-asset-456");
+      expect(result?.course.totalDurationSeconds).toBe(5400);
 
       // Settings
       expect(result?.settings?.language).toBe("es");
@@ -231,6 +233,46 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
       expect(result?.includes?.[1]?.text).toBe(
         "Verified Completion Certificate",
       );
+    });
+
+    it("preserves an explicit thumbnail removal in local preview data", () => {
+      const result = buildLocalPreviewData({
+        currentCourseId: "course-thumbnail-removal",
+        courseTitle: "Thumbnail Removal",
+        shortDescription: "",
+        courseDescription: "",
+        categoryId: "",
+        difficultyLevel: "",
+        language: "en",
+        instructorAlias: "",
+        showInstructorName: true,
+        courseVersion: 2,
+        isPublished: false,
+        thumbnailMediaId: null,
+        editorData: {
+          course: { thumbnailMediaId: "existing-thumbnail" },
+        } as CourseEditorDataResponse,
+        sections: [],
+        pricingDraft: {
+          pricingType: "free",
+          sellingPrice: "",
+          originalPrice: "",
+          currency: "INR",
+        },
+        accessRulesDraft: {
+          accessType: "everyone",
+          durationMode: "lifetime",
+          fixedDurationValue: 30,
+          fixedDurationUnit: "Days",
+          enableQA: true,
+          enableComments: true,
+          enableDownloads: true,
+        },
+        enableCertificate: false,
+        manualIncludesDraft: [],
+      });
+
+      expect(result?.course.thumbnailMediaId).toBeNull();
     });
 
     it("correctly calculates duration days across Days, Weeks, Months, and Years", () => {
@@ -601,6 +643,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
         },
         enableCertificate: false,
         manualIncludesDraft: [{ id: "p1", text: "Design Assets" }],
+        totalDurationSeconds: 5400,
       });
 
       const adapted = adaptPreviewDataToOverview(
@@ -614,6 +657,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
       expect(adapted.course.level).toBe("Beginner");
       expect(adapted.instructorName).toBe("Design Lead");
       expect(adapted.language).toBe("Spanish");
+      expect(adapted.course.duration).toBe("1h 30m");
       expect(adapted.pricing.price).toBe("Free");
       expect(adapted.sections).toHaveLength(1);
       expect(adapted.sections[0]!.title).toBe("Color Theory");

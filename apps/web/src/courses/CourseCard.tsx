@@ -345,7 +345,7 @@ export function CourseCard({
                   />
                   <MenuAction
                     Icon={Eye}
-                    label="Course Preview"
+                    label="Course Overview"
                     onClick={() => closeThen(() => onExplore(course))}
                   />
                   <MenuAction
@@ -371,15 +371,6 @@ export function CourseCard({
                     Icon={CopySimple}
                     label="Copy Course Link"
                     onClick={() => closeThen(() => void copyCourseLink())}
-                  />
-                  <MenuAction
-                    Icon={PaperPlaneTilt}
-                    label="Duplicate Course"
-                    onClick={() =>
-                      closeThen(() =>
-                        setNotice(`${course.title} was duplicated as a draft.`),
-                      )
-                    }
                   />
                   <MenuDivider />
                   <MenuAction
@@ -414,7 +405,7 @@ export function CourseCard({
               <>
                 <MenuAction
                   Icon={Eye}
-                  label="Course Preview"
+                  label="Course Overview"
                   onClick={() => closeThen(() => onExplore(course))}
                 />
                 <MenuDivider />
@@ -466,7 +457,7 @@ export function CourseCard({
               <>
                 <MenuAction
                   Icon={Eye}
-                  label="Course Preview"
+                  label="Course Overview"
                   onClick={() => closeThen(() => onExplore(course))}
                 />
                 <MenuDivider />
@@ -479,16 +470,6 @@ export function CourseCard({
                   Icon={LinkSimple}
                   label="Copy Course Link"
                   onClick={() => closeThen(() => void copyCourseLink())}
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={Flag}
-                  label="Report Course"
-                  onClick={() =>
-                    closeThen(() =>
-                      setNotice(`Course report opened for ${course.title}.`),
-                    )
-                  }
                 />
               </>
             )}

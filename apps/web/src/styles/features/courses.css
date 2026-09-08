@@ -422,7 +422,9 @@
 }
 
 .courses-app--hidden .courses-sidebar,
-:root[data-sidebar-state="hidden"] .courses-app .courses-sidebar {
+:root[data-sidebar-state="hidden"]
+  .courses-app:not(.courses-app--edge-open)
+  .courses-sidebar {
   position: fixed;
   top: 10px;
   bottom: 10px;

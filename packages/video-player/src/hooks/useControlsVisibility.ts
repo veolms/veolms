@@ -124,14 +124,11 @@ export function useControlsVisibility({
         return;
       }
 
-      if (pointerModeRef.current === "mouse") {
-        if (!pointerInsideRef.current) {
-          controller.setControlsVisible(false);
-          return;
-        }
-        controller.setControlsVisible(true);
+      if (pointerModeRef.current === "mouse" && !pointerInsideRef.current) {
+        controller.setControlsVisible(false);
         return;
-      } else if (paused) {
+      }
+      if (paused) {
         return;
       }
 

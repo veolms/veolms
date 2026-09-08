@@ -1,25 +1,27 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
-import { RichTextEditor, RenderMarkdown } from "./RichTextEditor";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
 import {
   LessonResourceManager,
   toLessonResourceItem,
   type LessonResourceItem,
 } from "./lesson-resources/LessonResourceManager";
+import {
+  CourseDescriptionEditor,
+  LessonDescriptionEditor,
+} from "./CourseDescriptionEditor";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import {
   ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   BookOpen,
-  Calendar,
   CaretDown,
   CaretLeft,
   CaretRight,
-  CaretUp,
   Certificate,
   ChartBar,
   ChatCircleText,
@@ -28,32 +30,21 @@ import {
   CircleNotch,
   Clock,
   DotsSixVertical,
-  DotsThreeVertical,
   DownloadSimple,
-  Export,
   Eye,
   EyeSlash,
   FileText,
-  Globe,
   Image as ImageIcon,
   Info,
   Lightning,
   ListBullets,
-  ListNumbers,
   LockKey,
-  Paperclip,
   PencilSimple,
   PlayCircle,
   Plus,
   Question,
-  Quotes,
-  Smiley,
   Sparkle,
-  Stack,
-  Star,
   Tag,
-  TextB,
-  TextItalic,
   Trash,
   UploadSimple,
   UserPlus,
@@ -78,6 +69,7 @@ import {
   coursesService,
   useCategories,
   useCourseEditor,
+  useCourseOverview,
   useCoursePreview,
   useCourseValidation,
   useCreateCategory,
@@ -112,6 +104,7 @@ import type {
   CreateLessonResourceRequest,
   LessonResource,
 } from "@veolms/contracts";
+import { MEDIA_MAX_SIZES } from "@veolms/contracts";
 import {
   CourseOverviewPage,
   CourseOverviewSkeleton,
@@ -121,8 +114,9 @@ import type {
   CourseOverviewPricingProps,
 } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
-import { sections as initialCourseSections } from "../learning/courseContent";
 import type { CourseSection, Lesson } from "../learning/courseContent";
+import { formatDuration } from "./courseAdapter";
+import { mediaService } from "../services/media";
 
 const EMPTY_CATEGORIES: Category[] = [];
 
@@ -153,6 +147,13 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
 export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
   ({ id }) => id,
 );
+
+type ThumbnailUploadStatus =
+  | "idle"
+  | "uploading"
+  | "confirming"
+  | "saving"
+  | "error";
 
 // Basics State Model & Normalization
 export interface BasicsFormState {
@@ -1309,6 +1310,7 @@ export interface BuildLocalPreviewParams {
   enableCertificate: boolean;
   manualIncludesDraft: Array<{ id: string; text: string }>;
   editorData?: CourseEditorDataResponse | null;
+  totalDurationSeconds?: number;
   now?: string;
 }
 
@@ -1332,6 +1334,7 @@ export function buildLocalPreviewData({
   enableCertificate,
   manualIncludesDraft,
   editorData,
+  totalDurationSeconds,
   now = new Date().toISOString(),
 }: BuildLocalPreviewParams): CourseEditorDataResponse | null {
   // Preserve course-title/course-ID boundary without "Untitled Course" fallback
@@ -1371,7 +1374,9 @@ export function buildLocalPreviewData({
     creatorId: editorData?.course?.creatorId || null,
     categoryId: categoryId || null,
     thumbnailMediaId:
-      thumbnailMediaId ?? (editorData?.course?.thumbnailMediaId || null),
+      thumbnailMediaId !== undefined
+        ? thumbnailMediaId
+        : editorData?.course?.thumbnailMediaId || null,
     trailerMediaId:
       trailerMediaId ?? (editorData?.course?.trailerMediaId || null),
     instructorAlias: instructorAlias.trim() || null,
@@ -1381,7 +1386,8 @@ export function buildLocalPreviewData({
     publishedAt: editorData?.course?.publishedAt || null,
     totalSections: totalSectionsCount,
     totalLessons: totalLessonsCount,
-    totalDurationSeconds: editorData?.course?.totalDurationSeconds || 0,
+    totalDurationSeconds:
+      totalDurationSeconds ?? editorData?.course?.totalDurationSeconds ?? 0,
   };
 
   const sectionsData: CourseEditorDataResponse["sections"] = sections.map(
@@ -2452,10 +2458,6 @@ export function CourseCreatePage({
     "right",
   );
 
-  const [indicatorStyle, setIndicatorStyle] = useState<{
-    left: number;
-    width: number;
-  }>({ left: 0, width: 0 });
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
   const navigateToStepRef = useRef<
@@ -2492,10 +2494,6 @@ export function CourseCreatePage({
     const updateIndicator = () => {
       const activeEl = tabRefs.current[activeStep];
       if (!activeEl) return;
-      setIndicatorStyle({
-        left: activeEl.offsetLeft,
-        width: activeEl.offsetWidth,
-      });
       const nav = stepsNavRef.current;
       if (nav) {
         const style = getComputedStyle(activeEl);
@@ -2636,16 +2634,6 @@ export function CourseCreatePage({
     setBasicsDraft((prev) => ({ ...prev, categoryId }));
     basicsDraftRef.current = { ...basicsDraftRef.current, categoryId };
   };
-  const setDifficultyLevel = (
-    difficulty: "beginner" | "intermediate" | "advanced" | "",
-  ) => {
-    setBasicsDraft((prev) => ({ ...prev, difficulty }));
-    basicsDraftRef.current = { ...basicsDraftRef.current, difficulty };
-  };
-  const setLanguage = (language: string) => {
-    setBasicsDraft((prev) => ({ ...prev, language }));
-    basicsDraftRef.current = { ...basicsDraftRef.current, language };
-  };
   const setInstructorAlias = (instructorAlias: string) => {
     setBasicsDraft((prev) => ({ ...prev, instructorAlias }));
     basicsDraftRef.current = { ...basicsDraftRef.current, instructorAlias };
@@ -2655,34 +2643,281 @@ export function CourseCreatePage({
     basicsDraftRef.current = { ...basicsDraftRef.current, showInstructorName };
   };
 
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(
+    activeEditId,
+  );
+  const [courseVersion, setCourseVersion] = useState<number>(1);
+  const courseVersionRef = useRef<number>(courseVersion);
+  courseVersionRef.current = courseVersion;
+  const currentCourseIdRef = useRef<string | null>(currentCourseId);
+
   const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [thumbnailMediaId, setThumbnailMediaId] = useState<
+    string | null | undefined
+  >(undefined);
+  const [thumbnailUploadStatus, setThumbnailUploadStatus] =
+    useState<ThumbnailUploadStatus>("idle");
+  const [thumbnailUploadProgress, setThumbnailUploadProgress] = useState(0);
+  const [thumbnailUploadError, setThumbnailUploadError] = useState<
+    string | null
+  >(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
+  const thumbnailMediaIdRef = useRef<string | null>(null);
+  const thumbnailUploadStatusRef = useRef<ThumbnailUploadStatus>("idle");
+  thumbnailUploadStatusRef.current = thumbnailUploadStatus;
+  const thumbnailDirtyRef = useRef(false);
+  const thumbnailObjectUrlRef = useRef<string | null>(null);
+  const thumbnailUploadAbortControllerRef = useRef<AbortController | null>(
+    null,
+  );
+  const thumbnailRequestIdRef = useRef(0);
+  const thumbnailMountedRef = useRef(true);
+  const isThumbnailBusy =
+    thumbnailUploadStatus === "uploading" ||
+    thumbnailUploadStatus === "confirming" ||
+    thumbnailUploadStatus === "saving";
+
+  useEffect(() => {
+    thumbnailMountedRef.current = true;
+    return () => {
+      thumbnailMountedRef.current = false;
+      thumbnailUploadAbortControllerRef.current?.abort();
+      if (thumbnailObjectUrlRef.current) {
+        URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+      }
+    };
+  }, []);
 
   const [videoTrailer, setVideoTrailer] = useState<string | null>(null);
-  const [videoTrailerName, setVideoTrailerName] = useState<string>("");
   const videoTrailerInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleThumbnailFileSelect = (
+  async function handleThumbnailFileSelect(
     e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  ): Promise<void> {
     const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setThumbnail(imageUrl);
+    e.target.value = "";
+    if (!file || isThumbnailBusy) return;
+
+    const contentType = file.type.toLowerCase();
+    if (!contentType.startsWith("image/")) {
+      setThumbnailUploadError("Please choose an image file for the thumbnail.");
+      setThumbnailUploadStatus("error");
+      return;
     }
-  };
+    if (file.size <= 0) {
+      setThumbnailUploadError("The selected thumbnail is empty.");
+      setThumbnailUploadStatus("error");
+      return;
+    }
+    if (file.size > MEDIA_MAX_SIZES.image) {
+      setThumbnailUploadError("Thumbnail images must be 10 MB or smaller.");
+      setThumbnailUploadStatus("error");
+      return;
+    }
+
+    const targetCourseId = currentCourseIdRef.current || currentCourseId;
+    if (!targetCourseId) {
+      setThumbnailUploadError(
+        "Save the course title before uploading a thumbnail.",
+      );
+      setThumbnailUploadStatus("error");
+      return;
+    }
+
+    const requestId = ++thumbnailRequestIdRef.current;
+    const previousThumbnail = thumbnail;
+    const previousMediaId = thumbnailMediaIdRef.current;
+    const previousObjectUrl = thumbnailObjectUrlRef.current;
+    const imageUrl = URL.createObjectURL(file);
+
+    thumbnailObjectUrlRef.current = imageUrl;
+    thumbnailDirtyRef.current = true;
+    setThumbnail(imageUrl);
+    setThumbnailUploadError(null);
+    setThumbnailUploadProgress(0);
+    setThumbnailUploadStatus("uploading");
+
+    const requestIsActive = () =>
+      thumbnailMountedRef.current &&
+      thumbnailRequestIdRef.current === requestId;
+
+    const restorePreviousThumbnail = () => {
+      if (!requestIsActive()) return;
+      URL.revokeObjectURL(imageUrl);
+      thumbnailObjectUrlRef.current = previousObjectUrl;
+      thumbnailMediaIdRef.current = previousMediaId;
+      setThumbnail(previousThumbnail);
+      setThumbnailMediaId(previousMediaId);
+      thumbnailDirtyRef.current = false;
+    };
+
+    const uploadAbortController = new AbortController();
+    thumbnailUploadAbortControllerRef.current = uploadAbortController;
+
+    try {
+      if (!(await flushBasicsPersistence()) || !requestIsActive()) {
+        throw new Error(
+          "Save the course details before uploading a thumbnail.",
+        );
+      }
+
+      const presigned = await mediaService.presignMediaUpload({
+        filename: file.name,
+        contentType: file.type,
+        fileSize: file.size,
+        type: "image",
+      });
+
+      if (!requestIsActive()) return;
+
+      await mediaService.uploadFileToPresignedUrl(
+        presigned.uploadUrl,
+        file,
+        ({ percent }) => {
+          if (requestIsActive()) setThumbnailUploadProgress(percent);
+        },
+        uploadAbortController.signal,
+      );
+
+      if (!requestIsActive()) return;
+      setThumbnailUploadStatus("confirming");
+      await mediaService.confirmUpload(presigned.mediaAssetId);
+
+      if (!requestIsActive()) return;
+      setThumbnailUploadStatus("saving");
+
+      const updated = await updateBasicsMutation.mutateAsync({
+        id: targetCourseId,
+        payload: {
+          thumbnailMediaId: presigned.mediaAssetId,
+          version: courseVersionRef.current,
+        },
+      });
+
+      if (!requestIsActive()) return;
+
+      setCourseVersion(updated.version);
+      courseVersionRef.current = updated.version;
+      thumbnailMediaIdRef.current = presigned.mediaAssetId;
+      setThumbnailMediaId(presigned.mediaAssetId);
+      setThumbnail(`/api/v1/media/${presigned.mediaAssetId}`);
+      thumbnailDirtyRef.current = false;
+      setThumbnailUploadProgress(100);
+      setThumbnailUploadStatus("idle");
+      setThumbnailUploadError(null);
+
+      if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
+      thumbnailObjectUrlRef.current = null;
+    } catch (error: unknown) {
+      if (
+        !requestIsActive() ||
+        (error instanceof Error && error.name === "AbortError")
+      ) {
+        return;
+      }
+
+      restorePreviousThumbnail();
+      setThumbnailUploadStatus("error");
+      setThumbnailUploadError(
+        error instanceof Error
+          ? error.message
+          : "Thumbnail upload failed. Please try again.",
+      );
+    } finally {
+      if (
+        thumbnailUploadAbortControllerRef.current === uploadAbortController
+      ) {
+        thumbnailUploadAbortControllerRef.current = null;
+      }
+    }
+  }
 
   const triggerThumbnailUpload = () => {
     thumbnailInputRef.current?.click();
   };
 
-  const handleRemoveThumbnail = (e: React.MouseEvent) => {
+  async function handleRemoveThumbnail(e: React.MouseEvent): Promise<void> {
     e.stopPropagation();
-    setThumbnail(null);
     if (thumbnailInputRef.current) {
       thumbnailInputRef.current.value = "";
     }
-  };
+
+    if (isThumbnailBusy) return;
+
+    const previousThumbnail = thumbnail;
+    const previousMediaId = thumbnailMediaIdRef.current;
+    const previousObjectUrl = thumbnailObjectUrlRef.current;
+    const targetCourseId = currentCourseIdRef.current || currentCourseId;
+
+    if (!targetCourseId || !previousMediaId) {
+      if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
+      thumbnailObjectUrlRef.current = null;
+      thumbnailDirtyRef.current = false;
+      thumbnailMediaIdRef.current = null;
+      setThumbnailMediaId(null);
+      setThumbnail(null);
+      setThumbnailUploadError(null);
+      setThumbnailUploadStatus("idle");
+      return;
+    }
+
+    const requestId = ++thumbnailRequestIdRef.current;
+    thumbnailDirtyRef.current = true;
+    setThumbnail(null);
+    setThumbnailMediaId(null);
+    setThumbnailUploadError(null);
+    setThumbnailUploadStatus("saving");
+
+    try {
+      if (!(await flushBasicsPersistence())) {
+        throw new Error(
+          "Save the course details before removing the thumbnail.",
+        );
+      }
+
+      const updated = await updateBasicsMutation.mutateAsync({
+        id: targetCourseId,
+        payload: {
+          thumbnailMediaId: null,
+          version: courseVersionRef.current,
+        },
+      });
+
+      if (
+        !thumbnailMountedRef.current ||
+        thumbnailRequestIdRef.current !== requestId
+      ) {
+        return;
+      }
+
+      setCourseVersion(updated.version);
+      courseVersionRef.current = updated.version;
+      thumbnailMediaIdRef.current = null;
+      thumbnailDirtyRef.current = false;
+      setThumbnailUploadStatus("idle");
+      setThumbnailUploadError(null);
+      if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
+      thumbnailObjectUrlRef.current = null;
+    } catch (error: unknown) {
+      if (
+        !thumbnailMountedRef.current ||
+        thumbnailRequestIdRef.current !== requestId
+      ) {
+        return;
+      }
+
+      thumbnailDirtyRef.current = false;
+      thumbnailMediaIdRef.current = previousMediaId;
+      setThumbnailMediaId(previousMediaId);
+      setThumbnail(previousThumbnail);
+      setThumbnailUploadStatus("error");
+      setThumbnailUploadError(
+        error instanceof Error
+          ? error.message
+          : "Thumbnail removal failed. Please try again.",
+      );
+    }
+  }
 
   const handleVideoTrailerFileSelect = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -2691,7 +2926,6 @@ export function CourseCreatePage({
     if (file) {
       const videoUrl = URL.createObjectURL(file);
       setVideoTrailer(videoUrl);
-      setVideoTrailerName(file.name);
     }
   };
 
@@ -2702,18 +2936,10 @@ export function CourseCreatePage({
   const handleRemoveVideoTrailer = (e: React.MouseEvent) => {
     e.stopPropagation();
     setVideoTrailer(null);
-    setVideoTrailerName("");
     if (videoTrailerInputRef.current) {
       videoTrailerInputRef.current.value = "";
     }
   };
-
-  const [currentCourseId, setCurrentCourseId] = useState<string | null>(
-    activeEditId,
-  );
-  const [courseVersion, setCourseVersion] = useState<number>(1);
-  const courseVersionRef = useRef<number>(courseVersion);
-  courseVersionRef.current = courseVersion;
 
   // Immediate persistence states for Basics interactive controls
   const [savingBasicsControls, setSavingBasicsControls] = useState<Set<string>>(
@@ -2886,7 +3112,6 @@ export function CourseCreatePage({
   } | null>(null);
 
   const isEditing = Boolean(activeEditId);
-  const isNewCourse = !currentCourseId && !isEditing;
   const isCourseTitleFilled = Boolean(courseTitle.trim());
   // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
   // course ID exists. A non-empty title alone (isCourseTitleFilled) is NOT
@@ -2894,7 +3119,6 @@ export function CourseCreatePage({
   // completed, which let concurrent callers each fire their own POST /courses.
   const isDownstreamUnlocked = Boolean(currentCourseId);
 
-  const currentCourseIdRef = useRef<string | null>(currentCourseId);
   useEffect(() => {
     currentCourseIdRef.current = currentCourseId;
   }, [currentCourseId]);
@@ -2918,13 +3142,9 @@ export function CourseCreatePage({
       tabFromUrl !== activeStep &&
       (isDownstreamUnlocked || Boolean(activeEditId) || tabFromUrl === "basics")
     ) {
-      const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-      const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === tabFromUrl);
-      if (targetIdx > currentIdx) setSlideDirection("right");
-      else if (targetIdx < currentIdx) setSlideDirection("left");
       setActiveStep(tabFromUrl);
     }
-  }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
+  }, [searchParams, isDownstreamUnlocked, activeEditId]);
 
   const {
     data: serverCategories = EMPTY_CATEGORIES,
@@ -2938,6 +3158,10 @@ export function CourseCreatePage({
     error: editorError,
     refetch: refetchEditor,
   } = useCourseEditor(currentCourseId);
+  const { data: courseOverviewData, refetch: refetchCourseOverview } =
+    useCourseOverview(currentCourseId, {
+      enabled: Boolean(currentCourseId),
+    });
   const isInitialLoadingCourse =
     isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   const {
@@ -3072,19 +3296,8 @@ export function CourseCreatePage({
     publishCourseMutation.isPending ||
     unpublishCourseMutation.isPending ||
     isValidating ||
+    isThumbnailBusy ||
     isPreviewLoading;
-
-  const categoryOptions = useMemo(() => {
-    const options: Array<readonly [string, string]> = [
-      ["", "Select a category"] as const,
-    ];
-    for (const cat of serverCategories) {
-      if (cat.id && cat.name) {
-        options.push([cat.id, cat.name] as const);
-      }
-    }
-    return options;
-  }, [serverCategories]);
 
   const selectedCategoryName = useMemo(() => {
     return serverCategories.find((c) => c.id === categoryId)?.name || "";
@@ -3149,13 +3362,6 @@ export function CourseCreatePage({
       setCategoryToDelete(null);
     }
   };
-
-  const difficultyOptions = [
-    ["", "Select difficulty level"],
-    ["beginner", "Beginner"],
-    ["intermediate", "Intermediate"],
-    ["advanced", "Advanced"],
-  ] as const;
 
   const languageOptions = useMemo(() => {
     const codes = ISO6391.getAllCodes();
@@ -3641,7 +3847,6 @@ export function CourseCreatePage({
   isPricingDirtyRef.current = isPricingDirty;
 
   const pricing = pricingDraft;
-  const setPricing = setPricingDraft;
   const [pricingValidationError, setPricingValidationError] = useState<
     string | null
   >(null);
@@ -3923,73 +4128,6 @@ export function CourseCreatePage({
     };
   }, []);
 
-  const clearPublishControlStatus = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => {
-      if (!prev[controlKey]) return prev;
-      const next = { ...prev };
-      delete next[controlKey];
-      return next;
-    });
-    setPublishSaveFailed(false);
-    if (publishSavedBrieflyTimerRef.current) {
-      clearTimeout(publishSavedBrieflyTimerRef.current);
-      publishSavedBrieflyTimerRef.current = null;
-    }
-    setShowPublishSavedBriefly(false);
-  };
-
-  const markPublishControlSaving = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saving" }));
-  };
-
-  const markPublishControlSaved = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "saved" }));
-    setPublishSaveFailed(false);
-    triggerPublishSavedBriefly();
-
-    publishControlTimersRef.current[controlKey] = setTimeout(() => {
-      setPublishControlStatus((prev) => {
-        if (prev[controlKey] !== "saved") return prev;
-        const next = { ...prev };
-        delete next[controlKey];
-        return next;
-      });
-      delete publishControlTimersRef.current[controlKey];
-    }, 1500);
-  };
-
-  const markPublishControlFailed = (controlKey: string) => {
-    if (publishControlTimersRef.current[controlKey]) {
-      clearTimeout(publishControlTimersRef.current[controlKey]);
-      delete publishControlTimersRef.current[controlKey];
-    }
-    setPublishControlStatus((prev) => ({ ...prev, [controlKey]: "failed" }));
-    setPublishSaveFailed(true);
-    if (publishSavedBrieflyTimerRef.current) {
-      clearTimeout(publishSavedBrieflyTimerRef.current);
-      publishSavedBrieflyTimerRef.current = null;
-    }
-    setShowPublishSavedBriefly(false);
-  };
-
-  const getPublishControlDisplayStatus = (
-    controlKey: string,
-  ): "saving" | "saved" | "failed" | null => {
-    return publishControlStatus[controlKey] ?? null;
-  };
-
   const isAnyPublishSaving =
     isSavingPublish ||
     Object.values(publishControlStatus).some((status) => status === "saving");
@@ -4262,6 +4400,24 @@ export function CourseCreatePage({
       serverBasicsRef.current = confirmedBasics;
       setCourseVersion(c.version || 1);
       courseVersionRef.current = c.version || 1;
+
+      const confirmedThumbnailMediaId = c.thumbnailMediaId ?? null;
+      if (
+        !thumbnailDirtyRef.current &&
+        thumbnailUploadStatusRef.current === "idle"
+      ) {
+        if (thumbnailObjectUrlRef.current) {
+          URL.revokeObjectURL(thumbnailObjectUrlRef.current);
+          thumbnailObjectUrlRef.current = null;
+        }
+        thumbnailMediaIdRef.current = confirmedThumbnailMediaId;
+        setThumbnailMediaId(confirmedThumbnailMediaId);
+        setThumbnail(
+          confirmedThumbnailMediaId
+            ? `/api/v1/media/${confirmedThumbnailMediaId}`
+            : null,
+        );
+      }
 
       const isBasicsSavingActive =
         savingBasicsControlsRef.current.size > 0 ||
@@ -6270,7 +6426,7 @@ export function CourseCreatePage({
     sectionId: string,
     lessonId: string,
     mediaAssetId: string,
-  ) => {
+  ): Promise<boolean> => {
     const currentSections = sectionsRef.current || sections;
     const currentLesson = currentSections
       .find((section) => section.id === sectionId)
@@ -6278,7 +6434,11 @@ export function CourseCreatePage({
     const previousMediaAssetId = currentLesson?.contentMediaId ?? null;
 
     handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
-    if (!currentLesson || currentLesson.isPendingCreation) return;
+    if (!currentLesson) return false;
+    // Pending lessons are persisted together with their lesson-create request.
+    // The local binding is valid for now and must not show a false attachment
+    // error while the optimistic lesson is waiting for that request.
+    if (currentLesson.isPendingCreation) return true;
 
     const persisted = await persistLesson(sectionId, lessonId, {
       collapseOnSuccess: false,
@@ -6292,6 +6452,21 @@ export function CourseCreatePage({
         contentMediaId: previousMediaAssetId,
       });
     }
+
+    return persisted;
+  };
+
+  const handleLessonProcessingComplete = async (): Promise<void> => {
+    if (!currentCourseIdRef.current) return;
+
+    // The media stream is the source of truth for the terminal state. Once it
+    // reports completion, refresh the derived editor/overview/preview data so
+    // duration and readiness are reflected everywhere without polling.
+    await Promise.allSettled([
+      refetchEditor(),
+      refetchCourseOverview(),
+      refetchPreview(),
+    ]);
   };
 
   const saveAllDirtyLessons = async (
@@ -6667,13 +6842,20 @@ export function CourseCreatePage({
     0,
   );
 
-  // Approximate course duration based on curriculum lessons
-  const computedDuration =
-    totalLessons === 0
-      ? "0h 0m"
-      : totalLessons < 10
-        ? `${Math.floor((totalLessons * 12) / 60)}h ${(totalLessons * 12) % 60}m`
-        : `${Math.floor((totalLessons * 9) / 60)}h ${(totalLessons * 9) % 60}m`;
+  // Prefer the server-calculated duration, which is derived from the actual
+  // uploaded lesson media. Fall back to the editor value and the optional
+  // estimated duration while the overview is catching up after a media change.
+  const courseDurationSeconds =
+    courseOverviewData?.stats?.totalDurationSeconds ??
+    editorData?.course?.totalDurationSeconds ??
+    (courseOverviewData?.settings?.estimatedDuration
+      ? courseOverviewData.settings.estimatedDuration * 60
+      : undefined) ??
+    (editorData?.settings?.estimatedDuration
+      ? editorData.settings.estimatedDuration * 60
+      : undefined) ??
+    0;
+  const computedDuration = formatDuration(courseDurationSeconds);
 
   // Student-facing Preview Object Adapter
   const previewCourse: Course = {
@@ -7100,7 +7282,7 @@ export function CourseCreatePage({
       showInstructorName,
       courseVersion,
       isPublished,
-      thumbnailMediaId: editorData?.course?.thumbnailMediaId || null,
+      thumbnailMediaId,
       trailerMediaId: editorData?.course?.trailerMediaId || null,
       sections,
       pricingDraft,
@@ -7108,6 +7290,7 @@ export function CourseCreatePage({
       enableCertificate: extras.enableCertificate,
       manualIncludesDraft,
       editorData,
+      totalDurationSeconds: courseDurationSeconds,
     });
   }, [
     currentCourseId,
@@ -7121,12 +7304,14 @@ export function CourseCreatePage({
     language,
     courseVersion,
     isPublished,
+    thumbnailMediaId,
     editorData,
     sections,
     accessRulesDraft,
     pricingDraft,
     extras.enableCertificate,
     manualIncludesDraft,
+    courseDurationSeconds,
   ]);
 
   // Explicit non-reconciliation: when local preview data is available from wizard state,
@@ -7173,6 +7358,18 @@ export function CourseCreatePage({
 
     if (activeStep === "basics") {
       await flushBasicsPersistence();
+    }
+
+    // Refresh the server-calculated duration once before opening the student
+    // preview so a just-completed video attachment is reflected immediately.
+    // This is an explicit refresh on user action, not polling.
+    if (currentCourseId) {
+      try {
+        await refetchCourseOverview();
+      } catch {
+        // The local preview remains usable when the optional duration refresh
+        // is temporarily unavailable.
+      }
     }
 
     setIsPreviewModalOpen(true);
@@ -7593,10 +7790,33 @@ export function CourseCreatePage({
       }
     }
 
-    const isMetaDirty = !isBasicsMetaEqual(currentDraft, baseline);
+    // If a basics save is already in-flight (e.g. started by the description
+    // field's blur handler), await it before re-evaluating dirtiness.  Without
+    // this guard both blur and navigation call executeSerializedBasicsMetaMutation
+    // with the same courseVersion, producing an optimistic-lock conflict:
+    //   1. blur fires → inFlightBasicsPromiseRef set synchronously → run() reads
+    //      courseVersionRef but the stale-response guard skips updating it when
+    //      basicsVersionRef has already been bumped by the navigation path.
+    //   2. navigation's run() then reads the un-updated courseVersionRef and
+    //      sends a PUT with the old version → backend rejects with 409.
+    // Awaiting here joins the in-flight save, lets it complete (which updates
+    // courseVersionRef and serverBasicsRef), and then the isMetaDirty check
+    // below correctly finds nothing left to save.
+    if (inFlightBasicsPromiseRef.current) {
+      try {
+        await inFlightBasicsPromiseRef.current;
+      } catch {
+        // Ignored – isMetaDirty is re-evaluated below with fresh ref values.
+      }
+    }
+
+    const isMetaDirty = !isBasicsMetaEqual(
+      basicsDraftRef.current,
+      serverBasicsRef.current,
+    );
     if (isMetaDirty) {
-      if (!currentDraft.title.trim()) {
-        setCourseTitle(baseline.title);
+      if (!basicsDraftRef.current.title.trim()) {
+        setCourseTitle(serverBasicsRef.current.title);
         setToastMessage("Course title cannot be empty.");
         return false;
       }
@@ -8077,14 +8297,6 @@ export function CourseCreatePage({
       titleInputRef.current?.focus();
       setToastMessage("Add a course title to continue.");
       return;
-    }
-
-    const currentIdx = WIZARD_STEPS.findIndex((s) => s.id === activeStep);
-    const targetIdx = WIZARD_STEPS.findIndex((s) => s.id === destination);
-    if (targetIdx > currentIdx) {
-      setSlideDirection("right");
-    } else if (targetIdx < currentIdx) {
-      setSlideDirection("left");
     }
 
     if (activeStep === "access-rules") {
@@ -8651,33 +8863,31 @@ export function CourseCreatePage({
                               : undefined
                         }
                         className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                      <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                        {courseTitle.length} / 120
-                      </span>
-                    </div>
-                    {!isDownstreamUnlocked && (
-                      <p
-                        className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
-                        role="status"
-                        data-testid="basics-title-helper"
-                      >
-                        {createCourseMutation.isPending ||
-                        isInitialCourseCreationPending ? (
-                          <>
-                            <CircleNotch
-                              size={13}
-                              className="animate-spin text-(--accent) shrink-0"
-                            />
-                            <span>Creating course…</span>
-                          </>
-                        ) : (
-                          "Add a course title to continue."
-                        )}
-                      </p>
-                    )}
+                    />
+                    <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                      {courseTitle.length} / 120
+                    </span>
                   </div>
-
+                  {!isDownstreamUnlocked && (
+                    <p
+                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                      role="status"
+                      data-testid="basics-title-helper"
+                    >
+                      {createCourseMutation.isPending || isInitialCourseCreationPending ? (
+                        <>
+                          <CircleNotch
+                            size={13}
+                            className="animate-spin text-(--accent) shrink-0"
+                          />
+                          <span>Creating course…</span>
+                        </>
+                      ) : (
+                        "Add a course title to continue."
+                      )}
+                    </p>
+                  )}
+                </div>
                   <div className="flex flex-col gap-2 mb-5">
                     <div className="flex items-center justify-between">
                       <label
@@ -8735,7 +8945,7 @@ export function CourseCreatePage({
                         testId="basics-field-status-courseDescription"
                       />
                     </div>
-                    <RichTextEditor
+                    <CourseDescriptionEditor
                       id="course-description"
                       disabled={!isDownstreamUnlocked}
                       value={courseDescription}
@@ -8833,8 +9043,12 @@ export function CourseCreatePage({
                     <input
                       type="file"
                       ref={thumbnailInputRef}
-                      disabled={!isDownstreamUnlocked || isBasicsSaving}
-                      onChange={handleThumbnailFileSelect}
+                      disabled={
+                        !isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy
+                      }
+                      onChange={(event) => {
+                        void handleThumbnailFileSelect(event);
+                      }}
                       accept="image/*"
                       style={{ display: "none" }}
                     />
@@ -8868,7 +9082,11 @@ export function CourseCreatePage({
                           <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
                             <button
                               type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              disabled={
+                                !isDownstreamUnlocked ||
+                                isBasicsSaving ||
+                                isThumbnailBusy
+                              }
                               style={{
                                 fontSize: "0.80rem",
                                 fontWeight: 700,
@@ -8885,7 +9103,11 @@ export function CourseCreatePage({
                             </button>
                             <button
                               type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              disabled={
+                                !isDownstreamUnlocked ||
+                                isBasicsSaving ||
+                                isThumbnailBusy
+                              }
                               style={{
                                 fontSize: "0.80rem",
                                 fontWeight: 500,
@@ -8911,7 +9133,11 @@ export function CourseCreatePage({
                           <div className="flex items-center justify-center gap-2.5 flex-wrap">
                             <button
                               type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
+                              disabled={
+                                !isDownstreamUnlocked ||
+                                isBasicsSaving ||
+                                isThumbnailBusy
+                              }
                               style={{
                                 fontSize: "0.80rem",
                                 fontWeight: 700,
@@ -8932,6 +9158,27 @@ export function CourseCreatePage({
                           </p>
                         </div>
                       )}
+                      {thumbnailUploadStatus !== "idle" &&
+                      thumbnailUploadStatus !== "error" ? (
+                        <p
+                          className="m-0 mt-2 text-(--accent) text-[0.75rem]"
+                          aria-live="polite"
+                        >
+                          {thumbnailUploadStatus === "uploading"
+                            ? `Uploading thumbnail… ${thumbnailUploadProgress}%`
+                            : thumbnailUploadStatus === "confirming"
+                              ? "Confirming thumbnail upload…"
+                              : "Saving thumbnail to this course…"}
+                        </p>
+                      ) : null}
+                      {thumbnailUploadError ? (
+                        <p
+                          className="m-0 mt-2 text-red-400 text-[0.75rem]"
+                          role="alert"
+                        >
+                          {thumbnailUploadError}
+                        </p>
+                      ) : null}
                     </div>
 
                     {/* Video Trailer Upload */}
@@ -9105,7 +9352,12 @@ export function CourseCreatePage({
                       <span className="flex items-center gap-1.25">
                         <BookOpen size={15} /> {totalLessons} Lessons
                       </span>
-                      <span className="flex items-center gap-1.25">0h 0m</span>
+                      <span
+                        className="flex items-center gap-1.25"
+                        data-testid="course-preview-duration"
+                      >
+                        {computedDuration}
+                      </span>
                     </div>
 
                     <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
@@ -9113,7 +9365,11 @@ export function CourseCreatePage({
                         About this course
                       </h4>
                       {courseDescription.trim() ? (
-                        <RenderMarkdown content={courseDescription} />
+                        <DiscussionMarkdown
+                          content={createDiscussionDraft(courseDescription.trim())}
+                          label="Course description preview"
+                          className="[&>:first-child]:mt-0 max-w-none"
+                        />
                       ) : (
                         <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
                           This is a short description of your course. It will
@@ -9769,7 +10025,9 @@ export function CourseCreatePage({
                                             }
                                           }}
                                         >
-                                          <RichTextEditor
+                                          <LessonDescriptionEditor
+                                            id={`lesson-description-${les.id}`}
+                                            disabled={les.isPendingCreation}
                                             value={les.description}
                                             onChange={(val) =>
                                               handleUpdateLesson(
@@ -9909,6 +10167,9 @@ export function CourseCreatePage({
                                                 mediaAssetId,
                                               )
                                             }
+                                            onProcessingComplete={() =>
+                                              handleLessonProcessingComplete()
+                                            }
                                           />
                                         ) : (
                                           <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
@@ -9927,7 +10188,7 @@ export function CourseCreatePage({
                                               className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                             >
                                               <UploadSimple size={15} />
-                                              Upload New
+                                              Upload 
                                             </button>
                                             <button
                                               type="button"
@@ -11137,8 +11398,11 @@ export function CourseCreatePage({
                         <Clock size={20} weight="bold" />
                       </div>
                       <div className="flex flex-col">
-                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                          0m
+                        <strong
+                          className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]"
+                          data-testid="course-extra-duration"
+                        >
+                          {computedDuration}
                         </strong>
                         <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                           Content length
@@ -11864,40 +12128,42 @@ export function CourseCreatePage({
         <div className="relative flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
           {/* Left: Preview Button */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                isAnyApiInProgress || isPreviewLoading
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={handlePreviewAction}
-              disabled={isAnyApiInProgress || isPreviewLoading}
-            >
-              {isPreviewLoading ? (
-                <>
-                  <CircleNotch
-                    size={14}
-                    className="animate-spin text-(--accent)"
-                  />
-                  <span>Opening...</span>
-                </>
-              ) : (
-                <>
-                  <Eye size={15} />
-                  <span>Preview</span>
-                </>
-              )}
-            </button>
+            {!(activeStep === "publish" && isPublished) && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "14px",
+                  paddingRight: "14px",
+                }}
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                  isAnyApiInProgress || isPreviewLoading
+                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+                }`}
+                onClick={handlePreviewAction}
+                disabled={isAnyApiInProgress || isPreviewLoading}
+              >
+                {isPreviewLoading ? (
+                  <>
+                    <CircleNotch
+                      size={14}
+                      className="animate-spin text-(--accent)"
+                    />
+                    <span>Opening...</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye size={15} />
+                    <span>Preview</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Center: True horizontal center save status */}
@@ -12161,31 +12427,33 @@ export function CourseCreatePage({
           {/* Right: Previous & Next / Validate / Publish Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
             {/* Previous Button */}
-            <button
-              type="button"
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "14px",
-                paddingRight: "14px",
-              }}
-              className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
-                activeStep === "basics" || actionLoading !== null
-                  ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-                  : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-              }`}
-              onClick={() => {
-                if (previousStepId) void navigateToStep(previousStepId);
-              }}
-              disabled={activeStep === "basics" || actionLoading !== null}
-              aria-label="Previous Step"
-            >
-              <CaretLeft size={15} />
-              <span>Previous</span>
-            </button>
+            {!(activeStep === "publish" && isPublished) && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "14px",
+                  paddingRight: "14px",
+                }}
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                  activeStep === "basics" || actionLoading !== null
+                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+                }`}
+                onClick={() => {
+                  if (previousStepId) void navigateToStep(previousStepId);
+                }}
+                disabled={activeStep === "basics" || actionLoading !== null}
+                aria-label="Previous Step"
+              >
+                <CaretLeft size={15} />
+                <span>Previous</span>
+              </button>
+            )}
 
             {/* Next Button / Validate on Publish */}
             {activeStep === "publish" ? (
@@ -12305,47 +12573,47 @@ export function CourseCreatePage({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "18px",
-                    paddingRight: "18px",
-                  }}
-                  className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                    !isCourseReadyToPublish
-                      ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                      : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
-                  }`}
-                  disabled={actionLoading !== null || !isCourseReadyToPublish}
-                  onClick={handleFinalPublishCourse}
-                  title={
-                    !isCourseReadyToPublish
-                      ? "Please resolve incomplete sections before publishing."
-                      : undefined
-                  }
-                >
-                  {actionLoading === "publish" ? (
-                    <>
-                      <CircleNotch
-                        size={15}
-                        className="animate-spin text-white"
-                      />
-                      <span>
-                        {isPublished ? "Updating..." : "Publishing..."}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Lightning size={15} weight="bold" />
-                      <span>{isPublished ? "Update Course" : "Publish"}</span>
-                    </>
-                  )}
-                </button>
+                {!isPublished && (
+                  <button
+                    type="button"
+                    style={{
+                      fontSize: "0.80rem",
+                      fontWeight: 700,
+                      height: "34px",
+                      borderRadius: "8px",
+                      gap: "6px",
+                      paddingLeft: "18px",
+                      paddingRight: "18px",
+                    }}
+                    className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                      !isCourseReadyToPublish
+                        ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                        : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                    }`}
+                    disabled={actionLoading !== null || !isCourseReadyToPublish}
+                    onClick={handleFinalPublishCourse}
+                    title={
+                      !isCourseReadyToPublish
+                        ? "Please resolve incomplete sections before publishing."
+                        : undefined
+                    }
+                  >
+                    {actionLoading === "publish" ? (
+                      <>
+                        <CircleNotch
+                          size={15}
+                          className="animate-spin text-white"
+                        />
+                        <span>Publishing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lightning size={15} weight="bold" />
+                        <span>Publish</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -12670,60 +12938,67 @@ export function CourseCreatePage({
         }`}
       >
         {/* Preview Button */}
-        <button
-          type="button"
-          style={{
-            fontSize: "0.84rem",
-            fontWeight: 500,
-            height: "44px",
-            borderRadius: "12px",
-            gap: "6px",
-          }}
-          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
-            isAnyApiInProgress || isPreviewLoading
-              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-          }`}
-          onClick={handlePreviewAction}
-          disabled={isAnyApiInProgress || isPreviewLoading}
-        >
-          {isPreviewLoading ? (
-            <>
-              <CircleNotch size={14} className="animate-spin text-(--accent)" />
-              <span>Opening...</span>
-            </>
-          ) : (
-            <>
-              <Eye size={14} />
-              <span>Preview</span>
-            </>
-          )}
-        </button>
+        {!(activeStep === "publish" && isPublished) && (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 500,
+              height: "44px",
+              borderRadius: "12px",
+              gap: "6px",
+            }}
+            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+              isAnyApiInProgress || isPreviewLoading
+                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+            }`}
+            onClick={handlePreviewAction}
+            disabled={isAnyApiInProgress || isPreviewLoading}
+          >
+            {isPreviewLoading ? (
+              <>
+                <CircleNotch
+                  size={14}
+                  className="animate-spin text-(--accent)"
+                />
+                <span>Opening...</span>
+              </>
+            ) : (
+              <>
+                <Eye size={14} />
+                <span>Preview</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Previous Button */}
-        <button
-          type="button"
-          style={{
-            fontSize: "0.84rem",
-            fontWeight: 500,
-            height: "44px",
-            borderRadius: "12px",
-            gap: "6px",
-          }}
-          className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
-            activeStep === "basics" || actionLoading !== null
-              ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
-              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
-          }`}
-          onClick={() => {
-            if (previousStepId) void navigateToStep(previousStepId);
-          }}
-          disabled={activeStep === "basics" || actionLoading !== null}
-          aria-label="Previous Step"
-        >
-          <CaretLeft size={14} />
-          <span>Previous</span>
-        </button>
+        {!(activeStep === "publish" && isPublished) && (
+          <button
+            type="button"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 500,
+              height: "44px",
+              borderRadius: "12px",
+              gap: "6px",
+            }}
+            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+              activeStep === "basics" || actionLoading !== null
+                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+            }`}
+            onClick={() => {
+              if (previousStepId) void navigateToStep(previousStepId);
+            }}
+            disabled={activeStep === "basics" || actionLoading !== null}
+            aria-label="Previous Step"
+          >
+            <CaretLeft size={14} />
+            <span>Previous</span>
+          </button>
+        )}
 
         {/* Next Button / Validate on Publish */}
         {activeStep === "publish" ? (
@@ -12833,40 +13108,42 @@ export function CourseCreatePage({
               </button>
             )}
 
-            <button
-              type="button"
-              style={{
-                fontSize: "0.84rem",
-                fontWeight: 600,
-                height: "44px",
-                borderRadius: "14px",
-                gap: "6px",
-              }}
-              className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
-                !isCourseReadyToPublish
-                  ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
-                  : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
-              }`}
-              disabled={actionLoading !== null || !isCourseReadyToPublish}
-              onClick={handleFinalPublishCourse}
-              title={
-                !isCourseReadyToPublish
-                  ? "Please resolve incomplete sections before publishing."
-                  : undefined
-              }
-            >
-              {actionLoading === "publish" ? (
-                <>
-                  <CircleNotch size={15} className="animate-spin text-white" />
-                  <span>{isPublished ? "Updating..." : "Publishing..."}</span>
-                </>
-              ) : (
-                <>
-                  <Lightning size={15} weight="bold" />
-                  <span>{isPublished ? "Update Course" : "Publish"}</span>
-                </>
-              )}
-            </button>
+            {!isPublished && (
+              <button
+                type="button"
+                style={{
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  height: "44px",
+                  borderRadius: "14px",
+                  gap: "6px",
+                }}
+                className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+                  !isCourseReadyToPublish
+                    ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                    : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
+                }`}
+                disabled={actionLoading !== null || !isCourseReadyToPublish}
+                onClick={handleFinalPublishCourse}
+                title={
+                  !isCourseReadyToPublish
+                    ? "Please resolve incomplete sections before publishing."
+                    : undefined
+                }
+              >
+                {actionLoading === "publish" ? (
+                  <>
+                    <CircleNotch size={15} className="animate-spin text-white" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lightning size={15} weight="bold" />
+                    <span>Publish</span>
+                  </>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>

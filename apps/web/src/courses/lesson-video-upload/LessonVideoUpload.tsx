@@ -32,7 +32,10 @@ import { mediaService } from "../../services/media";
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
   disabled?: boolean;
-  onMediaAttached: (mediaAssetId: string) => void | Promise<void>;
+  onMediaAttached: (
+    mediaAssetId: string,
+  ) => void | boolean | Promise<void | boolean>;
+  onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
 }
 
 type UploadPhase =
@@ -73,6 +76,7 @@ export function LessonVideoUpload({
   mediaAssetId,
   disabled = false,
   onMediaAttached,
+  onProcessingComplete,
 }: LessonVideoUploadProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -82,16 +86,22 @@ export function LessonVideoUpload({
   const mountedRef = useRef(true);
   const uploadedThisSessionRef = useRef(false);
   const committedMediaIdRef = useRef<string | null>(null);
+  const committingMediaIdRef = useRef<string | null>(null);
   const replacementForMediaIdRef = useRef<string | null>(null);
   const progressMediaIdRef = useRef<string | null>(mediaAssetId ?? null);
   const highestTranscodeProgressRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const streamReconnectAttemptRef = useRef(0);
   const onMediaAttachedRef = useRef(onMediaAttached);
+  const onProcessingCompleteRef = useRef(onProcessingComplete);
 
   useEffect(() => {
     onMediaAttachedRef.current = onMediaAttached;
   }, [onMediaAttached]);
+
+  useEffect(() => {
+    onProcessingCompleteRef.current = onProcessingComplete;
+  }, [onProcessingComplete]);
 
   const clearScheduledReconnect = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -126,6 +136,7 @@ export function LessonVideoUpload({
     null,
   );
   const [progressStreamAttempt, setProgressStreamAttempt] = useState(0);
+  const [streamErrorCount, setStreamErrorCount] = useState(0);
   const [streamConnectionState, setStreamConnectionState] =
     useState<StreamConnectionState>("idle");
   const [hasReceivedProgress, setHasReceivedProgress] = useState(false);
@@ -133,12 +144,38 @@ export function LessonVideoUpload({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReplacingVideo, setIsReplacingVideo] = useState(false);
 
-  const commitCandidate = useCallback((candidateId: string): Promise<void> => {
-    if (committedMediaIdRef.current === candidateId) return Promise.resolve();
+  const commitCandidate = useCallback(async (candidateId: string) => {
+    if (
+      committedMediaIdRef.current === candidateId ||
+      committingMediaIdRef.current === candidateId
+    ) {
+      return;
+    }
 
-    committedMediaIdRef.current = candidateId;
+    committingMediaIdRef.current = candidateId;
     setAttachmentError(null);
-    const handleCommitError = (error: unknown) => {
+    try {
+      const result = await onMediaAttachedRef.current(candidateId);
+      if (!mountedRef.current) return;
+
+      if (result === false) {
+        committedMediaIdRef.current = null;
+        setAttachmentError(
+          "The video is ready, but it could not be attached to this lesson.",
+        );
+        return;
+      }
+
+      committedMediaIdRef.current = candidateId;
+      setCandidateMediaId((current) =>
+        current === candidateId ? null : current,
+      );
+      replacementForMediaIdRef.current = null;
+      setSelectedFile(null);
+      uploadedThisSessionRef.current = false;
+      setPhase("ready");
+      setTrackProgress(false);
+    } catch (error: unknown) {
       if (!mountedRef.current) return;
       committedMediaIdRef.current = null;
       setAttachmentError(
@@ -146,15 +183,23 @@ export function LessonVideoUpload({
           ? error.message
           : "The video is ready, but it could not be attached to this lesson.",
       );
-    };
+    } finally {
+      if (committingMediaIdRef.current === candidateId) {
+        committingMediaIdRef.current = null;
+      }
+    }
+  }, []);
 
+  const notifyProcessingComplete = useCallback((mediaId: string) => {
     try {
-      return Promise.resolve(onMediaAttachedRef.current(candidateId)).catch(
-        handleCommitError,
+      void Promise.resolve(onProcessingCompleteRef.current?.(mediaId)).catch(
+        () => {
+          // The video is already ready; a refresh failure must not regress the
+          // terminal UI state or turn a successful transcode into an error.
+        },
       );
-    } catch (error: unknown) {
-      handleCommitError(error);
-      return Promise.resolve();
+    } catch {
+      // Optional reconciliation is best effort after the terminal event.
     }
   }, []);
 
@@ -199,6 +244,7 @@ export function LessonVideoUpload({
       resetReconnectBackoff();
       setStreamConnectionState("connected");
       setProgressStreamError(null);
+      setStreamErrorCount(0);
     };
 
     const onProgress = (event: MessageEvent<string>) => {
@@ -220,6 +266,7 @@ export function LessonVideoUpload({
       setHasReceivedProgress(true);
       setProgressStreamError(null);
       setStreamConnectionState("connected");
+      setStreamErrorCount(0);
       setTranscodeStatus(next.status);
       highestTranscodeProgressRef.current = Math.max(
         highestTranscodeProgressRef.current,
@@ -244,7 +291,11 @@ export function LessonVideoUpload({
           isPendingReplacement &&
           committedMediaIdRef.current !== activeMediaId
         ) {
-          void commitCandidate(activeMediaId);
+          void commitCandidate(activeMediaId).then(() => {
+            notifyProcessingComplete(activeMediaId);
+          });
+        } else {
+          notifyProcessingComplete(activeMediaId);
         }
       } else if (next.status === "failed" || next.status === "cancelled") {
         receivedTerminalEvent = true;
@@ -262,10 +313,31 @@ export function LessonVideoUpload({
         setPhase("transcoding");
       }
     };
+    const scheduleStreamReconnect = (message: string) => {
+      if (disposed || receivedTerminalEvent) return;
+
+      const reconnectAttempt = streamReconnectAttemptRef.current;
+      const reconnectDelay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+      streamReconnectAttemptRef.current = Math.min(reconnectAttempt + 1, 6);
+      setStreamConnectionState("reconnecting");
+      setProgressStreamError(message);
+
+      if (reconnectTimerRef.current === null) {
+        reconnectTimerRef.current = window.setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (!disposed && mountedRef.current) {
+            setProgressStreamAttempt((attempt) => attempt + 1);
+          }
+        }, reconnectDelay);
+      }
+    };
+
     const onStreamError = (event: Event) => {
       if (disposed || receivedTerminalEvent) return;
 
       const data = getEventData(event);
+      const closedReadyState = window.EventSource.CLOSED ?? 2;
+      setStreamErrorCount((count) => Math.min(count + 1, 3));
 
       if (data) {
         let message = "The transcoding status could not be loaded.";
@@ -278,15 +350,20 @@ export function LessonVideoUpload({
           // Keep the generic stream error for malformed server events.
         }
 
+        // The API can close the first stream while the transcoding job is
+        // still being created. Treat the error as transient. If EventSource
+        // is still CONNECTING, its native reconnect loop owns the connection;
+        // creating another source here would produce parallel stream requests.
+        setStreamConnectionState("reconnecting");
         setProgressStreamError(message);
-        setStreamConnectionState("closed");
-        setTrackProgress(false);
+        if (source.readyState === closedReadyState) {
+          scheduleStreamReconnect(message);
+        }
         return;
       }
 
       // EventSource reconnects automatically while the connection is in the
       // CONNECTING state. Preserve the last known job state and percentage.
-      const closedReadyState = window.EventSource.CLOSED ?? 2;
       if (source.readyState !== closedReadyState) {
         setStreamConnectionState("reconnecting");
         setProgressStreamError(
@@ -295,21 +372,9 @@ export function LessonVideoUpload({
         return;
       }
 
-      const reconnectAttempt = streamReconnectAttemptRef.current;
-      const reconnectDelay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
-      streamReconnectAttemptRef.current = Math.min(reconnectAttempt + 1, 6);
-      setStreamConnectionState("reconnecting");
-      setProgressStreamError(
+      scheduleStreamReconnect(
         "Live status updates are temporarily unavailable. Reconnecting automatically…",
       );
-      if (reconnectTimerRef.current === null) {
-        reconnectTimerRef.current = window.setTimeout(() => {
-          reconnectTimerRef.current = null;
-          if (!disposed && mountedRef.current) {
-            setProgressStreamAttempt((attempt) => attempt + 1);
-          }
-        }, reconnectDelay);
-      }
     };
     source.addEventListener("open", onOpen);
     source.addEventListener("progress", onProgress);
@@ -328,6 +393,7 @@ export function LessonVideoUpload({
     commitCandidate,
     clearScheduledReconnect,
     mediaAssetId,
+    notifyProcessingComplete,
     progressStreamAttempt,
     resetReconnectBackoff,
     trackProgress,
@@ -370,6 +436,12 @@ export function LessonVideoUpload({
     }
 
     if (candidateMediaId && mediaAssetId === candidateMediaId) {
+      // The parent may optimistically render the candidate before its lesson
+      // update has finished. Keep the candidate state until the persistence
+      // callback explicitly succeeds, otherwise a failed save is mistaken for
+      // a completed attachment.
+      if (committedMediaIdRef.current !== candidateMediaId) return;
+
       setCandidateMediaId(null);
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
@@ -440,6 +512,7 @@ export function LessonVideoUpload({
     resetReconnectBackoff();
     setErrorMessage(null);
     setProgressStreamError(null);
+    setStreamErrorCount(0);
     setStreamConnectionState("connecting");
     if (phase === "attached") setPhase("transcoding");
     setTrackProgress(true);
@@ -451,6 +524,7 @@ export function LessonVideoUpload({
     resetReconnectBackoff();
     setErrorMessage(null);
     setProgressStreamError(null);
+    setStreamErrorCount(0);
     setStreamConnectionState("connecting");
     setHasReceivedProgress(false);
     setTranscodeProgress(0);
@@ -513,6 +587,7 @@ export function LessonVideoUpload({
       setTranscodeProgress(0);
       setTranscodeStatus(undefined);
       setProgressStreamError(null);
+      setStreamErrorCount(0);
       setStreamConnectionState("idle");
       setHasReceivedProgress(false);
       setAttachmentError(null);
@@ -548,6 +623,7 @@ export function LessonVideoUpload({
       setUploadLoadedBytes(0);
       setTranscodeProgress(0);
       setHasReceivedProgress(false);
+      setStreamErrorCount(0);
       setStreamConnectionState("idle");
       setAttachmentError(null);
       setPhase("uploading");
@@ -729,6 +805,7 @@ export function LessonVideoUpload({
     setTranscodeProgress(0);
     setTranscodeStatus(undefined);
     setProgressStreamError(null);
+    setStreamErrorCount(0);
     setStreamConnectionState("idle");
     setHasReceivedProgress(false);
     setErrorMessage(null);
@@ -748,7 +825,12 @@ export function LessonVideoUpload({
   const displayErrorMessage =
     errorMessage ||
     attachmentError ||
-    progressStreamError ||
+    (progressStreamError &&
+      (hasReceivedProgress ||
+        streamConnectionState === "closed" ||
+        streamErrorCount >= 3)
+      ? progressStreamError
+      : null) ||
     (phase === "failed" ? "Video processing could not be completed." : null);
 
   return (
@@ -761,7 +843,7 @@ export function LessonVideoUpload({
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer"
         >
           <UploadSimple size={15} />
-          Upload New
+          Upload
         </button>
         {isReplacementFlow && mediaAssetId ? (
           <span
@@ -1240,7 +1322,7 @@ function UploadProgressStage({
       {/* Checklist Card: 3D raised surface, 0 borders, clear opacity hierarchy */}
       <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4 space-y-1`}>
         <UploadChecklistItem
-          description="Requesting secure upload URL"
+          description="Getting your video ready to upload..."
           label="Preparing upload"
           state={preparingState}
         />
@@ -1303,7 +1385,10 @@ function TranscodingProgressStage({
   isReplacement,
   onReplace,
 }: TranscodingProgressStageProps) {
-  const isReady = status === "completed" || progress >= 100;
+  // A worker can report 100% FFmpeg progress while the job is still doing
+  // final output/attachment work. Only the durable completed status means the
+  // playback files are verified and safe to show as Ready.
+  const isReady = status === "completed";
   const isFailed =
     status === "failed" || status === "cancelled" || Boolean(errorMessage);
   const isConnectionDegraded =
@@ -1758,7 +1843,7 @@ function ProgressBar({
       aria-busy={isIndeterminate}
     >
       <div
-        className={`h-full rounded-full bg-[linear-gradient(90deg,var(--accent)_0%,color-mix(in_srgb,var(--accent)_85%,white)_100%)] shadow-[0_0_10px_var(--accent-shadow),inset_0_1px_0_color-mix(in_srgb,white_35%,transparent)] ${isIndeterminate ? "w-2/5 animate-pulse" : "transition-[width] duration-300"}`}
+        className={`h-full rounded-full bg-[linear-gradient(90deg,var(--accent)_0%,color-mix(in_srgb,var(--accent)_85%,white)_100%)] shadow-[0_0_10px_var(--accent-shadow),inset_0_1px_0_color-mix(in_srgb,white_35%,transparent)] ${isIndeterminate ? "lesson-video-progress-indeterminate motion-reduce:animate-none" : "transition-[width] duration-300"}`}
         style={
           isIndeterminate
             ? undefined

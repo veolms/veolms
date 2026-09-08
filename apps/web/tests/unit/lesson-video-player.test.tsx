@@ -744,7 +744,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(pause).toHaveBeenCalledOnce();
     expect(player).toHaveAttribute("data-controls-visible", "true");
 
-    act(() => vi.advanceTimersByTime(5_100));
+    act(() => vi.advanceTimersByTime(1_100));
     expect(player).toHaveAttribute("data-controls-visible", "true");
 
     await act(async () => {
@@ -755,7 +755,7 @@ describe("LessonVideoPlayer adapter", () => {
     });
     tapEmptySpace();
     expect(player).toHaveAttribute("data-controls-visible", "true");
-    act(() => vi.advanceTimersByTime(4_698));
+    act(() => vi.advanceTimersByTime(698));
     expect(player).toHaveAttribute("data-controls-visible", "true");
     act(() => vi.advanceTimersByTime(1));
     expect(player).toHaveAttribute("data-controls-visible", "false");

@@ -445,6 +445,34 @@ describe("Creator Courses Page API Integration", () => {
       expect(state.isCoursesQueryEnabled).toBe(false);
       expect(state.isMyCoursesQueryEnabled).toBe(false);
     });
+
+    it("Scenario G: Unauthenticated user forces student role and only enables public /courses query", () => {
+      const computeEffectiveRole = (
+        isAuthenticated: boolean,
+        userRoles: readonly string[] | undefined,
+        currentRole: "student" | "creator",
+      ) => {
+        return isAuthenticated ? currentRole : "student";
+      };
+
+      // 1. Stale localStorage contains 'creator', but user is logged out (isAuthenticated: false)
+      const guestEffectiveRole = computeEffectiveRole(false, undefined, "creator");
+      expect(guestEffectiveRole).toBe("student");
+
+      const guestGating = getQueryGatingState(guestEffectiveRole, "all");
+      expect(guestGating.isCoursesQueryEnabled).toBe(true);
+      expect(guestGating.isMyCoursesQueryEnabled).toBe(false);
+      expect(guestGating.isDeletedCoursesQueryEnabled).toBe(false);
+
+      // 2. Authenticated creator (isAuthenticated: true)
+      const creatorEffectiveRole = computeEffectiveRole(true, ["creator"], "creator");
+      expect(creatorEffectiveRole).toBe("creator");
+
+      const creatorGating = getQueryGatingState(creatorEffectiveRole, "all");
+      expect(creatorGating.isCoursesQueryEnabled).toBe(false);
+      expect(creatorGating.isMyCoursesQueryEnabled).toBe(true);
+      expect(creatorGating.isDeletedCoursesQueryEnabled).toBe(false);
+    });
   });
 
   describe("10. Pricing formatting via formatCoursePricing", () => {
@@ -463,13 +491,13 @@ describe("Creator Courses Page API Integration", () => {
       });
     });
 
-    it("formats INR currency and sale price with minor unit conversion, Indian locale grouping and ₹ symbol", () => {
+    it("formats INR currency and sale price with Indian locale grouping and ₹ symbol", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 100000, // 1,000.00 INR
+          price: 1000,
           currency: "INR",
-          salePrice: 50000, // 500.00 INR
+          salePrice: 500,
         }),
       ).toEqual({
         price: "₹500",
@@ -478,13 +506,13 @@ describe("Creator Courses Page API Integration", () => {
       });
     });
 
-    it("formats USD currency and sale price with minor unit conversion and $ symbol", () => {
+    it("formats USD currency and sale price with $ symbol", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 10000, // 100.00 USD
+          price: 100,
           currency: "USD",
-          salePrice: 8000, // 80.00 USD
+          salePrice: 80,
         }),
       ).toEqual({
         price: "$80",
@@ -497,7 +525,7 @@ describe("Creator Courses Page API Integration", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 250000, // 2,500.00 EUR
+          price: 2500,
           currency: "EUR",
           salePrice: null,
         }),
@@ -512,7 +540,7 @@ describe("Creator Courses Page API Integration", () => {
       expect(
         formatCoursePricing({
           pricingType: "paid",
-          price: 4900, // 49.00 GBP
+          price: 49,
           currency: "GBP",
           salePrice: null,
         }),

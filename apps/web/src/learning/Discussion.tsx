@@ -201,6 +201,8 @@ interface DiscussionProps {
   persistenceKey: string;
   mobileBottomNavigation?: boolean;
   mobileBottomNavigationHidden?: boolean;
+  lessonDescription?: string | null;
+  isLessonDescriptionLoading?: boolean;
 }
 
 export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
@@ -269,6 +271,8 @@ export function Discussion({
   persistenceKey,
   mobileBottomNavigation = false,
   mobileBottomNavigationHidden = false,
+  lessonDescription,
+  isLessonDescriptionLoading = false,
 }: DiscussionProps) {
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
@@ -499,6 +503,8 @@ export function Discussion({
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
       <ThreadSurface
+        lessonDescription={lessonDescription}
+        isLessonDescriptionLoading={isLessonDescriptionLoading}
         draft={activeDraft}
         entryKind={activeEntryKind}
         visibility={activeVisibility}
@@ -598,6 +604,8 @@ export function Discussion({
 }
 
 interface ThreadSurfaceProps {
+  lessonDescription?: string | null;
+  isLessonDescriptionLoading?: boolean;
   draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
@@ -626,6 +634,8 @@ interface ThreadSurfaceProps {
 }
 
 function ThreadSurface({
+  lessonDescription,
+  isLessonDescriptionLoading = false,
   draft,
   entryKind,
   visibility,
@@ -823,7 +833,10 @@ function ThreadSurface({
 
   return (
     <div>
-      <LessonDescription />
+      <LessonDescription
+        description={lessonDescription}
+        isLoading={isLessonDescriptionLoading}
+      />
       {!isPhone && (
         <div
           ref={composerHostRef}

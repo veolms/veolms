@@ -3072,6 +3072,19 @@ test("hidden sidebar navigation stays open through selection and closes on point
   await page.mouse.move(2, 180);
   await expect(app).toHaveClass(/courses-app--edge-open/);
   await expect(sidebar).toBeVisible();
+  await expect
+    .poll(() =>
+      sidebar.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        return {
+          opacity: style.opacity,
+          pointerEvents: style.pointerEvents,
+          onScreen: bounds.right > 0,
+        };
+      }),
+    )
+    .toEqual({ opacity: "1", pointerEvents: "auto", onScreen: true });
 
   await sidebar.getByRole("button", { name: "Courses" }).click();
   await expect(page).toHaveURL(/\/courses$/);

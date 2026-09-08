@@ -52,6 +52,7 @@ import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeSh
 import { cn } from "../../lib/utils";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
+const LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS = 1_000;
 const MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS = 0.35;
 const LESSON_PLAYER_SHORTCUTS = {
   seekBackwardLarge: false,
@@ -634,7 +635,7 @@ export function LessonVideoPlayer({
       shortcuts={LESSON_PLAYER_SHORTCUTS}
       seekIntervalSeconds={seekIntervalSeconds}
       emptyTapBehavior="responsive"
-      controlsIdleDelay={5_000}
+      controlsIdleDelay={LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS}
       keepControlsVisibleUntilFirstPlay
       keepPosterVisibleUntilFirstPlay
       onEvent={handleEvent}

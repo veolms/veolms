@@ -749,8 +749,8 @@ export function CoursesPage({
     [role, userRoles],
   );
   const effectiveRole = useMemo(
-    () => resolveWorkspaceRole(userRoles, role),
-    [role, userRoles],
+    () => (isAuthenticated ? resolveWorkspaceRole(userRoles, role) : "student"),
+    [isAuthenticated, role, userRoles],
   );
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const { isPending: isSigningOut, signOut } = useSignOut();
@@ -2067,6 +2067,7 @@ export function CoursesPage({
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
   const sidebarVisuallyCollapsed =
     sidebarCollapsed && !sidebarPresentedAsOverlay;
+
   const sidebarControlAction = compactNavigation
     ? "Close navigation"
     : sidebarHidden
@@ -3371,6 +3372,7 @@ export function CoursesPage({
             courseSlug={surfaceCourseSlug}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
+            role={role}
           />
         </Suspense>
       );
