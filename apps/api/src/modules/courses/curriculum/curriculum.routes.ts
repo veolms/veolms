@@ -7,6 +7,7 @@ import {
   updateCourseLessonRequestSchema,
   reorderLessonsRequestSchema,
   createLessonResourceRequestSchema,
+  lessonResourceSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -63,7 +64,10 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: updateCourseSectionRequestSchema,
         response: {
-          200: jsonResponse("Section updated", z.object({ success: z.boolean() })),
+          200: jsonResponse(
+            "Section updated",
+            z.object({ success: z.boolean() }),
+          ),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Section not found"),
         },
@@ -82,7 +86,10 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a section and all its lessons/resources",
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         response: {
-          200: jsonResponse("Section deleted", z.object({ success: z.boolean() })),
+          200: jsonResponse(
+            "Section deleted",
+            z.object({ success: z.boolean() }),
+          ),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Section not found"),
         },
@@ -184,7 +191,10 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a lesson",
         params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
         response: {
-          200: jsonResponse("Lesson deleted", z.object({ success: z.boolean() })),
+          200: jsonResponse(
+            "Lesson deleted",
+            z.object({ success: z.boolean() }),
+          ),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Lesson not found"),
         },
@@ -204,7 +214,10 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: reorderLessonsRequestSchema,
         response: {
-          200: jsonResponse("Lessons reordered", z.object({ success: z.boolean() })),
+          200: jsonResponse(
+            "Lessons reordered",
+            z.object({ success: z.boolean() }),
+          ),
           400: errorResponse("Invalid lesson list"),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Section not found"),
@@ -226,13 +239,11 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
         body: createLessonResourceRequestSchema,
         response: {
-          201: jsonResponse(
-            "Resource added",
-            z.object({ id: z.uuid(), position: z.number() }),
-          ),
+          201: jsonResponse("Resource added", lessonResourceSchema),
           400: errorResponse("Invalid media asset"),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Lesson not found"),
+          409: errorResponse("Media asset is not ready"),
         },
       },
       preHandler: ctx.requireCourseAuthor,
@@ -249,7 +260,10 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Remove resource from lesson",
         params: z.object({ id: z.uuid(), resourceId: z.uuid() }),
         response: {
-          200: jsonResponse("Resource removed", z.object({ success: z.boolean() })),
+          200: jsonResponse(
+            "Resource removed",
+            z.object({ success: z.boolean() }),
+          ),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Resource not found"),
         },

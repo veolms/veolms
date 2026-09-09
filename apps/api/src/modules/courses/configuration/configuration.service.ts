@@ -98,16 +98,39 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const allowQa = updates.allowQa ?? true;
-    const allowComments = updates.allowComments ?? true;
-    const allowDownloads = updates.allowDownloads ?? false;
-    const certificateEnabled = updates.certificateEnabled ?? false;
-    const showInstructorName = updates.showInstructorName ?? true;
-    const language = updates.language ?? "en";
-    const estimatedDuration = updates.estimatedDuration ?? null;
+    const existing = await configRepo.findSettingsByCourseId(database, courseId);
+
+    const allowQa =
+      updates.allowQa !== undefined
+        ? updates.allowQa
+        : (existing?.allow_qa ?? true);
+    const allowComments =
+      updates.allowComments !== undefined
+        ? updates.allowComments
+        : (existing?.allow_comments ?? true);
+    const allowDownloads =
+      updates.allowDownloads !== undefined
+        ? updates.allowDownloads
+        : (existing?.allow_downloads ?? false);
+    const certificateEnabled =
+      updates.certificateEnabled !== undefined
+        ? updates.certificateEnabled
+        : (existing?.certificate_enabled ?? false);
+    const showInstructorName =
+      updates.showInstructorName !== undefined
+        ? updates.showInstructorName
+        : (existing?.show_instructor_name ?? true);
+    const language =
+      updates.language !== undefined
+        ? updates.language
+        : (existing?.language ?? "en");
+    const estimatedDuration =
+      updates.estimatedDuration !== undefined
+        ? updates.estimatedDuration
+        : (existing?.estimated_duration ?? null);
 
     const id = await configRepo.upsertSettings(database, {
-      id: crypto.randomUUID(),
+      id: existing?.id ?? crypto.randomUUID(),
       course_id: courseId,
       allow_qa: allowQa,
       allow_comments: allowComments,
@@ -116,7 +139,7 @@ export function createConfigurationService({
       show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
-      created_at: now,
+      created_at: existing?.created_at ?? now,
       updated_at: now,
     });
 

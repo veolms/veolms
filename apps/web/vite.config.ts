@@ -167,15 +167,7 @@ export default defineConfig(({ mode }) => {
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
-      include: [
-        "react",
-        "react-dom/client",
-        "emoji-picker-react",
-        "@tiptap/core",
-        "@tiptap/extension-link",
-        "@tiptap/markdown",
-        "@tiptap/starter-kit",
-      ],
+      include: ["react", "react-dom/client"],
     },
     define: {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
@@ -199,7 +191,6 @@ export default defineConfig(({ mode }) => {
           ),
         ),
       },
-      dedupe: ["@tiptap/core", "@tiptap/pm"],
     },
     ssr: {
       // The package publishes extensionless internal ESM imports. Bundling it

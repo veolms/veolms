@@ -93,6 +93,24 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     controller.getVideoJobProgress,
   );
 
+  app.post(
+    "/media/:mediaId/transcode/retry",
+    {
+      preHandler: requireAuthenticated,
+      schema: { params: z.object({ mediaId: z.uuid() }) },
+    },
+    controller.retryVideoJob,
+  );
+
+  app.get(
+    "/media/:mediaId/progress/stream",
+    {
+      preHandler: requireAuthenticated,
+      schema: { params: z.object({ mediaId: z.uuid() }) },
+    },
+    controller.streamVideoJobProgress,
+  );
+
   app.get(
     "/media/:mediaId",
     {

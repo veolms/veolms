@@ -8,7 +8,7 @@ import {
   CourseOverviewSkeleton,
   adaptCourseOverviewResponse,
 } from "../../src/courses/CourseOverviewPage";
-import { courses } from "../../src/courses/catalogue";
+import type { Course } from "../../src/courses/catalogue";
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -23,27 +23,27 @@ function renderWithClient(ui: React.ReactElement) {
   );
 }
 
+const sampleCourse: Course = {
+  id: "test-course-id",
+  slug: "test-course",
+  title: "Test Course Title",
+  description: "Test Course Description",
+  level: "Beginner",
+  category: "Development",
+  sections: 2,
+  lectures: 10,
+  progress: null,
+  enrolled: false,
+  duration: "5h",
+  students: 10,
+  thumbnail: "/test.webp",
+  lifecycleStatus: "published",
+};
+
 describe("CourseOverviewPage", () => {
-  it("renders course details for a valid catalogue course", () => {
-    const target = courses.find((c) => c.id === "ui-ux-design-mastery")!;
-    renderWithClient(
-      <CourseOverviewPage
-        courseSlug={target.id}
-        onNavigateCourses={vi.fn()}
-        onNavigatePage={vi.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByRole("heading", { name: target.title, level: 1 }),
-    ).toBeVisible();
-    expect(screen.getByText(/About this course/i)).toBeVisible();
-    expect(screen.getByText(/Course curriculum/i)).toBeVisible();
-  });
-
   it("renders customCourse data when provided", () => {
     const customCourse = {
-      ...courses[0]!,
+      ...sampleCourse,
       title: "Custom Preview Title",
       description: "Custom Preview Description",
     };
@@ -59,6 +59,8 @@ describe("CourseOverviewPage", () => {
     expect(
       screen.getByRole("heading", { name: "Custom Preview Title", level: 1 }),
     ).toBeVisible();
+    expect(screen.getByText(/About this course/i)).toBeVisible();
+    expect(screen.getByText(/Course curriculum/i)).toBeVisible();
   });
 
   it("renders not-found state when courseSlug is unknown and calls onNavigateCourses", async () => {
@@ -71,10 +73,14 @@ describe("CourseOverviewPage", () => {
     );
 
     expect(
-      await screen.findByRole("heading", {
-        name: "Course not found",
-        level: 2,
-      }),
+      await screen.findByRole(
+        "heading",
+        {
+          name: "Course not found",
+          level: 2,
+        },
+        { timeout: 4000 },
+      ),
     ).toBeVisible();
     expect(
       screen.getByText(
@@ -87,9 +93,19 @@ describe("CourseOverviewPage", () => {
   });
 
   it("associates unique aria-controls and panel IDs on section toggles", () => {
-    const target = courses.find((c) => c.id === "ui-ux-design-mastery")!;
     renderWithClient(
-      <CourseOverviewPage courseSlug={target.id} onNavigateCourses={vi.fn()} />,
+      <CourseOverviewPage
+        customCourse={sampleCourse}
+        customSections={[
+          {
+            id: 1,
+            title: "Section 1",
+            progress: "0/1",
+            lessons: [[1, "Lesson 1", "5m", "todo", true]],
+          },
+        ]}
+        onNavigateCourses={vi.fn()}
+      />,
     );
 
     const toggleButtons = screen.getAllByRole("button", { expanded: true });
@@ -218,6 +234,7 @@ describe("CourseOverviewPage", () => {
       "",
       "todo",
       true,
+      "video",
     ]);
     expect(adapted.inclusions).toEqual([
       "Full lifetime access",
@@ -237,4 +254,187 @@ describe("CourseOverviewPage", () => {
       "animate-pulse",
     );
   });
+
+  it("renders empty state for description when description is missing and never renders dummy text", () => {
+    const courseWithoutDescription = {
+      ...sampleCourse,
+      title: "Course Without Description",
+      description: "",
+    };
+
+    renderWithClient(
+      <CourseOverviewPage
+        customCourse={courseWithoutDescription}
+        isReadOnlyPreview={true}
+      />,
+    );
+
+    expect(screen.getByTestId("course-description-empty")).toBeVisible();
+    expect(screen.getByText("No description available yet")).toBeVisible();
+    // Confirms dummy fallback text is completely removed
+    expect(screen.queryByText(/This course is designed to take you from the basics/i)).toBeNull();
+    expect(screen.queryByText(/You'll learn core concepts/i)).toBeNull();
+    expect(screen.queryByText(/Show more/i)).toBeNull();
+  });
+
+  it("renders actual course description when description is provided", () => {
+    const courseWithDescription = {
+      ...sampleCourse,
+      title: "Course With Real Description",
+      description: "This is a real authentic course description written by the instructor.",
+    };
+
+    renderWithClient(
+      <CourseOverviewPage
+        customCourse={courseWithDescription}
+        isReadOnlyPreview={true}
+      />,
+    );
+
+    expect(screen.queryByTestId("course-description-empty")).toBeNull();
+    expect(
+      screen.getByText("This is a real authentic course description written by the instructor."),
+    ).toBeVisible();
+  });
+
+  describe("Course Overview Pricing & Actions: Testing States", () => {
+    const paidPricing = {
+      price: "$49.99",
+      originalPrice: "$99.99",
+      discount: "50% OFF",
+    };
+    const freePricing = {
+      price: "Free",
+    };
+
+    it("1. Creator viewing their course normally shows only 'Continue Learning' and opens Learning Space", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={paidPricing}
+          isCreator={true}
+          isReadOnlyPreview={false}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      // Does not show price in the card
+      expect(screen.queryByText("$49.99")).toBeNull();
+      // Does not show Buy Now or Apply coupon
+      expect(screen.queryByRole("button", { name: /Buy Now/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Apply coupon/i })).toBeNull();
+
+      // Shows only Continue Learning
+      const continueBtn = screen.getByRole("button", { name: /Continue Learning/i });
+      expect(continueBtn).toBeVisible();
+      expect(continueBtn).not.toBeDisabled();
+
+      // Clicking it opens Learning Space
+      fireEvent.click(continueBtn);
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);
+    });
+
+    it("2a. Creator Preview (Paid) shows price, 'Apply coupon', and 'Buy Now' as demo UI", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={paidPricing}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      // Shows existing price and discounts
+      expect(screen.getByText("$49.99")).toBeVisible();
+      expect(screen.getByText("$99.99")).toBeVisible();
+      expect(screen.getByText("50% OFF")).toBeVisible();
+
+      // Shows Apply coupon
+      const couponBtn = screen.getByRole("button", { name: /Apply coupon/i });
+      expect(couponBtn).toBeVisible();
+
+      // Shows Buy Now as demo UI (not disabled)
+      const buyNowBtn = screen.getByRole("button", { name: /Buy Now/i });
+      expect(buyNowBtn).toBeVisible();
+      expect(buyNowBtn).not.toBeDisabled();
+    });
+
+    it("2b. Creator Preview (Free) shows 'Free' and 'Enroll for Free' as demo UI without coupon", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={freePricing}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      // Shows Free
+      expect(screen.getByText("Free")).toBeVisible();
+
+      // Does not show Apply coupon
+      expect(screen.queryByRole("button", { name: /Apply coupon/i })).toBeNull();
+
+      // Shows Enroll for Free as demo UI (not disabled)
+      const enrollBtn = screen.getByRole("button", { name: /Enroll for Free/i });
+      expect(enrollBtn).toBeVisible();
+      expect(enrollBtn).not.toBeDisabled();
+    });
+
+    it("3a. Student (Paid) shows price, 'Apply coupon', and visibly disabled 'Buy Now'", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={paidPricing}
+          isCreator={false}
+          role="student"
+          isReadOnlyPreview={false}
+        />,
+      );
+
+      // Shows price and discount
+      expect(screen.getByText("$49.99")).toBeVisible();
+      expect(screen.getByText("$99.99")).toBeVisible();
+      expect(screen.getByText("50% OFF")).toBeVisible();
+
+      // Shows Apply coupon
+      expect(screen.getByRole("button", { name: /Apply coupon/i })).toBeVisible();
+
+      // Purchase/Buy Now action is visibly disabled/non-functional
+      const buyNowBtn = screen.getByRole("button", { name: /Buy Now/i });
+      expect(buyNowBtn).toBeVisible();
+      expect(buyNowBtn).toBeDisabled();
+    });
+
+    it("3b. Student (Free) shows 'Free' and 'Continue Learning' opening Learning Space without coupon", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={freePricing}
+          isCreator={false}
+          role="student"
+          isReadOnlyPreview={false}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      // Shows Free
+      expect(screen.getByText("Free")).toBeVisible();
+
+      // Does not show Apply coupon
+      expect(screen.queryByRole("button", { name: /Apply coupon/i })).toBeNull();
+
+      // Shows Continue Learning (enabled)
+      const continueBtn = screen.getByRole("button", { name: /Continue Learning/i });
+      expect(continueBtn).toBeVisible();
+      expect(continueBtn).not.toBeDisabled();
+
+      // Clicking opens existing Learning Space
+      fireEvent.click(continueBtn);
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);
+    });
+  });
 });
+

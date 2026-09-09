@@ -1948,9 +1948,42 @@ describe("Discussion", () => {
 
 });
 
+const sampleLessonMarkdown = `## Description
+
+UI and UX work together. You will practice \`empathy\` as a design tool, not a slogan, and leave with a short checklist you can reuse on the next product you touch.
+
+## Why this matters
+
+> Great interfaces start with people, not pixels.
+
+Keep this nearby while you watch, then try the exercise at the end of the lesson.
+
+### Goals
+
+- Map a user journey in one sitting
+- Spot three friction points in a real product
+- Write a one-line problem statement
+
+### Try this in code
+
+\`\`\`javascript
+const journey = ["discover", "decide", "delight"];
+\`\`\`
+
+See the [Nielsen Norman Group glossary](https://www.nngroup.com/articles/definition-user-experience/) for terms used in this lesson.
+`;
+
 describe("LessonDescription", () => {
-  it("clamps the example markdown behind more until expanded", () => {
+  it("renders empty fallback without mock text when rendered with no description prop", () => {
     render(<LessonDescription />);
+    expect(
+      screen.getByText("No description provided for this lesson."),
+    ).toBeVisible();
+    expect(screen.queryByText(/UI and UX work together/i)).not.toBeInTheDocument();
+  });
+
+  it("clamps the example markdown behind more until expanded", () => {
+    render(<LessonDescription description={sampleLessonMarkdown} />);
 
     const description = screen.getByRole("button", {
       name: "Show more of the lesson description",
@@ -2021,7 +2054,7 @@ describe("LessonDescription", () => {
   });
 
   it("does not collapse when clicking the description body while expanded", () => {
-    render(<LessonDescription />);
+    render(<LessonDescription description={sampleLessonMarkdown} />);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -2044,7 +2077,7 @@ describe("LessonDescription", () => {
   });
 
   it("collapses from the show less button", () => {
-    render(<LessonDescription />);
+    render(<LessonDescription description={sampleLessonMarkdown} />);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -2068,7 +2101,7 @@ describe("LessonDescription", () => {
   });
 
   it("collapses when Escape is pressed while focus is inside", async () => {
-    render(<LessonDescription />);
+    render(<LessonDescription description={sampleLessonMarkdown} />);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -2099,7 +2132,7 @@ describe("LessonDescription", () => {
   });
 
   it("focuses show less without scrolling on expand", async () => {
-    render(<LessonDescription />);
+    render(<LessonDescription description={sampleLessonMarkdown} />);
 
     const description = screen.getByRole("button", {
       name: "Show more of the lesson description",
@@ -2122,5 +2155,43 @@ describe("LessonDescription", () => {
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     focusSpy.mockRestore();
   });
-});
 
+  it("renders custom markdown description through DiscussionMarkdown when provided", () => {
+    const customMarkdown = `## Custom Lesson Header
+
+Here is custom content for this lesson:
+- Point A
+- Point B
+
+> Great takeaway.
+`;
+    render(<LessonDescription description={customMarkdown} />);
+
+    const description = screen.getByRole("button", {
+      name: "Show more of the lesson description",
+    });
+    expect(description).toHaveTextContent("Custom Lesson Header");
+
+    fireEvent.click(description);
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Custom Lesson Header" }),
+    ).toBeVisible();
+    expect(screen.getByText("Point A")).toBeVisible();
+    expect(screen.getByText("Point B")).toBeVisible();
+    expect(description.querySelector("blockquote")).toBeTruthy();
+  });
+
+  it("renders empty fallback when custom description is empty string or null", () => {
+    const { unmount } = render(<LessonDescription description="" />);
+    expect(
+      screen.getByText("No description provided for this lesson."),
+    ).toBeVisible();
+    unmount();
+
+    render(<LessonDescription description={null} />);
+    expect(
+      screen.getByText("No description provided for this lesson."),
+    ).toBeVisible();
+  });
+});
