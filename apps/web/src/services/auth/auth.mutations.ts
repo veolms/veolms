@@ -32,6 +32,7 @@ import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import { learningSpaceKeys } from "../learning-space";
+import { navigationKeys } from "../navigation";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -56,8 +57,6 @@ function persistAuthenticatedSession(
     phoneNo: data.user.phoneNo,
     mobileVerified: data.user.mobileVerified,
     roles: data.user.roles,
-    permissions: data.user.permissions,
-    menus: data.user.menus,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,
@@ -71,6 +70,7 @@ function persistAuthenticatedSession(
   authStore.setUser(data.user);
   queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
   queryClient.setQueryData(authKeys.me(), currentUser);
+  queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
 
 export function useSendOtp() {
@@ -283,7 +283,9 @@ export function useLogout() {
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
+      queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      queryClient.invalidateQueries({ queryKey: navigationKeys.all });
     },
   });
 }
