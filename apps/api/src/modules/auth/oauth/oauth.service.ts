@@ -188,8 +188,8 @@ export function createOauthService({
     }
 
     const session = await sessionService.establishSession(user, request);
-    const rbac = await authService.getUserRbac(user.id);
-    return { user: { ...user, ...rbac }, session };
+    const roles = await authService.getUserRoles(user.id);
+    return { user: { ...user, roles }, session };
   }
 
   async function register(
@@ -248,8 +248,8 @@ export function createOauthService({
     }
 
     const session = await sessionService.establishSession(user, requestMeta);
-    const rbac = await authService.getUserRbac(user.id);
-    return { statusCode, user: { ...user, ...rbac }, session };
+    const roles = await authService.getUserRoles(user.id);
+    return { statusCode, user: { ...user, roles }, session };
   }
 
   return {
