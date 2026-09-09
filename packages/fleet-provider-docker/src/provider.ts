@@ -125,6 +125,8 @@ export function buildDockerRunArgs(options: {
     `type=bind,src=${toDockerMountPath(options.storageRoot)},dst=/app/s3-bucket`,
     "--add-host",
     "host.docker.internal:host-gateway",
+    "--add-host",
+    "localhost:host-gateway",
   ];
   if (options.network) {
     args.push("--network", options.network);
@@ -142,11 +144,17 @@ function buildWorkerEnvironment(options: {
   defaultEnv?: Readonly<Record<string, string>>;
   workerDatabaseUrl?: string;
 }): Record<string, string> {
+  const databaseUrl =
+    options.workerDatabaseUrl ??
+    options.defaultEnv?.DATABASE_URL ??
+    options.spec.environmentVariables?.DATABASE_URL ??
+    process.env.DATABASE_URL;
+
   return {
     ...options.defaultEnv,
     ...options.spec.environmentVariables,
-    ...(options.workerDatabaseUrl
-      ? { DATABASE_URL: options.workerDatabaseUrl }
+    ...(databaseUrl
+      ? { DATABASE_URL: databaseUrl }
       : {}),
     WORKER_ID: options.workerId,
     PROVIDER: "docker",
@@ -182,7 +190,10 @@ export function buildDockerCreateRequest(options: {
         NanoCpus: Math.round(options.spec.cpu * 1_000_000_000),
         Memory: options.spec.memoryMb * 1024 * 1024,
         Binds: [`${toDockerMountPath(options.storageRoot)}:/app/s3-bucket:rw`],
-        ExtraHosts: ["host.docker.internal:host-gateway"],
+        ExtraHosts: [
+          "host.docker.internal:host-gateway",
+          "localhost:host-gateway",
+        ],
         ...(options.network ? { NetworkMode: options.network } : {}),
       },
     },

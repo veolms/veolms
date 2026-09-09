@@ -45,6 +45,7 @@ describe("Docker Fleet Provider", () => {
     );
     assert.ok(args.includes("WORKER_MAX_JOBS=1"));
     assert.ok(args.includes("host.docker.internal:host-gateway"));
+    assert.ok(args.includes("localhost:host-gateway"));
     assert.ok(
       args.includes("DATABASE_URL=postgresql://veolms@postgres:5432/veolms"),
     );
@@ -73,7 +74,10 @@ describe("Docker Fleet Provider", () => {
       NanoCpus: 2_000_000_000,
       Memory: 4_294_967_296,
       Binds: ["/repo/s3-bucket:/app/s3-bucket:rw"],
-      ExtraHosts: ["host.docker.internal:host-gateway"],
+      ExtraHosts: [
+        "host.docker.internal:host-gateway",
+        "localhost:host-gateway",
+      ],
       NetworkMode: "veolms-fleet",
     });
     assert.deepEqual(request.body.Labels, {

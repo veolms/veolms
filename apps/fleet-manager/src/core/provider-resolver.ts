@@ -72,7 +72,8 @@ export function resolveFleetProviderOptions(
       network: config.DOCKER_NETWORK,
       storageRoot: config.DOCKER_STORAGE_ROOT,
       verificationStorageRoot: config.DOCKER_VERIFICATION_STORAGE_ROOT,
-      workerDatabaseUrl: config.DATABASE_URL,
+      workerDatabaseUrl:
+        process.env.DOCKER_WORKER_DATABASE_URL || config.DATABASE_URL,
       transport: config.DOCKER_TRANSPORT,
       socketPath: config.DOCKER_SOCKET_PATH,
       defaultEnv: {
