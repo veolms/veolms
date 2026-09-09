@@ -7670,6 +7670,18 @@ export function CourseCreatePage({
       // Write the confirmed ID to the ref immediately so all awaiting callers
       // can use it as soon as the shared promise resolves.
       currentCourseIdRef.current = created.id;
+      if (typeof window !== "undefined") {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.get("edit") !== created.id) {
+          currentUrl.searchParams.set("edit", created.id);
+          currentUrl.searchParams.delete("courseId");
+          window.history.replaceState(
+            window.history.state,
+            "",
+            currentUrl.toString(),
+          );
+        }
+      }
       return created;
     } finally {
       // Clear regardless of success/failure so a failed attempt can be retried.
