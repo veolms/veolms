@@ -32,6 +32,9 @@ import { mediaService } from "../../services/media";
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
   disabled?: boolean;
+  hideUploadWhenAttached?: boolean;
+  attachedActionLabel?: string;
+  stackStatusBelow?: boolean;
   onMediaAttached: (
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
@@ -75,6 +78,9 @@ const SECONDARY_ACTION_CLASS =
 export function LessonVideoUpload({
   mediaAssetId,
   disabled = false,
+  hideUploadWhenAttached = false,
+  attachedActionLabel = "Replace",
+  stackStatusBelow = false,
   onMediaAttached,
   onProcessingComplete,
 }: LessonVideoUploadProps) {
@@ -835,16 +841,31 @@ export function LessonVideoUpload({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 max-[768px]:w-full">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={openModal}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer"
-        >
-          <UploadSimple size={15} />
-          Upload
-        </button>
+      <div
+        className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
+      >
+        {(!hideUploadWhenAttached || activeMediaId) && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={openModal}
+            style={{
+              fontSize: "0.80rem",
+              fontWeight: 700,
+              height: "34px",
+              borderRadius: "8px",
+              gap: "6px",
+              paddingLeft: "16px",
+              paddingRight: "16px",
+            }}
+            className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
+          >
+            <UploadSimple size={15} />
+            <span>
+              {activeMediaId ? attachedActionLabel : "Upload"}
+            </span>
+          </button>
+        )}
         {isReplacementFlow && mediaAssetId ? (
           <span
             aria-live="polite"

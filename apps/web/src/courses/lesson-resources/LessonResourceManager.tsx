@@ -1,7 +1,7 @@
 import {
   CircleNotch,
   FileText,
-  UploadSimple,
+  Plus,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
@@ -144,8 +144,8 @@ export function LessonResourceManager({
   };
 
   return (
-    <section className="mb-5 flex flex-col gap-2">
-      <div className="mb-2 flex items-center justify-between gap-3 max-[768px]:flex-col max-[768px]:items-start">
+    <section className="mb-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3 max-[768px]:flex-col max-[768px]:items-start">
         <label className="flex items-center gap-1.5 text-(--text-secondary) text-[0.84rem] font-semibold">
           Lesson Resources
         </label>
@@ -154,14 +154,18 @@ export function LessonResourceManager({
             type="button"
             disabled={!courseId || disabled || isUploading}
             onClick={chooseResource}
-            className="inline-flex h-[34px] flex-1 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+            style={{
+              fontSize: "0.84rem",
+              fontWeight: 600,
+            }}
+            className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-3 text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
           >
             {isUploading ? (
               <CircleNotch size={15} className="animate-spin" />
             ) : (
-              <UploadSimple size={15} />
+              <Plus size={15} weight="bold" />
             )}
-            {isUploading ? "Uploading..." : "Upload"}
+            {isUploading ? "Adding..." : "Add Resource"}
           </button>
           <input
             ref={fileInputRef}
@@ -208,78 +212,50 @@ export function LessonResourceManager({
       )}
 
       {resources.length > 0 ? (
-        <div className="w-full overflow-x-auto rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
-          <table className="w-full min-w-[520px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)]">
-                <th className="px-4 py-2.5 text-[0.74rem] font-bold uppercase tracking-wider text-(--muted)">
-                  File Name
-                </th>
-                <th className="px-4 py-2.5 text-[0.74rem] font-bold uppercase tracking-wider text-(--muted)">
-                  Type
-                </th>
-                <th className="px-4 py-2.5 text-[0.74rem] font-bold uppercase tracking-wider text-(--muted)">
-                  Size
-                </th>
-                <th className="px-4 py-2.5 pr-4 text-right text-[0.74rem] font-bold uppercase tracking-wider text-(--muted)">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {resources.map((resource) => {
-                const isDeleting = deletingResourceId === resource.id;
-                return (
-                  <tr
-                    key={resource.id}
-                    className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] last:border-b-0 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
-                  >
-                    <td className="px-4 py-3 text-[0.82rem] font-semibold text-(--text)">
-                      <div className="flex items-center gap-2.5">
-                        <FileText
-                          size={16}
-                          weight="fill"
-                          className="shrink-0 text-red-400"
-                        />
-                        <span className="max-w-[28rem] truncate">
-                          {resource.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-[0.8rem] font-medium uppercase text-(--text-secondary)">
-                      {resource.type}
-                    </td>
-                    <td className="px-4 py-3 text-[0.8rem] text-(--muted)">
-                      {resource.size}
-                    </td>
-                    <td className="px-4 py-3 pr-4 text-right">
-                      <button
-                        type="button"
-                        disabled={
-                          disabled || isUploading || Boolean(deletingResourceId)
-                        }
-                        onClick={() => void handleRemove(resource)}
-                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent p-0 text-(--muted) transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label={`Remove ${resource.name}`}
-                        title={
-                          isDeleting ? "Removing resource" : "Remove resource"
-                        }
-                      >
-                        {isDeleting ? (
-                          <CircleNotch size={14} className="animate-spin" />
-                        ) : (
-                          <X size={14} weight="bold" />
-                        )}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+          {resources.map((resource) => {
+            const isDeleting = deletingResourceId === resource.id;
+            return (
+              <div
+                key={resource.id}
+                className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2 last:border-b-0 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
+              >
+                <FileText
+                  size={16}
+                  weight="fill"
+                  className="shrink-0 text-red-400"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[0.8rem] font-semibold text-(--text)">
+                    {resource.name}
+                  </div>
+                  <div className="mt-0.5 text-[0.72rem] text-(--muted)">
+                    {resource.type} <span aria-hidden="true">·</span>{" "}
+                    {resource.size}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    disabled || isUploading || Boolean(deletingResourceId)
+                  }
+                  onClick={() => void handleRemove(resource)}
+                  className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-(--muted) transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={"Remove " + resource.name}
+                  title={isDeleting ? "Removing resource" : "Remove resource"}
+                >
+                  {isDeleting ? (
+                    <CircleNotch size={14} className="animate-spin" />
+                  ) : (
+                    <X size={14} weight="bold" />
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : (
-        <div className="rounded-xl bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-4 py-4 text-[0.78rem] text-(--muted)">
+        <div className="rounded-[8px] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 py-2.5 text-[0.76rem] text-(--muted)">
           No resources added to this lesson yet.
         </div>
       )}

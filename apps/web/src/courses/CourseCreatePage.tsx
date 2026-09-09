@@ -42,8 +42,8 @@ import {
   PencilSimple,
   PlayCircle,
   Plus,
+  PuzzlePiece,
   Question,
-  Sparkle,
   Tag,
   Trash,
   UploadSimple,
@@ -100,6 +100,7 @@ import type {
   Category,
   CourseEditorDataResponse,
   CourseIncludeItem,
+  CourseValidationArea,
   CreateLessonResourceRequest,
   LessonResource,
 } from "@veolms/contracts";
@@ -142,7 +143,7 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "curriculum", label: "Curriculum", Icon: ListBullets, tone: "violet" },
   { id: "access-rules", label: "Access Rules", Icon: LockKey, tone: "gold" },
   { id: "pricing", label: "Pricing", Icon: Tag, tone: "green" },
-  { id: "extras", label: "Extras", Icon: Sparkle, tone: "orange" },
+  { id: "extras", label: "Extras", Icon: PuzzlePiece, tone: "orange" },
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
 
@@ -156,6 +157,8 @@ type ThumbnailUploadStatus =
   | "confirming"
   | "saving"
   | "error";
+
+type ChecklistState = "idle" | "validating" | "valid" | "invalid";
 
 // Basics State Model & Normalization
 export interface BasicsFormState {
@@ -2934,6 +2937,26 @@ export function CourseCreatePage({
     }
   };
 
+  const handleTrailerMediaAttached = async (
+    mediaAssetId: string,
+  ): Promise<boolean> => {
+    if (!currentCourseId || !editorData?.course) return false;
+
+    try {
+      await updateBasicsMutation.mutateAsync({
+        id: currentCourseId,
+        payload: {
+          trailerMediaId: mediaAssetId,
+          version: editorData.course.version,
+        },
+      });
+      await refetchEditor();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const triggerVideoTrailerUpload = () => {
     videoTrailerInputRef.current?.click();
   };
@@ -3405,6 +3428,9 @@ export function CourseCreatePage({
   interface CurriculumLessonItem {
     id: string;
     title: string;
+    isEditingTitle?: boolean;
+    contentTypeSelected?: boolean;
+    pendingContentType?: "video" | "document";
     description: string;
     contentType: "video" | "document";
     contentMediaId?: string | null;
@@ -4063,6 +4089,8 @@ export function CourseCreatePage({
     scheduleDate: "2026-08-20",
     scheduleTime: "10:00",
   });
+  const [expandedValidationArea, setExpandedValidationArea] =
+    useState<CourseValidationArea | null>(null);
 
   // Course Overview Live Full Preview Modal State
   const [isUnpublishModalOpen, setIsUnpublishModalOpen] =
@@ -4658,6 +4686,9 @@ export function CourseCreatePage({
                 return {
                   id: les.id,
                   title,
+                  isEditingTitle: existingLesson?.isEditingTitle ?? false,
+                  contentTypeSelected:
+                    existingLesson?.contentTypeSelected ?? true,
                   description,
                   contentType,
                   contentMediaId,
@@ -6019,6 +6050,7 @@ export function CourseCreatePage({
       title: newLessonTitle,
       description: "",
       contentType: "video" as const,
+      contentTypeSelected: false,
       isExpanded: true,
       isPublished: true,
       isPreview: false,
@@ -6413,21 +6445,75 @@ export function CourseCreatePage({
     });
   };
 
+  const handleStartEditLessonTitle = (sectionId: string, lessonId: string) => {
+    setSections((prev) =>
+      prev.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              lessons: section.lessons.map((lesson) =>
+                lesson.id === lessonId
+                  ? { ...lesson, isEditingTitle: true }
+                  : lesson,
+              ),
+            },
+      ),
+    );
+  };
+
+  const handleLessonTitleBlur = async (
+    sectionId: string,
+    lessonId: string,
+  ) => {
+    await handleLessonFieldBlur(sectionId, lessonId);
+    setSections((prev) =>
+      prev.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              lessons: section.lessons.map((lesson) =>
+                lesson.id === lessonId
+                  ? { ...lesson, isEditingTitle: false }
+                  : lesson,
+              ),
+            },
+      ),
+    );
+  };
+
   const handleLessonDiscreteChange = async (
     sectionId: string,
     lessonId: string,
     updates: Partial<CurriculumLessonItem>,
-  ) => {
+  ): Promise<boolean> => {
+    const isContentTypeChange = Boolean(updates.contentType);
     handleUpdateLesson(sectionId, lessonId, updates);
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
     const les = sec?.lessons.find((l) => l.id === lessonId);
-    if (!les || les.isPendingCreation) return;
-    if (!isLessonDirty(les)) return;
+    if (!les || les.isPendingCreation) return false;
+    if (!isLessonDirty(les)) {
+      if (isContentTypeChange) {
+        handleUpdateLesson(sectionId, lessonId, {
+          contentTypeSelected: true,
+          pendingContentType: undefined,
+        });
+      }
+      return true;
+    }
 
-    await persistLesson(sectionId, lessonId, {
+    const persisted = await persistLesson(sectionId, lessonId, {
       collapseOnSuccess: false,
     });
+    if (persisted && isContentTypeChange) {
+      handleUpdateLesson(sectionId, lessonId, {
+        contentTypeSelected: true,
+        pendingContentType: undefined,
+      });
+    }
+    return persisted;
   };
 
   const handleLessonMediaAttached = async (
@@ -7318,13 +7404,49 @@ export function CourseCreatePage({
   const activePreviewData = localPreviewData || previewData;
 
   // Publish Checklist Validation based strictly on server validation response
-  const isBasicsValid = serverValidation?.sections?.basics?.valid ?? false;
-  const isCurriculumValid =
-    serverValidation?.sections?.curriculum?.valid ?? false;
-  const isAccessRulesValid =
-    serverValidation?.sections?.accessRules?.valid ?? false;
-  const isPricingValid = serverValidation?.sections?.pricing?.valid ?? false;
-  const isExtrasValid = serverValidation?.sections?.extras?.valid ?? false;
+  const getChecklistState = (area: CourseValidationArea): ChecklistState => {
+    if (isValidating) return "validating";
+    if (!serverValidation) return "idle";
+    return serverValidation.sections[area].valid ? "valid" : "invalid";
+  };
+
+  const validationChecklistItems: Array<{
+    area: CourseValidationArea;
+    label: string;
+    summary: string;
+  }> = [
+    { area: "basics", label: "Basics", summary: "Completed" },
+    {
+      area: "curriculum",
+      label: "Curriculum",
+      summary: `${totalSections} Sections, ${totalLessons} Lessons`,
+    },
+    {
+      area: "accessRules",
+      label: "Access Rules",
+      summary:
+        accessRules.accessType === "everyone"
+          ? "Everyone"
+          : "Restricted Access",
+    },
+    {
+      area: "pricing",
+      label: "Pricing",
+      summary:
+        pricing.pricingType === "free"
+          ? "Free"
+          : `₹${pricing.sellingPrice}`,
+    },
+    {
+      area: "extras",
+      label: "Extras",
+      summary: extras.enableCertificate ? "Certificate Enabled" : "Disabled",
+    },
+  ];
+
+  useEffect(() => {
+    if (isValidating) setExpandedValidationArea(null);
+  }, [isValidating]);
 
   const isCourseReadyToPublish = serverValidation?.canPublish ?? false;
 
@@ -8862,7 +8984,7 @@ export function CourseCreatePage({
                       data-testid="basics-title-helper"
                     >
                       {createCourseMutation.isPending || isInitialCourseCreationPending ? (
-                        <>
+                <>
                           <CircleNotch
                             size={13}
                             className="animate-spin text-(--accent) shrink-0"
@@ -9227,42 +9349,19 @@ export function CourseCreatePage({
                             <PlayCircle size={30} weight="light" />
                           </div>
                           <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                            <button
-                              type="button"
+                            <LessonVideoUpload
                               disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 700,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "16px",
-                                paddingRight: "16px",
+                              mediaAssetId={editorData?.course?.trailerMediaId}
+                              hideUploadWhenAttached={Boolean(
+                                editorData?.course?.trailerMediaId,
+                              )}
+                              attachedActionLabel="Replace trailer"
+                              stackStatusBelow
+                              onMediaAttached={handleTrailerMediaAttached}
+                              onProcessingComplete={() => {
+                                void refetchEditor();
                               }}
-                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={triggerVideoTrailerUpload}
-                            >
-                              <UploadSimple size={15} /> Upload
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 500,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "14px",
-                                paddingRight: "14px",
-                              }}
-                              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={() => {
-                                // Select from media action
-                              }}
-                            >
-                              <PlayCircle size={15} /> Select from Media
-                            </button>
+                            />
                           </div>
                           <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
                             Recommended: 16:9 video
@@ -9761,6 +9860,7 @@ export function CourseCreatePage({
                               }
                               onDragEnd={handleLessonDragEnd}
                             >
+                              <>
                               {/* Lesson Header */}
                               <div
                                 className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
@@ -9819,9 +9919,46 @@ export function CourseCreatePage({
                                   <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
                                     {lesIndex + 1}
                                   </span>
-                                  <span className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words">
-                                    {les.title}
-                                  </span>
+                                  {les.isExpanded && les.isEditingTitle ? (
+                                    <div
+                                      className="flex min-w-0 flex-1 items-center gap-2"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <input
+                                        id={`les-title-${les.id}`}
+                                        type="text"
+                                        maxLength={120}
+                                        value={les.title}
+                                        disabled={
+                                          les.isPendingCreation ||
+                                          savingLessonId === les.id
+                                        }
+                                        onChange={(e) =>
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            title: e.target.value,
+                                          })
+                                        }
+                                        onBlur={() => {
+                                          void handleLessonTitleBlur(
+                                            sec.id,
+                                            les.id,
+                                          );
+                                        }}
+                                        placeholder="e.g. Introduction to React Hooks"
+                                        className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span
+                                      className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words cursor-text"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartEditLessonTitle(sec.id, les.id);
+                                      }}
+                                    >
+                                      {les.title}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                                   {les.isPendingCreation ? (
@@ -9920,7 +10057,91 @@ export function CourseCreatePage({
                                 </div>
                               </div>
 
-                              {/* Expanded Lesson Editor with CSS transition */}
+                              {les.isPendingCreation ? (
+                                <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
+                                  <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
+                                    <CircleNotch size={16} className="animate-spin text-(--accent)" />
+                                    Creating lesson...
+                                  </div>
+                                </div>
+                              ) : !les.contentTypeSelected ? (
+                                <div className="flex flex-col items-center justify-center gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8 text-center">
+                                  <h3 className="m-0 text-(--text) text-[1rem] font-bold">
+                                    What type of lesson is this?
+                                  </h3>
+                                  <p className="m-0 text-(--muted) text-[0.82rem]">
+                                    Choose the type of content you want to add to this lesson.
+                                  </p>
+                                  <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
+                                    <button
+                                      type="button"
+                                      style={{
+                                        fontSize: "0.84rem",
+                                        fontWeight: 600,
+                                        gap: "6px",
+                                      }}
+                                      className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "video" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
+                                      onClick={() =>
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          pendingContentType: "video",
+                                        })
+                                      }
+                                    >
+                                      <Video size={18} weight="fill" /> Video
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        fontSize: "0.84rem",
+                                        fontWeight: 600,
+                                        gap: "6px",
+                                      }}
+                                      className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "document" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
+                                      onClick={() =>
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          pendingContentType: "document",
+                                        })
+                                      }
+                                    >
+                                      <FileText size={18} weight="fill" /> Document / PDF
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      !les.pendingContentType ||
+                                      savingLessonId === les.id
+                                    }
+                                    style={{
+                                      fontSize: "0.84rem",
+                                      fontWeight: 600,
+                                      height: "34px",
+                                      borderRadius: "8px",
+                                      gap: "6px",
+                                      paddingTop: 0,
+                                      paddingBottom: 0,
+                                    }}
+                                    className="mt-2 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) px-4 shadow-[0_3px_10px_var(--accent-shadow)] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                                    onClick={() => {
+                                      if (!les.pendingContentType) return;
+                                      void handleLessonDiscreteChange(
+                                        sec.id,
+                                        les.id,
+                                        {
+                                          contentType: les.pendingContentType,
+                                          ...(les.pendingContentType === "document"
+                                            ? { contentMediaId: null }
+                                            : {}),
+                                        },
+                                      );
+                                    }}
+                                  >
+                                    {savingLessonId === les.id
+                                      ? "Saving..."
+                                      : "Continue"}
+                                  </button>
+                                </div>
+                              ) : (
                               <div
                                 className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                                   les.isExpanded
@@ -9940,53 +10161,8 @@ export function CourseCreatePage({
                                   <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
                                     {/* Left column */}
                                     <div className="flex flex-col gap-4.5">
-                                      {/* Lesson Title */}
-                                      <div className="flex flex-col gap-2 mb-5">
-                                        <label
-                                          htmlFor={`les-title-${les.id}`}
-                                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                        >
-                                          Lesson Title{""}
-                                          <span className="text-[#ff5252] ml-0.5">
-                                            *
-                                          </span>
-                                        </label>
-                                        <div className="relative flex items-center">
-                                          <input
-                                            id={`les-title-${les.id}`}
-                                            type="text"
-                                            maxLength={120}
-                                            value={les.title}
-                                            disabled={
-                                              les.isPendingCreation ||
-                                              savingLessonId === les.id
-                                            }
-                                            onChange={(e) =>
-                                              handleUpdateLesson(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  title: e.target.value,
-                                                },
-                                              )
-                                            }
-                                            onBlur={() => {
-                                              void handleLessonFieldBlur(
-                                                sec.id,
-                                                les.id,
-                                              );
-                                            }}
-                                            placeholder="e.g. Introduction to React Hooks"
-                                            className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[70px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                                          />
-                                          <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                                            {les.title.length} / 120
-                                          </span>
-                                        </div>
-                                      </div>
-
                                       {/* Lesson Description Rich Editor */}
-                                      <div className="flex flex-col gap-2 mb-5">
+                                      <div className="flex flex-col gap-2 mb-3">
                                         <label
                                           id={`les-desc-label-${les.id}`}
                                           className="text-(--text-secondary) text-[0.84rem] font-semibold"
@@ -10035,6 +10211,7 @@ export function CourseCreatePage({
                                     {/* Right column */}
                                     <div className="flex flex-col gap-4.5">
                                       {/* Content Type Selector */}
+                                      {!les.contentTypeSelected && (
                                       <div className="flex flex-col gap-2 mb-5">
                                         <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                           Content Type{""}
@@ -10131,9 +10308,11 @@ export function CourseCreatePage({
                                           </div>
                                         </div>
                                       </div>
+                                      )}
 
+                                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                       {/* Content Source Controls (Video or Document) */}
-                                      <div className="flex flex-col gap-2 mb-5">
+                                      <div className="flex flex-col gap-2 mb-0">
                                         <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                           {les.contentType === "video"
                                             ? "Video Source"
@@ -10202,100 +10381,41 @@ export function CourseCreatePage({
                                       </div>
 
                                       {/* Lesson Publishing Status */}
-                                      <div className="flex flex-col gap-2 mb-5">
+                                      <div className="flex flex-col gap-2 mb-0">
                                         <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                           Publishing Status
                                         </label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                          <div
-                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                              les.isPendingCreation
-                                                ? "opacity-60 cursor-not-allowed"
-                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                            } ${
-                                              les.isPublished !== false
-                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                            }`}
-                                            onClick={() => {
-                                              if (les.isPendingCreation) return;
-                                              void handleLessonDiscreteChange(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  isPublished: true,
-                                                },
-                                              );
-                                            }}
-                                          >
-                                            <div
-                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                                                les.isPublished !== false
-                                                  ? "border-(--accent)"
-                                                  : "border-(--muted)"
-                                              }`}
-                                            >
-                                              {les.isPublished !== false && (
-                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                              )}
-                                            </div>
-                                            <div className="flex flex-col gap-0.5">
-                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                                Published
-                                              </span>
-                                              <span className="text-(--muted) text-[0.75rem]">
-                                                Visible to enrolled students
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          <div
-                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                              les.isPendingCreation
-                                                ? "opacity-60 cursor-not-allowed"
-                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                            } ${
-                                              les.isPublished === false
-                                                ? "is-selected border-[#f59e0b] bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))]"
-                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                            }`}
-                                            onClick={() => {
-                                              if (les.isPendingCreation) return;
-                                              void handleLessonDiscreteChange(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  isPublished: false,
-                                                },
-                                              );
-                                            }}
-                                          >
-                                            <div
-                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                                                les.isPublished === false
-                                                  ? "border-[#f59e0b]"
-                                                  : "border-(--muted)"
-                                              }`}
-                                            >
-                                              {les.isPublished === false && (
-                                                <div className="w-2 h-2 rounded-full bg-[#f59e0b]" />
-                                              )}
-                                            </div>
-                                            <div className="flex flex-col gap-0.5">
-                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                                Draft (Hidden)
-                                              </span>
-                                              <span className="text-(--muted) text-[0.75rem]">
-                                                Hidden from students
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
+                                        <ThemedSelect
+                                          value={
+                                            les.isPublished !== false
+                                              ? "published"
+                                              : "draft"
+                                          }
+                                          onValueChange={(value) => {
+                                            if (les.isPendingCreation) return;
+                                            void handleLessonDiscreteChange(
+                                              sec.id,
+                                              les.id,
+                                              {
+                                                isPublished:
+                                                  value === "published",
+                                              },
+                                            );
+                                          }}
+                                          options={[
+                                            ["published", "Published"],
+                                            ["draft", "Draft (Hidden)"],
+                                          ]}
+                                          disabled={les.isPendingCreation}
+                                          ariaLabel="Publishing status"
+                                          triggerClassName="!h-9 !w-full !rounded-[8px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.84rem] !text-(--text) !bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] font-semibold disabled:!opacity-60"
+                                        />
+                                      </div>
                                       </div>
 
                                       {/* Free Preview Toggle */}
                                       <div
-                                        className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-5 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                        className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
                                       >
                                         <div className="pr-3">
                                           <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
@@ -10361,6 +10481,8 @@ export function CourseCreatePage({
                                   </div>
                                 </div>
                               </div>
+                              )}
+                              </>
                             </div>
                           ))}
                         </div>
@@ -11831,156 +11953,129 @@ export function CourseCreatePage({
                   </div>
 
                   <div className="flex flex-col gap-2.5 mb-5">
-                    {/* Checklist Item: Basics */}
-                    <div
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      onClick={() => {
-                        void navigateToStep("basics");
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className={
-                            isBasicsValid
-                              ? "is-valid text-green-500"
-                              : "is-invalid text-rose-400/50"
-                          }
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          Basics
-                        </strong>
-                      </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>
-                          {isBasicsValid ? "Completed" : "Incomplete"}
-                        </span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
+                    {validationChecklistItems.map((item) => {
+                      const state = getChecklistState(item.area);
+                      const sectionErrors =
+                        serverValidation?.sections[item.area].errors ?? [];
+                      const isInvalid = state === "invalid";
+                      const isExpanded =
+                        isInvalid && expandedValidationArea === item.area;
+                      const errorSummary =
+                        sectionErrors.length > 1
+                          ? String(sectionErrors.length) + " issues"
+                          : sectionErrors[0] || "Needs attention";
 
-                    {/* Checklist Item: Curriculum */}
-                    <div
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      onClick={() => {
-                        void navigateToStep("curriculum");
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className={
-                            isCurriculumValid
-                              ? "is-valid text-green-500"
-                              : "is-invalid text-rose-400/50"
-                          }
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          Curriculum
-                        </strong>
-                      </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>
-                          {totalSections} Sections, {totalLessons} Lessons
-                        </span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
-
-                    {/* Checklist Item: Access Rules */}
-                    <div
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      onClick={() => {
-                        void navigateToStep("access-rules");
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className={
-                            isAccessRulesValid
-                              ? "is-valid text-green-500"
-                              : "is-invalid text-rose-400/50"
-                          }
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          Access Rules
-                        </strong>
-                      </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>
-                          {accessRules.accessType === "everyone"
-                            ? "Everyone"
-                            : "Restricted Access"}
-                        </span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
-
-                    {/* Checklist Item: Pricing */}
-                    <div
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      onClick={() => {
-                        void navigateToStep("pricing");
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className={
-                            isPricingValid
-                              ? "is-valid text-green-500"
-                              : "is-invalid text-rose-400/50"
-                          }
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          Pricing
-                        </strong>
-                      </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>
-                          {pricing.pricingType === "free"
-                            ? "Free"
-                            : `₹${pricing.sellingPrice}`}
-                        </span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
-
-                    {/* Checklist Item: Extras */}
-                    <div
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] cursor-pointer transition-[border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      onClick={() => {
-                        void navigateToStep("extras");
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className={
-                            isExtrasValid
-                              ? "is-valid text-green-500"
-                              : "is-invalid text-rose-400/50"
-                          }
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          Extras
-                        </strong>
-                      </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>
-                          {extras.enableCertificate
-                            ? "Certificate Enabled"
-                            : "Disabled"}
-                        </span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
+                      return (
+                        <div key={item.area}>
+                          <div
+                            className={[
+                              "flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-150 ease-out",
+                              isExpanded
+                                ? "rounded-t-[10px] rounded-b-none"
+                                : "rounded-[10px]",
+                            ].join(" ")}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              {state === "validating" ? (
+                                <CircleNotch
+                                  size={20}
+                                  className="shrink-0 animate-spin text-(--accent)"
+                                />
+                              ) : state === "valid" ? (
+                                <CheckCircle
+                                  size={20}
+                                  weight="fill"
+                                  className="shrink-0 text-green-500"
+                                />
+                              ) : state === "invalid" ? (
+                                <WarningCircle
+                                  size={20}
+                                  weight="fill"
+                                  className="shrink-0 text-rose-400"
+                                />
+                              ) : (
+                                <Info
+                                  size={20}
+                                  weight="fill"
+                                  className="shrink-0 text-(--muted)"
+                                />
+                              )}
+                              <strong className="truncate text-(--text) text-[0.9rem] font-[650]">
+                                {item.label}
+                              </strong>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2 text-[0.82rem]">
+                              {state === "validating" ? (
+                                <span className="text-(--accent)">
+                                  Validating...
+                                </span>
+                              ) : state === "idle" ? (
+                                <span className="text-(--muted)">
+                                  Not checked
+                                </span>
+                              ) : state === "valid" ? (
+                                <span className="text-(--muted)">
+                                  {item.summary}
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="max-w-[15rem] truncate text-rose-400">
+                                    {errorSummary}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
+                                    onClick={() =>
+                                      setExpandedValidationArea(
+                                        isExpanded ? null : item.area,
+                                      )
+                                    }
+                                    aria-expanded={isExpanded}
+                                    aria-controls={
+                                      "validation-errors-" + item.area
+                                    }
+                                    aria-label={
+                                      (isExpanded ? "Hide" : "Show") +
+                                      " " +
+                                      item.label +
+                                      " validation errors"
+                                    }
+                                  >
+                                    <CaretRight
+                                      size={16}
+                                      weight="bold"
+                                      className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${isExpanded ? "rotate-90" : "rotate-0"}`}
+                                    />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div
+                            id={"validation-errors-" + item.area}
+                            aria-hidden={!isExpanded}
+                            className={[
+                              "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                              isExpanded
+                                ? "grid-rows-[1fr] opacity-100"
+                                : "grid-rows-[0fr] opacity-0 pointer-events-none",
+                            ].join(" ")}
+                          >
+                            <div className="min-h-0">
+                              <div className="-mt-px border-x border-b border-[color-mix(in_srgb,#fb7185_24%,transparent)] rounded-b-[10px] bg-[color-mix(in_srgb,#fb7185_5%,var(--surface))] px-4 py-3 text-[0.78rem] leading-[1.45] text-(--text-secondary)">
+                                <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-rose-400">
+                                  {sectionErrors.map((message, index) => (
+                                    <li key={item.area + "-error-" + index}>
+                                      {message}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Ready-to-publish State Box */}
