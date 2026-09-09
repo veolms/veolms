@@ -114,7 +114,10 @@ import type {
 } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { CourseSection, Lesson } from "../learning/courseContent";
-import { formatDuration } from "./courseAdapter";
+import {
+  formatDuration,
+  resolveCourseDurationSeconds,
+} from "./courseAdapter";
 import { mediaService } from "../services/media";
 
 const EMPTY_CATEGORIES: Category[] = [];
@@ -912,6 +915,7 @@ export const checkIsCurriculumDirty = (
       description?: string;
       contentType: "video" | "document";
       contentMediaId?: string | null;
+      durationSeconds?: number;
       isPublished?: boolean;
       isPreview?: boolean;
       isPendingCreation?: boolean;
@@ -1295,6 +1299,7 @@ export interface BuildLocalPreviewParams {
       description?: string | null;
       contentType: "video" | "document";
       contentMediaId?: string | null;
+      durationSeconds?: number;
       isPreview?: boolean;
       isPublished?: boolean;
       resources?: Array<{
@@ -1403,6 +1408,7 @@ export function buildLocalPreviewData({
         description: les.description || null,
         contentType: les.contentType,
         contentMediaId: les.contentMediaId ?? null,
+        durationSeconds: les.durationSeconds,
         position: lesIdx,
         isPreview: Boolean(les.isPreview),
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
@@ -3402,6 +3408,7 @@ export function CourseCreatePage({
     description: string;
     contentType: "video" | "document";
     contentMediaId?: string | null;
+    durationSeconds?: number;
     isExpanded: boolean;
     isPublished?: boolean;
     isPreview?: boolean;
@@ -4627,6 +4634,10 @@ export function CourseCreatePage({
                   isDirty && existingLesson
                     ? (existingLesson.contentMediaId ?? null)
                     : (les.contentMediaId ?? null);
+                const durationSeconds =
+                  isDirty && existingLesson
+                    ? existingLesson.durationSeconds
+                    : les.durationSeconds;
                 const isPub =
                   isDirty && existingLesson
                     ? existingLesson.isPublished !== undefined
@@ -4650,6 +4661,7 @@ export function CourseCreatePage({
                   description,
                   contentType,
                   contentMediaId,
+                  durationSeconds,
                   isExpanded: existingLesson
                     ? existingLesson.isExpanded
                     : false,
@@ -6290,6 +6302,7 @@ export function CourseCreatePage({
         description: les.description || "",
         contentType: les.contentType,
         contentMediaId: les.contentMediaId ?? null,
+        durationSeconds: les.durationSeconds,
         isPublished: isPublishedVal,
         isPreview: isPreviewVal,
       };
@@ -6837,12 +6850,10 @@ export function CourseCreatePage({
   );
 
   // Prefer the server-calculated duration or estimated duration from editor data.
-  const courseDurationSeconds =
-    editorData?.course?.totalDurationSeconds ??
-    (editorData?.settings?.estimatedDuration
-      ? editorData.settings.estimatedDuration * 60
-      : undefined) ??
-    0;
+  const courseDurationSeconds = resolveCourseDurationSeconds(
+    editorData?.course?.totalDurationSeconds,
+    editorData?.settings?.estimatedDuration,
+  );
   const computedDuration = formatDuration(courseDurationSeconds);
 
   // Student-facing Preview Object Adapter

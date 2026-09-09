@@ -306,6 +306,7 @@ export const courseLessonSchema = z.object({
   description: z.string().nullable().optional(),
   contentType: z.enum(["video", "document"]),
   contentMediaId: z.uuid().nullable().optional(),
+  durationSeconds: z.number().int().nonnegative().optional(),
   position: z.number().int().nonnegative(),
   isPreview: z.boolean(),
   isPublished: z.boolean(),

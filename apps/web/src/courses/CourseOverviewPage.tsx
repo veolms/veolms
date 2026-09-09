@@ -3,6 +3,8 @@ import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import {
   ArrowLeft,
+  ArrowsInLineVertical,
+  ArrowsOutLineVertical,
   BookOpen,
   CaretDown,
   CheckCircle,
@@ -38,7 +40,7 @@ import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { formatDuration } from "./courseAdapter";
+import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
@@ -159,6 +161,12 @@ interface CurriculumSectionProps {
   onToggle: () => void;
 }
 
+function parseDurationLabel(label: string): number {
+  const hours = Number(label.match(/(\d+)h/)?.[1] ?? 0);
+  const minutes = Number(label.match(/(\d+)m/)?.[1] ?? 0);
+  return hours * 3600 + minutes * 60;
+}
+
 function CurriculumSectionItem({
   section,
   index,
@@ -168,15 +176,11 @@ function CurriculumSectionItem({
   const panelId = `cov-section-panel-${section.id}`;
   const buttonId = `cov-section-toggle-${section.id}`;
   const lessonCount = section.lessons.length;
-  const hasDurations = section.lessons.some((l) => Boolean(l[2]));
-  const durationLabel = hasDurations
-    ? (() => {
-        const minutes = 20 + index * 7 + (index % 4) * 5;
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-      })()
-    : "";
+  const durationSeconds = section.lessons.reduce(
+    (total, lesson) => total + parseDurationLabel(lesson[2]),
+    0,
+  );
+  const durationLabel = durationSeconds > 0 ? formatDuration(durationSeconds) : "";
 
   return (
     <div
@@ -228,14 +232,14 @@ function CurriculumSectionItem({
         }`}
       >
         <div className="overflow-hidden min-h-0">
-          <div className="px-3.5 pt-1 pb-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
+          <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
             {section.lessons.length > 0 ? (
               section.lessons.map(
                 ([number, title, duration, status, isPreview, contentType]) => {
                   const isDoc = contentType === "document";
                   return (
                     <div
-                      className="group/lesson flex items-center gap-3 min-h-9.5 px-3 py-1.5 rounded-md text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                      className="group/lesson flex items-center gap-3 min-h-11.5 px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
                       key={number}
                     >
                       {/* Content type icon */}
@@ -255,6 +259,13 @@ function CurriculumSectionItem({
                         {title}
                       </span>
 
+                      {/* Duration */}
+                      {duration ? (
+                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+                          {duration}
+                        </span>
+                      ) : null}
+
                       {/* Free preview badge */}
                       {isPreview && (
                         <span
@@ -264,13 +275,6 @@ function CurriculumSectionItem({
                           Free
                         </span>
                       )}
-
-                      {/* Duration */}
-                      {duration ? (
-                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                          {duration}
-                        </span>
-                      ) : null}
 
                       {/* Progress status */}
                       {status === "done" ? (
@@ -617,7 +621,7 @@ function CourseHeroSection({
 
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none disabled:hover:translate-y-0"
+                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 max-[640px]:text-[0.88rem] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none"
                 disabled={ctaDisabled}
                 onClick={ctaOnClick}
               >
@@ -800,6 +804,8 @@ interface CourseCurriculumCardProps {
   courseSections: CourseSection[];
   openSections: Set<number>;
   onToggleSection: (index: number) => void;
+  onExpandAll: () => void;
+  onCollapseAll: () => void;
 }
 
 function CourseCurriculumCard({
@@ -807,7 +813,12 @@ function CourseCurriculumCard({
   courseSections,
   openSections,
   onToggleSection,
+  onExpandAll,
+  onCollapseAll,
 }: CourseCurriculumCardProps) {
+  const allSectionsExpanded =
+    courseSections.length > 0 && openSections.size === courseSections.length;
+
   return (
     <section
       className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
@@ -823,8 +834,27 @@ function CourseCurriculumCard({
           </h2>
           <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem]">
             {course.sections} Section{course.sections === 1 ? "" : "s"} &bull;{" "}
-            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"}
+            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"} &bull; {course.duration}
           </p>
+        </div>
+        <div className="flex items-center shrink-0 pt-1">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,var(--text))] text-(--muted) cursor-pointer"
+            onClick={allSectionsExpanded ? onCollapseAll : onExpandAll}
+            aria-label={
+              allSectionsExpanded ? "Collapse all sections" : "Expand all sections"
+            }
+            title={
+              allSectionsExpanded ? "Collapse all sections" : "Expand all sections"
+            }
+          >
+            {allSectionsExpanded ? (
+              <ArrowsInLineVertical size={17} weight="bold" aria-hidden="true" />
+            ) : (
+              <ArrowsOutLineVertical size={17} weight="bold" aria-hidden="true" />
+            )}
+          </button>
         </div>
       </div>
 
@@ -913,11 +943,10 @@ export function adaptCourseOverviewResponse(
       defaultInstructorName
     : undefined;
 
-  const resolvedDurationSeconds =
-    overview.stats?.totalDurationSeconds ??
-    (overview.settings?.estimatedDuration
-      ? overview.settings.estimatedDuration * 60
-      : 0);
+  const resolvedDurationSeconds = resolveCourseDurationSeconds(
+    overview.stats?.totalDurationSeconds,
+    overview.settings?.estimatedDuration,
+  );
   const resolvedDuration = formatDuration(resolvedDurationSeconds);
 
   const resolvedThumbnail = c.thumbnailMediaId
@@ -957,7 +986,7 @@ export function adaptCourseOverviewResponse(
         .map((les, lesIdx) => [
           lesIdx + 1,
           les.title || `Lesson ${lesIdx + 1}`,
-          "",
+          formatDuration(les.durationSeconds ?? 0),
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
@@ -1037,11 +1066,10 @@ export function adaptPreviewDataToOverview(
     ? c.instructorAlias?.trim() || defaultInstructorName
     : undefined;
 
-  const totalDurationSeconds =
-    previewData.course.totalDurationSeconds ??
-    (previewData.settings?.estimatedDuration
-      ? previewData.settings.estimatedDuration * 60
-      : 0);
+  const totalDurationSeconds = resolveCourseDurationSeconds(
+    previewData.course.totalDurationSeconds,
+    previewData.settings?.estimatedDuration,
+  );
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1078,7 +1106,7 @@ export function adaptPreviewDataToOverview(
         .map((les, lesIdx) => [
           lesIdx + 1,
           les.title || `Lesson ${lesIdx + 1}`,
-          "", // No fake duration
+          formatDuration(les.durationSeconds ?? 0),
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
@@ -1427,6 +1455,14 @@ function CourseOverviewContent({
     });
   };
 
+  const expandAllSections = () => {
+    setOpenSections(new Set(courseSections.map((_, index) => index)));
+  };
+
+  const collapseAllSections = () => {
+    setOpenSections(new Set());
+  };
+
   const toggleWishlist = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (isReadOnlyPreview) return;
@@ -1492,6 +1528,8 @@ function CourseOverviewContent({
         courseSections={courseSections}
         openSections={openSections}
         onToggleSection={toggleSection}
+        onExpandAll={expandAllSections}
+        onCollapseAll={collapseAllSections}
       />
     </div>
   );

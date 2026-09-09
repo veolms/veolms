@@ -2,7 +2,11 @@ import type {
   CourseLesson,
   CourseOverviewResponse,
 } from "@veolms/contracts";
-import type { CourseSection, Lesson } from "./courseContent";
+import {
+  formatMediaTime,
+  type CourseSection,
+  type Lesson,
+} from "./courseContent";
 
 export interface AdaptedCurriculumSection extends CourseSection {
   /** Original section UUID from the API */
@@ -60,7 +64,7 @@ export function adaptCourseOverviewToCurriculum(
         return [
           lessonNumber,
           les.title,
-          "",
+          formatMediaTime(les.durationSeconds ?? 0),
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
