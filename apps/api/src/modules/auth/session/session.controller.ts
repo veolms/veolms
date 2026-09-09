@@ -17,6 +17,7 @@ export function createSessionController(context: AuthContext) {
       isCurrent: session.id === currentSessionId,
       createdAt: session.created_at.toISOString(),
       lastUsedAt: session.last_used_at.toISOString(),
+      expiresAt: session.expires_at.toISOString(),
     }));
   }
 

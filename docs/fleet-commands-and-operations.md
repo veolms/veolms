@@ -19,22 +19,33 @@ This document is a comprehensive guide to all commands used to configure, provis
 
 ## ⚡ Quick Command Matrix
 
-| Command                      | Workspace Location            | Purpose                                                                                     |
-| :--------------------------- | :---------------------------- | :------------------------------------------------------------------------------------------ |
-| `pnpm fleet:provider`        | `apps/fleet-manager`          | Interactively select and install a provider (`aws`, `local`, etc.)                          |
-| `pnpm fleet:infra`           | `apps/fleet-manager`          | Provision cloud infrastructure (IAM, Lambda, S3, CloudWatch, `.env`)                        |
-| `pnpm fleet:destroy`         | `apps/fleet-manager`          | **Teardown**: Terminate all EC2 workers and delete all AWS resources                        |
-| `pnpm fleet:build-ami`       | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                            |
-| `pnpm build:serverless`      | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                   |
-| `pnpm build:worker`          | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                      |
-| `pnpm fleet:queue:trigger`   | `apps/fleet-manager`          | Queue one AWS job & invoke the Lambda once to claim it — requires `fleet:infra` already run |
-| `pnpm test:pipeline`         | `apps/fleet-manager`          | Automated local offline end-to-end transcoding test                                         |
-| `pnpm fleet:run`             | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                     |
-| `pnpm fleet:cli health`      | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                            |
-| `pnpm fleet:cli workers`     | `apps/fleet-manager`          | List active, recent, and pending worker instances                                           |
-| `pnpm fleet:cli jobs`        | `apps/fleet-manager`          | List recent transcoding jobs and status                                                     |
-| `pnpm fleet:cli status <id>` | `apps/fleet-manager`          | View detailed diagnostics & real-time progress history for a job                            |
-| `pnpm fleet:cli prune`       | `apps/fleet-manager`          | Terminate and clean up any stalled zombie worker processes/instances                        |
+| Command                                     | Workspace Location            | Purpose                                                                                              |
+| :------------------------------------------ | :---------------------------- | :--------------------------------------------------------------------------------------------------- |
+| `pnpm fleet:provider`                       | `apps/fleet-manager`          | Interactively select and configure a provider (`aws`, `local`, etc.)                                 |
+| `pnpm fleet:infra [--provider=x] [--yes]`   | `apps/fleet-manager`          | Generate/check `.env` files, prompt confirmation, and provision infrastructure                       |
+| `pnpm fleet:destroy [--provider=x] [--yes]` | `apps/fleet-manager`          | **Teardown**: Terminate all workers and destroy all provider resources                               |
+| `pnpm fleet:queue:trigger [--provider=x]`   | `apps/fleet-manager`          | End-to-end task test: queue DB job & trigger worker execution (Lambda on AWS, child worker on local) |
+| `pnpm fleet:cicd`                           | `packages/fleet-provider-aws` | Setup AWS IAM policies and access keys for GitHub Actions CI/CD                                      |
+| `pnpm fleet:build-ami`                      | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                                     |
+| `pnpm build:serverless`                     | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                            |
+| `pnpm build:worker`                         | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                               |
+| `pnpm fleet:cli run`                        | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                              |
+| `pnpm fleet:cli health`                     | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                                     |
+| `pnpm fleet:cli workers`                    | `apps/fleet-manager`          | List active, recent, and pending worker instances                                                    |
+| `pnpm fleet:cli jobs`                       | `apps/fleet-manager`          | List recent transcoding jobs and status                                                              |
+| `pnpm fleet:cli status <id>`                | `apps/fleet-manager`          | View detailed diagnostics & real-time progress history for a job                                     |
+| `pnpm fleet:cli prune`                      | `apps/fleet-manager`          | Terminate and clean up any stalled zombie worker processes/instances                                 |
+
+---
+
+## 🏛️ Pluggable Provider Architecture
+
+`apps/fleet-manager` contains **zero provider-specific code**. All provider implementations live in their respective packages (`@veolms/fleet-provider-aws`, `@veolms/fleet-provider-local`, etc.) and adhere to standardized lifecycle contracts exported from `@veolms/fleet-types`:
+
+- **`configureEnv(options)`**: Interactively prompts (or derives) environment configuration and writes `.env` files for `apps/fleet-manager` and `apps/media-worker`.
+- **`provisionInfra(options)`**: Provisions required cloud or local resources (buckets, IAM roles, Lambda handlers, directories).
+- **`destroyInfra(options)`**: Completely removes provisioned resources and stops active compute workers.
+- **`triggerTest(options)`**: Queues a test transcoding task in PostgreSQL and executes worker dispatch appropriate for that provider.
 
 ---
 
@@ -47,7 +58,7 @@ This document is a comprehensive guide to all commands used to configure, provis
 **What it does:**
 
 - Interactively lists all available fleet provider packages (`@veolms/fleet-provider-aws`, `@veolms/fleet-provider-local`, etc.).
-- Dynamically installs the selected provider package into `apps/fleet-manager` using `pnpm add`.
+- Dynamically installs or updates the selected provider package in `apps/fleet-manager`.
 - Updates `FLEET_PROVIDER` in `apps/fleet-manager/.env`.
 - Ensures zero static vendor lock-in inside the core fleet manager.
 
@@ -59,21 +70,20 @@ This document is a comprehensive guide to all commands used to configure, provis
 
 **Location:** `apps/fleet-manager/src/cli.ts` (`infra` subcommand — delegates to active provider setup)
 
-**What it does:**
+**Two-Stage Workflow:**
 
-- Verifies AWS credentials via AWS STS (`aws sts get-caller-identity`).
-- Prompts for deployment settings:
-  - **Fleet Mode**: Serverless (AWS Lambda) or Serverful (persistent daemon).
-  - **Storage Provider**: AWS S3 or Local disk.
-  - **S3 Bucket**: Validates bucket existence, auto-creates if missing, and applies public read policy.
-  - **Allowed EC2 Types**: `c7g.large`, `c7g.xlarge`, `c7g.2xlarge`, `c6i.large`, etc.
-  - **Boot Mode**: Fresh install (Ubuntu base) or Pre-baked AMI.
-  - **Pricing Model**: Spot (up to 70-90% discount) or On-Demand.
-- Creates IAM Role `VeoLMSWorkerRole` & Instance Profile `VeoLMSWorkerInstanceProfile`.
-- Creates CloudWatch log groups `/aws/lambda/veolms-fleet-manager`, `/veolms/workers`, and `/veolms/fleet-manager`.
-- Direct `esbuild` bundle and deployment of AWS Lambda function `veolms-fleet-manager`.
-- Uploads `dist/worker/media-worker.js` to `s3://<bucket>/bundles/media-worker.js`.
-- Automatically generates `.env` files for `apps/fleet-manager` and `apps/media-worker`.
+1. **Environment Configuration & Review**:
+   - Provider asks configuration questions (or uses defaults/env flags).
+   - Writes generated `.env` configurations to `apps/fleet-manager/.env` and `apps/media-worker/.env`.
+   - Displays file locations on disk and pauses:
+     ```text
+     Please review or edit .env files if you wish to adjust any settings before provisioning.
+     Do you want to proceed with provisioning the infrastructure resources now? [y/N]:
+     ```
+   - Passing `--yes`, `--non-interactive`, or setting `CI=true` automatically bypasses this prompt for automated CI/CD runs.
+2. **Resource Provisioning**:
+   - **AWS Provider**: Verifies STS credentials, creates/validates S3 bucket & public policy, creates IAM Role & Instance Profile, creates CloudWatch log groups, bundles and deploys AWS Lambda `veolms-fleet-manager`, and uploads `dist/worker/media-worker.js` bundle to S3.
+   - **Local Provider**: Creates local video input, output, and temporary transcoding storage directories (`data/local-storage`).
 
 ---
 
@@ -83,12 +93,10 @@ This document is a comprehensive guide to all commands used to configure, provis
 
 **What it does:**
 
-- **Single-command complete teardown** of all AWS cloud resources:
-  1. 🛑 Finds and terminates any active/running EC2 worker instances (`ManagedBy=veolms-fleet-manager`).
-  2. 🗑️ Deletes the AWS Lambda function `veolms-fleet-manager`.
-  3. 🗑️ Deletes CloudWatch log groups (`/aws/lambda/veolms-fleet-manager`, `/veolms/workers`, `/veolms/fleet-manager`).
-  4. 🗑️ Removes role from instance profile and deletes `VeoLMSWorkerInstanceProfile`.
-  5. 🗑️ Detaches all policies and deletes IAM Role `VeoLMSWorkerRole`.
+- **Provider-delegated teardown**:
+  - **AWS**: Terminates any active/running EC2 worker instances (`ManagedBy=veolms-fleet-manager`), deletes AWS Lambda function `veolms-fleet-manager`, deletes CloudWatch log groups, removes role from instance profile and deletes `VeoLMSWorkerInstanceProfile`, detaches policies and deletes IAM Role `VeoLMSWorkerRole`.
+  - **Local**: Terminates any running worker processes and cleans up local storage directories.
+- Accepts `--provider=<name>` and `--yes` for unattended teardowns.
 
 ---
 
@@ -126,38 +134,35 @@ This document is a comprehensive guide to all commands used to configure, provis
 
 ### `pnpm fleet:queue:trigger`
 
-**Location:** `apps/fleet-manager/scripts/queue-and-trigger-lambda.ts`
+**Queue Logic:** Shared centrally inside `apps/fleet-manager/src/cli.ts` (inserts into PostgreSQL `media_assets` and `video_jobs`).
+**Execution Logic:** Delegated dynamically to the active provider package (`@veolms/fleet-provider-${provider}/trigger`).
 
-**Requires** AWS infra already provisioned via `pnpm fleet:infra` — this script does no infra provisioning itself.
+**Command Options:**
 
-**What it does:**
+- **Video Key:** `--key=<path>`, `--video-key=<path>`, `--video=<path>`, `-k <path>`, positional argument, or interactive prompt (defaults to `raw/video.mp4` or `s3-bucket/raw/video.mp4`).
+- **Qualities:** `--qty=<qualities>`, `--qualities=<qualities>`, `--quality=<qualities>`, `-q <qualities>`, or interactive prompt (e.g. `--qty=240p,144p`).
+- **Provider Override:** `--provider=<name>` (e.g. `--provider=local` or `--provider=aws`).
+- **Non-Interactive Bypass:** `--yes`, `-y`, or `--non-interactive`.
 
-1. **Queue Job**: Queues one transcode job (default `raw/video.mp4`, quality `240p`) into PostgreSQL.
-2. **Trigger Lambda**: Invokes AWS Lambda `veolms-fleet-manager` once to claim the job and launch an EC2 worker.
-3. **Status Check**: Looks up the resulting worker/EC2 instance and prints its state, IP, and an `ssh` command (using a local `mykey.pem` / `<key-name>.pem` if found) for tailing live worker logs.
+**Provider-Specific Execution:**
 
-Meant to be run multiple times in a row to queue several jobs and verify the fleet provisions one worker per job. Configurable via `VIDEO_KEY` and `QUALITIES` env vars, e.g.:
-
-```bash
-VIDEO_KEY=raw/other.mp4 QUALITIES=240p,360p pnpm fleet:queue:trigger
-```
-
----
-
-### `pnpm test:pipeline`
-
-**Location:** `apps/fleet-manager/scripts/test-local-pipeline.ts`
-
-**What it does:**
-
-- Runs a 100% offline local transcode test using `@veolms/fleet-provider-local`.
-- Spawns local worker child processes with FFmpeg, writes HLS chunks to local disk, and verifies playlists without incurring any cloud costs.
+- **AWS (`@veolms/fleet-provider-aws/src/trigger.ts`)**:
+  1. Invokes the deployed AWS Lambda (`veolms-fleet-manager` or probe Lambda) to claim the queued job.
+  2. The Lambda allocates an EC2 worker instance matching job hardware requirements.
+  3. Inspects worker state, public IP, and displays live SSH command for monitoring.
+- **Local (`@veolms/fleet-provider-local/src/trigger.ts`)**:
+  1. Sizes worker hardware dynamically via `resolveJobHardware`.
+  2. Registers worker instance and monitoring record in PostgreSQL.
+  3. Spawns `apps/media-worker` in a local child process.
+  4. Streams real-time transcode progress and heartbeats from PostgreSQL until completion.
+  5. Verifies output master playlist (`master.m3u8`) and all chunk files (`.ts` and `.m3u8`) on disk.
+  6. Safely shuts down the local worker process.
 
 ---
 
 ## 🛠️ 5. Fleet Daemon & CLI Operations
 
-### `pnpm fleet:run`
+### `pnpm fleet:cli run`
 
 **Location:** `apps/fleet-manager/src/entrypoints/serverful.ts`
 
@@ -182,7 +187,7 @@ VIDEO_KEY=raw/other.mp4 QUALITIES=240p,360p pnpm fleet:queue:trigger
 
 ## 🧪 6. Codebase Verification
 
-Run the full monorepo verification suite across all 10 packages:
+Run the full monorepo verification suite across all packages:
 
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
@@ -202,7 +207,7 @@ pnpm db:migrate
 # 2. Select AWS provider
 pnpm fleet:provider
 
-# 3. Provision AWS Infrastructure
+# 3. Provision AWS Infrastructure (reviews .env files before creating resources)
 pnpm fleet:infra
 
 # 4. Queue a job and trigger the Lambda to claim it
@@ -220,9 +225,16 @@ pnpm fleet:destroy
 ### 💻 **Workflow B: Offline Local Development (Zero Cloud Costs)**
 
 ```bash
-# 1. Select Local provider
-pnpm fleet:provider
+# 1. Install dependencies & run migrations
+pnpm install
+pnpm db:migrate
 
-# 2. Run automated local pipeline test
-pnpm test:pipeline
+# 2. Setup Local Storage & Environment
+pnpm fleet:infra --provider=local --yes
+
+# 3. Run automated local transcode pipeline test
+pnpm fleet:queue:trigger --provider=local --yes
+
+# 4. Cleanup Local Storage when finished
+pnpm fleet:destroy --provider=local --yes
 ```

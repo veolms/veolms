@@ -30,6 +30,9 @@ export function createMonitor(options: {
   const { provider, db, scheduler, jobManager, workerManager, config } =
     options;
   const timeoutMs = config.HEARTBEAT_TIMEOUT_SECONDS * 1000;
+  const provisioningTimeoutMs =
+    ((config as { PROVISIONING_TIMEOUT_SECONDS?: number })
+      .PROVISIONING_TIMEOUT_SECONDS ?? 600) * 1000;
 
   return {
     async checkOrphanedJobs(): Promise<number> {
@@ -43,19 +46,16 @@ export function createMonitor(options: {
         .where((eb) =>
           eb.or([
             eb("started_at", "<", cutoff),
-            eb.and([
-              eb("started_at", "is", null),
-              eb("created_at", "<", cutoff),
-            ]),
+            eb.and([eb("started_at", "is", null), eb("created_at", "<", cutoff)]),
           ]),
         )
         .execute();
 
       for (const job of orphanedJobs) {
-        console.warn(`Recovering orphaned processing job ${job.id}`);
+        console.warn(`Recovering orphaned job ${job.id}`);
         await jobManager.markJobFailed(
           job.id,
-          `Recovered orphaned job: worker assignment timed out or was interrupted`,
+          `Job orphaned: abandoned in active status without worker assignment (timeout: ${config.HEARTBEAT_TIMEOUT_SECONDS}s)`,
         );
       }
 
@@ -63,7 +63,9 @@ export function createMonitor(options: {
     },
 
     async checkHeartbeatTimeouts(): Promise<number> {
-      const cutoff = new Date(Date.now() - timeoutMs);
+      const now = Date.now();
+      const heartbeatCutoff = new Date(now - timeoutMs);
+      const provisioningCutoff = new Date(now - provisioningTimeoutMs);
 
       const staleWorkers = await db
         .selectFrom("workers")
@@ -77,18 +79,36 @@ export function createMonitor(options: {
         ])
         .where((eb) =>
           eb.or([
-            eb("last_heartbeat_at", "<", cutoff),
+            // Workers that already established a heartbeat but stopped reporting
             eb.and([
+              eb("last_heartbeat_at", "is not", null),
+              eb("last_heartbeat_at", "<", heartbeatCutoff),
+            ]),
+            // Workers that are ready or processing but never sent a heartbeat
+            eb.and([
+              eb("status", "in", ["ready", "processing"]),
               eb("last_heartbeat_at", "is", null),
-              eb("created_at", "<", cutoff),
+              eb("created_at", "<", heartbeatCutoff),
+            ]),
+            // Workers in provisioning/starting phase: allow bootstrapping time
+            eb.and([
+              eb("status", "in", ["pending", "provisioning", "starting"]),
+              eb("last_heartbeat_at", "is", null),
+              eb("created_at", "<", provisioningCutoff),
             ]),
           ]),
         )
         .execute();
 
       for (const worker of staleWorkers) {
+        const effectiveCutoff = worker.last_heartbeat_at
+          ? heartbeatCutoff
+          : ["pending", "provisioning", "starting"].includes(worker.status)
+            ? provisioningCutoff
+            : heartbeatCutoff;
+
         console.warn(
-          `Worker ${worker.id} missed heartbeat timeout (cutoff ${cutoff.toISOString()})`,
+          `Worker ${worker.id} missed timeout (cutoff ${effectiveCutoff.toISOString()})`,
         );
 
         await workerManager.recordEvent(
@@ -312,39 +332,38 @@ export function createMonitor(options: {
         }
       }
 
-      // 2. Storage Output Verification on completed / 100% progress jobs
+      // 2. Storage Output Verification on unverified 100% progress jobs
       if (typeof provider.verifyJobOutput === "function") {
         try {
-          const completedJobs = await db
+          const unverifiedJobs = await db
             .selectFrom("video_jobs")
             .selectAll()
-            .where((eb) =>
-              eb.or([
-                eb("status", "=", "completed"),
-                eb("progress_percent", ">=", 100),
-              ]),
-            )
+            .where("status", "=", "processing")
+            .where("progress_percent", ">=", 100)
             .where("worker_id", "is not", null)
             .execute();
 
-          for (const job of completedJobs) {
+          for (const job of unverifiedJobs) {
             const verified = await provider.verifyJobOutput(job.output_prefix);
             if (verified) {
-              if (job.status !== "completed") {
-                await jobManager.markJobCompleted(job.id);
-              }
-              await workerManager.recordEvent(
-                "job_output_verified",
-                job.worker_id,
+              const completed = await jobManager.markJobCompleted(
                 job.id,
-                {
-                  outputPrefix: job.output_prefix,
-                },
+                job.worker_id ?? undefined,
               );
-              verifiedCompletedJobs++;
-            } else if (job.status === "completed") {
+              if (completed) {
+                await workerManager.recordEvent(
+                  "job_output_verified",
+                  job.worker_id,
+                  job.id,
+                  {
+                    outputPrefix: job.output_prefix,
+                  },
+                );
+                verifiedCompletedJobs++;
+              }
+            } else {
               console.warn(
-                `[reconciliation] Job ${job.id} marked completed but output verification failed for ${job.output_prefix}`,
+                `[reconciliation] Job ${job.id} reached 100% progress but output verification failed for ${job.output_prefix}`,
               );
               await jobManager.markJobFailed(
                 job.id,

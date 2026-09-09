@@ -21,6 +21,16 @@ import type { SessionService } from "../session/session.service.ts";
 const ALLOW_MOCK_OAUTH =
   config.NODE_ENV === "development" && config.OAUTH_ALLOW_MOCK_CODES;
 
+function assertAccountActive(user: SessionUser | undefined): void {
+  if (user?.is_deleted) {
+    throw new AppError(
+      403,
+      "ACCOUNT_DEACTIVATED",
+      "This account has been deactivated.",
+    );
+  }
+}
+
 export interface OauthServiceOptions {
   authService: AuthService;
   sessionService: SessionService;
@@ -130,18 +140,27 @@ export function createOauthService({
   async function login(
     provider: OauthProviderName,
     profile: OauthProfile,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
     let user: SessionUser | undefined =
-      await authService.findUserByOauthAccount(
+      await authService.findUserByOauthAccountIncludingDeleted(
         provider,
         profile.providerUserId,
       );
+    assertAccountActive(user);
 
     if (!user) {
       const existingUser =
         (await authService.findVerifiedUserByEmail(profile.email)) ||
-        (await authService.findUserByIdentifier(profile.email, "email"));
+        (await authService.findUserByIdentifierIncludingDeleted(
+          profile.email,
+          "email",
+        ));
+      assertAccountActive(existingUser);
 
       if (existingUser) {
         await authService.linkOauthAccount({
@@ -161,6 +180,7 @@ export function createOauthService({
           username,
           displayName: profile.name || localPart,
           emailVerified: true,
+          phoneVerified: false,
           oauth: { provider, providerUserId: profile.providerUserId },
         });
         user = await authService.requireUser(userId);
@@ -175,7 +195,11 @@ export function createOauthService({
   async function register(
     request: OauthRegisterRequest,
     profile: OauthProfile,
-    requestMeta: { ip: string; userAgent: string | null },
+    requestMeta: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ) {
     const provider: OauthProviderName = request.provider;
 
@@ -191,7 +215,11 @@ export function createOauthService({
 
     let user: SessionUser | undefined =
       (await authService.findVerifiedUserByEmail(profile.email)) ||
-      (await authService.findUserByIdentifier(profile.email, "email"));
+      (await authService.findUserByIdentifierIncludingDeleted(
+        profile.email,
+        "email",
+      ));
+    assertAccountActive(user);
 
     let statusCode: 200 | 201 = 200;
 
@@ -213,15 +241,13 @@ export function createOauthService({
         username,
         displayName: request.displayName || profile.name || localPart,
         emailVerified: true,
+        phoneVerified: false,
         oauth: { provider, providerUserId: profile.providerUserId },
       });
       user = await authService.requireUser(userId);
     }
 
-    const session = await sessionService.establishSession(
-      user,
-      requestMeta,
-    );
+    const session = await sessionService.establishSession(user, requestMeta);
     const rbac = await authService.getUserRbac(user.id);
     return { statusCode, user: { ...user, ...rbac }, session };
   }

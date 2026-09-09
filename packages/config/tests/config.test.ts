@@ -96,6 +96,15 @@ describe("packages/config", () => {
       assert.equal(config.VIDEO_COMPRESSION_CRF, 22);
     });
 
+    it("should default WORKER_ID to a valid UUID when omitted", () => {
+      const config = loadMediaWorkerConfig({});
+      assert.ok(typeof config.WORKER_ID === "string");
+      assert.match(
+        config.WORKER_ID,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
+    });
+
     it("should reject config when UPLOAD_MIN_CONCURRENCY > UPLOAD_MAX_CONCURRENCY", () => {
       assert.throws(
         () =>

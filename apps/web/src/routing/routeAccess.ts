@@ -6,6 +6,12 @@ export const APP_HOME_PATH = "/courses";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
+const COURSE_AUTHOR_ROLES = new Set(["admin", "creator", "instructor"]);
+
+// Temporary product flag: keep lessons accessible while the login flow is disabled.
+// Set this to false to restore authentication for learning routes.
+export const ALLOW_GUEST_LEARNING = true;
+
 const AUTH_FLOW_PATHS = new Set([
   LOGIN_PATH,
   "/register",
@@ -28,6 +34,26 @@ export function isSettingsPath(pathname: string): boolean {
   return path === "/settings" || path.startsWith("/settings/");
 }
 
+export function isCourseAuthorPath(pathname: string): boolean {
+  const path = pathname.split(/[?#]/, 1)[0] || "/";
+  return normalizeAppPath(path) === "/courses/create";
+}
+
+export function hasCourseAuthorRole(
+  roles: readonly string[] | null | undefined,
+): boolean {
+  return Boolean(
+    roles?.some((role) => COURSE_AUTHOR_ROLES.has(role.trim().toLowerCase())),
+  );
+}
+
+export function shouldRedirectFromCourseAuthorPath(
+  pathname: string,
+  roles: readonly string[] | null | undefined,
+): boolean {
+  return isCourseAuthorPath(pathname) && !hasCourseAuthorRole(roles);
+}
+
 export function isCoursesPublicPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
   if (path === "/courses") {
@@ -36,8 +62,24 @@ export function isCoursesPublicPath(pathname: string): boolean {
   return /^\/courses\/[^/]+\/overview$/.test(path);
 }
 
+export function isLearningPath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+
+  if (/^\/learn\/[^/]+(?:\/[^/]+)?$/.test(path)) {
+    return true;
+  }
+
+  return (
+    path !== "/courses/create" && /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path)
+  );
+}
+
 export function isPublicAcademyPath(pathname: string): boolean {
-  return isSettingsPath(pathname) || isCoursesPublicPath(pathname);
+  return (
+    isSettingsPath(pathname) ||
+    isCoursesPublicPath(pathname) ||
+    (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
+  );
 }
 
 export function isGuestLandingPath(pathname: string): boolean {
@@ -83,6 +125,29 @@ export interface SessionAccess {
   isAuthenticated: boolean;
   needsMfaChallenge: boolean;
   isSessionReady: boolean;
+}
+
+export function shouldBlockAcademyRender(
+  pathname: string,
+  access: SessionAccess,
+): boolean {
+  const path = normalizeAppPath(pathname);
+
+  if (isGuestLandingPath(path)) {
+    return true;
+  }
+
+  if (!access.isAuthenticated) {
+    return requiresAcademyAuth(path);
+  }
+
+  return access.needsMfaChallenge && path !== "/logout";
+}
+
+export function resolveAcademyLandingDestination(
+  access: SessionAccess,
+): string {
+  return access.needsMfaChallenge ? MFA_CHALLENGE_PATH : APP_HOME_PATH;
 }
 
 export function resolveSessionAccess(input: {
@@ -140,7 +205,8 @@ export function shouldRedirectToMfaChallenge(
   const path = normalizeAppPath(pathname);
   if (
     isAuthFlowPath(path) ||
-    isPublicAcademyPath(path) ||
+    isCoursesPublicPath(path) ||
+    (ALLOW_GUEST_LEARNING && isLearningPath(path)) ||
     isGuestLandingPath(path)
   ) {
     return false;

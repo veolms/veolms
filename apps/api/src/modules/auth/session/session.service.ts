@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
+import { AppError } from "../../../lib/errors.ts";
 import { SESSION_TTL_MS } from "../shared/auth.constants.ts";
 import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
 import type {
@@ -16,6 +17,7 @@ import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
 import { generateRandomToken, hashToken } from "../shared/auth.utils.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+import type { Executor } from "../shared/repository.types.ts";
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
@@ -50,8 +52,20 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
   async function establishSession(
     user: SessionUser,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
   ): Promise<EstablishedSession> {
+    if (user.is_deleted) {
+      throw new AppError(
+        403,
+        "ACCOUNT_DEACTIVATED",
+        "This account has been deactivated.",
+      );
+    }
+
     const roles = await userRepository.listUserRoleNames(database, user.id);
     const mfa = await resolveMfaState(
       user.id,
@@ -59,16 +73,49 @@ export function createSessionService({ database }: SessionServiceOptions) {
     );
 
     const token = generateRandomToken();
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    const mfaVerified = !mfa.mfaRequired;
+
+    // Check if the client supplied an active, unexpired session belonging to this same user
+    if (request.existingSessionToken) {
+      const existingTokenHash = hashToken(request.existingSessionToken);
+      const existingSession = await sessionRepository.findActiveSession(
+        database,
+        existingTokenHash,
+      );
+
+      if (existingSession && existingSession.user_id === user.id) {
+        // Reuse the existing session record and rotate its token with optimistic concurrency check
+        const rotated = await sessionRepository.rotateSession(
+          database,
+          existingSession.id,
+          {
+            previousTokenHash: existingTokenHash,
+            tokenHash,
+            ipAddress: request.ip,
+            userAgent: request.userAgent,
+            mfaVerified,
+            expiresAt,
+          },
+        );
+
+        if (rotated) {
+          return { token, sessionId: existingSession.id, mfa };
+        }
+      }
+    }
+
     const sessionId = crypto.randomUUID();
 
     await sessionRepository.insertSession(database, {
       id: sessionId,
       userId: user.id,
-      tokenHash: hashToken(token),
+      tokenHash,
       ipAddress: request.ip,
       userAgent: request.userAgent,
-      mfaVerified: !mfa.mfaRequired,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      mfaVerified,
+      expiresAt,
     });
 
     return { token, sessionId, mfa };
@@ -79,7 +126,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     sessionId: string,
   ): Promise<void> {
     await sessionRepository.markSessionMfaVerified(database, sessionId);
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       sessionId,
@@ -87,7 +134,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
   }
 
   async function logout(sessionId: string): Promise<void> {
-    await sessionRepository.deleteSession(database, sessionId);
+    await sessionRepository.revokeSession(database, sessionId);
   }
 
   async function listSessions(userId: string) {
@@ -99,7 +146,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     sessionId: string,
   ): Promise<void> {
     await database.transaction().execute(async (trx) => {
-      const revoked = await sessionRepository.deleteUserSession(
+      const revoked = await sessionRepository.revokeUserSession(
         trx,
         userId,
         sessionId,
@@ -119,11 +166,23 @@ export function createSessionService({ database }: SessionServiceOptions) {
     userId: string,
     currentSessionId: string,
   ): Promise<void> {
-    await sessionRepository.deleteOtherUserSessions(
+    await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
       currentSessionId,
     );
+  }
+
+  async function revokeAllSessions(
+    userId: string,
+    executor: Executor = database,
+  ): Promise<void> {
+    await sessionRepository.deleteAllUserSessions(executor, userId);
+  }
+
+  async function purgeOldSessions(cutoffDays = 30): Promise<number> {
+    const cutoffDate = new Date(Date.now() - cutoffDays * 24 * 60 * 60 * 1000);
+    return sessionRepository.purgeOldSessions(database, cutoffDate);
   }
 
   async function authenticate(
@@ -142,13 +201,14 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const [totpEnabled, roles, permissions, menus, passkeyCount] = await Promise.all([
-      mfaRepository.isTotpEnabled(database, user.id),
-      userRepository.listUserRoleNames(database, user.id),
-      userRepository.listUserPermissions(database, user.id),
-      userRepository.listUserMenus(database, user.id),
-      mfaRepository.countUserPasskeys(database, user.id),
-    ]);
+    const [totpEnabled, roles, permissions, menus, passkeyCount] =
+      await Promise.all([
+        mfaRepository.isTotpEnabled(database, user.id),
+        userRepository.listUserRoleNames(database, user.id),
+        userRepository.listUserPermissions(database, user.id),
+        userRepository.listUserMenus(database, user.id),
+        mfaRepository.countUserPasskeys(database, user.id),
+      ]);
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
@@ -161,17 +221,30 @@ export function createSessionService({ database }: SessionServiceOptions) {
         username: user.username,
         name: user.display_name,
         displayName: user.display_name,
+        avatarDataUrl: user.avatar_data_url,
+        bio: user.bio,
+        emailPublic: Boolean(
+          user.email_public && user.email && user.email_verified_at,
+        ),
+        mobilePublic: Boolean(
+          user.mobile_public && user.phone_no && user.phone_verified_at,
+        ),
+        linkedinUrl: user.linkedin_url,
+        linkedinPublic: Boolean(user.linkedin_public && user.linkedin_url),
+        githubUrl: user.github_url,
+        githubPublic: Boolean(user.github_public && user.github_url),
+        websiteUrl: user.website_url,
+        websitePublic: Boolean(user.website_public && user.website_url),
         email: user.email,
+        emailVerified: Boolean(user.email_verified_at),
         phoneNo: user.phone_no,
+        mobileVerified: Boolean(user.phone_verified_at),
         roles,
         permissions,
         menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
-        mfaMandatory: isMfaMandatoryAccount(
-          Boolean(user.mfa_mandatory),
-          roles,
-        ),
+        mfaMandatory: isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
       },
       session: {
         id: session.id,
@@ -193,6 +266,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
     listSessions,
     revokeSession,
     revokeOtherSessions,
+    revokeAllSessions,
+    purgeOldSessions,
     authenticate,
   };
 }

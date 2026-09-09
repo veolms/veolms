@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LearningSpace } from "../../src/learning-space/LearningSpace";
 import { getCoursePlayerPath } from "../../src/learning/coursePlayerNavigation";
 import type { CoursePlayerSession } from "../../src/learning/coursePlayerNavigation";
@@ -31,9 +31,31 @@ const createSessions = (count: number): CoursePlayerSession[] =>
     };
   });
 
+const defaultMatchMedia = window.matchMedia;
+
+beforeEach(() => {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  })) as typeof window.matchMedia;
+});
+
+afterEach(() => {
+  window.matchMedia = defaultMatchMedia;
+});
+
 interface RenderLearningSpaceOptions {
   sessions?: CoursePlayerSession[];
   activeCourseId?: string | null;
+  panelActiveCourseId?: string | null;
   expanded?: boolean;
   collapsedSidebar?: boolean;
   mobile?: boolean;
@@ -46,6 +68,7 @@ interface RenderLearningSpaceOptions {
 const renderLearningSpace = ({
   sessions = createSessions(3),
   activeCourseId = sessions[0]?.courseId,
+  panelActiveCourseId,
   expanded = true,
   collapsedSidebar = false,
   mobile = false,
@@ -58,6 +81,7 @@ const renderLearningSpace = ({
     <LearningSpace
       sessions={sessions}
       activeCourseId={activeCourseId}
+      panelActiveCourseId={panelActiveCourseId}
       expanded={expanded}
       collapsedSidebar={collapsedSidebar}
       mobile={mobile}
@@ -146,10 +170,42 @@ describe("LearningSpace", () => {
     expect(onActivate).toHaveBeenCalledWith(sessions[0]);
   });
 
-  it("does not expose a selected session away from the learning route", () => {
+  it("does not expose a selected session when nothing is currently playing", () => {
     renderLearningSpace({ activeCourseId: null });
 
     expect(screen.queryByRole("button", { current: "page" })).toBeNull();
+  });
+
+  it("keeps the mini-player course marked as currently playing", () => {
+    renderLearningSpace({ activeCourseId: "backend-nodejs" });
+
+    const activeSession = screen.getByRole("button", {
+      name: /Open Complete Backend with Node\.js/,
+    });
+    expect(activeSession).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("article", {
+        name: /Currently playing, Complete Backend with Node\.js/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("highlights the mini-player course only inside the panel", () => {
+    renderLearningSpace({
+      activeCourseId: null,
+      panelActiveCourseId: "backend-nodejs",
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: "Learning Space, 3 active sessions",
+      }),
+    ).not.toHaveAttribute("aria-current");
+    expect(
+      screen.getByRole("button", {
+        name: /Open Complete Backend with Node\.js/,
+      }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("keeps the session count on the trigger and persists panel dismissal through its owner callback", () => {

@@ -1,7 +1,7 @@
 import type { SidebarMode } from "../settings/settingsPreferences";
 
 export const SIDEBAR_RESPONSIVE_COLLAPSE_QUERY = "(max-width: 1080px)";
-export const COMPACT_NAVIGATION_QUERY = "(max-width: 820px)";
+export const COMPACT_NAVIGATION_QUERY = "(max-width: 640px)";
 
 export interface SidebarPresentation {
   collapsed: boolean;

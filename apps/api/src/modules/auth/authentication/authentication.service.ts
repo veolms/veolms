@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import type { Database } from "@veolms/database";
+import type { ProfileUpdateRequest } from "@veolms/contracts";
 import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
@@ -15,6 +16,8 @@ import * as oauthRepository from "../oauth/oauth.repository.ts";
 import * as userRepository from "./authentication.repository.ts";
 import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
+import { normalizePhoneNumber } from "../shared/auth.utils.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
@@ -27,8 +30,14 @@ export function createAuthService({
   otpService,
   sessionService,
 }: AuthServiceOptions) {
+  const outbox = createOutboxService();
+
   function findUserById(userId: string) {
     return userRepository.findUserById(database, userId);
+  }
+
+  function findUserByIdForNotification(userId: string) {
+    return userRepository.findUserByIdIncludingDeleted(database, userId);
   }
 
   function findUserByIdentifier(
@@ -42,12 +51,34 @@ export function createAuthService({
     );
   }
 
+  function findUserByIdentifierIncludingDeleted(
+    identifier: string,
+    identifierType: IdentifierType,
+  ) {
+    return userRepository.findUserByIdentifierIncludingDeleted(
+      database,
+      identifier,
+      identifierType,
+    );
+  }
+
   function findVerifiedUserByEmail(email: string) {
     return userRepository.findVerifiedUserByEmail(database, email);
   }
 
   function findUserByOauthAccount(provider: string, providerUserId: string) {
     return oauthRepository.findUserByOauthAccount(
+      database,
+      provider,
+      providerUserId,
+    );
+  }
+
+  function findUserByOauthAccountIncludingDeleted(
+    provider: string,
+    providerUserId: string,
+  ) {
+    return oauthRepository.findUserByOauthAccountIncludingDeleted(
       database,
       provider,
       providerUserId,
@@ -81,6 +112,292 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
+  async function updateProfile(userId: string, input: ProfileUpdateRequest) {
+    const username = input.username?.trim().toLowerCase();
+    if (
+      username &&
+      (await userRepository.usernameExists(database, username, userId))
+    ) {
+      throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
+    }
+
+    const currentUser = await userRepository.findUserById(database, userId);
+    if (!currentUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const linkedinUrl =
+      input.linkedinUrl !== undefined
+        ? input.linkedinUrl?.trim() || null
+        : currentUser.linkedin_url;
+    const githubUrl =
+      input.githubUrl !== undefined
+        ? input.githubUrl?.trim() || null
+        : currentUser.github_url;
+    const websiteUrl =
+      input.websiteUrl !== undefined
+        ? input.websiteUrl?.trim() || null
+        : currentUser.website_url;
+
+    const user = await userRepository.updateUserProfile(database, userId, {
+      ...(username ? { username } : {}),
+      ...(input.displayName !== undefined
+        ? { displayName: input.displayName.trim() }
+        : {}),
+      ...(input.avatarDataUrl !== undefined
+        ? { avatarDataUrl: input.avatarDataUrl }
+        : {}),
+      ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+      ...(input.emailPublic !== undefined
+        ? {
+            emailPublic: Boolean(
+              input.emailPublic &&
+              currentUser.email &&
+              currentUser.email_verified_at,
+            ),
+          }
+        : {}),
+      ...(input.mobilePublic !== undefined
+        ? {
+            // A phone number is only publishable after the exact number on the
+            // account has completed the verification flow.
+            mobilePublic: Boolean(
+              input.mobilePublic &&
+              currentUser.phone_no &&
+              currentUser.phone_verified_at,
+            ),
+          }
+        : {}),
+      ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
+      ...(input.linkedinPublic !== undefined || input.linkedinUrl !== undefined
+        ? {
+            linkedinPublic: Boolean(
+              (input.linkedinPublic ?? currentUser.linkedin_public) &&
+              linkedinUrl,
+            ),
+          }
+        : {}),
+      ...(input.githubUrl !== undefined ? { githubUrl } : {}),
+      ...(input.githubPublic !== undefined || input.githubUrl !== undefined
+        ? {
+            githubPublic: Boolean(
+              (input.githubPublic ?? currentUser.github_public) && githubUrl,
+            ),
+          }
+        : {}),
+      ...(input.websiteUrl !== undefined ? { websiteUrl } : {}),
+      ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
+        ? {
+            websitePublic: Boolean(
+              (input.websitePublic ?? currentUser.website_public) && websiteUrl,
+            ),
+          }
+        : {}),
+    });
+
+    if (!user) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const rbac = await getUserRbac(userId);
+    return { ...user, ...rbac };
+  }
+
+  async function sendPhoneVerificationOtp(
+    userId: string,
+    phoneNo: string,
+  ): Promise<void> {
+    const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
+    if (normalizedPhoneNo.length < 8) {
+      throw new AppError(
+        400,
+        "INVALID_PHONE_NUMBER",
+        "Enter a valid mobile number.",
+      );
+    }
+
+    const currentUser = await userRepository.findUserById(database, userId);
+    if (!currentUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const existingUser = await userRepository.findUserByIdentifier(
+      database,
+      normalizedPhoneNo,
+      "phone",
+    );
+    if (existingUser && existingUser.id !== userId) {
+      throw new AppError(
+        409,
+        "PHONE_TAKEN",
+        "That phone number is already linked to another account.",
+      );
+    }
+
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService for phone verification.",
+      );
+    }
+
+    await otpService.sendPhoneVerificationOtp(normalizedPhoneNo);
+  }
+
+  async function sendEmailVerificationOtp(userId: string): Promise<void> {
+    const currentUser = await userRepository.findUserById(database, userId);
+    if (!currentUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+    if (!currentUser.email) {
+      throw new AppError(
+        400,
+        "EMAIL_NOT_FOUND",
+        "Add an email address before verifying it.",
+      );
+    }
+    if (currentUser.email_verified_at) return;
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService for email verification.",
+      );
+    }
+
+    await otpService.sendEmailVerificationOtp(currentUser.email);
+  }
+
+  async function verifyEmail(userId: string, code: string): Promise<void> {
+    const currentUser = await userRepository.findUserById(database, userId);
+    if (!currentUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+    if (!currentUser.email) {
+      throw new AppError(
+        400,
+        "EMAIL_NOT_FOUND",
+        "Add an email address before verifying it.",
+      );
+    }
+    if (currentUser.email_verified_at) return;
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService for email verification.",
+      );
+    }
+
+    await otpService.verifyAndConsumeOtp(
+      currentUser.email,
+      "email",
+      "email_verification",
+      code,
+    );
+    const updatedUser = await userRepository.markUserEmailVerified(
+      database,
+      userId,
+      new Date(),
+    );
+    if (!updatedUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+  }
+
+  async function verifyPhoneNumber(
+    userId: string,
+    phoneNo: string,
+    code: string,
+  ) {
+    const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
+    if (normalizedPhoneNo.length < 8) {
+      throw new AppError(
+        400,
+        "INVALID_PHONE_NUMBER",
+        "Enter a valid mobile number.",
+      );
+    }
+
+    const currentUser = await userRepository.findUserById(database, userId);
+    if (!currentUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const existingUser = await userRepository.findUserByIdentifier(
+      database,
+      normalizedPhoneNo,
+      "phone",
+    );
+    if (existingUser && existingUser.id !== userId) {
+      throw new AppError(
+        409,
+        "PHONE_TAKEN",
+        "That phone number is already linked to another account.",
+      );
+    }
+
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires otpService for phone verification.",
+      );
+    }
+
+    await otpService.verifyAndConsumeOtp(
+      normalizedPhoneNo,
+      "phone",
+      "phone_verification",
+      code,
+    );
+
+    const updatedUser = await userRepository.updateUserPhoneNumber(
+      database,
+      userId,
+      normalizedPhoneNo,
+      new Date(),
+    );
+    if (!updatedUser) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const rbac = await getUserRbac(userId);
+    return { ...updatedUser, ...rbac };
+  }
+
+  async function deactivateAccount(userId: string): Promise<void> {
+    if (!sessionService) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires sessionService for account deactivation.",
+      );
+    }
+
+    await database.transaction().execute(async (transaction) => {
+      const user = await userRepository.deactivateUser(transaction, userId);
+      if (!user) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found or is already deactivated.",
+        );
+      }
+
+      await sessionService.revokeAllSessions(userId, transaction);
+
+      await outbox.publish(transaction, {
+        type: "auth.account_deactivated",
+        version: 1,
+        dedupeKey: `auth.account_deactivated:${userId}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId },
+      });
+    });
+  }
+
   async function getUserRbac(userId: string) {
     const [roles, permissions, menus] = await Promise.all([
       userRepository.listUserRoleNames(database, userId),
@@ -94,9 +411,13 @@ export function createAuthService({
     identifier: string;
     identifierType: IdentifierType;
     code: string;
-    request: { ip: string; userAgent: string | null };
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    };
   }) {
-    const user = await findUserByIdentifier(
+    const user = await findUserByIdentifierIncludingDeleted(
       input.identifier,
       input.identifierType,
     );
@@ -106,6 +427,14 @@ export function createAuthService({
         400,
         "REGISTRATION_REQUIRED",
         "Account does not exist. Please register first.",
+      );
+    }
+
+    if (user.is_deleted) {
+      throw new AppError(
+        403,
+        "ACCOUNT_DEACTIVATED",
+        "This account has been deactivated.",
       );
     }
 
@@ -139,15 +468,24 @@ export function createAuthService({
     phoneCode?: string | undefined;
     username: string;
     displayName: string;
-    request: { ip: string; userAgent: string | null };
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    };
   }) {
     const hasBothChannels = Boolean(input.email && input.phoneNo);
     const existingUsers = hasBothChannels
       ? await Promise.all([
-          findUserByIdentifier(input.email!, "email"),
-          findUserByIdentifier(input.phoneNo!, "phone"),
+          findUserByIdentifierIncludingDeleted(input.email!, "email"),
+          findUserByIdentifierIncludingDeleted(input.phoneNo!, "phone"),
         ])
-      : [await findUserByIdentifier(input.identifier, input.identifierType)];
+      : [
+          await findUserByIdentifierIncludingDeleted(
+            input.identifier,
+            input.identifierType,
+          ),
+        ];
 
     if (existingUsers.some(Boolean)) {
       throw new AppError(
@@ -215,6 +553,7 @@ export function createAuthService({
       username: input.username.toLowerCase(),
       displayName: input.displayName,
       emailVerified: Boolean(input.email),
+      phoneVerified: Boolean(input.phoneNo),
     });
     const user = await requireUser(userId);
     const session = await sessionService.establishSession(user, input.request);
@@ -270,6 +609,7 @@ export function createAuthService({
         username: input.username,
         displayName: input.displayName,
         emailVerifiedAt: input.emailVerified ? new Date() : null,
+        phoneVerifiedAt: input.phoneVerified ? new Date() : null,
         mfaMandatory: isFirstUser,
       });
 
@@ -315,19 +655,28 @@ export function createAuthService({
 
   return {
     findUserById,
+    findUserByIdForNotification,
     findUserByIdentifier,
+    findUserByIdentifierIncludingDeleted,
     findVerifiedUserByEmail,
     findUserByOauthAccount,
+    findUserByOauthAccountIncludingDeleted,
     oauthAccountExists,
     linkOauthAccount,
     countUsers,
     usernameExists,
+    updateProfile,
+    sendPhoneVerificationOtp,
+    verifyPhoneNumber,
+    sendEmailVerificationOtp,
+    verifyEmail,
     login,
     register,
     getUserRbac,
     generateUniqueUsername,
     createUser,
     requireUser,
+    deactivateAccount,
   };
 }
 

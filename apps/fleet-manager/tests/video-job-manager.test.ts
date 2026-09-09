@@ -164,4 +164,350 @@ describe("Job Manager — queueJob insert values and duplicate protection", () =
     assert.equal(result, false);
     assert.equal(updateExecuted, false);
   });
+
+  it("constrains cancelJob writes to cancellable states and skips cleanup if not updated", async () => {
+    let workerResetCalled = false;
+    let s3DeleteCalled = false;
+    const jobUpdateFilters: { col: string; op: string; val: any }[] = [];
+
+    const mockDb = {
+      selectFrom: () => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-completed-1",
+              status: "completed",
+              worker_id: "worker-1",
+              video_key: "raw/test.mp4",
+              output_prefix: "out/test/",
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: () => {
+          const chain: any = {
+            where: (col: string, op: string, val: any) => {
+              if (table === "video_jobs") {
+                jobUpdateFilters.push({ col, op, val });
+              }
+              return chain;
+            },
+            executeTakeFirst: async () => {
+              if (table === "video_jobs") {
+                // Job was completed, so 0 rows match the cancellable status filter
+                return { numUpdatedRows: 0n };
+              }
+              if (table === "workers") {
+                workerResetCalled = true;
+                return { numUpdatedRows: 1n };
+              }
+              return { numUpdatedRows: 0n };
+            },
+            execute: async () => {
+              if (table === "workers") {
+                workerResetCalled = true;
+              }
+              return [];
+            },
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const mockStorage = {
+      deleteObject: async () => {
+        s3DeleteCalled = true;
+      },
+      deletePrefix: async () => {
+        s3DeleteCalled = true;
+      },
+    } as any;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const result = await jobManager.cancelJob({
+      jobId: "job-completed-1",
+      deleteFiles: true,
+      storage: mockStorage,
+    });
+
+    assert.equal(result.cancelled, false);
+    assert.equal(result.filesDeleted, false);
+    assert.equal(workerResetCalled, false);
+    assert.equal(s3DeleteCalled, false);
+
+    // Verify the update query constrained to cancellable states
+    assert.deepEqual(jobUpdateFilters, [
+      { col: "id", op: "=", val: "job-completed-1" },
+      { col: "status", op: "in", val: ["queued", "provisioning", "processing"] },
+    ]);
+  });
+
+  it("successfully cancels job when row is updated and executes cleanup", async () => {
+    let workerResetCalled = false;
+    let s3DeleteCalled = false;
+
+    const mockDb = {
+      selectFrom: () => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-active-1",
+              status: "processing",
+              worker_id: "worker-1",
+              video_key: "raw/test.mp4",
+              output_prefix: "out/test/",
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: () => {
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => {
+              if (table === "video_jobs") {
+                return { numUpdatedRows: 1n };
+              }
+              if (table === "workers") {
+                workerResetCalled = true;
+                return { numUpdatedRows: 1n };
+              }
+              return { numUpdatedRows: 1n };
+            },
+            execute: async () => {
+              if (table === "workers") {
+                workerResetCalled = true;
+              }
+              return [];
+            },
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const mockStorage = {
+      deleteObject: async () => {
+        s3DeleteCalled = true;
+      },
+      deletePrefix: async () => {
+        s3DeleteCalled = true;
+      },
+    } as any;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const result = await jobManager.cancelJob({
+      jobId: "job-active-1",
+      deleteFiles: true,
+      storage: mockStorage,
+    });
+
+    assert.equal(result.cancelled, true);
+    assert.equal(result.filesDeleted, true);
+    assert.equal(workerResetCalled, true);
+    assert.equal(s3DeleteCalled, true);
+    assert.deepEqual(result.deletedKeys, ["raw/test.mp4"]);
+    assert.equal(result.deletedPrefix, "out/test/");
+  });
+
+  it("markJobCompleted sets video_jobs to completed, progress to 100, and media_assets to ready", async () => {
+    let jobUpdatedValues: any;
+    let mediaUpdatedValues: any;
+
+    const mockDb = {
+      selectFrom: (table: string) => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-1",
+              video_id: "media-1",
+              status: "processing",
+              worker_id: "worker-1",
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          if (table === "video_jobs") jobUpdatedValues = values;
+          if (table === "media_assets") mediaUpdatedValues = values;
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => ({ numUpdatedRows: 1n }),
+            execute: async () => ({ numUpdatedRows: 1n }),
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const success = await jobManager.markJobCompleted("job-1", "worker-1");
+    assert.equal(success, true);
+    assert.equal(jobUpdatedValues?.status, "completed");
+    assert.equal(jobUpdatedValues?.progress_percent, 100);
+    assert.equal(mediaUpdatedValues?.status, "ready");
+  });
+
+  it("markJobCompleted is idempotent and ensures media_assets is ready on already completed job", async () => {
+    let mediaUpdatedValues: any;
+
+    const mockDb = {
+      selectFrom: (table: string) => ({
+        selectAll: () => ({
+          where: () => ({
+            executeTakeFirst: async () => ({
+              id: "job-completed",
+              video_id: "media-1",
+              status: "completed",
+              progress_percent: 100,
+              worker_id: null,
+            }),
+          }),
+        }),
+      }),
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          if (table === "media_assets") mediaUpdatedValues = values;
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => ({ numUpdatedRows: 0n }),
+            execute: async () => ({ numUpdatedRows: 1n }),
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const success = await jobManager.markJobCompleted("job-completed");
+    assert.equal(success, true);
+    assert.equal(mediaUpdatedValues?.status, "ready");
+  });
+
+  it("markJobFailed permanently sets video_jobs to failed and media_assets to failed when max_attempts reached", async () => {
+    let jobUpdatedValues: any;
+    let mediaUpdatedValues: any;
+
+    const createSelectChain = (row: any) => {
+      const chain: any = {
+        where: () => chain,
+        executeTakeFirst: async () => row,
+      };
+      return chain;
+    };
+
+    const mockDb = {
+      selectFrom: (table: string) => ({
+        select: () =>
+          createSelectChain({
+            id: "job-fail-1",
+            video_id: "media-fail-1",
+            attempts: 2,
+            max_attempts: 3,
+            status: "processing",
+            worker_id: "worker-1",
+          }),
+      }),
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          if (table === "video_jobs") jobUpdatedValues = values;
+          if (table === "media_assets") mediaUpdatedValues = values;
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => ({ numUpdatedRows: 1n }),
+            execute: async () => ({ numUpdatedRows: 1n }),
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const shouldRetry = await jobManager.markJobFailed(
+      "job-fail-1",
+      "Fatal transcoding error",
+      "worker-1",
+    );
+    assert.equal(shouldRetry, false);
+    assert.equal(jobUpdatedValues?.status, "failed");
+    assert.equal(jobUpdatedValues?.attempts, 3);
+    assert.equal(mediaUpdatedValues?.status, "failed");
+  });
+
+  it("markJobFailed sets video_jobs to queued and keeps media_assets as uploaded on retry", async () => {
+    let jobUpdatedValues: any;
+    let mediaUpdatedValues: any;
+
+    const createSelectChain = (row: any) => {
+      const chain: any = {
+        where: () => chain,
+        executeTakeFirst: async () => row,
+      };
+      return chain;
+    };
+
+    const mockDb = {
+      selectFrom: (table: string) => ({
+        select: () =>
+          createSelectChain({
+            id: "job-retry-1",
+            video_id: "media-retry-1",
+            attempts: 0,
+            max_attempts: 3,
+            status: "processing",
+            worker_id: "worker-1",
+          }),
+      }),
+      updateTable: (table: string) => ({
+        set: (values: any) => {
+          if (table === "video_jobs") jobUpdatedValues = values;
+          if (table === "media_assets") mediaUpdatedValues = values;
+          const chain: any = {
+            where: () => chain,
+            executeTakeFirst: async () => ({ numUpdatedRows: 1n }),
+            execute: async () => ({ numUpdatedRows: 1n }),
+          };
+          return chain;
+        },
+      }),
+    } as unknown as Kysely<Database>;
+
+    const jobManager = createJobManager({
+      db: mockDb,
+      config: loadFleetManagerConfig(),
+    });
+
+    const shouldRetry = await jobManager.markJobFailed(
+      "job-retry-1",
+      "Transient network error",
+      "worker-1",
+    );
+    assert.equal(shouldRetry, true);
+    assert.equal(jobUpdatedValues?.status, "queued");
+    assert.equal(jobUpdatedValues?.attempts, 1);
+    assert.equal(mediaUpdatedValues?.status, "uploaded");
+  });
 });

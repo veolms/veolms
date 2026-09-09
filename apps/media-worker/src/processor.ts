@@ -1,13 +1,51 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+function resolveRepoRoot(): string {
+  try {
+    const metaUrl =
+      typeof import.meta !== "undefined" ? import.meta?.url : undefined;
+    if (metaUrl) {
+      let currentDir = dirname(fileURLToPath(metaUrl));
+      while (currentDir !== resolve(currentDir, "..")) {
+        if (
+          existsSync(join(currentDir, "pnpm-workspace.yaml")) ||
+          existsSync(join(currentDir, "turbo.json"))
+        ) {
+          return currentDir;
+        }
+        currentDir = dirname(currentDir);
+      }
+    }
+  } catch {
+    // Ignore URL parse error in bundled/cjs environments
+  }
+
+  let cwd = process.cwd();
+  while (cwd !== resolve(cwd, "..")) {
+    if (
+      existsSync(join(cwd, "pnpm-workspace.yaml")) ||
+      existsSync(join(cwd, "turbo.json"))
+    ) {
+      return cwd;
+    }
+    cwd = dirname(cwd);
+  }
+
+  return process.cwd();
+}
+
+const repoRoot = resolveRepoRoot();
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
+  estimateJobHardware,
   resolveJobHardware,
   type JobHardwareRequirements,
+  type PersistedVideoMetadata,
   type VideoQualityLevel,
 } from "@veolms/fleet-types";
 import {
@@ -56,9 +94,13 @@ function resolveWithin(root: string, candidate: string): string {
   const resolvedPath = resolve(resolvedRoot, candidate);
   const pathFromRoot = relative(resolvedRoot, resolvedPath);
   if (
+    isAbsolute(pathFromRoot) ||
     pathFromRoot === ".." ||
     pathFromRoot.startsWith("../") ||
-    pathFromRoot.startsWith("..\\")
+    pathFromRoot.startsWith("..\\") ||
+    (!resolvedPath.startsWith(resolvedRoot + "/") &&
+      !resolvedPath.startsWith(resolvedRoot + "\\") &&
+      resolvedPath !== resolvedRoot)
   ) {
     throw new Error(
       "Media job path must remain inside its configured directory",
@@ -80,6 +122,7 @@ async function runFfmpeg(options: {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(executable, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
     });
     let settled = false;
     let stderrOutput = "";
@@ -95,8 +138,26 @@ async function runFfmpeg(options: {
     };
 
     const abortChild = () => {
+      if (process.platform === "win32" && child.pid) {
+        try {
+          execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: "ignore" });
+          return;
+        } catch {
+          // Fallback
+        }
+      }
       child.kill("SIGTERM");
-      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 10_000);
+      forceKillTimer = setTimeout(() => {
+        if (process.platform === "win32" && child.pid) {
+          try {
+            execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: "ignore" });
+            return;
+          } catch {
+            // Fallback
+          }
+        }
+        child.kill("SIGKILL");
+      }, 10_000);
       forceKillTimer.unref();
     };
 
@@ -151,28 +212,44 @@ export async function probeVideoMetadata(
   ffprobePath = "ffprobe",
 ): Promise<VideoMetadata> {
   try {
-    const { stdout } = await execFileAsync(ffprobePath, [
-      "-v",
-      "error",
-      "-show_entries",
-      "format=duration:stream=width,height,r_frame_rate",
-      "-of",
-      "json",
-      videoPath,
-    ]);
+    const { stdout } = await execFileAsync(
+      ffprobePath,
+      [
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration,size,bit_rate,format_name:stream=width,height,codec_name,codec_type,r_frame_rate,avg_frame_rate",
+        "-of",
+        "json",
+        videoPath,
+      ],
+      {
+        windowsHide: true,
+      },
+    );
 
     const parsed = JSON.parse(stdout) as {
-      format?: { duration?: string };
+      format?: {
+        duration?: string;
+        size?: string;
+        bit_rate?: string;
+        format_name?: string;
+      };
       streams?: Array<{
+        codec_name?: string;
+        codec_type?: string;
         width?: number;
         height?: number;
         r_frame_rate?: string;
+        avg_frame_rate?: string;
       }>;
     };
 
     const durationSeconds = Number(parsed.format?.duration);
     const videoStream = parsed.streams?.find(
-      (s) => typeof s.width === "number" && typeof s.height === "number",
+      (s) =>
+        s.codec_type === "video" ||
+        (typeof s.width === "number" && typeof s.height === "number"),
     );
     const width = videoStream?.width;
     const height = videoStream?.height;
@@ -188,22 +265,32 @@ export async function probeVideoMetadata(
       );
     }
 
-    const fpsParts = (videoStream?.r_frame_rate ?? "").split("/", 2);
-    const fpsNumerator = Number(fpsParts[0]);
-    const fpsDenominator = Number(fpsParts[1]);
-    const fps =
-      Number.isFinite(fpsNumerator) &&
-      Number.isFinite(fpsDenominator) &&
-      fpsNumerator > 0 &&
-      fpsDenominator > 0
-        ? fpsNumerator / fpsDenominator
-        : undefined;
+    let fps: number | undefined;
+    const frameRateStr =
+      videoStream?.r_frame_rate || videoStream?.avg_frame_rate || "";
+    if (frameRateStr && frameRateStr !== "0/0") {
+      const [numStr, denStr] = frameRateStr.split("/", 2);
+      const num = Number(numStr);
+      const den = Number(denStr);
+      if (Number.isFinite(num) && Number.isFinite(den) && den > 0) {
+        fps = Math.round((num / den) * 100) / 100;
+      }
+    }
+
+    const bitrate = parsed.format?.bit_rate
+      ? Number(parsed.format.bit_rate)
+      : undefined;
+    const size = parsed.format?.size ? Number(parsed.format.size) : undefined;
 
     return {
       durationSeconds,
       width,
       height,
       fps,
+      codec: videoStream?.codec_name,
+      bitrate: Number.isFinite(bitrate) ? bitrate : undefined,
+      format: parsed.format?.format_name,
+      size: Number.isFinite(size) ? size : undefined,
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -214,9 +301,23 @@ export async function probeVideoMetadata(
 export async function executeTranscodeJob(
   ctx: MediaWorkerContext,
   jobId: string,
-  signal?: AbortSignal,
+  externalSignal?: AbortSignal,
 ): Promise<void> {
   const { db, config, workerId, recordEvent } = ctx;
+  const jobAbortController = new AbortController();
+
+  const handleExternalAbort = () => {
+    jobAbortController.abort();
+  };
+  if (externalSignal?.aborted) {
+    jobAbortController.abort();
+  } else {
+    externalSignal?.addEventListener("abort", handleExternalAbort, {
+      once: true,
+    });
+  }
+
+  const signal = jobAbortController.signal;
 
   // 1. Fetch Job from DB
   const job = await db
@@ -317,7 +418,10 @@ export async function executeTranscodeJob(
     await db
       .updateTable("worker_monitoring")
       .set({
-        estimated_duration_sec: hardware.estimatedDurationSeconds,
+        estimated_duration_sec: Math.max(
+          1,
+          Math.round(hardware.estimatedDurationSeconds),
+        ),
         progress_percent: 0,
         last_progress_at: null,
         monitoring_attempts: 0,
@@ -347,12 +451,36 @@ export async function executeTranscodeJob(
       });
     } else {
       const cleanVideoKey = job.video_key.replace(/^[/\\]+/, "");
+      const keyWithoutBucketPrefix = cleanVideoKey.replace(
+        /^s3-bucket[/\\]/,
+        "",
+      );
       const workspaceDir = process.cwd();
-      const localCandidates = [
-        resolveWithin(workspaceDir, cleanVideoKey),
-        resolveWithin(join(workspaceDir, "s3-bucket"), cleanVideoKey),
-        resolveWithin(join(workspaceDir, "scratch"), cleanVideoKey),
+
+      const candidateRoots = [
+        join(workspaceDir, "s3-bucket"),
+        join(repoRoot, "s3-bucket"),
+        join(workspaceDir, "scratch"),
+        join(repoRoot, "scratch"),
+        workspaceDir,
+        repoRoot,
       ];
+      const candidateKeys = [cleanVideoKey, keyWithoutBucketPrefix];
+
+      const localCandidates: string[] = [];
+      for (const root of candidateRoots) {
+        for (const k of candidateKeys) {
+          try {
+            const pathCandidate = resolveWithin(root, k);
+            if (!localCandidates.includes(pathCandidate)) {
+              localCandidates.push(pathCandidate);
+            }
+          } catch {
+            // Path was outside candidate root, skip
+          }
+        }
+      }
+
       let isLocalFile = false;
       for (const candidate of localCandidates) {
         if (existsSync(candidate)) {
@@ -375,13 +503,17 @@ export async function executeTranscodeJob(
             ) {
               throw error;
             }
-            // Candidate disappeared or could not be read; try the next
-            // configured local location, then S3.
+            // Candidate disappeared or could not be read; try next candidate
           }
         }
       }
 
       if (!isLocalFile) {
+        if (config.STORAGE_PROVIDER === "local") {
+          throw new Error(
+            `Local source video not found for key "${job.video_key}". Checked: ${localCandidates.slice(0, 4).join(", ")}`,
+          );
+        }
         await storage.downloadObject(cleanVideoKey, inputVideoPath, {
           signal,
         });
@@ -404,7 +536,9 @@ export async function executeTranscodeJob(
       typeof mediaAsset.height === "number" &&
       mediaAsset.height > 0 &&
       mediaAsset.duration_seconds !== null &&
-      Number(mediaAsset.duration_seconds) > 0
+      Number(mediaAsset.duration_seconds) > 0 &&
+      mediaAsset.size_bytes !== null &&
+      Number(mediaAsset.size_bytes) > 0
     ) {
       console.info(
         `[media-worker] Reusing video metadata from database: ${mediaAsset.width}x${mediaAsset.height}, duration: ${mediaAsset.duration_seconds}s`,
@@ -413,6 +547,7 @@ export async function executeTranscodeJob(
         width: mediaAsset.width,
         height: mediaAsset.height,
         durationSeconds: Number(mediaAsset.duration_seconds),
+        size: Number(mediaAsset.size_bytes),
       };
     } else {
       console.info(`[media-worker] Probing video metadata from source file...`);
@@ -427,6 +562,32 @@ export async function executeTranscodeJob(
       ...new Set(job.qualities),
     ];
 
+    let videoSize = Number(job.video_size ?? 0);
+    try {
+      const s = await stat(inputVideoPath);
+      if (s.size > 0) {
+        videoSize = Number(s.size);
+      }
+    } catch {
+      if (sourceMetadata.size && videoSize === 0) {
+        videoSize = Number(sourceMetadata.size);
+      }
+    }
+
+    const persistedMetadata: PersistedVideoMetadata = {
+      width: sourceMetadata.width,
+      height: sourceMetadata.height,
+      durationSeconds: sourceMetadata.durationSeconds,
+      ...(sourceMetadata.fps ? { fps: sourceMetadata.fps } : {}),
+      ...(sourceMetadata.codec ? { codec: sourceMetadata.codec } : {}),
+      ...(sourceMetadata.bitrate ? { bitrate: sourceMetadata.bitrate } : {}),
+      ...(sourceMetadata.format ? { format: sourceMetadata.format } : {}),
+    };
+
+    const hardwareProfile = estimateJobHardware(videoSize, targetQualities, {
+      videoMetadata: persistedMetadata,
+    }).profile;
+
     // 4b. When necessary, cap the source to the largest requested quality
     // tier before splitting it into renditions. Sources already within that
     // cap skip this pass entirely to avoid an unnecessary full re-encode.
@@ -439,15 +600,32 @@ export async function executeTranscodeJob(
       crf: config.VIDEO_COMPRESSION_CRF,
     });
 
-    // 5b. Transition job to PROCESSING as FFmpeg is actually starting
+    // 5b. Transition job to PROCESSING as FFmpeg is actually starting and persist probed metadata
     await db
       .updateTable("video_jobs")
       .set({
         status: "processing",
+        video_size: videoSize,
+        video_metadata: persistedMetadata,
+        hardware_profile: hardwareProfile,
         updated_at: new Date(),
       })
       .where("id", "=", jobId)
       .execute();
+
+    if (job.video_id) {
+      await db
+        .updateTable("media_assets")
+        .set({
+          size_bytes: videoSize,
+          width: sourceMetadata.width,
+          height: sourceMetadata.height,
+          duration_seconds: Math.round(sourceMetadata.durationSeconds),
+          updated_at: new Date(),
+        })
+        .where("id", "=", job.video_id)
+        .execute();
+    }
 
     await recordEvent("job_started", jobId, {
       videoKey: job.video_key,
@@ -498,6 +676,21 @@ export async function executeTranscodeJob(
         progressWrite = progressWrite
           .catch(() => undefined)
           .then(async () => {
+            // Check if job status has been changed to "cancelled" in the database
+            const checkJob = await db
+              .selectFrom("video_jobs")
+              .select("status")
+              .where("id", "=", jobId)
+              .executeTakeFirst();
+
+            if (checkJob?.status === "cancelled") {
+              console.info(
+                `[media-worker] Job ${jobId} was cancelled in database. Aborting transcode...`,
+              );
+              jobAbortController.abort();
+              return;
+            }
+
             await db
               .updateTable("worker_monitoring")
               .set({
@@ -548,11 +741,11 @@ export async function executeTranscodeJob(
     // removed in finally, so persistence failures must fail the job rather
     // than leaving a false COMPLETED result with no playable output.
     if (config.STORAGE_PROVIDER === "local") {
-      const cleanPrefix = job.output_prefix.replace(/^s3-bucket\//, "");
-      const localTargetDir = resolveWithin(
-        join(process.cwd(), "s3-bucket"),
-        cleanPrefix,
-      );
+      const cleanPrefix = job.output_prefix.replace(/^s3-bucket[/\\]/, "");
+      const baseBucketDir = existsSync(join(repoRoot, "s3-bucket"))
+        ? join(repoRoot, "s3-bucket")
+        : join(process.cwd(), "s3-bucket");
+      const localTargetDir = resolveWithin(baseBucketDir, cleanPrefix);
       await mkdir(localTargetDir, { recursive: true });
       await cp(outputHlsDir, localTargetDir, {
         recursive: true,
@@ -575,20 +768,39 @@ export async function executeTranscodeJob(
       );
     }
 
-    // Mark the job complete and make the live worker ready for a compatible
-    // next claim in one transaction. Clearing job_id avoids monitor races
-    // against the just-completed job while the worker waits for more work.
+    // Mark the job complete, progress 100%, media asset ready, and make the live worker
+    // ready for a compatible next claim in one transaction. Clearing job_id avoids monitor
+    // races against the just-completed job while the worker waits for more work.
     await db.transaction().execute(async (trx) => {
       await trx
         .updateTable("video_jobs")
         .set({
           status: "completed",
+          progress_percent: 100.0,
+          video_size: videoSize,
+          video_metadata: persistedMetadata,
+          hardware_profile: hardwareProfile,
           completed_at: new Date(),
           updated_at: new Date(),
         })
         .where("id", "=", jobId)
         .where("worker_id", "=", workerId)
         .execute();
+
+      if (job.video_id) {
+        await trx
+          .updateTable("media_assets")
+          .set({
+            status: "ready",
+            size_bytes: videoSize,
+            width: sourceMetadata.width,
+            height: sourceMetadata.height,
+            duration_seconds: Math.round(sourceMetadata.durationSeconds),
+            updated_at: new Date(),
+          })
+          .where("id", "=", job.video_id)
+          .execute();
+      }
 
       await trx
         .updateTable("workers")
@@ -631,6 +843,47 @@ export async function executeTranscodeJob(
       uploadHandle = null;
     }
 
+    const isCancelled =
+      jobAbortController.signal.aborted ||
+      externalSignal?.aborted ||
+      (error instanceof Error &&
+        (error.name === "AbortError" || (error as any).code === "ABORT_ERR"));
+
+    if (isCancelled) {
+      console.info(
+        `[media-worker] Job ${jobId} was cancelled. Resetting worker state...`,
+      );
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable("video_jobs")
+          .set({
+            status: "cancelled",
+            worker_id: null,
+            error_message: "Job was cancelled",
+            updated_at: new Date(),
+          })
+          .where("id", "=", jobId)
+          .where("worker_id", "=", workerId)
+          .execute();
+
+        await trx
+          .updateTable("workers")
+          .set({
+            status: "ready",
+            job_id: null,
+            updated_at: new Date(),
+          })
+          .where("id", "=", workerId)
+          .execute();
+      });
+
+      await recordEvent("job_cancelled", jobId, {
+        reason: errorMsg,
+      });
+
+      throw error;
+    }
+
     const nextAttempts = job.attempts + 1;
     const shouldRetry = nextAttempts < job.max_attempts;
     await db.transaction().execute(async (trx) => {
@@ -647,6 +900,29 @@ export async function executeTranscodeJob(
         .where("id", "=", jobId)
         .where("worker_id", "=", workerId)
         .execute();
+
+      if (job.video_id) {
+        if (!shouldRetry) {
+          await trx
+            .updateTable("media_assets")
+            .set({
+              status: "failed",
+              updated_at: new Date(),
+            })
+            .where("id", "=", job.video_id)
+            .execute();
+        } else {
+          await trx
+            .updateTable("media_assets")
+            .set({
+              status: "uploaded",
+              updated_at: new Date(),
+            })
+            .where("id", "=", job.video_id)
+            .where("status", "!=", "ready")
+            .execute();
+        }
+      }
 
       await trx
         .updateTable("workers")
@@ -667,6 +943,9 @@ export async function executeTranscodeJob(
 
     throw error;
   } finally {
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", handleExternalAbort);
+    }
     // Clean up scratch files
     try {
       await rm(jobScratchDir, { recursive: true, force: true });

@@ -38,9 +38,11 @@ export function createOauthController(context: AuthContext) {
       () => clearOauthStateCookie(reply),
     );
 
+    const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await oauthService.login(request.body.provider, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      existingSessionToken,
     });
 
     setSessionCookie(reply, result.session.token);
@@ -57,9 +59,11 @@ export function createOauthController(context: AuthContext) {
       () => clearOauthStateCookie(reply),
     );
 
+    const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await oauthService.register(request.body, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      existingSessionToken,
     });
 
     setSessionCookie(reply, result.session.token);

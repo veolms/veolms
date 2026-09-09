@@ -86,6 +86,7 @@ export const FLEET_EVENT_TYPES = [
   "heartbeat_timeout",
   "job_completed",
   "job_failed",
+  "job_cancelled",
   "worker_termination_requested",
   "worker_terminated",
   "worker_error",
@@ -167,6 +168,7 @@ export type PersistedVideoMetadata = z.infer<
 
 export const videoJobEventSchema = z.looseObject({
   action: lambdaActionSchema.optional(),
+  status: videoJobStatusSchema.optional(),
   jobId: z.uuid().optional(),
   videoId: z.uuid().optional(),
   videoKey: z.string().min(1).optional(),
@@ -174,6 +176,8 @@ export const videoJobEventSchema = z.looseObject({
   qualities: z.array(videoQualityLevelSchema).min(1).optional(),
   videoSize: z.coerce.number().int().nonnegative().optional(),
   videoMetadata: videoMetadataSchema.optional(),
+  deleteFiles: z.boolean().optional(),
+  deleteMedia: z.boolean().optional(),
 });
 
 export const lambdaResponseSchema = z.object({
