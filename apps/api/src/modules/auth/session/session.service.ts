@@ -201,14 +201,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const [totpEnabled, roles, permissions, menus, passkeyCount] =
-      await Promise.all([
-        mfaRepository.isTotpEnabled(database, user.id),
-        userRepository.listUserRoleNames(database, user.id),
-        userRepository.listUserPermissions(database, user.id),
-        userRepository.listUserMenus(database, user.id),
-        mfaRepository.countUserPasskeys(database, user.id),
-      ]);
+    const [totpEnabled, roles, passkeyCount] = await Promise.all([
+      mfaRepository.isTotpEnabled(database, user.id),
+      userRepository.listUserRoleNames(database, user.id),
+      mfaRepository.countUserPasskeys(database, user.id),
+    ]);
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
@@ -240,8 +237,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
         phoneNo: user.phone_no,
         mobileVerified: Boolean(user.phone_verified_at),
         roles,
-        permissions,
-        menus,
         totpEnabled,
         passkeyEnabled: passkeyCount > 0,
         mfaMandatory: isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
