@@ -35,6 +35,7 @@ export interface VideoJobTable {
   max_attempts: Generated<number>;
   error_message: string | null;
   hardware_profile: HardwareProfile | null;
+  original_file_key: string | null;
   video_metadata: JSONColumnType<
     Record<string, unknown>,
     Record<string, unknown> | string,

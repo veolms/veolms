@@ -70,7 +70,7 @@ export async function runSetupCicdIam(
 
   if (!bucketName) {
     throw new Error(
-      "S3_BUILD_BUCKET, S3_BUCKET_NAME, or S3_BUCKET environment variable must be specified to configure least-privilege CI/CD permissions.\n" +
+      "S3_BUILD_BUCKET or S3_BUCKET environment variable must be specified to configure least-privilege CI/CD permissions.\n" +
         "Run `pnpm fleet:infra` first to provision the bucket, or pass S3_BUILD_BUCKET=<name>.",
     );
   }

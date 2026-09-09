@@ -50,7 +50,6 @@ const baseMediaWorkerConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   S3_BUCKET: z.string().default("veolms-media"),
-  S3_BUCKET_NAME: z.string().optional(),
   S3_BUILD_BUCKET: z.string().optional(),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-east-1"),
@@ -122,7 +121,7 @@ export function loadMediaWorkerConfig(
   const resolvedEnv = {
     ...env,
     WORKER_ID: env["WORKER_ID"] || undefined,
-    S3_BUCKET: env["S3_BUCKET"] || env["S3_BUCKET_NAME"] || "veolms-media",
+    S3_BUCKET: env["S3_BUCKET"] || "veolms-media",
     S3_REGION: env["S3_REGION"] || env["AWS_REGION"] || "us-east-1",
   };
   const parsed = mediaWorkerConfigSchema.parse(resolvedEnv);

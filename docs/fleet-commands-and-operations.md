@@ -29,7 +29,7 @@ This document is a comprehensive guide to all commands used to configure, provis
 | `pnpm fleet:build-ami`                      | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                                     |
 | `pnpm build:serverless`                     | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                            |
 | `pnpm build:worker`                         | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                               |
-| `pnpm fleet:cli run`                        | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                              |
+| `pnpm fleet:cli run daemon`                 | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                              |
 | `pnpm fleet:cli health`                     | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                                     |
 | `pnpm fleet:cli workers`                    | `apps/fleet-manager`          | List active, recent, and pending worker instances                                                    |
 | `pnpm fleet:cli jobs`                       | `apps/fleet-manager`          | List recent transcoding jobs and status                                                              |
@@ -167,23 +167,21 @@ local or remote PostgreSQL database to use; these commands do not create a
 PostgreSQL container:
 
 ```bash
-pnpm fleet:images:build
-pnpm fleet:local:up
-pnpm fleet:local:down
+# Docker provider setup & lifecycle
+pnpm fleet:infra              # builds images & migrates DB
+pnpm fleet:infra --update     # updates images & migrations
+pnpm fleet:destroy            # stop-only or complete teardown
 
-pnpm fleet:localstack:prepare
-pnpm fleet:localstack:up
-pnpm fleet:localstack:down
+# Containerized daemon execution via Docker Compose
+docker compose --env-file apps/fleet-manager/.env -f compose.fleet.yaml --profile serverful up -d
+docker compose --env-file apps/fleet-manager/.env -f compose.fleet.yaml --profile serverful down
 ```
-
-LocalStack defaults to its Community-compatible Lambda → Docker socket path.
-Set `LOCALSTACK_EC2_ENABLED=true` only when EC2 Docker emulation is available.
 
 ---
 
 ## 🛠️ 5. Fleet Daemon & CLI Operations
 
-### `pnpm fleet:cli run`
+### `pnpm fleet:cli run daemon`
 
 **Location:** `apps/fleet-manager/src/entrypoints/serverful.ts`
 

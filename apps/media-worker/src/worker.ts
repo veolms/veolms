@@ -263,7 +263,9 @@ export async function pollForNextJob(
     return null;
   }
 
-  const claimed = await claimNextQueuedVideoJob(ctx.db, ctx.workerId);
+  const claimed = await claimNextQueuedVideoJob(ctx.db, ctx.workerId, {
+    storageProvider: ctx.config.STORAGE_PROVIDER,
+  });
   if (claimed) {
     return claimed.id;
   }
@@ -305,6 +307,8 @@ export async function pollForNextJob(
     return null;
   }
 
-  const claimedAfterWait = await claimNextQueuedVideoJob(ctx.db, ctx.workerId);
+  const claimedAfterWait = await claimNextQueuedVideoJob(ctx.db, ctx.workerId, {
+    storageProvider: ctx.config.STORAGE_PROVIDER,
+  });
   return claimedAfterWait?.id ?? null;
 }

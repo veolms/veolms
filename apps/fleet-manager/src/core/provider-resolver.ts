@@ -30,25 +30,14 @@ export async function resolveFleetProvider(
     : `@veolms/fleet-provider-${normalized}`;
 
   try {
-    const candidateExportNames = [
-      "createProvider",
-      "createAwsProvider",
-      "createLocalProvider",
-      "createDockerProvider",
-      "default",
-    ];
-
     let factory: ((opts?: unknown) => FleetProvider) | undefined;
 
     if (BUILTIN_PROVIDERS[packageName]) {
       try {
         const mod = await BUILTIN_PROVIDERS[packageName]();
-        for (const name of candidateExportNames) {
-          const candidate = mod[name];
-          if (typeof candidate === "function") {
-            factory = candidate as (opts?: unknown) => FleetProvider;
-            break;
-          }
+        const candidate = mod["createProvider"];
+        if (typeof candidate === "function") {
+          factory = candidate as (opts?: unknown) => FleetProvider;
         }
       } catch {
         // Fall back to dynamic import
@@ -58,8 +47,8 @@ export async function resolveFleetProvider(
     if (!factory) {
       factory = await loadModuleFunction<(opts?: unknown) => FleetProvider>(
         packageName,
-        candidateExportNames,
-        `Package "${packageName}" did not export a valid provider factory function.`,
+        "createProvider",
+        `Package "${packageName}" did not export a "createProvider" factory function.`,
       );
     }
 

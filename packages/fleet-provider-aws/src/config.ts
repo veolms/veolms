@@ -8,7 +8,6 @@ export const awsProviderConfigSchema = z.object({
     .default("true")
     .transform((val) => val === "true"),
   S3_BUCKET: z.string().optional(),
-  S3_BUCKET_NAME: z.string().optional(),
   S3_BUILD_BUCKET: z.string().optional(),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("s3"),
   AMI_ID: z.string().optional(),
@@ -32,7 +31,7 @@ export type AwsProviderEnvironmentConfig = z.infer<
 export function resolveS3BucketName(
   env: Readonly<Record<string, string | undefined>>,
 ): string | null {
-  return env["S3_BUCKET"] || env["S3_BUCKET_NAME"] || null;
+  return env["S3_BUCKET"] || null;
 }
 
 export function resolveS3BuildBucketName(

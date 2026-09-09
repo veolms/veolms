@@ -24,9 +24,9 @@ import * as fsSync from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { execSync, execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { resolveS3BucketName, resolveS3BuildBucketName } from "../config.ts";
+import { LOCALSTACK_DOCKER_AMI_ID } from "../localstack-constants.ts";
 
 import {
   IAMClient,
@@ -82,7 +82,23 @@ import {
   green,
   red,
   yellow,
+  ask,
+  askChoice,
+  banner,
+  execCommand,
+  info,
+  isReadlineInterface,
+  ok,
+  step,
+  warn,
 } from "@veolms/fleet-types/terminal";
+import { crc32, createZipFromBuffers } from "@veolms/fleet-types/zip";
+import {
+  parseEnvFile,
+  resolveRepoRoot,
+  writeEnvFile as baseWriteEnvFile,
+} from "@veolms/fleet-types/env";
+
 import {
   isMainModule,
   type ProviderConfigOptions,
@@ -102,7 +118,6 @@ import {
   isDockerRunning,
   buildFfprobeLayer,
   publishFfprobeLayer,
-  resolveRepoRoot,
   type LambdaArchitecture,
 } from "./layer-builder.ts";
 import { runBuildAmi } from "./build-ami.ts";
@@ -170,33 +185,8 @@ interface SetupResult {
   readonly keyName: string | null;
 }
 
-// ─── Terminal Helpers ─────────────────────────────────────────────────────────
-
-function banner(): void {
-  console.log(`
-${bold(cyan("╔══════════════════════════════════════════════════════╗"))}
-${bold(cyan("║"))}        ${bold("VeoLMS AWS Infrastructure Setup")}             ${bold(cyan("║"))}
-${bold(cyan("║"))}   Fleet Manager + Media Worker EC2 Transcoding Fleet ${bold(cyan("║"))}
-${bold(cyan("╚══════════════════════════════════════════════════════╝"))}
-`);
-}
-
-function step(n: number, total: number, title: string): void {
-  console.log(`\n${bold(cyan(`[${n}/${total}]`))} ${bold(title)}`);
-  console.log(dim("─".repeat(52)));
-}
-
-function ok(msg: string): void {
-  console.log(`  ${green("✔")} ${msg}`);
-}
-function info(msg: string): void {
-  console.log(`  ${cyan("ℹ")} ${msg}`);
-}
-function warn(msg: string): void {
-  console.log(`  ${yellow("⚠")} ${msg}`);
-}
-
 // S3 bucket names can't contain characters that matter to a shell (quotes,
+
 // `$`, backticks, etc.), so validating the format up front — before the
 // name is ever interpolated into an `aws s3api ...` command below — turns
 // a confusing raw shell/AWS-CLI failure into a clear re-prompt.
@@ -210,60 +200,7 @@ function isValidS3BucketName(name: string): boolean {
   );
 }
 
-function isReadlineInterface(obj: unknown): obj is readline.Interface {
-  return (
-    typeof obj === "object" &&
-    obj !== null &&
-    "question" in obj &&
-    typeof (obj as any).question === "function"
-  );
-}
-
-async function ask(
-  rl: readline.Interface,
-  question: string,
-  defaultVal?: string,
-): Promise<string> {
-  const hint = defaultVal !== undefined ? dim(` (default: ${defaultVal})`) : "";
-  if (isNonInteractive()) {
-    console.log(
-      `  ${bold("?")} ${question}${hint}: ${green(defaultVal ?? "")}`,
-    );
-    return defaultVal ?? "";
-  }
-  const answer = await rl.question(`  ${bold("?")} ${question}${hint}: `);
-  const trimmed = answer.trim();
-  return trimmed === "" && defaultVal !== undefined ? defaultVal : trimmed;
-}
-
-async function askChoice<T extends string>(
-  rl: readline.Interface,
-  question: string,
-  choices: ReadonlyArray<{ readonly label: string; readonly value: T }>,
-  defaultIndex = 0,
-): Promise<T> {
-  console.log(`  ${bold("?")} ${question}`);
-  choices.forEach((c, i) => {
-    const marker = i === defaultIndex ? green("→") : " ";
-    console.log(`    ${marker} ${bold(`${i + 1}.`)} ${c.label}`);
-  });
-  if (isNonInteractive()) {
-    const chosen = choices[defaultIndex]!.value;
-    console.log(`  Auto-selected: ${green(choices[defaultIndex]!.label)}`);
-    return chosen;
-  }
-  const answer = await rl.question(
-    `  Enter number ${dim(`(default: ${defaultIndex + 1})`)}: `,
-  );
-  const trimmed = answer.trim();
-  const num = trimmed === "" ? defaultIndex + 1 : parseInt(trimmed, 10);
-  const choice = choices[num - 1];
-  if (!choice) {
-    warn(`Invalid choice. Using default: ${choices[defaultIndex]!.label}`);
-    return choices[defaultIndex]!.value;
-  }
-  return choice.value;
-}
+export { isReadlineInterface };
 
 // ─── AWS Resource Provisioners ────────────────────────────────────────────────
 
@@ -623,96 +560,6 @@ async function checkS3Bucket(
   }
 }
 
-function crc32(buf: Uint8Array): number {
-  let crc = -1;
-  for (let i = 0; i < buf.length; i++) {
-    crc ^= buf[i]!;
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ -1) >>> 0;
-}
-
-// Minimal "store" (uncompressed) multi-entry ZIP writer — fallback for
-// when the system `zip` CLI isn't available.
-function createZipFromBuffers(
-  entries: readonly { name: string; content: Uint8Array }[],
-): Uint8Array {
-  const encoder = new TextEncoder();
-  const now = new Date();
-  const dosDate =
-    (((now.getFullYear() - 1980) << 9) |
-      ((now.getMonth() + 1) << 5) |
-      now.getDate()) >>>
-    0;
-  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5)) >>> 0;
-
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let localSectionLength = 0;
-
-  for (const { name, content } of entries) {
-    const fileBytes = encoder.encode(name);
-    const fileCrc = crc32(content);
-    const localHeaderOffset = localSectionLength;
-
-    const localHeader = new Uint8Array(30 + fileBytes.length);
-    const lhView = new DataView(localHeader.buffer);
-    lhView.setUint32(0, 0x04034b50, true);
-    lhView.setUint16(4, 20, true);
-    lhView.setUint16(6, 0, true);
-    lhView.setUint16(8, 0, true); // store (no compression)
-    lhView.setUint16(10, dosTime, true);
-    lhView.setUint16(12, dosDate, true);
-    lhView.setUint32(14, fileCrc, true);
-    lhView.setUint32(18, content.length, true);
-    lhView.setUint32(22, content.length, true);
-    lhView.setUint16(26, fileBytes.length, true);
-    lhView.setUint16(28, 0, true);
-    localHeader.set(fileBytes, 30);
-
-    localParts.push(localHeader, content);
-    localSectionLength += localHeader.length + content.length;
-
-    const centralDir = new Uint8Array(46 + fileBytes.length);
-    const cdView = new DataView(centralDir.buffer);
-    cdView.setUint32(0, 0x02014b50, true);
-    cdView.setUint16(4, 20, true);
-    cdView.setUint16(6, 20, true);
-    cdView.setUint16(8, 0, true);
-    cdView.setUint16(10, 0, true);
-    cdView.setUint16(12, dosTime, true);
-    cdView.setUint16(14, dosDate, true);
-    cdView.setUint32(16, fileCrc, true);
-    cdView.setUint32(20, content.length, true);
-    cdView.setUint32(24, content.length, true);
-    cdView.setUint16(28, fileBytes.length, true);
-    cdView.setUint32(42, localHeaderOffset, true);
-    centralDir.set(fileBytes, 46);
-    centralParts.push(centralDir);
-  }
-
-  const centralDirLength = centralParts.reduce((sum, p) => sum + p.length, 0);
-  const eocd = new Uint8Array(22);
-  const eocdView = new DataView(eocd.buffer);
-  eocdView.setUint32(0, 0x06054b50, true);
-  eocdView.setUint16(8, entries.length, true);
-  eocdView.setUint16(10, entries.length, true);
-  eocdView.setUint32(12, centralDirLength, true);
-  eocdView.setUint32(16, localSectionLength, true);
-
-  const total = new Uint8Array(
-    localSectionLength + centralDirLength + eocd.length,
-  );
-  let offset = 0;
-  for (const part of [...localParts, ...centralParts, eocd]) {
-    total.set(part, offset);
-    offset += part.length;
-  }
-  return total;
-}
-
 export const AWS_RESERVED_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_DEFAULT_REGION",
@@ -998,7 +845,7 @@ export async function buildAndUploadWorkerBundle(
           "--region",
           region,
         ],
-        { stdio: "pipe" },
+        { stdio: "pipe", shell: process.platform === "win32" },
       );
       uploaded = true;
     }
@@ -1246,7 +1093,7 @@ export async function uploadFileOrBufferToS3(
       execFileSync(
         "aws",
         ["s3", "cp", tempPath, `s3://${bucket}/${key}`, "--region", region],
-        { stdio: "pipe" },
+        { stdio: "pipe", shell: process.platform === "win32" },
       );
       return true;
     } catch {
@@ -1472,15 +1319,10 @@ async function writeEnvFile(
   filePath: string,
   vars: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const lines = [
-    "# Generated by VeoLMS AWS Infrastructure Setup",
-    `# Run: pnpm fleet:infra  to regenerate`,
-    "",
-    ...Object.entries(vars).map(([k, v]) => `${k}="${v}"`),
-    "",
-  ];
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, lines.join("\n"), "utf-8");
+  await baseWriteEnvFile(filePath, vars, {
+    header:
+      "# Generated by VeoLMS AWS Infrastructure Setup\n# Run: pnpm fleet:infra  to regenerate",
+  });
   ok(`Written ${bold(path.relative(process.cwd(), filePath))}`);
 }
 
@@ -1510,7 +1352,6 @@ async function generateEnvFiles(
     fleetEnv["AWS_PROFILE"] = answers.profile;
   }
   if (answers.s3BucketName) {
-    fleetEnv["S3_BUCKET_NAME"] = answers.s3BucketName;
     fleetEnv["S3_BUCKET"] = answers.s3BucketName;
   }
   if (answers.s3BuildBucket) {
@@ -1524,6 +1365,7 @@ async function generateEnvFiles(
   }
   if (result.lambdaFunctionArn) {
     fleetEnv["LAMBDA_FUNCTION_ARN"] = result.lambdaFunctionArn;
+    fleetEnv["FLEET_MANAGER_LAMBDA_NAME"] = LAMBDA_FUNCTION_NAME;
   }
   if (answers.lambdaArch) {
     fleetEnv["LAMBDA_ARCHITECTURE"] = answers.lambdaArch;
@@ -1531,6 +1373,11 @@ async function generateEnvFiles(
   if (result.probeLambdaArn) {
     fleetEnv["PROBE_LAMBDA_ARN"] = result.probeLambdaArn;
     fleetEnv["PROBE_LAMBDA_NAME"] = PROBE_LAMBDA_FUNCTION_NAME;
+  }
+  if (answers.setupProbeLambda !== undefined) {
+    fleetEnv["SETUP_PROBE_LAMBDA"] = String(answers.setupProbeLambda);
+  } else if (result.probeLambdaArn) {
+    fleetEnv["SETUP_PROBE_LAMBDA"] = "true";
   }
   if (result.ffprobeLayerArn) {
     fleetEnv["FFPROBE_LAYER_ARN"] = result.ffprobeLayerArn;
@@ -1568,7 +1415,6 @@ async function generateEnvFiles(
     workerEnv["AWS_PROFILE"] = answers.profile;
   }
   if (answers.s3BucketName) {
-    workerEnv["S3_BUCKET_NAME"] = answers.s3BucketName;
     workerEnv["S3_BUCKET"] = answers.s3BucketName;
     if (answers.s3CredentialMode === "automatic") {
       workerEnv["S3_USE_INSTANCE_ROLE"] = "true";
@@ -1590,34 +1436,6 @@ async function generateEnvFiles(
     path.join(repoRoot, "apps", "media-worker", ".env"),
     workerEnv,
   );
-}
-
-// ─── Environment Helpers ───────────────────────────────────────────────────────
-
-function parseEnvFile(filePath: string): Record<string, string> {
-  if (!fsSync.existsSync(filePath)) return {};
-  try {
-    const content = fsSync.readFileSync(filePath, "utf-8");
-    const result: Record<string, string> = {};
-    for (const rawLine of content.split("\n")) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith("#")) continue;
-      const eqIdx = line.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = line.slice(0, eqIdx).trim();
-      let value = line.slice(eqIdx + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      result[key] = value;
-    }
-    return result;
-  } catch {
-    return {};
-  }
 }
 
 function parseSetupCliArgs(): Partial<SetupAnswers> & {
@@ -1690,7 +1508,6 @@ function loadExistingConfig(repoRoot: string): Partial<SetupAnswers> {
   if (cliArgs.profile) combined["AWS_PROFILE"] = cliArgs.profile;
   if (cliArgs.s3BucketName) {
     combined["S3_BUCKET"] = cliArgs.s3BucketName;
-    combined["S3_BUCKET_NAME"] = cliArgs.s3BucketName;
     combined["STORAGE_PROVIDER"] = "s3";
   }
   if (cliArgs.s3BuildBucket) {
@@ -1756,7 +1573,12 @@ function loadExistingConfig(repoRoot: string): Partial<SetupAnswers> {
     : null;
   const lambdaArch: LambdaArchitecture =
     combined["LAMBDA_ARCHITECTURE"] === "x86_64" ? "x86_64" : "arm64";
-  const setupProbeLambda = combined["SETUP_PROBE_LAMBDA"] !== "false";
+  const setupProbeLambda =
+    combined["SETUP_PROBE_LAMBDA"] !== undefined
+      ? combined["SETUP_PROBE_LAMBDA"] === "true"
+      : combined["LAMBDA_FUNCTION_ARN"]
+        ? Boolean(combined["PROBE_LAMBDA_ARN"] || combined["PROBE_LAMBDA_NAME"])
+        : true;
 
   return {
     targetEnv,
@@ -2856,7 +2678,6 @@ You can change them if needed.
     }
     if (s3BucketName) {
       lambdaEnvVars["S3_BUCKET"] = s3BucketName;
-      lambdaEnvVars["S3_BUCKET_NAME"] = s3BucketName;
     }
     if (s3BuildBucket) {
       lambdaEnvVars["S3_BUILD_BUCKET"] = s3BuildBucket;
@@ -3019,7 +2840,7 @@ ${bold("Generated .env Files:")}
 ${bold("Next Steps:")}${bootMode === "ami" ? `\n  1. Build the worker AMI:   ${cyan("pnpm fleet:build-ami")}` : ""}
   ${bootMode === "ami" ? "2" : "1"}. Upload build artifacts:  ${cyan("pnpm fleet:build:upload")}
   ${bootMode === "ami" ? "3" : "2"}. Queue & trigger a job:   ${cyan("pnpm fleet:queue:trigger")}
-  ${bootMode === "ami" ? "4" : "3"}. Run the fleet daemon:    ${cyan("pnpm fleet:cli run")}
+  ${bootMode === "ami" ? "4" : "3"}. Run the fleet daemon:    ${cyan("pnpm fleet:cli run daemon")}
   ${bootMode === "ami" ? "5" : "4"}. Monitor fleet health:    ${cyan("pnpm fleet:cli health")}
   ${bootMode === "ami" ? "6" : "5"}. Teardown AWS resources:  ${cyan("pnpm fleet:destroy")}
 `);
@@ -3282,7 +3103,6 @@ ${bold("Next Steps:")}
     }
     if (s3BucketName) {
       lambdaEnvVars["S3_BUCKET"] = s3BucketName;
-      lambdaEnvVars["S3_BUCKET_NAME"] = s3BucketName;
     }
     if (s3BuildBucket) {
       lambdaEnvVars["S3_BUILD_BUCKET"] = s3BuildBucket;
@@ -3537,16 +3357,9 @@ export async function runAwsInfraSetup(
   const existingConfig = loadExistingConfig(repoRoot);
   const cliArgs = parseSetupCliArgs();
 
-  const isNonInteractive =
-    options?.nonInteractive === true ||
-    options?.interactive === false ||
-    process.argv.includes("--yes") ||
-    process.argv.includes("-y") ||
-    process.argv.includes("--non-interactive") ||
-    process.env["NON_INTERACTIVE"] === "true" ||
-    process.env["SETUP_NON_INTERACTIVE"] === "true";
+  const isNonInteractiveMode = isNonInteractive(options);
 
-  if (isNonInteractive) {
+  if (isNonInteractiveMode) {
     process.env["SETUP_NON_INTERACTIVE"] = "true";
   }
 

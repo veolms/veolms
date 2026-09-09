@@ -40,10 +40,14 @@ const baseFleetManagerConfigSchema = z.object({
   MEDIA_WORKER_SCRIPT_PATH: z.string().optional(),
   DOCKER_WORKER_IMAGE: z.string().default("veolms-media-worker:local"),
   DOCKER_NETWORK: z.string().optional(),
-  // `socket` lets a LocalStack Lambda create workers without a Docker CLI
-  // or LocalStack's paid Docker-backed EC2 emulation.
   DOCKER_TRANSPORT: z.enum(["cli", "socket"]).default("cli"),
-  DOCKER_SOCKET_PATH: z.string().default("/var/run/docker.sock"),
+  DOCKER_SOCKET_PATH: z
+    .string()
+    .default(() =>
+      process.platform === "win32"
+        ? "//./pipe/docker_engine"
+        : "/var/run/docker.sock",
+    ),
   // This must be a host-visible absolute path when the manager itself runs
   // in Compose, because the Docker daemon resolves bind-mount sources.
   DOCKER_STORAGE_ROOT: z.string().optional(),
@@ -55,6 +59,10 @@ const baseFleetManagerConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   S3_BUILD_BUCKET: z.string().optional(),
+  STORAGE_PROVIDER: z
+    .string()
+    .optional()
+    .transform((val) => val?.toLowerCase().trim()),
 });
 
 export const fleetManagerConfigSchema = z.preprocess((raw) => {

@@ -1,16 +1,16 @@
 /**
- * VeoLMS Local Fleet Provider End-to-End Test Trigger
+ * VeoLMS Docker Provider End-to-End Test Trigger
  *
- * In Serverful Local mode:
+ * In Serverful Docker mode:
  * 1. The job is queued in PostgreSQL by Fleet Manager CLI.
- * 2. Fleet Manager daemon (running via `pnpm fleet:cli run daemon`)
- *    polls `video_jobs`, claims the queued job, and spawns the local media-worker child process.
+ * 2. Fleet Manager daemon (running via Docker Compose or `pnpm fleet:cli run daemon`)
+ *    polls `video_jobs`, claims the queued job, and spawns the Docker worker.
  * 3. This trigger script monitors the job and worker progress in PostgreSQL,
  *    and verifies the generated HLS outputs upon completion.
- *    It does NOT start processes directly, delegating orchestration to Fleet Manager.
+ *    It does NOT start containers directly, delegating orchestration to Fleet Manager.
  *
  * Dispatched via: apps/fleet-manager/src/cli.ts's "trigger" command
- * Triggered by:   pnpm fleet:queue:trigger  (when FLEET_PROVIDER=local)
+ * Triggered by:   pnpm fleet:queue:trigger  (when FLEET_PROVIDER=docker)
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -54,9 +54,7 @@ export async function triggerTest(
     ),
   );
   console.info(
-    bold(
-      cyan("=== AUTONOMOUS END-TO-END FLEET & TRANSCODER PIPELINE TEST ==="),
-    ),
+    bold(cyan("=== DOCKER AUTONOMOUS END-TO-END FLEET & PIPELINE TEST ===")),
   );
   console.info(
     bold(
@@ -68,7 +66,7 @@ export async function triggerTest(
   console.info(`Video Key:     ${videoKey}`);
   console.info(`Video Size:    ${options.videoSize ?? 0} bytes`);
   console.info(
-    `Output Folder: s3-bucket/${outputPrefix.replace(/^s3-bucket[/\\]/, "")}`,
+    `Output Folder: s3-bucket/${outputPrefix.replace(/^s3-bucket[/\\\\]/, "")}`,
   );
   console.info(`Qualities:     ${qualities.join(", ")}`);
   console.info(
@@ -76,9 +74,9 @@ export async function triggerTest(
   );
 
   try {
-    // 1. Monitor job execution by Fleet Manager Daemon
+    // 1. Monitor Job Execution by Fleet Manager Daemon
     console.info(
-      "[1/2] Awaiting Fleet Manager daemon to claim job and spawn media-worker...",
+      "[1/2] Awaiting Fleet Manager daemon to claim job and provision Docker worker...",
     );
     const startTime = Date.now();
     let completed = false;
@@ -117,8 +115,9 @@ export async function triggerTest(
         console.warn(
           yellow(
             "\n⚠ Job is queued but no worker has been assigned yet.\n" +
-              "  Ensure Fleet Manager daemon is running in another terminal:\n" +
-              "    • pnpm fleet:cli run daemon\n",
+              "  Ensure Fleet Manager daemon is running in another terminal or container:\n" +
+              "    • pnpm fleet:cli run daemon\n" +
+              "    • or docker compose up veolms-fleet-manager\n",
           ),
         );
       }
@@ -157,9 +156,9 @@ export async function triggerTest(
       }
     }
 
-    // 2. Verify generated HLS files on disk
+    // 2. Verify generated HLS output on disk
     console.info("\n[2/2] Verifying generated HLS files on disk...");
-    const cleanPrefix = outputPrefix.replace(/^s3-bucket[/\\]/, "");
+    const cleanPrefix = outputPrefix.replace(/^s3-bucket[/\\\\]/, "");
     const outputDir = existsSync(resolve(repoRoot, outputPrefix))
       ? resolve(repoRoot, outputPrefix)
       : resolve(repoRoot, "s3-bucket", cleanPrefix);
@@ -189,7 +188,7 @@ export async function triggerTest(
 
       const origKey = options.originalFileKey ?? finalOriginalFileKey;
       if (origKey) {
-        const cleanOrig = origKey.replace(/^s3-bucket[/\\]/, "");
+        const cleanOrig = origKey.replace(/^s3-bucket[/\\\\]/, "");
         const origFile = existsSync(resolve(repoRoot, origKey))
           ? resolve(repoRoot, origKey)
           : resolve(repoRoot, "s3-bucket", cleanOrig);
@@ -209,12 +208,12 @@ export async function triggerTest(
       ),
     );
     console.info(
-      bold(green("🎉 LOCAL AUTONOMOUS PIPELINE TEST PASSED SUCCESSFULLY!")),
+      bold(green("🎉 DOCKER AUTONOMOUS PIPELINE TEST PASSED SUCCESSFULLY!")),
     );
     console.info(
       bold(
         green(
-          "===============================================================",
+          "===============================================================\n",
         ),
       ),
     );

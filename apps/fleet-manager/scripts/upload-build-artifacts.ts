@@ -63,10 +63,7 @@ async function main(): Promise<void> {
   const shouldUpdateLambda =
     args.includes("--update-lambda") || process.env["UPDATE_LAMBDA"] === "true";
 
-  const bucketName =
-    process.env.S3_BUILD_BUCKET ||
-    process.env.S3_BUCKET_NAME ||
-    process.env.S3_BUCKET;
+  const bucketName = process.env.S3_BUILD_BUCKET || process.env.S3_BUCKET;
   const region =
     process.env.AWS_REGION ||
     process.env.FLEET_MANAGER_LAMBDA_REGION ||

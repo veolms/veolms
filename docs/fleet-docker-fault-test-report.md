@@ -56,10 +56,9 @@ progress should be treated as a failure in production.
 ## Commands
 
 ```bash
-pnpm fleet:provider docker
-pnpm fleet:images:build
-pnpm fleet:db:migrate
-pnpm fleet:local:up
+pnpm fleet:provider --provider=docker
+pnpm fleet:infra
+pnpm fleet:cli run daemon
 
 pnpm fleet:cli test fault interrupt --worker <worker-id>
 pnpm fleet:cli test fault heartbeat-loss --worker <worker-id>

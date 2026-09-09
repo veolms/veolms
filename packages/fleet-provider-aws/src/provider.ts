@@ -196,9 +196,7 @@ export function createAwsProvider(
         LOCAL_STORAGE_ROOT: process.env.LOCAL_STORAGE_ROOT ?? "/app/s3-bucket",
         WORKER_MAX_JOBS: process.env.WORKER_MAX_JOBS ?? "1",
         FLEET_TEST_MODE: process.env.FLEET_TEST_MODE ?? "false",
-        ...(bucketName
-          ? { S3_BUCKET: bucketName, S3_BUCKET_NAME: bucketName }
-          : {}),
+        ...(bucketName ? { S3_BUCKET: bucketName } : {}),
         ...(buildBucket ? { S3_BUILD_BUCKET: buildBucket } : {}),
         ...config.defaultEnv,
       };
@@ -559,3 +557,6 @@ export function createAwsProvider(
     },
   };
 }
+
+export const createProvider = createAwsProvider;
+export default createAwsProvider;

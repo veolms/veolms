@@ -4,26 +4,17 @@ The **Fleet Manager** is the control-plane orchestrator responsible for managing
 
 ## Local Docker development
 
-Normal `docker compose up -d` starts PostgreSQL only. The optional local Fleet
-services are in [`compose.fleet.yaml`](../../compose.fleet.yaml):
+Normal `docker compose up -d` starts PostgreSQL only. Setting up and operating the Docker Fleet is fully automated via provider lifecycle commands:
 
 ```bash
-pnpm fleet:images:build       # rebuild only after Fleet or worker changes
-pnpm fleet:db:migrate         # migrates the database in apps/fleet-manager/.env
-pnpm fleet:local:up           # persistent manager + one Docker worker per job
-pnpm fleet:localstack:prepare # Lambda bundle + worker image
-pnpm fleet:localstack:up      # LocalStack Lambda using Docker-socket fallback
+pnpm fleet:provider            # Select "docker" provider
+pnpm fleet:infra               # Prompts for config, builds worker & manager images, offers to start daemon
+pnpm fleet:infra --update      # Rebuilds container images after code changes
+pnpm fleet:cli run daemon      # Starts Fleet Manager in-process (if not started as container)
+pnpm fleet:destroy             # Teardown: options to stop running containers or complete teardown
 ```
 
-Before either `up` command, set the existing `DATABASE_URL` in
-`apps/fleet-manager/.env` to a local or remote PostgreSQL database. The Fleet
-Compose file never creates PostgreSQL. Docker workers reuse that same
-`DATABASE_URL`; their heartbeat cadence is derived from
-`HEARTBEAT_TIMEOUT_SECONDS`, so no worker-specific database or heartbeat
-aliases are required.
-
-The Docker images contain only one built bundle each, not the repository or
-workspace dependencies. See the full [local Fleet guide](../../docs/fleet-local-testing.md).
+The Docker setup command prepares storage, configures networks, compiles standalone bundles into minimal container images, and optionally starts the Fleet Manager container daemon in the background. See the full [local Fleet guide](../../docs/fleet-local-testing.md).
 
 ---
 
@@ -103,7 +94,7 @@ Run commands using `pnpm` from the monorepo root:
 
 ```bash
 # Start long-running serverful daemon
-pnpm fleet:cli run
+pnpm fleet:cli run daemon
 
 # Queue a transcoding job
 pnpm fleet:cli queue my-video.mp4 --qualities=1080p,720p,480p --prefix=transcoded/my-video/

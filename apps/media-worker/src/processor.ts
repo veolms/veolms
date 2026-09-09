@@ -7,42 +7,10 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-
-function resolveRepoRoot(): string {
-  try {
-    const metaUrl =
-      typeof import.meta !== "undefined" ? import.meta?.url : undefined;
-    if (metaUrl) {
-      let currentDir = dirname(fileURLToPath(metaUrl));
-      while (currentDir !== resolve(currentDir, "..")) {
-        if (
-          existsSync(join(currentDir, "pnpm-workspace.yaml")) ||
-          existsSync(join(currentDir, "turbo.json"))
-        ) {
-          return currentDir;
-        }
-        currentDir = dirname(currentDir);
-      }
-    }
-  } catch {
-    // Ignore URL parse error in bundled/cjs environments
-  }
-
-  let cwd = process.cwd();
-  while (cwd !== resolve(cwd, "..")) {
-    if (
-      existsSync(join(cwd, "pnpm-workspace.yaml")) ||
-      existsSync(join(cwd, "turbo.json"))
-    ) {
-      return cwd;
-    }
-    cwd = dirname(cwd);
-  }
-
-  return process.cwd();
-}
+import { resolveRepoRoot } from "@veolms/fleet-types/env";
 
 const repoRoot = resolveRepoRoot();
+
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
@@ -97,14 +65,18 @@ function resolveWithin(root: string, candidate: string): string {
   const resolvedRoot = resolve(root);
   const resolvedPath = resolve(resolvedRoot, candidate);
   const pathFromRoot = relative(resolvedRoot, resolvedPath);
+  const normResolved =
+    process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+  const normRoot =
+    process.platform === "win32" ? resolvedRoot.toLowerCase() : resolvedRoot;
   if (
     isAbsolute(pathFromRoot) ||
     pathFromRoot === ".." ||
     pathFromRoot.startsWith("../") ||
     pathFromRoot.startsWith("..\\") ||
-    (!resolvedPath.startsWith(resolvedRoot + "/") &&
-      !resolvedPath.startsWith(resolvedRoot + "\\") &&
-      resolvedPath !== resolvedRoot)
+    (!normResolved.startsWith(normRoot + "/") &&
+      !normResolved.startsWith(normRoot + "\\") &&
+      normResolved !== normRoot)
   ) {
     throw new Error(
       "Media job path must remain inside its configured directory",
@@ -119,7 +91,7 @@ function resolveWithin(root: string, candidate: string): string {
  * value works for both local `s3-bucket/` storage and S3.
  */
 export function buildMasterPlaylistStorageKey(outputPrefix: string): string {
-  const prefix = outputPrefix.replace(/^\/+|\/+$/g, "");
+  const prefix = outputPrefix.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   return prefix ? `${prefix}/master.m3u8` : "master.m3u8";
 }
 
@@ -700,21 +672,54 @@ export async function executeTranscodeJob(
     });
 
     // Avoid a needless full re-encode when the source already fits the
-    // largest requested rendition. Capped inputs still use the smaller
-    // intermediate to avoid carrying 4K pixels through every HLS rendition.
-    const transcodeInputPath = compression.targetResolution
+    // largest requested rendition, unless an optimized original file backup
+    // is requested.
+    const originalFileKey = job.original_file_key ?? null;
+
+    const shouldRunCompression = Boolean(
+      compression.targetResolution || originalFileKey,
+    );
+    const transcodeInputPath = shouldRunCompression
       ? optimizedVideoPath
       : inputVideoPath;
-    if (compression.targetResolution) {
+
+    if (shouldRunCompression) {
       await runFfmpeg({
         executable: config.FFMPEG_PATH,
         args: compression.args,
         phase: "compression pass",
         signal,
       });
+
+      // If an original file backup key is specified, upload/save the optimized video file immediately.
+      // If originalFileKey is null, do NOT upload or backup this file.
+      if (originalFileKey) {
+        if (config.STORAGE_PROVIDER === "local") {
+          const cleanOrigKey = originalFileKey.replace(/^s3-bucket[/\\]/, "");
+          const baseBucketDir = existsSync(join(repoRoot, "s3-bucket"))
+            ? join(repoRoot, "s3-bucket")
+            : join(process.cwd(), "s3-bucket");
+          const localTargetOrig = resolveWithin(baseBucketDir, cleanOrigKey);
+          await mkdir(dirname(localTargetOrig), { recursive: true });
+          await copyFile(optimizedVideoPath, localTargetOrig);
+          console.info(
+            `[media-worker] Optimized original video saved locally to ${localTargetOrig}`,
+          );
+        } else {
+          const cleanOrigKey = originalFileKey.replace(/^s3-bucket[/\\]/, "");
+          await storage.uploadFile(
+            cleanOrigKey,
+            optimizedVideoPath,
+            "video/mp4",
+          );
+          console.info(
+            `[media-worker] Uploaded optimized original video to s3://${config.S3_BUCKET}/${cleanOrigKey}`,
+          );
+        }
+      }
     }
 
-    const metadata = compression.targetResolution
+    const metadata = shouldRunCompression
       ? await probeVideoMetadata(optimizedVideoPath, config.FFPROBE_PATH)
       : sourceMetadata;
 
@@ -907,6 +912,7 @@ export async function executeTranscodeJob(
       applicableQualities,
       outputPrefix: job.output_prefix,
       masterPlaylistPath: masterPlaylistStorageKey,
+      ...(originalFileKey ? { originalFileKey } : {}),
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : String(error);

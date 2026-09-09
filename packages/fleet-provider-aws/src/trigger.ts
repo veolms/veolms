@@ -5,28 +5,25 @@
  * function to claim it and provision an EC2 Graviton worker.
  */
 
-import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
-import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { join } from "node:path";
 import { createDatabase } from "@veolms/database";
 import { loadFleetManagerConfig } from "@veolms/config";
 import {
   estimateJobHardware,
+  isMainModule,
   videoQualityLevelSchema,
   type VideoQualityLevel,
   type ProviderTriggerOptions,
   type ProviderTriggerResult,
 } from "@veolms/fleet-types";
-import { isMainModule } from "@veolms/fleet-types";
-import { bold, cyan, green, red, yellow } from "@veolms/fleet-types/terminal";
 
-function resolveAwsRegion(): string {
-  const args = process.argv.slice(2);
+import { bold, cyan, green, yellow } from "@veolms/fleet-types/terminal";
+
+export function resolveAwsRegion(options?: ProviderTriggerOptions): string {
+  const args = [...process.argv.slice(2), ...(options?.rawArgs ?? [])];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg?.startsWith("--region=")) {
@@ -49,8 +46,10 @@ function resolveAwsRegion(): string {
   return "us-east-1";
 }
 
-function resolveAwsProfile(): string | undefined {
-  const args = process.argv.slice(2);
+export function resolveAwsProfile(
+  options?: ProviderTriggerOptions,
+): string | undefined {
+  const args = [...process.argv.slice(2), ...(options?.rawArgs ?? [])];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg?.startsWith("--profile=") || arg?.startsWith("--aws-profile=")) {
@@ -67,43 +66,113 @@ function resolveAwsProfile(): string | undefined {
   return process.env.AWS_PROFILE;
 }
 
-function resolveTargetLambda(): {
+export function resolveFleetManagerLambdaName(): string {
+  if (process.env.FLEET_MANAGER_LAMBDA_NAME) {
+    return process.env.FLEET_MANAGER_LAMBDA_NAME;
+  }
+  if (process.env.LAMBDA_FUNCTION_NAME) {
+    return process.env.LAMBDA_FUNCTION_NAME;
+  }
+  if (process.env.LAMBDA_FUNCTION_ARN) {
+    const parts = process.env.LAMBDA_FUNCTION_ARN.split(":");
+    const fnName = parts[parts.length - 1];
+    if (fnName) return fnName;
+  }
+  return "veolms-fleet-manager";
+}
+
+export function resolveProbeLambdaName(): string {
+  if (process.env.PROBE_LAMBDA_NAME) {
+    return process.env.PROBE_LAMBDA_NAME;
+  }
+  if (process.env.PROBE_LAMBDA_ARN) {
+    const parts = process.env.PROBE_LAMBDA_ARN.split(":");
+    const fnName = parts[parts.length - 1];
+    if (fnName) return fnName;
+  }
+  return "veolms-video-metadata-probe";
+}
+
+export interface ResolvedTargetLambda {
   name: string;
   isDirectFleetManager: boolean;
-} {
-  const args = process.argv.slice(2);
-  const isDirect =
-    args.includes("--fleet-manager") ||
-    args.includes("--direct") ||
-    args.includes("--target=fleet-manager") ||
-    process.env["DIRECT"] === "true";
+}
 
-  for (const arg of args) {
-    if (arg.startsWith("--lambda=") || arg.startsWith("--function-name=")) {
+export function resolveTargetLambda(
+  options?: ProviderTriggerOptions,
+): ResolvedTargetLambda {
+  const args = [...process.argv.slice(2), ...(options?.rawArgs ?? [])];
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg?.startsWith("--lambda=") || arg?.startsWith("--function-name=")) {
       const customName = arg.split("=")[1]?.trim();
       if (customName) {
+        const isDirect =
+          args.includes("--fleet-manager") ||
+          args.includes("--direct") ||
+          args.includes("--target=fleet-manager") ||
+          process.env["DIRECT"] === "true";
+        return { name: customName, isDirectFleetManager: isDirect };
+      }
+    }
+    if (
+      (arg === "--lambda" || arg === "--function-name") &&
+      i + 1 < args.length &&
+      !args[i + 1]?.startsWith("-")
+    ) {
+      const customName = args[i + 1]?.trim();
+      if (customName) {
+        const isDirect =
+          args.includes("--fleet-manager") ||
+          args.includes("--direct") ||
+          args.includes("--target=fleet-manager") ||
+          process.env["DIRECT"] === "true";
         return { name: customName, isDirectFleetManager: isDirect };
       }
     }
   }
 
-  if (isDirect) {
+  const explicitDirect =
+    args.includes("--fleet-manager") ||
+    args.includes("--direct") ||
+    args.includes("--target=fleet-manager") ||
+    process.env["DIRECT"] === "true";
+
+  const explicitProbe =
+    args.includes("--probe") ||
+    args.includes("--target=probe") ||
+    process.env["PROBE"] === "true";
+
+  // Probe Lambda is only considered active/configured if PROBE_LAMBDA_NAME or PROBE_LAMBDA_ARN
+  // is present in the environment (or SETUP_PROBE_LAMBDA === "true").
+  // When skipped during setup, neither variable is set in .env.
+  const hasProbeConfigured = Boolean(
+    process.env.PROBE_LAMBDA_NAME ||
+    process.env.PROBE_LAMBDA_ARN ||
+    process.env.SETUP_PROBE_LAMBDA === "true",
+  );
+
+  const fleetManagerLambdaName = resolveFleetManagerLambdaName();
+  const probeLambdaName = resolveProbeLambdaName();
+
+  // If direct Fleet Manager is explicitly requested, or if probe was NOT explicitly requested
+  // and probe Lambda is not configured in the environment (e.g. user selected "Skip probe Lambda" during setup),
+  // automatically invoke the Fleet Manager Lambda directly.
+  if (explicitDirect || (!explicitProbe && !hasProbeConfigured)) {
     return {
-      name:
-        process.env.FLEET_MANAGER_LAMBDA_NAME ||
-        process.env.LAMBDA_FUNCTION_NAME ||
-        "veolms-fleet-manager",
+      name: fleetManagerLambdaName,
       isDirectFleetManager: true,
     };
   }
 
   return {
-    name: process.env.PROBE_LAMBDA_NAME || "veolms-video-metadata-probe",
+    name: probeLambdaName,
     isDirectFleetManager: false,
   };
 }
 
-function buildAwsCliArgs(
+export function buildAwsCliArgs(
   subcommandArgs: string[],
   region: string,
   profile?: string,
@@ -122,85 +191,51 @@ function buildAwsCliArgs(
   return args;
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 export async function triggerTest(
   options: ProviderTriggerOptions = {},
 ): Promise<ProviderTriggerResult> {
-  const fleetConfig = loadFleetManagerConfig();
-  const db = createDatabase(fleetConfig.DATABASE_URL);
-
-  const region = resolveAwsRegion();
-  const profile = resolveAwsProfile();
-  const endpointUrl =
-    process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT;
-  const { name: lambdaName, isDirectFleetManager } = resolveTargetLambda();
-
-  const isNonInteractive =
-    options.nonInteractive === true ||
-    process.env.CI === "true" ||
-    process.argv.includes("--yes") ||
-    process.argv.includes("-y") ||
-    process.argv.includes("--non-interactive");
-
-  let videoKey = options.videoKey || process.env.VIDEO_KEY;
-  if (!videoKey && !isNonInteractive && process.stdin.isTTY) {
-    const rl = readline.createInterface({ input, output });
-    const answer = (
-      await rl.question(`Video key or URL [raw/video.mp4]: `)
-    ).trim();
-    rl.close();
-    videoKey = answer || "raw/video.mp4";
-  } else if (!videoKey) {
-    videoKey = "raw/video.mp4";
-  }
-
-  const defaultQualities: readonly VideoQualityLevel[] = ["240p"];
-  let qualities: readonly VideoQualityLevel[] = defaultQualities;
-  if (options.qualities && options.qualities.length > 0) {
-    qualities = options.qualities.map((q) => videoQualityLevelSchema.parse(q));
-  } else if (process.env.QUALITIES) {
-    qualities = process.env.QUALITIES.split(",").map((q) =>
-      videoQualityLevelSchema.parse(q.trim()),
+  const jobId = options.jobId;
+  if (!jobId) {
+    throw new Error(
+      "Missing required option 'jobId'. Video jobs must be queued via Fleet Manager CLI before triggering.",
     );
   }
 
+  const fleetConfig = loadFleetManagerConfig();
+  const db = createDatabase(fleetConfig.DATABASE_URL);
+
+  const region = resolveAwsRegion(options);
+  const profile = resolveAwsProfile(options);
+  const endpointUrl =
+    process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT;
+  const { name: lambdaName, isDirectFleetManager } =
+    resolveTargetLambda(options);
+
+  const rawArgs = [...process.argv.slice(2), ...(options.rawArgs ?? [])];
+  const fleetMode = (process.env.FLEET_MODE || "").toLowerCase().trim();
+  const isServerful = fleetMode === "serverful";
+  const hasExplicitLambda = rawArgs.some(
+    (a) =>
+      a.startsWith("--lambda") ||
+      a.startsWith("--function-name") ||
+      a === "--probe" ||
+      a === "--target=probe" ||
+      a === "--fleet-manager" ||
+      a === "--target=fleet-manager",
+  );
+
+  const videoKey = options.videoKey || "raw/video.mp4";
+  const videoId = options.videoId;
   const filename = videoKey.split(/[/\\]/).pop() || "video.mp4";
   const cleanFilename = filename.replace(/\.[^/.]+$/, "");
-  const outputPrefix = `transcoded/${cleanFilename}/`;
-  let resolvedVideoSize = options.videoSize;
-  const s3Bucket =
-    process.env["S3_BUCKET"] ??
-    process.env["S3_BUCKET_NAME"] ??
-    process.env["STORAGE_BUCKET"];
+  const outputPrefix = options.outputPrefix || `transcoded/${cleanFilename}/`;
+  const videoSize = options.videoSize ?? 1024 * 1024;
+  const qualities: readonly VideoQualityLevel[] =
+    options.qualities && options.qualities.length > 0
+      ? options.qualities.map((q) => videoQualityLevelSchema.parse(q))
+      : ["240p"];
 
-  if (!resolvedVideoSize && s3Bucket && !/^https?:\/\//i.test(videoKey)) {
-    try {
-      const endpoint =
-        process.env["AWS_ENDPOINT_URL"] || process.env["LOCALSTACK_ENDPOINT"];
-      const s3Client = new S3Client({
-        region,
-        ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-      });
-      const head = await s3Client.send(
-        new HeadObjectCommand({
-          Bucket: s3Bucket,
-          Key: videoKey,
-        }),
-      );
-      if (head.ContentLength) {
-        resolvedVideoSize = Number(head.ContentLength);
-      }
-    } catch {
-      // S3 head-object fallback
-    }
-  }
-  const videoSize = resolvedVideoSize ?? 1024 * 1024;
   const hardwareProfile = estimateJobHardware(videoSize, qualities).profile;
-  const jobId = options.jobId ?? randomUUID();
-  let videoId = options.videoId;
 
   console.info(
     bold(
@@ -213,155 +248,103 @@ export async function triggerTest(
       cyan("==============================================================="),
     ),
   );
-  console.info(
-    `Target Lambda: ${lambdaName} (${isDirectFleetManager ? "direct" : "probe"})`,
-  );
-  console.info(`AWS Region:    ${region}`);
-  console.info(`Video Key:     ${videoKey}`);
-  console.info(`Video Size:    ${videoSize} bytes`);
-  console.info(`Hardware:      ${hardwareProfile}`);
-  console.info(`Qualities:     ${qualities.join(", ")}`);
-  console.info(`Job ID:        ${jobId}`);
+  if (isServerful && !hasExplicitLambda) {
+    console.info(`Execution Mode: Serverful Daemon (polling database)`);
+  } else {
+    console.info(
+      `Target Lambda:  ${lambdaName} (${isDirectFleetManager ? "direct" : "probe"})`,
+    );
+  }
+  console.info(`AWS Region:     ${region}`);
+  console.info(`Video Key:      ${videoKey}`);
+  console.info(`Video Size:     ${videoSize} bytes`);
+  console.info(`Hardware:       ${hardwareProfile}`);
+  console.info(`Qualities:      ${qualities.join(", ")}`);
+  console.info(`Job ID:         ${jobId}`);
   console.info(
     "---------------------------------------------------------------\n",
   );
 
   try {
-    // If not already queued by fleet-manager, queue into PostgreSQL as fallback
-    if (!options.jobId) {
-      const existingMedia = await db
-        .selectFrom("media_assets")
-        .selectAll()
-        .where("storage_key", "=", videoKey)
-        .executeTakeFirst();
+    if (isServerful && !hasExplicitLambda) {
+      console.info(
+        cyan(
+          "ℹ Serverful mode active (FLEET_MODE=serverful). Skipping Lambda invocation;\nthe running fleet-manager daemon will process the queued job from PostgreSQL.\n",
+        ),
+      );
+    } else {
+      // 1. Invoke AWS Lambda
+      console.info(
+        `\nInvoking Lambda "${lambdaName}" to claim job and provision EC2 worker...`,
+      );
 
-      videoId = existingMedia?.id ?? videoId ?? randomUUID();
-      if (!existingMedia) {
-        const ownerUser = await db
-          .selectFrom("users")
-          .select("id")
-          .limit(1)
-          .executeTakeFirst();
+      const outFile = join(tmpdir(), `lambda-invoke-${jobId.slice(0, 8)}.json`);
+      const invokeArgs = [
+        ...buildAwsCliArgs(
+          [
+            "lambda",
+            "invoke",
+            "--function-name",
+            lambdaName,
+            "--payload",
+            JSON.stringify({
+              action: "claim",
+              jobId,
+              videoId,
+              videoKey,
+              outputPrefix,
+              qualities,
+              videoSize,
+              ...(options.originalFileKey
+                ? { originalFileKey: options.originalFileKey }
+                : {}),
+            }),
+            "--cli-binary-format",
+            "raw-in-base64-out",
+          ],
+          region,
+          profile,
+          endpointUrl,
+        ),
+        outFile,
+      ];
 
-        const ownerId = ownerUser?.id ?? "00000000-0000-4000-8000-000000000001";
+      try {
+        execFileSync("aws", invokeArgs, {
+          stdio: "pipe",
+          shell: process.platform === "win32",
+        });
 
-        await db
-          .insertInto("users")
-          .values({
-            id: ownerId,
-            email: "creator@veolms.org",
-            username: "creator",
-            display_name: "VeoLMS Creator",
-            email_verified_at: new Date(),
-          })
-          .onConflict((oc: any) => oc.column("id").doNothing())
-          .execute();
-
-        await db
-          .insertInto("media_assets")
-          .values({
-            id: videoId,
-            owner_id: ownerId,
-            type: "video",
-            storage_provider: "s3",
-            storage_key: videoKey,
-            original_filename: filename,
-            mime_type: "video/mp4",
-            size_bytes: videoSize,
-            status: "uploaded",
-          })
-          .execute();
-      } else if (
-        !existingMedia.size_bytes ||
-        Number(existingMedia.size_bytes) === 0
-      ) {
-        try {
-          await db
-            .updateTable("media_assets")
-            .set({
-              size_bytes: videoSize,
-              updated_at: new Date(),
-            })
-            .where("id", "=", videoId)
-            .execute();
-        } catch {
-          // Ignore
+        if (existsSync(outFile)) {
+          const responseRaw = readFileSync(outFile, "utf-8").trim();
+          console.info(`✔ Lambda Invocation Response:\n  ${responseRaw}`);
+        }
+      } catch (invokeErr: unknown) {
+        const msg =
+          invokeErr instanceof Error ? invokeErr.message : String(invokeErr);
+        console.warn(yellow(`⚠ Lambda invoke warning: ${msg}`));
+        if (
+          msg.includes("ResourceNotFoundException") ||
+          msg.includes("Function not found")
+        ) {
+          console.warn(
+            yellow(
+              `\n  Note: Lambda function "${lambdaName}" was not found on AWS.\n` +
+                `  If you opted to skip deploying this Lambda or are using serverful mode,\n` +
+                `  ensure the fleet manager daemon is running (pnpm fleet:start)\n` +
+                `  or run "pnpm fleet:infra" to deploy serverless infrastructure.\n`,
+            ),
+          );
+        }
+      } finally {
+        if (existsSync(outFile)) {
+          try {
+            unlinkSync(outFile);
+          } catch {
+            // Ignore cleanup failure
+          }
         }
       }
-
-      await db
-        .insertInto("video_jobs")
-        .values({
-          id: jobId,
-          video_id: videoId,
-          status: "queued",
-          video_key: videoKey,
-          output_prefix: outputPrefix,
-          video_size: videoSize,
-          qualities: [...qualities],
-          worker_id: null,
-          attempts: 0,
-          max_attempts: 3,
-          error_message: null,
-          hardware_profile: hardwareProfile,
-          created_at: new Date(),
-          started_at: null,
-          completed_at: null,
-          failed_at: null,
-          updated_at: new Date(),
-        })
-        .execute();
-      console.info(`✔ Job [${jobId}] queued in PostgreSQL.`);
-    }
-
-    // 3. Invoke AWS Lambda
-    console.info(
-      `\nInvoking Lambda "${lambdaName}" to claim job and provision EC2 worker...`,
-    );
-
-    const outFile = join(tmpdir(), `lambda-invoke-${jobId.slice(0, 8)}.json`);
-    const invokeArgs = [
-      ...buildAwsCliArgs(
-        [
-          "lambda",
-          "invoke",
-          "--function-name",
-          lambdaName,
-          "--payload",
-          JSON.stringify({
-            action: "claim",
-            jobId,
-            videoId,
-            videoKey,
-            outputPrefix,
-            qualities,
-            videoSize,
-          }),
-          "--cli-binary-format",
-          "raw-in-base64-out",
-        ],
-        region,
-        profile,
-        endpointUrl,
-      ),
-      outFile,
-    ];
-
-    try {
-      execFileSync("aws", invokeArgs, {
-        stdio: "pipe",
-        shell: process.platform === "win32",
-      });
-
-      if (existsSync(outFile)) {
-        const responseRaw = readFileSync(outFile, "utf-8").trim();
-        unlinkSync(outFile);
-        console.info(`✔ Lambda Invocation Response:\n  ${responseRaw}`);
-      }
-    } catch (invokeErr: unknown) {
-      const msg =
-        invokeErr instanceof Error ? invokeErr.message : String(invokeErr);
-      console.warn(yellow(`⚠ Lambda invoke warning: ${msg}`));
     }
 
     // 4. Poll database to verify worker assignment

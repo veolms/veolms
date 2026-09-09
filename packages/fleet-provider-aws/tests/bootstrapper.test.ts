@@ -91,14 +91,12 @@ describe("EC2 UserData Bootstrapper Generator", () => {
     });
 
     const sourceIndex = script.indexOf("source /opt/veolms/worker.env");
-    const realResolutionIndex = script.indexOf(
-      'BUCKET_NAME="${S3_BUCKET:-${S3_BUCKET_NAME:-}}"',
-    );
+    const realResolutionIndex = script.indexOf('BUCKET_NAME="${S3_BUCKET:-}"');
 
     assert.ok(sourceIndex !== -1, "script must source worker.env");
     assert.ok(
       realResolutionIndex !== -1,
-      "script must resolve BUCKET_NAME from S3_BUCKET/S3_BUCKET_NAME",
+      "script must resolve BUCKET_NAME from S3_BUCKET",
     );
     assert.ok(
       realResolutionIndex > sourceIndex,

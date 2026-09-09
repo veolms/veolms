@@ -5,6 +5,7 @@ import {
   bold,
   cyan,
   dim,
+  execCommand as exec,
   green,
   red,
   yellow,
@@ -28,14 +29,6 @@ export interface DestroyOptions {
   readonly s3BucketName?: string | null;
   readonly s3BuildBucket?: string | null;
   readonly nonInteractive?: boolean;
-}
-
-function exec(cmd: string): string | null {
-  try {
-    return execSync(cmd, { encoding: "utf-8", stdio: "pipe" }).trim();
-  } catch {
-    return null;
-  }
 }
 
 async function destroyS3Bucket(
@@ -379,16 +372,10 @@ ${bold(green("╚═════════════════════
 export async function destroyInfra(
   options: ProviderDestroyOptions = {},
 ): Promise<ProviderDestroyResult> {
-  const isNonInteractive =
-    options.nonInteractive === true ||
-    options.interactive === false ||
-    process.env.CI === "true" ||
-    process.argv.includes("--yes") ||
-    process.argv.includes("-y") ||
-    process.argv.includes("--non-interactive");
+  const isNonInteractiveMode = isNonInteractive(options);
 
   await runAwsInfraDestroy({
-    nonInteractive: isNonInteractive,
+    nonInteractive: isNonInteractiveMode,
   });
 
   return {

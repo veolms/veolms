@@ -51,6 +51,22 @@ describe("Pluggable Provider Resolver", () => {
     assert.equal(typeof provider.terminateWorker, "function");
   });
 
+  it("should resolve docker provider correctly", async () => {
+    const provider = await resolveFleetProvider("docker");
+    assert.ok(provider);
+    assert.equal(provider.name, "docker");
+    assert.equal(typeof provider.createWorker, "function");
+    assert.equal(typeof provider.terminateWorker, "function");
+  });
+
+  it("should resolve local provider correctly", async () => {
+    const provider = await resolveFleetProvider("local");
+    assert.ok(provider);
+    assert.equal(provider.name, "local");
+    assert.equal(typeof provider.createWorker, "function");
+    assert.equal(typeof provider.terminateWorker, "function");
+  });
+
   it("passes Docker socket settings to the Docker provider", () => {
     const config = loadFleetManagerConfig({
       PROVIDER: "docker",

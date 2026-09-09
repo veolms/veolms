@@ -8,6 +8,7 @@ import type {
   ExecutionResult,
   FleetProvider,
   HealthStatus,
+  VideoQualityLevel,
   WorkerHandle,
   WorkerSpec,
   WorkerStatus,
@@ -93,6 +94,10 @@ function isMissingDockerContainerError(error: unknown): boolean {
   );
 }
 
+export function toDockerMountPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 export function buildDockerRunArgs(options: {
   workerId: string;
   spec: WorkerSpec;
@@ -117,7 +122,7 @@ export function buildDockerRunArgs(options: {
     "--memory",
     `${options.spec.memoryMb}m`,
     "--mount",
-    `type=bind,src=${options.storageRoot},dst=/app/s3-bucket,rw`,
+    `type=bind,src=${toDockerMountPath(options.storageRoot)},dst=/app/s3-bucket`,
     "--add-host",
     "host.docker.internal:host-gateway",
   ];
@@ -176,7 +181,7 @@ export function buildDockerCreateRequest(options: {
         AutoRemove: false,
         NanoCpus: Math.round(options.spec.cpu * 1_000_000_000),
         Memory: options.spec.memoryMb * 1024 * 1024,
-        Binds: [`${options.storageRoot}:/app/s3-bucket:rw`],
+        Binds: [`${toDockerMountPath(options.storageRoot)}:/app/s3-bucket:rw`],
         ExtraHosts: ["host.docker.internal:host-gateway"],
         ...(options.network ? { NetworkMode: options.network } : {}),
       },
@@ -196,7 +201,11 @@ export function createDockerProvider(
   );
   const docker = config.dockerCommand ?? "docker";
   const transport = config.transport ?? "cli";
-  const socketPath = config.socketPath ?? "/var/run/docker.sock";
+  const socketPath =
+    config.socketPath ??
+    (process.platform === "win32"
+      ? "//./pipe/docker_engine"
+      : "/var/run/docker.sock");
   const workers = new Map<string, DockerWorkerRecord>();
 
   const run = async (args: readonly string[]) =>
@@ -285,7 +294,16 @@ export function createDockerProvider(
     name: "docker",
 
     async createWorker(id: string, spec: WorkerSpec): Promise<WorkerHandle> {
-      await mkdir(storageRoot, { recursive: true });
+      try {
+        await mkdir(verificationStorageRoot, { recursive: true });
+      } catch {
+        // Ignore if already exists or not writable
+      }
+      try {
+        await mkdir(storageRoot, { recursive: true });
+      } catch {
+        // storageRoot may be a host path when running inside a container
+      }
       let providerWorkerId: string;
       if (transport === "socket") {
         const create = buildDockerCreateRequest({
@@ -348,7 +366,7 @@ export function createDockerProvider(
           const inspect = JSON.parse(
             await apiRequest(
               "GET",
-              `/containers/${encodeURIComponent(providerWorkerId)}/json`,
+              `/containers/${encodeURIComponent(providerWorkerId)}/json` as const,
             ),
           ) as DockerInspectResponse;
           rawStatus = inspect.State?.Status ?? "dead";
@@ -519,22 +537,37 @@ export function createDockerProvider(
       return instances;
     },
 
-    async verifyJobOutput(outputPrefix: string): Promise<boolean> {
+    async verifyJobOutput(
+      outputPrefix: string,
+      _qualities?: readonly VideoQualityLevel[],
+    ): Promise<boolean> {
       const { stat } = await import("node:fs/promises");
       const cleanPrefix = outputPrefix.replace(/^[/\\]+/, "");
-      try {
-        return (
-          (
-            await stat(
-              join(verificationStorageRoot, cleanPrefix, "master.m3u8"),
-            )
-          ).size > 0
-        );
-      } catch {
-        return false;
+      const strippedPrefix = cleanPrefix.replace(/^s3-bucket[/\\]/, "");
+
+      const candidateDirs = [
+        join(verificationStorageRoot, strippedPrefix),
+        join(verificationStorageRoot, cleanPrefix),
+        resolve(outputPrefix),
+        resolve(strippedPrefix),
+      ];
+
+      for (const dir of candidateDirs) {
+        try {
+          const masterPath = join(dir, "master.m3u8");
+          const s = await stat(masterPath);
+          if (s.size > 0) {
+            return true;
+          }
+        } catch {
+          // Check next candidate
+        }
       }
+
+      return false;
     },
   };
 }
 
 export const createProvider = createDockerProvider;
+export default createDockerProvider;

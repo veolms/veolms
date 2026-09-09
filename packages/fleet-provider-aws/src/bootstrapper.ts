@@ -64,7 +64,7 @@ set -a
 source /opt/veolms/worker.env
 set +a
 
-BUCKET_NAME="\${S3_BUCKET:-\${S3_BUCKET_NAME:-}}"
+BUCKET_NAME="\${S3_BUCKET:-}"
 BUILD_BUCKET="\${S3_BUILD_BUCKET:-\$BUCKET_NAME}"
 
 set -e

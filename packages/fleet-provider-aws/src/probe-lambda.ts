@@ -265,7 +265,6 @@ export async function processProbeAndForward(
     customConfig.s3BucketName ??
     (typeof payload.bucket === "string" ? payload.bucket : undefined) ??
     process.env["S3_BUCKET"] ??
-    process.env["S3_BUCKET_NAME"] ??
     process.env["STORAGE_BUCKET"];
 
   const endpoint =

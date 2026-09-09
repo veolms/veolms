@@ -6,3 +6,6 @@ export * from "./provider.ts";
 export * from "./events.ts";
 export * from "./test-control.ts";
 export * from "./entrypoint.ts";
+export * from "./terminal.ts";
+export * from "./zip.ts";
+export * from "./env.ts";
