@@ -136,40 +136,12 @@ export const registerRequestSchema = z
     },
   );
 
-export const authMenuPermissionSchema = z.object({
-  canCreate: z.boolean(),
-  canRead: z.boolean(),
-  canUpdate: z.boolean(),
-  canDelete: z.boolean(),
-});
-
-export interface AuthMenuNode {
-  id: string;
-  parentId: string | null;
-  label: string;
-  routeLink: string;
-  icon: string | null;
-  expanded: boolean;
-  checkList?: string | null;
-  isBoth: boolean;
-  permissions: z.output<typeof authMenuPermissionSchema>;
-  children?: AuthMenuNode[];
-}
-
-export const authMenuNodeSchema: z.ZodType<AuthMenuNode> = z.lazy(() =>
-  z.object({
-    id: z.uuid(),
-    parentId: z.uuid().nullable(),
-    label: z.string(),
-    routeLink: z.string(),
-    icon: z.string().nullable(),
-    expanded: z.boolean(),
-    checkList: z.string().nullable().optional(),
-    isBoth: z.boolean(),
-    permissions: authMenuPermissionSchema,
-    children: z.array(authMenuNodeSchema).optional(),
-  }),
-);
+export {
+  authMenuNodeSchema,
+  authMenuPermissionSchema,
+  type AuthMenuNode,
+  type AuthMenuPermission,
+} from "../navigation.ts";
 
 const profileFieldSchemas = {
   avatarDataUrl: z.string().max(3_000_000).nullable().optional(),
@@ -193,8 +165,6 @@ export const authUserSchema = z.object({
   emailVerified: z.boolean().default(false),
   mobileVerified: z.boolean().default(false),
   roles: z.array(z.string().max(50)).default([]),
-  permissions: z.array(z.string().max(50)).default([]),
-  menus: z.array(authMenuNodeSchema).default([]),
   ...profileFieldSchemas,
 });
 
@@ -207,8 +177,6 @@ export const userProfileResponseSchema = z.object({
   emailVerified: z.boolean(),
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
-  permissions: z.array(z.string().max(50)),
-  menus: z.array(authMenuNodeSchema),
   ...profileFieldSchemas,
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),
@@ -299,7 +267,6 @@ export type EmailVerificationVerifyRequest = z.input<
   typeof emailVerificationVerifyRequestSchema
 >;
 export type RegisterRequest = z.input<typeof registerRequestSchema>;
-export type AuthMenuPermission = z.output<typeof authMenuPermissionSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
 export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
