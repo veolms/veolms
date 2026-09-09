@@ -21,6 +21,17 @@ export function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
+export function resolveCourseDurationSeconds(
+  durationSeconds?: number | null,
+  estimatedDurationMinutes?: number | null,
+): number {
+  if (durationSeconds && durationSeconds > 0) return durationSeconds;
+  if (estimatedDurationMinutes && estimatedDurationMinutes > 0) {
+    return estimatedDurationMinutes * 60;
+  }
+  return 0;
+}
+
 export function formatCoursePricing(
   pricing?: CoursePricingSummary,
 ): CoursePricing | undefined {
