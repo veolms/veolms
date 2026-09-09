@@ -32,11 +32,14 @@ export function getNestedGlobalProperty<T>(
 }
 
 /**
- * Sanitize an endpoint name into a safe valid JavaScript identifier suffix.
- * Replaces non-alphanumeric characters with underscores.
+ * Sanitize an endpoint name into an injective JavaScript identifier suffix.
+ * Encodes non-alphanumeric characters using their hex character code to prevent collision.
  */
 export function sanitizeIdentifier(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_$]/g, "_");
+  return name.replace(
+    /[^a-zA-Z0-9_$]/g,
+    (ch) => `_${ch.charCodeAt(0).toString(16)}_`,
+  );
 }
 
 /**

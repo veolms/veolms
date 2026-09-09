@@ -18,6 +18,9 @@ export class AndroidModernEndpoint implements NativeEndpoint {
   private readonly listeners = new Set<NativeMessageHandler>();
   private targetObject: AndroidWebMessageListenerObject | null = null;
   private boundEventListener: ((event: WebMessageObject) => void) | null = null;
+  private installedOnMessage: ((event: WebMessageObject) => void) | null = null;
+  private previousOnMessage:
+    ((event: WebMessageObject) => void) | null | undefined = undefined;
   private isDisposed = false;
 
   constructor(name: string) {
@@ -67,12 +70,13 @@ export class AndroidModernEndpoint implements NativeEndpoint {
       safelyDispatchHandlers(this.listeners, rawData);
     };
 
-    // Attach via addEventListener if available, otherwise set onmessage
+    // Attach via addEventListener if available, otherwise set onmessage wrapper safely
     if (typeof obj.addEventListener === "function") {
       obj.addEventListener("message", this.boundEventListener);
     } else {
       const existingOnMessage = obj.onmessage;
-      obj.onmessage = (event: WebMessageObject) => {
+      this.previousOnMessage = existingOnMessage ?? null;
+      this.installedOnMessage = (event: WebMessageObject) => {
         if (typeof existingOnMessage === "function") {
           try {
             existingOnMessage(event);
@@ -84,6 +88,7 @@ export class AndroidModernEndpoint implements NativeEndpoint {
           this.boundEventListener(event);
         }
       };
+      obj.onmessage = this.installedOnMessage;
     }
   }
 
@@ -120,19 +125,27 @@ export class AndroidModernEndpoint implements NativeEndpoint {
     }
     this.isDisposed = true;
 
-    if (this.targetObject && this.boundEventListener) {
-      if (typeof this.targetObject.removeEventListener === "function") {
+    if (this.targetObject) {
+      if (
+        this.boundEventListener &&
+        typeof this.targetObject.removeEventListener === "function"
+      ) {
         this.targetObject.removeEventListener(
           "message",
           this.boundEventListener,
         );
-      } else if (this.targetObject.onmessage === this.boundEventListener) {
-        this.targetObject.onmessage = null;
+      } else if (
+        this.installedOnMessage &&
+        this.targetObject.onmessage === this.installedOnMessage
+      ) {
+        this.targetObject.onmessage = this.previousOnMessage ?? null;
       }
     }
 
     this.listeners.clear();
     this.targetObject = null;
     this.boundEventListener = null;
+    this.installedOnMessage = null;
+    this.previousOnMessage = undefined;
   }
 }

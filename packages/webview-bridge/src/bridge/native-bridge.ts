@@ -4,6 +4,7 @@ import type {
 } from "../transport/types.d.ts";
 import type { MetadataRegistry } from "./metadata.ts";
 import { createBridgeProxy } from "./proxy.ts";
+import { evictBridgeSession } from "./build-native-bridge.ts";
 
 /**
  * Concrete session container for initialized NativeBridge instances.
@@ -29,7 +30,12 @@ export class NativeBridgeSession {
    */
   public getProxy<T extends object>(): T {
     if (!this.rootProxy) {
-      this.rootProxy = createBridgeProxy<T>(this.transport, this.metadata);
+      this.rootProxy = createBridgeProxy<T>(
+        this.transport,
+        this.metadata,
+        "",
+        this,
+      );
     }
     return this.rootProxy as T;
   }
@@ -42,10 +48,11 @@ export class NativeBridgeSession {
   }
 
   /**
-   * Dispose bridge session and clean up underlying transport.
+   * Dispose bridge session, remove from session cache, and clean up underlying transport.
    */
   public dispose(): void {
     this.rootProxy = null;
+    evictBridgeSession(this.endpointName);
     this.transport.dispose();
   }
 }

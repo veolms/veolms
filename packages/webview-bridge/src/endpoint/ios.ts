@@ -98,10 +98,12 @@ export class IOSEndpoint implements NativeEndpoint {
                 typeof replyPayload === "string"
                   ? replyPayload
                   : JSON.stringify(replyPayload);
-              safelyDispatchHandlers(this.listeners, replyString);
+              if (typeof replyString === "string") {
+                safelyDispatchHandlers(this.listeners, replyString);
+              }
             }
           })
-          .catch((error: unknown) => {
+          .catch(() => {
             if (this.isDisposed) {
               return;
             }
@@ -110,8 +112,7 @@ export class IOSEndpoint implements NativeEndpoint {
               typeof console.error === "function"
             ) {
               console.error(
-                `iOS WebKit reply handler error for endpoint "${this.name}":`,
-                error,
+                `iOS WebKit reply handler rejected for endpoint "${this.name}".`,
               );
             }
           });

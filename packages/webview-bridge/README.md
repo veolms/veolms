@@ -123,5 +123,4 @@ pnpm --filter @veolms/webview-bridge typecheck
 
 ## Scope
 
-This package provides the JavaScript/TypeScript side of the WebView-to-native bridge. Native Android/iOS implementations are separate from this package. 
-
+This package provides the JavaScript/TypeScript side of the WebView-to-native bridge. Native Android/iOS implementations are separate from this package.

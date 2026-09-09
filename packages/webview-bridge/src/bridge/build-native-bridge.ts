@@ -33,6 +33,21 @@ const bridgeCache = new Map<string, NativeBridgeSession>();
 const initPromises = new Map<string, Promise<NativeBridgeSession>>();
 
 /**
+ * Generation counter for invalidating in-flight initialization tasks when clearNativeBridgeCache is called.
+ */
+let cacheGeneration = 0;
+
+/**
+ * Evicts a session from the active session cache by endpoint name.
+ */
+export function evictBridgeSession(endpointName: string): void {
+  const name =
+    (typeof endpointName === "string" ? endpointName : "").trim() ||
+    DEFAULT_BRIDGE_NAME;
+  bridgeCache.delete(name);
+}
+
+/**
  * Constructs or retrieves a cached NativeBridge instance matching frontend contract `T`.
  *
  * Handles endpoint discovery, initialization handshake, capability metadata caching,
@@ -78,6 +93,9 @@ export async function buildNativeBridge<
     }
   }
 
+  // Capture current cache generation to detect cache clearing during init
+  const currentGeneration = cacheGeneration;
+
   // 3. Initiate new bridge session
   const initTask = (async (): Promise<NativeBridgeSession> => {
     const endpoint = createNativeEndpoint(name);
@@ -110,6 +128,14 @@ export async function buildNativeBridge<
         transport,
         metadataRegistry,
       );
+
+      if (currentGeneration !== cacheGeneration) {
+        session.dispose();
+        throw new Error(
+          `Bridge cache was cleared while endpoint "${name}" was initializing.`,
+        );
+      }
+
       bridgeCache.set(name, session);
       return session;
     } catch (err) {
@@ -143,6 +169,7 @@ export async function buildNativeBridge<
  * Primarily useful for testing or WebView re-navigation teardown.
  */
 export function clearNativeBridgeCache(): void {
+  cacheGeneration++;
   for (const session of bridgeCache.values()) {
     session.dispose();
   }

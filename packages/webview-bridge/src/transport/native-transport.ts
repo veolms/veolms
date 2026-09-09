@@ -113,7 +113,6 @@ export class DefaultNativeTransport implements NativeTransport {
     if (this.isDisposed) {
       throw new BridgeTransportError(
         `Transport for endpoint "${this.endpoint.name}" is disposed.`,
-        this.endpoint.name,
       );
     }
 
@@ -140,7 +139,6 @@ export class DefaultNativeTransport implements NativeTransport {
       if (!replyPayload || typeof replyPayload !== "object") {
         throw new BridgeInitializationError(
           `Initialization reply payload for endpoint "${this.endpoint.name}" is invalid or null.`,
-          this.endpoint.name,
         );
       }
 
@@ -152,7 +150,6 @@ export class DefaultNativeTransport implements NativeTransport {
       ) {
         throw new BridgeInitializationError(
           `Incompatible bridge protocol version: native reported version ${metadataPayload.protocolVersion}, expected ${PROTOCOL_VERSION}.`,
-          this.endpoint.name,
         );
       }
 
@@ -178,7 +175,6 @@ export class DefaultNativeTransport implements NativeTransport {
         `Failed to initialize bridge transport for endpoint "${this.endpoint.name}": ${
           err instanceof Error ? err.message : String(err)
         }`,
-        this.endpoint.name,
       );
     }
   }
@@ -243,7 +239,6 @@ export class DefaultNativeTransport implements NativeTransport {
     if (this.isDisposed) {
       throw new BridgeTransportError(
         `Transport for endpoint "${this.endpoint.name}" is disposed.`,
-        this.endpoint.name,
       );
     }
 
@@ -290,7 +285,6 @@ export class DefaultNativeTransport implements NativeTransport {
             `Failed to transmit message over endpoint "${this.endpoint.name}": ${
               err instanceof Error ? err.message : String(err)
             }`,
-            this.endpoint.name,
           ),
         );
       }
@@ -445,7 +439,6 @@ export class DefaultNativeTransport implements NativeTransport {
       pending.reject(
         new BridgeTransportError(
           `Native transport for endpoint "${this.endpoint.name}" was disposed.`,
-          this.endpoint.name,
         ),
       );
     }
@@ -453,5 +446,8 @@ export class DefaultNativeTransport implements NativeTransport {
     this.pendingRequests.clear();
     this.eventSubscribers.clear();
     this.metadataRegistry = null;
+
+    // Clean up underlying endpoint (removes window message listeners and callback properties)
+    this.endpoint.dispose();
   }
 }

@@ -52,7 +52,6 @@ export function isBridgeReply(val: unknown): val is BridgeReply {
   }
   const status = obj["status"];
   if (
-    status &&
     status !== REPLY_STATUS.SUCCESS &&
     status !== REPLY_STATUS.ACK &&
     status !== REPLY_STATUS.ERROR
@@ -84,6 +83,9 @@ export function isBridgeEvent(val: unknown): val is BridgeEvent {
     return false;
   }
   if (typeof obj["name"] !== "string" || obj["name"] === "") {
+    return false;
+  }
+  if (!("payload" in obj) || !isBridgeValue(obj["payload"])) {
     return false;
   }
   return true;

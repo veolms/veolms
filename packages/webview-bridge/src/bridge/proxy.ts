@@ -6,6 +6,7 @@ import type {
   NativeTransport,
 } from "../transport/types.d.ts";
 import type { MetadataRegistry } from "./metadata.ts";
+import type { NativeBridgeSession } from "./native-bridge.ts";
 
 /**
  * Creates a developer-facing Proxy object for NativeBridge.
@@ -18,6 +19,7 @@ export function createBridgeProxy<T extends object>(
   transport: NativeTransport,
   metadata: MetadataRegistry,
   basePath: string = "",
+  session?: NativeBridgeSession,
 ): T {
   // Empty dummy target for Proxy wrapping
   const NativeBridgeProxyTarget = function () {} as unknown as object;
@@ -54,7 +56,7 @@ export function createBridgeProxy<T extends object>(
             transport.onEvent(eventName, handler);
         }
         if (prop === "dispose") {
-          return () => transport.dispose();
+          return () => (session ? session.dispose() : transport.dispose());
         }
       }
 
@@ -89,6 +91,8 @@ export function createBridgeProxy<T extends object>(
         if (metadata.isReadable(currentPath)) {
           return transport.get(currentPath);
         }
+        // Write-only property returns undefined when read directly
+        return undefined;
       }
 
       // 6. Support function calls directly on the property
@@ -117,8 +121,8 @@ export function createBridgeProxy<T extends object>(
           );
         }
         const bridgeValue = value === undefined ? null : (value as BridgeValue);
-        // Execute set call asynchronously
-        void transport.set(currentPath, bridgeValue);
+        // Execute set call asynchronously and swallow rejections to avoid unhandledrejection events in browser
+        void transport.set(currentPath, bridgeValue).catch(() => {});
         return true;
       }
 
@@ -136,7 +140,9 @@ export function createBridgeProxy<T extends object>(
       );
 
       if (metadata.hasCapability(basePath)) {
-        return transport.invoke(basePath, bridgeArgs);
+        if (metadata.isFunction(basePath)) {
+          return transport.invoke(basePath, bridgeArgs);
+        }
       }
       // NOOP
       return Promise.resolve(null);
@@ -170,6 +176,7 @@ function createBridgeProxyInternal<T extends object>(
         if (metadata.isReadable(childPath)) {
           return transport.get(childPath);
         }
+        return undefined;
       }
 
       const childFunctionHandler = (
@@ -178,7 +185,10 @@ function createBridgeProxyInternal<T extends object>(
         const bridgeArgs: BridgeValue[] = args.map((arg) =>
           arg === undefined ? null : (arg as BridgeValue),
         );
-        if (metadata.hasCapability(childPath)) {
+        if (
+          metadata.hasCapability(childPath) &&
+          metadata.isFunction(childPath)
+        ) {
           return transport.invoke(childPath, bridgeArgs);
         }
         return Promise.resolve(null);
@@ -204,7 +214,7 @@ function createBridgeProxyInternal<T extends object>(
           );
         }
         const bridgeValue = value === undefined ? null : (value as BridgeValue);
-        void transport.set(childPath, bridgeValue);
+        void transport.set(childPath, bridgeValue).catch(() => {});
         return true;
       }
       return true;
