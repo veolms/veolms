@@ -75,6 +75,7 @@ function ContextMenuContent({
   className,
   align = "start",
   alignOffset = 4,
+  portalContainer,
   side = "right",
   sideOffset = 0,
   ...props
@@ -82,9 +83,14 @@ function ContextMenuContent({
   Pick<
     ContextMenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
-  >) {
+  > & {
+    portalContainer?: ContextMenuPrimitive.Portal.Props["container"];
+  }) {
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal
+      container={portalContainer}
+      data-slot="context-menu-portal"
+    >
       <ContextMenuPrimitive.Positioner
         className="isolate z-220 outline-none"
         align={align}

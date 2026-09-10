@@ -57,7 +57,7 @@ export function registerBackgroundJobs(
   fulfillmentScheduler.start();
 
   app.addHook("onClose", async () => {
-    paymentEventQueue.stop?.();
+    await paymentEventQueue.stop?.();
     fulfillmentScheduler.stop();
   });
 

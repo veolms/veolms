@@ -1,21 +1,66 @@
-name: Test development SSH
+name: Deploy development API
 
 on:
+  push:
+    branches:
+      - development
+    paths:
+      - "apps/api/**"
+      - "packages/contracts/**"
+      - "packages/database/**"
+      - "packages/config/**"
+      - "packages/storage/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-development-api.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  test-ssh:
-    name: Test deployment server SSH
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+concurrency:
+  group: deploy-development-api
+  cancel-in-progress: false
 
+jobs:
+  deploy:
+    name: Validate, build, and deploy API
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: development
+      url: ${{ vars.API_HEALTHCHECK_URL }}
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check contracts and database
+        run: |
+          pnpm --filter @veolms/contracts typecheck
+          pnpm --filter @veolms/database typecheck
+
+      - name: Type-check API
+        run: pnpm --filter @veolms/api typecheck
+
       - name: Configure SSH
         shell: bash
         env:
@@ -25,47 +70,43 @@ jobs:
           set -Eeuo pipefail
 
           test -n "${DEPLOY_SSH_PRIVATE_KEY}" || {
-            echo "DEPLOY_SSH_PRIVATE_KEY is missing"
+            echo "::error::DEPLOY_SSH_PRIVATE_KEY secret is missing"
             exit 1
           }
 
           test -n "${DEPLOY_KNOWN_HOSTS}" || {
-            echo "DEPLOY_KNOWN_HOSTS is missing"
+            echo "::error::DEPLOY_KNOWN_HOSTS secret is missing"
             exit 1
           }
 
           install -m 700 -d "${HOME}/.ssh"
 
-          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" \
-            > "${HOME}/.ssh/deploy_key"
-
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/deploy_key"
           chmod 600 "${HOME}/.ssh/deploy_key"
 
-          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" \
-            > "${HOME}/.ssh/known_hosts"
-
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
           chmod 644 "${HOME}/.ssh/known_hosts"
 
-      - name: Test SSH connection
+      - name: Deploy API and run migrations
         shell: bash
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+          DEPLOY_SERVICE_NAME: ${{ vars.DEPLOY_SERVICE_NAME }}
+          API_HEALTHCHECK_URL: ${{ vars.API_HEALTHCHECK_URL }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
 
-          test -n "${DEPLOY_HOST}" || {
-            echo "DEPLOY_HOST is missing"
-            exit 1
-          }
+          test -n "${DEPLOY_HOST}" || { echo "::error::DEPLOY_HOST variable is missing"; exit 1; }
+          test -n "${DEPLOY_USER}" || { echo "::error::DEPLOY_USER variable is missing"; exit 1; }
+          test -n "${DEPLOY_APP_DIR}" || { echo "::error::DEPLOY_APP_DIR variable is missing"; exit 1; }
+          test -n "${DEPLOY_SERVICE_NAME}" || { echo "::error::DEPLOY_SERVICE_NAME variable is missing"; exit 1; }
+          test -n "${API_HEALTHCHECK_URL}" || { echo "::error::API_HEALTHCHECK_URL variable is missing"; exit 1; }
 
-          test -n "${DEPLOY_USER}" || {
-            echo "DEPLOY_USER is missing"
-            exit 1
-          }
-
-          echo "Connecting to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT:-22}"
+          echo "Connecting to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT:-22}..."
 
           ssh \
             -i "${HOME}/.ssh/deploy_key" \
@@ -73,4 +114,66 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'echo "SSH CONNECTION SUCCESSFUL"; echo "User: $(whoami)"; echo "Host: $(hostname)"'
+            bash -s -- "${DEPLOY_APP_DIR}" "${DEPLOY_SHA}" "${DEPLOY_SERVICE_NAME}" "${API_HEALTHCHECK_URL}" <<'REMOTE'
+          set -Eeuo pipefail
+
+          app_dir="$1"
+          deploy_sha="$2"
+          service_name="$3"
+          healthcheck_url="$4"
+
+          # Ensure Node/pnpm/pm2 are on PATH for non-interactive SSH shells
+          export PATH="${HOME}/.local/share/pnpm:${HOME}/.nvm/versions/node/$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -n 1)/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+
+          # Add safe.directory to avoid dubious ownership errors
+          git config --global --add safe.directory "${app_dir}" || true
+
+          echo "==> Navigating to application directory: ${app_dir}"
+          cd "${app_dir}"
+
+          if [ ! -f ".env" ]; then
+            echo "::warning::.env file not found in ${app_dir}. Verify your server environment configuration."
+          fi
+
+          echo "==> Fetching latest commit (${deploy_sha})..."
+          git fetch --prune origin development
+          if ! git cat-file --quiet --exit-code "${deploy_sha}^{commit}"; then
+            git fetch origin "${deploy_sha}"
+          fi
+
+          echo "==> Checking out target commit..."
+          git checkout --force -B development "${deploy_sha}"
+          test "$(git rev-parse HEAD)" = "${deploy_sha}"
+
+          echo "==> Installing dependencies..."
+          pnpm install --frozen-lockfile
+
+
+          echo "==> Building API..."
+          pnpm --filter @veolms/api build
+
+          echo "==> Restarting service: ${service_name}..."
+          if command -v systemctl >/dev/null 2>&1 && sudo systemctl list-unit-files "${service_name}*" 2>/dev/null | grep -q "${service_name}"; then
+            echo "--> Restarting via systemctl..."
+            sudo systemctl restart "${service_name}"
+          elif sudo pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Restarting via sudo PM2..."
+            sudo pm2 restart "${service_name}" --update-env
+          elif pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Restarting via user PM2..."
+            pm2 restart "${service_name}" --update-env
+          else
+            echo "--> Fallback: Restarting via sudo systemctl..."
+            sudo systemctl restart "${service_name}"
+          fi
+
+          echo "==> Performing health check at: ${healthcheck_url}"
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            "${healthcheck_url}"
+
+          echo ""
+          echo "==> API deployment completed successfully for commit ${deploy_sha}!"
+          REMOTE

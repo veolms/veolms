@@ -164,9 +164,11 @@ export function selectOptimalInstanceType(spec: WorkerSpec): readonly string[] {
 
 /**
  * Intersects a tier's candidate list with an operator-configured
- * EC2_ALLOWED_INSTANCE_TYPES allow-list, if one is set. Falls back to the
- * unfiltered candidate list if the intersection would otherwise be empty
- * (a misconfigured allow-list should never make a job unprovisionable).
+ * EC2_ALLOWED_INSTANCE_TYPES allow-list, if one is set. Supports exact instance
+ * types (e.g. "c7g.xlarge") and family wildcards (e.g. "c7g.*", "c8g.*", "*").
+ * Falls back to the unfiltered candidate list if the intersection would
+ * otherwise be empty (a misconfigured allow-list should never make a job
+ * unprovisionable).
  */
 export function filterAllowedInstanceTypes(
   candidates: readonly string[],
@@ -175,7 +177,26 @@ export function filterAllowedInstanceTypes(
   if (!allowedInstanceTypes || allowedInstanceTypes.length === 0) {
     return candidates;
   }
-  const allowSet = new Set(allowedInstanceTypes);
-  const filtered = candidates.filter((candidate) => allowSet.has(candidate));
+
+  const cleanAllowList = allowedInstanceTypes
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (cleanAllowList.length === 0) {
+    return candidates;
+  }
+
+  const filtered = candidates.filter((candidate) => {
+    const candidateLower = candidate.toLowerCase();
+    return cleanAllowList.some((allowed) => {
+      if (allowed === "*") return true;
+      if (allowed.endsWith("*")) {
+        const prefix = allowed.slice(0, -1);
+        return candidateLower.startsWith(prefix);
+      }
+      return candidateLower === allowed;
+    });
+  });
+
   return filtered.length > 0 ? filtered : candidates;
 }

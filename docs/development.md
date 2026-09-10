@@ -94,11 +94,21 @@ The document lists `/` as its server, which resolves against whatever origin ser
 
 ## Static Web build
 
-The static Web build does not require PostgreSQL or the API. Build and preview it with:
+The static Web build does not require PostgreSQL or the API. A normal build
+prerenders every learning lecture. Preview builds the same output before it
+starts the local server:
 
 ```bash
 pnpm build:web
 pnpm --filter @veolms/web preview
+```
+
+For a faster test build that prerenders only the first section of each course,
+pass `--first-section` to either command:
+
+```bash
+pnpm build:web -- --first-section
+pnpm --filter @veolms/web preview -- --first-section
 ```
 
 React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_COURSE_MEDIA_BASE_URL` is optional; when it is unset, course media uses relative `/course-videos/...` URLs.

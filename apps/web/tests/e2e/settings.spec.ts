@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await installBaselineState(page);
 });
 
-test("profile settings validate, autosave, and retain academy-local identity", async ({
+test("profile settings keep signed-out identity blank and controls locked", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
@@ -22,6 +22,7 @@ test("profile settings validate, autosave, and retain academy-local identity", a
     "data-settings-tab",
     "profile",
   );
+  await expect(page.getByRole("tabpanel")).not.toHaveAttribute("tabindex");
   await expect(page.getByRole("tab", { name: "Profile" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -31,126 +32,51 @@ test("profile settings validate, autosave, and retain academy-local identity", a
   const email = page.getByLabel("Email address", { exact: true });
   const photoFile = page.getByLabel("Profile photo file");
 
-  await expect(displayName).toHaveValue("Ashi Singh");
+  await expect(displayName).toHaveValue("");
+  await expect(displayName).toBeDisabled();
   await expect(email).toHaveAttribute("readonly", "");
+  await expect(email).toBeDisabled();
   await expect(photoFile).toHaveAttribute("tabindex", "-1");
-
-  await displayName.fill("");
-  await expect(
-    page.getByText("Enter the name you want to use in this academy."),
-  ).toBeVisible();
-  await expect(displayName).toHaveAttribute("aria-invalid", "true");
-
-  await displayName.fill("Avery Patel");
-  await expect(displayName).toHaveValue("Avery Patel");
-
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const value = localStorage.getItem("veolms-profile-student");
-        return value ? JSON.parse(value).displayName : null;
-      }),
-    )
-    .toBe("Avery Patel");
-  await expect(
-    page.locator(
-      ".courses-profile__button > span:not(.shell-profile-avatar) strong",
-    ),
-  ).toHaveText("Avery Patel");
-
-  await page.reload();
-  await expect(displayName).toHaveValue("Avery Patel");
-  await expect(
-    page.locator(
-      ".courses-profile__button > span:not(.shell-profile-avatar) strong",
-    ),
-  ).toHaveText("Avery Patel");
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  const mobileNavigation = page.getByRole("navigation", {
-    name: "Student mobile navigation",
-  });
-  await mobileNavigation
-    .getByRole("button", { name: "More navigation options" })
-    .click();
-  const mobileMenu = page.getByRole("dialog", { name: /More/ });
-  const mobileProfile = mobileMenu.locator(".mobile-menu-sheet__profile");
-  const mobileNavigationList = mobileMenu.locator(".mobile-menu-sheet__list");
-  await expect(mobileProfile).toContainText("Avery Patel");
-  await expect(mobileProfile).toHaveAttribute("aria-haspopup", "menu");
-  const navigationListBefore = await mobileNavigationList.boundingBox();
-  await mobileProfile.click();
-  const mobileProfileMenu = page.locator("#mobile-profile-menu");
-  await expect(mobileProfileMenu).toBeVisible();
-  const [profileBounds, profileMenuBounds] = await Promise.all([
-    mobileProfile.boundingBox(),
-    mobileProfileMenu.boundingBox(),
-  ]);
-  expect(profileBounds).not.toBeNull();
-  expect(profileMenuBounds).not.toBeNull();
-  expect(profileMenuBounds!.x).toBeGreaterThan(profileBounds!.x);
-  expect(profileMenuBounds!.width).toBeLessThan(profileBounds!.width);
-  expect(profileMenuBounds!.x + profileMenuBounds!.width).toBeCloseTo(
-    profileBounds!.x + profileBounds!.width,
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(
     0,
   );
-  expect(profileMenuBounds!.y).toBeGreaterThanOrEqual(
-    profileBounds!.y + profileBounds!.height,
-  );
-  const navigationListAfter = await mobileNavigationList.boundingBox();
-  expect(navigationListBefore).not.toBeNull();
-  expect(navigationListAfter).not.toBeNull();
-  expect(navigationListAfter!.y).toBeCloseTo(navigationListBefore!.y, 0);
-  await expect(mobileProfileMenu.getByText("Workspace")).toHaveCount(0);
   await expect(
-    mobileProfileMenu.getByRole("menuitemradio", { name: "Student" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitemradio", { name: "Creator" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitem", { name: "Hide sidebar" }),
-  ).toHaveCount(0);
-  await expect(
-    mobileProfileMenu.getByRole("menuitem", { name: "Logout" }),
+    page.getByText("Sign in to edit and save your profile."),
   ).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(
+    page.evaluate(() => localStorage.getItem("veolms-profile-student")),
+  ).resolves.toBeNull();
+  await expect(page.locator(".courses-profile__login-button")).toContainText(
+    "Login",
+  );
+
+  await page.reload();
+  await expect(displayName).toHaveValue("");
+  await expect(displayName).toBeDisabled();
+  await expect(page.locator(".courses-profile__login-button")).toContainText(
+    "Login",
+  );
 });
 
-test("profile settings preserve an offline draft and recover autosave", async ({
+test("signed-out profile settings stay locked while offline", async ({
   page,
 }) => {
   await openApp(page, "/settings/profile");
 
   const displayName = page.getByLabel("Display name", { exact: true });
-  const storedNameBeforeDraft = await page.evaluate(() => {
-    const value = localStorage.getItem("veolms-profile-student");
-    return value ? JSON.parse(value).displayName : null;
-  });
-
   await page.context().setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-  await displayName.fill("Offline draft");
-  await expect(displayName).toHaveValue("Offline draft");
-
-  await page.waitForTimeout(500);
+  await expect(displayName).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(
+    0,
+  );
   await expect(
-    page.evaluate(() => {
-      const value = localStorage.getItem("veolms-profile-student");
-      return value ? JSON.parse(value).displayName : null;
-    }),
-  ).resolves.toBe(storedNameBeforeDraft);
+    page.evaluate(() => localStorage.getItem("veolms-profile-draft-student")),
+  ).resolves.toBeNull();
 
   await page.context().setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const value = localStorage.getItem("veolms-profile-student");
-        return value ? JSON.parse(value).displayName : null;
-      }),
-    )
-    .toBe("Offline draft");
+  await expect(displayName).toBeDisabled();
 });
 
 test("settings tabs support roving arrow, Home, and End navigation", async ({
@@ -171,6 +97,58 @@ test("settings tabs support roving arrow, Home, and End navigation", async ({
   await page.keyboard.press("Home");
   await expect(page).toHaveURL(/\/settings\/profile$/);
   await expect(profileTab).toBeFocused();
+});
+
+test("settings arrow shortcuts cycle without stealing focus", async ({
+  page,
+}) => {
+  await openApp(page, "/settings/profile");
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/\/settings\/account$/);
+  await expect(page.getByRole("tab", { name: "Account" })).not.toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await page.keyboard.press("ArrowRight");
+  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(
+    page.getByRole("tab", { name: "Appearance", exact: true }),
+  ).not.toBeFocused();
+
+  const displayMode = page.getByRole("radio", { name: "Dark" });
+  await displayMode.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/\/settings\/appearance$/);
+
+  await displayMode.evaluate((element) => element.blur());
+  await page.evaluate(() => {
+    for (let index = 0; index < 3; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowRight",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/settings\/notifications$/);
+
+  await page.evaluate(() => {
+    for (let index = 0; index < 2; index += 1) {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowLeft",
+          repeat: true,
+        }),
+      );
+    }
+  });
+  await expect(page).toHaveURL(/\/settings\/sidebar$/);
 });
 
 test("creator settings control which sidebar menu items are visible", async ({
@@ -932,6 +910,12 @@ test("sidebar logo stays on one anchor while the rail reveals it", async ({
 test("learning settings save a coherent preference object", async ({
   page,
 }) => {
+  await page.route("**/api/v1/courses", (route) =>
+    route.fulfill({ status: 200, json: { courses: [] } }),
+  );
+  await page.route("**/api/v1/notification-preferences", (route) =>
+    route.fulfill({ status: 200, json: { preferences: [] } }),
+  );
   await openApp(page, "/settings/learning");
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "data-settings-tab",
@@ -948,8 +932,18 @@ test("learning settings save a coherent preference object", async ({
   const curriculumScrollbar = page.getByRole("switch", {
     name: "Show course content scrollbar",
   });
+  const startFromBeginning = page.getByRole("switch", {
+    name: "Always start lectures from beginning",
+  });
+  const skipInterval = page.getByRole("button", {
+    name: "Skip interval: 10 seconds (Default)",
+  });
+  await skipInterval.click();
+  await page.getByRole("option", { name: "30 seconds" }).click();
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "true");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "true");
+  await expect(startFromBeginning).toHaveAttribute("aria-checked", "false");
+  await startFromBeginning.click();
   await lessonPageScrollbar.click();
   await curriculumScrollbar.click();
   await expect(page.locator("html")).toHaveAttribute(
@@ -979,6 +973,8 @@ test("learning settings save a coherent preference object", async ({
   expect(stored.reminderDays).toContain("sat");
   expect(stored.showLessonPageScrollbar).toBe(false);
   expect(stored.showCurriculumScrollbar).toBe(false);
+  expect(stored.seekIntervalSeconds).toBe(30);
+  expect(stored.resumeFromLastPosition).toBe(false);
 
   await page.reload();
   await expect(
@@ -986,4 +982,8 @@ test("learning settings save a coherent preference object", async ({
   ).toHaveAttribute("aria-pressed", "true");
   await expect(lessonPageScrollbar).toHaveAttribute("aria-checked", "false");
   await expect(curriculumScrollbar).toHaveAttribute("aria-checked", "false");
+  await expect(startFromBeginning).toHaveAttribute("aria-checked", "true");
+  await expect(
+    page.getByRole("button", { name: "Skip interval: 30 seconds" }),
+  ).toBeVisible();
 });

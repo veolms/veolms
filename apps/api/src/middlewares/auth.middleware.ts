@@ -13,9 +13,11 @@ export interface AuthMiddleware {
     request: FastifyRequest,
     reply: FastifyReply,
   ) => Promise<void>;
-  requirePermission: (
-    permission: string,
-  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  /** Allows anonymous requests, but blocks an authenticated session pending MFA. */
+  requireMfaVerifiedIfAuthenticated: (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => Promise<void>;
   requireRoles: (
     roles: string[],
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -24,6 +26,26 @@ export interface AuthMiddleware {
 export function createAuthMiddleware(
   sessionService: SessionService,
 ): AuthMiddleware {
+  function sessionHasPendingMfa(request: FastifyRequest): boolean {
+    if (!request.user || !request.session) {
+      return false;
+    }
+
+    return sessionNeedsMfaChallenge({
+      mfaMandatory: request.user.mfaMandatory,
+      totpEnabled: request.user.totpEnabled,
+      passkeyEnabled: request.user.passkeyEnabled,
+      mfaVerified: request.session.mfa_verified,
+    });
+  }
+
+  function sendMfaRequired(
+    reply: FastifyReply,
+    message = "Multi-factor authentication is required to access this resource.",
+  ) {
+    return reply.code(403).send(httpError(403, "MFA_REQUIRED", message));
+  }
+
   async function authenticate(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -68,63 +90,18 @@ export function createAuthMiddleware(
         .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
     }
 
-    if (
-      sessionNeedsMfaChallenge({
-        mfaMandatory: request.user.mfaMandatory,
-        totpEnabled: request.user.totpEnabled,
-        passkeyEnabled: request.user.passkeyEnabled,
-        mfaVerified: request.session.mfa_verified,
-      })
-    ) {
-      return reply
-        .code(403)
-        .send(
-          httpError(
-            403,
-            "MFA_REQUIRED",
-            "Multi-factor authentication is required to access this resource.",
-          ),
-        );
+    if (sessionHasPendingMfa(request)) {
+      return sendMfaRequired(reply);
     }
   }
 
-  function requirePermission(permission: string) {
-    return async (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ): Promise<void> => {
-      // 1. Ensure authenticated
-      if (!request.user || !request.session) {
-        return reply
-          .code(401)
-          .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
-      }
-
-      // 2. Enforce MFA check for users who have MFA enabled or mandatory
-      if (
-        sessionNeedsMfaChallenge({
-          mfaMandatory: request.user.mfaMandatory,
-          totpEnabled: request.user.totpEnabled,
-          passkeyEnabled: request.user.passkeyEnabled,
-          mfaVerified: request.session.mfa_verified,
-        })
-      ) {
-        return reply
-          .code(403)
-          .send(
-            httpError(
-              403,
-              "MFA_REQUIRED",
-              "Multi-factor authentication code required to complete action",
-            ),
-          );
-      }
-
-      // 3. Verify user has capability permission
-      if (!request.user.permissions.includes(permission)) {
-        return reply.code(403).send(httpError(403, "FORBIDDEN", "Forbidden"));
-      }
-    };
+  async function requireMfaVerifiedIfAuthenticated(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    if (sessionHasPendingMfa(request)) {
+      return sendMfaRequired(reply);
+    }
   }
 
   /**
@@ -137,6 +114,10 @@ export function createAuthMiddleware(
       reply: FastifyReply,
     ): Promise<void> => {
       const user = request.user;
+      if (sessionHasPendingMfa(request)) {
+        return sendMfaRequired(reply);
+      }
+
       if (!user || !roles.some((role) => user.roles.includes(role))) {
         return reply
           .code(403)
@@ -155,7 +136,7 @@ export function createAuthMiddleware(
     authenticate,
     requireAuthenticated,
     requireMfaVerified,
-    requirePermission,
+    requireMfaVerifiedIfAuthenticated,
     requireRoles,
   };
 }

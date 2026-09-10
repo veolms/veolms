@@ -1,5 +1,3 @@
-import type { AuthMenuNode } from "@veolms/contracts";
-
 export type IdentifierType = "email" | "phone";
 
 export type OtpPurpose = "login" | "email_verification" | "phone_verification";
@@ -8,12 +6,23 @@ export interface SessionUser {
   id: string;
   username: string;
   display_name: string;
+  avatar_data_url: string | null;
+  bio: string | null;
+  email_public: boolean;
+  mobile_public: boolean;
+  linkedin_url: string | null;
+  linkedin_public: boolean;
+  github_url: string | null;
+  github_public: boolean;
+  website_url: string | null;
+  website_public: boolean;
   email: string | null;
+  email_verified_at: Date | null;
   phone_no: string | null;
+  phone_verified_at: Date | null;
+  is_deleted: boolean;
   mfa_mandatory: boolean;
   roles?: string[];
-  permissions?: string[];
-  menus?: AuthMenuNode[];
 }
 
 export interface MfaState {
@@ -38,11 +47,21 @@ export interface AuthenticatedUserContext {
   username: string;
   name: string;
   displayName: string;
+  avatarDataUrl: string | null;
+  bio: string | null;
+  emailPublic: boolean;
+  mobilePublic: boolean;
+  linkedinUrl: string | null;
+  linkedinPublic: boolean;
+  githubUrl: string | null;
+  githubPublic: boolean;
+  websiteUrl: string | null;
+  websitePublic: boolean;
   email: string | null;
+  emailVerified: boolean;
   phoneNo: string | null;
+  mobileVerified: boolean;
   roles: string[];
-  permissions: string[];
-  menus: AuthMenuNode[];
   totpEnabled: boolean;
   passkeyEnabled: boolean;
   mfaMandatory: boolean;

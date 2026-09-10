@@ -2,6 +2,10 @@ import type { CourseRole } from "../courses/catalogue";
 
 const CREATOR_ROLES = new Set(["creator", "instructor", "admin"]);
 
+export function getWorkspaceRoleStorageKey(userId?: string | null): string {
+  return userId ? `veolms-role-${userId}` : "veolms-role";
+}
+
 export function getAllowedWorkspaceRoles(
   roles: readonly string[] | null | undefined,
 ): CourseRole[] {
@@ -37,7 +41,9 @@ export function resolveWorkspaceRole(
   currentRole: CourseRole,
 ): CourseRole {
   const visible = getVisibleWorkspaceRoles(roles, currentRole);
-  return visible.includes(currentRole) ? currentRole : (visible[0] ?? "student");
+  return visible.includes(currentRole)
+    ? currentRole
+    : (visible[0] ?? "student");
 }
 
 export function getUserRoles(

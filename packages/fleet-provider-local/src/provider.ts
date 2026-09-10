@@ -1,5 +1,11 @@
 import { execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
+const repoRoot =
+  typeof __dirname !== "undefined"
+    ? resolve(__dirname, "../../../..")
+    : process.cwd();
+
 import type {
   ExecutionResult,
   FleetProvider,
@@ -64,6 +70,9 @@ export function createLocalProvider(
       }
 
       const env: Record<string, string> = {
+        ...(process.env.DATABASE_URL
+          ? { DATABASE_URL: process.env.DATABASE_URL }
+          : {}),
         ...config.defaultEnv,
         ...spec.environmentVariables,
         WORKER_ID: id,
@@ -75,7 +84,7 @@ export function createLocalProvider(
         command: workerExecutable,
         args,
         env,
-        cwd: config.cwd,
+        cwd: config.cwd ?? repoRoot,
       });
 
       return {

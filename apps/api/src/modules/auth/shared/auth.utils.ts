@@ -13,16 +13,45 @@ export function generateRandomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+export function normalizePhoneIdentifier(phoneNo: string): string {
+  const trimmed = phoneNo.trim();
+  const digits = trimmed.replace(/\D/g, "");
+
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    return `+91${digits}`;
+  }
+
+  if (
+    digits.length === 11 &&
+    digits.startsWith("0") &&
+    /^[6-9]/.test(digits.slice(1))
+  ) {
+    return `+91${digits.slice(1)}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
+}
+
 export function resolveIdentifier(body: {
   email?: string | undefined;
   phoneNo?: string | undefined;
 }): { identifier: string; identifierType: IdentifierType } {
   if (body.email) {
-    return { identifier: body.email, identifierType: "email" };
+    return {
+      identifier: body.email.trim().toLowerCase(),
+      identifierType: "email",
+    };
   }
 
   if (body.phoneNo) {
-    return { identifier: body.phoneNo, identifierType: "phone" };
+    return {
+      identifier: normalizePhoneIdentifier(body.phoneNo),
+      identifierType: "phone",
+    };
   }
 
   throw new AppError(
@@ -30,6 +59,10 @@ export function resolveIdentifier(body: {
     "INVALID_REQUEST",
     "Email or phone number is required.",
   );
+}
+
+export function normalizePhoneNumber(phoneNo: string): string {
+  return phoneNo.trim().replace(/[^\d+]/g, "");
 }
 
 export function generatePkce(): { verifier: string; challenge: string } {

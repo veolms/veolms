@@ -4,6 +4,7 @@ import {
   currentUserResponseSchema,
   loginRequestSchema,
   loginResponseSchema,
+  profileUpdateRequestSchema,
   registerRequestSchema,
   userProfileResponseSchema,
 } from "@veolms/contracts";
@@ -114,6 +115,48 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       preHandler: [middleware.authenticate],
     },
     controller.me,
+  );
+
+  app.patch(
+    "/auth/me",
+    {
+      schema: {
+        operationId: "updateCurrentUserProfile",
+        tags: ["Auth"],
+        summary: "Update current user profile",
+        description:
+          "Updates editable public profile fields for the authenticated account.",
+        body: profileUpdateRequestSchema,
+        response: {
+          200: jsonResponse("User profile updated.", userProfileResponseSchema),
+          400: errorResponse("Invalid profile or username already taken."),
+          404: errorResponse("User account was not found."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.updateProfile,
+  );
+
+  app.delete(
+    "/auth/me",
+    {
+      schema: {
+        operationId: "deactivateCurrentUserAccount",
+        tags: ["Auth"],
+        summary: "Deactivate the current user account",
+        description:
+          "Deactivates the authenticated account, invalidates every active session, and queues a confirmation email.",
+        response: {
+          200: jsonResponse("Account deactivated.", authMessageResponseSchema),
+          401: errorResponse("Authentication required."),
+          403: errorResponse("MFA step-up required."),
+          404: errorResponse("User account was not found."),
+        },
+      },
+      preHandler: context.mfaVerified,
+    },
+    controller.deactivateAccount,
   );
 };
 

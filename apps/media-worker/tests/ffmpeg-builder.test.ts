@@ -131,6 +131,32 @@ describe("FFmpeg Dynamic HLS Command Builder", () => {
     assert.equal(result.variants.length, 2);
     assert.equal(result.args.filter((value) => value === "144").length, 4);
   });
+
+  it("builds vertical/portrait resolution scale filter and variant metadata for portrait sources", () => {
+    const result = buildFfmpegHlsArgs({
+      inputPath: "/tmp/source.mp4",
+      outputDir: "/tmp/hls_out",
+      qualities: ["1080p"],
+      metadata: {
+        durationSeconds: 60,
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+      segmentDurationSeconds: 6,
+    });
+
+    assert.equal(result.variants[0]?.width, 1080);
+    assert.equal(result.variants[0]?.height, 1920);
+    assert.ok(
+      result.args.some((a) =>
+        a.includes("scale=w=1080:h=1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920"),
+      ),
+    );
+    assert.ok(
+      result.masterPlaylistContent.includes("RESOLUTION=1080x1920"),
+    );
+  });
 });
 
 describe("Video Processing V2 — Compression Resolution Cap", () => {

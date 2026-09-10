@@ -4,11 +4,13 @@ import {
   CURRICULUM_SECTION_COUNT_DEFAULT,
   normalizeCurriculumSize,
 } from "./curriculumSize";
+import type { CourseOverviewResponse } from "@veolms/contracts";
 
 export interface CourseVideo {
   fileName: string;
   duration: number;
   src: string;
+  thumbnailSrc?: string;
 }
 
 export type LessonStatus = "done" | "active" | "todo";
@@ -40,7 +42,10 @@ export function resolveCourseMediaBaseUrl(configuredBaseUrl?: string) {
 }
 
 export const courseMediaBaseUrl = resolveCourseMediaBaseUrl(
-  import.meta.env.VITE_COURSE_MEDIA_BASE_URL,
+  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
+    (typeof process !== "undefined"
+      ? process.env.VITE_COURSE_MEDIA_BASE_URL
+      : undefined),
 );
 
 export function resolveCourseVideoSrc(
@@ -50,13 +55,51 @@ export function resolveCourseVideoSrc(
   return `${baseUrl.replace(/\/+$/, "")}/${encodeURIComponent(fileName)}`;
 }
 
+export function resolveCourseHlsBaseUrl(configuredBaseUrl?: string) {
+  const normalizedBaseUrl = configuredBaseUrl?.trim().replace(/\/+$/, "");
+  return normalizedBaseUrl ? `${normalizedBaseUrl}/course-hls` : "/course-hls";
+}
+
+export const courseHlsBaseUrl = resolveCourseHlsBaseUrl(
+  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
+    (typeof process !== "undefined"
+      ? process.env.VITE_COURSE_MEDIA_BASE_URL
+      : undefined),
+);
+
+export function getCourseVideoHlsSlug(fileName: string) {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function resolveCourseHlsSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/${getCourseVideoHlsSlug(fileName)}/master.m3u8`;
+}
+
+export function resolveCourseVideoThumbnailSrc(
+  fileName: string,
+  baseUrl = courseHlsBaseUrl,
+) {
+  return `${baseUrl.replace(/\/+$/, "")}/thumbnails/${getCourseVideoHlsSlug(fileName)}.webp`;
+}
+
 const courseVideo = (fileName: string, duration: number): CourseVideo => ({
   fileName,
   duration,
-  src: resolveCourseVideoSrc(fileName),
+  src: resolveCourseHlsSrc(fileName),
+  thumbnailSrc: resolveCourseVideoThumbnailSrc(fileName),
 });
 
 export const courseVideos: CourseVideo[] = [
+  courseVideo("The Complete JavaScript Course Trailer.mp4", 454.9),
   courseVideo("04 ui design system and storybook.mp4", 2090.61),
   courseVideo("00 welcome to the typescript course.mp4", 103.05),
   courseVideo("03 the idea of veolms.mp4", 699.94),
@@ -68,16 +111,16 @@ export const courseVideos: CourseVideo[] = [
 ];
 
 const sourceLessonVideos = [
-  courseVideos[4]!,
-  courseVideos[1]!,
-  courseVideos[7]!,
   courseVideos[0]!,
-  courseVideos[5]!,
   courseVideos[2]!,
+  courseVideos[8]!,
+  courseVideos[1]!,
   courseVideos[6]!,
   courseVideos[3]!,
-  courseVideos[0]!,
-  courseVideos[2]!,
+  courseVideos[7]!,
+  courseVideos[4]!,
+  courseVideos[1]!,
+  courseVideos[3]!,
 ];
 
 const repeatedSectionLessonCounts = [6, 7, 8, 5, 5];
@@ -330,6 +373,51 @@ export const createLessonsById = (courseSections: readonly CourseSection[]) =>
       section.lessons.map((item): [number, Lesson] => [item[0], item]),
     ),
   );
+
+/**
+ * Converts the API overview curriculum into the compact learning-player
+ * representation. The numeric lesson IDs intentionally remain route-local:
+ * learning URLs and saved progress use the ordered lesson number, while the
+ * API's UUIDs stay inside the course service boundary.
+ */
+export function adaptCourseOverviewToLearningSections(
+  overview?: CourseOverviewResponse,
+): CourseSection[] | null {
+  const overviewSections = overview?.sections
+    ?.slice()
+    .sort((a, b) => a.position - b.position);
+  if (!overviewSections?.length) return null;
+
+  let nextLessonNumber = 1;
+  const adaptedSections = overviewSections.map((section, sectionIndex) => {
+    const lessons = (section.lessons ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .filter((lesson) => lesson.isPublished)
+      .map((lesson) => {
+        const lessonNumber = nextLessonNumber;
+        nextLessonNumber += 1;
+        return [
+          lessonNumber,
+          lesson.title || `Lesson ${lessonNumber}`,
+          formatMediaTime(getCourseVideoForLesson(lessonNumber).duration),
+          "todo" as const,
+          lesson.isPreview,
+        ] as Lesson;
+      });
+
+    return {
+      id: sectionIndex + 1,
+      title: section.title || `Section ${sectionIndex + 1}`,
+      progress: `0/${lessons.length}`,
+      lessons,
+    };
+  });
+
+  return adaptedSections.some((section) => section.lessons.length > 0)
+    ? adaptedSections
+    : null;
+}
 
 export const sections: CourseSection[] = createCurriculumSections(
   CURRICULUM_SECTION_COUNT_DEFAULT,

@@ -36,7 +36,7 @@ try {
     },
     recipients: {
       findRecipient: async (userId) => {
-        const user = await auth.findUserById(userId);
+        const user = await auth.findUserByIdForNotification(userId);
         return user ? { id: user.id, email: user.email } : undefined;
       },
     },

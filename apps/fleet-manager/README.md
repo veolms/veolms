@@ -66,65 +66,54 @@ The **Fleet Manager** is the control-plane orchestrator responsible for managing
 
 ---
 
-## Two-Way State Reconciliation
+## State Reconciliation & Dynamic Scheduling
 
-The Fleet Manager actively reconciles state between the PostgreSQL database and real cloud instances:
-
-1. **Spot Interruption & Unexpected Worker Crash**:
-   - If a DB worker is in `provisioning`, `starting`, `ready`, or `processing`, but its EC2 instance is terminated/missing in AWS (past a 30s launch grace period):
-   - The worker is marked `failed` with event `spot_interrupted`.
-   - The associated video job has its `attempts` incremented and is automatically reset to `queued` if `attempts < max_attempts` (or marked `failed` if retries exhausted).
-
-2. **Orphaned Cloud Instances (Zombie Cleanup)**:
-   - If an EC2 instance tagged with `ManagedBy: veolms-fleet-manager` is running in AWS but has no matching active worker in the database (and is older than 3 minutes):
-   - Fleet Manager terminates the instance via `provider.terminateWorker()` and logs `orphan_instance_terminated` to prevent cost leaks.
-
-3. **Storage Output Verification**:
-   - When a job completes, Fleet Manager verifies that the target `master.m3u8` playlist exists in S3 (with non-zero size) before finalizing `completed` status.
-
----
-
-## Dynamic EventBridge Scheduler Integration
-
-In serverless environments (AWS Lambda), Fleet Manager avoids expensive fixed polling:
-
-- After every tick or job claim, `fleet.syncWakeupSchedule()` computes `min(next_check_at)` across all active workers.
-- It upserts a single one-shot schedule named `veolms-fleet-next-check` in AWS EventBridge Scheduler targeting the Lambda ARN at that exact timestamp (`at(YYYY-MM-DDTHH:mm:ss)`).
-- When all active jobs complete and no workers remain, `cancelWakeup()` automatically deletes the schedule. **Zero workers = zero Lambda invocations = zero idle cost.**
+- **Two-Way Reconciliation**: Actively reconciles PostgreSQL DB state against cloud provider instances (auto-recovering Spot interruptions, terminating orphaned EC2 instances, and verifying S3 output playlists). For detailed state transitions and recovery flows, see **[`docs/fleet/job-lifecycle-and-reconciliation.md`](../../docs/fleet/job-lifecycle-and-reconciliation.md)**.
+- **Dynamic EventBridge Scheduling**: In serverless mode, calculates `min(next_check_at)` across active workers, schedules one-shot `at(timestamp)` wakeups via EventBridge Scheduler, and deletes the schedule when idle (zero idle cost). For mathematical details and formulas, see **[`docs/fleet/dynamic-scheduling.md`](../../docs/fleet/dynamic-scheduling.md)**.
+- **Job Cancellation**: Marks jobs as `cancelled`, unassigns workers, trips worker abort signals, and purges S3 artifacts.
 
 ---
 
 ## CLI & Operations
 
-Run commands using `pnpm` from the monorepo root or package directory:
+Run commands using `pnpm` from the monorepo root:
 
 ```bash
 # Start long-running serverful daemon
-pnpm fleet run
+pnpm fleet:cli run
 
 # Queue a transcoding job
-pnpm fleet queue my-video.mp4 --qualities=1080p,720p,480p --prefix=transcoded/my-video/
+pnpm fleet:cli queue my-video.mp4 --qualities=1080p,720p,480p --prefix=transcoded/my-video/
+
+# Queue & trigger video task (interactive or with flags)
+pnpm fleet:queue:trigger
+
+# Queue & trigger with specific video key and qualities
+pnpm fleet:queue:trigger --key=raw/video.mp4 --qty=720p,360p
+
+# Cancel an active/queued job and purge its S3 files
+pnpm fleet:queue:trigger --cancel --job-id=<job-uuid>
 
 # View job status, worker handle, and diagnostic events
-pnpm fleet status <job-id>
+pnpm fleet:cli status <job-id>
 
 # View cluster health metrics (queued, processing, stalled count)
-pnpm fleet health
+pnpm fleet:cli health
 
 # List active and recent workers
-pnpm fleet workers
+pnpm fleet:cli workers
 
 # Terminate stalled zombie workers manually
-pnpm fleet prune
+pnpm fleet:cli prune
 
 # Select active provider (AWS / Local)
-pnpm fleet provider
+pnpm fleet:provider
 
-# Provision AWS infrastructure (IAM roles, Lambda, S3 bundle, log groups)
-pnpm fleet infra
+# Provision infrastructure (IAM roles, Lambda, S3 bundle, log groups, or local storage)
+pnpm fleet:infra
 
-# Tear down cloud infrastructure
-pnpm fleet destroy
+# Tear down infrastructure
+pnpm fleet:destroy
 ```
 
 ---
@@ -143,18 +132,14 @@ pnpm --filter @veolms/fleet-manager typecheck
 
 ## How to Contribute a New Provider
 
-To add a new cloud provider (e.g. `@veolms/fleet-provider-gcp` or `@veolms/fleet-provider-azure`):
+All providers are pluggable packages and follow the specification defined in [`packages/fleet-types/AGENTS.md`](../../packages/fleet-types/AGENTS.md).
 
-1. Create `packages/fleet-provider-<name>`.
-2. Implement the `FleetProvider` interface defined in `@veolms/fleet-types`:
-   - `createWorker(id, spec)`
-   - `getWorker(providerWorkerId)`
-   - `getWorkerStatus(providerWorkerId)`
-   - `terminateWorker(providerWorkerId)`
-   - `healthCheck(providerWorkerId)`
-   - `listActiveInstances?()`
-   - `scheduleNextWakeup?(targetTime, payload)`
-   - `cancelWakeup?()`
-   - `verifyJobOutput?(outputPrefix)`
-3. Export a factory function named `createProvider` or `create<Name>Provider`.
-4. Register the option in [`src/provider-select.ts`](./src/provider-select.ts).
+To add a new cloud or local provider (e.g. `@veolms/fleet-provider-gcp` or `@veolms/fleet-provider-kubernetes`):
+
+1. Follow the step-by-step checklist in [`packages/fleet-types/AGENTS.md`](../../packages/fleet-types/AGENTS.md).
+2. Create `packages/fleet-provider-<name>`.
+3. Implement `FleetProvider` in `src/index.ts` and the standard lifecycle exports:
+   - `./setup`: `configureEnv`, `provisionInfra`, `runInfraSetup`
+   - `./destroy`: `destroyInfra`, `runDestroy`
+   - `./trigger`: `triggerTest`, `runTrigger`
+4. Providers are dynamically discovered—`apps/fleet-manager` requires zero vendor code!

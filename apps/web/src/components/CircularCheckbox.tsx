@@ -10,6 +10,7 @@ interface CircularCheckboxProps {
   className?: string;
   indicatorClassName?: string;
   unstyled?: boolean;
+  disabled?: boolean;
 }
 
 export function CircularCheckbox({
@@ -22,6 +23,7 @@ export function CircularCheckbox({
   className = "",
   indicatorClassName = "",
   unstyled = false,
+  disabled = false,
 }: CircularCheckboxProps) {
   const text = <span>{label}</span>;
   const indicatorClasses = indicatorClassName
@@ -34,8 +36,8 @@ export function CircularCheckbox({
       data-circular-checkbox
       className={
         unstyled
-          ? className
-          : `group inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors hover:bg-(--hover) sm:text-sm ${className}`
+          ? `${className} ${disabled ? "pointer-events-none opacity-60" : ""}`
+          : `group inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors hover:bg-(--hover) sm:text-sm ${className} ${disabled ? "pointer-events-none opacity-60" : ""}`
       }
     >
       {labelPosition === "before" && text}
@@ -43,6 +45,7 @@ export function CircularCheckbox({
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onCheckedChange(event.target.checked)}
         aria-label={ariaLabel ?? label}
         className="peer sr-only"
