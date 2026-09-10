@@ -230,8 +230,9 @@ export function LessonResourceManager({
                     {resource.name}
                   </div>
                   <div className="mt-0.5 text-[0.72rem] text-(--muted)">
-                    {resource.type} <span aria-hidden="true">·</span>{" "}
-                    {resource.size}
+                    <span>{resource.type}</span>{" "}
+                    <span aria-hidden="true">·</span>{" "}
+                    <span>{resource.size}</span>
                   </div>
                 </div>
                 <button

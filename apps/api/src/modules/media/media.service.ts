@@ -370,6 +370,49 @@ export function createMediaService({
     return { should202: true, jobId: job.id };
   }
 
+  async function cancelTranscodeJob(
+    mediaId: string,
+    ownerId: string,
+    logger?: FastifyBaseLogger,
+  ) {
+    const media = await mediaRepo.findMediaAssetById(database, mediaId, ownerId);
+    if (!media || media.type !== "video") {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+
+    const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
+    if (!job) {
+      throw new AppError(409, "MEDIA_JOB_NOT_FOUND", "No transcoding job exists for this video.");
+    }
+    if (!["queued", "provisioning", "processing"].includes(job.status)) {
+      throw new AppError(409, "MEDIA_NOT_CANCELLABLE", "This video is no longer being transcoded.");
+    }
+
+    try {
+      await services.videoDispatch.dispatch({
+        status: "cancelled",
+        jobId: job.id,
+        videoId: mediaId,
+        videoKey: job.video_key,
+        outputPrefix: job.output_prefix,
+        deleteFiles: true,
+        deleteMedia: false,
+      });
+    } catch (error) {
+      logger?.error({ err: error, jobId: job.id, mediaId }, "Failed to dispatch video cancellation cleanup");
+      throw error;
+    }
+
+    // In serverful/local mode the fleet manager watches the database directly;
+    // in serverless mode the cancellation event above performs this update.
+    await mediaRepo.updateVideoJobStatus(database, job.id, {
+      status: "cancelled",
+    });
+    await mediaRepo.updateMediaAssetStatus(database, mediaId, "failed");
+
+    return { cancelled: true, jobId: job.id };
+  }
+
   /**
    * Retrieves a single media asset by ID with optional owner verification.
    * Inter-module API method (Rule 11 compliance).
@@ -641,6 +684,7 @@ export function createMediaService({
     confirmUpload,
     queueTranscodeJob,
     retryTranscodeJob,
+    cancelTranscodeJob,
     getMediaAsset,
     getMediaAssets,
     getVideoJobProgress,

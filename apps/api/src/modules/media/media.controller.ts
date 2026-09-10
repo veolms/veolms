@@ -81,6 +81,16 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
+  async function cancelVideoJob(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return service.cancelTranscodeJob(
+      request.params.mediaId,
+      request.user!.id,
+      request.log,
+    );
+  }
+
   async function streamVideoJobProgress(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
     reply: FastifyReply,
@@ -168,6 +178,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     getPlaybackBootstrap,
     streamHlsResource,
     retryVideoJob,
+    cancelVideoJob,
     streamVideoJobProgress,
     getMediaAssetStream,
   };

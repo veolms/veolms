@@ -135,6 +135,15 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     controller.retryVideoJob,
   );
 
+  app.post(
+    "/media/:mediaId/transcode/cancel",
+    {
+      preHandler: requireAuthenticated,
+      schema: { params: z.object({ mediaId: z.uuid() }) },
+    },
+    controller.cancelVideoJob,
+  );
+
   app.get(
     "/media/:mediaId/progress/stream",
     {
