@@ -10,6 +10,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "migrate": "node --env-file-if-exists=../../.env src/migrate.ts",
+    "migrate:fleet": "node --env-file=../../apps/fleet-manager/.env src/migrate.ts",
     "seed": "node --env-file-if-exists=../../.env src/seed.ts",
     "reset": "node --env-file-if-exists=../../.env src/reset.ts",
     "migration:create": "node ./scripts/create-migration.ts"
