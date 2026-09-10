@@ -525,6 +525,29 @@ export function createCourseService({
     const resourceMediaById = new Map(
       resourceMediaAssets.map((media) => [media.id, media]),
     );
+    const contentMediaAssets = await mediaService.getMediaAssets(
+      Array.from(
+        new Set(
+          lessons
+            .map((lesson) => lesson.content_media_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ),
+      creatorId,
+    );
+    const contentMediaDurations = new Map(
+      contentMediaAssets
+        .filter((media) => media.duration_seconds != null)
+        .map((media) => [media.id, media.duration_seconds ?? 0]),
+    );
+    const totalDurationSeconds = lessons.reduce(
+      (total, lesson) =>
+        total +
+        (lesson.content_media_id
+          ? (contentMediaDurations.get(lesson.content_media_id) ?? 0)
+          : 0),
+      0,
+    );
 
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
@@ -539,6 +562,9 @@ export function createCourseService({
             description: les.description,
             contentType: les.content_type as "video" | "document",
             contentMediaId: les.content_media_id,
+            durationSeconds: les.content_media_id
+              ? (contentMediaDurations.get(les.content_media_id) ?? 0)
+              : 0,
             position: les.position,
             isPreview: les.is_preview,
             isPublished: les.is_published,
@@ -595,6 +621,7 @@ export function createCourseService({
         createdAt: course.created_at.toISOString(),
         updatedAt: course.updated_at.toISOString(),
         publishedAt: course.published_at?.toISOString() ?? null,
+        totalDurationSeconds,
       },
       sections: fullSections,
       accessRules: accessRules
@@ -746,6 +773,9 @@ export function createCourseService({
             description: les.description,
             contentType: les.content_type as "video" | "document",
             contentMediaId: les.content_media_id,
+            durationSeconds: les.content_media_id
+              ? (mediaDurationMap.get(les.content_media_id) ?? 0)
+              : 0,
             position: les.position,
             isPreview: les.is_preview,
             isPublished: les.is_published,
