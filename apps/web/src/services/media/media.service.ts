@@ -153,6 +153,10 @@ export const mediaService = {
   ): Promise<{ should202: boolean; jobId: string }> {
     return api.post(`/media/${mediaAssetId}/transcode/retry`);
   },
+
+  cancelTranscode(mediaAssetId: string): Promise<{ cancelled: true; jobId: string }> {
+    return api.post(`/media/${mediaAssetId}/transcode/cancel`);
+  },
 };
 
 function createAbortError(): Error {

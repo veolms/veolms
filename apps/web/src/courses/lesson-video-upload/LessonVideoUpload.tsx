@@ -79,7 +79,7 @@ export function LessonVideoUpload({
   mediaAssetId,
   disabled = false,
   hideUploadWhenAttached = false,
-  attachedActionLabel = "Replace",
+  attachedActionLabel = "Change Video",
   stackStatusBelow = false,
   onMediaAttached,
   onProcessingComplete,
@@ -552,6 +552,25 @@ export function LessonVideoUpload({
     }
   }, [activeMediaId, resetReconnectBackoff]);
 
+  const cancelTranscoding = useCallback(async () => {
+    if (!activeMediaId) return;
+    setErrorMessage(null);
+    setTrackProgress(false);
+    resetReconnectBackoff();
+    try {
+      await mediaService.cancelTranscode(activeMediaId);
+      setProgressStreamAttempt((attempt) => attempt + 1);
+      setTranscodeStatus("cancelled");
+      setPhase("failed");
+      setErrorMessage("Video processing was cancelled.");
+    } catch (error) {
+      setTrackProgress(true);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to cancel video processing.",
+      );
+    }
+  }, [activeMediaId, resetReconnectBackoff]);
+
   const retryAttachment = useCallback(async () => {
     if (!candidateMediaId || phase !== "ready") return;
     await commitCandidate(candidateMediaId);
@@ -864,7 +883,7 @@ export function LessonVideoUpload({
           >
             {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
             <span>
-              {hasVideo ? (activeMediaId ? attachedActionLabel : "Change Video") : "Upload"}
+              {hasVideo ? attachedActionLabel : "Upload"}
             </span>
           </button>
         )}
@@ -1172,6 +1191,14 @@ export function LessonVideoUpload({
                       className={`${SECONDARY_ACTION_CLASS} min-w-[120px] px-5`}
                     >
                       Cancel Upload
+                    </button>
+                  ) : phase === "transcoding" ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelTranscoding()}
+                      className={`${SECONDARY_ACTION_CLASS} min-w-[140px] px-5`}
+                    >
+                      Cancel Processing
                     </button>
                   ) : !isReplacingVideo ? (
                     <button

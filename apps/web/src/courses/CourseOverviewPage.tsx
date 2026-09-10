@@ -36,7 +36,6 @@ import {
   type CourseRole,
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
-import { formatDuration } from "./courseAdapter";
 import type { CourseSection } from "../learning/courseContent";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
@@ -1294,7 +1293,9 @@ export function adaptCourseOverviewResponse(
         .map((les, lesIdx) => [
           lesIdx + 1,
           les.title || `Lesson ${lesIdx + 1}`,
-          formatDuration(les.durationSeconds ?? 0),
+          les.durationSeconds && les.durationSeconds > 0
+            ? formatDuration(les.durationSeconds)
+            : "",
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
@@ -1414,7 +1415,9 @@ export function adaptPreviewDataToOverview(
         .map((les, lesIdx) => [
           lesIdx + 1,
           les.title || `Lesson ${lesIdx + 1}`,
-          formatDuration(les.durationSeconds ?? 0),
+          les.durationSeconds && les.durationSeconds > 0
+            ? formatDuration(les.durationSeconds)
+            : "",
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
