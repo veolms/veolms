@@ -21,7 +21,10 @@ import {
   red,
   yellow,
 } from "@veolms/fleet-types/terminal";
-import { resolveS3BucketName, resolveS3BuildBucketName } from "../src/config.ts";
+import {
+  resolveS3BucketName,
+  resolveS3BuildBucketName,
+} from "../src/config.ts";
 
 const USER_NAME = "veolms-fleet-infra-action";
 const POLICY_NAME = "veolms-fleet-infra-action-policy";
@@ -48,8 +51,7 @@ export interface SetupCicdResult {
 export async function runSetupCicdIam(
   options?: SetupCicdOptions,
 ): Promise<SetupCicdResult> {
-  const profile =
-    options?.profile ?? process.env["AWS_PROFILE"] ?? undefined;
+  const profile = options?.profile ?? process.env["AWS_PROFILE"] ?? undefined;
   const region =
     options?.region ||
     process.env["AWS_REGION"] ||
@@ -62,17 +64,13 @@ export async function runSetupCicdIam(
     resolveS3BucketName(process.env);
 
   const userName =
-    options?.userName ||
-    process.env["CICD_USER_NAME"] ||
-    USER_NAME;
+    options?.userName || process.env["CICD_USER_NAME"] || USER_NAME;
   const policyName =
-    options?.policyName ||
-    process.env["CICD_POLICY_NAME"] ||
-    POLICY_NAME;
+    options?.policyName || process.env["CICD_POLICY_NAME"] || POLICY_NAME;
 
   if (!bucketName) {
     throw new Error(
-      "S3_BUILD_BUCKET, S3_BUCKET_NAME, or S3_BUCKET environment variable must be specified to configure least-privilege CI/CD permissions.\n" +
+      "S3_BUILD_BUCKET or S3_BUCKET environment variable must be specified to configure least-privilege CI/CD permissions.\n" +
         "Run `pnpm fleet:infra` first to provision the bucket, or pass S3_BUILD_BUCKET=<name>.",
     );
   }
@@ -111,7 +109,9 @@ export async function runSetupCicdIam(
 
   const accountId = caller.Account;
   if (!accountId) {
-    throw new Error("Could not determine AWS Account ID from active credentials.");
+    throw new Error(
+      "Could not determine AWS Account ID from active credentials.",
+    );
   }
   console.info(`  ${green("✔")} AWS Account ID: ${bold(accountId)}`);
 
@@ -203,7 +203,9 @@ export async function runSetupCicdIam(
         SetAsDefault: true,
       }),
     );
-    console.info(`  ${green("✔")} Updated policy with current S3 bucket & region.`);
+    console.info(
+      `  ${green("✔")} Updated policy with current S3 bucket & region.`,
+    );
   } catch (err: any) {
     if (err.name === "NoSuchEntityException" || err.name === "NoSuchEntity") {
       await iam.send(
@@ -230,7 +232,9 @@ export async function runSetupCicdIam(
 
   // 4. Check / Create Access Keys
   console.info(`\n[4/4] Checking access keys for ${bold(userName)}...`);
-  const keys = await iam.send(new ListAccessKeysCommand({ UserName: userName }));
+  const keys = await iam.send(
+    new ListAccessKeysCommand({ UserName: userName }),
+  );
   const existingKeyCount = keys.AccessKeyMetadata?.length ?? 0;
   let accessKeyId: string | undefined = undefined;
   let secretAccessKey: string | undefined = undefined;
@@ -308,15 +312,23 @@ export async function runSetupCicdIam(
       );
       accessKeyId = createdKey.AccessKey?.AccessKeyId || "";
       secretAccessKey = createdKey.AccessKey?.SecretAccessKey || "";
-      console.info(`  ${green("✔")} Created new access key for ${bold(userName)}.`);
+      console.info(
+        `  ${green("✔")} Created new access key for ${bold(userName)}.`,
+      );
     }
   } else {
     console.info(`  ${dim("ℹ")} Skipped generating new access keys.`);
   }
 
-  console.info(`\n${bold(cyan("╔══════════════════════════════════════════════════════╗"))}`);
-  console.info(`${bold(cyan("║"))}          ${bold(green("CI/CD IAM User Setup Complete!"))}              ${bold(cyan("║"))}`);
-  console.info(`${bold(cyan("╚══════════════════════════════════════════════════════╝"))}\n`);
+  console.info(
+    `\n${bold(cyan("╔══════════════════════════════════════════════════════╗"))}`,
+  );
+  console.info(
+    `${bold(cyan("║"))}          ${bold(green("CI/CD IAM User Setup Complete!"))}              ${bold(cyan("║"))}`,
+  );
+  console.info(
+    `${bold(cyan("╚══════════════════════════════════════════════════════╝"))}\n`,
+  );
   console.info(`  ${bold("IAM User:")}              ${bold(userName)}`);
   console.info(`  ${bold("IAM Policy:")}            ${bold(policyArn)}`);
   console.info(`  ${bold("AWS Region:")}            ${bold(region)}`);
@@ -327,9 +339,13 @@ export async function runSetupCicdIam(
     `Configure these secrets under: ${cyan("Settings -> Secrets and variables -> Actions")}\n`,
   );
   if (accessKeyId) {
-    console.info(`  ${bold("AWS_ACCESS_KEY_ID")}:     ${bold(green(accessKeyId))}`);
+    console.info(
+      `  ${bold("AWS_ACCESS_KEY_ID")}:     ${bold(green(accessKeyId))}`,
+    );
   } else {
-    console.info(`  ${bold("AWS_ACCESS_KEY_ID")}:     ${dim("<not-generated>")}`);
+    console.info(
+      `  ${bold("AWS_ACCESS_KEY_ID")}:     ${dim("<not-generated>")}`,
+    );
   }
   if (secretAccessKey) {
     console.info(

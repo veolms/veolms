@@ -19,7 +19,7 @@ that should poll for compatible work.
 
 | Variable                   | Default        | Meaning                                                     |
 | -------------------------- | -------------- | ----------------------------------------------------------- |
-| `S3_BUCKET`                | `veolms-media` | S3 bucket. `S3_BUCKET_NAME` is accepted as an alias.        |
+| `S3_BUCKET`                | `veolms-media` | Primary S3 bucket for video uploads and outputs.            |
 | `S3_REGION`                | `us-east-1`    | S3 region. `AWS_REGION` is accepted as an alias.            |
 | `S3_ENDPOINT`              | unset          | Custom S3-compatible endpoint.                              |
 | `S3_FORCE_PATH_STYLE`      | unset          | Set `true` for path-style S3-compatible endpoints.          |

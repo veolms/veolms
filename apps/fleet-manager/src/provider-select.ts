@@ -3,18 +3,19 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as readline from "node:readline/promises";
-import { isMainModule } from "@veolms/fleet-types";
 import { bold, cyan, dim, green, yellow } from "@veolms/fleet-types/terminal";
+import { isMainModule } from "@veolms/fleet-types";
 
-interface ProviderOption {
+export interface ProviderOption {
   id: string;
   name: string;
   pkg: string;
   description: string;
   status: "available" | "planned";
+  requiresInstall?: boolean;
 }
 
-const AVAILABLE_PROVIDERS: readonly ProviderOption[] = [
+export const AVAILABLE_PROVIDERS: readonly ProviderOption[] = [
   {
     id: "aws",
     name: "Amazon Web Services (AWS)",
@@ -30,6 +31,15 @@ const AVAILABLE_PROVIDERS: readonly ProviderOption[] = [
     description:
       "Local Node.js child processes + local FFmpeg for zero-cost offline development",
     status: "available",
+  },
+  {
+    id: "docker",
+    name: "Docker Engine (Local Fleet)",
+    pkg: "@veolms/fleet-provider-docker",
+    description:
+      "One ephemeral media-worker container per job, shared s3-bucket mount, and Docker socket orchestration",
+    status: "available",
+    requiresInstall: false,
   },
   {
     id: "gcp",
@@ -49,106 +59,160 @@ const AVAILABLE_PROVIDERS: readonly ProviderOption[] = [
   },
 ];
 
-export async function runProviderSelection(): Promise<void> {
+function setEnvValue(content: string, key: string, value: string): string {
+  const entry = `${key}=${JSON.stringify(value)}`;
+  const pattern = new RegExp(`^${key}=.*$`, "m");
+  return pattern.test(content)
+    ? content.replace(pattern, entry)
+    : `${content}${entry}\n`;
+}
+
+function getEnvValue(content: string, key: string): string | undefined {
+  const match = content.match(new RegExp(`^${key}=(.*)$`, "m"));
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const raw = match[1].trim();
+  return raw.replace(/^(['"])(.*)\1$/, "$2");
+}
+
+function removeEnvValue(content: string, key: string): string {
+  return content.replace(new RegExp(`^${key}=.*\\n?`, "gm"), "");
+}
+
+function detectDockerSocketGid(): string | undefined {
+  if (process.platform === "win32") {
+    return "0";
+  }
+  // Docker Desktop bind-mounts the host socket into the Linux VM as root:root,
+  // so the container must join group 0 even when the host-side socket has a
+  // different GID. Native Linux engines preserve the socket GID.
+  try {
+    const operatingSystem = execSync(
+      'docker info --format "{{.OperatingSystem}}"',
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    ).trim();
+    if (/docker desktop/i.test(operatingSystem)) {
+      return "0";
+    }
+  } catch {
+    // Fall back to the host socket metadata when Docker info is unavailable.
+  }
+
+  try {
+    const gid = execSync("stat -c %g /var/run/docker.sock", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return /^\d+$/.test(gid) ? gid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function runProviderSelection(
+  requestedProviderId?: string,
+): Promise<void> {
   console.info(`
 ╔══════════════════════════════════════════════════════════════╗
 ║          VeoLMS Fleet Manager — Provider Selection           ║
 ╚══════════════════════════════════════════════════════════════╝
 `);
 
-  console.info("Select a provider package to install for the Fleet Manager:\n");
-
-  AVAILABLE_PROVIDERS.forEach((prov, index) => {
-    const num = bold(`[${index + 1}]`);
-    const statusTag =
-      prov.status === "available"
-        ? green("● Ready")
-        : yellow("○ Planned for future release");
-    console.info(`  ${num} ${bold(prov.name)} ${statusTag}`);
-    console.info(`      Package: ${cyan(prov.pkg)}`);
-    console.info(`      ${dim(prov.description)}\n`);
-  });
-
-  let selectedIndex = -1;
-
-  // Check CLI arguments for provider selection
-  for (const arg of process.argv.slice(2)) {
-    const val = arg.startsWith("--provider=")
-      ? arg.split("=")[1]?.trim().toLowerCase()
-      : arg.trim().toLowerCase();
-    const idx = AVAILABLE_PROVIDERS.findIndex(
-      (p, i) =>
-        p.id === val ||
-        p.name.toLowerCase() === val ||
-        String(i + 1) === val,
+  let selectedProvider: ProviderOption | undefined;
+  if (requestedProviderId) {
+    selectedProvider = AVAILABLE_PROVIDERS.find(
+      (provider) => provider.id === requestedProviderId.toLowerCase(),
     );
-    if (idx >= 0 && AVAILABLE_PROVIDERS[idx]?.status === "available") {
-      selectedIndex = idx;
-      break;
-    }
-  }
+  } else {
+    console.info(
+      "Select a provider package to install for the Fleet Manager:\n",
+    );
 
-  if (selectedIndex < 0) {
+    AVAILABLE_PROVIDERS.forEach((prov, index) => {
+      const num = bold(`[${index + 1}]`);
+      const statusTag =
+        prov.status === "available"
+          ? green("● Ready")
+          : yellow("○ Planned for future release");
+      console.info(`  ${num} ${bold(prov.name)} ${statusTag}`);
+      console.info(`      Package: ${cyan(prov.pkg)}`);
+      console.info(`      ${dim(prov.description)}\n`);
+    });
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
 
-    while (selectedIndex < 0) {
-      const answer = (await rl.question(bold("Select provider [1-4]: "))).trim();
+    while (!selectedProvider) {
+      const answer = (
+        await rl.question(
+          bold(`Select provider [1-${AVAILABLE_PROVIDERS.length}]: `),
+        )
+      ).trim();
       const parsed = parseInt(answer, 10);
-      if (
-        !Number.isNaN(parsed) &&
-        parsed >= 1 &&
-        parsed <= AVAILABLE_PROVIDERS.length
-      ) {
-        const chosen = AVAILABLE_PROVIDERS[parsed - 1];
-        if (!chosen) {
-          continue;
-        }
-        if (chosen.status === "planned") {
-          console.warn(
-            `\n  ${yellow(`⚠ ${chosen.name} is not yet implemented. Please select an available provider.`)}\n`,
-          );
-          continue;
-        }
-        selectedIndex = parsed - 1;
-      } else {
+      const chosen =
+        Number.isNaN(parsed) ||
+        parsed < 1 ||
+        parsed > AVAILABLE_PROVIDERS.length
+          ? undefined
+          : AVAILABLE_PROVIDERS[parsed - 1];
+      if (!chosen) {
         console.warn(
           `  Invalid choice. Please enter a number between 1 and ${AVAILABLE_PROVIDERS.length}.`,
         );
+      } else if (chosen.status === "planned") {
+        console.warn(
+          `\n  ${yellow(`⚠ ${chosen.name} is not yet implemented. Please select an available provider.`)}\n`,
+        );
+      } else {
+        selectedProvider = chosen;
       }
     }
-
     rl.close();
   }
 
-  const selectedProvider = AVAILABLE_PROVIDERS[selectedIndex];
   if (!selectedProvider) {
-    throw new Error("Invalid provider selection.");
+    throw new Error(
+      `Unknown provider "${requestedProviderId}". Use aws, local, or docker.`,
+    );
+  }
+  if (selectedProvider.status === "planned") {
+    throw new Error(`${selectedProvider.name} is not implemented yet.`);
   }
   console.info(
     `\n✔ Selected Provider: ${bold(green(selectedProvider.name))} (${cyan(selectedProvider.pkg)})\n`,
   );
 
   // Step 1: Install the selected provider package in @veolms/fleet-manager
-  console.info(
-    `[1/3] Installing ${cyan(selectedProvider.pkg)} into @veolms/fleet-manager...`,
-  );
-  try {
-    execSync(
-      `pnpm --filter @veolms/fleet-manager add "${selectedProvider.pkg}@workspace:*"`,
-      {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      },
-    );
+  if (selectedProvider.requiresInstall !== false) {
     console.info(
-      `✔ Successfully added ${cyan(selectedProvider.pkg)} to dependencies.\n`,
+      `[1/3] Installing ${cyan(selectedProvider.pkg)} into @veolms/fleet-manager...`,
     );
-  } catch (err: unknown) {
-    console.warn(
-      `⚠ Could not run pnpm add (workspace may already resolve package). Continuing...`,
+    const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    try {
+      execSync(
+        `${pnpmCmd} --filter @veolms/fleet-manager add "${selectedProvider.pkg}@workspace:*"`,
+        {
+          stdio: "inherit",
+          cwd: process.cwd(),
+        },
+      );
+      console.info(
+        `✔ Successfully added ${cyan(selectedProvider.pkg)} to dependencies.\n`,
+      );
+    } catch {
+      console.warn(
+        `⚠ Could not run pnpm add (workspace may already resolve package). Continuing...`,
+      );
+    }
+  } else {
+    console.info(
+      `[1/3] ${cyan(selectedProvider.pkg)} is built in; no package installation is needed.\n`,
     );
   }
 
@@ -163,22 +227,38 @@ export async function runProviderSelection(): Promise<void> {
     envContent += "\n";
   }
 
-  if (/^FLEET_PROVIDER=.*/m.test(envContent)) {
-    envContent = envContent.replace(
-      /^FLEET_PROVIDER=.*/m,
-      `FLEET_PROVIDER="${selectedProvider.id}"`,
-    );
-  } else {
-    envContent = `FLEET_PROVIDER="${selectedProvider.id}"\n${envContent}`;
-  }
+  envContent = setEnvValue(envContent, "FLEET_PROVIDER", selectedProvider.id);
+  envContent = setEnvValue(envContent, "PROVIDER", selectedProvider.id);
 
-  if (/^PROVIDER=.*/m.test(envContent)) {
-    envContent = envContent.replace(
-      /^PROVIDER=.*/m,
-      `PROVIDER="${selectedProvider.id}"`,
-    );
-  } else {
-    envContent += `PROVIDER="${selectedProvider.id}"\n`;
+  if (selectedProvider.id === "docker") {
+    // Docker workers inherit DATABASE_URL and derive their heartbeat cadence
+    // from HEARTBEAT_TIMEOUT_SECONDS; remove obsolete aliases from older setup.
+    for (const key of [
+      "FLEET_DATABASE_URL",
+      "DOCKER_WORKER_DATABASE_URL",
+      "DOCKER_WORKER_HEARTBEAT_INTERVAL_MS",
+    ]) {
+      envContent = removeEnvValue(envContent, key);
+    }
+    if (!getEnvValue(envContent, "DOCKER_WORKER_IMAGE")) {
+      envContent = setEnvValue(
+        envContent,
+        "DOCKER_WORKER_IMAGE",
+        "veolms-media-worker:local",
+      );
+    }
+    if (!getEnvValue(envContent, "DOCKER_NETWORK")) {
+      envContent = setEnvValue(envContent, "DOCKER_NETWORK", "veolms-fleet");
+    }
+    if (!getEnvValue(envContent, "DOCKER_SOCKET_GID")) {
+      const socketGid = detectDockerSocketGid();
+      if (socketGid) {
+        envContent = setEnvValue(envContent, "DOCKER_SOCKET_GID", socketGid);
+      }
+    }
+    if (!getEnvValue(envContent, "FLEET_TEST_MODE")) {
+      envContent = setEnvValue(envContent, "FLEET_TEST_MODE", "true");
+    }
   }
 
   writeFileSync(envPath, envContent, "utf-8");
@@ -195,12 +275,23 @@ export async function runProviderSelection(): Promise<void> {
   console.info(
     `╚══════════════════════════════════════════════════════════════╝`,
   );
-  console.info(`  Run the following command to provision your infrastructure:`);
+  console.info(
+    `  Run the following command to configure environment and provision infrastructure:`,
+  );
   console.info(`\n      ${bold(cyan("pnpm fleet:infra"))}\n`);
 }
 
 if (isMainModule(import.meta.url)) {
-  runProviderSelection().catch((err: unknown) => {
+  const providerArgument = process.argv.slice(2).find((argument) => {
+    if (argument.startsWith("--provider=")) {
+      return true;
+    }
+    return !argument.startsWith("-");
+  });
+  const requestedProvider = providerArgument?.startsWith("--provider=")
+    ? providerArgument.slice("--provider=".length)
+    : providerArgument;
+  runProviderSelection(requestedProvider).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\n✘ Provider selection failed: ${message}\n`);
     process.exit(1);

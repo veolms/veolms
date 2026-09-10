@@ -41,19 +41,12 @@ async function dispatch(): Promise<void> {
     ? `${normalized}/destroy`
     : `@veolms/fleet-provider-${normalized}/destroy`;
 
-  let destroyFn: () => Promise<void>;
+  let destroyFn: (options?: unknown) => Promise<void>;
   try {
-    destroyFn = await loadModuleFunction<() => Promise<void>>(
+    destroyFn = await loadModuleFunction<(options?: unknown) => Promise<void>>(
       packageName,
-      [
-        "destroyInfra",
-        "runDestroy",
-        "runAwsInfraDestroy",
-        "runLocalInfraDestroy",
-        "runInfraDestroy",
-        "default",
-      ],
-      `Provider destroy package "${packageName}" does not export a destroy function.`,
+      "destroyInfra",
+      `Provider destroy package "${packageName}" does not export a "destroyInfra" function.`,
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -61,7 +54,11 @@ async function dispatch(): Promise<void> {
       `Failed to load destroy module for provider "${provider}" (${packageName}). Run "pnpm fleet:provider" to install it. Details: ${msg}`,
     );
   }
-  await destroyFn();
+
+  const isStopOnly =
+    process.argv.includes("--stop-only") || process.argv.includes("--stop");
+  const isComplete = process.argv.includes("--complete");
+  await destroyFn({ stopOnly: isStopOnly, complete: isComplete });
 }
 
 dispatch().catch((err: unknown) => {

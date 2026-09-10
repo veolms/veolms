@@ -90,7 +90,9 @@ export function createFleetManager(
         return false;
       }
 
-      const job = await jobManager.claimNextJob();
+      const job = await jobManager.claimNextJob({
+        storageProvider: config.STORAGE_PROVIDER,
+      });
       if (!job) {
         return false;
       }

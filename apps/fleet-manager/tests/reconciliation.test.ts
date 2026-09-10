@@ -458,9 +458,7 @@ describe("Fleet Manager — State Reconciliation & Dynamic Scheduling", () => {
               where: () => ({
                 where: () => ({
                   where: () => ({
-                    execute: async () => [
-                      { ...currentJobState },
-                    ],
+                    execute: async () => [{ ...currentJobState }],
                   }),
                 }),
               }),

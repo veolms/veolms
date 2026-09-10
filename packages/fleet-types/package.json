@@ -5,7 +5,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./terminal": "./src/terminal.ts",
-    "./entrypoint": "./src/entrypoint.ts"
+    "./entrypoint": "./src/entrypoint.ts",
+    "./zip": "./src/zip.ts",
+    "./env": "./src/env.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

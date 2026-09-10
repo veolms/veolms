@@ -11,9 +11,14 @@ import type { VideoJobTable } from "../schema/fleet.schema.ts";
  * transaction and only jobs that fit that worker's recorded capabilities are
  * considered.
  */
+export interface ClaimJobOptions {
+  readonly storageProvider?: string;
+}
+
 export async function claimNextQueuedVideoJob(
   db: Kysely<Database>,
   workerId?: string,
+  options?: ClaimJobOptions,
 ): Promise<Selectable<VideoJobTable> | null> {
   return await db.transaction().execute(async (trx) => {
     const worker = workerId
@@ -38,6 +43,22 @@ export async function claimNextQueuedVideoJob(
       .selectAll()
       .where("status", "=", "queued")
       .orderBy("created_at", "asc");
+
+    if (options?.storageProvider) {
+      query = query.where((eb) =>
+        eb.or([
+          eb(
+            "video_id",
+            "in",
+            trx
+              .selectFrom("media_assets")
+              .select("id")
+              .where("storage_provider", "=", options.storageProvider!),
+          ),
+          eb("video_id", "not in", trx.selectFrom("media_assets").select("id")),
+        ]),
+      );
+    }
 
     if (worker) {
       // Prefer the tier estimateJobHardware() already resolved (and
