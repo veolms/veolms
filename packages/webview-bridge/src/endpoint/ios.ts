@@ -103,7 +103,7 @@ export class IOSEndpoint implements NativeEndpoint {
               }
             }
           })
-          .catch(() => {
+          .catch((error: unknown) => {
             if (this.isDisposed) {
               return;
             }
@@ -114,6 +114,30 @@ export class IOSEndpoint implements NativeEndpoint {
               console.error(
                 `iOS WebKit reply handler rejected for endpoint "${this.name}".`,
               );
+            }
+
+            // Extract request id from message payload to reject pending invoke immediately
+            try {
+              const parsed = JSON.parse(message);
+              if (parsed && typeof parsed.id === "string") {
+                const errorMsg =
+                  error instanceof Error
+                    ? error.message
+                    : String(error || "iOS native handler rejected");
+                const syntheticErrorReply = JSON.stringify({
+                  type: "reply",
+                  operation: parsed.operation || "invoke",
+                  id: parsed.id,
+                  status: "error",
+                  error: {
+                    code: "NATIVE_ERROR",
+                    message: `iOS WebKit reply handler rejected: ${errorMsg}`,
+                  },
+                });
+                safelyDispatchHandlers(this.listeners, syntheticErrorReply);
+              }
+            } catch {
+              // Ignore if outbound request string is malformed
             }
           });
       }

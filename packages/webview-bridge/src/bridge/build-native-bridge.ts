@@ -38,13 +38,19 @@ const initPromises = new Map<string, Promise<NativeBridgeSession>>();
 let cacheGeneration = 0;
 
 /**
- * Evicts a session from the active session cache by endpoint name.
+ * Evicts a session from the active session cache by endpoint name if it matches the current owner.
  */
-export function evictBridgeSession(endpointName: string): void {
+export function evictBridgeSession(
+  endpointName: string,
+  sessionToEvict?: NativeBridgeSession,
+): void {
   const name =
     (typeof endpointName === "string" ? endpointName : "").trim() ||
     DEFAULT_BRIDGE_NAME;
-  bridgeCache.delete(name);
+  const current = bridgeCache.get(name);
+  if (!sessionToEvict || current === sessionToEvict) {
+    bridgeCache.delete(name);
+  }
 }
 
 /**
@@ -121,20 +127,20 @@ export async function buildNativeBridge<
 
     try {
       const metadataPayload = await transport.initialize();
-      const metadataRegistry = new MetadataRegistry(metadataPayload);
 
+      if (currentGeneration !== cacheGeneration) {
+        transport.dispose();
+        throw new Error(
+          `Bridge cache was cleared while endpoint "${name}" was initializing.`,
+        );
+      }
+
+      const metadataRegistry = new MetadataRegistry(metadataPayload);
       const session = new NativeBridgeSession(
         name,
         transport,
         metadataRegistry,
       );
-
-      if (currentGeneration !== cacheGeneration) {
-        session.dispose();
-        throw new Error(
-          `Bridge cache was cleared while endpoint "${name}" was initializing.`,
-        );
-      }
 
       bridgeCache.set(name, session);
       return session;
@@ -160,7 +166,9 @@ export async function buildNativeBridge<
     }
     return null;
   } finally {
-    initPromises.delete(name);
+    if (initPromises.get(name) === initTask) {
+      initPromises.delete(name);
+    }
   }
 }
 

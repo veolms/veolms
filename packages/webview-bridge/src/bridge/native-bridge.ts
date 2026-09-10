@@ -48,11 +48,11 @@ export class NativeBridgeSession {
   }
 
   /**
-   * Dispose bridge session, remove from session cache, and clean up underlying transport.
+   * Dispose bridge session, remove from session cache if current owner, and clean up underlying transport.
    */
   public dispose(): void {
     this.rootProxy = null;
-    evictBridgeSession(this.endpointName);
+    evictBridgeSession(this.endpointName, this);
     this.transport.dispose();
   }
 }
