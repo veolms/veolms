@@ -137,7 +137,7 @@ jobs:
 
           echo "==> Fetching latest commit (${deploy_sha})..."
           git fetch --prune origin development
-          if ! git cat-file --quiet --exit-code "${deploy_sha}^{commit}"; then
+          if ! git cat-file -e "${deploy_sha}^{commit}"; then
             git fetch origin "${deploy_sha}"
           fi
 
@@ -146,8 +146,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${deploy_sha}"
 
           echo "==> Installing dependencies..."
-          pnpm install --frozen-lockfile
-
+          CI=true pnpm install --frozen-lockfile
 
           echo "==> Building API..."
           pnpm --filter @veolms/api build
