@@ -12,7 +12,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { isMainModule } from "@veolms/fleet-types";
-import { bold, cyan, dim, green, yellow } from "@veolms/fleet-types/terminal";
+import {
+  ask,
+  bold,
+  cyan,
+  dim,
+  green,
+  isNonInteractive,
+  yellow,
+} from "@veolms/fleet-types/terminal";
 import { resolveDebianAmiId } from "../debian-ami.ts";
 
 const DEBIAN_RELEASE = "13";
@@ -216,7 +224,11 @@ shutdown -h now
           "--region",
           region,
         ],
-        { encoding: "utf-8", stdio: "pipe" },
+        {
+          encoding: "utf-8",
+          stdio: "pipe",
+          shell: process.platform === "win32",
+        },
       ).trim(),
     );
     amiId = createAmiRes.ImageId;
@@ -342,28 +354,21 @@ async function cliMain(): Promise<void> {
     }
   }
 
-  const isNonInteractive =
-    process.argv.includes("--yes") ||
-    process.argv.includes("-y") ||
-    process.argv.includes("--non-interactive") ||
-    process.env["NON_INTERACTIVE"] === "true";
+  const nonInteractiveMode = isNonInteractive();
 
-  if (!amiName && !isNonInteractive) {
+  if (!amiName && !nonInteractiveMode && process.stdin.isTTY) {
     const defaultAmiName = `veolms-worker-ami-${architecture}-${Date.now()}`;
     const rl = (await import("node:readline/promises")).createInterface({
       input: process.stdin,
       output: process.stdout,
     });
     try {
-      const answer = (
-        await rl.question(
-          `  ${bold("?")} Pre-baked AMI name ${dim(`(default: ${defaultAmiName})`)}: `,
-        )
-      ).trim();
-      amiName = answer || defaultAmiName;
+      amiName = await ask(rl, "Pre-baked AMI name", defaultAmiName);
     } finally {
       rl.close();
     }
+  } else if (!amiName) {
+    amiName = `veolms-worker-ami-${architecture}-${Date.now()}`;
   }
 
   await runBuildAmi({ region, architecture, amiName });

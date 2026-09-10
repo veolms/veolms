@@ -182,14 +182,8 @@ describe("Video Metadata Probe Lambda", () => {
     assert.equal(sentPayload.status, "cancelled");
     assert.equal(sentPayload.deleteFiles, true);
     // Verify proxy response body was parsed
-    assert.equal(
-      typeof (result.targetLambdaResponse as any)?.body,
-      "object",
-    );
-    assert.equal(
-      (result.targetLambdaResponse as any)?.body?.cancelled,
-      true,
-    );
+    assert.equal(typeof (result.targetLambdaResponse as any)?.body, "object");
+    assert.equal((result.targetLambdaResponse as any)?.body?.cancelled, true);
   });
 
   it("should propagate failure (success: false) when cancellation response has cancelled: false", async () => {
@@ -222,10 +216,7 @@ describe("Video Metadata Probe Lambda", () => {
 
     assert.equal(result.success, false);
     assert.equal(result.probed, false);
-    assert.equal(
-      (result.targetLambdaResponse as any)?.body?.cancelled,
-      false,
-    );
+    assert.equal((result.targetLambdaResponse as any)?.body?.cancelled, false);
   });
 
   it("should propagate failure when Fleet Manager returns an error status code", async () => {
@@ -255,10 +246,7 @@ describe("Video Metadata Probe Lambda", () => {
     );
 
     assert.equal(result.success, false);
-    assert.equal(
-      (result.targetLambdaResponse as any)?.statusCode,
-      500,
-    );
+    assert.equal((result.targetLambdaResponse as any)?.statusCode, 500);
   });
 
   it("should propagate failure when Fleet Manager invocation reports FunctionError", async () => {

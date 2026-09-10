@@ -139,15 +139,20 @@ export function createWorkerManager(options: {
               const meta: Record<string, unknown> =
                 (jobToSize.video_metadata as any) ?? {};
               if (media.width && !meta["width"]) meta["width"] = media.width;
-              if (media.height && !meta["height"]) meta["height"] = media.height;
+              if (media.height && !meta["height"])
+                meta["height"] = media.height;
               if (media.duration_seconds && !meta["durationSeconds"]) {
                 meta["durationSeconds"] = media.duration_seconds;
               }
               const hasMeta = Object.keys(meta).length > 0;
-              const hw = estimateJobHardware(resolvedSize, jobToSize.qualities, {
-                videoMetadata: hasMeta ? (meta as any) : undefined,
-                profile: jobToSize.hardware_profile,
-              });
+              const hw = estimateJobHardware(
+                resolvedSize,
+                jobToSize.qualities,
+                {
+                  videoMetadata: hasMeta ? (meta as any) : undefined,
+                  profile: jobToSize.hardware_profile,
+                },
+              );
 
               try {
                 await db

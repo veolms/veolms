@@ -39,8 +39,17 @@ const baseMediaWorkerConfigSchema = z.object({
     .string()
     .default("postgresql://veolms:veolms@localhost:5433/veolms"),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
+  LOCAL_STORAGE_ROOT: z.string().default("s3-bucket"),
+  WORKER_MAX_JOBS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(Number.MAX_SAFE_INTEGER),
+  FLEET_TEST_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   S3_BUCKET: z.string().default("veolms-media"),
-  S3_BUCKET_NAME: z.string().optional(),
   S3_BUILD_BUCKET: z.string().optional(),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-east-1"),
@@ -112,7 +121,7 @@ export function loadMediaWorkerConfig(
   const resolvedEnv = {
     ...env,
     WORKER_ID: env["WORKER_ID"] || undefined,
-    S3_BUCKET: env["S3_BUCKET"] || env["S3_BUCKET_NAME"] || "veolms-media",
+    S3_BUCKET: env["S3_BUCKET"] || "veolms-media",
     S3_REGION: env["S3_REGION"] || env["AWS_REGION"] || "us-east-1",
   };
   const parsed = mediaWorkerConfigSchema.parse(resolvedEnv);

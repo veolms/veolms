@@ -32,8 +32,6 @@ export function presentLogin(user: SessionUser, mfa: MfaState) {
       phoneNo: user.phone_no,
       mobileVerified: Boolean(user.phone_verified_at),
       roles: user.roles ?? [],
-      permissions: user.permissions ?? [],
-      menus: user.menus ?? [],
     },
     mfaRequired: mfa.mfaRequired,
     mfaMandatory: mfa.mfaMandatory,

@@ -99,10 +99,9 @@ describe("AWS Instance Type Selector", () => {
     });
 
     it("supports family wildcard patterns like c7g.* or c8g.*", () => {
-      assert.deepEqual(
-        filterAllowedInstanceTypes(candidates, ["c7g.*"]),
-        ["c7g.large"],
-      );
+      assert.deepEqual(filterAllowedInstanceTypes(candidates, ["c7g.*"]), [
+        "c7g.large",
+      ]);
       assert.deepEqual(
         filterAllowedInstanceTypes(candidates, ["c7g.*", "c8g.*"]),
         ["c7g.large", "c8g.large"],

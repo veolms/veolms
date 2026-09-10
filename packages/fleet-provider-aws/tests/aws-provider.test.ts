@@ -22,7 +22,7 @@ describe("AWS Fleet Provider", () => {
     const config = loadAwsProviderConfig({
       EC2_KEY_NAME: "key-03fe15e84e3eee02c",
       EC2_SECURITY_GROUP_IDS: "sg-12345678",
-      S3_BUCKET_NAME: "my-test-bucket",
+      S3_BUCKET: "my-test-bucket",
     });
 
     assert.equal(config.KEY_NAME, "key-03fe15e84e3eee02c");
@@ -41,18 +41,11 @@ describe("AWS Fleet Provider", () => {
   });
 
   describe("resolveS3BucketName", () => {
-    it("prefers S3_BUCKET over S3_BUCKET_NAME when both are set", () => {
-      assert.equal(
-        resolveS3BucketName({ S3_BUCKET: "a", S3_BUCKET_NAME: "b" }),
-        "a",
-      );
+    it("returns S3_BUCKET when set", () => {
+      assert.equal(resolveS3BucketName({ S3_BUCKET: "a" }), "a");
     });
 
-    it("falls back to S3_BUCKET_NAME when S3_BUCKET is unset", () => {
-      assert.equal(resolveS3BucketName({ S3_BUCKET_NAME: "b" }), "b");
-    });
-
-    it("returns null when neither is set", () => {
+    it("returns null when S3_BUCKET is unset", () => {
       assert.equal(resolveS3BucketName({}), null);
     });
   });

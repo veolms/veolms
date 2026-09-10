@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import {
   claimNextQueuedVideoJob,
+  type ClaimJobOptions,
   type Database,
   type VideoJobTable,
 } from "@veolms/database";
@@ -22,6 +23,7 @@ export interface QueueJobParams {
   qualities: readonly VideoQualityLevel[];
   videoSize?: number;
   videoMetadata?: VideoMetadata;
+  originalFileKey?: string | null;
 }
 
 export interface CancelJobParams {
@@ -40,16 +42,16 @@ export interface CancelJobResult {
 }
 
 export interface JobManager {
-  claimNextJob(): Promise<Selectable<VideoJobTable> | null>;
+  claimNextJob(
+    options?: ClaimJobOptions,
+  ): Promise<Selectable<VideoJobTable> | null>;
   assignWorkerToJob(jobId: string, workerId: string): Promise<void>;
-  markJobCompleted(
-    jobId: string,
-    expectedWorkerId?: string,
-  ): Promise<boolean>;
+  markJobCompleted(jobId: string, expectedWorkerId?: string): Promise<boolean>;
   markJobFailed(
     jobId: string,
     errorMessage: string,
     expectedWorkerId?: string,
+    options?: { allowCompleted?: boolean },
   ): Promise<boolean>;
   cancelJob(params: CancelJobParams): Promise<CancelJobResult>;
   queueJob(params: QueueJobParams): Promise<Selectable<VideoJobTable>>;
@@ -63,8 +65,10 @@ export function createJobManager(options: {
   const { db, config } = options;
 
   return {
-    async claimNextJob(): Promise<Selectable<VideoJobTable> | null> {
-      return await claimNextQueuedVideoJob(db);
+    async claimNextJob(
+      claimOptions?: ClaimJobOptions,
+    ): Promise<Selectable<VideoJobTable> | null> {
+      return await claimNextQueuedVideoJob(db, undefined, claimOptions);
     },
 
     async assignWorkerToJob(jobId: string, workerId: string): Promise<void> {
@@ -149,7 +153,9 @@ export function createJobManager(options: {
               if (meta.width) mediaUpdate.width = meta.width;
               if (meta.height) mediaUpdate.height = meta.height;
               if (meta.durationSeconds) {
-                mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+                mediaUpdate.duration_seconds = Math.round(
+                  Number(meta.durationSeconds),
+                );
               }
 
               await trx
@@ -181,13 +187,18 @@ export function createJobManager(options: {
                   status: "ready",
                   updated_at: new Date(),
                 };
-                if (existingJob.video_size && Number(existingJob.video_size) > 0) {
+                if (
+                  existingJob.video_size &&
+                  Number(existingJob.video_size) > 0
+                ) {
                   mediaUpdate.size_bytes = Number(existingJob.video_size);
                 }
                 if (meta.width) mediaUpdate.width = meta.width;
                 if (meta.height) mediaUpdate.height = meta.height;
                 if (meta.durationSeconds) {
-                  mediaUpdate.duration_seconds = Math.round(Number(meta.durationSeconds));
+                  mediaUpdate.duration_seconds = Math.round(
+                    Number(meta.durationSeconds),
+                  );
                 }
 
                 await trx
@@ -218,6 +229,7 @@ export function createJobManager(options: {
       jobId: string,
       errorMessage: string,
       expectedWorkerId?: string,
+      options: { allowCompleted?: boolean } = {},
     ): Promise<boolean> {
       const executeTransaction = async (trx: Kysely<Database>) => {
         let query = trx
@@ -316,6 +328,8 @@ export function createJobManager(options: {
     },
 
     async queueJob(params: QueueJobParams): Promise<Selectable<VideoJobTable>> {
+      const resolvedOrigKey = params.originalFileKey ?? null;
+
       // 1. If an exact jobId is requested, check if it already exists in the database
       if (params.jobId) {
         const existingById = await db
@@ -324,11 +338,12 @@ export function createJobManager(options: {
           .where("id", "=", params.jobId)
           .executeTakeFirst();
         if (existingById) {
-          // If existing job lacks hardware_profile/video_size, or if new videoMetadata is provided,
+          // If existing job lacks hardware_profile/video_size, original_file_key, or if new videoMetadata is provided,
           // Fleet Manager estimates profile, updates video_jobs, and synchronizes media_assets
           if (
             !existingById.hardware_profile ||
             existingById.video_size <= 0 ||
+            (!existingById.original_file_key && resolvedOrigKey) ||
             (params.videoMetadata && !existingById.video_metadata)
           ) {
             let media: any = undefined;
@@ -381,6 +396,11 @@ export function createJobManager(options: {
                 .set({
                   hardware_profile: hw.profile,
                   video_size: resolvedSize,
+                  ...(resolvedOrigKey && !existingById.original_file_key
+                    ? {
+                        original_file_key: resolvedOrigKey,
+                      }
+                    : {}),
                   ...(meta ? { video_metadata: meta } : {}),
                   updated_at: new Date(),
                 })
@@ -459,6 +479,7 @@ export function createJobManager(options: {
         if (
           !existingActive.hardware_profile ||
           existingActive.video_size <= 0 ||
+          (!existingActive.original_file_key && resolvedOrigKey) ||
           (params.videoMetadata && !existingActive.video_metadata)
         ) {
           let media: any = undefined;
@@ -511,6 +532,11 @@ export function createJobManager(options: {
               .set({
                 hardware_profile: hw.profile,
                 video_size: resolvedSize,
+                ...(resolvedOrigKey && !existingActive.original_file_key
+                  ? {
+                      original_file_key: resolvedOrigKey,
+                    }
+                  : {}),
                 ...(meta ? { video_metadata: meta } : {}),
                 updated_at: new Date(),
               })
@@ -562,7 +588,6 @@ export function createJobManager(options: {
         return existingActive;
       }
 
-
       // 3. Ensure media_assets record exists so foreign key video_jobs.video_id -> media_assets.id is satisfied
       let existingMedia: any = undefined;
       try {
@@ -587,7 +612,6 @@ export function createJobManager(options: {
       const id = params.jobId ?? randomUUID();
       const now = new Date();
 
-
       // Fleet Manager resolves videoSize and videoMetadata from params or existing media_assets
       const videoSize =
         params.videoSize && params.videoSize > 0
@@ -602,7 +626,7 @@ export function createJobManager(options: {
         params.videoMetadata?.height ?? existingMedia?.height ?? null;
       const metaDuration = params.videoMetadata?.durationSeconds
         ? Math.round(params.videoMetadata.durationSeconds)
-        : existingMedia?.duration_seconds ?? null;
+        : (existingMedia?.duration_seconds ?? null);
 
       const persistedMetadata =
         params.videoMetadata || (metaWidth && metaHeight)
@@ -628,11 +652,15 @@ export function createJobManager(options: {
       if (existingMedia) {
         const mediaUpdates: Record<string, any> = {};
         if (metaWidth && !existingMedia.width) mediaUpdates.width = metaWidth;
-        if (metaHeight && !existingMedia.height) mediaUpdates.height = metaHeight;
+        if (metaHeight && !existingMedia.height)
+          mediaUpdates.height = metaHeight;
         if (metaDuration && !existingMedia.duration_seconds) {
           mediaUpdates.duration_seconds = metaDuration;
         }
-        if (videoSize > 0 && (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0)) {
+        if (
+          videoSize > 0 &&
+          (!existingMedia.size_bytes || Number(existingMedia.size_bytes) === 0)
+        ) {
           mediaUpdates.size_bytes = videoSize;
         }
         if (Object.keys(mediaUpdates).length > 0) {
@@ -709,6 +737,7 @@ export function createJobManager(options: {
             output_prefix: params.outputPrefix,
             video_size: videoSize,
             qualities: [...params.qualities],
+            original_file_key: resolvedOrigKey,
             worker_id: null,
             attempts: 0,
             max_attempts: config.MAX_RETRIES,
@@ -733,6 +762,7 @@ export function createJobManager(options: {
             output_prefix: params.outputPrefix,
             video_size: videoSize,
             qualities: [...params.qualities],
+            original_file_key: resolvedOrigKey,
             worker_id: null,
             progress_percent: 0,
             attempts: 0,
@@ -835,18 +865,8 @@ export function createJobManager(options: {
       const deletedKeys: string[] = [];
       let deletedPrefix: string | undefined;
 
-      if (
-        deleteFiles &&
-        (storage ||
-          s3Bucket ||
-          process.env.S3_BUCKET ||
-          process.env.S3_BUCKET_NAME)
-      ) {
-        const bucket =
-          s3Bucket ||
-          process.env.S3_BUCKET ||
-          process.env.S3_BUCKET_NAME ||
-          "veolms-media";
+      if (deleteFiles && (storage || s3Bucket || process.env.S3_BUCKET)) {
+        const bucket = s3Bucket || process.env.S3_BUCKET || "veolms-media";
         const s3Storage =
           storage ??
           new S3StorageService({

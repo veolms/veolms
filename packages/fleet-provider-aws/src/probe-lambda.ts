@@ -69,7 +69,10 @@ export interface FleetManagerEvaluationResult {
 }
 
 export function parseFleetManagerResponse(
-  invokeResponse: { readonly FunctionError?: string; readonly Payload?: Uint8Array },
+  invokeResponse: {
+    readonly FunctionError?: string;
+    readonly Payload?: Uint8Array;
+  },
   options: { readonly isCancellation?: boolean } = {},
 ): FleetManagerEvaluationResult {
   let targetResult: unknown = {};
@@ -262,7 +265,6 @@ export async function processProbeAndForward(
     customConfig.s3BucketName ??
     (typeof payload.bucket === "string" ? payload.bucket : undefined) ??
     process.env["S3_BUCKET"] ??
-    process.env["S3_BUCKET_NAME"] ??
     process.env["STORAGE_BUCKET"];
 
   const endpoint =

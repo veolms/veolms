@@ -2,10 +2,30 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   encodeUserDataBase64,
+  generateLocalStackUserDataScript,
   generateUserDataScript,
 } from "../src/bootstrapper.ts";
 
 describe("EC2 UserData Bootstrapper Generator", () => {
+  it("generates a local-only bootstrap script for a prebuilt LocalStack AMI", () => {
+    const script = generateLocalStackUserDataScript({
+      workerId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      spec: {
+        cpu: 2,
+        memoryMb: 4096,
+        architecture: "x86_64",
+        storageGb: 30,
+        region: "us-east-1",
+        environmentVariables: { DATABASE_URL: "postgresql://db/veolms" },
+      },
+      extraEnv: { LOCAL_STORAGE_ROOT: "/app/s3-bucket" },
+    });
+
+    assert.ok(script.includes("exec node /opt/veolms/worker.js"));
+    assert.ok(script.includes('LOCAL_STORAGE_ROOT="/app/s3-bucket"'));
+    assert.ok(!script.includes("apt-get install"));
+    assert.ok(!script.includes("aws s3 cp"));
+  });
   it("should generate a bootstrapper script with environment variables and install-if-missing checks", () => {
     const script = generateUserDataScript({
       workerId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
@@ -71,14 +91,12 @@ describe("EC2 UserData Bootstrapper Generator", () => {
     });
 
     const sourceIndex = script.indexOf("source /opt/veolms/worker.env");
-    const realResolutionIndex = script.indexOf(
-      'BUCKET_NAME="${S3_BUCKET:-${S3_BUCKET_NAME:-}}"',
-    );
+    const realResolutionIndex = script.indexOf('BUCKET_NAME="${S3_BUCKET:-}"');
 
     assert.ok(sourceIndex !== -1, "script must source worker.env");
     assert.ok(
       realResolutionIndex !== -1,
-      "script must resolve BUCKET_NAME from S3_BUCKET/S3_BUCKET_NAME",
+      "script must resolve BUCKET_NAME from S3_BUCKET",
     );
     assert.ok(
       realResolutionIndex > sourceIndex,

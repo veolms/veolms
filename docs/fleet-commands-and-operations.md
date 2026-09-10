@@ -29,7 +29,7 @@ This document is a comprehensive guide to all commands used to configure, provis
 | `pnpm fleet:build-ami`                      | `packages/fleet-provider-aws` | _(Optional)_ Build pre-baked worker AMI with Node.js 24 + FFmpeg                                     |
 | `pnpm build:serverless`                     | `apps/fleet-manager`          | Fast universal `esbuild` bundling of the Serverless Fleet Manager handler                            |
 | `pnpm build:worker`                         | `apps/media-worker`           | Fast `esbuild` bundling of the standalone Media Worker                                               |
-| `pnpm fleet:cli run`                        | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                              |
+| `pnpm fleet:cli run daemon`                 | `apps/fleet-manager`          | Run Fleet Manager daemon in serverful (persistent) mode                                              |
 | `pnpm fleet:cli health`                     | `apps/fleet-manager`          | Inspect fleet health metrics (queued, processing, stalled count)                                     |
 | `pnpm fleet:cli workers`                    | `apps/fleet-manager`          | List active, recent, and pending worker instances                                                    |
 | `pnpm fleet:cli jobs`                       | `apps/fleet-manager`          | List recent transcoding jobs and status                                                              |
@@ -158,11 +158,30 @@ This document is a comprehensive guide to all commands used to configure, provis
   5. Verifies output master playlist (`master.m3u8`) and all chunk files (`.ts` and `.m3u8`) on disk.
   6. Safely shuts down the local worker process.
 
+### Docker Fleet profiles
+
+`compose.yaml` is intentionally PostgreSQL-only. Use `compose.fleet.yaml`
+through the scripts below only when testing the Fleet. Before starting either
+profile, set the existing `DATABASE_URL` in `apps/fleet-manager/.env` to the
+local or remote PostgreSQL database to use; these commands do not create a
+PostgreSQL container:
+
+```bash
+# Docker provider setup & lifecycle
+pnpm fleet:infra              # builds images & migrates DB
+pnpm fleet:infra --update     # updates images & migrations
+pnpm fleet:destroy            # stop-only or complete teardown
+
+# Containerized daemon execution via Docker Compose
+docker compose --env-file apps/fleet-manager/.env -f compose.fleet.yaml --profile serverful up -d
+docker compose --env-file apps/fleet-manager/.env -f compose.fleet.yaml --profile serverful down
+```
+
 ---
 
 ## 🛠️ 5. Fleet Daemon & CLI Operations
 
-### `pnpm fleet:cli run`
+### `pnpm fleet:cli run daemon`
 
 **Location:** `apps/fleet-manager/src/entrypoints/serverful.ts`
 

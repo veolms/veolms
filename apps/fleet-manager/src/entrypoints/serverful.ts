@@ -11,7 +11,10 @@ import {
   createFleetManager,
   type FleetManager,
 } from "../core/fleet-manager.ts";
-import { resolveFleetProvider } from "../core/provider-resolver.ts";
+import {
+  resolveFleetProvider,
+  resolveFleetProviderOptions,
+} from "../core/provider-resolver.ts";
 
 export interface StartServerfulOptions {
   configOverride?: Partial<FleetManagerConfig>;
@@ -30,13 +33,11 @@ export async function startServerfulFleetManager(
 
   const db = createDatabase(config.DATABASE_URL);
 
-  const repoRoot = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-    "..",
-  );
+  const moduleDirectory =
+    typeof import.meta.url === "string" && import.meta.url
+      ? dirname(fileURLToPath(import.meta.url))
+      : process.cwd();
+  const repoRoot = join(moduleDirectory, "..", "..", "..", "..");
   const defaultWorkerScript = join(repoRoot, "apps/media-worker/src/index.ts");
   const workerScript =
     config.MEDIA_WORKER_SCRIPT_PATH ??
@@ -44,9 +45,10 @@ export async function startServerfulFleetManager(
 
   const provider: FleetProvider =
     options.provider ??
-    (await resolveFleetProvider(config.PROVIDER, {
-      workerScriptPath: workerScript,
-    }));
+    (await resolveFleetProvider(
+      config.PROVIDER,
+      resolveFleetProviderOptions(config, workerScript),
+    ));
 
   const fleet = createFleetManager({
     provider,
