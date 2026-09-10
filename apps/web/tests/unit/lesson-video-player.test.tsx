@@ -79,12 +79,24 @@ class RecordingFakeVideoEngine extends FakeVideoEngine {
     for (const listener of this.#textTrackListeners) listener({ track });
   }
 
+  readonly #engineListeners = new Map<string, Set<(event: any) => void>>();
+
   override on<Type extends keyof VideoEngineEventMap>(
     type: Type,
     listener: (event: VideoEngineEventMap[Type]) => void,
   ): () => void {
     const unsubscribeFromEngine = super.on(type, listener);
-    if (type !== "texttrackchange") return unsubscribeFromEngine;
+    if (!this.#engineListeners.has(type)) {
+      this.#engineListeners.set(type, new Set());
+    }
+    this.#engineListeners.get(type)!.add(listener);
+
+    if (type !== "texttrackchange") {
+      return () => {
+        unsubscribeFromEngine();
+        this.#engineListeners.get(type)?.delete(listener);
+      };
+    }
 
     const textTrackListener = listener as (
       detail: VideoEngineEventMap["texttrackchange"],
@@ -93,7 +105,15 @@ class RecordingFakeVideoEngine extends FakeVideoEngine {
     return () => {
       unsubscribeFromEngine();
       this.#textTrackListeners.delete(textTrackListener);
+      this.#engineListeners.get(type)?.delete(listener);
     };
+  }
+
+  emitEnded(): void {
+    this.setSnapshot({ ended: true, playing: false, paused: true });
+    for (const listener of this.#engineListeners.get("ended") ?? []) {
+      listener(undefined);
+    }
   }
 }
 
@@ -2944,5 +2964,54 @@ describe("LessonVideoPlayer adapter", () => {
       src: "/course-hls/lesson-two/master.m3u8",
       metadata: { title: "The design mindset" },
     });
+  });
+
+  it("displays the end screen overlay upon video ended and handles restart", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    const seek = vi.spyOn(engine, "seek");
+    const play = vi.spyOn(engine, "play");
+    const onLessonEnded = vi.fn();
+    const nextLessonInfo = {
+      id: 2,
+      title: "What is UI/UX Design?",
+      duration: "01:43",
+      sectionTitle: "Section 1: Introduction",
+    };
+
+    render(
+      <LessonVideoPlayer
+        {...playerProps(firstMedia, engine)}
+        canGoNext
+        nextLessonInfo={nextLessonInfo}
+        onLessonEnded={onLessonEnded}
+      />,
+    );
+
+    await waitFor(() => expect(engine.loadCalls).toHaveLength(1));
+
+    expect(
+      screen.queryByRole("dialog", { name: /lecture completed/i }),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      engine.emitEnded();
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: /lecture completed/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("What is UI/UX Design?")).toBeInTheDocument();
+    expect(onLessonEnded).toHaveBeenCalledTimes(1);
+
+    const restartButton = screen.getByRole("button", { name: /restart/i });
+    act(() => {
+      fireEvent.click(restartButton);
+    });
+
+    expect(seek).toHaveBeenCalledWith(0);
+    expect(play).toHaveBeenCalled();
+    expect(
+      screen.queryByRole("dialog", { name: /lecture completed/i }),
+    ).not.toBeInTheDocument();
   });
 });

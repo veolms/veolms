@@ -7,6 +7,7 @@ import {
   CaretDown,
   CheckCircle,
   Circle,
+  CircleNotch,
   Clock,
   FileText,
   Heart,
@@ -17,6 +18,7 @@ import {
   Tag,
   Ticket,
   User,
+  X,
 } from "@phosphor-icons/react";
 import type {
   Category,
@@ -32,17 +34,38 @@ import {
   type CourseRole,
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
+import { formatDuration } from "./courseAdapter";
 import type { CourseSection } from "../learning/courseContent";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
+import {
+  useCheckoutPreview,
+  useCreateCheckoutOrder,
+  useVerifyPayment,
+} from "../services/payments";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { formatDuration } from "./courseAdapter";
-
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+async function loadRazorpay() {
+  if (typeof window === "undefined" || window.Razorpay) return;
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Unable to load payment checkout."));
+    document.head.appendChild(script);
+  });
+}
 
 export function getPriceSizeVariant(priceStr: string): PriceSizeVariant {
   if (!priceStr || priceStr.toLowerCase() === "free") return "normal";
@@ -347,15 +370,44 @@ function CourseHeroSection({
   isReadOnlyPreview = false,
   isCreator = false,
 }: CourseHeroSectionProps) {
-  const price = pricing?.price ?? "Free";
+  const user = useAuthStore((state) => state.user);
+  const preview = useCheckoutPreview();
+  const createOrder = useCreateCheckoutOrder();
+  const verify = useVerifyPayment();
+
+  const [isPaymentBusy, setIsPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const [couponInputOpen, setCouponInputOpen] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountAmount: number;
+    totalAmount: number;
+    currency: string;
+    discountLabel?: string;
+  } | null>(null);
+
+  const basePrice = pricing?.price ?? "Free";
+  const displayPrice = appliedCoupon
+    ? appliedCoupon.totalAmount === 0
+      ? "Free"
+      : formatPriceWithCurrency(appliedCoupon.totalAmount, appliedCoupon.currency)
+    : basePrice;
   const originalPrice = pricing?.originalPrice;
   const discount = pricing?.discount;
+  const displayDiscount = appliedCoupon
+    ? appliedCoupon.discountLabel ||
+      `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
+    : discount;
   const perksList = inclusions ?? [
     "Full lifetime access",
     "Access on mobile & desktop",
     "Certificate of completion",
   ];
-  const priceSizeVariant = getPriceSizeVariant(price);
+  const priceSizeVariant = getPriceSizeVariant(displayPrice);
 
   const isPreview = Boolean(isReadOnlyPreview);
   const isCreatorNormal = Boolean(isCreator && !isPreview);
@@ -366,8 +418,151 @@ function CourseHeroSection({
     pricing.price.trim() === "$0" ||
     pricing.price.trim() === "₹0";
 
+  const handleApplyCoupon = async () => {
+    const code = couponCodeInput.trim().toUpperCase();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponError(null);
+
+    try {
+      const item = { itemType: "course" as const, courseId: course.id };
+      const res = await preview.mutateAsync({
+        items: [item],
+        couponCode: code,
+      });
+
+      if (res.couponValidation && !res.couponValidation.valid) {
+        setCouponError(res.couponValidation.message || "Invalid coupon code.");
+        setCouponBusy(false);
+        return;
+      }
+
+      const discountAmount = res.pricing.discountAmount;
+      const currency = res.pricing.currency || "INR";
+      const totalAmount = res.pricing.totalAmount;
+
+      let discountLabel: string | undefined;
+      if (res.couponValidation?.discountValue) {
+        discountLabel =
+          res.couponValidation.discountType === "percentage"
+            ? `${res.couponValidation.discountValue}% OFF`
+            : `${formatPriceWithCurrency(res.couponValidation.discountValue, currency)} OFF`;
+      } else if (discountAmount > 0) {
+        discountLabel = `${formatPriceWithCurrency(discountAmount, currency)} OFF`;
+      }
+
+      setAppliedCoupon({
+        code,
+        discountAmount,
+        totalAmount,
+        currency,
+        discountLabel,
+      });
+
+      setCouponInputOpen(false);
+      setCouponCodeInput("");
+    } catch (err) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "Invalid coupon code. Please retry.";
+      setCouponError(msg);
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    setCouponCodeInput("");
+  };
+
+  const handlePayNow = async () => {
+    if (isReadOnlyPreview) return;
+    if (!user) {
+      setPaymentError("Please log in before purchasing this course.");
+      return;
+    }
+
+    setIsPaymentBusy(true);
+    setPaymentError(null);
+
+    try {
+      const item = { itemType: "course" as const, courseId: course.id };
+      const coupon = appliedCoupon?.code?.trim();
+      const order = await createOrder.mutateAsync({
+        items: [item],
+        ...(coupon ? { couponCode: coupon.toUpperCase() } : {}),
+        idempotencyKey: crypto.randomUUID(),
+      });
+
+      if (!order.gateway) {
+        setIsPaymentBusy(false);
+        onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        return;
+      }
+
+      await loadRazorpay();
+      if (!window.Razorpay) {
+        throw new Error("Payment checkout is unavailable.");
+      }
+
+      const rzp = new window.Razorpay({
+        key: order.gateway.keyId,
+        amount: order.gateway.amount,
+        currency: order.gateway.currency,
+        name: "VeoLMS",
+        description: course.title,
+        order_id: order.gateway.gatewayOrderId,
+        prefill: {
+          name: user.displayName || user.username,
+          email: user.email,
+        },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            await verify.mutateAsync({
+              orderId: order.order.id,
+              gatewayOrderId: response.razorpay_order_id,
+              gatewayPaymentId: response.razorpay_payment_id,
+              gatewaySignature: response.razorpay_signature,
+            });
+            setIsPaymentBusy(false);
+            onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+          } catch (error) {
+            setPaymentError(
+              error instanceof Error
+                ? error.message
+                : "Payment verification failed. Please retry.",
+            );
+            setIsPaymentBusy(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaymentError("Payment cancelled. You can retry.");
+            setIsPaymentBusy(false);
+          },
+        },
+      });
+
+      rzp.open();
+    } catch (error) {
+      const msg =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "Checkout could not be started. Please retry.";
+      setPaymentError(msg);
+      setIsPaymentBusy(false);
+    }
+  };
+
   let ctaLabel = "Continue Learning";
-  let ctaIcon = (
+  let ctaIcon: React.ReactNode = (
     <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
   );
   let ctaDisabled = false;
@@ -382,7 +577,7 @@ function CourseHeroSection({
   if (isCreatorNormal) {
     // 1. Creator viewing their course normally:
     // Show only "Continue Learning". Clicking it opens the existing Learning Space.
-    // Do not show Buy Now or Apply Coupon.
+    // Do not show Pay Now or Apply Coupon.
     ctaLabel = "Continue Learning";
     ctaIcon = (
       <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
@@ -395,7 +590,7 @@ function CourseHeroSection({
     };
   } else if (isPreview) {
     // 2. Creator Preview:
-    // Paid course: show existing price, "Apply Coupon", and "Buy Now" as demo UI.
+    // Paid course: show existing price, "Apply coupon", and "Pay Now" as demo UI.
     // Free course: show "Free" and "Enroll for Free" as demo UI.
     if (isFree) {
       ctaLabel = "Enroll for Free";
@@ -408,7 +603,7 @@ function CourseHeroSection({
         />
       );
     } else {
-      ctaLabel = "Buy Now";
+      ctaLabel = "Pay Now";
       ctaIcon = (
         <ShoppingBag
           size="1.15em"
@@ -419,11 +614,11 @@ function CourseHeroSection({
       );
     }
     ctaDisabled = false;
-    ctaOnClick = undefined; // Demo UI: purchase/enrollment actions do not need real logic
+    ctaOnClick = undefined; // Preview actions stay non-functional.
   } else {
-    // 3. Student:
-    // Paid course: show price and "Apply Coupon". Purchase/Buy Now action visibly disabled/non-functional.
+    // 3. Student / Learner:
     // Free course: show "Free" and "Continue Learning", which opens existing Learning Space.
+    // Paid course: show price, "Apply coupon", and "Pay Now" which triggers direct checkout.
     if (isFree) {
       ctaLabel = "Continue Learning";
       ctaIcon = (
@@ -436,8 +631,10 @@ function CourseHeroSection({
         }
       };
     } else {
-      ctaLabel = "Buy Now";
-      ctaIcon = (
+      ctaLabel = isPaymentBusy ? "Processing…" : "Pay Now";
+      ctaIcon = isPaymentBusy ? (
+        <CircleNotch size="1.15em" className="animate-spin shrink-0" aria-hidden="true" />
+      ) : (
         <ShoppingBag
           size="1.15em"
           weight="bold"
@@ -445,8 +642,8 @@ function CourseHeroSection({
           aria-hidden="true"
         />
       );
-      ctaDisabled = true;
-      ctaOnClick = undefined;
+      ctaDisabled = isPaymentBusy;
+      ctaOnClick = handlePayNow;
     }
   }
 
@@ -560,16 +757,16 @@ function CourseHeroSection({
                   <span
                     className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
                   >
-                    {isFree ? "Free" : price}
+                    {isFree ? "Free" : displayPrice}
                   </span>
-                  {!isFree && originalPrice && (
+                  {!isFree && (originalPrice || appliedCoupon) && (
                     <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
-                      {originalPrice}
+                      {appliedCoupon ? basePrice : originalPrice}
                     </span>
                   )}
-                  {!isFree && discount && (
+                  {!isFree && displayDiscount && (
                     <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
-                      {discount}
+                      {displayDiscount}
                     </span>
                   )}
                 </div>
@@ -598,12 +795,110 @@ function CourseHeroSection({
               </div>
             )}
 
-            {/* Middle Row: Actions (Apply Coupon + Buy Now / Continue Learning / Enroll for Free) */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
-              {showApplyCoupon && (
+            {/* Applied Coupon Badge */}
+            {appliedCoupon && (
+              <div className="flex items-center justify-between gap-2 w-full px-3 py-2 rounded-[9px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] text-(--text)">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Ticket
+                    size={16}
+                    weight="fill"
+                    className="text-(--accent) shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider text-(--accent-ink,var(--accent)) truncate">
+                    {appliedCoupon.code}
+                  </span>
+                  <span className="text-xs text-(--muted) whitespace-nowrap">
+                    applied {appliedCoupon.discountLabel ? `(${appliedCoupon.discountLabel})` : ""}
+                  </span>
+                </div>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center gap-1.5 min-h-10 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem]"
+                  onClick={handleRemoveCoupon}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full text-(--muted) hover:text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                  aria-label="Remove coupon"
+                  title="Remove coupon"
+                >
+                  <X size={13} weight="bold" />
+                </button>
+              </div>
+            )}
+
+            {/* Inline Coupon Input Box (shown when user clicks 'Apply coupon') */}
+            {showApplyCoupon && couponInputOpen && !appliedCoupon && (
+              <div className="flex flex-col gap-1.5 w-full">
+                <div className="flex items-center gap-2 w-full min-h-10.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_75%,var(--canvas))] border border-[color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:border-(--accent) focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_18%,transparent)] p-1.5 pl-3 transition-all">
+                  <Ticket
+                    size={18}
+                    weight="bold"
+                    className="text-(--muted) shrink-0"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="text"
+                    value={couponCodeInput}
+                    onChange={(e) => {
+                      setCouponCodeInput(e.target.value.toUpperCase());
+                      setCouponError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleApplyCoupon();
+                      } else if (e.key === "Escape") {
+                        setCouponInputOpen(false);
+                        setCouponError(null);
+                      }
+                    }}
+                    placeholder="Enter coupon code"
+                    disabled={couponBusy}
+                    aria-label="Coupon code"
+                    className="w-full bg-transparent border-0 text-(--text) placeholder-(--muted) text-[0.86rem] font-semibold tracking-wider outline-none uppercase"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={couponBusy || !couponCodeInput.trim()}
+                    className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-[7px] bg-(--accent) text-(--on-accent,#ffffff) text-[0.82rem] font-[750] cursor-pointer whitespace-nowrap transition-all hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    {couponBusy ? (
+                      <CircleNotch size={14} className="animate-spin" />
+                    ) : (
+                      "Apply"
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCouponInputOpen(false);
+                      setCouponError(null);
+                    }}
+                    aria-label="Cancel"
+                    title="Cancel"
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-(--muted) hover:text-(--text) hover:bg-(--hover) cursor-pointer transition-colors shrink-0"
+                  >
+                    <X size={15} weight="bold" />
+                  </button>
+                </div>
+                {couponError && (
+                  <p className="m-0 text-xs text-rose-500 font-semibold px-1">
+                    {couponError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Middle Row: Actions (Apply Coupon + Pay Now / Continue Learning / Enroll for Free) */}
+            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
+              {showApplyCoupon && !couponInputOpen && !appliedCoupon && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponInputOpen(true);
+                    setCouponError(null);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 min-h-10.5 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem]"
                 >
                   <Ticket
                     size="1.15em"
@@ -625,6 +920,21 @@ function CourseHeroSection({
                 <span className="font-[800] truncate">{ctaLabel}</span>
               </button>
             </div>
+
+            {/* Payment Error Banner */}
+            {paymentError && (
+              <div className="flex items-center justify-between gap-2 w-full rounded-lg bg-rose-500/12 border border-rose-500/30 p-2.5 text-xs text-rose-500 font-medium">
+                <span>{paymentError}</span>
+                <button
+                  type="button"
+                  onClick={() => setPaymentError(null)}
+                  className="text-rose-400 hover:text-rose-600 cursor-pointer p-0.5"
+                  aria-label="Dismiss error"
+                >
+                  <X size={13} weight="bold" />
+                </button>
+              </div>
+            )}
 
             {/* Bottom Row: Additional Inclusions / Value Perks */}
             {perksList.length > 0 && (
@@ -688,9 +998,6 @@ function CourseHeroSection({
     </div>
   );
 }
-
-// ─── about this course card ──────────────────────────────────────────────────
-
 interface CourseAboutCardProps {
   description?: string;
   isReadOnlyPreview?: boolean;

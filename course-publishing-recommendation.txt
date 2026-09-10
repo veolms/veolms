@@ -1,0 +1,26 @@
+Course Publishing Recommendation
+
+Do not automatically change a published course to Draft when an instructor edits it.
+
+Recommended enterprise approach:
+
+1. Keep the current published version unchanged for learners.
+2. Create a new draft version when editing starts.
+3. Allow instructors to edit, preview, and validate the draft privately.
+4. Publish the draft only after validation succeeds.
+5. Replace the learner-visible version atomically during publishing.
+
+Example:
+
+Published version: v3 - visible to learners
+Draft version: v4 - being edited and validated
+
+After publishing:
+
+Published version: v4 - visible to learners
+
+The course should remain Published, but show an indicator such as
+"Unpublished changes" until the new version is successfully published.
+
+This prevents learners from seeing incomplete or unvalidated changes while
+allowing instructors to work safely without taking the course offline.

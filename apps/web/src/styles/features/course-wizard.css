@@ -102,14 +102,101 @@
   will-change: transform;
 }
 
+.course-wizard-mobile-action-bar.is-scroll-hidden {
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translate3d(
+    0,
+    calc(100% + 58px + var(--app-viewport-safe-area-bottom) + 4px),
+    0
+  );
+  transition:
+    transform 180ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 110ms ease-in,
+    visibility 0s linear 180ms;
+}
+
+/* When any modal dialog is open on small devices, remove Preview / Previous / Next actions */
+body:has([role="dialog"][aria-modal="true"]) .course-wizard-mobile-action-bar,
+body:has([data-modal-open]) .course-wizard-mobile-action-bar,
+body:has([data-lesson-video-modal]) .course-wizard-mobile-action-bar,
+body.modal-open .course-wizard-mobile-action-bar,
+body[data-modal-open="true"] .course-wizard-mobile-action-bar {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
 @media (min-width: 641px) {
+  /* Frame the course wizard card on desktop:
+     - Header & Tabs Nav pinned at top
+     - Bottom Action Bar pinned at bottom of the card
+     - Center Tab Content scrolls smoothly between them */
   .courses-main:has([data-course-wizard]),
   .courses-main:has(.course-wizard-sticky-bottom-bar),
-  .courses-main:has(.course-wizard-steps-nav),
   .student-surface-main:has([data-course-wizard]),
-  .student-surface-main:has(.course-wizard-sticky-bottom-bar),
-  .student-surface-main:has(.course-wizard-steps-nav) {
+  .student-surface-main:has(.course-wizard-sticky-bottom-bar) {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
     padding-bottom: 0 !important;
+  }
+
+  .course-wizard-mobile-action-bar {
+    display: none !important;
+  }
+
+  [data-course-wizard] {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  [data-course-wizard] > header {
+    flex-shrink: 0 !important;
+  }
+
+  [data-course-wizard] > .course-wizard-steps-nav {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    top: 0 !important;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+    padding-bottom: 24px !important;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text) 20%, transparent);
+    border-radius: 999px;
+  }
+
+  [data-course-wizard] > .course-wizard-sticky-bottom-bar {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    bottom: auto !important;
+    margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
+    align-self: stretch !important;
   }
 }
 
@@ -142,51 +229,99 @@
   .course-wizard-sticky-bottom-bar {
     display: none !important;
   }
-}
 
-@media (min-width: 641px) {
-  .course-wizard-mobile-action-bar {
-    display: none !important;
+  /* Frame the course wizard on mobile:
+     - Header & Tabs navigation stay pinned at top
+     - Bottom Action Bar stays pinned above mobile bottom nav
+     - Center Tab Content is the sole scrolling element
+     - Window/body scroll and artificial empty scrollports are eliminated */
+  :root:has([data-course-wizard]),
+  :root[data-course-wizard-active="true"],
+  :root:has([data-course-wizard]) body,
+  :root[data-course-wizard-active="true"] body {
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
   }
-}
 
-.course-wizard-mobile-action-bar.is-scroll-hidden {
-  pointer-events: none;
-  visibility: hidden;
-  opacity: 0;
-  transform: translate3d(
-    0,
-    calc(100% + 58px + var(--app-viewport-safe-area-bottom) + 4px),
-    0
-  );
-  transition:
-    transform 180ms cubic-bezier(0.4, 0, 1, 1),
-    opacity 110ms ease-in,
-    visibility 0s linear 180ms;
-}
+  .courses-app:has([data-course-wizard]),
+  :root[data-course-wizard-active="true"] .courses-app {
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    align-items: stretch !important;
+    grid-template-rows: 1fr !important;
+    padding: 8px 8px 0 8px !important;
+    box-sizing: border-box !important;
+  }
 
-/* When any modal dialog is open on small devices, remove Preview / Previous / Next actions */
-body:has([role="dialog"][aria-modal="true"]) .course-wizard-mobile-action-bar,
-body:has([data-modal-open]) .course-wizard-mobile-action-bar,
-body:has([data-lesson-video-modal]) .course-wizard-mobile-action-bar,
-body.modal-open .course-wizard-mobile-action-bar,
-body[data-modal-open="true"] .course-wizard-mobile-action-bar {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-  opacity: 0 !important;
-}
+  .courses-main-frame:has([data-course-wizard]),
+  :root[data-course-wizard-active="true"] .courses-main-frame {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Course Wizard — Mobile Scrollport Bottom Space Optimization
-   Eliminate excess trailing blank space beneath cards on small viewports.
-   ───────────────────────────────────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .student-surface-main:has(.course-wizard-steps-nav),
-  .student-surface-main:has(.course-wizard-mobile-action-bar),
-  .courses-main:has(.course-wizard-steps-nav),
-  .courses-main:has(.course-wizard-mobile-action-bar) {
-    padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+  .courses-main:has([data-course-wizard]),
+  .student-surface-main:has([data-course-wizard]),
+  :root[data-course-wizard-active="true"] .courses-main,
+  :root[data-course-wizard-active="true"] .student-surface-main {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding-top: 14px !important;
+    padding-inline: 15px !important;
+    padding-bottom: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  [data-course-wizard] {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  [data-course-wizard] > header {
+    flex-shrink: 0 !important;
+  }
+
+  [data-course-wizard] > .course-wizard-steps-nav {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    top: 0 !important;
+    margin-bottom: 8px !important;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: calc(130px + var(--app-viewport-safe-area-bottom, 0px)) !important;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text) 20%, transparent);
+    border-radius: 999px;
   }
 }
 
@@ -265,4 +400,3 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
     opacity: 0.7;
   }
 }
-

@@ -336,7 +336,7 @@ describe("CourseOverviewPage", () => {
       expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);
     });
 
-    it("2a. Creator Preview (Paid) shows price, 'Apply coupon', and 'Buy Now' as demo UI", () => {
+    it("2a. Creator Preview (Paid) shows price, 'Apply coupon', and 'Pay Now' as demo UI", () => {
       renderWithClient(
         <CourseOverviewPage
           customCourse={sampleCourse}
@@ -354,10 +354,10 @@ describe("CourseOverviewPage", () => {
       const couponBtn = screen.getByRole("button", { name: /Apply coupon/i });
       expect(couponBtn).toBeVisible();
 
-      // Shows Buy Now as demo UI (not disabled)
-      const buyNowBtn = screen.getByRole("button", { name: /Buy Now/i });
-      expect(buyNowBtn).toBeVisible();
-      expect(buyNowBtn).not.toBeDisabled();
+      // Shows Pay Now as demo UI (not disabled)
+      const payNowBtn = screen.getByRole("button", { name: /Pay Now/i });
+      expect(payNowBtn).toBeVisible();
+      expect(payNowBtn).not.toBeDisabled();
     });
 
     it("2b. Creator Preview (Free) shows 'Free' and 'Enroll for Free' as demo UI without coupon", () => {
@@ -381,7 +381,7 @@ describe("CourseOverviewPage", () => {
       expect(enrollBtn).not.toBeDisabled();
     });
 
-    it("3a. Student (Paid) shows price, 'Apply coupon', and visibly disabled 'Buy Now'", () => {
+    it("3a. Student (Paid) shows price, 'Apply coupon', and 'Pay Now' CTA", () => {
       renderWithClient(
         <CourseOverviewPage
           customCourse={sampleCourse}
@@ -400,13 +400,49 @@ describe("CourseOverviewPage", () => {
       // Shows Apply coupon
       expect(screen.getByRole("button", { name: /Apply coupon/i })).toBeVisible();
 
-      // Purchase/Buy Now action is visibly disabled/non-functional
-      const buyNowBtn = screen.getByRole("button", { name: /Buy Now/i });
-      expect(buyNowBtn).toBeVisible();
-      expect(buyNowBtn).toBeDisabled();
+      // Pay Now action is visible and functional
+      const payNowBtn = screen.getByRole("button", { name: /Pay Now/i });
+      expect(payNowBtn).toBeVisible();
+      expect(payNowBtn).not.toBeDisabled();
     });
 
-    it("3b. Student (Free) shows 'Free' and 'Continue Learning' opening Learning Space without coupon", () => {
+    it("3b. Student (Paid) clicking 'Apply coupon' toggles inline coupon input and Apply button", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customPricing={paidPricing}
+          isCreator={false}
+          role="student"
+          isReadOnlyPreview={false}
+        />,
+      );
+
+      const applyCouponBtn = screen.getByRole("button", { name: /Apply coupon/i });
+      expect(applyCouponBtn).toBeVisible();
+
+      // Click "Apply coupon" to open inline input box
+      fireEvent.click(applyCouponBtn);
+
+      // Input box and Apply button should now be visible
+      const input = screen.getByPlaceholderText("Enter coupon code");
+      expect(input).toBeVisible();
+      const applyBtn = screen.getByRole("button", { name: "Apply" });
+      expect(applyBtn).toBeVisible();
+      expect(applyBtn).toBeDisabled();
+
+      // Type code
+      fireEvent.change(input, { target: { value: "SAVE50" } });
+      expect(input).toHaveValue("SAVE50");
+      expect(applyBtn).not.toBeDisabled();
+
+      // Cancel button closes input and restores "Apply coupon" button
+      const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+      fireEvent.click(cancelBtn);
+      expect(screen.queryByPlaceholderText("Enter coupon code")).toBeNull();
+      expect(screen.getByRole("button", { name: /Apply coupon/i })).toBeVisible();
+    });
+
+    it("3c. Student (Free) shows 'Free' and 'Continue Learning' opening Learning Space without coupon", () => {
       const onNavigatePage = vi.fn();
       renderWithClient(
         <CourseOverviewPage

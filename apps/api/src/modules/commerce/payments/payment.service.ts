@@ -15,6 +15,53 @@ import * as orderRepo from "../orders/order.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
 import { toPaymentContract } from "./payment.mapper.ts";
 
+/**
+ * Course pricing is currently stored in major currency units (for example,
+ * 499 means ₹499). Payment gateways expect the amount in the currency's
+ * smallest unit (for INR, 49900 paise). Keep this conversion at the gateway
+ * boundary so internal course/order pricing remains unchanged.
+ */
+function toGatewayAmount(amount: number, currency: string): number {
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    throw new Error(`Invalid order amount: ${amount}`);
+  }
+
+  // Razorpay uses the smallest unit for the supported currencies. The
+  // current course-pricing UI stores whole major units, so standard
+  // two-decimal currencies use a 100x conversion. Zero-decimal currencies
+  // must not be multiplied.
+  const zeroDecimalCurrencies = new Set([
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "JPY",
+    "KMF",
+    "KRW",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
+  ]);
+  const multiplier = zeroDecimalCurrencies.has(currency.toUpperCase())
+    ? 1
+    : 100;
+  const gatewayAmount = amount * multiplier;
+
+  if (!Number.isSafeInteger(gatewayAmount)) {
+    throw new Error(
+      `Order amount is too large for gateway: ${amount} ${currency}`,
+    );
+  }
+
+  return gatewayAmount;
+}
+
 export interface PaymentService {
   initializePayment(params: {
     orderId: string;
@@ -82,11 +129,14 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_ALREADY_PROCESSED();
     }
 
-    // 2. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.)
+    // 2. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.).
+    // The gateway receives minor units; the internal order remains in the
+    // major-unit format used by the current course-pricing configuration.
+    const gatewayAmount = toGatewayAmount(order.total_amount, order.currency);
     const gatewayOrder = await paymentGateway.createOrder({
       orderId: order.id,
       orderNumber: order.order_number,
-      amount: order.total_amount,
+      amount: gatewayAmount,
       currency: order.currency,
       receipt: order.order_number,
       customer,
@@ -104,7 +154,9 @@ export function createPaymentService({
         gateway_order_id: gatewayOrder.gatewayOrderId,
         gateway_payment_id: null,
         gateway_key_id: gatewayOrder.keyId ?? null,
-        amount: order.total_amount,
+        // Persist the gateway amount so refunds and gateway events use the
+        // same minor-unit representation as Razorpay.
+        amount: gatewayOrder.amount,
         currency: order.currency,
         status: "initiated",
       });
@@ -120,6 +172,8 @@ export function createPaymentService({
       const updated = await paymentRepo.updatePayment(database, payment.id, {
         gateway_order_id: gatewayOrder.gatewayOrderId,
         gateway_key_id: gatewayOrder.keyId ?? null,
+        amount: gatewayOrder.amount,
+        currency: order.currency,
         status: "initiated",
         error_code: null,
         error_description: null,
@@ -226,7 +280,8 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
     }
 
-    if (paymentDetails.amount !== order.total_amount) {
+    const expectedGatewayAmount = toGatewayAmount(order.total_amount, order.currency);
+    if (paymentDetails.amount !== expectedGatewayAmount) {
       throw CommerceErrors.PAYMENT_AMOUNT_MISMATCH();
     }
     if (paymentDetails.currency.toUpperCase() !== order.currency.toUpperCase()) {
