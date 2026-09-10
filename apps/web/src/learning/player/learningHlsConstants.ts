@@ -30,6 +30,18 @@ export function appendLearningHlsCacheVersion(
   });
 }
 
+export function createLearningHlsRequestFilter(options?: {
+  protectedPlayback?: boolean;
+}) {
+  if (!options?.protectedPlayback) {
+    return appendLearningHlsCacheVersion;
+  }
+  return (request: VideoNetworkRequest): void => {
+    appendLearningHlsCacheVersion(request);
+    request.allowCrossSiteCredentials = true;
+  };
+}
+
 export const LEARNING_HLS_STREAMING = {
   abrEnabled: true,
   bufferBehind: 600,

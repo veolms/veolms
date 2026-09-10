@@ -833,6 +833,8 @@ export function LessonVideoUpload({
       : null) ||
     (phase === "failed" ? "Video processing could not be completed." : null);
 
+  const hasVideo = Boolean(activeMediaId || mediaAssetId);
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 max-[768px]:w-full">
@@ -842,8 +844,8 @@ export function LessonVideoUpload({
           onClick={openModal}
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer"
         >
-          <UploadSimple size={15} />
-          Upload
+          {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
+          {hasVideo ? "Change Video" : "Upload"}
         </button>
         {isReplacementFlow && mediaAssetId ? (
           <span

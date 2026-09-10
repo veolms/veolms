@@ -169,7 +169,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     try {
       this.clearNetworkingFilters();
-      const preloadSession = this.takeMatchingPreloadSession(source.src);
+      const preloadSession = this.takeMatchingPreloadSession(source);
       if (
         !configureShakaPlayer(player, source, runtime, {
           reset: !preloadSession,
@@ -429,7 +429,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   private takeMatchingPreloadSession(
-    manifestUrl: string,
+    source: VideoSource,
   ): EarlyShakaPreloadSession | null {
     const session = this.#adoptedPreloadSession;
     if (!session || session.consumed) {
@@ -441,7 +441,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return null;
     }
 
-    if (session.manifestUrl !== manifestUrl) {
+    const manifestMatches = session.manifestUrl === source.src;
+    const mediaKeyMatches =
+      !session.mediaKey || !source.id || session.mediaKey === source.id;
+    // The paid bootstrap can resolve after the player source was created. A
+    // stable media key is sufficient to adopt that session; its manifest URL
+    // may be the protected API HLS path rather than the local fallback URL.
+    if (!manifestMatches && !mediaKeyMatches) {
       consumeEarlyShakaPreloadSession(session);
       this.#adoptedPreloadSession = null;
       void discardEarlyShakaPreloadManager(session);

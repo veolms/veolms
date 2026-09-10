@@ -2552,6 +2552,31 @@ export function CourseCreatePage({
   }, [activeStep]);
 
   useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.courseWizardActive = "true";
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        delete document.documentElement.dataset.courseWizardActive;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const scrollport = document.getElementById("courses-main-scrollport");
+    if (scrollport) {
+      scrollport.scrollTop = 0;
+    }
+    const tabContent = document.getElementById("course-wizard-tab-panel");
+    if (tabContent) {
+      tabContent.scrollTop = 0;
+    }
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+    }
+  }, [activeStep]);
+
+  useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -9382,7 +9407,7 @@ export function CourseCreatePage({
               </div>
             </div>
           ) : panelStep === "curriculum" ? (
-            <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
+            <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
               {/* Header row */}
               <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
                 <div className="">

@@ -101,6 +101,8 @@ export interface VideoPlayerProps extends Omit<
   onProgressChange?: (progress: number) => void;
   onReady?: (duration: number) => void;
   onPlayerError?: (error: Error) => void;
+  /** Optional action shown in the error state, for example closing a mini-player. */
+  onErrorOverlayClose?: () => void;
   onEvent?: VideoPlayerEventListener;
   onStoryboardError?: (error: unknown) => void;
   accentColor?: string;
@@ -168,6 +170,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       mediaProps,
       onEvent,
       onPlayerError,
+      onErrorOverlayClose,
       onProgress,
       onProgressChange,
       onReady,
@@ -403,7 +406,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             ? null
             : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
-          <ErrorOverlay />
+          <ErrorOverlay onClose={onErrorOverlayClose} />
           {controls === false
             ? null
             : (controls ?? (

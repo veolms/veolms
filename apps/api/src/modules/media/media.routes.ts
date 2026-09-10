@@ -4,6 +4,7 @@ import {
   presignMediaResponseSchema,
   mediaAssetStatusSchema,
   videoJobProgressResponseSchema,
+  videoPlaybackBootstrapSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -29,6 +30,38 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     services: options.services,
   });
   const controller = createMediaController({ service });
+
+  app.get(
+    "/courses/:idOrSlug/lessons/:lessonNumber/playback-bootstrap",
+    {
+      schema: {
+        operationId: "getVideoPlaybackBootstrap",
+        tags: ["Media"],
+        summary: "Resolve an authorized lesson video playback bootstrap",
+        description:
+          "Returns the minimum HLS startup data after applying the existing session and course-access rules. Protected stream URLs are never embedded in static HTML.",
+        params: z.object({
+          idOrSlug: z.string().min(1).max(160),
+          lessonNumber: z.coerce.number().int().positive(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Authorized video playback bootstrap",
+            videoPlaybackBootstrapSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("Lesson or media not found"),
+          409: errorResponse("Video is not ready for playback"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getPlaybackBootstrap,
+  );
 
   app.post(
     "/media/presign",
@@ -109,6 +142,32 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.streamVideoJobProgress,
+  );
+
+  app.get(
+    "/media/:mediaId/hls/*",
+    {
+      schema: {
+        operationId: "streamProtectedHlsResource",
+        tags: ["Media"],
+        summary: "Stream an authorized HLS playlist or segment",
+        params: z.object({
+          mediaId: z.string().uuid(),
+          "*": z.string().min(1),
+        }),
+        response: {
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("HLS resource not found"),
+          409: errorResponse("Video is not ready for playback"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.streamHlsResource,
   );
 
   app.get(
