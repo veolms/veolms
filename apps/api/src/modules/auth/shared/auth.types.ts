@@ -1,5 +1,3 @@
-import type { AuthMenuNode } from "@veolms/contracts";
-
 export type IdentifierType = "email" | "phone";
 
 export type OtpPurpose = "login" | "email_verification" | "phone_verification";
@@ -25,8 +23,6 @@ export interface SessionUser {
   is_deleted: boolean;
   mfa_mandatory: boolean;
   roles?: string[];
-  permissions?: string[];
-  menus?: AuthMenuNode[];
 }
 
 export interface MfaState {
@@ -66,8 +62,6 @@ export interface AuthenticatedUserContext {
   phoneNo: string | null;
   mobileVerified: boolean;
   roles: string[];
-  permissions: string[];
-  menus: AuthMenuNode[];
   totpEnabled: boolean;
   passkeyEnabled: boolean;
   mfaMandatory: boolean;
