@@ -16,6 +16,9 @@ import { registerOpenApi } from "./openapi.ts";
 import { createServices, type AppServices } from "./services/index.ts";
 import { config } from "./config.ts";
 import { registerBackgroundJobs } from "./background-jobs.ts";
+import assetLinksPlugin, {
+  ASSET_LINKS_ROUTE,
+} from "./modules/_system/asset-links.plugin.ts";
 
 export const API_ROUTE_PREFIX = "/api/v1";
 
@@ -61,7 +64,10 @@ export async function createApp({
   // registered plugin only apply to that plugin's own routes, not siblings).
 
   app.addHook("preSerialization", async (request, reply, payload) => {
-    if (request.url.startsWith("/api/docs")) {
+    if (
+      request.url.startsWith("/api/docs") ||
+      request.url === ASSET_LINKS_ROUTE
+    ) {
       return payload;
     }
 
@@ -81,6 +87,14 @@ export async function createApp({
       statusCode: reply.statusCode,
       data: payload,
     };
+  });
+
+  // Android App Links: served unprefixed at the literal well-known path Android
+  // expects, so it's registered directly rather than through the /api/v1
+  // autoload below.
+  await app.register(assetLinksPlugin, {
+    packageName: config.ANDROID_APP_PACKAGE_NAME ?? "",
+    fingerprints: config.ANDROID_APP_SHA256_CERT_FINGERPRINTS ?? "",
   });
 
   // Register cookie support for stateful sessions
