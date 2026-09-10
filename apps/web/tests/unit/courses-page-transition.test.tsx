@@ -47,6 +47,10 @@ vi.mock("../../src/services/learning-space", () => ({
   }),
 }));
 
+vi.mock("../../src/services/navigation", () => ({
+  useSidenav: () => ({ data: undefined }),
+}));
+
 vi.mock("../../src/services/courses", async () => {
   const actual = await vi.importActual<
     typeof import("../../src/services/courses")
