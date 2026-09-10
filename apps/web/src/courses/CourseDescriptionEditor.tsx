@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { CommentFormattingToolbar } from "../learning/CommentFormattingToolbar";
 import {
@@ -86,6 +87,22 @@ export function CourseDescriptionEditor({
     onChangeRef.current(nextDraft.markdown);
   }, []);
 
+  const handleWheelCapture = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      const content = containerRef.current?.querySelector(".cm-content");
+      if (content?.contains(document.activeElement)) return;
+
+      const scrollport = event.currentTarget.closest<HTMLElement>(
+        ".courses-main",
+      );
+      if (!scrollport) return;
+
+      event.preventDefault();
+      scrollport.scrollTop += event.deltaY;
+    },
+    [],
+  );
+
   return (
     <div
       ref={containerRef}
@@ -94,6 +111,7 @@ export function CourseDescriptionEditor({
       data-course-description-editor={id}
       data-base-ui-swipe-ignore=""
       data-tab-swipe-ignore=""
+      onWheelCapture={handleWheelCapture}
       className={`learning-comment-editor relative isolate flex flex-col overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] shadow-[0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)] transition-[border-color,box-shadow] duration-150 focus-within:border-(--accent) focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent)_14%,transparent)] ${
         disabled ? "cursor-not-allowed opacity-60 pointer-events-none" : ""
       } ${
