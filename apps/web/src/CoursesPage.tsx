@@ -63,7 +63,8 @@ import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { autosyncManager } from "./lib/autosync";
-import { useCurrentUser, useSignOut } from "./services/auth";
+import { useCurrentUser, useSignOut, useLogout } from "./services/auth";
+import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
 import {
   useCourses,
@@ -715,6 +716,7 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const { data: sidenavData } = useSidenav();
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
     // The learning route already has its static player content and does not
@@ -730,8 +732,8 @@ export function CoursesPage({
     activeUser?.id,
   );
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(activeUser?.menus),
-    [activeUser?.menus],
+    () => resolveShellNavigation(sidenavData?.menus),
+    [sidenavData?.menus],
   );
   const navigationSignature = useMemo(
     () =>

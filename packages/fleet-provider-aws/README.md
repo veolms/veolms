@@ -55,7 +55,7 @@ packages/fleet-provider-aws/
 | `AWS_REGION`                                    | AWS region for EC2, S3, SSM, and EventBridge Scheduler           | `us-east-1`                   |
 | `EC2_USE_SPOT`                                  | Whether to launch workers as EC2 Spot instances (`true`/`false`) | `true`                        |
 | `EC2_IAM_INSTANCE_PROFILE`                      | IAM instance profile attached to worker instances                | `VeoLMSWorkerInstanceProfile` |
-| `S3_BUCKET` / `S3_BUCKET_NAME`                  | S3 bucket containing worker bundles and video outputs            | _Required_                    |
+| `S3_BUCKET`                                     | S3 bucket containing worker bundles and video outputs            | _Required_                    |
 | `AMI_ID`                                        | Optional pre-baked AMI ID (bypasses dynamic Debian SSM lookup)   | _Optional_                    |
 | `SUBNET_ID`                                     | Optional target subnet ID for EC2 launches                       | _Optional_                    |
 | `SECURITY_GROUP_IDS` / `EC2_SECURITY_GROUP_IDS` | Comma-separated list of Security Group IDs                       | _Optional_                    |

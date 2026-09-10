@@ -26,38 +26,8 @@ export interface PublishLayerOptions {
   readonly description?: string;
 }
 
-/**
- * Resolves the monorepo root directory by scanning upwards for workspace root markers.
- */
-export function resolveRepoRoot(): string {
-  try {
-    let currentDir = path.dirname(fileURLToPath(import.meta.url));
-    while (currentDir !== path.parse(currentDir).root) {
-      if (
-        fsSync.existsSync(path.join(currentDir, "pnpm-workspace.yaml")) ||
-        fsSync.existsSync(path.join(currentDir, "turbo.json"))
-      ) {
-        return currentDir;
-      }
-      currentDir = path.dirname(currentDir);
-    }
-  } catch {
-    // ignore
-  }
-
-  let cwd = process.cwd();
-  while (cwd !== path.parse(cwd).root) {
-    if (
-      fsSync.existsSync(path.join(cwd, "pnpm-workspace.yaml")) ||
-      fsSync.existsSync(path.join(cwd, "turbo.json"))
-    ) {
-      return cwd;
-    }
-    cwd = path.dirname(cwd);
-  }
-
-  return process.cwd();
-}
+import { resolveRepoRoot } from "@veolms/fleet-types/env";
+export { resolveRepoRoot };
 
 /**
  * Resolves the directory containing Dockerfile.ffprobe-layer reliably regardless
@@ -141,10 +111,13 @@ export function buildFfprobeLayer(options: BuildLayerOptions): string {
   }
 
   // Use Docker BuildKit with --output to extract the zip directly from the container
-  const buildCmd = `DOCKER_BUILDKIT=1 docker build --build-arg TARGETARCH=${targetArch} -f "${dockerfilePath}" --output "${outDir}" "${dockerfileDir}"`;
+  const buildCmd = `docker build --build-arg TARGETARCH=${targetArch} -f "${dockerfilePath}" --output "${outDir}" "${dockerfileDir}"`;
 
   try {
-    execSync(buildCmd, { stdio: log ? "inherit" : "pipe" });
+    execSync(buildCmd, {
+      stdio: log ? "inherit" : "pipe",
+      env: { ...process.env, DOCKER_BUILDKIT: "1" },
+    });
   } catch (buildErr: unknown) {
     // Fallback: build container and copy zip out
     if (log) {

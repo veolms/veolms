@@ -1,0 +1,25 @@
+{
+  "name": "@veolms/fleet-provider-docker",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./setup": "./src/setup/index.ts",
+    "./destroy": "./src/setup/destroy.ts",
+    "./trigger": "./src/trigger.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@veolms/config": "workspace:*",
+    "@veolms/database": "workspace:*",
+    "@veolms/fleet-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.13",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}
