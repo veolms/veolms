@@ -6,6 +6,8 @@ import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { MedalIcon as Medal } from "@phosphor-icons/react/Medal";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import type { EnrolledCourse } from "@veolms/contracts";
 import { ThemedSelect } from "./ThemedSelect";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
@@ -17,6 +19,8 @@ import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
 import illustratorThumbnail from "./assets/learning-thumbnails/illustrator-course.webp";
 import reactThumbnail from "./assets/learning-thumbnails/react-course.webp";
 import d3Thumbnail from "./assets/learning-thumbnails/d3-course.webp";
+import { getCourseThumbnail } from "./learning/courseMetadata";
+import { useEnrolledCourses } from "./services/enrollments";
 import {
   isStoredString,
   useSessionStorageState,
@@ -28,6 +32,7 @@ import {
 
 export interface LearningCourse {
   id: string;
+  slug?: string;
   title: string;
   sections: number;
   lectures: number;
@@ -38,6 +43,39 @@ export interface LearningCourse {
   enrolledOn?: string;
   completedOn?: string;
   thumbnail: string;
+}
+
+export function adaptEnrolledCourseToLearningCourse(
+  ec: EnrolledCourse,
+): LearningCourse {
+  const status: "in-progress" | "not-started" | "completed" =
+    ec.progress === 100
+      ? "completed"
+      : ec.progress !== null && ec.progress > 0
+        ? "in-progress"
+        : "not-started";
+
+  const enrolledDateStr = ec.enrolledAt
+    ? new Date(ec.enrolledAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      })
+    : undefined;
+
+  return {
+    id: ec.courseId,
+    slug: ec.courseSlug,
+    title: ec.courseTitle,
+    sections: ec.totalSections,
+    lectures: ec.totalLessons,
+    status,
+    progress: ec.progress ?? 0,
+    enrolledOn: enrolledDateStr,
+    thumbnail:
+      ec.courseThumbnailUrl ||
+      getCourseThumbnail(ec.courseSlug),
+  };
 }
 
 interface ProgressBarProps {
@@ -61,7 +99,9 @@ interface MyCoursesPageProps {
   setNotice: (notice: string) => void;
 }
 
-const learningCourses: readonly LearningCourse[] = [
+/*
+// LEGACY CODE REFERENCE:
+const legacyLearningCourses: readonly LearningCourse[] = [
   {
     id: "typescript-course",
     title: "The Ultimate TypeScript Course",
@@ -159,6 +199,7 @@ const learningCourses: readonly LearningCourse[] = [
     thumbnail: awsThumbnail,
   },
 ];
+*/
 
 const LEGACY_MY_COURSES_SEARCH_KEYS = ["veolms-my-learning-search"] as const;
 
@@ -231,11 +272,14 @@ function LearningCourseCard({
           {completed ? (
             <>Completed on {course.completedOn}</>
           ) : notStarted ? (
-            <>Enrolled on {course.enrolledOn}</>
+            <>{course.enrolledOn ? `Enrolled on ${course.enrolledOn}` : "Enrolled"}</>
           ) : (
             <>
-              <span>Last watched: {course.lastLesson}</span>
-              <time>{course.accessed}</time>
+              {course.lastLesson && <span>Last watched: {course.lastLesson}</span>}
+              {course.accessed && <time>{course.accessed}</time>}
+              {!course.lastLesson && !course.accessed && (
+                <span>{course.enrolledOn ? `Enrolled on ${course.enrolledOn}` : "Enrolled"}</span>
+              )}
             </>
           )}
         </div>
@@ -279,6 +323,7 @@ export function MyCoursesPage({
   onWishlist,
   setNotice,
 }: MyCoursesPageProps) {
+  const { data: enrolledData, isLoading, isError, refetch } = useEnrolledCourses();
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useSessionStorageState(
     "veolms-my-courses-search",
@@ -288,6 +333,10 @@ export function MyCoursesPage({
   );
   const [sort, setSort] = useState("recent");
   const [status, setStatus] = useState("all");
+
+  const learningCourses = useMemo(() => {
+    return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
+  }, [enrolledData?.courses]);
 
   const visibleCourses = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -302,7 +351,7 @@ export function MyCoursesPage({
     if (sort === "progress")
       result = [...result].sort((a, b) => b.progress - a.progress);
     return result;
-  }, [filter, search, sort, status]);
+  }, [learningCourses, filter, search, sort, status]);
 
   return (
     <div className="my-courses-page">
@@ -383,7 +432,21 @@ export function MyCoursesPage({
         </div>
       </div>
 
-      {visibleCourses.length ? (
+      {isLoading ? (
+        <div className="learning-load-state" role="status">
+          <CircleNotch size={32} className="animate-spin" />
+          <p>Loading your enrolled courses...</p>
+        </div>
+      ) : isError ? (
+        <div className="learning-empty" role="alert">
+          <WarningCircle size={32} className="text-rose-400" />
+          <h2>Unable to load enrolled courses</h2>
+          <p>Please check your connection and try again.</p>
+          <button type="button" onClick={() => refetch()}>
+            Retry
+          </button>
+        </div>
+      ) : visibleCourses.length ? (
         <section className="learning-course-grid" aria-label="Enrolled courses">
           {visibleCourses.map((course, index) => (
             <LearningCourseCard
@@ -412,14 +475,6 @@ export function MyCoursesPage({
           >
             Reset filters
           </button>
-        </div>
-      )}
-
-      {filter === "all" && status === "all" && !search.trim() && (
-        <div className="learning-load-state" role="status">
-          <CircleNotch size={30} />
-          <p>Loading more courses...</p>
-          <small>{learningCourses.length} of 28 courses loaded</small>
         </div>
       )}
     </div>

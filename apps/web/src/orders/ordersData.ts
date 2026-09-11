@@ -44,6 +44,8 @@ export interface RecentPaymentItem {
 
 export type OrderTabId = "all" | "completed" | "pending" | "failed" | "refunded";
 
+/*
+// LEGACY MOCK DATA REFERENCE:
 export const initialOrdersList: readonly OrderItem[] = [
   {
     id: "ord-1",
@@ -162,58 +164,15 @@ export const initialOrdersList: readonly OrderItem[] = [
 ];
 
 export const initialOrderSummary: OrderSummaryMetrics = {
-  totalOrders: 24,
-  completed: 16,
-  pending: 4,
-  failed: 2,
-  refunded: 2,
-  totalSpent: "₹15,293",
-  totalSpentAmount: 15293,
+  totalOrders: 0,
+  completed: 0,
+  pending: 0,
+  failed: 0,
+  refunded: 0,
+  totalSpent: "₹0",
+  totalSpentAmount: 0,
 };
 
-export const initialRecentPayments: readonly RecentPaymentItem[] = [
-  {
-    id: "rec-1",
-    courseTitle: "The Ultimate TypeScript Course",
-    badgeText: "TS",
-    badgeColor: "#2563eb",
-    badgeTextColor: "#ffffff",
-    date: "May 12, 2025",
-    status: "completed",
-    statusLabel: "Completed",
-    formattedPrice: "₹1,499",
-  },
-  {
-    id: "rec-2",
-    courseTitle: "Complete Backend with Node.js",
-    badgeText: "node",
-    badgeColor: "#1e293b",
-    badgeTextColor: "#4ade80",
-    date: "Apr 28, 2025",
-    status: "completed",
-    statusLabel: "Completed",
-    formattedPrice: "₹2,499",
-  },
-  {
-    id: "rec-3",
-    courseTitle: "UI/UX Design Mastery",
-    badgeText: "UI",
-    badgeColor: "#8b5cf6",
-    badgeTextColor: "#ffffff",
-    date: "Apr 15, 2025",
-    status: "pending",
-    statusLabel: "Pending",
-    formattedPrice: "₹1,299",
-  },
-  {
-    id: "rec-4",
-    courseTitle: "PostgreSQL Mastery",
-    badgeText: "PG",
-    badgeColor: "#0284c7",
-    badgeTextColor: "#ffffff",
-    date: "Mar 30, 2025",
-    status: "failed",
-    statusLabel: "Failed",
-    formattedPrice: "₹1,799",
-  },
-];
+export const initialRecentPayments: readonly RecentPaymentItem[] = [];
+*/
+

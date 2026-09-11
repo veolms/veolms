@@ -127,7 +127,62 @@ export function Curriculum({
       section.lessons.some(([number]) => number === selectedLesson),
     ) || sections[0]!;
   const currentLesson = lessonsById.get(selectedLesson) || lessonsById.get(1)!;
-  const courseProgress = 52;
+  // Legacy hardcoded progress:
+  // const courseProgress = 52;
+
+  const getLessonProgress = useCallback(
+    (number: number, status: string) => {
+      const storedProgress = lessonProgress[number];
+      if (typeof storedProgress === "number")
+        return Math.max(0, Math.min(100, storedProgress));
+      if (status === "done") return 100;
+      /* Legacy hardcoded active status:
+      if (status === "active") return 52;
+      */
+      return 0;
+    },
+    [lessonProgress],
+  );
+
+  const isLessonComplete = useCallback(
+    (number: number, status: string) => {
+      const progress = getLessonProgress(number, status);
+      return (
+        status === "done" || progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
+      );
+    },
+    [getLessonProgress],
+  );
+
+  const totalLessonsCount = sections.reduce(
+    (sum, section) => sum + section.lessons.length,
+    0,
+  );
+  const completedLessonsCount = sections.reduce((total, section) => {
+    return (
+      total +
+      section.lessons.filter(([number, , , status]) =>
+        isLessonComplete(number, status),
+      ).length
+    );
+  }, 0);
+
+  const totalProgressSum = sections.reduce((sum, section) => {
+    return (
+      sum +
+      section.lessons.reduce((sectionSum, [number, , , status]) => {
+        return sectionSum + getLessonProgress(number, status);
+      }, 0)
+    );
+  }, 0);
+
+  const courseProgress =
+    totalLessonsCount > 0
+      ? Math.max(
+          0,
+          Math.min(100, Math.round(totalProgressSum / totalLessonsCount)),
+        )
+      : 0;
 
   useEffect(() => {
     if (expandAllSections || !hideHero || isExpandedControlled) return;
@@ -156,15 +211,6 @@ export function Curriculum({
     },
     [scrollportRef],
   );
-
-  const getLessonProgress = (number: number, status: string) => {
-    const storedProgress = lessonProgress[number];
-    if (typeof storedProgress === "number")
-      return Math.max(0, Math.min(100, storedProgress));
-    if (status === "done") return 100;
-    if (status === "active") return 52;
-    return 0;
-  };
 
   const scrollItemToTop = (element: HTMLElement | null) => {
     const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
@@ -557,7 +603,14 @@ export function Curriculum({
                     Section {section.id}: {section.title}
                   </span>
                   <span className="learning-curriculum__section-progress">
-                    {section.progress}
+                    {/* Legacy: {section.progress} */}
+                    {(() => {
+                      const secCompleted = section.lessons.filter(
+                        ([number, , , status]) =>
+                          isLessonComplete(number, status),
+                      ).length;
+                      return `${secCompleted}/${section.lessons.length}`;
+                    })()}
                   </span>
                 </button>
                 {matchingLessons.length > 0 && (

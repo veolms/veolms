@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import {
@@ -39,6 +39,7 @@ import { getCourseTitle, getCourseThumbnail } from "../learning/courseMetadata";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
+import { useEnrolledCourses, useEnrollFreeCourse } from "../services/enrollments";
 import { RenderMarkdown } from "./RichTextEditor";
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
@@ -453,6 +454,30 @@ function CourseHeroSection({
     "Certificate of completion",
   ];
   const priceSizeVariant = getPriceSizeVariant(price);
+  const authUser = useAuthStore((s) => s.user);
+  const enrollFreeMutation = useEnrollFreeCourse();
+
+  const handleEnrollOrLearn = async () => {
+    if (isReadOnlyPreview) return;
+    if (course.enrolled) {
+      onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+      return;
+    }
+    if (price.toLowerCase() === "free") {
+      if (!authUser) {
+        onNavigatePage?.("/login");
+        return;
+      }
+      try {
+        await enrollFreeMutation.mutateAsync(course.id);
+        onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+      } catch (err) {
+        console.error("Failed to enroll in free course:", err);
+      }
+      return;
+    }
+    onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+  };
 
   const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -628,16 +653,16 @@ function CourseHeroSection({
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] duration-160 ease-out hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) hover:-translate-y-px hover:shadow-[0_6px_18px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_38%,transparent))] max-[640px]:text-[0.88rem] disabled:opacity-75 disabled:cursor-default"
-                disabled={isReadOnlyPreview}
-                onClick={() => {
-                  if (!isReadOnlyPreview && onNavigatePage) {
-                    onNavigatePage(
-                      `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-                    );
-                  }
-                }}
+                disabled={isReadOnlyPreview || enrollFreeMutation.isPending}
+                onClick={handleEnrollOrLearn}
               >
-                {course.enrolled ? (
+                {enrollFreeMutation.isPending ? (
+                  <CircleNotch
+                    size="1.15em"
+                    className="animate-spin shrink-0"
+                    aria-hidden="true"
+                  />
+                ) : course.enrolled ? (
                   <Play
                     size="1.15em"
                     weight="fill"
@@ -660,11 +685,13 @@ function CourseHeroSection({
                   />
                 )}
                 <span className="font-[800] truncate">
-                  {price.toLowerCase() === "free"
-                    ? "Enroll for Free"
+                  {enrollFreeMutation.isPending
+                    ? "Enrolling..."
                     : course.enrolled
                       ? "Continue Learning"
-                      : "Buy Now"}
+                      : price.toLowerCase() === "free"
+                        ? "Enroll for Free"
+                        : "Buy Now"}
                 </span>
               </button>
             </div>
@@ -1261,6 +1288,26 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         )
       : undefined);
 
+  const { data: enrolledData } = useEnrolledCourses();
+
+  const isEnrolled = useMemo(() => {
+    if (!enrolledData?.courses) return false;
+    return enrolledData.courses.some(
+      (ec) =>
+        ec.courseId === course?.id ||
+        ec.courseSlug === courseSlug ||
+        (course?.slug && ec.courseSlug === course.slug),
+    );
+  }, [enrolledData?.courses, course?.id, course?.slug, courseSlug]);
+
+  const courseWithEnrollment = useMemo(() => {
+    if (!course) return undefined;
+    return {
+      ...course,
+      enrolled: isEnrolled || course.enrolled,
+    };
+  }, [course, isEnrolled]);
+
   if (
     isOverviewLoading &&
     !course &&
@@ -1272,7 +1319,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     );
   }
 
-  if (!course) {
+  if (!courseWithEnrollment) {
     return (
       <div className="w-full max-w-275 mx-auto box-border text-(--text)">
         <div className="courses-empty">
@@ -1302,8 +1349,8 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   return (
     <CourseOverviewContent
       {...props}
-      key={course.id}
-      course={course}
+      key={courseWithEnrollment.id}
+      course={courseWithEnrollment}
       courseSlug={courseSlug}
       defaultInstructorName={defaultInstructorName}
       adaptedFromPreview={activeAdapted}

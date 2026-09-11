@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { orderSchema, invoiceSchema } from "@veolms/contracts";
+import { orderSchema, invoiceSchema, ordersListQuerySchema, ordersListResponseSchema } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
@@ -14,7 +14,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
   const invoiceService = createInvoiceService({ database: options.database });
   const controller = createOrderController({ service, invoiceService });
 
-  // 1. GET /orders - List authenticated student orders
+  // 1. GET /orders - List authenticated student orders (cursor-paginated)
   app.get(
     "/orders",
     {
@@ -23,9 +23,12 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         operationId: "listMyOrders",
         tags: ["Commerce - Orders"],
         summary: "List student orders",
-        description: "Returns the authenticated student's historical and active orders.",
+        description:
+          "Returns the authenticated student's orders with cursor-based pagination. " +
+          "Pass `cursor` (ISO timestamp) and `limit` for infinite scroll.",
+        querystring: ordersListQuerySchema,
         response: {
-          200: jsonResponse("List of student orders", z.array(orderSchema)),
+          200: jsonResponse("Paginated list of student orders", ordersListResponseSchema),
           401: errorResponse("Unauthorized"),
         },
       },
