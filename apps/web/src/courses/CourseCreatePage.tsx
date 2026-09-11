@@ -10180,71 +10180,90 @@ export function CourseCreatePage({
                                   <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
                                     <button
                                       type="button"
+                                      disabled={
+                                        les.isPendingCreation ||
+                                        savingLessonId === les.id
+                                      }
                                       style={{
                                         fontSize: "0.84rem",
                                         fontWeight: 600,
-                                        gap: "6px",
+                                        gap: "8px",
                                       }}
-                                      className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "video" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                      onClick={() =>
-                                        handleUpdateLesson(sec.id, les.id, {
-                                          pendingContentType: "video",
-                                        })
-                                      }
+                                      className="inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-[0.84rem] font-semibold text-(--text) cursor-pointer transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                                      onClick={() => {
+                                        if (
+                                          les.isPendingCreation ||
+                                          savingLessonId === les.id
+                                        )
+                                          return;
+                                        void handleLessonDiscreteChange(
+                                          sec.id,
+                                          les.id,
+                                          {
+                                            contentType: "video",
+                                            contentTypeSelected: true,
+                                          },
+                                        );
+                                      }}
                                     >
-                                      <Video size={18} weight="fill" /> Video
+                                      {savingLessonId === les.id ? (
+                                        <CircleNotch
+                                          size={16}
+                                          className="animate-spin text-(--accent)"
+                                        />
+                                      ) : (
+                                        <Video
+                                          size={18}
+                                          weight="fill"
+                                          className="text-(--accent) shrink-0"
+                                        />
+                                      )}
+                                      <span>Video</span>
                                     </button>
                                     <button
                                       type="button"
+                                      disabled={
+                                        les.isPendingCreation ||
+                                        savingLessonId === les.id
+                                      }
                                       style={{
                                         fontSize: "0.84rem",
                                         fontWeight: 600,
-                                        gap: "6px",
+                                        gap: "8px",
                                       }}
-                                      className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "document" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                      onClick={() =>
-                                        handleUpdateLesson(sec.id, les.id, {
-                                          pendingContentType: "document",
-                                        })
-                                      }
+                                      className="inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-[0.84rem] font-semibold text-(--text) cursor-pointer transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                                      onClick={() => {
+                                        if (
+                                          les.isPendingCreation ||
+                                          savingLessonId === les.id
+                                        )
+                                          return;
+                                        void handleLessonDiscreteChange(
+                                          sec.id,
+                                          les.id,
+                                          {
+                                            contentType: "document",
+                                            contentMediaId: null,
+                                            contentTypeSelected: true,
+                                          },
+                                        );
+                                      }}
                                     >
-                                      <FileText size={18} weight="fill" /> Document / PDF
+                                      {savingLessonId === les.id ? (
+                                        <CircleNotch
+                                          size={16}
+                                          className="animate-spin text-(--accent)"
+                                        />
+                                      ) : (
+                                        <FileText
+                                          size={18}
+                                          weight="fill"
+                                          className="text-(--accent) shrink-0"
+                                        />
+                                      )}
+                                      <span>Document / PDF</span>
                                     </button>
                                   </div>
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      !les.pendingContentType ||
-                                      savingLessonId === les.id
-                                    }
-                                    style={{
-                                      fontSize: "0.84rem",
-                                      fontWeight: 600,
-                                      height: "34px",
-                                      borderRadius: "8px",
-                                      gap: "6px",
-                                      paddingTop: 0,
-                                      paddingBottom: 0,
-                                    }}
-                                    className="mt-2 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) px-4 shadow-[0_3px_10px_var(--accent-shadow)] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                                    onClick={() => {
-                                      if (!les.pendingContentType) return;
-                                      void handleLessonDiscreteChange(
-                                        sec.id,
-                                        les.id,
-                                        {
-                                          contentType: les.pendingContentType,
-                                          ...(les.pendingContentType === "document"
-                                            ? { contentMediaId: null }
-                                            : {}),
-                                        },
-                                      );
-                                    }}
-                                  >
-                                    {savingLessonId === les.id
-                                      ? "Saving..."
-                                      : "Continue"}
-                                  </button>
                                 </div>
                               ) : (
                               <div
