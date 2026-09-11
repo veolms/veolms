@@ -26,6 +26,7 @@ interface CommentComposerProps {
   canSubmit: boolean;
   capabilities?: InteractionCapabilities;
   editing?: boolean;
+  isSubmitting?: boolean;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
@@ -44,6 +45,7 @@ export function CommentComposer({
   canSubmit,
   capabilities,
   editing = false,
+  isSubmitting = false,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
@@ -156,7 +158,7 @@ export function CommentComposer({
               type="button"
               aria-label="Next: choose publishing options"
               title="Next"
-              disabled={!canSubmit}
+              disabled={!canSubmit || isSubmitting}
               onClick={openPublishingOptions}
               className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
             >
@@ -182,11 +184,15 @@ export function CommentComposer({
               onVisibilityChange={onVisibilityChange}
             />
           </div>
-          <div className="mt-auto flex shrink-0 items-center justify-end gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:px-4">
+          <div
+            data-comment-publish-actions
+            className="flex shrink-0 items-center justify-end gap-2 px-4 py-3 sm:px-5 sm:py-3.5"
+          >
             <button
               type="button"
               onClick={returnToEditor}
-              className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              disabled={isSubmitting}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               <ArrowLeft size={18} weight="bold" aria-hidden="true" />
               Back
@@ -194,11 +200,13 @@ export function CommentComposer({
             <button
               type="button"
               aria-label={
-                editing
-                  ? "Save changes"
-                  : `Post ${getEntryKindLabel(entryKind)}`
+                isSubmitting
+                  ? "Saving…"
+                  : editing
+                    ? "Save changes"
+                    : `Post ${getEntryKindLabel(entryKind)}`
               }
-              disabled={!canSubmit}
+              disabled={!canSubmit || isSubmitting}
               onClick={onSubmit}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
@@ -207,7 +215,7 @@ export function CommentComposer({
               ) : (
                 <PaperPlaneTilt size={19} weight="fill" aria-hidden="true" />
               )}
-              {editing ? "Save changes" : "Post"}
+              {isSubmitting ? "Saving…" : editing ? "Save changes" : "Post"}
             </button>
           </div>
         </div>

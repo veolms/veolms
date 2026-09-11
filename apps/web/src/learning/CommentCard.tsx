@@ -39,7 +39,7 @@ export interface CommentReply {
 }
 
 export interface Comment {
-  id: number;
+  id: string | number;
   name: string;
   time: string;
   avatar: string;
@@ -58,15 +58,17 @@ export interface Comment {
     meta: string;
   };
   isOwn?: boolean;
+  createdAt?: string | number;
+  timestampSeconds?: number | null;
 }
 
 interface CommentCardProps {
   comment: Comment;
-  onLike: (id: number, liked: boolean) => void;
-  onOpenThread?: (id: number, focusComposer?: boolean) => void;
+  onLike: (id: string | number, liked: boolean) => void;
+  onOpenThread?: (id: string | number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
-  onDelete?: (id: number) => void;
-  onReport?: (id: number) => void;
+  onDelete?: (id: string | number) => void;
+  onReport?: (id: string | number) => void;
 }
 
 export function CommentCard({
@@ -94,7 +96,16 @@ export function CommentCard({
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
   );
   const replyCount = unloadedReplyCount + localReplies.length;
-  const hasReplies = replyCount > 0;
+  const entryKind =
+    comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
+  const isNote = entryKind === "note";
+  const entryLabel =
+    entryKind === "question"
+      ? "Q&A"
+      : isNote
+        ? "Note"
+        : "Comment";
+  const hasReplies = !isNote && replyCount > 0;
 
   const toggleReplies = () => {
     if (!hasReplies) return;
@@ -137,15 +148,6 @@ export function CommentCard({
     );
   };
 
-  const entryKind =
-    comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
-  const entryLabel =
-    entryKind === "question"
-      ? "Q&A"
-      : entryKind === "note"
-        ? "Note"
-        : "Comment";
-
   return (
     <article
       id={`discussion-entry-${comment.id}`}
@@ -163,6 +165,7 @@ export function CommentCard({
         ) {
           return;
         }
+        event.stopPropagation();
         toggleReplies();
       }}
     >
@@ -253,7 +256,7 @@ export function CommentCard({
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
-              {comment.attachment && (
+              {comment.attachment && !isNote && (
                 <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
                   <FileText
                     size={26}
@@ -272,69 +275,71 @@ export function CommentCard({
                 </div>
               )}
 
-              <div
-                data-comment-engagement
-                className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLiked(!liked);
-                    onLike(comment.id, !liked);
-                  }}
-                  aria-pressed={liked}
-                  aria-label={liked ? "Unlike" : "Like"}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+              {!isNote && (
+                <div
+                  data-comment-engagement
+                  className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
                 >
-                  <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
-                  <span>{comment.likes}</span>
-                </button>
-
-                {replyCount > 0 && (
                   <button
                     type="button"
+                    onClick={() => {
+                      setLiked(!liked);
+                      onLike(comment.id, !liked);
+                    }}
+                    aria-pressed={liked}
+                    aria-label={liked ? "Unlike" : "Like"}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                  >
+                    <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
+                    <span>{comment.likes}</span>
+                  </button>
+
+                  {replyCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleReplies();
+                      }}
+                      aria-expanded={repliesOpen}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                    >
+                      View {replyCount} {replyCount === 1 ? "reply" : "replies"}
+                      <CaretDown
+                        size={16}
+                        className={`transition-transform duration-200 ${repliesOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    aria-label="Reply"
+                    title="Reply"
+                    data-reply-action
+                    data-discussion-thread-trigger={
+                      onOpenThread ? "true" : undefined
+                    }
                     onClick={(event) => {
                       event.stopPropagation();
-                      toggleReplies();
+                      if (onOpenThread) onOpenThread(comment.id, true);
+                      else setReplyComposerOpen((open) => !open);
                     }}
-                    aria-expanded={repliesOpen}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                    aria-expanded={replyComposerOpen}
+                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
                   >
-                    View {replyCount} {replyCount === 1 ? "reply" : "replies"}
-                    <CaretDown
-                      size={16}
-                      className={`transition-transform duration-200 ${repliesOpen ? "rotate-180" : ""}`}
+                    <ArrowBendUpLeft
+                      data-reply-icon
+                      size={20}
+                      weight="bold"
+                      className="origin-center scale-x-[1.16]"
+                      aria-hidden="true"
                     />
                   </button>
-                )}
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  aria-label="Reply"
-                  title="Reply"
-                  data-reply-action
-                  data-discussion-thread-trigger={
-                    onOpenThread ? "true" : undefined
-                  }
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (onOpenThread) onOpenThread(comment.id, true);
-                    else setReplyComposerOpen((open) => !open);
-                  }}
-                  aria-expanded={replyComposerOpen}
-                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-                >
-                  <ArrowBendUpLeft
-                    data-reply-icon
-                    size={20}
-                    weight="bold"
-                    className="origin-center scale-x-[1.16]"
-                    aria-hidden="true"
-                  />
-                </button>
-              </div>
-
-              {replyComposerOpen && !onOpenThread && (
+              {replyComposerOpen && !onOpenThread && !isNote && (
                 <div className="mt-3 flex max-w-2xl items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
@@ -362,7 +367,7 @@ export function CommentCard({
             </div>
           </div>
 
-          {repliesOpen && localReplies.length > 0 && (
+          {repliesOpen && localReplies.length > 0 && !isNote && (
             <div className="mt-2.5 space-y-2.5">
               {localReplies.map((reply) => (
                 <ReplyCard
@@ -632,8 +637,9 @@ export function CommentActionMenu({
   className,
 }: CommentActionMenuProps) {
   const [open, setOpen] = useState(false);
+  const isNote = kind === "note";
   const actionLabel =
-    kind === "question" ? "Q&A" : kind === "note" ? "note" : kind;
+    kind === "question" ? "Q&A" : isNote ? "note" : kind;
   const menuLabel =
     actionLabel === "Q&A"
       ? actionLabel
@@ -648,7 +654,22 @@ export function CommentActionMenu({
       className={className}
       triggerClassName="size-9"
     >
-      {isOwn ? (
+      {isNote ? (
+        <>
+          <MenuAction
+            Icon={PencilSimple}
+            label="Edit note"
+            onClick={onEdit}
+          />
+          <MenuDivider />
+          <MenuAction
+            Icon={Trash}
+            label="Delete note"
+            destructive
+            onClick={onDelete}
+          />
+        </>
+      ) : isOwn ? (
         <>
           <MenuAction
             Icon={PencilSimple}
@@ -767,7 +788,7 @@ function UndoDeleteButton({
 }
 
 export async function shareDiscussionEntry(
-  entryId: number,
+  entryId: string | number,
   name: string,
   text: string,
 ) {

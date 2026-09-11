@@ -5,7 +5,7 @@ import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,
@@ -89,6 +89,12 @@ export function CommentPublishingOptions({
     entryKind === "note"
       ? visibilityOptions
       : visibilityOptions.filter((option) => option.value !== "private");
+
+  useEffect(() => {
+    if (entryKind !== "note" && visibility === "private") {
+      onVisibilityChange("public");
+    }
+  }, [entryKind, onVisibilityChange, visibility]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-5 sm:px-5 sm:py-6">

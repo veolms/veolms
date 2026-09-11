@@ -32,6 +32,52 @@ vi.mock("../../src/services/discussion", () => ({
   discussionService: { uploadAttachment },
 }));
 
+vi.mock("../../src/services/auth", () => ({
+  useCurrentUser: () => ({
+    data: {
+      id: "test-user-id",
+      displayName: "Ashi Singh",
+      avatarDataUrl: "/assets/sofia-avatar-160.webp",
+    },
+  }),
+}));
+
+vi.mock("../../src/services/learning-interactions", () => ({
+  useUserNotes: () => ({
+    data: {
+      notes: [
+        {
+          id: "note-1",
+          userId: "test-user-id",
+          courseId: "course-1",
+          lessonId: "lesson-1",
+          content: "Here’s a quick note on user empathy",
+          plainText: "Here’s a quick note on user empathy",
+          visibility: "private" as const,
+          createdAt: "1970-01-01T00:00:00.002Z",
+          updatedAt: "1970-01-01T00:00:00.002Z",
+        },
+      ],
+      nextCursor: null,
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useCreateNote: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useUpdateNote: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useDeleteNote: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+}));
+
 describe("CommentCard", () => {
   it("tracks its pressed state and delegates like changes", () => {
     const onLike = vi.fn();
@@ -1109,7 +1155,11 @@ describe("Discussion", () => {
 
   it("shows a tab count and sorts the feed with Newest, Top, and Mine", () => {
     const { container } = render(
-      <Discussion persistenceKey="discussion-feed-toolbar-test" />,
+      <Discussion
+        persistenceKey="discussion-feed-toolbar-test"
+        courseId="course-test-id"
+        lessonId="lesson-test-id"
+      />,
     );
     const visibleAuthors = () =>
       Array.from(
@@ -1201,7 +1251,11 @@ describe("Discussion", () => {
 
   it("filters the unified feed by entry type", () => {
     const { container } = render(
-      <Discussion persistenceKey="discussion-entry-filter-test" />,
+      <Discussion
+        persistenceKey="discussion-entry-filter-test"
+        courseId="course-test-id"
+        lessonId="lesson-test-id"
+      />,
     );
     const visibleKinds = () =>
       Array.from(
