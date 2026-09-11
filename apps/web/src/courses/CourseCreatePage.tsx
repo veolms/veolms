@@ -3148,11 +3148,18 @@ export function CourseCreatePage({
 
   const isEditing = Boolean(activeEditId);
   const isCourseTitleFilled = Boolean(courseTitle.trim());
+  const [
+    isInitialCurriculumBootstrapInProgress,
+    setIsInitialCurriculumBootstrapInProgress,
+  ] = useState(false);
+  const isInitialCurriculumBootstrapInProgressRef = useRef(false);
+  isInitialCurriculumBootstrapInProgressRef.current =
+    isInitialCurriculumBootstrapInProgress;
+
   // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
-  // course ID exists. A non-empty title alone (isCourseTitleFilled) is NOT
-  // sufficient — allowing that caused tabs to become clickable before creation
-  // completed, which let concurrent callers each fire their own POST /courses.
-  const isDownstreamUnlocked = Boolean(currentCourseId);
+  // course ID exists AND initial curriculum bootstrap (Introduction section + lesson) has completed.
+  const isDownstreamUnlocked =
+    Boolean(currentCourseId) && !isInitialCurriculumBootstrapInProgress;
 
   useEffect(() => {
     currentCourseIdRef.current = currentCourseId;
@@ -3274,8 +3281,9 @@ export function CourseCreatePage({
   const isPublishSaving = isSavingPublish;
 
   const isInitialCourseCreationPending =
-    !currentCourseId &&
+    (!currentCourseId || isInitialCurriculumBootstrapInProgress) &&
     (createCourseMutation.isPending ||
+      isInitialCurriculumBootstrapInProgress ||
       isSavingBasics ||
       savingBasicsControls.has("title"));
 
@@ -7752,13 +7760,15 @@ export function CourseCreatePage({
 
     // Register the promise SYNCHRONOUSLY before the first await so any
     // concurrent caller that checks immediately after this line will find it.
-    const promise = createCourseMutation.mutateAsync({
-      title,
-      instructorAlias,
-    });
-    inFlightCourseCreationPromiseRef.current = promise;
-    try {
-      const created = await promise;
+    const promise = (async () => {
+      isInitialCurriculumBootstrapInProgressRef.current = true;
+      setIsInitialCurriculumBootstrapInProgress(true);
+
+      const created = await createCourseMutation.mutateAsync({
+        title,
+        instructorAlias,
+      });
+
       // Write the confirmed ID to the ref immediately so all awaiting callers
       // can use it as soon as the shared promise resolves.
       currentCourseIdRef.current = created.id;
@@ -7774,8 +7784,74 @@ export function CourseCreatePage({
           );
         }
       }
+
+      // Prebuild initial section ("Introduction") and initial lesson ("New Lesson 1")
+      try {
+        const createdSection = await createSectionMutation.mutateAsync({
+          courseId: created.id,
+          payload: { title: "Introduction" },
+        });
+
+        const createdLesson = await createLessonMutation.mutateAsync({
+          courseId: created.id,
+          sectionId: createdSection.id,
+          payload: {
+            title: "New Lesson 1",
+            contentType: "video",
+            description: "",
+          },
+        });
+
+        const prebuiltLesson: CurriculumLessonItem = {
+          id: createdLesson.id,
+          title: "New Lesson 1",
+          description: "",
+          contentType: "video",
+          contentTypeSelected: false,
+          isExpanded: true,
+          isPublished: true,
+          isPreview: false,
+          contentMediaId: null,
+          isPendingCreation: false,
+          initialState: {
+            title: "New Lesson 1",
+            description: "",
+            contentType: "video",
+            contentMediaId: null,
+            isPublished: true,
+            isPreview: false,
+          },
+          resources: [],
+        };
+
+        const prebuiltSection: CurriculumSectionItem = {
+          id: createdSection.id,
+          title: createdSection.title || "Introduction",
+          isEditingTitle: false,
+          isExpanded: true,
+          isPendingCreation: false,
+          lessons: [prebuiltLesson],
+        };
+
+        setSections([prebuiltSection]);
+        sectionsRef.current = [prebuiltSection];
+      } catch (bootstrapErr: unknown) {
+        const errorMsg =
+          bootstrapErr instanceof Error
+            ? bootstrapErr.message
+            : "Course created, but default section setup could not be completed.";
+        setToastMessage(errorMsg);
+      }
+
       return created;
+    })();
+
+    inFlightCourseCreationPromiseRef.current = promise;
+    try {
+      return await promise;
     } finally {
+      isInitialCurriculumBootstrapInProgressRef.current = false;
+      setIsInitialCurriculumBootstrapInProgress(false);
       // Clear regardless of success/failure so a failed attempt can be retried.
       inFlightCourseCreationPromiseRef.current = null;
     }
