@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { NavigateTo } from "../routing/navigation";
 import { OrderCard } from "./OrderCard";
@@ -13,6 +15,7 @@ import type { OrderTabId } from "./ordersData";
 import { OrderSummaryWidget } from "./OrderSummaryWidget";
 import { RecentPaymentsWidget } from "./RecentPaymentsWidget";
 import { useOrdersFilter } from "./useOrdersFilter";
+import { ordersService } from "../services/orders";
 
 export interface OrdersPageProps {
   onNavigatePage?: NavigateTo;
@@ -37,6 +40,7 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
     orderSummary,
     recentPayments,
     totalFilteredCount,
+    totalLoadedCount,
     activeTab,
     setActiveTab,
     searchQuery,
@@ -48,6 +52,12 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
     selectedReceiptOrder,
     setSelectedReceiptOrder,
     resetFilters,
+    isLoading,
+    isError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
   } = useOrdersFilter(setNotice);
 
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -76,6 +86,7 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
   const handleDownloadReceipt = (order: typeof selectedReceiptOrder) => {
     if (!order) return;
     setNotice?.(`Downloading receipt for order ${order.orderNumber}...`);
+    window.open(ordersService.getInvoiceDownloadUrl(order.id), "_blank");
   };
 
   return (
@@ -169,15 +180,62 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
         {/* Left / Main Column: Orders Feed (Full width on zoom, 8 of 12 columns on desktop) */}
         <main className="flex flex-col gap-3.5 xl:col-span-8 min-w-0">
-          {orders.length > 0 ? (
-            orders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onViewReceipt={setSelectedReceiptOrder}
-                setNotice={setNotice}
-              />
-            ))
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
+              <CircleNotch size={32} className="animate-spin text-(--accent) mb-3" />
+              <h3 className="text-base font-semibold text-(--text)">Loading orders...</h3>
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
+              <WarningCircle size={32} className="text-rose-400 mb-3" />
+              <h3 className="text-base font-semibold text-(--text)">Unable to load orders</h3>
+              <p className="mt-1 text-xs text-(--muted)">Please check your connection and try again.</p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : orders.length > 0 ? (
+            <>
+              {orders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onViewReceipt={setSelectedReceiptOrder}
+                  setNotice={setNotice}
+                />
+              ))}
+
+              {hasNextPage && (
+                <div className="mt-2 flex items-center justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer disabled:opacity-50"
+                    style={{ boxShadow: "var(--card-shadow)" }}
+                  >
+                    {isFetchingNextPage ? "Loading more orders..." : "Load more orders"}
+                  </button>
+                </div>
+              )}
+
+              {/* Showing orders count indicator */}
+              <div className="mt-2 flex items-center justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNotice?.("All orders currently loaded.")}
+                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+                  style={{ boxShadow: "var(--card-shadow)" }}
+                >
+                  Showing {totalFilteredCount} of {orderSummary.totalOrders}{" "}
+                  orders
+                </button>
+              </div>
+            </>
           ) : (
             <div
               className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
@@ -200,21 +258,6 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
                 className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
               >
                 Reset filters
-              </button>
-            </div>
-          )}
-
-          {/* Showing orders count indicator */}
-          {orders.length > 0 && (
-            <div className="mt-2 flex items-center justify-center pt-2">
-              <button
-                type="button"
-                onClick={() => setNotice?.("All orders currently loaded.")}
-                className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
-                style={{ boxShadow: "var(--card-shadow)" }}
-              >
-                Showing {totalFilteredCount} of {orderSummary.totalOrders}{" "}
-                orders
               </button>
             </div>
           )}
@@ -249,3 +292,4 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
     </div>
   );
 }
+

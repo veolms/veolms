@@ -309,3 +309,15 @@ export const invoiceSchema = z.strictObject({
   createdAt: z.string().or(z.date()),
 });
 export type Invoice = z.infer<typeof invoiceSchema>;
+
+export const ordersListQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type OrdersListQuery = z.infer<typeof ordersListQuerySchema>;
+
+export const ordersListResponseSchema = z.strictObject({
+  orders: z.array(orderSchema),
+  nextCursor: z.string().nullable(),
+});
+export type OrdersListResponse = z.infer<typeof ordersListResponseSchema>;

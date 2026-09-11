@@ -318,15 +318,36 @@ export function LearningWorkspace({
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
   const pendingLessonSelectionRef = useRef<number | null>(null);
+  const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const [lessonProgress, setLessonProgress] = useState<Record<number, number>>(
-    {},
+    () => {
+      try {
+        const stored = localStorage.getItem(
+          `veolms-learning-${coursePersistenceKey}-progress`,
+        );
+        return stored ? JSON.parse(stored) : {};
+      } catch {
+        return {};
+      }
+    },
   );
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(
+        `veolms-learning-${coursePersistenceKey}-progress`,
+      );
+      setLessonProgress(stored ? JSON.parse(stored) : {});
+    } catch {
+      setLessonProgress({});
+    }
+  }, [coursePersistenceKey]);
+
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
   );
   const courseTitle = getCourseTitle(courseSlug);
-  const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
   const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
@@ -722,20 +743,6 @@ export function LearningWorkspace({
     publishLearningPlayerBootstrap({ autoplay: enabled });
   }, []);
 
-  const goToPreviousLesson = useCallback(() => {
-    if (previousLessonId !== undefined) selectLesson(previousLessonId);
-  }, [previousLessonId, selectLesson]);
-
-  const goToNextLesson = useCallback(() => {
-    if (nextLessonId !== undefined) selectLesson(nextLessonId);
-  }, [nextLessonId, selectLesson]);
-
-  const handleLessonEnded = useCallback(() => {
-    if (autoplayEnabled && nextLessonId !== undefined) {
-      selectLesson(nextLessonId);
-    }
-  }, [autoplayEnabled, nextLessonId, selectLesson]);
-
   const updateSelectedLessonProgress = useCallback(
     (progress: number) => {
       const roundedProgress = Math.max(0, Math.min(100, Math.round(progress)));
@@ -745,11 +752,38 @@ export function LearningWorkspace({
           : roundedProgress;
       setLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
-        return { ...current, [selectedLesson]: nextProgress };
+        const updated = { ...current, [selectedLesson]: nextProgress };
+        try {
+          localStorage.setItem(
+            `veolms-learning-${coursePersistenceKey}-progress`,
+            JSON.stringify(updated),
+          );
+        } catch {
+          // Ignore storage write errors
+        }
+        return updated;
       });
     },
-    [selectedLesson],
+    [coursePersistenceKey, selectedLesson],
   );
+
+  const goToPreviousLesson = useCallback(() => {
+    if (previousLessonId !== undefined) selectLesson(previousLessonId);
+  }, [previousLessonId, selectLesson]);
+
+  const goToNextLesson = useCallback(() => {
+    if (nextLessonId !== undefined) {
+      updateSelectedLessonProgress(100);
+      selectLesson(nextLessonId);
+    }
+  }, [nextLessonId, selectLesson, updateSelectedLessonProgress]);
+
+  const handleLessonEnded = useCallback(() => {
+    updateSelectedLessonProgress(100);
+    if (autoplayEnabled && nextLessonId !== undefined) {
+      selectLesson(nextLessonId);
+    }
+  }, [autoplayEnabled, nextLessonId, selectLesson, updateSelectedLessonProgress]);
 
   useEffect(() => {
     const pendingLessonSelection = pendingLessonSelectionRef.current;

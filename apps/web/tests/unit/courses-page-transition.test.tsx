@@ -51,6 +51,10 @@ vi.mock("../../src/services/navigation", () => ({
   useSidenav: () => ({ data: undefined }),
 }));
 
+vi.mock("../../src/services/enrollments", () => ({
+  useEnrolledCourses: () => ({ data: { items: [], total: 0 } }),
+}));
+
 vi.mock("../../src/services/courses", async () => {
   const actual = await vi.importActual<
     typeof import("../../src/services/courses")

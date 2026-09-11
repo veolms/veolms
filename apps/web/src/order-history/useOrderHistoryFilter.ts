@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
-import {
-  initialOrderHistoryList,
-  type OrderHistoryItem,
-  type OrderHistoryStatus,
-  type OrderHistoryTabId,
+import type {
+  OrderHistoryItem,
+  OrderHistoryTabId,
 } from "./orderHistoryData";
+import { useOrders } from "../services/orders";
+import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
 export interface UseOrderHistoryFilterReturn {
   orders: readonly OrderHistoryItem[];
   paginatedOrders: readonly OrderHistoryItem[];
   totalFilteredCount: number;
+  totalLoadedCount: number;
   activeTab: OrderHistoryTabId;
   setActiveTab: (tab: OrderHistoryTabId) => void;
   searchQuery: string;
@@ -28,14 +29,27 @@ export interface UseOrderHistoryFilterReturn {
   selectedReceiptOrder: OrderHistoryItem | null;
   setSelectedReceiptOrder: (order: OrderHistoryItem | null) => void;
   resetFilters: () => void;
+  isLoading: boolean;
+  isError: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => void;
+  refetch: () => void;
 }
 
 export function useOrderHistoryFilter(
   setNotice?: (message: string) => void,
 ): UseOrderHistoryFilterReturn {
-  const [ordersList] = useState<readonly OrderHistoryItem[]>(
-    initialOrderHistoryList,
-  );
+  const {
+    data,
+    isLoading,
+    isError,
+    hasNextPage = false,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
+  } = useOrders();
+
   const [activeTab, setActiveTab] = useState<OrderHistoryTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState("all");
@@ -45,7 +59,15 @@ export function useOrderHistoryFilter(
   const [selectedReceiptOrder, setSelectedReceiptOrder] =
     useState<OrderHistoryItem | null>(null);
 
-  const pageSize = 6;
+  const pageSize = 10;
+
+  const rawOrders = useMemo(() => {
+    return data?.pages.flatMap((page) => page.orders) || [];
+  }, [data?.pages]);
+
+  const ordersList = useMemo(() => {
+    return rawOrders.map(adaptOrderToOrderHistoryItem);
+  }, [rawOrders]);
 
   const resetFilters = () => {
     setActiveTab("all");
@@ -115,14 +137,7 @@ export function useOrderHistoryFilter(
 
   const totalFilteredCount = filteredOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
-
-  // Ensure currentPage doesn't exceed totalPages after filtering
   const safeCurrentPage = Math.min(currentPage, totalPages);
-
-  const paginatedOrders = useMemo(() => {
-    const start = (safeCurrentPage - 1) * pageSize;
-    return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, safeCurrentPage, pageSize]);
 
   const handleTabChange = (tab: OrderHistoryTabId) => {
     setActiveTab(tab);
@@ -136,8 +151,9 @@ export function useOrderHistoryFilter(
 
   return {
     orders: filteredOrders,
-    paginatedOrders,
+    paginatedOrders: filteredOrders,
     totalFilteredCount,
+    totalLoadedCount: ordersList.length,
     activeTab,
     setActiveTab: handleTabChange,
     searchQuery,
@@ -156,5 +172,11 @@ export function useOrderHistoryFilter(
     selectedReceiptOrder,
     setSelectedReceiptOrder,
     resetFilters,
+    isLoading,
+    isError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
   };
 }

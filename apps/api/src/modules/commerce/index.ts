@@ -64,6 +64,10 @@ export {
   type InvoiceService,
 } from "./invoices/invoice.service.ts";
 export {
+  createEnrollmentService,
+  type EnrollmentService,
+} from "./enrollments/enrollment.service.ts";
+export {
   createEnrollmentAudienceService,
   type EnrollmentAudienceService,
 } from "./enrollments/enrollment-audience.service.ts";

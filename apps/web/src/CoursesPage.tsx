@@ -78,6 +78,7 @@ import {
   useLearningSpaceSessions,
   useUpsertLearningSpaceSession,
 } from "./services/learning-space";
+import { useEnrolledCourses } from "./services/enrollments";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -751,6 +752,9 @@ export function CoursesPage({
   }, [setNotice, signOut]);
   const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
   const { data: publishedCoursesData } = useCourses({
+    enabled: shouldLoadCourseSurface && role === "student",
+  });
+  const { data: enrolledCoursesData } = useEnrolledCourses({
     enabled: shouldLoadCourseSurface && role === "student",
   });
   const { data: myCoursesData } = useMyCourses({
@@ -1647,13 +1651,75 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (role !== "creator") {
-      const apiCourses = (publishedCoursesData?.courses || []).map(
-        adaptCourseSummaryToCatalogueCourse,
+      const enrolledSet = new Set<string>();
+      const progressMap = new Map<string, number | null>();
+      if (enrolledCoursesData?.courses) {
+        for (const ec of enrolledCoursesData.courses) {
+          enrolledSet.add(ec.courseId);
+          if (ec.courseSlug) enrolledSet.add(ec.courseSlug);
+          progressMap.set(ec.courseId, ec.progress);
+          if (ec.courseSlug) progressMap.set(ec.courseSlug, ec.progress);
+        }
+      }
+      if (learningSpaceSessionsQuery.data?.sessions) {
+        for (const session of learningSpaceSessionsQuery.data.sessions) {
+          if (session.lessonNumber != null && session.lessonNumber > 0) {
+            const calculatedProgress = Math.min(100, Math.round((session.lessonNumber / 84) * 100));
+            const current = progressMap.get(session.courseId);
+            if (current == null || current === 0) {
+              progressMap.set(session.courseId, calculatedProgress);
+              if (session.courseSlug) progressMap.set(session.courseSlug, calculatedProgress);
+            }
+          }
+        }
+      }
+      if (typeof window !== "undefined") {
+        for (const ec of enrolledCoursesData?.courses || []) {
+          try {
+            const courseKey = encodeURIComponent(ec.courseSlug);
+            const detailedProgStr = localStorage.getItem(`veolms-learning-${courseKey}-progress`);
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            if (detailedProgStr) {
+              const progMap = JSON.parse(detailedProgStr) as Record<string, number>;
+              const vals = Object.values(progMap);
+              if (vals.length > 0) {
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const calc = Math.min(100, Math.round(sum / total));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+                continue;
+              }
+            }
+            const lastLessonStr = localStorage.getItem(`veolms-last-lesson-${courseKey}`);
+            if (lastLessonStr) {
+              const lessonNum = parseInt(lastLessonStr, 10);
+              if (!isNaN(lessonNum) && lessonNum > 0) {
+                const calc = Math.min(100, Math.round((lessonNum / total) * 100));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+              }
+            }
+          } catch {
+            // Ignore storage errors
+          }
+        }
+      }
+      const apiCourses = (publishedCoursesData?.courses || []).map((summary) =>
+        adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
       // Use one catalogue source at a time. The local catalogue is the
       // intentional fallback for an empty API response; merging both sources
       // creates duplicate-looking courses with incompatible IDs.
-      return apiCourses.length > 0 ? apiCourses : [...courses];
+      if (apiCourses.length > 0) return apiCourses;
+      return courses.map((c) => ({
+        ...c,
+        enrolled:
+          enrolledSet.has(c.id) || (c.slug ? enrolledSet.has(c.slug) : false),
+        progress:
+          progressMap.get(c.id) ??
+          (c.slug ? progressMap.get(c.slug) : null) ??
+          null,
+      }));
     }
     if (enrollmentFilter === "bin") {
       const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
@@ -1676,6 +1742,8 @@ export function CoursesPage({
     deletedCoursesData?.courses,
     deletedMockCourseIds,
     enrollmentFilter,
+    enrolledCoursesData?.courses,
+    learningSpaceSessionsQuery.data?.sessions,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
     role,

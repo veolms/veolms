@@ -1,4 +1,4 @@
-import type { Order } from "@veolms/contracts";
+import type { Order, OrdersListResponse } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "./order.repository.ts";
@@ -7,6 +7,10 @@ import { toOrderContract } from "./order.mapper.ts";
 export interface OrderService {
   getOrderById(userId: string, orderId: string): Promise<Order>;
   listUserOrders(userId: string): Promise<Order[]>;
+  listUserOrdersPaginated(
+    userId: string,
+    options: { cursor?: string; limit: number },
+  ): Promise<OrdersListResponse>;
 }
 
 export function createOrderService({
@@ -46,8 +50,49 @@ export function createOrderService({
     });
   }
 
+  async function listUserOrdersPaginated(
+    userId: string,
+    options: { cursor?: string; limit: number },
+  ): Promise<OrdersListResponse> {
+    const rows = await orderRepo.listOrdersByUserIdPaginated(
+      database,
+      userId,
+      options,
+    );
+
+    // We fetched limit + 1 — if we got more than limit rows, there's a next page
+    const hasNextPage = rows.length > options.limit;
+    const pageRows = hasNextPage ? rows.slice(0, options.limit) : rows;
+
+    if (pageRows.length === 0) {
+      return { orders: [], nextCursor: null };
+    }
+
+    const orderIds = pageRows.map((o) => o.id);
+    const allItems = await orderRepo.listOrderItemsByOrderIds(database, orderIds);
+
+    const itemsByOrderId = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByOrderId.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrderId.set(item.order_id, list);
+    }
+
+    const orders = pageRows.map((order) => {
+      const items = itemsByOrderId.get(order.id) ?? [];
+      return toOrderContract(order, items);
+    });
+
+    const lastOrder = pageRows[pageRows.length - 1]!;
+    const nextCursor = hasNextPage ? lastOrder.created_at.toISOString() : null;
+
+    return { orders, nextCursor };
+  }
+
   return {
     getOrderById,
     listUserOrders,
+    listUserOrdersPaginated,
   };
 }
+

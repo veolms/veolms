@@ -17,9 +17,14 @@ export function createOrderController({
     return await service.getOrderById(userId, request.params.orderId);
   }
 
-  async function listOrders(request: FastifyRequest) {
+  async function listOrders(
+    request: FastifyRequest<{
+      Querystring: { cursor?: string; limit?: number };
+    }>,
+  ) {
     const userId = request.user!.id;
-    return await service.listUserOrders(userId);
+    const { cursor, limit = 20 } = request.query;
+    return await service.listUserOrdersPaginated(userId, { cursor, limit });
   }
 
   async function getInvoice(
