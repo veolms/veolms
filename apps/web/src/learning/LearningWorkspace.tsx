@@ -650,12 +650,14 @@ export function LearningWorkspace({
     }
     return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
   }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
-  const selectedLessonDescription = useMemo(() => {
+
+  const selectedLessonRecord = useMemo(() => {
     if (!adaptedCurriculum) return null;
-    return (
-      adaptedCurriculum.lessonsByNumber.get(selectedLesson)?.description ?? null
-    );
+    return adaptedCurriculum.lessonsByNumber.get(selectedLesson) ?? null;
   }, [adaptedCurriculum, selectedLesson]);
+  const selectedLessonDescription = selectedLessonRecord?.description ?? null;
+  const courseId = courseOverview?.course.id;
+  const backendLessonId = selectedLessonRecord?.id;
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -2012,6 +2014,8 @@ export function LearningWorkspace({
               <Discussion
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
+                courseId={courseId}
+                lessonId={backendLessonId}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}

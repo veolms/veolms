@@ -43,7 +43,18 @@ import {
   type DiscussionEntryKind,
   type DiscussionVisibility,
 } from "./discussion-editor/types";
-import { useSessionStorageState } from "./useSessionStorageState";
+import {
+  NO_LEGACY_KEYS,
+  useSessionStorageState,
+} from "./useSessionStorageState";
+import { useCurrentUser } from "../services/auth";
+import {
+  useCreateNote,
+  useDeleteNote,
+  useUpdateNote,
+  useUserNotes,
+} from "../services/learning-interactions";
+import { adaptLearningNoteToComment } from "./learning-notes.adapter";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
@@ -102,19 +113,6 @@ const initialEntries: Comment[] = [
         likes: 7,
       },
     ],
-  },
-  {
-    id: 2,
-    name: "Ashi Singh",
-    time: "1 day ago",
-    avatar: "/assets/sofia-avatar-160.webp",
-    text: "Here’s a quick note on user empathy with examples and a worksheet that helped me connect the steps.",
-    entryKind: "note",
-    likes: 8,
-    attachment: {
-      name: "User empathy notes",
-      meta: "PDF · 412 KB",
-    },
   },
   {
     id: 1,
@@ -202,6 +200,8 @@ export const getDiscussionComposerViewportGeometry = (
 
 export interface DiscussionProps {
   persistenceKey: string;
+  courseId?: string;
+  lessonId?: string;
   mobileBottomNavigation?: boolean;
   mobileBottomNavigationHidden?: boolean;
   lessonDescription?: string | null;
@@ -222,14 +222,14 @@ const initialDraft = createEmptyDiscussionDraft();
 const countCharacters = (value: string) => Array.from(value).length;
 
 interface EditingEntry {
-  id: number;
+  id: string | number;
   draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
 }
 
 interface OpenDiscussionThread {
-  id: number;
+  id: string | number;
   focusComposer: boolean;
 }
 
@@ -245,7 +245,7 @@ const getAllowedVisibility = (
   entryKind: DiscussionEntryKind,
   visibility: DiscussionVisibility,
 ): DiscussionVisibility =>
-  entryKind === "note" || visibility !== "private" ? visibility : "public";
+  entryKind !== "note" && visibility === "private" ? "public" : visibility;
 
 const isStoredEntries = (value: unknown): value is Comment[] =>
   Array.isArray(value) &&
@@ -253,7 +253,8 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
     (entry) =>
       Boolean(entry) &&
       typeof entry === "object" &&
-      typeof (entry as Comment).id === "number" &&
+      (typeof (entry as Comment).id === "number" ||
+        typeof (entry as Comment).id === "string") &&
       typeof (entry as Comment).name === "string" &&
       typeof (entry as Comment).time === "string" &&
       typeof (entry as Comment).avatar === "string" &&
@@ -273,6 +274,8 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
 
 export function Discussion({
   persistenceKey,
+  courseId,
+  lessonId,
   mobileBottomNavigation = false,
   mobileBottomNavigationHidden = false,
   lessonDescription,
@@ -327,16 +330,57 @@ export function Discussion({
     return "Write something…";
   }, [enabledKinds]);
 
+  const { data: currentUser } = useCurrentUser();
+  const authorName =
+    currentUser?.displayName?.trim() ||
+    currentUser?.username?.trim() ||
+    CURRENT_USER.name;
+  const authorAvatar = currentUser?.avatarDataUrl || CURRENT_USER.avatar;
+
+  const {
+    data: notesData,
+    isLoading: isNotesLoading,
+    isError: isNotesError,
+    refetch: refetchNotes,
+  } = useUserNotes(
+    {
+      courseId: courseId ?? "",
+      lessonId: lessonId ?? "",
+      limit: 50,
+    },
+    {
+      enabled: Boolean(courseId && lessonId && capabilities.allowNotes),
+    },
+  );
+
+  const createNoteMutation = useCreateNote();
+  const updateNoteMutation = useUpdateNote();
+  const deleteNoteMutation = useDeleteNote();
+  const isSubmittingNote =
+    createNoteMutation.isPending || updateNoteMutation.isPending;
+
+  const backendNotes = useMemo<Comment[]>(() => {
+    if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes) return [];
+    return notesData.notes.map((note) =>
+      adaptLearningNoteToComment(note, authorName, authorAvatar),
+    );
+  }, [capabilities.allowNotes, courseId, lessonId, notesData?.notes, authorName, authorAvatar]);
+
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
     `${storageBase}-markdown-draft-v1`,
     initialDraft,
     isStoredDiscussionDraft,
   );
+  const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
+    items.filter((entry) => entry.entryKind !== "note");
+
   const [postedEntries, setPostedEntries] = useSessionStorageState<Comment[]>(
     `${storageBase}-markdown-entries-v1`,
     [],
     isStoredEntries,
+    NO_LEGACY_KEYS,
+    sanitizeStoredEntries,
   );
   const [entries, setEntries] = useState(initialEntries);
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>(firstAvailableKind);
@@ -359,7 +403,11 @@ export function Discussion({
   const draftHasContent = hasDiscussionDraftContent(activeDraft);
   const draftIsTooLong =
     countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
-  const canSubmitDraft = draftHasContent && !draftIsTooLong;
+  const canSubmitDraft =
+    draftHasContent &&
+    !draftIsTooLong &&
+    !isSubmittingNote &&
+    (activeEntryKind !== "note" || Boolean(courseId && lessonId));
 
   useEffect(() => {
     if (isInteractionCapabilitiesLoading || enabledKinds.length === 0) return;
@@ -383,39 +431,97 @@ export function Discussion({
 
   useEffect(() => {
     if (postedEntries.length === 0) return;
+    const sanitizedEntries = sanitizeStoredEntries(postedEntries);
+    if (sanitizedEntries.length !== postedEntries.length) {
+      setPostedEntries(sanitizedEntries);
+      return;
+    }
     setEntries((current) => [
-      ...postedEntries.map((entry) => ({ ...entry, isOwn: true })),
+      ...sanitizedEntries.map((entry) => ({ ...entry, isOwn: true })),
       ...current.filter(
         (entry) =>
-          !postedEntries.some((persisted) => persisted.id === entry.id),
+          !sanitizedEntries.some((persisted) => persisted.id === entry.id),
       ),
     ]);
-  }, [postedEntries]);
+  }, [postedEntries, setPostedEntries]);
+
+  const combinedEntries = useMemo<Comment[]>(() => {
+    return [...backendNotes, ...entries];
+  }, [backendNotes, entries]);
 
   const filteredEntries = useMemo(
     () =>
       applyDiscussionFeed({
-        currentUserName: CURRENT_USER.name,
-        entries,
+        currentUserName: authorName,
+        entries: combinedEntries,
         filter: entryFilter,
         sort: feedSort,
         capabilities,
       }),
-    [capabilities, entries, entryFilter, feedSort],
+    [authorName, capabilities, combinedEntries, entryFilter, feedSort],
   );
   const threadEntries = useMemo(
     () =>
-      Array.from(new Map(entries.map((entry) => [entry.id, entry])).values()),
-    [entries],
+      Array.from(
+        new Map(combinedEntries.map((entry) => [entry.id, entry])).values(),
+      ),
+    [combinedEntries],
   );
 
-  const submitEntry = () => {
-    if (draftIsTooLong) {
-      setNotice(COMMENT_LENGTH_NOTICE);
-      return;
+  const submitEntry = async (): Promise<boolean> => {
+    if (activeEntryKind === "note") {
+      if (!draftHasContent) return false;
+      if (draftIsTooLong) {
+        setNotice(COMMENT_LENGTH_NOTICE);
+        return false;
+      }
+      if (!courseId || !lessonId) {
+        setNotice("Course or lesson context is missing.");
+        return false;
+      }
+
+      if (editingEntry) {
+        try {
+          await updateNoteMutation.mutateAsync({
+            noteId: String(editingEntry.id),
+            payload: {
+              content: activeDraft.markdown,
+            },
+          });
+          setEditingEntry(null);
+          setNotice("");
+          return true;
+        } catch (error) {
+          setNotice("Failed to update note. Please try again.");
+          return false;
+        }
+      }
+
+      try {
+        await createNoteMutation.mutateAsync({
+          courseId,
+          lessonId,
+          content: activeDraft.markdown,
+          visibility: activeVisibility,
+        });
+        setDraft(createEmptyDiscussionDraft());
+        setEntryFilter(
+          enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
+        );
+        setNotice("");
+        return true;
+      } catch (error) {
+        setNotice("Failed to save note. Please try again.");
+        return false;
+      }
     }
 
-    if (!draftHasContent) return;
+    if (draftIsTooLong) {
+      setNotice(COMMENT_LENGTH_NOTICE);
+      return false;
+    }
+
+    if (!draftHasContent) return false;
 
     const text = activeDraft.plainText.trim();
     const submittedVisibility = getAllowedVisibility(
@@ -429,7 +535,7 @@ export function Discussion({
       );
       if (!originalEntry) {
         setEditingEntry(null);
-        return;
+        return false;
       }
 
       const updatedEntry: Comment = {
@@ -457,14 +563,14 @@ export function Discussion({
         enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
       );
       setNotice("");
-      return;
+      return true;
     }
 
     const entry: Comment = {
       id: Date.now(),
-      name: CURRENT_USER.name,
+      name: authorName,
       time: "Just now",
-      avatar: CURRENT_USER.avatar,
+      avatar: authorAvatar,
       text,
       content: activeDraft,
       visibility: submittedVisibility,
@@ -483,9 +589,10 @@ export function Discussion({
     );
 
     setNotice("");
+    return true;
   };
 
-  const onLike = (id: number, liked: boolean) => {
+  const onLike = (id: string | number, liked: boolean) => {
     const update = (current: Comment[]) =>
       current.map((entry) =>
         entry.id === id
@@ -512,7 +619,19 @@ export function Discussion({
     setNotice("");
   };
 
-  const deleteEntry = (id: number) => {
+  const deleteEntry = async (id: string | number) => {
+    const isBackendNote = backendNotes.some((note) => note.id === id);
+    if (isBackendNote) {
+      try {
+        await deleteNoteMutation.mutateAsync(String(id));
+        setEditingEntry((current) => (current?.id === id ? null : current));
+        setNotice("");
+      } catch (error) {
+        setNotice("Failed to delete note. Please try again.");
+      }
+      return;
+    }
+
     const remove = (current: Comment[]) =>
       current.filter((entry) => entry.id !== id);
     setEntries(remove);
@@ -521,7 +640,7 @@ export function Discussion({
     setNotice("");
   };
 
-  const addReply = (entryId: number, reply: CommentReply) => {
+  const addReply = (entryId: string | number, reply: CommentReply) => {
     const update = (current: Comment[]) =>
       current.map((entry) => {
         if (entry.id !== entryId) return entry;
@@ -537,7 +656,7 @@ export function Discussion({
   };
 
   const editReply = (
-    entryId: number,
+    entryId: string | number,
     replyId: number,
     replyDraft: DiscussionDraft,
   ) => {
@@ -563,7 +682,7 @@ export function Discussion({
     setPostedEntries(update);
   };
 
-  const deleteReply = (entryId: number, replyId: number) => {
+  const deleteReply = (entryId: string | number, replyId: number) => {
     const update = (current: Comment[]) =>
       current.map((entry) => {
         if (entry.id !== entryId) return entry;
@@ -596,6 +715,10 @@ export function Discussion({
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
         canSubmitDraft={canSubmitDraft}
+        isSubmitting={isSubmittingNote}
+        isNotesLoading={isNotesLoading}
+        isNotesError={isNotesError}
+        onRetryNotes={() => refetchNotes()}
         mobileBottomNavigation={mobileBottomNavigation}
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}
         capabilities={capabilities}
@@ -695,7 +818,7 @@ interface ThreadSurfaceProps {
   draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
-  editingEntryId: number | null;
+  editingEntryId: string | number | null;
   notice: string;
   entryFilter: DiscussionEntryFilter;
   feedSort: DiscussionFeedSort;
@@ -703,6 +826,10 @@ interface ThreadSurfaceProps {
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
   canSubmitDraft: boolean;
+  isSubmitting?: boolean;
+  isNotesLoading?: boolean;
+  isNotesError?: boolean;
+  onRetryNotes?: () => void;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
   capabilities: InteractionCapabilities;
@@ -714,15 +841,15 @@ interface ThreadSurfaceProps {
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
-  onSubmit: () => void;
+  onSubmit: () => Promise<boolean> | void;
   onCancelEdit: () => void;
   onEntryFilterChange: (filter: DiscussionEntryFilter) => void;
   onFeedSortChange: (sort: DiscussionFeedSort) => void;
-  onLike: (id: number, liked: boolean) => void;
+  onLike: (id: string | number, liked: boolean) => void;
   onEdit: (comment: Comment) => void;
-  onDelete: (id: number) => void;
-  onReport: (id: number) => void;
-  onOpenThread: (id: number, focusComposer?: boolean) => void;
+  onDelete: (id: string | number) => void;
+  onReport: (id: string | number) => void;
+  onOpenThread: (id: string | number, focusComposer?: boolean) => void;
 }
 
 function ThreadSurface({
@@ -739,6 +866,10 @@ function ThreadSurface({
   draftIsTooLong,
   draftAttachmentCount,
   canSubmitDraft,
+  isSubmitting = false,
+  isNotesLoading = false,
+  isNotesError = false,
+  onRetryNotes,
   mobileBottomNavigation,
   mobileBottomNavigationHidden,
   capabilities,
@@ -906,10 +1037,12 @@ function ThreadSurface({
       document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [closeComposer, composerMode]);
 
-  const submitAndCollapse = () => {
+  const submitAndCollapse = async () => {
     if (!canSubmitDraft) return;
-    onSubmit();
-    setComposerMode("collapsed");
+    const result = await onSubmit();
+    if (result !== false) {
+      setComposerMode("collapsed");
+    }
   };
 
   if (isInteractionCapabilitiesLoading) {
@@ -977,6 +1110,7 @@ function ThreadSurface({
               capabilities={capabilities}
               invalid={draftIsTooLong}
               canSubmit={canSubmitDraft}
+              isSubmitting={isSubmitting}
               editing={editingEntryId !== null}
               autoFocus
               onDraftChange={onDraftChange}
@@ -1049,30 +1183,61 @@ function ThreadSurface({
       <div
         className={`mt-2.5 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}
       >
-        {entries.map((entry) => (
-          <CommentCard
-            key={entry.id}
-            comment={entry}
-            onLike={onLike}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onReport={onReport}
-            onOpenThread={onOpenThread}
-          />
-        ))}
-        {entries.length === 0 && (
-          <div className="py-12 text-center">
-            <p className="font-semibold text-(--text)">
-              No{" "}
-              {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
-              yet
+        {entryFilter === "note" && isNotesLoading ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-notes-loading"
+          >
+            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+            <p className="text-sm font-medium text-(--muted)">Loading notes…</p>
+          </div>
+        ) : entryFilter === "note" && isNotesError ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-notes-error"
+          >
+            <p className="font-semibold text-(--text)">Failed to load notes</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+              There was a problem loading your notes for this lesson.
             </p>
-            {availableFilters.some(([val]) => val === "all") && (
-              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
-                Choose All to return to the full lesson discussion.
-              </p>
+            {onRetryNotes && (
+              <button
+                type="button"
+                onClick={onRetryNotes}
+                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+              >
+                Retry
+              </button>
             )}
           </div>
+        ) : (
+          <>
+            {entries.map((entry) => (
+              <CommentCard
+                key={entry.id}
+                comment={entry}
+                onLike={onLike}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onReport={onReport}
+                onOpenThread={onOpenThread}
+              />
+            ))}
+            {entries.length === 0 && (
+              <div className="py-12 text-center">
+                <p className="font-semibold text-(--text)">
+                  No{" "}
+                  {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
+                  yet
+                </p>
+                {availableFilters.some(([val]) => val === "all") && (
+                  <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
+                    Choose All to return to the full lesson discussion.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1151,6 +1316,7 @@ function ThreadSurface({
               capabilities={capabilities}
               invalid={draftIsTooLong}
               canSubmit={canSubmitDraft}
+              isSubmitting={isSubmitting}
               editing={editingEntryId !== null}
               autoFocus
               presentation="drawer"

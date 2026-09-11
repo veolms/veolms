@@ -50,6 +50,24 @@ export interface InteractionCapabilities {
   allowQa: boolean;
 }
 
+export function getEntryTimestamp(entry: Comment): number {
+  if (entry.createdAt !== undefined) {
+    const parsed =
+      typeof entry.createdAt === "number"
+        ? entry.createdAt
+        : Date.parse(entry.createdAt);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (typeof entry.id === "number") return entry.id;
+  return 0;
+}
+
+export function compareEntriesNewest(left: Comment, right: Comment): number {
+  const diff = getEntryTimestamp(right) - getEntryTimestamp(left);
+  if (diff !== 0) return diff;
+  return String(right.id).localeCompare(String(left.id));
+}
+
 export function applyDiscussionFeed({
   currentUserName,
   entries,
@@ -90,8 +108,8 @@ export function applyDiscussionFeed({
 
   return [...visibleEntries].sort((left, right) => {
     if (sort === "top") {
-      return right.likes - left.likes || right.id - left.id;
+      return right.likes - left.likes || compareEntriesNewest(left, right);
     }
-    return right.id - left.id;
+    return compareEntriesNewest(left, right);
   });
 }

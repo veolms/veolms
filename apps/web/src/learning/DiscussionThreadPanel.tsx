@@ -65,22 +65,22 @@ const useThreadPanelLayoutEffect =
 
 interface DiscussionThreadPanelProps {
   open: boolean;
-  activeEntryId: number | null;
+  activeEntryId: string | number | null;
   entries: Comment[];
   focusComposerOnOpen?: boolean;
   onOpenChange: (open: boolean) => void;
-  onActiveEntryChange: (entryId: number) => void;
-  onLike: (id: number, liked: boolean) => void;
-  onAddReply: (entryId: number, reply: CommentReply) => void;
+  onActiveEntryChange: (entryId: string | number) => void;
+  onLike: (id: string | number, liked: boolean) => void;
+  onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
-  onDeleteEntry: (id: number) => void;
+  onDeleteEntry: (id: string | number) => void;
   onEditReply: (
-    entryId: number,
+    entryId: string | number,
     replyId: number,
     draft: DiscussionDraft,
   ) => void;
-  onDeleteReply: (entryId: number, replyId: number) => void;
-  onReport: (id: number) => void;
+  onDeleteReply: (entryId: string | number, replyId: number) => void;
+  onReport: (id: string | number) => void;
 }
 
 export function DiscussionThreadPanel({
@@ -137,20 +137,20 @@ export function DiscussionThreadPanel({
         );
   const [composerFocusRequest, setComposerFocusRequest] = useState<{
     id: number;
-    entryId: number | null;
+    entryId: string | number | null;
   }>({ id: 0, entryId: null });
   const activeIndex = Math.max(
     0,
     entries.findIndex((entry) => entry.id === activeEntryId),
   );
-  const requestComposerFocus = useCallback((entryId: number) => {
+  const requestComposerFocus = useCallback((entryId: string | number) => {
     setComposerFocusRequest((current) => ({
       id: current.id + 1,
       entryId,
     }));
   }, []);
   const handleComposerFocusHandled = useCallback(
-    (entryId: number, requestId: number) => {
+    (entryId: string | number, requestId: number) => {
       setComposerFocusRequest((current) =>
         current.id === requestId && current.entryId === entryId
           ? { ...current, entryId: null }
@@ -629,19 +629,19 @@ interface ThreadSlideProps {
   entry: Comment;
   active: boolean;
   focusRequest: number;
-  onFocusComposer: (entryId: number) => void;
-  onComposerFocusHandled: (entryId: number, requestId: number) => void;
-  onLike: (id: number, liked: boolean) => void;
-  onAddReply: (entryId: number, reply: CommentReply) => void;
+  onFocusComposer: (entryId: string | number) => void;
+  onComposerFocusHandled: (entryId: string | number, requestId: number) => void;
+  onLike: (id: string | number, liked: boolean) => void;
+  onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
-  onDeleteEntry: (id: number) => void;
+  onDeleteEntry: (id: string | number) => void;
   onEditReply: (
-    entryId: number,
+    entryId: string | number,
     replyId: number,
     draft: DiscussionDraft,
   ) => void;
-  onDeleteReply: (entryId: number, replyId: number) => void;
-  onReport: (id: number) => void;
+  onDeleteReply: (entryId: string | number, replyId: number) => void;
+  onReport: (id: string | number) => void;
 }
 
 function ThreadSlide({
@@ -727,7 +727,7 @@ function ThreadRootEntry({
   onReport,
 }: {
   entry: Comment;
-  onLike: (id: number, liked: boolean) => void;
+  onLike: (id: string | number, liked: boolean) => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -818,7 +818,11 @@ function ThreadRootEntry({
                 className="origin-center scale-x-[1.16]"
                 aria-hidden="true"
               />
-              {replyCount} {replyCount === 1 ? "reply" : "replies"}
+              <span className="font-medium">
+                {replyCount > 0
+                  ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
+                  : "Reply"}
+              </span>
             </button>
           </div>
         </div>
@@ -835,12 +839,12 @@ function ThreadReplyEntry({
   onDelete,
   onReport,
 }: {
-  parentId: number;
+  parentId: string | number;
   reply: CommentReply;
   onReply: () => void;
-  onEdit: (entryId: number, replyId: number, draft: DiscussionDraft) => void;
-  onDelete: (entryId: number, replyId: number) => void;
-  onReport: (id: number) => void;
+  onEdit: (entryId: string | number, replyId: number, draft: DiscussionDraft) => void;
+  onDelete: (entryId: string | number, replyId: number) => void;
+  onReport: (id: string | number) => void;
 }) {
   const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -949,7 +953,7 @@ function ThreadReplyComposer({
 }: {
   entry: Comment;
   focusRequest: number;
-  onFocusHandled: (entryId: number, requestId: number) => void;
+  onFocusHandled: (entryId: string | number, requestId: number) => void;
   onSubmit: (reply: CommentReply) => void;
 }) {
   const [draft, setDraft] = useState<DiscussionDraft>(

@@ -187,11 +187,23 @@ export function useCreateNote() {
   });
 }
 
-export function useUpdateNote(noteId: string) {
+export function useUpdateNote(noteId?: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, UpdateLearningNoteRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.updateNote(noteId, payload),
+  return useMutation<
+    any,
+    ApiError,
+    | { noteId?: string; payload: UpdateLearningNoteRequest }
+    | UpdateLearningNoteRequest
+  >({
+    mutationFn: (variables) => {
+      if ("payload" in variables) {
+        const id = variables.noteId ?? noteId;
+        if (!id) throw new Error("noteId is required to update note");
+        return learningInteractionsService.updateNote(id, variables.payload);
+      }
+      if (!noteId) throw new Error("noteId is required to update note");
+      return learningInteractionsService.updateNote(noteId, variables);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.notesRoot(),
