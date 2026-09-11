@@ -187,6 +187,7 @@ describe("CourseOverviewPage", () => {
         allowQa: true,
         allowComments: true,
         allowDownloads: true,
+        allowNotes: true,
         estimatedDuration: 18,
       },
       includes: [

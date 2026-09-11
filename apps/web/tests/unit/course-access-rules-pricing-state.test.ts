@@ -37,6 +37,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         enableQA: true,
         enableComments: true,
         enableDownloads: false,
+        enableNotes: true,
       });
     });
 
@@ -49,6 +50,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         enableQA: true,
         enableComments: false,
         enableDownloads: true,
+        enableNotes: true,
       };
 
       const serverBaseline = normalizeAccessRulesState(serverResponse);
@@ -91,6 +93,10 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
       // 6. Toggle Downloads
       draftState = { ...serverState, enableDownloads: true };
       expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
+
+      // 7. Toggle Notes
+      draftState = { ...serverState, enableNotes: false };
+      expect(!isAccessRulesEqual(draftState, serverState)).toBe(true);
     });
 
     it("synchronizes confirmed baseline upon successful save and clears dirty state", async () => {
@@ -103,6 +109,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         enableQA: true,
         enableComments: true,
         enableDownloads: true,
+        enableNotes: true,
       };
 
       expect(!isAccessRulesEqual(localDraft, serverState)).toBe(true);
@@ -122,6 +129,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         allowQa: true,
         allowComments: true,
         allowDownloads: true,
+        allowNotes: true,
         certificateEnabled: false,
         showInstructorName: true,
         estimatedDuration: null,
@@ -144,6 +152,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         allowQa: localDraft.enableQA,
         allowComments: localDraft.enableComments,
         allowDownloads: localDraft.enableDownloads,
+        allowNotes: localDraft.enableNotes,
       });
 
       const isFixed = ruleRes.durationType === "fixed_duration";
@@ -155,6 +164,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         enableQA: settingsRes.allowQa,
         enableComments: settingsRes.allowComments,
         enableDownloads: settingsRes.allowDownloads,
+        enableNotes: settingsRes.allowNotes,
       });
 
       serverState = newBaseline;
@@ -380,6 +390,7 @@ describe("Course Wizard Step 3: Access Rules & Pricing Server/Local Draft State"
         enableQA: true,
         enableComments: true,
         enableDownloads: false,
+        enableNotes: true,
       };
 
       // 1. Only duration changed

@@ -156,6 +156,7 @@ describe("Course Wizard: Access Rules Persistence & Existence State (Bug 3)", ()
         enableQA: true,
         enableComments: true,
         enableDownloads: false,
+        enableNotes: true,
       };
 
       // User changes to fixed duration 6 Months

@@ -32,6 +32,7 @@ describe("Course Wizard Step 2: Immediate Access Rules Persistence", () => {
           allowQa: payload.allowQa ?? false,
           allowComments: payload.allowComments ?? false,
           allowDownloads: payload.allowDownloads ?? false,
+          allowNotes: payload.allowNotes ?? true,
           certificateEnabled: false,
           showInstructorName: true,
           language: "en",
@@ -291,6 +292,7 @@ describe("Course Wizard Step 2: Immediate Access Rules Persistence", () => {
       allowQa: true,
       allowComments: false,
       allowDownloads: false,
+      allowNotes: true,
       certificateEnabled: false,
       showInstructorName: true,
       language: "en",
@@ -359,6 +361,7 @@ describe("Course Wizard Step 2: Immediate Access Rules Persistence", () => {
           allowQa: payload.allowQa ?? false,
           allowComments: payload.allowComments ?? false,
           allowDownloads: payload.allowDownloads ?? false,
+          allowNotes: payload.allowNotes ?? true,
           certificateEnabled: false,
           showInstructorName: true,
           language: "en",
@@ -738,6 +741,7 @@ describe("Course Wizard Step 2: Immediate Access Rules Persistence", () => {
       allowQa: false,
       allowComments: false,
       allowDownloads: false,
+      allowNotes: false,
       certificateEnabled: false,
       showInstructorName: true,
       language: "en",
@@ -1055,6 +1059,9 @@ describe("Course Wizard Step 2: Immediate Access Rules Persistence", () => {
         enableDownloads: isAccessControlSaving("enableDownloads")
           ? prevDraft.enableDownloads
           : confirmedAccessRules.enableDownloads,
+        enableNotes: isAccessControlSaving("enableNotes")
+          ? prevDraft.enableNotes
+          : confirmedAccessRules.enableNotes,
       };
     }
 

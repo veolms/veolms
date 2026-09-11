@@ -73,6 +73,7 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       allowQa: true,
       allowComments: true,
       allowDownloads: true,
+      allowNotes: true,
       certificateEnabled: false,
       showInstructorName: true,
       language: "en",
@@ -85,6 +86,7 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       allowQa: true,
       allowComments: true,
       allowDownloads: true,
+      allowNotes: true,
     };
 
     const result = await coursesService.upsertSettings(courseId, payload);
@@ -92,6 +94,33 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
     expect(spy).toHaveBeenCalledWith(courseId, payload);
     expect(result.allowComments).toBe(true);
     expect(result.allowDownloads).toBe(true);
+    expect(result.allowNotes).toBe(true);
+  });
+
+  it("calls upsertSettings with allowNotes: false payload", async () => {
+    const mockSettings: CourseSettings = {
+      id: "settings-notes-false",
+      courseId,
+      allowQa: true,
+      allowComments: true,
+      allowDownloads: false,
+      allowNotes: false,
+      certificateEnabled: false,
+      showInstructorName: true,
+      language: "en",
+      estimatedDuration: null,
+    };
+
+    const spy = vi.spyOn(coursesService, "upsertSettings").mockResolvedValue(mockSettings);
+
+    const payload: UpdateCourseSettingsRequest = {
+      allowNotes: false,
+    };
+
+    const result = await coursesService.upsertSettings(courseId, payload);
+
+    expect(spy).toHaveBeenCalledWith(courseId, payload);
+    expect(result.allowNotes).toBe(false);
   });
 
   it("calls upsertSettings with certificateEnabled payload", async () => {
@@ -101,6 +130,7 @@ describe("Course Access Rules & Settings Service and Mutations", () => {
       allowQa: true,
       allowComments: true,
       allowDownloads: false,
+      allowNotes: true,
       certificateEnabled: true,
       showInstructorName: true,
       language: "en",
