@@ -128,6 +128,7 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         enableQA: false,
         enableComments: true,
         enableDownloads: true,
+        enableNotes: true,
       };
 
       let isSavingAccessRules = false;
@@ -166,6 +167,7 @@ describe("Course Wizard: Save Concurrency & Form Input Locking (Bug 2)", () => {
         enableQA: true,
         enableComments: false,
         enableDownloads: false,
+        enableNotes: true,
       };
 
       try {

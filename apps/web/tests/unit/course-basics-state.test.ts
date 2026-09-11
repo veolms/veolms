@@ -251,6 +251,7 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
         allowQa: true,
         allowComments: true,
         allowDownloads: false,
+        allowNotes: true,
         certificateEnabled: false,
         showInstructorName: false,
         estimatedDuration: null,

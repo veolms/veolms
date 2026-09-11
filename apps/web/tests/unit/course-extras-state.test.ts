@@ -171,6 +171,7 @@ describe("Course Wizard Step 4: Extras & Course Includes State", () => {
         allowQa: true,
         allowComments: true,
         allowDownloads: false,
+        allowNotes: true,
         certificateEnabled: true,
         showInstructorName: true,
         estimatedDuration: null,

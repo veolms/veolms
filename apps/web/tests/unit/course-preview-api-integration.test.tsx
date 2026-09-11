@@ -114,6 +114,7 @@ describe("Course Preview API Integration - Dynamic Metadata & Layout", () => {
       allowQa: true,
       allowComments: true,
       allowDownloads: true,
+      allowNotes: true,
       certificateEnabled: true,
       showInstructorName: true,
     },

@@ -39,6 +39,7 @@ import {
   Lightning,
   ListBullets,
   LockKey,
+  NotePencil,
   PencilSimple,
   PlayCircle,
   Plus,
@@ -304,7 +305,8 @@ export type AccessRulesControlKey =
   | "fixedDuration"
   | "enableQA"
   | "enableComments"
-  | "enableDownloads";
+  | "enableDownloads"
+  | "enableNotes";
 
 export const AccessRulesControlStatusIndicator = ({
   status,
@@ -647,6 +649,7 @@ export interface AccessRulesFormState {
   enableQA: boolean;
   enableComments: boolean;
   enableDownloads: boolean;
+  enableNotes: boolean;
 }
 
 export const initialAccessRulesState: AccessRulesFormState = {
@@ -657,6 +660,7 @@ export const initialAccessRulesState: AccessRulesFormState = {
   enableQA: true,
   enableComments: true,
   enableDownloads: false,
+  enableNotes: true,
 };
 
 export const normalizeAccessRulesState = (
@@ -672,6 +676,8 @@ export const normalizeAccessRulesState = (
     raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
   enableDownloads:
     raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
+  enableNotes:
+    raw?.enableNotes !== undefined ? Boolean(raw.enableNotes) : true,
 });
 
 export const isAccessRuleConfigEqual = (
@@ -697,7 +703,8 @@ export const isAccessSettingsEqual = (
   return (
     normA.enableQA === normB.enableQA &&
     normA.enableComments === normB.enableComments &&
-    normA.enableDownloads === normB.enableDownloads
+    normA.enableDownloads === normB.enableDownloads &&
+    normA.enableNotes === normB.enableNotes
   );
 };
 
@@ -1450,6 +1457,7 @@ export function buildLocalPreviewData({
     allowQa: accessRulesDraft.enableQA,
     allowComments: accessRulesDraft.enableComments,
     allowDownloads: accessRulesDraft.enableDownloads,
+    allowNotes: accessRulesDraft.enableNotes,
     certificateEnabled: enableCertificate,
     showInstructorName: showInstructorName !== false,
     language: language || "en",
@@ -1959,15 +1967,14 @@ export function CourseWizardSkeleton({
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex items-center gap-3.5 min-w-0 pr-3">
                     <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                      <DownloadSimple size={20} weight="bold" />
+                      <NotePencil size={20} weight="bold" />
                     </div>
                     <div>
                       <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Downloads
+                        Notes
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Allow learners to download lesson resources for offline
-                        access.
+                        Allow learners to take notes while learning.
                       </p>
                     </div>
                   </div>
@@ -3670,6 +3677,7 @@ export function CourseCreatePage({
     enableQA: number;
     enableComments: number;
     enableDownloads: number;
+    enableNotes: number;
   }>({
     accessType: 0,
     durationMode: 0,
@@ -3677,6 +3685,7 @@ export function CourseCreatePage({
     enableQA: 0,
     enableComments: 0,
     enableDownloads: 0,
+    enableNotes: 0,
   });
   const inFlightAccessControlsRef = useRef<Record<string, number>>({
     accessType: 0,
@@ -3685,6 +3694,7 @@ export function CourseCreatePage({
     enableQA: 0,
     enableComments: 0,
     enableDownloads: 0,
+    enableNotes: 0,
   });
   const fixedDurationDebounceTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -3812,7 +3822,8 @@ export function CourseCreatePage({
     (inFlightAccessControlsRef.current.fixedDuration ?? 0) > 0 ||
     (inFlightAccessControlsRef.current.enableQA ?? 0) > 0 ||
     (inFlightAccessControlsRef.current.enableComments ?? 0) > 0 ||
-    (inFlightAccessControlsRef.current.enableDownloads ?? 0) > 0;
+    (inFlightAccessControlsRef.current.enableDownloads ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.enableNotes ?? 0) > 0;
 
   const hasAccessControlFailed =
     accessRulesSaveFailed ||
@@ -4509,6 +4520,10 @@ export function CourseCreatePage({
             s?.allowDownloads !== undefined
               ? Boolean(s.allowDownloads)
               : initialAccessRulesState.enableDownloads,
+          enableNotes:
+            s?.allowNotes !== undefined
+              ? Boolean(s.allowNotes)
+              : initialAccessRulesState.enableNotes,
         });
 
       setServerAccessRules((prev) => ({
@@ -4533,6 +4548,9 @@ export function CourseCreatePage({
         enableDownloads: isAccessControlSaving("enableDownloads")
           ? prev.enableDownloads
           : confirmedAccessRules.enableDownloads,
+        enableNotes: isAccessControlSaving("enableNotes")
+          ? prev.enableNotes
+          : confirmedAccessRules.enableNotes,
       }));
 
       if (
@@ -4562,6 +4580,9 @@ export function CourseCreatePage({
             enableDownloads: isAccessControlSaving("enableDownloads")
               ? prev.enableDownloads
               : confirmedAccessRules.enableDownloads,
+            enableNotes: isAccessControlSaving("enableNotes")
+              ? prev.enableNotes
+              : confirmedAccessRules.enableNotes,
           };
           accessRulesDraftRef.current = next;
           return next;
@@ -5730,6 +5751,77 @@ export function CourseCreatePage({
       );
       if (inFlightAccessControlsRef.current.enableDownloads === 0) {
         markAccessControlSaving("enableDownloads", false);
+      }
+    }
+  };
+
+  const handleToggleNotes = async () => {
+    clearAccessControlStatus("enableNotes");
+    const previousValue = accessRulesDraftRef.current.enableNotes;
+    const nextValue = !previousValue;
+    const version = ++accessControlVersionsRef.current.enableNotes;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      enableNotes: nextValue,
+    };
+    setAccessRules((prev) => ({ ...prev, enableNotes: nextValue }));
+    inFlightAccessControlsRef.current.enableNotes =
+      (inFlightAccessControlsRef.current.enableNotes || 0) + 1;
+    markAccessControlSaving("enableNotes", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          allowNotes: nextValue,
+        },
+      });
+
+      if (accessControlVersionsRef.current.enableNotes === version) {
+        const confirmedNotes =
+          res.allowNotes !== undefined ? Boolean(res.allowNotes) : nextValue;
+
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableNotes: confirmedNotes,
+        };
+        setServerAccessRules((prev) => ({
+          ...prev,
+          enableNotes: confirmedNotes,
+        }));
+        setAccessRules((prev) => ({
+          ...prev,
+          enableNotes: confirmedNotes,
+        }));
+        markAccessControlSaved("enableNotes");
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.enableNotes === version) {
+        markAccessControlFailed("enableNotes");
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableNotes: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          enableNotes: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update notes setting.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.enableNotes = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.enableNotes || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.enableNotes === 0) {
+        markAccessControlSaving("enableNotes", false);
       }
     }
   };
@@ -8209,6 +8301,7 @@ export function CourseCreatePage({
         enableQA: accessRulesDraftRef.current.enableQA,
         enableComments: accessRulesDraftRef.current.enableComments,
         enableDownloads: accessRulesDraftRef.current.enableDownloads,
+        enableNotes: accessRulesDraftRef.current.enableNotes,
       });
 
       setAccessRulesExists(true);
@@ -10850,37 +10943,34 @@ export function CourseCreatePage({
                     </div>
                   </div>
 
-                  {/* Toggle 3: Downloads */}
+                  {/* Toggle 3: Notes */}
                   <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                     <div className="flex items-center gap-3.5 min-w-0 pr-3">
                       <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                        <DownloadSimple size={20} weight="bold" />
+                        <NotePencil size={20} weight="bold" />
                       </div>
                       <div className="min-w-0">
                         <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Downloads
+                          Notes
                         </strong>
                         <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Allow learners to download lesson resources for
-                          offline access.
+                          Allow learners to take notes while learning.
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">
                       <AccessRulesControlStatusIndicator
-                        status={getAccessControlDisplayStatus(
-                          "enableDownloads",
-                        )}
-                        testId="access-rules-status-enableDownloads"
+                        status={getAccessControlDisplayStatus("enableNotes")}
+                        testId="access-rules-status-enableNotes"
                       />
                       <SettingsToggle
-                        checked={accessRules.enableDownloads}
+                        checked={accessRules.enableNotes}
                         disabled={
                           isAccessRulesSaving ||
-                          savingAccessControls.has("enableDownloads")
+                          savingAccessControls.has("enableNotes")
                         }
-                        onChange={handleToggleDownloads}
-                        label="Toggle Downloads"
+                        onChange={handleToggleNotes}
+                        label="Toggle Notes"
                       />
                     </div>
                   </div>

@@ -112,6 +112,10 @@ export function createConfigurationService({
       updates.allowDownloads !== undefined
         ? updates.allowDownloads
         : (existing?.allow_downloads ?? false);
+    const allowNotes =
+      updates.allowNotes !== undefined
+        ? updates.allowNotes
+        : (existing?.allow_notes ?? true);
     const certificateEnabled =
       updates.certificateEnabled !== undefined
         ? updates.certificateEnabled
@@ -135,6 +139,7 @@ export function createConfigurationService({
       allow_qa: allowQa,
       allow_comments: allowComments,
       allow_downloads: allowDownloads,
+      allow_notes: allowNotes,
       certificate_enabled: certificateEnabled,
       show_instructor_name: showInstructorName,
       language,
@@ -149,6 +154,7 @@ export function createConfigurationService({
       allowQa,
       allowComments,
       allowDownloads,
+      allowNotes,
       certificateEnabled,
       showInstructorName,
       language,

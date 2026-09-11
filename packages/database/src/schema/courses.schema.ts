@@ -109,6 +109,7 @@ export interface CourseSettingsTable {
   allow_qa: Generated<boolean>;
   allow_comments: Generated<boolean>;
   allow_downloads: Generated<boolean>;
+  allow_notes: Generated<boolean>;
   certificate_enabled: Generated<boolean>;
   show_instructor_name: Generated<boolean>;
   language: Generated<string>;

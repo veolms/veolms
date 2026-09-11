@@ -164,7 +164,7 @@ describe("Course Wizard Step 2: Access Rules Save Status UI Refinement", () => {
       expect(statusMap["enableComments"]).toBeUndefined();
     });
 
-    it("covers all target controls: accessType, durationMode, fixedDuration, enableQA, enableComments, enableDownloads", () => {
+    it("covers all target controls: accessType, durationMode, fixedDuration, enableQA, enableComments, enableDownloads, enableNotes", () => {
       const allControls: AccessRulesControlKey[] = [
         "accessType",
         "durationMode",
@@ -172,8 +172,9 @@ describe("Course Wizard Step 2: Access Rules Save Status UI Refinement", () => {
         "enableQA",
         "enableComments",
         "enableDownloads",
+        "enableNotes",
       ];
-      expect(allControls).toHaveLength(6);
+      expect(allControls).toHaveLength(7);
     });
   });
 

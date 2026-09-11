@@ -62,6 +62,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: false,
         manualIncludesDraft: [],
@@ -98,6 +99,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: false,
         manualIncludesDraft: [],
@@ -134,6 +136,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: false,
           enableComments: false,
           enableDownloads: false,
+          enableNotes: false,
         },
         enableCertificate: false,
         manualIncludesDraft: [],
@@ -183,6 +186,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: false,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: true,
         manualIncludesDraft: [
@@ -267,6 +271,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: false,
         manualIncludesDraft: [],
@@ -309,6 +314,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
       });
       expect(daysResult?.accessRules?.durationDays).toBe(45);
@@ -323,6 +329,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
       });
       expect(weeksResult?.accessRules?.durationDays).toBe(21);
@@ -337,6 +344,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
       });
       expect(yearsResult?.accessRules?.durationDays).toBe(730);
@@ -351,6 +359,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
       });
       expect(lifetimeResult?.accessRules?.durationType).toBe("lifetime");
@@ -424,6 +433,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: false,
         manualIncludesDraft: [],
@@ -541,6 +551,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: true,
         manualIncludesDraft: [
@@ -640,6 +651,7 @@ describe("Milestone 1: Course Creation Wizard Local Preview & Skeleton", () => {
           enableQA: true,
           enableComments: true,
           enableDownloads: true,
+          enableNotes: true,
         },
         enableCertificate: false,
         manualIncludesDraft: [{ id: "p1", text: "Design Assets" }],
