@@ -44,24 +44,41 @@ export function getDiscussionFeedCountLabel(
   return `${count}\u00A0\u00A0${noun}`;
 }
 
+export interface InteractionCapabilities {
+  allowComments: boolean;
+  allowNotes: boolean;
+  allowQa: boolean;
+}
+
 export function applyDiscussionFeed({
   currentUserName,
   entries,
   filter,
   sort,
+  capabilities,
 }: {
   currentUserName: string;
   entries: readonly Comment[];
   filter: DiscussionEntryFilter;
   sort: DiscussionFeedSort;
+  capabilities?: InteractionCapabilities;
 }): Comment[] {
   const uniqueEntries = Array.from(
     new Map(entries.map((entry) => [entry.id, entry])).values(),
   );
+  const capabilityFiltered = capabilities
+    ? uniqueEntries.filter((entry) => {
+        const kind = getDiscussionEntryKind(entry);
+        if (kind === "comment" && !capabilities.allowComments) return false;
+        if (kind === "note" && !capabilities.allowNotes) return false;
+        if (kind === "question" && !capabilities.allowQa) return false;
+        return true;
+      })
+    : uniqueEntries;
   const typedEntries =
     filter === "all"
-      ? uniqueEntries
-      : uniqueEntries.filter(
+      ? capabilityFiltered
+      : capabilityFiltered.filter(
           (entry) => getDiscussionEntryKind(entry) === filter,
         );
   const visibleEntries =

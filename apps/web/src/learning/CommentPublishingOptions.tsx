@@ -10,10 +10,12 @@ import type {
   DiscussionEntryKind,
   DiscussionVisibility,
 } from "./discussion-editor/types";
+import type { InteractionCapabilities } from "./discussionFeed";
 
 interface CommentPublishingOptionsProps {
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
+  capabilities?: InteractionCapabilities;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
 }
@@ -70,9 +72,19 @@ const entryKindOptions: readonly PublishingOption<DiscussionEntryKind>[] = [
 export function CommentPublishingOptions({
   entryKind,
   visibility,
+  capabilities,
   onEntryKindChange,
   onVisibilityChange,
 }: CommentPublishingOptionsProps) {
+  const availableEntryKindOptions = capabilities
+    ? entryKindOptions.filter((option) => {
+        if (option.value === "comment") return capabilities.allowComments;
+        if (option.value === "question") return capabilities.allowQa;
+        if (option.value === "note") return capabilities.allowNotes;
+        return false;
+      })
+    : entryKindOptions;
+
   const availableVisibilityOptions =
     entryKind === "note"
       ? visibilityOptions
@@ -89,7 +101,7 @@ export function CommentPublishingOptions({
           role="radiogroup"
           aria-label="Post as"
         >
-          {entryKindOptions.map((option, index) => (
+          {availableEntryKindOptions.map((option, index) => (
             <PublishingRow
               key={option.value}
               name="discussion-entry-kind"
