@@ -214,13 +214,16 @@ export function ThemedSelect<Value extends string>({
       const pos = calculatePosition();
       if (pos) setPosition(pos);
     };
+    const handleScroll = () => {
+      closeMenu();
+    };
     document.addEventListener("pointerdown", closeFromOutside, true);
     window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
       document.removeEventListener("pointerdown", closeFromOutside, true);
       window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [open, calculatePosition]);
 

@@ -35,6 +35,7 @@ import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
+import { useMyQuizAssignments } from "../services/quizzes";
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -115,11 +116,28 @@ export default function LearningRoute() {
       course.slug === courseSlug ||
       course.slug === apiCourseSlugForKey,
   );
+  const { data: myQuizAssignments, isLoading: myQuizAssignmentsLoading } =
+    useMyQuizAssignments({
+      enabled: Boolean(activeUser),
+    });
   const canonicalCourseSlug = courseOverview?.course.slug;
   const lessonId = courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
     : 1;
+  const apiLesson = courseOverview?.sections
+    .slice()
+    .sort((left, right) => left.position - right.position)
+    .flatMap((section) =>
+      (section.lessons ?? [])
+        .slice()
+        .sort((left, right) => left.position - right.position),
+    )[lessonId - 1];
+  const quizAssignment = myQuizAssignments?.assignments.find(
+    (assignment) =>
+      assignment.courseId === courseOverview?.course.id &&
+      assignment.lessonId === apiLesson?.id,
+  );
 
   useLayoutEffect(() => {
     if (!courseSlug) return;
@@ -278,6 +296,9 @@ export default function LearningRoute() {
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
+      quizAssignment={quizAssignment ?? null}
+      quizAssignments={myQuizAssignments?.assignments ?? null}
+      quizAssignmentLoading={myQuizAssignmentsLoading}
     />
   );
 }

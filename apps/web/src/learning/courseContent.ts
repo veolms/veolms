@@ -14,8 +14,16 @@ export interface CourseVideo {
 }
 
 export type LessonStatus = "done" | "active" | "todo";
-export type LessonContentType = "video" | "document";
-export type Lesson = [number, string, string, LessonStatus, boolean?, LessonContentType?];
+export type LessonContentType = "video" | "document" | "quiz";
+export type Lesson = [
+  number,
+  string,
+  string,
+  LessonStatus,
+  boolean?,
+  LessonContentType?,
+  string?,
+];
 
 export interface CourseSection {
   id: number;

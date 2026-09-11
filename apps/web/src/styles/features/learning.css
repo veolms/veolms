@@ -1081,6 +1081,45 @@
   font-size: 0.75rem;
 }
 
+.learning-curriculum__quiz-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  cursor: pointer;
+  transition: all 150ms ease;
+  line-height: 1.35;
+  user-select: none;
+}
+
+.learning-curriculum__quiz-trigger:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.learning-curriculum__quiz-trigger:active {
+  transform: translateY(0);
+}
+
+.learning-curriculum__quiz-trigger.is-active {
+  color: var(--on-accent-glyph, #fff);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .learning-discussion {
   margin: 15px 0 0;
   padding: 0 0 28px;

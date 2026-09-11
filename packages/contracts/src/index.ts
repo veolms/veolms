@@ -11,3 +11,4 @@ export * from "./learning-space.ts";
 export * from "./health.ts";
 export * from "./error.ts";
 export * from "./fleet.ts";
+export * from "./quiz.ts";

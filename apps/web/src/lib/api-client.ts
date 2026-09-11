@@ -40,9 +40,12 @@ axiosInstance.interceptors.request.use(
   (config) => {
     if (isReactRouterBuildRequest()) {
       return Promise.reject(
-        Object.assign(new Error("API requests are disabled during prerender."), {
-          config,
-        }),
+        Object.assign(
+          new Error("API requests are disabled during prerender."),
+          {
+            config,
+          },
+        ),
       );
     }
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -85,7 +88,14 @@ export const api = {
     data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> {
-    return axiosInstance.post(url, data, config) as unknown as Promise<T>;
+    // Fastify rejects an empty request when the client advertises
+    // `application/json`. Treat a no-body POST as an empty JSON object so
+    // action endpoints (publish, logout, retry, etc.) work consistently.
+    return axiosInstance.post(
+      url,
+      data === undefined ? {} : data,
+      config,
+    ) as unknown as Promise<T>;
   },
 
   put<T = unknown>(

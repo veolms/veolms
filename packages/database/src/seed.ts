@@ -46,12 +46,29 @@ export const DEFAULT_SEED_USER = {
   email_verified_at: new Date(),
 } as const;
 
+const DEFAULT_SEED_ACADEMY = {
+  id: "00000000-0000-4000-8000-000000000100",
+  name: "VeoLMS Academy",
+  logo_url: null,
+  custom_domain: null,
+  setup_completed: true,
+} as const;
+
 export const DEFAULT_SYSTEM_USER_ID = DEFAULT_SEED_USER.id;
 
 const database = createDatabase(config.DATABASE_URL);
 
 try {
   await seedRolesAndPermissions(database);
+
+  // The rest of the development seed data belongs to one academy. Keeping a
+  // stable, idempotent tenant here also makes academy-scoped features such as
+  // quizzes usable immediately after the documented `pnpm db:seed` command.
+  await database
+    .insertInto("academy")
+    .values(DEFAULT_SEED_ACADEMY)
+    .onConflict((conflict) => conflict.column("id").doNothing())
+    .execute();
 
   // Seed default creator user
   await database
@@ -102,4 +119,3 @@ try {
 } finally {
   await database.destroy();
 }
-

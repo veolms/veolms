@@ -1,6 +1,7 @@
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
+import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ExpandableSearch } from "../ExpandableSearch";
@@ -53,6 +54,9 @@ interface CurriculumProps {
   expandAllSections?: boolean;
   expandedSectionIds?: readonly number[];
   onExpandedSectionIdsChange?: (sectionIds: readonly number[]) => void;
+  hasLessonQuiz?: (lessonNumber: number) => boolean;
+  isLessonQuizActive?: (lessonNumber: number) => boolean;
+  onOpenLessonQuiz?: (lessonNumber: number) => void;
 }
 
 export function Curriculum({
@@ -79,6 +83,9 @@ export function Curriculum({
   expandAllSections = false,
   expandedSectionIds: controlledExpandedSectionIds,
   onExpandedSectionIdsChange,
+  hasLessonQuiz,
+  isLessonQuizActive,
+  onOpenLessonQuiz,
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;
@@ -685,6 +692,35 @@ export function Curriculum({
                               <span className="min-w-0 flex-1 truncate">
                                 {title}
                               </span>
+                              {hasLessonQuiz?.(number) ? (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenLessonQuiz?.(number);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      onOpenLessonQuiz?.(number);
+                                    }
+                                  }}
+                                  className={`learning-curriculum__quiz-trigger ${
+                                    isLessonQuizActive?.(number) ? "is-active" : ""
+                                  }`}
+                                  title={
+                                    isLessonQuizActive?.(number)
+                                      ? "Currently viewing quiz"
+                                      : "Open lesson quiz"
+                                  }
+                                  aria-label={`Open quiz for lesson ${number}: ${title}`}
+                                >
+                                  <Exam size={12} weight="bold" />
+                                  <span>Quiz</span>
+                                </span>
+                              ) : null}
                               <span className="learning-curriculum__lesson-duration">
                                 {duration}
                               </span>

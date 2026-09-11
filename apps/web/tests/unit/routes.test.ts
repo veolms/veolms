@@ -48,6 +48,7 @@ describe("React Router framework route configuration", () => {
       wishlist: "wishlist",
       students: "students",
       reviews: "reviews",
+      quizzes: "quizzes",
       discussions: "discussions",
       "discussions-q-and-a": "discussions/q-and-a",
       "discussions-comments": "discussions/comments",
@@ -55,6 +56,9 @@ describe("React Router framework route configuration", () => {
       "discussions-following": "discussions/following",
       "discussions-saved": "discussions/saved",
       analytics: "analytics",
+      "quiz-create": "quizzes/create",
+      "quiz-edit": "quizzes/:quizId",
+      "quiz-attempt": "quizzes/attempt/:assignmentId",
       orders: "orders",
       messages: "messages",
       "order-history": "order-history",
@@ -73,9 +77,7 @@ describe("React Router framework route configuration", () => {
       path: "home",
       file: "routes/home-marker.tsx",
     });
-    expect(
-      childRoutes.find(({ id }) => id === "root-courses"),
-    ).toMatchObject({
+    expect(childRoutes.find(({ id }) => id === "root-courses")).toMatchObject({
       index: true,
       file: "routes/academy-marker.tsx",
     });

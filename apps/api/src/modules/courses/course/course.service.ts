@@ -560,7 +560,7 @@ export function createCourseService({
             sectionId: les.section_id,
             title: les.title,
             description: les.description,
-            contentType: les.content_type as "video" | "document",
+            contentType: les.content_type as "video" | "document" | "quiz",
             contentMediaId: les.content_media_id,
             durationSeconds: les.content_media_id
               ? (contentMediaDurations.get(les.content_media_id) ?? 0)
@@ -771,7 +771,7 @@ export function createCourseService({
             sectionId: les.section_id,
             title: les.title,
             description: les.description,
-            contentType: les.content_type as "video" | "document",
+            contentType: les.content_type as "video" | "document" | "quiz",
             contentMediaId: les.content_media_id,
             durationSeconds: les.content_media_id
               ? (mediaDurationMap.get(les.content_media_id) ?? 0)
@@ -879,6 +879,16 @@ export function createCourseService({
     return await deletionService.scheduleCourseDeletion(courseId, creatorId);
   }
 
+  async function findLessonById(courseId: string, lessonId: string) {
+    return curriculumService.findLessonById(lessonId, courseId);
+  }
+
+  /** Read-only course lookup for trusted module services that already perform
+   * their own actor authorization (for example platform-admin analytics). */
+  async function findCourseById(courseId: string) {
+    return courseRepo.findCourseById(database, courseId);
+  }
+
   return {
     getCourseAndVerifyOwner,
     createCourse,
@@ -890,6 +900,8 @@ export function createCourseService({
     getCourseEditorData,
     getCourseOverviewData,
     deleteCourse,
+    findLessonById,
+    findCourseById,
   };
 }
 

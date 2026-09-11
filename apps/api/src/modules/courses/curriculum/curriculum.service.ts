@@ -247,9 +247,11 @@ export function createCurriculumService({
 
     const effectiveContentType = payload.contentType ?? lesson.content_type;
     const effectiveMediaId =
-      payload.contentMediaId !== undefined
-        ? payload.contentMediaId
-        : lesson.content_media_id;
+      effectiveContentType === "quiz"
+        ? null
+        : payload.contentMediaId !== undefined
+          ? payload.contentMediaId
+          : lesson.content_media_id;
 
     const mediaChanged =
       payload.contentMediaId !== undefined &&
@@ -281,7 +283,8 @@ export function createCurriculumService({
       title: payload.title,
       description: payload.description,
       content_type: payload.contentType,
-      content_media_id: payload.contentMediaId,
+      content_media_id:
+        effectiveContentType === "quiz" ? null : payload.contentMediaId,
       is_preview: payload.isPreview,
       is_published: payload.isPublished,
       updated_at: now,

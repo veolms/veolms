@@ -48,6 +48,9 @@ import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
+import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
+import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
+import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -235,6 +238,8 @@ interface CoursesPageProps {
   settingsTab?: string;
   discussionTab?: string;
   courseSlug?: string;
+  quizId?: string;
+  assignmentId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -546,6 +551,8 @@ export function CoursesPage({
   settingsTab = "profile",
   discussionTab = "q-and-a",
   courseSlug,
+  quizId,
+  assignmentId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -772,31 +779,24 @@ export function CoursesPage({
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
 
-  const {
-    data: publishedCoursesData,
-    isPending: isPublishedPending,
-  } = useCourses({
-    enabled: shouldQueryCourses && effectiveRole === "student",
-  });
-  const {
-    data: myCoursesData,
-    isPending: isMyCoursesPending,
-  } = useMyCourses({
+  const { data: publishedCoursesData, isPending: isPublishedPending } =
+    useCourses({
+      enabled: shouldQueryCourses && effectiveRole === "student",
+    });
+  const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
       shouldQueryCourses &&
       effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
-  const {
-    data: deletedCoursesData,
-    isPending: isDeletedPending,
-  } = useDeletedCourses(undefined, {
-    enabled:
-      shouldQueryCourses &&
-      isAdmin &&
-      effectiveRole === "creator" &&
-      enrollmentFilter === "bin",
-  });
+  const { data: deletedCoursesData, isPending: isDeletedPending } =
+    useDeletedCourses(undefined, {
+      enabled:
+        shouldQueryCourses &&
+        isAdmin &&
+        effectiveRole === "creator" &&
+        enrollmentFilter === "bin",
+    });
 
   const isLoadingCourses =
     !isAuthReady ||
@@ -995,10 +995,7 @@ export function CoursesPage({
     const root = document.documentElement;
     root.dataset.sidebarState = shellState.mode;
     root.style.setProperty("--sidebar-width", `${shellState.width}px`);
-    root.style.setProperty(
-      "--sidebar-expanded-width",
-      `${shellState.width}px`,
-    );
+    root.style.setProperty("--sidebar-expanded-width", `${shellState.width}px`);
     window.__VEO_BOOTSTRAP__ = {
       ...window.__VEO_BOOTSTRAP__,
       sidebar: shellState,
@@ -1702,9 +1699,7 @@ export function CoursesPage({
         adaptDeletedCourseToCatalogueCourse,
       );
     }
-    return (myCoursesData?.courses || []).map(
-      adaptApiCourseToCatalogueCourse,
-    );
+    return (myCoursesData?.courses || []).map(adaptApiCourseToCatalogueCourse);
   }, [
     deletedCoursesData?.courses,
     effectiveRole,
@@ -3234,7 +3229,8 @@ export function CoursesPage({
       onNavigatePage,
       upsertLearningSpaceSession,
     ],
-  );``
+  );
+  ``;
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
@@ -3416,6 +3412,26 @@ export function CoursesPage({
           setNotice={setNotice}
         />
       );
+    }
+    if (surfacePage === "quiz-builder") {
+      return (
+        <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
+      );
+    }
+    if (surfacePage === "quiz-attempt") {
+      return (
+        <QuizDirectAttemptPage
+          assignmentId={assignmentId}
+          onNavigatePage={onNavigatePage}
+        />
+      );
+    }
+    if (
+      surfacePage === "quizzes" ||
+      surfaceActiveSection === "Analytics" ||
+      surfaceActiveSection === "Quizzes"
+    ) {
+      return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
     }
     if (surfacePage === "placeholder") {
       return <PlaceholderPage section={surfaceActiveSection} role={role} />;

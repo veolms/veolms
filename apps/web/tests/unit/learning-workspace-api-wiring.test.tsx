@@ -420,5 +420,87 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("Lesson Quiz Integration & Toggle", () => {
+    const mockQuizAssignment = {
+      id: "qa-1111-uuid",
+      quizId: "quiz-1111-uuid",
+      quizVersionId: "qv-1111-uuid",
+      courseId: "c1111111-1111-4111-a111-111111111111",
+      lessonId: "les-1-1-uuid",
+      quizTitle: "TypeScript Fundamentals Quiz",
+      lessonTitle: "Type Annotations Basics",
+      courseTitle: "Modern TypeScript Deep Dive",
+      required: true,
+      passPercentage: 75,
+      maxAttempts: 3,
+      timeLimitSeconds: 600,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      feedbackMode: "after_submit" as const,
+      availableFrom: null,
+      availableUntil: null,
+      activeAttemptId: null,
+      attemptCount: 0,
+      latestAttemptStatus: null,
+      latestScore: null,
+      bestScore: null,
+      latestPassed: null,
+    };
+
+    it("renders Quiz trigger button to the left of lesson duration when a quiz is assigned", async () => {
+      const mockOverview = createMockOverview();
+      queryClient.setQueryData(
+        courseKeys.overview("modern-ts-deep-dive"),
+        mockOverview,
+      );
+
+      renderWorkspaceWithClient(queryClient, {
+        lessonId: 1,
+        quizAssignments: [mockQuizAssignment],
+      });
+
+      // The quiz trigger button for lesson 1 must be in the document
+      const quizTriggers = screen.getAllByRole("button", {
+        name: /Open quiz for lesson 1/i,
+      });
+      expect(quizTriggers.length).toBeGreaterThan(0);
+      expect(quizTriggers[0]).toHaveTextContent("Quiz");
+    });
+
+    it("toggles to quiz attempt view when clicking Quiz trigger and restores video with Back to video", async () => {
+      const mockOverview = createMockOverview();
+      queryClient.setQueryData(
+        courseKeys.overview("modern-ts-deep-dive"),
+        mockOverview,
+      );
+
+      renderWorkspaceWithClient(queryClient, {
+        lessonId: 1,
+        quizAssignment: mockQuizAssignment,
+        quizAssignments: [mockQuizAssignment],
+      });
+
+      // Initially, "Back to video" is NOT present because video mode is active
+      expect(screen.queryByRole("button", { name: /Back to video/i })).toBeNull();
+
+      // Click the Quiz trigger in the curriculum list
+      const quizTriggers = screen.getAllByRole("button", {
+        name: /Open quiz for lesson 1/i,
+      });
+      fireEvent.click(quizTriggers[0]!);
+
+      // Now "Back to video" button and Lesson Quiz label must be visible
+      const backButton = screen.getByRole("button", { name: /Back to video/i });
+      expect(backButton).toBeInTheDocument();
+      expect(screen.getByText(/Lesson 1 Quiz/i)).toBeInTheDocument();
+
+      // Click "Back to video" button
+      fireEvent.click(backButton);
+
+      // Now "Back to video" is gone and video player is restored
+      expect(screen.queryByRole("button", { name: /Back to video/i })).toBeNull();
+    });
+  });
 });
 

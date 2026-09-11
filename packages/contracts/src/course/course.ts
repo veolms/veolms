@@ -304,7 +304,7 @@ export const courseLessonSchema = z.object({
   sectionId: z.uuid(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
-  contentType: z.enum(["video", "document"]),
+  contentType: z.enum(["video", "document", "quiz"]),
   contentMediaId: z.uuid().nullable().optional(),
   durationSeconds: z.number().int().nonnegative().optional(),
   position: z.number().int().nonnegative(),
@@ -337,13 +337,13 @@ export const reorderSectionsRequestSchema = z.object({
 export const createCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(1500).nullable().optional(),
-  contentType: z.enum(["video", "document"]),
+  contentType: z.enum(["video", "document", "quiz"]),
 });
 
 export const updateCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(1500).nullable().optional(),
-  contentType: z.enum(["video", "document"]).optional(),
+  contentType: z.enum(["video", "document", "quiz"]).optional(),
   contentMediaId: z.uuid().nullable().optional(),
   isPreview: z.boolean().optional(),
   isPublished: z.boolean().optional(),

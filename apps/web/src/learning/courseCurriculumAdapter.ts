@@ -1,7 +1,4 @@
-import type {
-  CourseLesson,
-  CourseOverviewResponse,
-} from "@veolms/contracts";
+import type { CourseLesson, CourseOverviewResponse } from "@veolms/contracts";
 import {
   formatMediaTime,
   type CourseSection,
@@ -68,6 +65,7 @@ export function adaptCourseOverviewToCurriculum(
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
+          les.id,
         ];
       });
 
