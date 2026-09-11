@@ -1059,29 +1059,33 @@ async function resolveInstructor(
   }
 
   if (!selectedUser) {
-    console.log(`\n${bold("Found existing instructors/admins:")}`);
-    existingInstructors.forEach((inst, idx) => {
-      console.log(
-        `  ${cyan(`[${idx + 1}]`)} ${inst.display_name} (${inst.email ?? "no email"}) - ${dim(inst.roles.join(", "))}`,
-      );
-    });
-
-    while (!selectedUser) {
-      const choice = (
-        await rl.question(
-          `\n${cyan("? ")}${bold(`Select instructor/admin [1-${existingInstructors.length}]: `)}`,
-        )
-      ).trim();
-      const num = parseInt(choice, 10);
-      if (!isNaN(num) && num >= 1 && num <= existingInstructors.length) {
-        selectedUser = existingInstructors[num - 1]!;
-      } else {
+    if (rl) {
+      console.log(`\n${bold("Found existing instructors/admins:")}`);
+      existingInstructors.forEach((inst, idx) => {
         console.log(
-          red(
-            `Please enter a valid number between 1 and ${existingInstructors.length}.`,
-          ),
+          `  ${cyan(`[${idx + 1}]`)} ${inst.display_name} (${inst.email ?? "no email"}) - ${dim(inst.roles.join(", "))}`,
         );
+      });
+
+      while (!selectedUser) {
+        const choice = (
+          await rl.question(
+            `\n${cyan("? ")}${bold(`Select instructor/admin [1-${existingInstructors.length}]: `)}`,
+          )
+        ).trim();
+        const num = parseInt(choice, 10);
+        if (!isNaN(num) && num >= 1 && num <= existingInstructors.length) {
+          selectedUser = existingInstructors[num - 1]!;
+        } else {
+          console.log(
+            red(
+              `Please enter a valid number between 1 and ${existingInstructors.length}.`,
+            ),
+          );
+        }
       }
+    } else {
+      selectedUser = existingInstructors[0]!;
     }
   }
 
@@ -2070,13 +2074,19 @@ ${bold("Examples:")}
 
   try {
     // 1. Locate / Auto-update yt-dlp & Auto-install FFmpeg
-    const ytdlp = await ensureYtDlpBinary(cliArgs.ytdlpPath, rl);
+    const ytdlp = await ensureYtDlpBinary(
+      cliArgs.ytdlpPath,
+      cliArgs.yes ? undefined : rl,
+    );
     const ytdlpBinary = ytdlp.path;
     ytCtx.supportsJsRuntimes = ytdlp.supportsJsRuntimes;
     console.log(
       `${green("✓")} yt-dlp: ${dim(ytdlpBinary)}${ytdlp.supportsJsRuntimes ? " (node JS runtime enabled)" : ""}`,
     );
-    const ffmpegBinary = await ensureFfmpegBinary(cliArgs.ffmpegPath, rl);
+    const ffmpegBinary = await ensureFfmpegBinary(
+      cliArgs.ffmpegPath,
+      cliArgs.yes ? undefined : rl,
+    );
 
     if (ffmpegBinary) {
       console.log(
@@ -2092,7 +2102,7 @@ ${bold("Examples:")}
     let instructor = await resolveInstructor(
       database,
       cliArgs.instructorEmail,
-      rl,
+      cliArgs.yes ? undefined : rl,
     );
     console.log(
       `\n${green("✓")} Instructor assigned: ${bold(instructor.display_name)} (${dim(instructor.email ?? "")})`,
