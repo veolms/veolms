@@ -130,6 +130,9 @@ const serverConfigSchema = z.object({
 
   // Storage Configs
   STORAGE_ENDPOINT: z.string().optional(),
+  // Optional public CDN origin for published free/preview HLS output. Keep
+  // this separate from STORAGE_ENDPOINT because the latter is private.
+  STORAGE_PUBLIC_BASE_URL: z.url().optional(),
   STORAGE_REGION: z.string().default("us-east-1"),
   STORAGE_ACCESS_KEY_ID: z.string().optional(),
   STORAGE_SECRET_ACCESS_KEY: z.string().optional(),

@@ -4,6 +4,7 @@ import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { ExpandableSearch } from "../ExpandableSearch";
+import { CourseThumbnailPlaceholder } from "../courses/CourseThumbnailPlaceholder";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -43,6 +44,7 @@ interface CurriculumProps {
   topRequest?: number;
   persistenceKey: string;
   isLessonAvailable?: (lessonNumber: number) => boolean;
+  isLoading?: boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
   scrollControlBottomClearance?: number | string;
@@ -68,6 +70,7 @@ export function Curriculum({
   topRequest = 0,
   persistenceKey,
   isLessonAvailable,
+  isLoading = false,
   scrollportId,
   scrollportRef,
   scrollControlBottomClearance,
@@ -122,13 +125,21 @@ export function Curriculum({
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
   const handledTopRequestRef = useRef(0);
+  const fallbackSection: CourseSection = {
+    id: 0,
+    title: "",
+    progress: "",
+    lessons: [],
+  };
+  const fallbackLesson: Lesson = [selectedLesson || 1, "", "", "todo"];
   const currentSection =
     sections.find((section) =>
       section.lessons.some(([number]) => number === selectedLesson),
-    ) || sections[0]!;
-  const currentLesson = lessonsById.get(selectedLesson) || lessonsById.get(1)!;
-  const courseProgress = 52;
-
+    ) ||
+    sections[0] ||
+    fallbackSection;
+  const currentLesson =
+    lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
   useEffect(() => {
     if (expandAllSections || !hideHero || isExpandedControlled) return;
     if (
@@ -162,9 +173,20 @@ export function Curriculum({
     if (typeof storedProgress === "number")
       return Math.max(0, Math.min(100, storedProgress));
     if (status === "done") return 100;
-    if (status === "active") return 52;
     return 0;
   };
+
+  const allLessons = sections.flatMap(({ lessons }) => lessons);
+  const courseProgress =
+    allLessons.length > 0
+      ? Math.round(
+          allLessons.reduce(
+            (total, [number, , , status]) =>
+              total + getLessonProgress(number, status),
+            0,
+          ) / allLessons.length,
+        )
+      : 0;
 
   const scrollItemToTop = (element: HTMLElement | null) => {
     const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
@@ -391,11 +413,17 @@ export function Curriculum({
               />
             }
           >
-            <img
-              src={courseThumbnail}
-              alt=""
-              className="learning-curriculum__cover"
-            />
+            {courseThumbnail ? (
+              <img
+                src={courseThumbnail}
+                alt=""
+                className="learning-curriculum__cover"
+              />
+            ) : (
+              <div className="learning-curriculum__cover overflow-hidden">
+                <CourseThumbnailPlaceholder />
+              </div>
+            )}
             <div className="learning-curriculum__shade" aria-hidden="true" />
             <button
               type="button"
@@ -513,12 +541,38 @@ export function Curriculum({
         ) : null}
 
         <div ref={lessonListRef} className="learning-curriculum__lesson-list">
-          {sections.map((section) => {
+          {isLoading ? (
+            <div
+              className="p-3 space-y-4 animate-pulse"
+              data-testid="curriculum-loading-skeleton"
+              aria-label="Loading curriculum"
+            >
+              {[1, 2, 3].map((sectionIndex) => (
+                <div key={sectionIndex} className="space-y-2.5">
+                  <div className="flex items-center justify-between py-2 px-1">
+                    <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+                    <div className="h-3.5 w-8 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+                  </div>
+                  <div className="space-y-1.5 pl-6">
+                    <div className="h-7 w-4/5 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+                    <div className="h-7 w-3/5 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            sections.map((section) => {
             const matchingLessons = section.lessons.filter((lesson) =>
               lesson[1]
                 .toLowerCase()
                 .includes(activeLessonSearch.toLowerCase()),
             );
+            const completedLessons = section.lessons.filter(
+              ([number, , , status]) =>
+                getLessonProgress(number, status) >=
+                LESSON_PROGRESS_COMPLETE_THRESHOLD,
+            ).length;
+            const sectionProgress = `${completedLessons}/${section.lessons.length}`;
             const isOpen =
               expanded.includes(section.id) ||
               Boolean(activeLessonSearch && matchingLessons.length > 0);
@@ -557,7 +611,7 @@ export function Curriculum({
                     Section {section.id}: {section.title}
                   </span>
                   <span className="learning-curriculum__section-progress">
-                    {section.progress}
+                    {sectionProgress}
                   </span>
                 </button>
                 {matchingLessons.length > 0 && (
@@ -658,7 +712,7 @@ export function Curriculum({
                 )}
               </section>
             );
-          })}
+          }))}
         </div>
       </aside>
 

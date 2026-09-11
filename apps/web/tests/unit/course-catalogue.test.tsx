@@ -3,7 +3,7 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CourseCatalogue } from "../../src/courses/CourseCatalogue.tsx";
 import type { CourseCatalogueProps } from "../../src/courses/CourseCatalogue.tsx";
-import { courses } from "../../src/courses/catalogue.ts";
+import type { Course } from "../../src/courses/catalogue.ts";
 
 vi.mock("../../src/ThemedSelect.tsx", () => ({
   ThemedSelect: ({
@@ -60,6 +60,22 @@ const renderCatalogue = (props: Partial<CourseCatalogueProps> = {}) => {
   return { ...callbacks, ...view };
 };
 
+const sampleCourse: Course = {
+  id: "test-course-id",
+  title: "Test Course Title",
+  description: "Test Course Description",
+  level: "Beginner",
+  category: "Development",
+  sections: 5,
+  lectures: 20,
+  progress: null,
+  enrolled: false,
+  duration: "5h",
+  students: 10,
+  thumbnail: "/test.webp",
+  lifecycleStatus: "published",
+};
+
 describe("CourseCatalogue", () => {
   it("forwards enrollment, search, status, and sort controls to the parent", () => {
     const {
@@ -114,23 +130,22 @@ describe("CourseCatalogue", () => {
   });
 
   it("opens the overview route when a student explores an unenrolled course", () => {
-    const unenrolledCourse = courses.find((course) => !course.enrolled);
-    expect(unenrolledCourse).toBeDefined();
+    const unenrolledCourse = { ...sampleCourse, enrolled: false };
 
     const { onNavigatePage, setNotice } = renderCatalogue({
-      visibleCourses: [unenrolledCourse!],
+      visibleCourses: [unenrolledCourse],
     });
 
     fireEvent.click(screen.getByRole("button", { name: "View Curriculum" }));
 
     expect(onNavigatePage).toHaveBeenCalledWith(
-      `/courses/${encodeURIComponent(unenrolledCourse!.id)}/overview`,
+      `/courses/${encodeURIComponent(unenrolledCourse.id)}/overview`,
     );
     expect(setNotice).not.toHaveBeenCalled();
   });
 
   it("navigates to course edit page when edit course action is selected", async () => {
-    const target = courses[0]!;
+    const target = sampleCourse;
     const { onNavigatePage } = renderCatalogue({
       role: "creator",
       visibleCourses: [target],
@@ -167,7 +182,21 @@ describe("CourseCatalogue", () => {
   });
 
   it("opens ConfirmDeleteModal on Delete Course action and triggers onDeleteCourse on confirm", async () => {
-    const target = courses[0]!;
+    const target: Course = {
+      id: "test-course-id",
+      title: "Test Course Title",
+      description: "Test Course Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 5,
+      lectures: 20,
+      progress: null,
+      enrolled: false,
+      duration: "5h",
+      students: 10,
+      thumbnail: "/test.webp",
+      lifecycleStatus: "published",
+    };
     const onDeleteCourse = vi.fn().mockResolvedValue(undefined);
     renderCatalogue({
       role: "creator",
@@ -192,5 +221,221 @@ describe("CourseCatalogue", () => {
     // Trigger hold-to-confirm
     const confirmBtn = screen.getByRole("button", { name: /Hold to Move to Bin/i });
     fireEvent.keyDown(confirmBtn, { key: "Enter" });
+  });
+
+  it("renders Bin tab in creator mode when isAdmin is true", () => {
+    renderCatalogue({
+      role: "creator",
+      isAdmin: true,
+    });
+
+    expect(screen.getByRole("tab", { name: "Bin" })).toBeVisible();
+  });
+
+  it("omits Bin tab in creator mode when isAdmin is false or omitted", () => {
+    renderCatalogue({
+      role: "creator",
+      isAdmin: false,
+    });
+
+    expect(screen.queryByRole("tab", { name: "Bin" })).toBeNull();
+  });
+
+  it("omits Bin tab in student mode even if isAdmin is true", () => {
+    renderCatalogue({
+      role: "student",
+      isAdmin: true,
+    });
+
+    expect(screen.queryByRole("tab", { name: "Bin" })).toBeNull();
+  });
+
+  it("renders 6 CourseCardSkeleton items and hides empty state when isLoading is true", () => {
+    renderCatalogue({
+      isLoading: true,
+      visibleCourses: [],
+    });
+
+    const skeletonContainer = screen.getByTestId("course-catalogue-skeleton");
+    expect(skeletonContainer).toBeVisible();
+    expect(screen.getAllByTestId("course-card-skeleton")).toHaveLength(6);
+    expect(screen.queryByText("No courses found")).toBeNull();
+    expect(screen.queryByText("No courses yet")).toBeNull();
+  });
+
+  it("renders student zero-course empty state when visibleCourses is empty and no filters/search are active", () => {
+    renderCatalogue({
+      isLoading: false,
+      role: "student",
+      visibleCourses: [],
+      totalCoursesCount: 0,
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses yet")).toBeVisible();
+    expect(
+      screen.getByText("You don't have any courses available to you yet."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Create course" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "View all courses" }),
+    ).toBeNull();
+  });
+
+  it("renders creator zero-course empty state with Create course button when visibleCourses is empty and no courses exist", () => {
+    const { onNavigatePage } = renderCatalogue({
+      isLoading: false,
+      role: "creator",
+      visibleCourses: [],
+      totalCoursesCount: 0,
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses yet")).toBeVisible();
+    expect(
+      screen.getByText(
+        "You haven't created any courses yet. Create your first course to get started.",
+      ),
+    ).toBeVisible();
+
+    const createButton = screen.getByRole("button", { name: "Create course" });
+    expect(createButton).toBeVisible();
+    fireEvent.click(createButton);
+    expect(onNavigatePage).toHaveBeenCalledWith("Create Course");
+    expect(
+      screen.queryByRole("button", { name: "View all courses" }),
+    ).toBeNull();
+  });
+
+  it("renders search/filter empty state when courses exist but search/filter returns zero results", () => {
+    const { onResetCatalogue } = renderCatalogue({
+      isLoading: false,
+      role: "student",
+      search: "non-existent course",
+      visibleCourses: [],
+      totalCoursesCount: 5,
+    });
+
+    expect(screen.queryByTestId("course-catalogue-skeleton")).toBeNull();
+    expect(screen.getByText("No courses found")).toBeVisible();
+    expect(
+      screen.getByText("Try a different search or filter."),
+    ).toBeVisible();
+
+    const viewAllButton = screen.getByRole("button", {
+      name: "View all courses",
+    });
+    expect(viewAllButton).toBeVisible();
+    fireEvent.click(viewAllButton);
+    expect(onResetCatalogue).toHaveBeenCalled();
+  });
+
+  it("renders search/filter empty state for creator when filters produce zero results even if total courses exist", () => {
+    const { onResetCatalogue } = renderCatalogue({
+      isLoading: false,
+      role: "creator",
+      enrollmentFilter: "draft",
+      visibleCourses: [],
+      totalCoursesCount: 3,
+    });
+
+    expect(screen.getByText("No courses found")).toBeVisible();
+    expect(
+      screen.getByText("Try a different search or filter."),
+    ).toBeVisible();
+    const viewAllButton = screen.getByRole("button", {
+      name: "View all courses",
+    });
+    expect(viewAllButton).toBeVisible();
+    fireEvent.click(viewAllButton);
+    expect(onResetCatalogue).toHaveBeenCalled();
+  });
+
+  it("renders CourseThumbnailPlaceholder when a course has no thumbnail", () => {
+    const courseWithoutThumbnail: Course = {
+      id: "course-no-thumb",
+      title: "Course Without Thumbnail",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      visibleCourses: [courseWithoutThumbnail],
+    });
+
+    expect(
+      screen.getByTestId("course-thumbnail-placeholder"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders img tag when a course has a valid thumbnail", () => {
+    const courseWithThumbnail: Course = {
+      id: "course-with-thumb",
+      title: "Course With Thumbnail",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "https://example.com/thumb.jpg",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      visibleCourses: [courseWithThumbnail],
+    });
+
+    expect(
+      screen.queryByTestId("course-thumbnail-placeholder"),
+    ).toBeNull();
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://example.com/thumb.jpg");
+  });
+
+  it("renders deleting state on CourseCard when deletingCourseIds contains course id", () => {
+    const course: Course = {
+      id: "deleting-course-id",
+      title: "Course Under Deletion",
+      description: "Description",
+      level: "Beginner",
+      category: "Development",
+      sections: 1,
+      lectures: 5,
+      progress: null,
+      enrolled: false,
+      duration: "1h 0m",
+      students: 0,
+      thumbnail: "/test.webp",
+      lifecycleStatus: "published",
+    };
+
+    renderCatalogue({
+      role: "creator",
+      visibleCourses: [course],
+      deletingCourseIds: new Set([course.id]),
+    });
+
+    const card = screen.getByRole("article");
+    expect(card).toHaveAttribute("data-deleting", "true");
+    expect(card).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("course-deleting-tag")).toBeInTheDocument();
+    expect(screen.getByTestId("course-deleting-tag")).toHaveTextContent("Deleting...");
+    expect(screen.getByTestId("course-deleting-overlay")).toBeInTheDocument();
+    expect(screen.getByText("Moving to Bin...")).toBeInTheDocument();
   });
 });

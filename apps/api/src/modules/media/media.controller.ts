@@ -30,6 +30,134 @@ export function createMediaController({ service }: { service: MediaService }) {
     return await service.getVideoJobProgress(mediaId, ownerId);
   }
 
+  async function getPlaybackBootstrap(
+    request: FastifyRequest<{
+      Params: { idOrSlug: string; lessonNumber: number };
+    }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getPlaybackBootstrap(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
+      user,
+    );
+  }
+
+  async function streamHlsResource(
+    request: FastifyRequest<{
+      Params: { mediaId: string; "*": string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    const result = await service.getHlsStream(
+      request.params.mediaId,
+      request.params["*"],
+      user,
+    );
+    reply.header("Content-Type", result.contentType);
+    if (result.contentLength !== undefined) {
+      reply.header("Content-Length", result.contentLength);
+    }
+    reply.header(
+      "Cache-Control",
+      result.isPublic
+        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
+        : result.isManifest
+          ? "private, no-store"
+          : "private, max-age=86400",
+    );
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(result.stream);
+  }
+
+  async function retryVideoJob(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return service.retryTranscodeJob(
+      request.params.mediaId,
+      request.user!.id,
+      request.log,
+    );
+  }
+
+  async function cancelVideoJob(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return service.cancelTranscodeJob(
+      request.params.mediaId,
+      request.user!.id,
+      request.log,
+    );
+  }
+
+  async function streamVideoJobProgress(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+    reply: FastifyReply,
+  ) {
+    // Fastify's CORS hook sets these headers on the reply object. Because this
+    // endpoint takes ownership of the raw response, copy the resolved values
+    // explicitly before writeHead; otherwise EventSource requests from the
+    // separately hosted web app can be rejected by the browser as CORS errors.
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": reply.getHeader(
+        "Access-Control-Allow-Origin",
+      ),
+      "Access-Control-Allow-Credentials": reply.getHeader(
+        "Access-Control-Allow-Credentials",
+      ),
+      Vary: reply.getHeader("Vary"),
+    };
+    reply.hijack();
+    const response = reply.raw;
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+      ...(typeof corsHeaders["Access-Control-Allow-Origin"] === "string" && {
+        "Access-Control-Allow-Origin":
+          corsHeaders["Access-Control-Allow-Origin"],
+      }),
+      ...(typeof corsHeaders["Access-Control-Allow-Credentials"] ===
+        "string" && {
+        "Access-Control-Allow-Credentials":
+          corsHeaders["Access-Control-Allow-Credentials"],
+      }),
+      ...(typeof corsHeaders.Vary === "string" && {
+        Vary: corsHeaders.Vary,
+      }),
+    });
+    let closed = false;
+    request.raw.on("close", () => {
+      closed = true;
+    });
+    while (!closed) {
+      try {
+        const progress = await service.getVideoJobProgress(
+          request.params.mediaId,
+          request.user!.id,
+        );
+        response.write(
+          `event: progress\ndata: ${JSON.stringify(progress)}\n\n`,
+        );
+        if (["completed", "failed", "cancelled"].includes(progress.status))
+          break;
+      } catch (error) {
+        response.write(
+          `event: error\ndata: ${JSON.stringify({ message: error instanceof Error ? error.message : "Unable to read progress" })}\n\n`,
+        );
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    response.end();
+  }
+
   async function getMediaAssetStream(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
     reply: FastifyReply,
@@ -51,6 +179,11 @@ export function createMediaController({ service }: { service: MediaService }) {
     presignMediaUpload,
     confirmMediaUpload,
     getVideoJobProgress,
+    getPlaybackBootstrap,
+    streamHlsResource,
+    retryVideoJob,
+    cancelVideoJob,
+    streamVideoJobProgress,
     getMediaAssetStream,
   };
 }

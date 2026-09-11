@@ -271,7 +271,7 @@ describe("CourseCard", () => {
     ["student", enrolledCourse],
     ["student", nonEnrolledCourse],
   ] as const)(
-    "opens course preview from the %s course menu",
+    "opens course overview from the %s course menu",
     async (role, course) => {
       const { onExplore, setMenuOpen } = renderCard({
         role,
@@ -279,7 +279,7 @@ describe("CourseCard", () => {
         menuOpen: true,
       });
 
-      fireEvent.click(screen.getByRole("menuitem", { name: "Course Preview" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Course Overview" }));
 
       expect(setMenuOpen).toHaveBeenCalledWith(null);
       await waitFor(() => expect(onExplore).toHaveBeenCalledWith(course));
@@ -364,6 +364,35 @@ describe("CourseCard", () => {
     fireEvent.pointerDown(document.body);
 
     expect(setMenuOpen).toHaveBeenCalledWith(null);
+  });
+
+  it("renders deleting state with overlay, disabled interactions and deleting badge", () => {
+    const { onOpen, onNavigatePage } = renderCard({
+      isDeleting: true,
+    });
+
+    const card = screen.getByRole("article");
+    expect(card).toHaveAttribute("data-deleting", "true");
+    expect(card).toHaveAttribute("aria-busy", "true");
+    expect(card).toHaveClass("pointer-events-none");
+
+    expect(screen.getByTestId("course-deleting-tag")).toHaveTextContent("Deleting...");
+    expect(screen.getByTestId("course-deleting-overlay")).toBeInTheDocument();
+    expect(screen.getByText("Moving to Bin...")).toBeInTheDocument();
+
+    // Menu should not be rendered while deleting
+    expect(screen.queryByRole("button", { name: /Actions for/i })).toBeNull();
+
+    // Clicking play thumbnail does not trigger onOpen
+    const playBtn = screen.getByRole("button", { name: /Resume/i });
+    expect(playBtn).toBeDisabled();
+    fireEvent.click(playBtn);
+    expect(onOpen).not.toHaveBeenCalled();
+
+    // Clicking overview link does not navigate
+    const link = screen.getByRole("link", { name: /View course overview/i });
+    fireEvent.click(link);
+    expect(onNavigatePage).not.toHaveBeenCalled();
   });
 });
 

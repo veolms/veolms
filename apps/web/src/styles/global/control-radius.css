@@ -25,7 +25,7 @@
     .creator-primary-action
   ):not(.primary-learning-action):not(.workspace-button):not(
     .settings-profile__primary-action
-  ):not(.course-wizard-link-btn-primary):not(.is-primary):not(
+  ):not(.is-primary):not(
     [role="switch"]
   ):not([class~="rounded-full"]):not(.themed-select__item):not(
     [data-theme-swatch]
@@ -52,7 +52,6 @@
     .primary-learning-action,
     .workspace-button,
     .settings-profile__primary-action,
-    .course-wizard-link-btn-primary,
     .delete-modal-confirm,
     .delete-modal-cancel,
     button.is-primary
