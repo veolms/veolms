@@ -48,7 +48,7 @@ import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
-import { courses, getVisibleCourses } from "./courses/catalogue";
+import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -63,7 +63,7 @@ import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { autosyncManager } from "./lib/autosync";
-import { useCurrentUser, useSignOut, useLogout } from "./services/auth";
+import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
 import {
@@ -102,6 +102,7 @@ import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   getUserRoles,
   getVisibleWorkspaceRoles,
+  hasAdminRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
 } from "./shell/workspaceRole";
@@ -550,7 +551,15 @@ export function CoursesPage({
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
-  const [role, setRole] = useState<CourseRole>("student");
+  const [role, setRole] = useState<CourseRole>(() => {
+    if (typeof window === "undefined") return "student";
+    try {
+      const stored = localStorage.getItem("veolms-role");
+      return stored === "creator" ? "creator" : "student";
+    } catch {
+      return "student";
+    }
+  });
   const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
@@ -707,6 +716,7 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
@@ -714,7 +724,10 @@ export function CoursesPage({
     // need Learning Space sessions before the video can mount. Load these
     // sessions when the panel is opened; keep the existing eager behavior on
     // catalogue/home surfaces.
-    enabled: isAuthenticated && (!renderMain || learningSpaceExpanded),
+    enabled:
+      isAuthenticated &&
+      !isEditingOrCreatingCourse &&
+      (!renderMain || learningSpaceExpanded),
   });
   const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
     activeUser?.id,
@@ -736,10 +749,16 @@ export function CoursesPage({
     [navigationItems],
   );
   const userRoles = getUserRoles(activeUser);
+  const isAdmin = hasAdminRole(userRoles);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
   );
+  const effectiveRole = useMemo(
+    () => (isAuthenticated ? resolveWorkspaceRole(userRoles, role) : "student"),
+    [isAuthenticated, role, userRoles],
+  );
+  const isAuthReady = Boolean(storeUser) || authUserFetched;
   const { isPending: isSigningOut, signOut } = useSignOut();
   const signOutAfterSync = useCallback(async () => {
     try {
@@ -749,25 +768,55 @@ export function CoursesPage({
       setNotice("Couldn't sign out yet. Please try again.");
     }
   }, [setNotice, signOut]);
-  const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
-  const { data: publishedCoursesData } = useCourses({
-    enabled: shouldLoadCourseSurface && role === "student",
+  const shouldLoadCourseSurface =
+    (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
+  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
+
+  const {
+    data: publishedCoursesData,
+    isPending: isPublishedPending,
+  } = useCourses({
+    enabled: shouldQueryCourses && effectiveRole === "student",
   });
-  const { data: myCoursesData } = useMyCourses({
+  const {
+    data: myCoursesData,
+    isPending: isMyCoursesPending,
+  } = useMyCourses({
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
-  const { data: deletedCoursesData } = useDeletedCourses(undefined, {
+  const {
+    data: deletedCoursesData,
+    isPending: isDeletedPending,
+  } = useDeletedCourses(undefined, {
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      isAdmin &&
+      effectiveRole === "creator" &&
       enrollmentFilter === "bin",
   });
+
+  const isLoadingCourses =
+    !isAuthReady ||
+    (effectiveRole === "student"
+      ? isPublishedPending
+      : enrollmentFilter === "bin"
+        ? isDeletedPending
+        : isMyCoursesPending);
+
+  useEffect(() => {
+    if (
+      enrollmentFilter === "bin" &&
+      (!isAdmin || effectiveRole !== "creator")
+    ) {
+      setEnrollmentFilter("all");
+    }
+  }, [enrollmentFilter, isAdmin, effectiveRole]);
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
-  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
+  const [deletingCourseIds, setDeletingCourseIds] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -920,10 +969,7 @@ export function CoursesPage({
           Array.isArray(storedWishlist)
             ? storedWishlist.filter(
                 (courseId): courseId is string =>
-                  typeof courseId === "string" &&
-                  courses.some(
-                    (course) => course.id === courseId && !course.enrolled,
-                  ),
+                  typeof courseId === "string" && Boolean(courseId.trim()),
               )
             : [],
         ),
@@ -1646,39 +1692,40 @@ export function CoursesPage({
   }, [compactNavigation, navigation, role, sidebarMode]);
 
   const allCourses = useMemo(() => {
-    if (role !== "creator") {
-      const apiCourses = (publishedCoursesData?.courses || []).map(
+    if (effectiveRole !== "creator") {
+      return (publishedCoursesData?.courses || []).map(
         adaptCourseSummaryToCatalogueCourse,
       );
-      // Use one catalogue source at a time. The local catalogue is the
-      // intentional fallback for an empty API response; merging both sources
-      // creates duplicate-looking courses with incompatible IDs.
-      return apiCourses.length > 0 ? apiCourses : [...courses];
     }
     if (enrollmentFilter === "bin") {
-      const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
+      return (deletedCoursesData?.courses || []).map(
         adaptDeletedCourseToCatalogueCourse,
       );
-      const mockDeletedCourses = courses.filter((c) =>
-        deletedMockCourseIds.has(c.id),
-      );
-      return [...apiDeletedCourses, ...mockDeletedCourses];
     }
-    const apiCourses = (myCoursesData?.courses || []).map(
+    return (myCoursesData?.courses || []).map(
       adaptApiCourseToCatalogueCourse,
     );
-    const existingIds = new Set(apiCourses.map((c) => c.id));
-    const nonConflictingMockCourses = courses.filter(
-      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
-    );
-    return [...apiCourses, ...nonConflictingMockCourses];
   }, [
     deletedCoursesData?.courses,
-    deletedMockCourseIds,
+    effectiveRole,
     enrollmentFilter,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
-    role,
+  ]);
+
+  const totalCoursesCount = useMemo(() => {
+    if (effectiveRole !== "creator") {
+      return publishedCoursesData?.courses?.length ?? 0;
+    }
+    return (
+      (myCoursesData?.courses?.length ?? 0) +
+      (deletedCoursesData?.courses?.length ?? 0)
+    );
+  }, [
+    deletedCoursesData?.courses?.length,
+    effectiveRole,
+    myCoursesData?.courses?.length,
+    publishedCoursesData?.courses?.length,
   ]);
 
   // Authenticated Learning Space entries must be backed by a real API course.
@@ -1695,16 +1742,7 @@ export function CoursesPage({
   }, [allCourses]);
 
   const handleDeleteCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
-      setNotice(`${course.title} moved to Bin.`);
-      return;
-    }
-
+    setDeletingCourseIds((prev) => new Set(prev).add(course.id));
     try {
       await deleteCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} moved to Bin.`);
@@ -1715,24 +1753,16 @@ export function CoursesPage({
           `Failed to move "${course.title}" to Bin. Please try again.`,
       );
       throw err;
-    }
-  };
-
-  const handleRestoreCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => {
+    } finally {
+      setDeletingCourseIds((prev) => {
         const next = new Set(prev);
         next.delete(course.id);
         return next;
       });
-      setNotice(`${course.title} was restored.`);
-      return;
     }
+  };
 
+  const handleRestoreCourse = async (course: Course) => {
     try {
       await restoreCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} was restored.`);
@@ -1751,7 +1781,7 @@ export function CoursesPage({
       getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
-        role,
+        role: effectiveRole,
         enrollmentFilter,
         statusFilter,
         search,
@@ -1760,8 +1790,8 @@ export function CoursesPage({
     [
       activeSection,
       allCourses,
+      effectiveRole,
       enrollmentFilter,
-      role,
       search,
       sort,
       statusFilter,
@@ -2044,6 +2074,7 @@ export function CoursesPage({
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
   const sidebarVisuallyCollapsed =
     sidebarCollapsed && !sidebarPresentedAsOverlay;
+
   const sidebarControlAction = compactNavigation
     ? "Close navigation"
     : sidebarHidden
@@ -3348,6 +3379,7 @@ export function CoursesPage({
             courseSlug={surfaceCourseSlug}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
+            role={role}
           />
         </Suspense>
       );
@@ -3391,7 +3423,9 @@ export function CoursesPage({
     return (
       <CourseCatalogue
         activeSection={surfaceActiveSection}
-        role={role}
+        role={effectiveRole}
+        isAdmin={isAdmin}
+        isLoading={isLoadingCourses}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
         onEnrollmentFilterChange={setEnrollmentFilter}
@@ -3402,6 +3436,7 @@ export function CoursesPage({
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         visibleCourses={visibleCourses}
+        totalCoursesCount={totalCoursesCount}
         onWishlist={toggleWishlist}
         onOpenCourse={onOpenCourse}
         courseMenu={courseMenu}
@@ -3411,6 +3446,7 @@ export function CoursesPage({
         onResetCatalogue={resetCatalogue}
         onDeleteCourse={handleDeleteCourse}
         onRestoreCourse={handleRestoreCourse}
+        deletingCourseIds={deletingCourseIds}
       />
     );
   };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mediaAssetStatusSchema } from "../media.ts";
 
 export interface CoursePricingSummary {
   pricingType: "free" | "paid";
@@ -287,6 +288,14 @@ export const lessonResourceSchema = z.object({
   description: z.string().nullable().optional(),
   position: z.number().int().nonnegative(),
   createdAt: z.string(),
+  mediaAsset: z
+    .object({
+      originalFilename: z.string(),
+      mimeType: z.string(),
+      sizeBytes: z.coerce.number().int().nonnegative(),
+      status: mediaAssetStatusSchema,
+    })
+    .optional(),
 });
 
 export const courseLessonSchema = z.object({
@@ -297,6 +306,7 @@ export const courseLessonSchema = z.object({
   description: z.string().nullable().optional(),
   contentType: z.enum(["video", "document"]),
   contentMediaId: z.uuid().nullable().optional(),
+  durationSeconds: z.number().int().nonnegative().optional(),
   position: z.number().int().nonnegative(),
   isPreview: z.boolean(),
   isPublished: z.boolean(),

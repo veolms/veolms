@@ -11,10 +11,14 @@ const messages: Record<string, string> = {
   MEDIA: "The browser could not decode this video.",
 };
 
-export function ErrorOverlay() {
+export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
   const controller = usePlayerController();
   const error = usePlayerState(({ media }) => media.error);
-  const { retry: RetryIcon, warning: WarningIcon } = usePlayerTheme().icons;
+  const {
+    close: CloseIcon,
+    retry: RetryIcon,
+    warning: WarningIcon,
+  } = usePlayerTheme().icons;
   if (!error) return null;
 
   return (
@@ -22,6 +26,17 @@ export function ErrorOverlay() {
       className="absolute inset-0 z-40 grid place-items-center bg-black/75 p-6 text-center text-white backdrop-blur-sm"
       role="alert"
     >
+      {onClose ? (
+        <button
+          type="button"
+          aria-label="Close video player"
+          title="Close video player"
+          className="absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          onClick={onClose}
+        >
+          <CloseIcon size={20} />
+        </button>
+      ) : null}
       <div className="max-w-sm space-y-4">
         <WarningIcon size={42} active className="mx-auto text-amber-300" />
         <div className="space-y-1">

@@ -15,12 +15,14 @@ import type {
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
+  CreateLessonResourceRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   DeletedCoursesListResponse,
   DeletedCoursesQuery,
   MyCoursesListResponse,
   PublicCourse,
+  LessonResource,
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
@@ -203,6 +205,26 @@ export const coursesService = {
     return api.post<{ success: boolean }>(
       `/courses/${courseId}/sections/${sectionId}/lessons/reorder`,
       payload,
+    );
+  },
+
+  createLessonResource: (
+    courseId: string,
+    lessonId: string,
+    payload: CreateLessonResourceRequest,
+  ): Promise<LessonResource> => {
+    return api.post<LessonResource>(
+      `/courses/${courseId}/lessons/${lessonId}/resources`,
+      payload,
+    );
+  },
+
+  deleteLessonResource: (
+    courseId: string,
+    resourceId: string,
+  ): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(
+      `/courses/${courseId}/resources/${resourceId}`,
     );
   },
 
