@@ -208,8 +208,9 @@ export function LessonVideoPlayer({
       lessonTitle,
       mediaKey,
       startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
-      protectedPlayback:
-        protectedPlayback || playbackBootstrap?.source === "paid-bootstrap-api",
+      protectedPlayback: playbackBootstrap
+        ? playbackBootstrap.source === "paid-bootstrap-api"
+        : protectedPlayback,
     });
   }, [lessonTitle, mediaKey, playbackBootstrap, playbackMedia, protectedPlayback]);
 

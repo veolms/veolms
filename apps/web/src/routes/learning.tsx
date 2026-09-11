@@ -105,10 +105,13 @@ export default function LearningRoute() {
   const { data: courseOverview } = useCourseOverview(courseSlug, {
     enabled: Boolean(courseSlug),
   });
-  const { data: publishedCoursesData } = useCourses({
-    enabled: Boolean(activeUser),
-  });
   const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
+  const { data: publishedCoursesData } = useCourses({
+    // Canonical API routes already resolve their session key from the
+    // overview response. Only legacy local keys need the catalogue lookup to
+    // discover their mapped API course.
+    enabled: Boolean(activeUser && apiCourseSlugForKey),
+  });
   const apiCourse = publishedCoursesData?.courses.find(
     (course) =>
       course.id === courseSlug ||
@@ -262,6 +265,7 @@ export default function LearningRoute() {
     <LearningWorkspace
       key={courseSlug}
       courseSlug={courseSlug}
+      userId={activeUser?.id}
       lessonId={lessonId}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}

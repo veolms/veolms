@@ -23,7 +23,7 @@ export const videoPlaybackBootstrapSchema = z.strictObject({
   posterUrl: z.string().min(1).optional(),
   resumeAt: z.number().nonnegative().optional(),
   tracks: z.array(videoPlaybackTrackSchema).optional(),
-  source: z.enum(["ssg", "paid-bootstrap-api"]),
+  source: z.enum(["ssg", "public-cdn", "paid-bootstrap-api"]),
 });
 
 export type VideoPlaybackBootstrap = z.infer<

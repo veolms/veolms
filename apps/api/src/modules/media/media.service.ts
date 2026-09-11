@@ -526,12 +526,14 @@ export function createMediaService({
     mediaId: string,
     options: { verifyManifest?: boolean } = {},
   ) {
-    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    const [media, job] = await Promise.all([
+      mediaRepo.findMediaAssetById(database, mediaId),
+      mediaRepo.findVideoJobByVideoId(database, mediaId),
+    ]);
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
 
-    const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
     if (!job || job.status !== "completed" || media.status !== "ready") {
       throw new AppError(
         409,
@@ -583,19 +585,33 @@ export function createMediaService({
       );
     }
 
-    const { media } = await getReadyPlaybackOutput(context.content_media_id);
+    // The transcode worker only marks a job completed after publishing its
+    // output. Avoid an extra storage HEAD round-trip on every first play;
+    // the manifest request itself remains the authoritative final check.
+    const { media, outputPrefix } = await getReadyPlaybackOutput(
+      context.content_media_id,
+      { verifyManifest: false },
+    );
+    const publicManifestUrl = services.storage.getPublicObjectUrl(
+      `${outputPrefix}/master.m3u8`,
+    );
+    const isPublicPlayback =
+      Boolean(publicManifestUrl) &&
+      (context.is_preview || context.pricing_type === "free");
     return {
       version: 1,
       courseSlug: context.course_slug,
       lessonId: context.lesson_id,
       mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
-      manifestUrl: `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
+      manifestUrl:
+        publicManifestUrl ??
+        `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
       ...(media.duration_seconds !== null &&
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
         : {}),
       title: context.lesson_title,
-      source: "paid-bootstrap-api",
+      source: isPublicPlayback ? "public-cdn" : "paid-bootstrap-api",
     };
   }
 
@@ -628,6 +644,7 @@ export function createMediaService({
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
       isManifest: /\.m3u8$/i.test(hlsPath),
+      isPublic: context.is_preview || context.pricing_type === "free",
     };
   }
 

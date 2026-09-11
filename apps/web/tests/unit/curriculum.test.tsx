@@ -215,6 +215,27 @@ describe("Curriculum", () => {
     expect(within(activeLesson).getByLabelText("Completed")).toBeVisible();
   });
 
+  it("derives course and section progress from the saved lesson percentages", () => {
+    render(
+      <TestCurriculum
+        persistenceKey="curriculum-derived-progress"
+        selectedLesson={1}
+        lessonProgress={{ 1: 100, 2: 50 }}
+        onSelectLesson={vi.fn()}
+        onOpenCourseOverview={vi.fn()}
+        courseTitle="UX Design Fundamentals"
+        courseThumbnail="/course-thumbnail.png"
+      />,
+    );
+
+    expect(
+      screen.getByRole("progressbar", {
+        name: "Course progress: 3 percent",
+      }),
+    ).toHaveAttribute("aria-valuenow", "3");
+    expect(screen.getByText("1/16")).toBeVisible();
+  });
+
   it("toggles sections, filters lessons, and delegates lesson selection and close", () => {
     const onSelectLesson = vi.fn();
     const onOpenCourseOverview = vi.fn();

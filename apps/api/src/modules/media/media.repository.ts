@@ -184,7 +184,7 @@ export async function findPlaybackLessonContext(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       courseIdOrSlug,
     );
-  const lessons = await database
+  return await database
     .selectFrom("course_lessons")
     .innerJoin("courses", "courses.id", "course_lessons.course_id")
     .innerJoin(
@@ -224,9 +224,12 @@ export async function findPlaybackLessonContext(
     .where("course_lessons.is_published", "=", true)
     .orderBy("course_sections.position", "asc")
     .orderBy("course_lessons.position", "asc")
-    .execute();
-
-  return lessons[lessonNumber - 1];
+    // The public lesson number is the ordered position across all sections.
+    // Offset/limit keeps large courses from serializing every lesson for a
+    // single playback bootstrap request.
+    .offset(lessonNumber - 1)
+    .limit(1)
+    .executeTakeFirst();
 }
 
 /** Resolves the lesson that owns a media asset for HLS request authorization. */

@@ -1822,7 +1822,12 @@ describe("LessonVideoPlayer adapter", () => {
           duration: 90,
           title: "Designing for real users",
         },
-        streaming: { abrEnabled: true, bufferBehind: 600 },
+        streaming: {
+          abrEnabled: true,
+          bufferingGoal: 2,
+          rebufferingGoal: 1,
+          bufferBehind: 60,
+        },
         networking: { requestFilter: appendLearningHlsCacheVersion },
         textTracks: [
           {

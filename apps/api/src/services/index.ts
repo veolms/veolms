@@ -116,6 +116,7 @@ export function createServices({
     }),
     storage: new S3StorageService({
       endpoint: config.STORAGE_ENDPOINT,
+      publicBaseUrl: config.STORAGE_PUBLIC_BASE_URL,
       region: config.STORAGE_REGION,
       accessKeyId: config.STORAGE_ACCESS_KEY_ID,
       secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,
