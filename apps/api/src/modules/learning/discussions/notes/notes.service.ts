@@ -139,6 +139,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         { userId: input.userId, roles: input.roles },
         input.courseId,
       );
+      await courseAccess.assertNotesEnabled(db, input.courseId);
 
       const lesson = await db
         .selectFrom("course_lessons")
@@ -296,6 +297,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async updateNote(db, noteId, userId, updates) {
       const note = await notesRepo.findNoteById(db, noteId);
       assertOwnNote(note, userId);
+      await courseAccess.assertNotesEnabled(db, note.courseId);
 
       const plainText = updates.content
         ? extractPlainText(updates.content)

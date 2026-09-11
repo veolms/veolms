@@ -2,6 +2,7 @@ import type {
   AcceptReplyRequest,
   AcceptReplyResponse,
   CompleteAttachmentUploadRequest,
+  CourseNotesOverviewResponse,
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
@@ -192,8 +193,8 @@ export const learningInteractionsService = {
 
   getCourseNotesOverview(
     courseId: string,
-  ): Promise<any> {
-    return api.get<any>(`/courses/${courseId}/notes-overview`);
+  ): Promise<CourseNotesOverviewResponse> {
+    return api.get<CourseNotesOverviewResponse>(`/courses/${courseId}/notes-overview`);
   },
 
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
