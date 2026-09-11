@@ -9,6 +9,7 @@
     "purge:sessions": "node --env-file-if-exists=../../.env src/jobs/session-retention.ts",
     "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "instructor:cli": "node --env-file-if-exists=../../.env src/cli/instructor.ts",
+    "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
