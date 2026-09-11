@@ -166,14 +166,9 @@ describe("Fleet Manager Diagnostics and Health Metrics", () => {
       },
     } as any;
 
-    const { pruneZombieWorkers } = await import(
-      "../src/diagnostics/diagnostics.ts"
-    );
-    const pruned = await pruneZombieWorkers(
-      mockDb as any,
-      mockProvider,
-      90000,
-    );
+    const { pruneZombieWorkers } =
+      await import("../src/diagnostics/diagnostics.ts");
+    const pruned = await pruneZombieWorkers(mockDb as any, mockProvider, 90000);
 
     assert.deepEqual(pruned, ["w-stalled-1"]);
     assert.equal(workerStatusUpdated, "terminated");
@@ -268,7 +263,8 @@ describe("Fleet Manager Diagnostics and Health Metrics", () => {
                   const matches = filters.every(({ col, op, val }) => {
                     const currentVal = (currentJobState as any)[col];
                     if (op === "=") return currentVal === val;
-                    if (op === "in") return Array.isArray(val) && val.includes(currentVal);
+                    if (op === "in")
+                      return Array.isArray(val) && val.includes(currentVal);
                     return false;
                   });
                   if (matches) {
@@ -288,9 +284,8 @@ describe("Fleet Manager Diagnostics and Health Metrics", () => {
       terminateWorker: async () => {},
     } as any;
 
-    const { pruneZombieWorkers } = await import(
-      "../src/diagnostics/diagnostics.ts"
-    );
+    const { pruneZombieWorkers } =
+      await import("../src/diagnostics/diagnostics.ts");
     await pruneZombieWorkers(mockDb as any, mockProvider, 90000);
 
     // Job should NOT have been updated because current worker_id is w-reassigned-99, not w-stalled-1

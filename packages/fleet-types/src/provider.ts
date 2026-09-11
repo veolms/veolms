@@ -63,6 +63,7 @@ export interface ProviderInfraOptions {
   nonInteractive?: boolean;
   skipEnvConfig?: boolean;
   cwd?: string;
+  [key: string]: unknown;
 }
 
 export interface ProviderInfraResult {
@@ -76,6 +77,7 @@ export interface ProviderDestroyOptions {
   nonInteractive?: boolean;
   force?: boolean;
   cwd?: string;
+  [key: string]: unknown;
 }
 
 export interface ProviderDestroyResult {
@@ -91,6 +93,7 @@ export interface ProviderTriggerOptions {
   outputPrefix?: string;
   qualities?: readonly string[];
   videoSize?: number;
+  originalFileKey?: string | null;
   interactive?: boolean;
   nonInteractive?: boolean;
   cwd?: string;

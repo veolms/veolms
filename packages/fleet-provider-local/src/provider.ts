@@ -248,3 +248,6 @@ export function createLocalProvider(
     },
   };
 }
+
+export const createProvider = createLocalProvider;
+export default createLocalProvider;

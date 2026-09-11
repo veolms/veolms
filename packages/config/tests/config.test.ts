@@ -83,7 +83,7 @@ describe("packages/config", () => {
     it("should load media worker config with aliases and defaults", () => {
       const config = loadMediaWorkerConfig({
         WORKER_ID: validWorkerId,
-        S3_BUCKET_NAME: "custom-media-bucket",
+        S3_BUCKET: "custom-media-bucket",
         AWS_REGION: "us-west-2",
         UPLOAD_MAX_CONCURRENCY: "10",
         UPLOAD_MIN_CONCURRENCY: "4",

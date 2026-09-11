@@ -47,4 +47,18 @@ describe("Fleet Manager CLI Argument Parser", () => {
     assert.equal(parsed.command, "prune");
     assert.equal(parsed.flags["provider"], "aws");
   });
+
+  it("should parse 'run daemon' command and positional argument correctly", () => {
+    const parsed = parseCliArgs(["run", "daemon"]);
+
+    assert.equal(parsed.command, "run");
+    assert.deepEqual(parsed.positional, ["daemon"]);
+  });
+
+  it("should parse 'daemon' command correctly", () => {
+    const parsed = parseCliArgs(["daemon"]);
+
+    assert.equal(parsed.command, "daemon");
+    assert.deepEqual(parsed.positional, []);
+  });
 });

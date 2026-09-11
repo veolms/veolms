@@ -235,7 +235,6 @@ export function estimateJobHardware(
             : BASE_HARDWARE.estimatedDurationSeconds,
         );
 
-
   // 3. Storage formula: (video duration x total output bitrate) + source size + safety margin
   const sourceSizeGb = Math.max(videoSizeBytes, 0) / BYTES_PER_GB;
   const estimatedOutputGb =

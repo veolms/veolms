@@ -150,12 +150,12 @@ describe("FFmpeg Dynamic HLS Command Builder", () => {
     assert.equal(result.variants[0]?.height, 1920);
     assert.ok(
       result.args.some((a) =>
-        a.includes("scale=w=1080:h=1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920"),
+        a.includes(
+          "scale=w=1080:h=1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920",
+        ),
       ),
     );
-    assert.ok(
-      result.masterPlaylistContent.includes("RESOLUTION=1080x1920"),
-    );
+    assert.ok(result.masterPlaylistContent.includes("RESOLUTION=1080x1920"));
   });
 });
 

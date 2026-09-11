@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import type { Kysely } from "kysely";
 import { claimNextQueuedVideoJob, type Database } from "@veolms/database";
-import type { FleetEventType } from "@veolms/fleet-types";
+import type { FleetEventType, FleetTestFault } from "@veolms/fleet-types";
 import type { MediaWorkerConfig } from "@veolms/config";
 
 export interface MediaWorkerContext {
@@ -15,6 +15,33 @@ export interface MediaWorkerContext {
     jobId?: string | null,
     metadata?: Readonly<Record<string, unknown>>,
   ) => Promise<void>;
+}
+
+export async function getRequestedTestFault(
+  ctx: MediaWorkerContext,
+): Promise<FleetTestFault | null> {
+  if (!ctx.config.FLEET_TEST_MODE) return null;
+  const control = await ctx.db
+    .selectFrom("fleet_test_controls")
+    .select(["fault", "applied_at"])
+    .where("worker_id", "=", ctx.workerId)
+    .executeTakeFirst();
+  if (!control) return null;
+
+  if (!control.applied_at) {
+    const applied = await ctx.db
+      .updateTable("fleet_test_controls")
+      .set({ applied_at: new Date() })
+      .where("worker_id", "=", ctx.workerId)
+      .where("applied_at", "is", null)
+      .executeTakeFirst();
+    if (applied.numUpdatedRows === 1n) {
+      await ctx.recordEvent("test_fault_applied", undefined, {
+        fault: control.fault,
+      });
+    }
+  }
+  return control.fault;
 }
 
 export async function initMediaWorker(options: {
@@ -119,20 +146,56 @@ export async function initMediaWorker(options: {
       return;
     }
     try {
-      inFlightHeartbeat = db
-        .updateTable("workers")
-        .set({
-          last_heartbeat_at: new Date(),
-          updated_at: new Date(),
-        })
-        .where("id", "=", workerId)
-        .execute()
+      const writeHeartbeat = async (): Promise<void> => {
+        if (config.FLEET_TEST_MODE) {
+          const fault = await getRequestedTestFault({
+            workerId,
+            db,
+            config,
+            stopHeartbeat: async () => undefined,
+            recordEvent,
+          });
+          if (fault === "heartbeat-loss") return;
+          if (fault === "worker-failure") {
+            const timer = setTimeout(() => process.exit(86), 0);
+            timer.unref();
+            return;
+          }
+        }
+        await db
+          .updateTable("workers")
+          .set({
+            last_heartbeat_at: new Date(),
+            updated_at: new Date(),
+          })
+          .where("id", "=", workerId)
+          .execute();
+      };
+
+      inFlightHeartbeat = (
+        config.FLEET_TEST_MODE
+          ? writeHeartbeat()
+          : db
+              .updateTable("workers")
+              .set({
+                last_heartbeat_at: new Date(),
+                updated_at: new Date(),
+              })
+              .where("id", "=", workerId)
+              .execute()
+      )
         .then(() => undefined)
         .catch((err) => {
           console.error(
             `Failed to write heartbeat for worker ${workerId}:`,
             err,
           );
+          if (
+            config.FLEET_TEST_MODE &&
+            String(err).includes("worker-failure")
+          ) {
+            process.exitCode = 86;
+          }
         })
         .finally(() => {
           inFlightHeartbeat = null;
@@ -200,7 +263,9 @@ export async function pollForNextJob(
     return null;
   }
 
-  const claimed = await claimNextQueuedVideoJob(ctx.db, ctx.workerId);
+  const claimed = await claimNextQueuedVideoJob(ctx.db, ctx.workerId, {
+    storageProvider: ctx.config.STORAGE_PROVIDER,
+  });
   if (claimed) {
     return claimed.id;
   }
@@ -242,6 +307,8 @@ export async function pollForNextJob(
     return null;
   }
 
-  const claimedAfterWait = await claimNextQueuedVideoJob(ctx.db, ctx.workerId);
+  const claimedAfterWait = await claimNextQueuedVideoJob(ctx.db, ctx.workerId, {
+    storageProvider: ctx.config.STORAGE_PROVIDER,
+  });
   return claimedAfterWait?.id ?? null;
 }

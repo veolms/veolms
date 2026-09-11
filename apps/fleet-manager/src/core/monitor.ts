@@ -46,7 +46,10 @@ export function createMonitor(options: {
         .where((eb) =>
           eb.or([
             eb("started_at", "<", cutoff),
-            eb.and([eb("started_at", "is", null), eb("created_at", "<", cutoff)]),
+            eb.and([
+              eb("started_at", "is", null),
+              eb("created_at", "<", cutoff),
+            ]),
           ]),
         )
         .execute();
@@ -369,6 +372,7 @@ export function createMonitor(options: {
                 job.id,
                 "Output verification failed: master.m3u8 missing or empty in storage",
                 job.worker_id ?? undefined,
+                { allowCompleted: true },
               );
               await workerManager.recordEvent(
                 "job_output_verification_failed",

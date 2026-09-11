@@ -20,8 +20,10 @@ This document defines the strict architectural standards, command workflows, and
    - Infrastructure Provisioning (`provisionInfra`)
    - Infrastructure Teardown (`destroyInfra`)
    - End-to-End Task Trigger (`triggerTest`)
-4. **Shared Database Queue Ownership**:
-   Adding jobs to the PostgreSQL queue (`media_assets` and `video_jobs`) is a centralized Fleet Manager responsibility. When `pnpm fleet:queue:trigger` runs, `apps/fleet-manager` creates the database job and hands the queued `jobId` to the provider. The provider only performs the compute execution (Lambda invocation, container spawn, VM launch).
+4. **Shared Database Queue Ownership & Worker Lifecycle**:
+   Adding jobs to the PostgreSQL queue (`media_assets` and `video_jobs`) is a centralized Fleet Manager responsibility. When `pnpm fleet:queue:trigger` runs, `apps/fleet-manager` creates the database job and hands the queued `jobId` to the provider.
+   - In **Serverful mode** (`docker`, `local`): Fleet Manager runs as a long-lived polling service/daemon (via `pnpm fleet:cli run daemon` or Docker Compose). The Fleet Manager daemon is exclusively responsible for provisioning, monitoring, and terminating media-worker containers/processes. The trigger script MUST NOT spawn workers directly; it simply monitors the database until the job completes and verifies HLS outputs.
+   - In **Serverless mode** (`aws`): Because there is no persistent polling daemon, the trigger script invokes the cloud compute entrypoint (e.g. AWS Lambda) to initiate the job claim and EC2 worker provisioning cycle.
 
 ---
 
@@ -83,8 +85,9 @@ The infrastructure setup follows a **two-phase review-first pattern**:
   3. Outputs: `✓ Job [<jobId>] queued in PostgreSQL database.`
 - **Provider Dispatch Step**:
   1. Calls `triggerTest({ jobId, videoId, videoKey, outputPrefix, qualities, ... })`.
-  2. Provider performs ONLY the provider-specific action (AWS invokes Lambda; Local spawns worker child process; GCP triggers Cloud Run; Kubernetes creates Job).
-  3. Standalone Fallback: If `options.jobId` is not provided (e.g. direct test execution), provider queues its own fallback job in PostgreSQL.
+  2. **Serverful Providers (`docker`, `local`)**: Fleet Manager daemon polls `video_jobs`, claims the job, and provisions the worker. The trigger script monitors job & worker status in PostgreSQL, displays live progress, and verifies generated HLS artifacts.
+  3. **Serverless Providers (`aws`)**: The trigger script invokes the cloud compute entrypoint (e.g. AWS Lambda) to trigger the claim and EC2 provisioning loop, then monitors database records.
+  4. **Standalone Fallback**: If `options.jobId` is not provided (e.g. direct module execution), the provider script inserts its own fallback queued job into PostgreSQL before proceeding.
 
 ---
 
@@ -292,11 +295,9 @@ MUST export:
    - **Job Resolution**: If `options.jobId` is passed, USE IT directly. DO NOT cancel it and DO NOT re-insert into `video_jobs`.
    - **Standalone Fallback**: If `options.jobId` is omitted, create a media asset and insert a job row into `video_jobs`.
    - **Provider Action**:
-     - AWS: invokes AWS Lambda function (`veolms-fleet-manager` or probe Lambda) to claim the job and boot an EC2 worker.
-     - Local: spawns local worker child process with `resolveJobHardware` sizing and tracks progress.
-     - Container/Kubernetes: launches container worker pod/task.
-   - **Output Verification**: Verifies generated `master.m3u8` playlist and rendition chunks (`.ts`/`.m3u8`).
-   - **Clean Worker Termination**: Shuts down the test worker process after completion.
+     - **Serverful (`docker`, `local`)**: Awaits Fleet Manager daemon polling, monitoring database status and progress percent in `video_jobs` and `worker_monitoring`. Does NOT create or terminate workers directly.
+     - **Serverless (`aws`)**: Invokes AWS Lambda function (`veolms-fleet-manager` or probe Lambda) to claim the job and provision an EC2 Graviton worker, then monitors worker assignment in PostgreSQL.
+   - **Output Verification**: Verifies generated `master.m3u8` playlist and rendition chunks (`.ts`/`.m3u8`) in destination storage.
 2. `runTrigger`: Aliased to `triggerTest`. Exported as `triggerTest`, `runTrigger`, and `default`.
 
 ---

@@ -61,13 +61,9 @@ async function main(): Promise<void> {
     args.includes("--lambda-only") ||
     process.env["ONLY_LAMBDA"] === "true";
   const shouldUpdateLambda =
-    args.includes("--update-lambda") ||
-    process.env["UPDATE_LAMBDA"] === "true";
+    args.includes("--update-lambda") || process.env["UPDATE_LAMBDA"] === "true";
 
-  const bucketName =
-    process.env.S3_BUILD_BUCKET ||
-    process.env.S3_BUCKET_NAME ||
-    process.env.S3_BUCKET;
+  const bucketName = process.env.S3_BUILD_BUCKET || process.env.S3_BUCKET;
   const region =
     process.env.AWS_REGION ||
     process.env.FLEET_MANAGER_LAMBDA_REGION ||
@@ -93,9 +89,15 @@ async function main(): Promise<void> {
 
   console.info(`  Target Build Bucket:  ${bold(cyan(bucketName))}`);
   console.info(`  Target Region:        ${bold(cyan(region))}`);
-  console.info(`  Build Worker:         ${includeWorker ? green("Yes") : yellow("Skipped")}`);
-  console.info(`  Build Lambdas:        ${includeLambda ? green("Yes") : yellow("Skipped")}`);
-  console.info(`  Update Lambda Code:   ${shouldUpdateLambda ? green("Yes") : yellow("No")}`);
+  console.info(
+    `  Build Worker:         ${includeWorker ? green("Yes") : yellow("Skipped")}`,
+  );
+  console.info(
+    `  Build Lambdas:        ${includeLambda ? green("Yes") : yellow("Skipped")}`,
+  );
+  console.info(
+    `  Update Lambda Code:   ${shouldUpdateLambda ? green("Yes") : yellow("No")}`,
+  );
   console.info(`  Building & uploading artifacts to S3...\n`);
 
   const result = await buildAndUploadBuildArtifacts({
@@ -113,7 +115,9 @@ async function main(): Promise<void> {
         `  ${green("✔")} Media Worker:       ${bold(`s3://${bucketName}/bundles/media-worker.js`)}`,
       );
     } else {
-      console.info(`  ${yellow("⚠")} Media Worker:       Upload failed or skipped`);
+      console.info(
+        `  ${yellow("⚠")} Media Worker:       Upload failed or skipped`,
+      );
     }
   }
 
@@ -123,7 +127,9 @@ async function main(): Promise<void> {
         `  ${green("✔")} Fleet Lambda:       ${bold(`s3://${bucketName}/bundles/fleet-manager.zip`)}`,
       );
     } else {
-      console.info(`  ${yellow("⚠")} Fleet Lambda:       Upload failed or skipped`);
+      console.info(
+        `  ${yellow("⚠")} Fleet Lambda:       Upload failed or skipped`,
+      );
     }
   }
 
@@ -133,13 +139,18 @@ async function main(): Promise<void> {
         `  ${green("✔")} Probe Lambda:       ${bold(`s3://${bucketName}/bundles/probe-lambda.zip`)}`,
       );
     } else {
-      console.info(`  ${yellow("⚠")} Probe Lambda:       Upload failed or skipped`);
+      console.info(
+        `  ${yellow("⚠")} Probe Lambda:       Upload failed or skipped`,
+      );
     }
   }
 
   // If requested, update deployed Lambda functions with new S3 zip bundles
   let lambdaUpdatesSuccessful = true;
-  if (shouldUpdateLambda && (result.lambdaZipUploaded || result.probeZipUploaded)) {
+  if (
+    shouldUpdateLambda &&
+    (result.lambdaZipUploaded || result.probeZipUploaded)
+  ) {
     console.info(`\n${bold("Updating Deployed AWS Lambda Functions:")}`);
     const lambda = new LambdaClient({ region });
 
@@ -156,11 +167,15 @@ async function main(): Promise<void> {
           }),
         );
         await waitForLambdaUpdate(lambda, fleetFunctionName);
-        console.info(`  ${green("✔")} ${fleetFunctionName} updated successfully.`);
+        console.info(
+          `  ${green("✔")} ${fleetFunctionName} updated successfully.`,
+        );
       } catch (err: unknown) {
         lambdaUpdatesSuccessful = false;
         console.error(
-          red(`  ✘ Failed to update ${fleetFunctionName}: ${err instanceof Error ? err.message : String(err)}`),
+          red(
+            `  ✘ Failed to update ${fleetFunctionName}: ${err instanceof Error ? err.message : String(err)}`,
+          ),
         );
       }
     }
@@ -178,11 +193,15 @@ async function main(): Promise<void> {
           }),
         );
         await waitForLambdaUpdate(lambda, probeFunctionName);
-        console.info(`  ${green("✔")} ${probeFunctionName} updated successfully.`);
+        console.info(
+          `  ${green("✔")} ${probeFunctionName} updated successfully.`,
+        );
       } catch (err: unknown) {
         lambdaUpdatesSuccessful = false;
         console.error(
-          red(`  ✘ Failed to update ${probeFunctionName}: ${err instanceof Error ? err.message : String(err)}`),
+          red(
+            `  ✘ Failed to update ${probeFunctionName}: ${err instanceof Error ? err.message : String(err)}`,
+          ),
         );
       }
     }
@@ -201,7 +220,9 @@ async function main(): Promise<void> {
     );
   } else {
     console.warn(
-      yellow("\n⚠ Some build artifacts could not be uploaded. Check logs above.\n"),
+      yellow(
+        "\n⚠ Some build artifacts could not be uploaded. Check logs above.\n",
+      ),
     );
     process.exitCode = 1;
   }

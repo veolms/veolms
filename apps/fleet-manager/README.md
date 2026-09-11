@@ -2,6 +2,20 @@
 
 The **Fleet Manager** is the control-plane orchestrator responsible for managing ephemeral video transcoding workers and job lifecycles. It supports both **serverful daemon mode** (long-running polling loop) and **serverless mode** (AWS Lambda / Cloud Functions triggered on-demand and via dynamic AWS EventBridge Scheduler one-shot timers).
 
+## Local Docker development
+
+Normal `docker compose up -d` starts PostgreSQL only. Setting up and operating the Docker Fleet is fully automated via provider lifecycle commands:
+
+```bash
+pnpm fleet:provider            # Select "docker" provider
+pnpm fleet:infra               # Prompts for config, builds worker & manager images, offers to start daemon
+pnpm fleet:infra --update      # Rebuilds container images after code changes
+pnpm fleet:cli run daemon      # Starts Fleet Manager in-process (if not started as container)
+pnpm fleet:destroy             # Teardown: options to stop running containers or complete teardown
+```
+
+The Docker setup command prepares storage, configures networks, compiles standalone bundles into minimal container images, and optionally starts the Fleet Manager container daemon in the background. See the full [local Fleet guide](../../docs/fleet-local-testing.md).
+
 ---
 
 ## Architecture Overview
@@ -80,7 +94,7 @@ Run commands using `pnpm` from the monorepo root:
 
 ```bash
 # Start long-running serverful daemon
-pnpm fleet:cli run
+pnpm fleet:cli run daemon
 
 # Queue a transcoding job
 pnpm fleet:cli queue my-video.mp4 --qualities=1080p,720p,480p --prefix=transcoded/my-video/

@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 if [ -z "${S3_BUILD_BUCKET:-}" ] && [ -f "${REPO_ROOT}/apps/fleet-manager/.env" ]; then
-  S3_BUILD_BUCKET=$(grep -E "^(S3_BUILD_BUCKET|S3_BUCKET_NAME|S3_BUCKET)=" "${REPO_ROOT}/apps/fleet-manager/.env" | head -n 1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+  S3_BUILD_BUCKET=$(grep -E "^(S3_BUILD_BUCKET|S3_BUCKET)=" "${REPO_ROOT}/apps/fleet-manager/.env" | head -n 1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
 BUCKET_NAME="${S3_BUILD_BUCKET:-}"
