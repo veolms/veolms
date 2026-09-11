@@ -19,6 +19,8 @@ import { pipeline } from "node:stream/promises";
 export interface StorageOptions extends Partial<S3ClientConfig> {
   bucket: string;
   endpoint?: string;
+  /** Public CDN origin mapped to the storage bucket root, if configured. */
+  publicBaseUrl?: string;
   region?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
@@ -41,12 +43,15 @@ export interface StorageUploadItem {
 export class S3StorageService {
   private client: S3Client;
   private bucket: string;
+  private publicBaseUrl: string | null;
 
   constructor(options: StorageOptions) {
     if (!options.bucket) {
       throw new Error("Storage bucket name is required.");
     }
     this.bucket = options.bucket;
+    this.publicBaseUrl =
+      options.publicBaseUrl?.trim().replace(/\/+$/, "") || null;
 
     if (options.client) {
       this.client = options.client;
@@ -88,6 +93,22 @@ export class S3StorageService {
 
   getBucket(): string {
     return this.bucket;
+  }
+
+  /**
+   * Resolves a storage key against the configured public CDN origin. This is
+   * intentionally opt-in; callers must never infer a public URL from the
+   * private S3 endpoint.
+   */
+  getPublicObjectUrl(key: string): string | null {
+    if (!this.publicBaseUrl) return null;
+
+    const encodedKey = key
+      .replace(/^\/+/, "")
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    return `${this.publicBaseUrl}/${encodedKey}`;
   }
 
   /**

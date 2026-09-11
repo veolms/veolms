@@ -44,5 +44,10 @@ export function createLearningHlsRequestFilter(options?: {
 
 export const LEARNING_HLS_STREAMING = {
   abrEnabled: true,
-  bufferBehind: 600,
+  // A VOD player does not need Shaka's default ~10s startup buffer. Keep the
+  // first playable frame responsive while retaining a small rebuffer safety
+  // margin for normal network jitter.
+  bufferingGoal: 2,
+  rebufferingGoal: 1,
+  bufferBehind: 60,
 } as const;

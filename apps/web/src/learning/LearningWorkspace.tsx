@@ -84,6 +84,7 @@ import {
   getInitialLearningShellState,
 } from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
+import { useLearningProgress } from "./useLearningProgress";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
   getSideLessonDrawerBounds,
@@ -208,6 +209,7 @@ const getInitialFloatingLessonDrawerWidth = () => {
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
+  userId?: string;
   lessonId: number;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -281,6 +283,7 @@ interface CurriculumScreenSwipeStartEvent {
 
 export function LearningWorkspace({
   courseSlug,
+  userId,
   lessonId,
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -329,9 +332,9 @@ export function LearningWorkspace({
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
   const pendingLessonSelectionRef = useRef<number | null>(null);
-  const [lessonProgress, setLessonProgress] = useState<Record<number, number>>(
-    {},
-  );
+  const [localLessonProgress, setLocalLessonProgress] = useState<
+    Record<number, number>
+  >({});
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
@@ -654,6 +657,39 @@ export function LearningWorkspace({
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
     [curriculumSections],
   );
+  const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
+    () =>
+      adaptedCurriculum
+        ? new Map(
+            [...adaptedCurriculum.lessonsByNumber.entries()].map(
+              ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
+            ),
+          )
+        : undefined,
+    [adaptedCurriculum],
+  );
+  const {
+    lessonProgress: persistedLessonProgress,
+    recordProgress,
+  } = useLearningProgress({
+    courseKey: courseOverview?.course.slug,
+    userId,
+    lessonIdsByNumber,
+    enabled: Boolean(courseOverview?.course.slug),
+  });
+  const lessonProgress = useMemo(() => {
+    if (Object.keys(localLessonProgress).length === 0) {
+      return persistedLessonProgress;
+    }
+    const merged = { ...persistedLessonProgress };
+    for (const [lessonNumber, progress] of Object.entries(
+      localLessonProgress,
+    )) {
+      const number = Number(lessonNumber);
+      merged[number] = Math.max(merged[number] ?? 0, progress);
+    }
+    return merged;
+  }, [localLessonProgress, persistedLessonProgress]);
   const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
     currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
@@ -852,12 +888,13 @@ export function LearningWorkspace({
         roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
           ? 100
           : roundedProgress;
-      setLessonProgress((current) => {
+      setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
         return { ...current, [selectedLesson]: nextProgress };
       });
+      recordProgress(selectedLesson, nextProgress);
     },
-    [selectedLesson],
+    [recordProgress, selectedLesson],
   );
 
   const handleLessonEnded = useCallback(() => {

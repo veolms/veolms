@@ -77,15 +77,18 @@ export async function startEarlyHlsPreload(
   if (!requestMetadata) return null;
 
   try {
-    const paidBootstrap = await getVideoPlaybackBootstrap({
+    const playbackBootstrap = await getVideoPlaybackBootstrap({
       courseSlug: requestMetadata.courseSlug,
       lessonNumber: requestMetadata.lessonNumber,
     });
     if (requestKey !== latestRequestKey) return null;
-    mark("paid-bootstrap-ready");
-    return startPreloadForBootstrap(paidBootstrap, true);
+    mark("playback-bootstrap-ready");
+    return startPreloadForBootstrap(
+      playbackBootstrap,
+      playbackBootstrap.source === "paid-bootstrap-api",
+    );
   } catch {
-    mark("paid-bootstrap-failed");
+    mark("playback-bootstrap-failed");
     return null;
   }
 }
