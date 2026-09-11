@@ -230,10 +230,10 @@ describe("Curriculum", () => {
 
     expect(
       screen.getByRole("progressbar", {
-        name: "Course progress: 3 percent",
+        name: "Course progress: 47 percent",
       }),
-    ).toHaveAttribute("aria-valuenow", "3");
-    expect(screen.getByText("1/16")).toBeVisible();
+    ).toHaveAttribute("aria-valuenow", "47");
+    expect(screen.getByText("4/5")).toBeVisible();
   });
 
   it("toggles sections, filters lessons, and delegates lesson selection and close", () => {
