@@ -15,6 +15,7 @@ import {
   type DiscussionEditorController,
 } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
+import type { InteractionCapabilities } from "./discussionFeed";
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -23,6 +24,7 @@ interface CommentComposerProps {
   visibility: DiscussionVisibility;
   invalid: boolean;
   canSubmit: boolean;
+  capabilities?: InteractionCapabilities;
   editing?: boolean;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
@@ -40,6 +42,7 @@ export function CommentComposer({
   visibility,
   invalid,
   canSubmit,
+  capabilities,
   editing = false,
   onDraftChange,
   onEntryKindChange,
@@ -107,7 +110,15 @@ export function CommentComposer({
               documentId={documentId}
               value={draft}
               label={getEditorLabel(entryKind, editing)}
-              placeholderText="Write something…"
+              placeholderText={
+                capabilities && !capabilities.allowComments
+                  ? capabilities.allowQa && !capabilities.allowNotes
+                    ? "Ask a question…"
+                    : !capabilities.allowQa && capabilities.allowNotes
+                      ? "Write a note…"
+                      : "Write something…"
+                  : "Write something…"
+              }
               invalid={invalid}
               autoFocus={autoFocus}
               className={presentation === "drawer" ? "min-h-full" : "min-h-34"}
@@ -166,6 +177,7 @@ export function CommentComposer({
             <CommentPublishingOptions
               entryKind={entryKind}
               visibility={visibility}
+              capabilities={capabilities}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
             />

@@ -23,7 +23,10 @@ import {
   getDiscussionFeedCountLabel,
   type DiscussionEntryFilter,
   type DiscussionFeedSort,
+  type InteractionCapabilities,
 } from "./discussionFeed";
+
+export type { InteractionCapabilities };
 import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
 import {
   DESCRIPTION_SURFACE_BASE,
@@ -197,13 +200,21 @@ export const getDiscussionComposerViewportGeometry = (
   };
 };
 
-interface DiscussionProps {
+export interface DiscussionProps {
   persistenceKey: string;
   mobileBottomNavigation?: boolean;
   mobileBottomNavigationHidden?: boolean;
   lessonDescription?: string | null;
   isLessonDescriptionLoading?: boolean;
+  interactionCapabilities?: InteractionCapabilities;
+  isInteractionCapabilitiesLoading?: boolean;
 }
+
+const DEFAULT_CAPABILITIES: InteractionCapabilities = {
+  allowComments: true,
+  allowNotes: true,
+  allowQa: true,
+};
 
 export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
 const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
@@ -221,13 +232,6 @@ interface OpenDiscussionThread {
   id: number;
   focusComposer: boolean;
 }
-
-const entryFilters = [
-  ["all", "All"],
-  ["comment", "Comments"],
-  ["note", "Notes"],
-  ["question", "Q&As"],
-] as const satisfies readonly (readonly [DiscussionEntryFilter, string])[];
 
 const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
   value === "comment" || value === "question" || value === "note";
@@ -273,7 +277,56 @@ export function Discussion({
   mobileBottomNavigationHidden = false,
   lessonDescription,
   isLessonDescriptionLoading = false,
+  interactionCapabilities,
+  isInteractionCapabilitiesLoading = false,
 }: DiscussionProps) {
+  const capabilities = interactionCapabilities ?? DEFAULT_CAPABILITIES;
+  const enabledKinds = useMemo<DiscussionEntryKind[]>(() => {
+    const kinds: DiscussionEntryKind[] = [];
+    if (capabilities.allowComments) kinds.push("comment");
+    if (capabilities.allowNotes) kinds.push("note");
+    if (capabilities.allowQa) kinds.push("question");
+    return kinds;
+  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
+
+  const isAllDisabled =
+    !isInteractionCapabilitiesLoading && enabledKinds.length === 0;
+
+  const firstAvailableKind = useMemo<DiscussionEntryKind>(() => {
+    if (capabilities.allowComments) return "comment";
+    if (capabilities.allowQa) return "question";
+    if (capabilities.allowNotes) return "note";
+    return "comment";
+  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
+
+  const availableFilters = useMemo<readonly (readonly [DiscussionEntryFilter, string])[]>(() => {
+    if (enabledKinds.length === 0) return [];
+    if (enabledKinds.length === 1) {
+      const singleKind = enabledKinds[0]!;
+      const label =
+        singleKind === "comment"
+          ? "Comments"
+          : singleKind === "note"
+            ? "Notes"
+            : "Q&As";
+      return [[singleKind, label]] as const;
+    }
+    const filters: (readonly [DiscussionEntryFilter, string])[] = [["all", "All"]];
+    if (capabilities.allowComments) filters.push(["comment", "Comments"]);
+    if (capabilities.allowNotes) filters.push(["note", "Notes"]);
+    if (capabilities.allowQa) filters.push(["question", "Q&As"]);
+    return filters;
+  }, [capabilities, enabledKinds]);
+
+  const promptText = useMemo(() => {
+    if (enabledKinds.length === 1) {
+      if (enabledKinds[0] === "note") return "Write a note…";
+      if (enabledKinds[0] === "question") return "Ask a question…";
+      return "Write a comment…";
+    }
+    return "Write something…";
+  }, [enabledKinds]);
+
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
     `${storageBase}-markdown-draft-v1`,
@@ -286,9 +339,11 @@ export function Discussion({
     isStoredEntries,
   );
   const [entries, setEntries] = useState(initialEntries);
-  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>("comment");
+  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>(firstAvailableKind);
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
-  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>("all");
+  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
+    enabledKinds.length === 1 ? enabledKinds[0]! : "all",
+  );
   const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
@@ -305,6 +360,26 @@ export function Discussion({
   const draftIsTooLong =
     countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
   const canSubmitDraft = draftHasContent && !draftIsTooLong;
+
+  useEffect(() => {
+    if (isInteractionCapabilitiesLoading || enabledKinds.length === 0) return;
+    const isCurrentFilterValid =
+      (entryFilter === "all" && enabledKinds.length > 1) ||
+      (entryFilter !== "all" && enabledKinds.includes(entryFilter));
+
+    if (!isCurrentFilterValid) {
+      const fallback = enabledKinds.length > 1 ? "all" : enabledKinds[0]!;
+      setEntryFilter(fallback);
+    }
+  }, [enabledKinds, entryFilter, isInteractionCapabilitiesLoading]);
+
+  useEffect(() => {
+    if (enabledKinds.length === 0) return;
+    if (!enabledKinds.includes(entryKind)) {
+      setEntryKind(firstAvailableKind);
+      setVisibility((current) => getAllowedVisibility(firstAvailableKind, current));
+    }
+  }, [enabledKinds, entryKind, firstAvailableKind]);
 
   useEffect(() => {
     if (postedEntries.length === 0) return;
@@ -324,8 +399,9 @@ export function Discussion({
         entries,
         filter: entryFilter,
         sort: feedSort,
+        capabilities,
       }),
-    [entries, entryFilter, feedSort],
+    [capabilities, entries, entryFilter, feedSort],
   );
   const threadEntries = useMemo(
     () =>
@@ -377,7 +453,9 @@ export function Discussion({
           : [updatedEntry, ...current],
       );
       setEditingEntry(null);
-      setEntryFilter("all");
+      setEntryFilter(
+        enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
+      );
       setNotice("");
       return;
     }
@@ -400,7 +478,9 @@ export function Discussion({
     setPostedEntries((current) => [entry, ...current]);
     setEntries((current) => [entry, ...current]);
     setDraft(createEmptyDiscussionDraft());
-    setEntryFilter("all");
+    setEntryFilter(
+      enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
+    );
 
     setNotice("");
   };
@@ -518,6 +598,12 @@ export function Discussion({
         canSubmitDraft={canSubmitDraft}
         mobileBottomNavigation={mobileBottomNavigation}
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+        capabilities={capabilities}
+        isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
+        isAllDisabled={isAllDisabled}
+        availableFilters={availableFilters}
+        enabledKinds={enabledKinds}
+        promptText={promptText}
         onDraftChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
@@ -619,6 +705,12 @@ interface ThreadSurfaceProps {
   canSubmitDraft: boolean;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
+  capabilities: InteractionCapabilities;
+  isInteractionCapabilitiesLoading?: boolean;
+  isAllDisabled: boolean;
+  availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
+  enabledKinds: DiscussionEntryKind[];
+  promptText: string;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
@@ -649,6 +741,11 @@ function ThreadSurface({
   canSubmitDraft,
   mobileBottomNavigation,
   mobileBottomNavigationHidden,
+  capabilities,
+  isInteractionCapabilitiesLoading = false,
+  isAllDisabled,
+  availableFilters,
+  promptText,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
@@ -705,6 +802,11 @@ function ThreadSurface({
     );
   }, []);
 
+  const closeComposer = useCallback(() => {
+    setComposerMode("collapsed");
+    if (editingEntryId !== null) onCancelEdit();
+  }, [editingEntryId, onCancelEdit]);
+
   const openMobileComposer = useCallback(() => {
     const geometry = getMobileComposerViewportGeometry();
     setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
@@ -714,13 +816,8 @@ function ThreadSurface({
     setComposerMode("mobile");
   }, [getMobileComposerViewportGeometry]);
 
-  const closeComposer = useCallback(() => {
-    setComposerMode("collapsed");
-    if (editingEntryId !== null) onCancelEdit();
-  }, [editingEntryId, onCancelEdit]);
-
   useEffect(() => {
-    setComposerMode((current) => {
+    setComposerMode((current: ComposerMode) => {
       if (isPhone && current === "desktop") return "collapsed";
       if (!isPhone && current === "mobile") return "collapsed";
       return current;
@@ -748,52 +845,36 @@ function ThreadSurface({
   }, [editingEntryId, isPhone, openMobileComposer]);
 
   useEffect(() => {
-    if (!isPhone || composerMode !== "mobile") return undefined;
+    if (!isPhone || composerMode !== "mobile") {
+      setMobileComposerKeyboardInset(0);
+      setMobileComposerViewportHeight(null);
+      return undefined;
+    }
 
-    const player = document.querySelector<HTMLElement>(
-      ".learning-workspace__player-wrap",
-    );
-    let frame: number | null = null;
-    let settleTimer: number | null = null;
-    const syncSnapPoint = () => {
-      frame = null;
+    const syncGeometry = () => {
       const geometry = getMobileComposerViewportGeometry();
       setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
-      setMobileComposerSnapPoint((current) =>
+      setMobileComposerSnapPoint((current: number | null) =>
         current === 1 ? 1 : geometry.collapsedSnapPoint,
       );
       setMobileComposerKeyboardInset(geometry.keyboardInset);
       setMobileComposerViewportHeight(geometry.visualViewportHeight);
     };
-    const scheduleSnapPointSync = () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(syncSnapPoint);
-      if (settleTimer !== null) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(syncSnapPoint, 180);
-    };
-    const playerResizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleSnapPointSync);
 
-    if (player) playerResizeObserver?.observe(player);
+    syncGeometry();
+    let frameId = 0;
+    const scheduleSnapPointSync = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(syncGeometry);
+    };
+
     window.addEventListener("resize", scheduleSnapPointSync);
-    window.addEventListener("orientationchange", scheduleSnapPointSync);
-    document.addEventListener("fullscreenchange", scheduleSnapPointSync);
-    document.addEventListener("webkitfullscreenchange", scheduleSnapPointSync);
     window.visualViewport?.addEventListener("resize", scheduleSnapPointSync);
     window.visualViewport?.addEventListener("scroll", scheduleSnapPointSync);
+
     return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      if (settleTimer !== null) window.clearTimeout(settleTimer);
-      playerResizeObserver?.disconnect();
+      window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", scheduleSnapPointSync);
-      window.removeEventListener("orientationchange", scheduleSnapPointSync);
-      document.removeEventListener("fullscreenchange", scheduleSnapPointSync);
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        scheduleSnapPointSync,
-      );
       window.visualViewport?.removeEventListener(
         "resize",
         scheduleSnapPointSync,
@@ -831,6 +912,46 @@ function ThreadSurface({
     setComposerMode("collapsed");
   };
 
+  if (isInteractionCapabilitiesLoading) {
+    return (
+      <div>
+        <LessonDescription
+          description={lessonDescription}
+          isLoading={isLessonDescriptionLoading}
+        />
+        <div
+          className="mt-4 flex flex-col gap-3"
+          data-testid="learner-interactions-loading"
+        >
+          <div className="h-10 w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
+          <div className="flex gap-2">
+            <div className="h-8 w-16 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
+            <div className="h-8 w-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAllDisabled) {
+    return (
+      <div>
+        <LessonDescription
+          description={lessonDescription}
+          isLoading={isLessonDescriptionLoading}
+        />
+        <div
+          className="py-8 text-center"
+          data-testid="learner-interactions-disabled-message"
+        >
+          <p className="text-sm font-medium text-(--muted)">
+            Learner interactions are disabled for this course.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <LessonDescription
@@ -853,6 +974,7 @@ function ThreadSurface({
               }
               entryKind={entryKind}
               visibility={visibility}
+              capabilities={capabilities}
               invalid={draftIsTooLong}
               canSubmit={canSubmitDraft}
               editing={editingEntryId !== null}
@@ -867,6 +989,7 @@ function ThreadSurface({
             <CompactComposer
               draft={draft}
               attachmentCount={draftAttachmentCount}
+              promptText={promptText}
               onOpen={() => setComposerMode("desktop")}
             />
           )}
@@ -877,23 +1000,25 @@ function ThreadSurface({
         {notice}
       </p>
 
-      <div
-        role="group"
-        aria-label="Filter discussion entries"
-        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
-      >
-        {entryFilters.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={entryFilter === value}
-            onClick={() => onEntryFilterChange(value)}
-            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {availableFilters.length > 0 && (
+        <div
+          role="group"
+          aria-label="Filter discussion entries"
+          className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
+        >
+          {availableFilters.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={entryFilter === value}
+              onClick={() => onEntryFilterChange(value)}
+              className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
@@ -942,9 +1067,11 @@ function ThreadSurface({
               {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
               yet
             </p>
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
-              Choose All to return to the full lesson discussion.
-            </p>
+            {availableFilters.some(([val]) => val === "all") && (
+              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
+                Choose All to return to the full lesson discussion.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -953,6 +1080,7 @@ function ThreadSurface({
         <MobileCompactComposerPortal
           draft={draft}
           attachmentCount={draftAttachmentCount}
+          promptText={promptText}
           mobileBottomNavigation={mobileBottomNavigation}
           scrollHidden={compactComposerScrollHidden}
           onOpen={openMobileComposer}
@@ -1020,6 +1148,7 @@ function ThreadSurface({
               }
               entryKind={entryKind}
               visibility={visibility}
+              capabilities={capabilities}
               invalid={draftIsTooLong}
               canSubmit={canSubmitDraft}
               editing={editingEntryId !== null}
@@ -1041,6 +1170,7 @@ function ThreadSurface({
 interface CompactComposerProps {
   draft: DiscussionDraft;
   attachmentCount: number;
+  promptText?: string;
   disabled?: boolean;
   onOpen: () => void;
 }
@@ -1053,6 +1183,7 @@ const MOBILE_COMPOSER_SURFACE_BASE =
 interface MobileCompactComposerPortalProps {
   draft: DiscussionDraft;
   attachmentCount: number;
+  promptText?: string;
   mobileBottomNavigation: boolean;
   scrollHidden: boolean;
   onOpen: () => void;
@@ -1061,6 +1192,7 @@ interface MobileCompactComposerPortalProps {
 function MobileCompactComposerPortal({
   draft,
   attachmentCount,
+  promptText,
   mobileBottomNavigation,
   scrollHidden,
   onOpen,
@@ -1095,6 +1227,7 @@ function MobileCompactComposerPortal({
         <CompactComposer
           draft={draft}
           attachmentCount={attachmentCount}
+          promptText={promptText}
           onOpen={onOpen}
         />
       </div>
@@ -1127,6 +1260,7 @@ export function PrerenderedMobileCommentComposer() {
 function CompactComposer({
   draft,
   attachmentCount,
+  promptText = "Write something…",
   disabled = false,
   onOpen,
 }: CompactComposerProps) {
@@ -1161,7 +1295,7 @@ function CompactComposer({
       />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
         {preview ||
-          (attachmentCount > 0 ? attachmentPreview : "Write something…")}
+          (attachmentCount > 0 ? attachmentPreview : promptText)}
       </span>
     </div>
   );

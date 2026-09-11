@@ -68,7 +68,11 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
+import {
+  Discussion,
+  PrerenderedMobileCommentComposer,
+  type InteractionCapabilities,
+} from "./Discussion";
 import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -300,6 +304,23 @@ export function LearningWorkspace({
   } = useCourseOverview(courseSlug, {
     enabled: isApiRoute,
   });
+  const isInteractionCapabilitiesLoading =
+    isApiRoute && isCourseOverviewLoading && !courseOverview;
+
+  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
+    if (courseOverview?.settings) {
+      return {
+        allowComments: courseOverview.settings.allowComments,
+        allowNotes: courseOverview.settings.allowNotes,
+        allowQa: courseOverview.settings.allowQa,
+      };
+    }
+    return {
+      allowComments: true,
+      allowNotes: true,
+      allowQa: true,
+    };
+  }, [courseOverview?.settings]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -1995,6 +2016,8 @@ export function LearningWorkspace({
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
                 isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
+                interactionCapabilities={interactionCapabilities}
+                isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
               />
             </article>
           </div>
