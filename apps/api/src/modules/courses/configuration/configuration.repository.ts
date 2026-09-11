@@ -177,7 +177,7 @@ export async function updatePricing(
 // --- Settings ---
 
 export async function findSettingsByCourseId(
-  database: Kysely<Database>,
+  database: DatabaseExecutor,
   courseId: string,
 ) {
   return await database

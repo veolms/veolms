@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
+import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
 import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
@@ -26,6 +27,10 @@ export interface DiscussionAccess {
   assertCanAccessCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
+    courseId: string,
+  ): Promise<void>;
+  assertNotesEnabled(
+    db: DatabaseExecutor,
     courseId: string,
   ): Promise<void>;
   assertCanAccessThreadCourse(
@@ -120,6 +125,13 @@ export function createDiscussionAccess(): DiscussionAccess {
       const allowed = await canAccessCourse(db, actor, courseId);
       if (!allowed) {
         throw DiscussionErrors.courseAccessDenied();
+      }
+    },
+
+    async assertNotesEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_notes === false) {
+        throw DiscussionErrors.forbidden("Notes are disabled for this course.");
       }
     },
 
