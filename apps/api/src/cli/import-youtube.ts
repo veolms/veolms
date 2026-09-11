@@ -953,7 +953,7 @@ async function ensureYtDlpBinary(
 async function resolveInstructor(
   database: ReturnType<typeof createDatabase>,
   inputEmail: string | undefined,
-  rl: readline.Interface,
+  rl?: readline.Interface,
 ) {
   const email = inputEmail?.trim().toLowerCase();
 
