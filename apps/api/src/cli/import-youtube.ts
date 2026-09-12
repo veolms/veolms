@@ -2399,6 +2399,7 @@ ${bold("Examples:")}
       course_id: courseId,
       allow_qa: true,
       allow_comments: true,
+      allow_notes: true,
       allow_downloads: false,
       certificate_enabled: false,
       show_instructor_name: true,

@@ -23,11 +23,69 @@ const testCurrentUser = {
   avatarDataUrl: "/assets/sofia-avatar-160.webp",
 };
 
+const defaultTestThreads = [
+  {
+    id: "thread-1",
+    academyId: "academy-1",
+    courseId: "course-1",
+    lessonId: "lesson-1",
+    userId: "user-2",
+    author: {
+      id: "user-2",
+      displayName: "Rohit Sharma",
+      username: "rohit",
+      avatarUrl: "/assets/ethan-avatar-160.webp",
+      role: "Student",
+    },
+    kind: "comment",
+    content:
+      "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
+    plainText:
+      "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
+    visibility: "public",
+    status: "active",
+    isLocked: false,
+    likesCount: 24,
+    repliesCount: 2,
+    createdAt: "2026-03-01T08:00:00.000Z",
+    updatedAt: "2026-03-01T08:00:00.000Z",
+  },
+  {
+    id: "thread-2",
+    academyId: "academy-1",
+    courseId: "course-1",
+    lessonId: "lesson-1",
+    userId: "user-3",
+    author: {
+      id: "user-3",
+      displayName: "Neha Patel",
+      username: "neha",
+      avatarUrl: "/assets/sofia-avatar-160.webp",
+      role: "Student",
+    },
+    kind: "question",
+    content: "Can you share some real-world examples of this process?",
+    plainText: "Can you share some real-world examples of this process?",
+    visibility: "public",
+    status: "active",
+    isLocked: false,
+    likesCount: 18,
+    repliesCount: 1,
+    createdAt: "2026-03-01T07:00:00.000Z",
+    updatedAt: "2026-03-01T07:00:00.000Z",
+  },
+];
+
 const notesMocks = vi.hoisted(() => ({
   useUserNotes: vi.fn(),
   useCreateNote: vi.fn(),
   useUpdateNote: vi.fn(),
   useDeleteNote: vi.fn(),
+  useLessonThreads: vi.fn(),
+  useCreateLessonThread: vi.fn(),
+  useUpdateThread: vi.fn(),
+  useDeleteThread: vi.fn(),
+  useToggleLike: vi.fn(),
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -41,6 +99,12 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useCreateNote: (...args: any[]) => notesMocks.useCreateNote(...args),
   useUpdateNote: (...args: any[]) => notesMocks.useUpdateNote(...args),
   useDeleteNote: (...args: any[]) => notesMocks.useDeleteNote(...args),
+  useLessonThreads: (...args: any[]) => notesMocks.useLessonThreads(...args),
+  useCreateLessonThread: (...args: any[]) =>
+    notesMocks.useCreateLessonThread(...args),
+  useUpdateThread: (...args: any[]) => notesMocks.useUpdateThread(...args),
+  useDeleteThread: (...args: any[]) => notesMocks.useDeleteThread(...args),
+  useToggleLike: (...args: any[]) => notesMocks.useToggleLike(...args),
 }));
 
 describe("Learning Space Interaction Settings Gating", () => {
@@ -61,6 +125,28 @@ describe("Learning Space Interaction Settings Gating", () => {
     });
     notesMocks.useDeleteNote.mockReturnValue({
       mutateAsync: vi.fn().mockResolvedValue({}),
+      isPending: false,
+    });
+    notesMocks.useLessonThreads.mockImplementation(() => ({
+      data: { threads: defaultTestThreads, nextCursor: null },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    }));
+    notesMocks.useCreateLessonThread.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({}),
+      isPending: false,
+    });
+    notesMocks.useUpdateThread.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({}),
+      isPending: false,
+    });
+    notesMocks.useDeleteThread.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({}),
+      isPending: false,
+    });
+    notesMocks.useToggleLike.mockReturnValue({
+      mutate: vi.fn(),
       isPending: false,
     });
   });

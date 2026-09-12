@@ -49,12 +49,21 @@ import {
 } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
 import {
+  useCreateLessonThread,
   useCreateNote,
   useDeleteNote,
+  useDeleteThread,
+  useLessonThreads,
+  useToggleLike,
   useUpdateNote,
+  useUpdateThread,
   useUserNotes,
 } from "../services/learning-interactions";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
+import {
+  adaptLearningThreadToComment,
+  isCommentOrQaThread,
+} from "./learning-threads.adapter";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
@@ -353,11 +362,48 @@ export function Discussion({
     },
   );
 
+  const shouldFetchThreads = Boolean(
+    courseId &&
+      lessonId &&
+      (capabilities.allowComments || capabilities.allowQa),
+  );
+
+  const {
+    data: threadsData,
+    isLoading: isThreadsLoading,
+    isError: isThreadsError,
+    refetch: refetchThreads,
+  } = useLessonThreads(
+    courseId ?? "",
+    lessonId ?? "",
+    {
+      kind: "all",
+      status: "all",
+      sort: "latest",
+      limit: 100,
+    },
+    {
+      enabled: shouldFetchThreads,
+    },
+  );
+
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
   const deleteNoteMutation = useDeleteNote();
-  const isSubmittingNote =
-    createNoteMutation.isPending || updateNoteMutation.isPending;
+
+  const createThreadMutation = useCreateLessonThread(
+    courseId ?? "",
+    lessonId ?? "",
+  );
+  const updateThreadMutation = useUpdateThread();
+  const deleteThreadMutation = useDeleteThread();
+  const toggleLikeMutation = useToggleLike();
+
+  const isSubmitting =
+    createNoteMutation.isPending ||
+    updateNoteMutation.isPending ||
+    createThreadMutation.isPending ||
+    updateThreadMutation.isPending;
 
   const backendNotes = useMemo<Comment[]>(() => {
     if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes) return [];
@@ -366,12 +412,41 @@ export function Discussion({
     );
   }, [capabilities.allowNotes, courseId, lessonId, notesData?.notes, authorName, authorAvatar]);
 
+  const backendThreads = useMemo<Comment[]>(() => {
+    if (
+      !courseId ||
+      !lessonId ||
+      (!capabilities.allowComments && !capabilities.allowQa) ||
+      !threadsData?.threads
+    ) {
+      return [];
+    }
+
+    return threadsData.threads
+      .filter(isCommentOrQaThread)
+      .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id));
+  }, [
+    capabilities.allowComments,
+    capabilities.allowQa,
+    courseId,
+    currentUser?.id,
+    lessonId,
+    threadsData?.threads,
+  ]);
+
+  const isBackendMode = Boolean(courseId);
+
+  const [optimisticallyHiddenIds, setOptimisticallyHiddenIds] = useState<
+    Set<string | number>
+  >(new Set());
+
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
     `${storageBase}-markdown-draft-v1`,
     initialDraft,
     isStoredDiscussionDraft,
   );
+
   const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
     items.filter((entry) => entry.entryKind !== "note");
 
@@ -383,6 +458,23 @@ export function Discussion({
     sanitizeStoredEntries,
   );
   const [entries, setEntries] = useState(initialEntries);
+
+  useEffect(() => {
+    if (isBackendMode || postedEntries.length === 0) return;
+    const sanitizedEntries = sanitizeStoredEntries(postedEntries);
+    if (sanitizedEntries.length !== postedEntries.length) {
+      setPostedEntries(sanitizedEntries);
+      return;
+    }
+    setEntries((current) => [
+      ...sanitizedEntries.map((entry) => ({ ...entry, isOwn: true })),
+      ...current.filter(
+        (entry) =>
+          !sanitizedEntries.some((persisted) => persisted.id === entry.id),
+      ),
+    ]);
+  }, [isBackendMode, postedEntries, setPostedEntries]);
+
   const [entryKind, setEntryKind] = useState<DiscussionEntryKind>(firstAvailableKind);
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
   const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
@@ -406,8 +498,8 @@ export function Discussion({
   const canSubmitDraft =
     draftHasContent &&
     !draftIsTooLong &&
-    !isSubmittingNote &&
-    (activeEntryKind !== "note" || Boolean(courseId && lessonId));
+    !isSubmitting &&
+    (isBackendMode ? Boolean(courseId) : true);
 
   useEffect(() => {
     if (isInteractionCapabilitiesLoading || enabledKinds.length === 0) return;
@@ -429,25 +521,14 @@ export function Discussion({
     }
   }, [enabledKinds, entryKind, firstAvailableKind]);
 
-  useEffect(() => {
-    if (postedEntries.length === 0) return;
-    const sanitizedEntries = sanitizeStoredEntries(postedEntries);
-    if (sanitizedEntries.length !== postedEntries.length) {
-      setPostedEntries(sanitizedEntries);
-      return;
-    }
-    setEntries((current) => [
-      ...sanitizedEntries.map((entry) => ({ ...entry, isOwn: true })),
-      ...current.filter(
-        (entry) =>
-          !sanitizedEntries.some((persisted) => persisted.id === entry.id),
-      ),
-    ]);
-  }, [postedEntries, setPostedEntries]);
-
   const combinedEntries = useMemo<Comment[]>(() => {
+    if (isBackendMode) {
+      const all = [...backendNotes, ...backendThreads];
+      if (optimisticallyHiddenIds.size === 0) return all;
+      return all.filter((entry) => !optimisticallyHiddenIds.has(entry.id));
+    }
     return [...backendNotes, ...entries];
-  }, [backendNotes, entries]);
+  }, [backendNotes, backendThreads, entries, isBackendMode, optimisticallyHiddenIds]);
 
   const filteredEntries = useMemo(
     () =>
@@ -469,12 +550,14 @@ export function Discussion({
   );
 
   const submitEntry = async (): Promise<boolean> => {
+    if (draftIsTooLong) {
+      setNotice(COMMENT_LENGTH_NOTICE);
+      return false;
+    }
+
+    if (!draftHasContent) return false;
+
     if (activeEntryKind === "note") {
-      if (!draftHasContent) return false;
-      if (draftIsTooLong) {
-        setNotice(COMMENT_LENGTH_NOTICE);
-        return false;
-      }
       if (!courseId || !lessonId) {
         setNotice("Course or lesson context is missing.");
         return false;
@@ -516,13 +599,59 @@ export function Discussion({
       }
     }
 
-    if (draftIsTooLong) {
-      setNotice(COMMENT_LENGTH_NOTICE);
-      return false;
+    // Comment or Question/Q&A
+    if (isBackendMode) {
+      if (!courseId) {
+        setNotice("Course context is missing.");
+        return false;
+      }
+
+      const submittedVisibility = getAllowedVisibility(
+        activeEntryKind,
+        activeVisibility,
+      );
+      const threadVisibility =
+        submittedVisibility === "private" ? "public" : submittedVisibility;
+
+      if (editingEntry) {
+        try {
+          await updateThreadMutation.mutateAsync({
+            threadId: String(editingEntry.id),
+            payload: {
+              content: activeDraft.markdown,
+              visibility: threadVisibility,
+            },
+          });
+          setEditingEntry(null);
+          setNotice("");
+          return true;
+        } catch (error) {
+          setNotice("Failed to update discussion entry. Please try again.");
+          return false;
+        }
+      }
+
+      try {
+        await createThreadMutation.mutateAsync({
+          courseId,
+          lessonId: lessonId || undefined,
+          kind: activeEntryKind === "question" ? "question" : "comment",
+          content: activeDraft.markdown,
+          visibility: threadVisibility,
+        });
+        setDraft(createEmptyDiscussionDraft());
+        setEntryFilter(
+          enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
+        );
+        setNotice("");
+        return true;
+      } catch (error) {
+        setNotice("Failed to post discussion entry. Please try again.");
+        return false;
+      }
     }
 
-    if (!draftHasContent) return false;
-
+    // Standalone / offline mode
     const text = activeDraft.plainText.trim();
     const submittedVisibility = getAllowedVisibility(
       activeEntryKind,
@@ -592,7 +721,15 @@ export function Discussion({
     return true;
   };
 
-  const onLike = (id: string | number, liked: boolean) => {
+  const onLike = (id: string | number, liked?: boolean) => {
+    if (isBackendMode) {
+      toggleLikeMutation.mutate({
+        targetType: "thread",
+        targetId: String(id),
+      });
+      return;
+    }
+
     const update = (current: Comment[]) =>
       current.map((entry) =>
         entry.id === id
@@ -621,13 +758,36 @@ export function Discussion({
 
   const deleteEntry = async (id: string | number) => {
     const isBackendNote = backendNotes.some((note) => note.id === id);
+    setOptimisticallyHiddenIds((prev) => new Set(prev).add(id));
+
     if (isBackendNote) {
       try {
         await deleteNoteMutation.mutateAsync(String(id));
         setEditingEntry((current) => (current?.id === id ? null : current));
         setNotice("");
       } catch (error) {
+        setOptimisticallyHiddenIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
         setNotice("Failed to delete note. Please try again.");
+      }
+      return;
+    }
+
+    if (isBackendMode) {
+      try {
+        await deleteThreadMutation.mutateAsync(String(id));
+        setEditingEntry((current) => (current?.id === id ? null : current));
+        setNotice("");
+      } catch (error) {
+        setOptimisticallyHiddenIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        setNotice("Failed to delete discussion entry. Please try again.");
       }
       return;
     }
@@ -641,6 +801,7 @@ export function Discussion({
   };
 
   const addReply = (entryId: string | number, reply: CommentReply) => {
+    if (isBackendMode) return;
     const update = (current: Comment[]) =>
       current.map((entry) => {
         if (entry.id !== entryId) return entry;
@@ -660,6 +821,7 @@ export function Discussion({
     replyId: number,
     replyDraft: DiscussionDraft,
   ) => {
+    if (isBackendMode) return;
     const update = (current: Comment[]) =>
       current.map((entry) =>
         entry.id === entryId
@@ -683,6 +845,7 @@ export function Discussion({
   };
 
   const deleteReply = (entryId: string | number, replyId: number) => {
+    if (isBackendMode) return;
     const update = (current: Comment[]) =>
       current.map((entry) => {
         if (entry.id !== entryId) return entry;
@@ -715,10 +878,13 @@ export function Discussion({
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
         canSubmitDraft={canSubmitDraft}
-        isSubmitting={isSubmittingNote}
+        isSubmitting={isSubmitting}
         isNotesLoading={isNotesLoading}
         isNotesError={isNotesError}
         onRetryNotes={() => refetchNotes()}
+        isThreadsLoading={isThreadsLoading}
+        isThreadsError={isThreadsError}
+        onRetryThreads={() => refetchThreads()}
         mobileBottomNavigation={mobileBottomNavigation}
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}
         capabilities={capabilities}
@@ -781,9 +947,13 @@ export function Discussion({
         onReport={() =>
           setNotice("Report received. Our moderation team will review it.")
         }
-        onOpenThread={(id, focusComposer = false) =>
-          setOpenThread({ id, focusComposer })
-        }
+        onOpenThread={(id, focusComposer = false) => {
+          if (isBackendMode) {
+            // In Phase 1, root-thread opening is temporarily disabled for backend Comments/Q&A
+            return;
+          }
+          setOpenThread({ id, focusComposer });
+        }}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
@@ -830,6 +1000,9 @@ interface ThreadSurfaceProps {
   isNotesLoading?: boolean;
   isNotesError?: boolean;
   onRetryNotes?: () => void;
+  isThreadsLoading?: boolean;
+  isThreadsError?: boolean;
+  onRetryThreads?: () => void;
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
   capabilities: InteractionCapabilities;
@@ -870,6 +1043,9 @@ function ThreadSurface({
   isNotesLoading = false,
   isNotesError = false,
   onRetryNotes,
+  isThreadsLoading = false,
+  isThreadsError = false,
+  onRetryThreads,
   mobileBottomNavigation,
   mobileBottomNavigationHidden,
   capabilities,
@@ -1204,6 +1380,33 @@ function ThreadSurface({
               <button
                 type="button"
                 onClick={onRetryNotes}
+                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        ) : entryFilter !== "note" && isThreadsLoading && entries.length === 0 ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-threads-loading"
+          >
+            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+            <p className="text-sm font-medium text-(--muted)">Loading discussions…</p>
+          </div>
+        ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-threads-error"
+          >
+            <p className="font-semibold text-(--text)">Failed to load discussions</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+              There was a problem loading the discussion for this lesson.
+            </p>
+            {onRetryThreads && (
+              <button
+                type="button"
+                onClick={onRetryThreads}
                 className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
               >
                 Retry
