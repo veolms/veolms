@@ -148,7 +148,27 @@ export function createAwsProvider(
 
   const ec2 = config.ec2Client ?? new EC2Client({ region });
   const ssm = config.ssmClient ?? new SSMClient({ region });
-  const s3 = config.s3Client ?? new S3Client({ region });
+  const s3Endpoint = process.env.S3_ENDPOINT || process.env.AWS_ENDPOINT_URL;
+  const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  const s3Credentials =
+    s3AccessKeyId && s3SecretAccessKey
+      ? { accessKeyId: s3AccessKeyId, secretAccessKey: s3SecretAccessKey }
+      : undefined;
+  const s3 =
+    config.s3Client ??
+    new S3Client({
+      region: process.env.S3_REGION || region,
+      ...(s3Endpoint
+        ? {
+            endpoint: s3Endpoint,
+            forcePathStyle:
+              process.env.S3_FORCE_PATH_STYLE === "true" ||
+              Boolean(process.env.AWS_ENDPOINT_URL),
+          }
+        : {}),
+      ...(s3Credentials ? { credentials: s3Credentials } : {}),
+    });
   const schedulerManager =
     config.schedulerManager ??
     createAwsSchedulerManager({
@@ -198,6 +218,17 @@ export function createAwsProvider(
         FLEET_TEST_MODE: process.env.FLEET_TEST_MODE ?? "false",
         ...(bucketName ? { S3_BUCKET: bucketName } : {}),
         ...(buildBucket ? { S3_BUILD_BUCKET: buildBucket } : {}),
+        ...(process.env.S3_ENDPOINT ? { S3_ENDPOINT: process.env.S3_ENDPOINT } : {}),
+        ...(process.env.S3_REGION ? { S3_REGION: process.env.S3_REGION } : {}),
+        ...(process.env.S3_ACCESS_KEY_ID
+          ? { S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID }
+          : {}),
+        ...(process.env.S3_SECRET_ACCESS_KEY
+          ? { S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY }
+          : {}),
+        ...(process.env.S3_FORCE_PATH_STYLE
+          ? { S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE }
+          : {}),
         ...config.defaultEnv,
       };
 
