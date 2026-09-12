@@ -28,7 +28,11 @@ export interface VideoPlaybackBootstrapRequest {
 export function resolveVideoPlaybackApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const base = String(API_BASE_URL).replace(/\/+$/, "");
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath === base || cleanPath.startsWith(`${base}/`)) {
+    return cleanPath;
+  }
+  return `${base}${cleanPath}`;
 }
 
 export function getVideoPlaybackApiOrigin(): string | null {

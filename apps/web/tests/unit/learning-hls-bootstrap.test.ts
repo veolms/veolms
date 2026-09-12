@@ -13,6 +13,7 @@ import {
   resolveLessonIdentifier,
 } from "../../src/learning/courseContent";
 import { appendLearningHlsCacheVersion } from "../../src/learning/player/learningHlsConstants";
+import { resolveVideoPlaybackApiUrl } from "../../src/learning/videoPlaybackBootstrap";
 
 describe("learning HLS bootstrap", () => {
   it("uses the prerendered lecture's HLS URL", () => {
@@ -73,5 +74,27 @@ describe("learning HLS bootstrap", () => {
       "https://cdn.example.com/course-hls/lesson/segment_00000.ts?veo_hls_cache=cors-v2",
       "https://cdn.example.com/course-hls/lesson/index.m3u8?token=test&veo_hls_cache=cors-v2",
     ]);
+  });
+
+  it("resolves playback API URLs without duplicating prefixes", () => {
+    expect(
+      resolveVideoPlaybackApiUrl(
+        "/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8",
+      ),
+    ).toBe("/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8");
+
+    expect(
+      resolveVideoPlaybackApiUrl(
+        "/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8",
+      ),
+    ).toBe("/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8");
+
+    expect(
+      resolveVideoPlaybackApiUrl(
+        "https://cdn.example.com/transcoded/11111111-1111-1111-1111-111111111111/master.m3u8",
+      ),
+    ).toBe(
+      "https://cdn.example.com/transcoded/11111111-1111-1111-1111-111111111111/master.m3u8",
+    );
   });
 });
