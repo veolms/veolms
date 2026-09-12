@@ -64,7 +64,7 @@ set -a
 source /opt/veolms/worker.env
 set +a
 
-BUCKET_NAME="\${S3_BUCKET:-\${S3_BUCKET_NAME:-}}"
+BUCKET_NAME="\${S3_BUCKET:-}"
 BUILD_BUCKET="\${S3_BUILD_BUCKET:-\$BUCKET_NAME}"
 
 set -e
@@ -144,6 +144,33 @@ export function generateUserDataScript(options: BootstrapperOptions): string {
     "__WORKER_ID__",
     workerId,
   ).replaceAll("__ENV_FILE_LINES__", envFileLines);
+}
+
+/** LocalStack EC2 workers use a prebuilt Docker AMI and stay fully local. */
+export function generateLocalStackUserDataScript(
+  options: BootstrapperOptions,
+): string {
+  const mergedEnv: Record<string, string> = {
+    WORKER_ID: options.workerId,
+    PROVIDER: "aws",
+    ...options.spec.environmentVariables,
+    ...options.extraEnv,
+  };
+  const envFileLines = Object.entries(mergedEnv)
+    .map(([key, value]) => `${key}="${escapeEnvValue(value)}"`)
+    .join("\n");
+  return `#!/bin/bash
+set -eu
+mkdir -p /opt/veolms
+cat << 'EOF' > /opt/veolms/worker.env
+${envFileLines}
+EOF
+set -a
+source /opt/veolms/worker.env
+set +a
+cd /opt/veolms
+exec node /opt/veolms/worker.js
+`;
 }
 
 export function encodeUserDataBase64(script: string): string {

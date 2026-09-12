@@ -28,7 +28,7 @@ const baseFleetManagerConfigSchema = z.object({
   DATABASE_URL: z
     .string()
     .default("postgresql://veolms:veolms@localhost:5433/veolms"),
-  PROVIDER: z.enum(["LOCAL", "AWS"]).default("LOCAL"),
+  PROVIDER: z.enum(["LOCAL", "DOCKER", "AWS"]).default("LOCAL"),
   POLL_INTERVAL_MS: z.coerce.number().int().min(500).default(2000),
   HEARTBEAT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).default(90),
   PROVISIONING_TIMEOUT_SECONDS: z.coerce.number().int().min(30).default(600),
@@ -38,7 +38,31 @@ const baseFleetManagerConfigSchema = z.object({
   MAX_RETRIES: z.coerce.number().int().min(0).default(3),
   MAX_WORKERS: z.coerce.number().int().min(1).default(8),
   MEDIA_WORKER_SCRIPT_PATH: z.string().optional(),
+  DOCKER_WORKER_IMAGE: z.string().default("veolms-media-worker:local"),
+  DOCKER_NETWORK: z.string().optional(),
+  DOCKER_TRANSPORT: z.enum(["cli", "socket"]).default("cli"),
+  DOCKER_SOCKET_PATH: z
+    .string()
+    .default(() =>
+      process.platform === "win32"
+        ? "//./pipe/docker_engine"
+        : "/var/run/docker.sock",
+    ),
+  // This must be a host-visible absolute path when the manager itself runs
+  // in Compose, because the Docker daemon resolves bind-mount sources.
+  DOCKER_STORAGE_ROOT: z.string().optional(),
+  // The manager container's corresponding mounted path, used for output
+  // verification after the worker exits.
+  DOCKER_VERIFICATION_STORAGE_ROOT: z.string().optional(),
+  FLEET_TEST_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   S3_BUILD_BUCKET: z.string().optional(),
+  STORAGE_PROVIDER: z
+    .string()
+    .optional()
+    .transform((val) => val?.toLowerCase().trim()),
 });
 
 export const fleetManagerConfigSchema = z.preprocess((raw) => {

@@ -146,11 +146,13 @@ candidate, so there's no point retrying.
 Setting `EC2_ALLOWED_INSTANCE_TYPES` filters each tier's candidate list down to
 that allow-list, falling back to the full list if the intersection would
 otherwise be empty. It supports:
+
 - **Exact instance types**: `c7g.large,c7g.xlarge,c6i.large`
 - **Family wildcard patterns**: `c7g.*,c8g.*,c6g.*` (matches any size within those families)
 - **Global wildcard / Unrestricted**: `*` or leaving the variable empty allows the engine to freely use all candidate tiers and fallbacks.
 
 During `pnpm fleet:infra` (Step 8), the wizard provides 5 guided presets:
+
 1. **Balanced Graviton & x86 (Recommended)**: `c7g.large,c7g.xlarge,c7g.2xlarge,c6i.large,c6i.xlarge` (direct matches for MICRO, SMALL, and MEDIUM tiers across ARM64 and x86).
 2. **Full Graviton with Family Wildcards**: `c7g.*,c8g.*,c6g.*` (allows automatic Spot failover across Graviton 3, 4, and 2 generations).
 3. **Unrestricted**: Empty allowlist for maximum Spot availability.

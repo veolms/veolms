@@ -79,7 +79,7 @@ export function LessonVideoUpload({
   mediaAssetId,
   disabled = false,
   hideUploadWhenAttached = false,
-  attachedActionLabel = "Replace",
+  attachedActionLabel = "Change Video",
   stackStatusBelow = false,
   onMediaAttached,
   onProcessingComplete,
@@ -552,6 +552,25 @@ export function LessonVideoUpload({
     }
   }, [activeMediaId, resetReconnectBackoff]);
 
+  const cancelTranscoding = useCallback(async () => {
+    if (!activeMediaId) return;
+    setErrorMessage(null);
+    setTrackProgress(false);
+    resetReconnectBackoff();
+    try {
+      await mediaService.cancelTranscode(activeMediaId);
+      setProgressStreamAttempt((attempt) => attempt + 1);
+      setTranscodeStatus("cancelled");
+      setPhase("failed");
+      setErrorMessage("Video processing was cancelled.");
+    } catch (error) {
+      setTrackProgress(true);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to cancel video processing.",
+      );
+    }
+  }, [activeMediaId, resetReconnectBackoff]);
+
   const retryAttachment = useCallback(async () => {
     if (!candidateMediaId || phase !== "ready") return;
     await commitCandidate(candidateMediaId);
@@ -839,6 +858,8 @@ export function LessonVideoUpload({
       : null) ||
     (phase === "failed" ? "Video processing could not be completed." : null);
 
+  const hasVideo = Boolean(activeMediaId || mediaAssetId);
+
   return (
     <>
       <div
@@ -860,9 +881,9 @@ export function LessonVideoUpload({
             }}
             className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
           >
-            <UploadSimple size={15} />
+            {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
             <span>
-              {activeMediaId ? attachedActionLabel : "Upload"}
+              {hasVideo ? attachedActionLabel : "Upload"}
             </span>
           </button>
         )}
@@ -1170,6 +1191,14 @@ export function LessonVideoUpload({
                       className={`${SECONDARY_ACTION_CLASS} min-w-[120px] px-5`}
                     >
                       Cancel Upload
+                    </button>
+                  ) : phase === "transcoding" ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelTranscoding()}
+                      className={`${SECONDARY_ACTION_CLASS} min-w-[140px] px-5`}
+                    >
+                      Cancel Processing
                     </button>
                   ) : !isReplacingVideo ? (
                     <button

@@ -140,8 +140,6 @@ export function Curriculum({
     fallbackSection;
   const currentLesson =
     lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
-  const courseProgress = 52;
-
   useEffect(() => {
     if (expandAllSections || !hideHero || isExpandedControlled) return;
     if (
@@ -175,9 +173,20 @@ export function Curriculum({
     if (typeof storedProgress === "number")
       return Math.max(0, Math.min(100, storedProgress));
     if (status === "done") return 100;
-    if (status === "active") return 52;
     return 0;
   };
+
+  const allLessons = sections.flatMap(({ lessons }) => lessons);
+  const courseProgress =
+    allLessons.length > 0
+      ? Math.round(
+          allLessons.reduce(
+            (total, [number, , , status]) =>
+              total + getLessonProgress(number, status),
+            0,
+          ) / allLessons.length,
+        )
+      : 0;
 
   const scrollItemToTop = (element: HTMLElement | null) => {
     const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
@@ -558,6 +567,12 @@ export function Curriculum({
                 .toLowerCase()
                 .includes(activeLessonSearch.toLowerCase()),
             );
+            const completedLessons = section.lessons.filter(
+              ([number, , , status]) =>
+                getLessonProgress(number, status) >=
+                LESSON_PROGRESS_COMPLETE_THRESHOLD,
+            ).length;
+            const sectionProgress = `${completedLessons}/${section.lessons.length}`;
             const isOpen =
               expanded.includes(section.id) ||
               Boolean(activeLessonSearch && matchingLessons.length > 0);
@@ -596,7 +611,7 @@ export function Curriculum({
                     Section {section.id}: {section.title}
                   </span>
                   <span className="learning-curriculum__section-progress">
-                    {section.progress}
+                    {sectionProgress}
                   </span>
                 </button>
                 {matchingLessons.length > 0 && (

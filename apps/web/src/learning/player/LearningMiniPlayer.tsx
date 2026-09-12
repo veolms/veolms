@@ -328,6 +328,7 @@ export function LearningMiniPlayer({
         mediaProps={{ muted: preparing || session.muted }}
         onReady={handleReady}
         onEvent={handleEvent}
+        onErrorOverlayClose={handleClose}
         ariaLabel={`Mini player video for ${session.lessonTitle}`}
         className="!rounded-none"
         playerClassName="!rounded-none !shadow-none"

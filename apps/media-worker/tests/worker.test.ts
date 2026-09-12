@@ -3,7 +3,11 @@ import { describe, it } from "node:test";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import { loadMediaWorkerConfig } from "@veolms/config";
-import { initMediaWorker, pollForNextJob } from "../src/worker.ts";
+import {
+  getRequestedTestFault,
+  initMediaWorker,
+  pollForNextJob,
+} from "../src/worker.ts";
 
 const WORKER_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -185,6 +189,29 @@ describe("Heartbeat lifecycle", () => {
       true,
       "stopHeartbeat resolves once the drain timeout elapses",
     );
+  });
+});
+
+describe("Fault control application", () => {
+  it("does not emit an applied event when another worker won the update", async () => {
+    let appliedEvents = 0;
+    const db = {
+      selectFrom: () =>
+        makeChain(() => ({ fault: "heartbeat-loss", applied_at: null })),
+      updateTable: () => makeChain(() => ({ numUpdatedRows: 0n })),
+    } as unknown as Kysely<Database>;
+    const ctx = {
+      workerId: WORKER_ID,
+      db,
+      config: loadMediaWorkerConfig({ WORKER_ID, FLEET_TEST_MODE: "true" }),
+      recordEvent: async () => {
+        appliedEvents++;
+      },
+    } as any;
+
+    const fault = await getRequestedTestFault(ctx);
+    assert.equal(fault, "heartbeat-loss");
+    assert.equal(appliedEvents, 0);
   });
 });
 

@@ -2751,4 +2751,27 @@ describe("VideoPlayer integration", () => {
       expect.objectContaining({ type: "error" }),
     );
   });
+
+  it("shows an accessible close action for a closable error state", async () => {
+    const engine = new FakeVideoEngine();
+    const onClose = vi.fn();
+
+    render(
+      <VideoPlayer
+        source={source}
+        engineFactory={() => engine}
+        keyboardEnabled={false}
+        onErrorOverlayClose={onClose}
+      />,
+    );
+
+    await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
+    engine.emitError();
+
+    const closeButton = await screen.findByRole("button", {
+      name: "Close video player",
+    });
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });

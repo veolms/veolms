@@ -130,16 +130,13 @@ describe("SSRF Protection & URL Validation", () => {
           });
         };
 
-        await assert.rejects(
-          async () => {
-            await downloadHttpFile(
-              "http://93.184.216.34/initial.mp4",
-              "/tmp/test-out.mp4",
-              { maxBytes: 1000, timeoutMs: 2000 },
-            );
-          },
-          /Access to private, loopback, or cloud metadata network addresses is prohibited/,
-        );
+        await assert.rejects(async () => {
+          await downloadHttpFile(
+            "http://93.184.216.34/initial.mp4",
+            "/tmp/test-out.mp4",
+            { maxBytes: 1000, timeoutMs: 2000 },
+          );
+        }, /Access to private, loopback, or cloud metadata network addresses is prohibited/);
       }
     } finally {
       globalThis.fetch = originalFetch;

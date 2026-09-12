@@ -16,6 +16,10 @@ export { getApiError, type ApiError };
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
+export function getApiRequestUrl(path: string): string {
+  return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
 function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
     return;

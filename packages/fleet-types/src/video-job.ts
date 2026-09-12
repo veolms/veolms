@@ -43,7 +43,9 @@ export type MachineProfile = HardwareProfile;
 // here instead of DB-backed fields nothing ever populated.
 export const DEFAULT_VIDEO_CODEC = "h264";
 export const DEFAULT_AUDIO_CODEC = "aac";
-export const DEFAULT_SEGMENT_DURATION_SECONDS = 6;
+// Two-second segments reduce time-to-first-frame and let ABR switch faster.
+// Existing outputs keep their old duration until the lesson is re-transcoded.
+export const DEFAULT_SEGMENT_DURATION_SECONDS = 2;
 
 export interface JobHardwareRequirements {
   minCpu: number;
@@ -234,7 +236,6 @@ export function estimateJobHardware(
             ? Math.ceil(videoSizeBytes / ((5 * 1000 * 1000) / 8))
             : BASE_HARDWARE.estimatedDurationSeconds,
         );
-
 
   // 3. Storage formula: (video duration x total output bitrate) + source size + safety margin
   const sourceSizeGb = Math.max(videoSizeBytes, 0) / BYTES_PER_GB;

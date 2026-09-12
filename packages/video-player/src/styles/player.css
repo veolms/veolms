@@ -92,8 +92,22 @@
   will-change: filter, opacity, transform;
 }
 
-[data-video-player-root] video::-webkit-media-controls {
+[data-video-player-root] video::-webkit-media-controls-enclosure {
   display: none !important;
+}
+
+[data-video-player-root] video::-webkit-media-text-track-container {
+  display: block !important;
+  z-index: 10 !important;
+}
+
+[data-video-player-root] video::cue {
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: clamp(14px, 2.2vw, 22px);
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .player-volume-slider {

@@ -83,6 +83,7 @@ The interactive wizard guides you through provisioning and verifying all necessa
    - `veolms-video-metadata-probe`: Pre-probes video metadata (resolution, frame rate, codec) using `ffprobe` directly over S3 presigned URLs.
 6. **Initial Artifact Upload**:
    - Automatically bundles `apps/media-worker` and serverless entrypoints and uploads them to the S3 build bucket.
+
 ### IAM Policies Reference for Infrastructure & Runtime
 
 All policy definitions live in [`packages/fleet-provider-aws/iam/`](../packages/fleet-provider-aws/iam/):
@@ -105,22 +106,26 @@ To automate updates securely without exposing root or administrative AWS credent
 Run the setup script located in [`packages/fleet-provider-aws/iam/`](../packages/fleet-provider-aws/iam/):
 
 #### Option A: Via pnpm (Recommended)
+
 ```bash
 pnpm fleet:cicd
 ```
 
 #### Option B: Via Bash / AWS CLI
+
 ```bash
 S3_BUILD_BUCKET="<your-build-bucket>" AWS_REGION="<your-region>" ./packages/fleet-provider-aws/iam/setup-cicd-iam.sh
 ```
 
 ### What This Script Does:
+
 1. Queries your current AWS Account ID dynamically via `aws sts get-caller-identity`.
 2. Creates an IAM User named **`veolms-fleet-infra-action`**.
 3. Creates and attaches the least-privilege policy **`veolms-fleet-infra-action-policy`** defined in [`packages/fleet-provider-aws/iam/cicd-infra-deployer-policy.json`](../packages/fleet-provider-aws/iam/cicd-infra-deployer-policy.json).
 4. Generates or preserves an Access Key pair and outputs the exact values to paste into GitHub.
 
 ### Permissions Granted by the CI/CD Policy:
+
 - **S3 Build Bucket**: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:DeleteObjectVersion`, `s3:HeadObject`, `s3:ListBucket` strictly scoped to `arn:aws:s3:::${S3_BUILD_BUCKET}/*`.
 - **AWS Lambda**: `lambda:UpdateFunctionCode`, `lambda:GetFunction`, `lambda:GetFunctionConfiguration`, `lambda:PublishVersion` on `veolms-fleet-manager` and `veolms-video-metadata-probe`.
 - **CloudWatch Logs**: `logs:DescribeLogGroups`.
@@ -135,19 +140,19 @@ In your GitHub repository, navigate to:
 
 ### 1. Repository Secrets (Click "New repository secret")
 
-| Secret Name | Required | Description | Example |
-|---|---|---|---|
-| `AWS_ACCESS_KEY_ID` | **Yes** | Access Key ID for `veolms-fleet-infra-action` | `AKIAIOSFODNN7EXAMPLE` |
-| `AWS_SECRET_ACCESS_KEY` | **Yes** | Secret Access Key for `veolms-fleet-infra-action` | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| Secret Name             | Required | Description                                       | Example                                    |
+| ----------------------- | -------- | ------------------------------------------------- | ------------------------------------------ |
+| `AWS_ACCESS_KEY_ID`     | **Yes**  | Access Key ID for `veolms-fleet-infra-action`     | `AKIAIOSFODNN7EXAMPLE`                     |
+| `AWS_SECRET_ACCESS_KEY` | **Yes**  | Secret Access Key for `veolms-fleet-infra-action` | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
 
 ### 2. Repository Variables (Click "New repository variable")
 
-| Variable Name | Required | Description | Example |
-|---|---|---|---|
-| `S3_BUILD_BUCKET` | **Yes** | S3 bucket where worker and Lambda bundles reside | `my-media-build-bucket` |
-| `AWS_REGION` | Optional | AWS Region (defaults to `ap-south-1` if omitted) | `ap-south-1` |
-| `FLEET_MANAGER_LAMBDA_NAME` | Optional | Lambda function name for fleet manager | `veolms-fleet-manager` |
-| `PROBE_LAMBDA_NAME` | Optional | Lambda function name for metadata probe | `veolms-video-metadata-probe` |
+| Variable Name               | Required | Description                                      | Example                       |
+| --------------------------- | -------- | ------------------------------------------------ | ----------------------------- |
+| `S3_BUILD_BUCKET`           | **Yes**  | S3 bucket where worker and Lambda bundles reside | `my-media-build-bucket`       |
+| `AWS_REGION`                | Optional | AWS Region (defaults to `ap-south-1` if omitted) | `ap-south-1`                  |
+| `FLEET_MANAGER_LAMBDA_NAME` | Optional | Lambda function name for fleet manager           | `veolms-fleet-manager`        |
+| `PROBE_LAMBDA_NAME`         | Optional | Lambda function name for metadata probe          | `veolms-video-metadata-probe` |
 
 ---
 
@@ -156,6 +161,7 @@ In your GitHub repository, navigate to:
 The workflow file is located at [`.github/workflows/deploy-video-fleet-infra.yml`](../.github/workflows/deploy-video-fleet-infra.yml).
 
 ### 1. Trigger Conditions:
+
 - **Branch**: Push to `development`.
 - **Path Filtering**: To avoid wasting CI runner minutes, it triggers **only** when files in the following paths are changed:
   - `apps/fleet-manager/**`
@@ -168,7 +174,9 @@ The workflow file is located at [`.github/workflows/deploy-video-fleet-infra.yml
 - **Manual Trigger**: Can be dispatched on-demand via the GitHub Actions UI (`workflow_dispatch`) with checkboxes to selectively deploy worker, lambdas, or both.
 
 ### 2. Job 1: Test & Quality Gate (`test-video-pipeline`)
+
 Before any code is built or deployed, the workflow runs a complete automated test suite:
+
 - Runs TypeScript type-checks across all monorepo packages.
 - Runs **130 unit tests**:
   - `@veolms/media-worker` (44 tests)
@@ -177,7 +185,9 @@ Before any code is built or deployed, the workflow runs a complete automated tes
 - **If any test fails, deployment stops immediately.**
 
 ### 3. Job 2: Targeted Build & Deploy (`deploy-video-fleet`)
+
 Once tests pass, the deploy job detects which components actually changed in git:
+
 - **When Media Worker Changes**:
   - Builds `apps/media-worker` into a single standalone bundle (`bundles/media-worker.js`).
   - Uploads the bundle to `s3://${S3_BUILD_BUCKET}/bundles/media-worker.js`.
@@ -193,6 +203,7 @@ Once tests pass, the deploy job detects which components actually changed in git
 ## Step 6: Day-to-Day Development & Updates Workflow
 
 ### Updating Transcoding Logic or Worker Behavior:
+
 1. Make changes in `apps/media-worker/`.
 2. Commit and push to `development`:
    ```bash
@@ -204,12 +215,15 @@ Once tests pass, the deploy job detects which components actually changed in git
 4. Existing running instances continue their jobs; any newly spawned worker immediately runs the updated code.
 
 ### Updating Lambda Coordinator or Scheduler Logic:
+
 1. Make changes in `apps/fleet-manager/src/entrypoints/serverless.ts` or `packages/fleet-provider-aws/`.
 2. Commit and push to `development`.
 3. GitHub Actions runs tests, uploads the new zip files, and updates the live AWS Lambda functions.
 
 ### Manual Verification Command:
+
 You can also build and upload artifacts manually from your terminal at any time:
+
 ```bash
 # Upload only worker bundle
 pnpm fleet:build:upload --only-worker

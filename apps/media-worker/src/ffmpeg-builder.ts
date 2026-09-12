@@ -182,7 +182,7 @@ export function buildFfmpegHlsArgs(options: {
   segmentDurationSeconds?: number;
 }): FfmpegHlsBuildResult {
   const { inputPath, outputDir, qualities, metadata } = options;
-  const segmentDuration = options.segmentDurationSeconds ?? 6;
+  const segmentDuration = options.segmentDurationSeconds ?? 2;
 
   const applicableQualities = filterApplicableQualities(
     [...new Set(qualities)],

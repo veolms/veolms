@@ -1,44 +1,16 @@
-import { execFile, execSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { execFile, spawn, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-function resolveRepoRoot(): string {
-  try {
-    const metaUrl =
-      typeof import.meta !== "undefined" ? import.meta?.url : undefined;
-    if (metaUrl) {
-      let currentDir = dirname(fileURLToPath(metaUrl));
-      while (currentDir !== resolve(currentDir, "..")) {
-        if (
-          existsSync(join(currentDir, "pnpm-workspace.yaml")) ||
-          existsSync(join(currentDir, "turbo.json"))
-        ) {
-          return currentDir;
-        }
-        currentDir = dirname(currentDir);
-      }
-    }
-  } catch {
-    // Ignore URL parse error in bundled/cjs environments
-  }
-
-  let cwd = process.cwd();
-  while (cwd !== resolve(cwd, "..")) {
-    if (
-      existsSync(join(cwd, "pnpm-workspace.yaml")) ||
-      existsSync(join(cwd, "turbo.json"))
-    ) {
-      return cwd;
-    }
-    cwd = dirname(cwd);
-  }
-
-  return process.cwd();
-}
+import type { Kysely } from "kysely";
+import type { Database } from "@veolms/database";
+import { resolveRepoRoot } from "@veolms/fleet-types/env";
 
 const repoRoot = resolveRepoRoot();
+
 import {
   ARCHITECTURES,
   DEFAULT_SEGMENT_DURATION_SECONDS,
@@ -62,7 +34,7 @@ import {
   type IncrementalUploadHandle,
 } from "./incremental-upload.ts";
 import type { MediaWorkerConfig } from "@veolms/config";
-import type { MediaWorkerContext } from "./worker.ts";
+import { getRequestedTestFault, type MediaWorkerContext } from "./worker.ts";
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_STDERR_TAIL_BYTES = 16 * 1024;
@@ -93,20 +65,66 @@ function resolveWithin(root: string, candidate: string): string {
   const resolvedRoot = resolve(root);
   const resolvedPath = resolve(resolvedRoot, candidate);
   const pathFromRoot = relative(resolvedRoot, resolvedPath);
+  const normResolved =
+    process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+  const normRoot =
+    process.platform === "win32" ? resolvedRoot.toLowerCase() : resolvedRoot;
   if (
     isAbsolute(pathFromRoot) ||
     pathFromRoot === ".." ||
     pathFromRoot.startsWith("../") ||
     pathFromRoot.startsWith("..\\") ||
-    (!resolvedPath.startsWith(resolvedRoot + "/") &&
-      !resolvedPath.startsWith(resolvedRoot + "\\") &&
-      resolvedPath !== resolvedRoot)
+    (!normResolved.startsWith(normRoot + "/") &&
+      !normResolved.startsWith(normRoot + "\\") &&
+      normResolved !== normRoot)
   ) {
     throw new Error(
       "Media job path must remain inside its configured directory",
     );
   }
   return resolvedPath;
+}
+
+/**
+ * Returns the portable storage key for the HLS master playlist.  Database
+ * paths are storage keys (not absolute scratch/container paths), so the same
+ * value works for both local `s3-bucket/` storage and S3.
+ */
+export function buildMasterPlaylistStorageKey(outputPrefix: string): string {
+  const prefix = outputPrefix.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return prefix ? `${prefix}/master.m3u8` : "master.m3u8";
+}
+
+async function persistVideoOutput(
+  database: Kysely<Database>,
+  videoId: string,
+  masterPlaylistPath: string,
+): Promise<void> {
+  const existing = await database
+    .selectFrom("video_outputs")
+    .select(["id"])
+    .where("video_id", "=", videoId)
+    .orderBy("created_at", "desc")
+    .executeTakeFirst();
+
+  if (existing) {
+    await database
+      .updateTable("video_outputs")
+      .set({ master_playlist_path: masterPlaylistPath })
+      .where("id", "=", existing.id)
+      .execute();
+    return;
+  }
+
+  await database
+    .insertInto("video_outputs")
+    .values({
+      id: randomUUID(),
+      video_id: videoId,
+      master_playlist_path: masterPlaylistPath,
+      created_at: new Date(),
+    })
+    .execute();
 }
 
 async function runFfmpeg(options: {
@@ -344,6 +362,10 @@ export async function executeTranscodeJob(
   try {
     throwIfAborted(signal);
 
+    if ((await getRequestedTestFault(ctx)) === "worker-failure") {
+      throw new Error("Test fault: worker-failure");
+    }
+
     if (
       job.status !== "processing" &&
       job.status !== "provisioning" &&
@@ -557,6 +579,22 @@ export async function executeTranscodeJob(
       );
     }
 
+    // Keep the media asset authoritative for metadata discovered by the
+    // worker. Jobs created with only a video/job id may not have been probed
+    // by the API yet, so persist the duration before FFmpeg starts. Existing
+    // dimensions are retained when available; the resolved duration is
+    // written as the worker's authoritative integer value.
+    await db
+      .updateTable("media_assets")
+      .set({
+        width: mediaAsset?.width ?? sourceMetadata.width,
+        height: mediaAsset?.height ?? sourceMetadata.height,
+        duration_seconds: Math.round(sourceMetadata.durationSeconds),
+        updated_at: new Date(),
+      })
+      .where("id", "=", job.video_id)
+      .execute();
+
     // 5. Build FFmpeg command for requested qualities array
     const targetQualities: readonly VideoQualityLevel[] = [
       ...new Set(job.qualities),
@@ -634,21 +672,54 @@ export async function executeTranscodeJob(
     });
 
     // Avoid a needless full re-encode when the source already fits the
-    // largest requested rendition. Capped inputs still use the smaller
-    // intermediate to avoid carrying 4K pixels through every HLS rendition.
-    const transcodeInputPath = compression.targetResolution
+    // largest requested rendition, unless an optimized original file backup
+    // is requested.
+    const originalFileKey = job.original_file_key ?? null;
+
+    const shouldRunCompression = Boolean(
+      compression.targetResolution || originalFileKey,
+    );
+    const transcodeInputPath = shouldRunCompression
       ? optimizedVideoPath
       : inputVideoPath;
-    if (compression.targetResolution) {
+
+    if (shouldRunCompression) {
       await runFfmpeg({
         executable: config.FFMPEG_PATH,
         args: compression.args,
         phase: "compression pass",
         signal,
       });
+
+      // If an original file backup key is specified, upload/save the optimized video file immediately.
+      // If originalFileKey is null, do NOT upload or backup this file.
+      if (originalFileKey) {
+        if (config.STORAGE_PROVIDER === "local") {
+          const cleanOrigKey = originalFileKey.replace(/^s3-bucket[/\\]/, "");
+          const baseBucketDir = existsSync(join(repoRoot, "s3-bucket"))
+            ? join(repoRoot, "s3-bucket")
+            : join(process.cwd(), "s3-bucket");
+          const localTargetOrig = resolveWithin(baseBucketDir, cleanOrigKey);
+          await mkdir(dirname(localTargetOrig), { recursive: true });
+          await copyFile(optimizedVideoPath, localTargetOrig);
+          console.info(
+            `[media-worker] Optimized original video saved locally to ${localTargetOrig}`,
+          );
+        } else {
+          const cleanOrigKey = originalFileKey.replace(/^s3-bucket[/\\]/, "");
+          await storage.uploadFile(
+            cleanOrigKey,
+            optimizedVideoPath,
+            "video/mp4",
+          );
+          console.info(
+            `[media-worker] Uploaded optimized original video to s3://${config.S3_BUCKET}/${cleanOrigKey}`,
+          );
+        }
+      }
     }
 
-    const metadata = compression.targetResolution
+    const metadata = shouldRunCompression
       ? await probeVideoMetadata(optimizedVideoPath, config.FFPROBE_PATH)
       : sourceMetadata;
 
@@ -676,6 +747,9 @@ export async function executeTranscodeJob(
         progressWrite = progressWrite
           .catch(() => undefined)
           .then(async () => {
+            if ((await getRequestedTestFault(ctx)) === "progress-stall") {
+              return;
+            }
             // Check if job status has been changed to "cancelled" in the database
             const checkJob = await db
               .selectFrom("video_jobs")
@@ -741,6 +815,9 @@ export async function executeTranscodeJob(
     // removed in finally, so persistence failures must fail the job rather
     // than leaving a false COMPLETED result with no playable output.
     if (config.STORAGE_PROVIDER === "local") {
+      if ((await getRequestedTestFault(ctx)) === "storage-failure") {
+        throw new Error("Test fault: storage-failure");
+      }
       const cleanPrefix = job.output_prefix.replace(/^s3-bucket[/\\]/, "");
       const baseBucketDir = existsSync(join(repoRoot, "s3-bucket"))
         ? join(repoRoot, "s3-bucket")
@@ -768,10 +845,18 @@ export async function executeTranscodeJob(
       );
     }
 
+    // Mark the job complete and make the live worker ready for a compatible
+    // next claim in one transaction. Clearing job_id avoids monitor races
+    // against the just-completed job while the worker waits for more work.
+    const masterPlaylistStorageKey = buildMasterPlaylistStorageKey(
+      job.output_prefix,
+    );
     // Mark the job complete, progress 100%, media asset ready, and make the live worker
     // ready for a compatible next claim in one transaction. Clearing job_id avoids monitor
     // races against the just-completed job while the worker waits for more work.
     await db.transaction().execute(async (trx) => {
+      await persistVideoOutput(trx, job.video_id, masterPlaylistStorageKey);
+
       await trx
         .updateTable("video_jobs")
         .set({
@@ -826,6 +911,8 @@ export async function executeTranscodeJob(
     await recordEvent("job_completed", jobId, {
       applicableQualities,
       outputPrefix: job.output_prefix,
+      masterPlaylistPath: masterPlaylistStorageKey,
+      ...(originalFileKey ? { originalFileKey } : {}),
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : String(error);
