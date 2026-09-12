@@ -60,9 +60,29 @@ export function registerErrorHandler(app: FastifyInstance): void {
         );
     }
 
-    const statusCode = error.statusCode ?? 500;
-    // A plain `Error` thrown from a handler carries no `code`, despite the type.
-    const code = error.code || "INTERNAL_SERVER_ERROR";
+    const statusCode =
+      typeof error?.statusCode === "number"
+        ? error.statusCode
+        : typeof (error as any)?.status === "number"
+          ? (error as any).status
+          : typeof (error as any)?.error?.statusCode === "number"
+            ? (error as any).error.statusCode
+            : 500;
+
+    const code =
+      error?.code || (error as any)?.error?.code || "INTERNAL_SERVER_ERROR";
+
+    const message =
+      typeof error?.message === "string" && error.message.length > 0
+        ? error.message
+        : typeof (error as any)?.error?.message === "string" &&
+            (error as any).error.message.length > 0
+          ? (error as any).error.message
+          : typeof error === "string"
+            ? error
+            : "An unexpected error occurred.";
+
+    const issues = (error as any)?.issues ?? (error as any)?.error?.issues;
 
     if (statusCode >= 500) {
       request.log.error({ err: error }, "Unhandled error");
@@ -74,6 +94,6 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     return reply
       .code(statusCode)
-      .send(httpError(statusCode, code, error.message));
+      .send(httpError(statusCode, code, message, issues));
   });
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const engagementTargetTypeSchema = z.enum(["thread", "reply"]);
+export const engagementTargetTypeSchema = z.enum(["thread", "reply", "note"]);
 export type EngagementTargetType = z.infer<typeof engagementTargetTypeSchema>;
 
 export const toggleLikeRequestSchema = z.object({

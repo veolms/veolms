@@ -3,9 +3,9 @@ import type { Generated } from "kysely";
 export type DiscussionEntryKind = "comment" | "question" | "note";
 export type DiscussionVisibility = "public" | "unlisted" | "private";
 export type InteractionStatus = "active" | "hidden" | "deleted";
-export type EngagementTargetType = "thread" | "reply";
+export type EngagementTargetType = "thread" | "reply" | "note";
 export type AttachmentKind = "image" | "screenshot" | "code" | "document";
-export type AttachmentTargetType = "thread" | "reply";
+export type AttachmentTargetType = "thread" | "reply" | "note";
 export type AttachmentStatus = "uploading" | "ready" | "rejected" | "deleted";
 export type ReportReason =
   | "spam"
@@ -97,6 +97,7 @@ export interface LearningNoteTable {
   plain_text: string;
   tags: Generated<string[]>;
   visibility: Generated<DiscussionVisibility>;
+  likes_count: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
