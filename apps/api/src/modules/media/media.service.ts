@@ -6,9 +6,14 @@ import type {
   MediaAssetStatus,
   VideoQualityLevel,
 } from "@veolms/database";
-import type { PresignMediaRequest } from "@veolms/contracts";
+import type {
+  PresignMediaRequest,
+  VideoPlaybackBootstrap,
+} from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
+import { ADMIN_ROLE } from "../auth/index.ts";
+import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
 
 export interface MediaServiceOptions {
@@ -17,6 +22,37 @@ export interface MediaServiceOptions {
 }
 
 const VIDEO_QUALITIES: VideoQualityLevel[] = ["360p", "720p", "1080p"];
+const accessService = createAccessService();
+
+type PlaybackUser = {
+  id: string;
+  roles?: readonly string[];
+};
+
+function normalizeOutputPrefix(outputPrefix: string): string {
+  return outputPrefix.replace(/^\/+|\/+$/g, "");
+}
+
+function isSafeHlsPath(path: string): boolean {
+  const segments = path.split("/");
+  return (
+    segments.length > 0 &&
+    segments.every(
+      (segment) => segment.length > 0 && segment !== "." && segment !== "..",
+    ) &&
+    /\.(?:m3u8|ts|m4s|mp4|aac|vtt)$/i.test(path)
+  );
+}
+
+function hlsContentType(path: string): string {
+  if (/\.m3u8$/i.test(path)) return "application/vnd.apple.mpegurl";
+  if (/\.ts$/i.test(path)) return "video/mp2t";
+  if (/\.m4s$/i.test(path)) return "video/iso.segment";
+  if (/\.mp4$/i.test(path)) return "video/mp4";
+  if (/\.aac$/i.test(path)) return "audio/aac";
+  if (/\.vtt$/i.test(path)) return "text/vtt";
+  return "application/octet-stream";
+}
 
 /** Postgres unique_violation (23505), as raised by the pg driver via node-postgres. */
 function isUniqueViolation(err: unknown): boolean {
@@ -334,6 +370,49 @@ export function createMediaService({
     return { should202: true, jobId: job.id };
   }
 
+  async function cancelTranscodeJob(
+    mediaId: string,
+    ownerId: string,
+    logger?: FastifyBaseLogger,
+  ) {
+    const media = await mediaRepo.findMediaAssetById(database, mediaId, ownerId);
+    if (!media || media.type !== "video") {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+
+    const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
+    if (!job) {
+      throw new AppError(409, "MEDIA_JOB_NOT_FOUND", "No transcoding job exists for this video.");
+    }
+    if (!["queued", "provisioning", "processing"].includes(job.status)) {
+      throw new AppError(409, "MEDIA_NOT_CANCELLABLE", "This video is no longer being transcoded.");
+    }
+
+    try {
+      await services.videoDispatch.dispatch({
+        status: "cancelled",
+        jobId: job.id,
+        videoId: mediaId,
+        videoKey: job.video_key,
+        outputPrefix: job.output_prefix,
+        deleteFiles: true,
+        deleteMedia: false,
+      });
+    } catch (error) {
+      logger?.error({ err: error, jobId: job.id, mediaId }, "Failed to dispatch video cancellation cleanup");
+      throw error;
+    }
+
+    // In serverful/local mode the fleet manager watches the database directly;
+    // in serverless mode the cancellation event above performs this update.
+    await mediaRepo.updateVideoJobStatus(database, job.id, {
+      status: "cancelled",
+    });
+    await mediaRepo.updateMediaAssetStatus(database, mediaId, "failed");
+
+    return { cancelled: true, jobId: job.id };
+  }
+
   /**
    * Retrieves a single media asset by ID with optional owner verification.
    * Inter-module API method (Rule 11 compliance).
@@ -400,6 +479,175 @@ export function createMediaService({
     };
   }
 
+  async function assertPlaybackAccess(
+    context: {
+      course_id: string;
+      course_status: string;
+      course_creator_id: string | null;
+      pricing_type: string | null;
+      is_preview: boolean;
+    },
+    user?: PlaybackUser,
+  ): Promise<void> {
+    if (context.course_status !== "published") {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    // Preview lessons and explicitly free courses are intentionally public.
+    if (context.is_preview || context.pricing_type === "free") return;
+
+    if (!user) {
+      throw new AppError(
+        401,
+        "UNAUTHORIZED",
+        "Authentication is required to play this lesson.",
+      );
+    }
+
+    const isOwner = context.course_creator_id === user.id;
+    const isAdmin = user.roles?.includes(ADMIN_ROLE) ?? false;
+    if (isOwner || isAdmin) return;
+
+    const hasAccess = await accessService.hasActiveAccess(
+      database,
+      user.id,
+      context.course_id,
+    );
+    if (!hasAccess) {
+      throw new AppError(
+        403,
+        "COURSE_ACCESS_DENIED",
+        "You do not have access to this course.",
+      );
+    }
+  }
+
+  async function getReadyPlaybackOutput(
+    mediaId: string,
+    options: { verifyManifest?: boolean } = {},
+  ) {
+    const [media, job] = await Promise.all([
+      mediaRepo.findMediaAssetById(database, mediaId),
+      mediaRepo.findVideoJobByVideoId(database, mediaId),
+    ]);
+    if (!media || media.type !== "video") {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+
+    if (!job || job.status !== "completed" || media.status !== "ready") {
+      throw new AppError(
+        409,
+        "MEDIA_NOT_READY",
+        "This video is still being prepared.",
+      );
+    }
+
+    const outputPrefix = normalizeOutputPrefix(job.output_prefix);
+    const manifestKey = `${outputPrefix}/master.m3u8`;
+    if (options.verifyManifest !== false) {
+      const manifest = await services.storage.headObject(manifestKey);
+      if (!manifest) {
+        throw new AppError(
+          409,
+          "MEDIA_NOT_READY",
+          "This video is still being prepared.",
+        );
+      }
+    }
+
+    return { media, job, outputPrefix, manifestKey };
+  }
+
+  async function getPlaybackBootstrap(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ): Promise<VideoPlaybackBootstrap> {
+    if (!Number.isInteger(lessonNumber) || lessonNumber < 1) {
+      throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
+    }
+
+    const context = await mediaRepo.findPlaybackLessonContext(
+      database,
+      courseIdOrSlug,
+      lessonNumber,
+    );
+    if (!context) {
+      throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
+    }
+
+    await assertPlaybackAccess(context, user);
+    if (context.lesson_content_type !== "video" || !context.content_media_id) {
+      throw new AppError(
+        404,
+        "MEDIA_NOT_FOUND",
+        "This lesson does not have a playable video.",
+      );
+    }
+
+    // The transcode worker only marks a job completed after publishing its
+    // output. Avoid an extra storage HEAD round-trip on every first play;
+    // the manifest request itself remains the authoritative final check.
+    const { media, outputPrefix } = await getReadyPlaybackOutput(
+      context.content_media_id,
+      { verifyManifest: false },
+    );
+    const publicManifestUrl = services.storage.getPublicObjectUrl(
+      `${outputPrefix}/master.m3u8`,
+    );
+    const isPublicPlayback =
+      Boolean(publicManifestUrl) &&
+      (context.is_preview || context.pricing_type === "free");
+    return {
+      version: 1,
+      courseSlug: context.course_slug,
+      lessonId: context.lesson_id,
+      mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
+      manifestUrl:
+        publicManifestUrl ??
+        `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
+      ...(media.duration_seconds !== null &&
+      media.duration_seconds !== undefined
+        ? { duration: Number(media.duration_seconds) }
+        : {}),
+      title: context.lesson_title,
+      source: isPublicPlayback ? "public-cdn" : "paid-bootstrap-api",
+    };
+  }
+
+  async function getHlsStream(
+    mediaId: string,
+    requestedPath: string,
+    user?: PlaybackUser,
+  ) {
+    const context = await mediaRepo.findPlaybackMediaContext(database, mediaId);
+    if (!context) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+
+    await assertPlaybackAccess(context, user);
+    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, {
+      verifyManifest: false,
+    });
+    const hlsPath = requestedPath.replace(/^\/+/, "");
+    if (!isSafeHlsPath(hlsPath)) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "HLS resource not found.");
+    }
+
+    const file = await services.storage.getObject(`${outputPrefix}/${hlsPath}`);
+    if (!file) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "HLS resource not found.");
+    }
+
+    return {
+      stream: file.body,
+      contentType: hlsContentType(hlsPath),
+      contentLength: file.contentLength,
+      isManifest: /\.m3u8$/i.test(hlsPath),
+      isPublic: context.is_preview || context.pricing_type === "free",
+    };
+  }
+
   /**
    * Fetches the media file stream and metadata from storage.
    *
@@ -453,9 +701,12 @@ export function createMediaService({
     confirmUpload,
     queueTranscodeJob,
     retryTranscodeJob,
+    cancelTranscodeJob,
     getMediaAsset,
     getMediaAssets,
     getVideoJobProgress,
+    getPlaybackBootstrap,
+    getHlsStream,
     getMediaStream,
   };
 }

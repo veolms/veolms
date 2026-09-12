@@ -18,9 +18,6 @@ export interface AuthMiddleware {
     request: FastifyRequest,
     reply: FastifyReply,
   ) => Promise<void>;
-  requirePermission: (
-    permission: string,
-  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   requireRoles: (
     roles: string[],
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -107,33 +104,6 @@ export function createAuthMiddleware(
     }
   }
 
-  function requirePermission(permission: string) {
-    return async (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ): Promise<void> => {
-      // 1. Ensure authenticated
-      if (!request.user || !request.session) {
-        return reply
-          .code(401)
-          .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
-      }
-
-      // 2. Enforce MFA check for users who have MFA enabled or mandatory
-      if (sessionHasPendingMfa(request)) {
-        return sendMfaRequired(
-          reply,
-          "Multi-factor authentication code required to complete action",
-        );
-      }
-
-      // 3. Verify user has capability permission
-      if (!request.user.permissions.includes(permission)) {
-        return reply.code(403).send(httpError(403, "FORBIDDEN", "Forbidden"));
-      }
-    };
-  }
-
   /**
    * Restricts a route to users holding at least one of the given roles. Must
    * be used AFTER authenticate + requireAuthenticated in the preHandler chain.
@@ -167,7 +137,6 @@ export function createAuthMiddleware(
     requireAuthenticated,
     requireMfaVerified,
     requireMfaVerifiedIfAuthenticated,
-    requirePermission,
     requireRoles,
   };
 }

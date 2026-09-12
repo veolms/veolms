@@ -1,7 +1,7 @@
 import type { ExternalTextTrack, VideoSource } from "@veolms/video-player";
 import type { CourseVideo } from "../courseContent";
 import {
-  appendLearningHlsCacheVersion,
+  createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
 } from "./learningHlsConstants";
@@ -31,6 +31,7 @@ export function createLearningLessonVideoSource(options: {
   lessonTitle: string;
   mediaKey: string;
   startTime: number;
+  protectedPlayback?: boolean;
 }): VideoSource {
   const hls = isHlsUrl(options.media.src);
   return {
@@ -48,8 +49,12 @@ export function createLearningLessonVideoSource(options: {
     },
     streaming: hls ? { ...LEARNING_HLS_STREAMING } : undefined,
     networking: hls
-      ? { requestFilter: appendLearningHlsCacheVersion }
+      ? {
+          requestFilter: createLearningHlsRequestFilter({
+            protectedPlayback: options.protectedPlayback,
+          }),
+        }
       : undefined,
-    textTracks: [...LEARNING_LESSON_TEXT_TRACKS],
+    textTracks: undefined,
   };
 }

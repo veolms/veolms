@@ -199,8 +199,8 @@ export function createAuthService({
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
 
-    const rbac = await getUserRbac(userId);
-    return { ...user, ...rbac };
+    const roles = await getUserRoles(userId);
+    return { ...user, roles };
   }
 
   async function sendPhoneVerificationOtp(
@@ -363,8 +363,8 @@ export function createAuthService({
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
 
-    const rbac = await getUserRbac(userId);
-    return { ...updatedUser, ...rbac };
+    const roles = await getUserRoles(userId);
+    return { ...updatedUser, roles };
   }
 
   async function deactivateAccount(userId: string): Promise<void> {
@@ -398,13 +398,8 @@ export function createAuthService({
     });
   }
 
-  async function getUserRbac(userId: string) {
-    const [roles, permissions, menus] = await Promise.all([
-      userRepository.listUserRoleNames(database, userId),
-      userRepository.listUserPermissions(database, userId),
-      userRepository.listUserMenus(database, userId),
-    ]);
-    return { roles, permissions, menus };
+  async function getUserRoles(userId: string): Promise<string[]> {
+    return userRepository.listUserRoleNames(database, userId);
   }
 
   async function login(input: {
@@ -454,8 +449,8 @@ export function createAuthService({
     );
 
     const session = await sessionService.establishSession(user, input.request);
-    const rbac = await getUserRbac(user.id);
-    return { user: { ...user, ...rbac }, session };
+    const roles = await getUserRoles(user.id);
+    return { user: { ...user, roles }, session };
   }
 
   async function register(input: {
@@ -557,9 +552,9 @@ export function createAuthService({
     });
     const user = await requireUser(userId);
     const session = await sessionService.establishSession(user, input.request);
-    const rbac = await getUserRbac(user.id);
+    const roles = await getUserRoles(user.id);
 
-    return { user: { ...user, ...rbac }, session };
+    return { user: { ...user, roles }, session };
   }
 
   /** Appends a numeric suffix until the username is free. */
@@ -672,7 +667,7 @@ export function createAuthService({
     verifyEmail,
     login,
     register,
-    getUserRbac,
+    getUserRoles,
     generateUniqueUsername,
     createUser,
     requireUser,

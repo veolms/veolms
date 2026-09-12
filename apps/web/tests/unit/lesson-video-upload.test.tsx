@@ -35,10 +35,23 @@ describe("LessonVideoUpload", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders 'Upload' when no video is attached and 'Change Video' when video is attached", () => {
+    const { rerender } = render(<LessonVideoUpload onMediaAttached={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
+
+    rerender(
+      <LessonVideoUpload
+        mediaAssetId="11111111-1111-4111-8111-111111111111"
+        onMediaAttached={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Change Video" })).toBeInTheDocument();
+  });
+
   it("opens a persistent modal and only closes from the explicit close button", () => {
     render(<LessonVideoUpload onMediaAttached={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
 
     const dialog = screen.getByRole("dialog", {
       name: "Upload Lesson Video",
@@ -66,7 +79,7 @@ describe("LessonVideoUpload", () => {
 
   it("rejects non-video files before creating a media asset", () => {
     render(<LessonVideoUpload onMediaAttached={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
 
     const input = screen.getByLabelText("Choose a video file");
     const invalidFile = new File(["not a video"], "notes.txt", {
@@ -82,7 +95,7 @@ describe("LessonVideoUpload", () => {
   it("uploads a valid dropped video and attaches the returned media asset", async () => {
     const onMediaAttached = vi.fn();
     render(<LessonVideoUpload onMediaAttached={onMediaAttached} />);
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
 
     const dropzone = screen.getByRole("region", {
       name: "Video upload dropzone",
@@ -152,7 +165,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -196,7 +209,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -248,7 +261,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -282,7 +295,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     expect(
       screen.getByRole("button", { name: "Choose Replacement Video" }),
@@ -302,7 +315,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     expect(screen.getByText("Checking…")).toBeInTheDocument();
     expect(screen.queryByText("0%")).toBeNull();
@@ -316,7 +329,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -361,7 +374,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -413,7 +426,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
 
     const source = mediaMocks.createVideoJobProgressEventSource.mock.results[0]
       ?.value as {
@@ -469,7 +482,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
     const input = screen.getByLabelText("Choose a video file");
     const replacementFile = new File(["replacement"], "replacement.mp4", {
       type: "video/mp4",
@@ -527,7 +540,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
     const input = screen.getByLabelText("Choose a video file");
     fireEvent.change(input, {
       target: {
@@ -585,7 +598,7 @@ describe("LessonVideoUpload", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload New" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change Video" }));
     fireEvent.change(screen.getByLabelText("Choose a video file"), {
       target: {
         files: [

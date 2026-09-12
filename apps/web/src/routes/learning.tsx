@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   useLocation,
   useNavigate,
@@ -10,8 +10,11 @@ import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
   getLearningHlsBootstrap,
   getLearningHlsPreconnectHref,
+  getLearningPlaybackRequestMetadata,
+  LEARNING_COURSE_SLUG_META_NAME,
   LEARNING_HLS_MANIFEST_META_NAME,
   LEARNING_HLS_MEDIA_KEY_META_NAME,
+  LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
@@ -31,6 +34,7 @@ import { useUpsertLearningSpaceSession } from "../services/learning-space";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
+import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -39,9 +43,23 @@ export function meta({ location, params }: Route.MetaArgs) {
     name === "title" ? { title: content } : { name, content },
   );
   const bootstrap = getLearningHlsBootstrap(params);
-  if (!bootstrap) return descriptors;
+  const requestMetadata = getLearningPlaybackRequestMetadata(params);
+  const safeMetadata = requestMetadata
+    ? [
+        {
+          name: LEARNING_COURSE_SLUG_META_NAME,
+          content: requestMetadata.courseSlug,
+        },
+        {
+          name: LEARNING_LESSON_NUMBER_META_NAME,
+          content: String(requestMetadata.lessonNumber),
+        },
+      ]
+    : [];
+  if (!bootstrap) return [...descriptors, ...safeMetadata];
   return [
     ...descriptors,
+    ...safeMetadata,
     { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
     { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
   ];
@@ -49,7 +67,12 @@ export function meta({ location, params }: Route.MetaArgs) {
 
 export function links(args?: Pick<Route.MetaArgs, "params">) {
   const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
-  if (!bootstrap) return [];
+  if (!bootstrap) {
+    const apiOrigin = getVideoPlaybackApiOrigin();
+    return apiOrigin
+      ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
+      : [];
+  }
   const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
   return preconnectHref
     ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
@@ -82,10 +105,13 @@ export default function LearningRoute() {
   const { data: courseOverview } = useCourseOverview(courseSlug, {
     enabled: Boolean(courseSlug),
   });
-  const { data: publishedCoursesData } = useCourses({
-    enabled: Boolean(activeUser),
-  });
   const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
+  const { data: publishedCoursesData } = useCourses({
+    // Canonical API routes already resolve their session key from the
+    // overview response. Only legacy local keys need the catalogue lookup to
+    // discover their mapped API course.
+    enabled: Boolean(activeUser && apiCourseSlugForKey),
+  });
   const apiCourse = publishedCoursesData?.courses.find(
     (course) =>
       course.id === courseSlug ||
@@ -97,6 +123,23 @@ export default function LearningRoute() {
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
     : 1;
+
+  useLayoutEffect(() => {
+    if (!courseSlug) return;
+
+    // Hard navigations start from the root head script. This covers SPA lesson
+    // changes, where React Router updates the lesson meta tags without a new
+    // document and therefore cannot execute that script again.
+    void import("../learning/earlyHlsPreload")
+      .then(({ startEarlyHlsPreload }) =>
+        startEarlyHlsPreload(
+          getLearningHlsBootstrap({ courseSlug, lectureSlug }),
+          getLearningPlaybackRequestMetadata({ courseSlug, lectureSlug }),
+        ),
+      )
+      .catch(() => undefined);
+  }, [courseSlug, lectureSlug]);
+
   useEffect(() => {
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
@@ -222,6 +265,7 @@ export default function LearningRoute() {
     <LearningWorkspace
       key={courseSlug}
       courseSlug={courseSlug}
+      userId={activeUser?.id}
       lessonId={lessonId}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}

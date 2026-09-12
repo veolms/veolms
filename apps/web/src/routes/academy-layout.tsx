@@ -22,6 +22,7 @@ import {
   type CourseOpenOptions,
 } from "../courses/catalogue";
 import { useCurrentUser, useSignOut } from "../services/auth";
+import { useSidenav } from "../services/navigation";
 import { useAuthStore } from "../store/auth.store";
 import type { LearningCourse } from "../StudentPages";
 import {
@@ -282,9 +283,10 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
+  const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(activeUser?.menus),
-    [activeUser?.menus],
+    () => resolveShellNavigation(sidenavData?.menus),
+    [sidenavData?.menus],
   );
 
   useLayoutEffect(() => {

@@ -30,10 +30,65 @@ export function createMediaController({ service }: { service: MediaService }) {
     return await service.getVideoJobProgress(mediaId, ownerId);
   }
 
+  async function getPlaybackBootstrap(
+    request: FastifyRequest<{
+      Params: { idOrSlug: string; lessonNumber: number };
+    }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getPlaybackBootstrap(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
+      user,
+    );
+  }
+
+  async function streamHlsResource(
+    request: FastifyRequest<{
+      Params: { mediaId: string; "*": string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    const result = await service.getHlsStream(
+      request.params.mediaId,
+      request.params["*"],
+      user,
+    );
+    reply.header("Content-Type", result.contentType);
+    if (result.contentLength !== undefined) {
+      reply.header("Content-Length", result.contentLength);
+    }
+    reply.header(
+      "Cache-Control",
+      result.isPublic
+        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
+        : result.isManifest
+          ? "private, no-store"
+          : "private, max-age=86400",
+    );
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(result.stream);
+  }
+
   async function retryVideoJob(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
   ) {
     return service.retryTranscodeJob(
+      request.params.mediaId,
+      request.user!.id,
+      request.log,
+    );
+  }
+
+  async function cancelVideoJob(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return service.cancelTranscodeJob(
       request.params.mediaId,
       request.user!.id,
       request.log,
@@ -124,7 +179,10 @@ export function createMediaController({ service }: { service: MediaService }) {
     presignMediaUpload,
     confirmMediaUpload,
     getVideoJobProgress,
+    getPlaybackBootstrap,
+    streamHlsResource,
     retryVideoJob,
+    cancelVideoJob,
     streamVideoJobProgress,
     getMediaAssetStream,
   };

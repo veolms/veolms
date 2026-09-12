@@ -18,6 +18,7 @@ const EARLY_SHAKA_PRELOAD_SETTLE_KEY = "__VEO_SHAKA_PRELOAD_SETTLE__";
 
 export interface EarlyShakaPreloadSession {
   manifestUrl: string;
+  mediaKey?: string;
   player: ShakaPlayerLike | null;
   preloadPromise: Promise<ShakaPreloadManagerLike | null> | null;
   consumed: boolean;
@@ -181,11 +182,16 @@ export async function startEarlyShakaPreload(
   if (existing?.consumed) {
     existing = null;
   }
-  if (existing?.player && existing.manifestUrl === source.src) {
+  const existingMatches =
+    existing &&
+    existing.manifestUrl === source.src &&
+    (!existing.mediaKey || !source.id || existing.mediaKey === source.id);
+  if (existingMatches && existing?.player) {
+    existing!.mediaKey = source.id;
     settleEarlySession();
     return existing;
   }
-  if (existing?.player && existing.manifestUrl !== source.src) {
+  if (existing && !existingMatches) {
     await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
     existing = getEarlyShakaPreloadSession();
   }
@@ -197,6 +203,7 @@ export async function startEarlyShakaPreload(
     });
     session = {
       manifestUrl: source.src,
+      mediaKey: source.id,
       player: null,
       preloadPromise: null,
       consumed: false,
@@ -204,6 +211,7 @@ export async function startEarlyShakaPreload(
     };
   }
   session.manifestUrl = source.src;
+  session.mediaKey = source.id;
   store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] = session;
 
   try {
@@ -212,6 +220,7 @@ export async function startEarlyShakaPreload(
     );
     runtime.polyfill.installAll();
     if (!runtime.Player.isBrowserSupported()) {
+      if (store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] !== session) return null;
       await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
       return null;
     }
@@ -223,14 +232,28 @@ export async function startEarlyShakaPreload(
     }
 
     const networkingFilters = createShakaNetworkingFilters(source, runtime);
-    registerShakaNetworkingFilters(player, networkingFilters);
 
+    // A newer lesson may have replaced this session while the Shaka runtime
+    // was loading. Never let the stale player take ownership of the global
+    // handoff or keep downloading the previous lesson.
+    if (
+      store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] !== session ||
+      session.consumed ||
+      session.manifestUrl !== source.src ||
+      (session.mediaKey && source.id && session.mediaKey !== source.id)
+    ) {
+      await player.destroy();
+      return null;
+    }
+
+    registerShakaNetworkingFilters(player, networkingFilters);
     session.player = player;
     session.networkingFilters = networkingFilters;
     session.preloadPromise = startPreload(player, source).catch(() => null);
     settleEarlySession();
     return session;
   } catch (error) {
+    if (store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] !== session) return null;
     settleEarlySession(error);
     await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
     return null;

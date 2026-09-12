@@ -11,7 +11,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createReadStream, createWriteStream, statSync } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -19,6 +19,8 @@ import { pipeline } from "node:stream/promises";
 export interface StorageOptions extends Partial<S3ClientConfig> {
   bucket: string;
   endpoint?: string;
+  /** Public CDN origin mapped to the storage bucket root, if configured. */
+  publicBaseUrl?: string;
   region?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
@@ -41,12 +43,15 @@ export interface StorageUploadItem {
 export class S3StorageService {
   private client: S3Client;
   private bucket: string;
+  private publicBaseUrl: string | null;
 
   constructor(options: StorageOptions) {
     if (!options.bucket) {
       throw new Error("Storage bucket name is required.");
     }
     this.bucket = options.bucket;
+    this.publicBaseUrl =
+      options.publicBaseUrl?.trim().replace(/\/+$/, "") || null;
 
     if (options.client) {
       this.client = options.client;
@@ -88,6 +93,22 @@ export class S3StorageService {
 
   getBucket(): string {
     return this.bucket;
+  }
+
+  /**
+   * Resolves a storage key against the configured public CDN origin. This is
+   * intentionally opt-in; callers must never infer a public URL from the
+   * private S3 endpoint.
+   */
+  getPublicObjectUrl(key: string): string | null {
+    if (!this.publicBaseUrl) return null;
+
+    const encodedKey = key
+      .replace(/^\/+/, "")
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    return `${this.publicBaseUrl}/${encodedKey}`;
   }
 
   /**
@@ -144,23 +165,22 @@ export class S3StorageService {
   }
 
   /**
-   * Uploads a local file to S3.
+   * Uploads a local file to S3/R2 with automatic retries on network drop.
    */
   async uploadFile(
     key: string,
     localFilePath: string,
     contentType: string,
   ): Promise<void> {
-    const readStream = createReadStream(localFilePath);
-    const stat = statSync(localFilePath);
+    const fileBuffer = await readFile(localFilePath);
 
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: readStream,
+        Body: fileBuffer,
         ContentType: contentType,
-        ContentLength: stat.size,
+        ContentLength: fileBuffer.byteLength,
       }),
     );
   }
@@ -170,7 +190,7 @@ export class S3StorageService {
    */
   async uploadFiles(
     files: readonly StorageUploadItem[],
-    concurrency = 16,
+    concurrency = 6,
   ): Promise<number> {
     if (files.length === 0) {
       return 0;
@@ -191,7 +211,7 @@ export class S3StorageService {
         const contentType = item.contentType ?? getMimeType(filename);
 
         let attempts = 0;
-        const maxRetries = 3;
+        const maxRetries = 5;
         while (true) {
           try {
             await this.uploadFile(item.key, item.localFilePath, contentType);
@@ -203,7 +223,7 @@ export class S3StorageService {
               throw err;
             }
             await new Promise((resolve) =>
-              setTimeout(resolve, 200 * Math.pow(2, attempts)),
+              setTimeout(resolve, 500 * Math.pow(2, attempts)),
             );
           }
         }
@@ -226,7 +246,7 @@ export class S3StorageService {
   async uploadDirectory(
     localDirectory: string,
     s3Prefix: string,
-    concurrency = 16,
+    concurrency = 6,
   ): Promise<number> {
     const cleanPrefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
     const fileList: StorageUploadItem[] = [];
