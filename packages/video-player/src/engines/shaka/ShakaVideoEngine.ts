@@ -140,6 +140,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   >["responseFilter"] = null;
   #adoptedPreloadSession: EarlyShakaPreloadSession | null = null;
   #autoQuality = true;
+  #selectedTextTrackId: string | null = null;
   #browserSupported: boolean | null = null;
 
   constructor(options: ShakaVideoEngineOptions = {}) {
@@ -165,11 +166,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const runtime = this.requireRuntime();
     const generation = this.beginOperation();
     this.startLoading(source);
+    this.#selectedTextTrackId = null;
     this.#autoQuality = source.streaming?.abrEnabled ?? true;
 
     try {
       this.clearNetworkingFilters();
-      const preloadSession = this.takeMatchingPreloadSession(source.src);
+      const preloadSession = this.takeMatchingPreloadSession(source);
       if (
         !configureShakaPlayer(player, source, runtime, {
           reset: !preloadSession,
@@ -315,7 +317,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   override selectTextTrack(id: string | null): void {
     const player = this.requirePlayer();
     if (id === null) {
+      this.#selectedTextTrackId = null;
       player.selectTextTrack(null);
+      player.setTextTrackVisibility?.(false);
       this.refreshTracks(false);
       this.setTrackState({ selectedTextTrackId: null });
       this.emit("texttrackchange", { track: null });
@@ -331,7 +335,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       });
     }
 
+    this.#selectedTextTrackId = id;
     player.selectTextTrack(track);
+    player.setTextTrackVisibility?.(true);
     this.refreshTracks(false);
     const selected = this.getTextTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedTextTrackId: id });
@@ -378,6 +384,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   protected override async onDetaching(
     _media: HTMLMediaElement,
   ): Promise<void> {
+    this.#selectedTextTrackId = null;
     this.clearNetworkingFilters();
     this.clearTrackMaps();
     await this.#player?.detach();
@@ -429,7 +436,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   private takeMatchingPreloadSession(
-    manifestUrl: string,
+    source: VideoSource,
   ): EarlyShakaPreloadSession | null {
     const session = this.#adoptedPreloadSession;
     if (!session || session.consumed) {
@@ -441,7 +448,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return null;
     }
 
-    if (session.manifestUrl !== manifestUrl) {
+    const manifestMatches = session.manifestUrl === source.src;
+    const mediaKeyMatches =
+      !session.mediaKey || !source.id || session.mediaKey === source.id;
+    // The paid bootstrap can resolve after the player source was created. A
+    // stable media key is sufficient to adopt that session; its manifest URL
+    // may be the protected API HLS path rather than the local fallback URL.
+    if (!manifestMatches && !mediaKeyMatches) {
       consumeEarlyShakaPreloadSession(session);
       this.#adoptedPreloadSession = null;
       void discardEarlyShakaPreloadManager(session);
@@ -495,6 +508,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     listen("audiotrackschanged", () => this.refreshTracks(true));
     listen("audiotrackchanged", () => this.refreshTracks(true));
     listen("textchanged", () => this.refreshTracks(true));
+    listen("texttrackvisibilitychanged", () => this.refreshTracks(true));
     listen("adaptation", () => {
       this.refreshTracks(false);
       const active = this.getQualities().find((quality) => quality.active) ?? null;
@@ -549,16 +563,30 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#audioTracks.set(normalized.id, track);
     }
 
+    const isVisible = player.isTextTrackVisible
+      ? player.isTextTrackVisible()
+      : Boolean(this.#selectedTextTrackId);
+
     const textTracks: VideoTextTrack[] = [];
     for (const track of player.getTextTracks()) {
       const normalized = normalizeShakaTextTrack(track);
+      if (!isVisible) {
+        normalized.active = false;
+      } else if (this.#selectedTextTrackId) {
+        normalized.active = normalized.id === this.#selectedTextTrackId;
+      }
       textTracks.push(normalized);
       this.#textTracks.set(normalized.id, track);
     }
 
     const activeQuality = qualities.find((track) => track.active) ?? null;
     const activeAudio = audioTracks.find((track) => track.active) ?? null;
-    const activeText = textTracks.find((track) => track.active) ?? null;
+    const activeText = isVisible
+      ? (textTracks.find((track) => track.id === this.#selectedTextTrackId) ??
+         textTracks.find((track) => track.active) ??
+         null)
+      : null;
+
     this.setTrackState({
       qualities,
       audioTracks,

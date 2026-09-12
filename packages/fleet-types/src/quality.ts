@@ -40,7 +40,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 28000,
     audioBitrateKbps: 192,
     fps: 60,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "1440p": {
     name: "1440p",
@@ -51,7 +51,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 16000,
     audioBitrateKbps: 192,
     fps: 60,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "1080p": {
     name: "1080p",
@@ -62,7 +62,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 9000,
     audioBitrateKbps: 128,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "720p": {
     name: "720p",
@@ -73,7 +73,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 4800,
     audioBitrateKbps: 128,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "480p": {
     name: "480p",
@@ -84,7 +84,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 2400,
     audioBitrateKbps: 96,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "360p": {
     name: "360p",
@@ -95,7 +95,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 1600,
     audioBitrateKbps: 96,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "240p": {
     name: "240p",
@@ -106,7 +106,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 800,
     audioBitrateKbps: 64,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
   "144p": {
     name: "144p",
@@ -117,7 +117,7 @@ export const QUALITY_PROFILES: Readonly<
     bufferSizeKbps: 400,
     audioBitrateKbps: 48,
     fps: 30,
-    segmentDurationSeconds: 6,
+    segmentDurationSeconds: 2,
   },
 };
 

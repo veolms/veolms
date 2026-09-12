@@ -1,0 +1,6 @@
+Implement student enrollments end to end.
+Add an authenticated API to return the logged-in student’s active enrolled/purchased courses from the enrollments table.
+After successful payment or free enrollment, make sure the course is created as an active enrollment and access is granted.
+Connect the frontend dashboard and course list to this API instead of using mock or hardcoded learningCourses data.
+Show course details, enrollment status, progress, and a Continue Learning action for enrolled courses.
+Make sure revoked/refunded courses are excluded and add basic backend/frontend tests for the complete flow.

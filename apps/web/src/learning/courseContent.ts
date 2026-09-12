@@ -14,7 +14,8 @@ export interface CourseVideo {
 }
 
 export type LessonStatus = "done" | "active" | "todo";
-export type Lesson = [number, string, string, LessonStatus, boolean?];
+export type LessonContentType = "video" | "document";
+export type Lesson = [number, string, string, LessonStatus, boolean?, LessonContentType?];
 
 export interface CourseSection {
   id: number;
@@ -189,7 +190,6 @@ const coreSections: CourseSection[] = [
   {
     id: 1,
     title: "Introduction",
-    /* Legacy hardcoded section progress & done status:
     progress: "5/5",
     lessons: [
       lesson(1, "The Beginning of a Design Journey", "done"),
@@ -198,35 +198,16 @@ const coreSections: CourseSection[] = [
       lesson(4, "Tools Overview", "done"),
       lesson(5, "Career Opportunities", "done"),
     ],
-    */
-    progress: "0/5",
-    lessons: [
-      lesson(1, "The Beginning of a Design Journey", "todo"),
-      lesson(2, "What is UI/UX Design?", "todo"),
-      lesson(3, "The Design Mindset", "todo"),
-      lesson(4, "Tools Overview", "todo"),
-      lesson(5, "Career Opportunities", "todo"),
-    ],
   },
   {
     id: 2,
     title: "User Research",
-    /* Legacy hardcoded section progress & done status:
     progress: "4/6",
     lessons: [
       lesson(6, "Understanding Your Users", "done"),
       lesson(7, "Research Methods", "done"),
       lesson(8, "Empathy Mapping", "done"),
       lesson(9, "Designing for Real Users", "active"),
-      lesson(10, "Usability Testing", "todo"),
-    ],
-    */
-    progress: "0/5",
-    lessons: [
-      lesson(6, "Understanding Your Users", "todo"),
-      lesson(7, "Research Methods", "todo"),
-      lesson(8, "Empathy Mapping", "todo"),
-      lesson(9, "Designing for Real Users", "todo"),
       lesson(10, "Usability Testing", "todo"),
     ],
   },

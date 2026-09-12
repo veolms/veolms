@@ -1,8 +1,5 @@
 import type { Kysely } from "kysely";
-import type {
-  Database,
-  MediaAssetStatus,
-} from "@veolms/database";
+import type { Database, MediaAssetStatus } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -147,7 +144,7 @@ export async function updateVideoJobStatus(
     status: VideoJobStatus;
     progress_percent?: number;
     error_message?: string | null;
-    failed_at?: Date;
+    failed_at?: Date | null;
   },
 ) {
   await database
@@ -169,6 +166,116 @@ export async function findVideoJobByVideoId(
     .selectAll()
     .where("video_id", "=", videoId)
     .orderBy("created_at", "desc")
+    .executeTakeFirst();
+}
+
+/**
+ * Resolves the public, sequential lesson number used by the learning route to
+ * the canonical course/lesson/media records. The web app deliberately keeps
+ * database UUIDs out of learner URLs, so the ordering must match the course
+ * overview adapter: section position, then lesson position.
+ */
+export async function findPlaybackLessonContext(
+  database: Kysely<Database>,
+  courseIdOrSlug: string,
+  lessonNumber: number,
+) {
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      courseIdOrSlug,
+    );
+  return await database
+    .selectFrom("course_lessons")
+    .innerJoin("courses", "courses.id", "course_lessons.course_id")
+    .innerJoin(
+      "course_sections",
+      "course_sections.id",
+      "course_lessons.section_id",
+    )
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin(
+      "media_assets",
+      "media_assets.id",
+      "course_lessons.content_media_id",
+    )
+    .select([
+      "courses.id as course_id",
+      "courses.slug as course_slug",
+      "courses.title as course_title",
+      "courses.status as course_status",
+      "courses.creator_id as course_creator_id",
+      "course_pricing.pricing_type as pricing_type",
+      "course_lessons.id as lesson_id",
+      "course_lessons.title as lesson_title",
+      "course_lessons.content_type as lesson_content_type",
+      "course_lessons.content_media_id as content_media_id",
+      "course_lessons.is_preview as is_preview",
+      "media_assets.status as media_status",
+      "media_assets.duration_seconds as duration_seconds",
+    ])
+    .where((eb) =>
+      isUuid
+        ? eb("courses.id", "=", courseIdOrSlug)
+        : eb("courses.slug", "=", courseIdOrSlug),
+    )
+    .where("courses.deleted_at", "is", null)
+    .where("course_sections.deleted_at", "is", null)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("course_lessons.is_published", "=", true)
+    .orderBy("course_sections.position", "asc")
+    .orderBy("course_lessons.position", "asc")
+    // The public lesson number is the ordered position across all sections.
+    // Offset/limit keeps large courses from serializing every lesson for a
+    // single playback bootstrap request.
+    .offset(lessonNumber - 1)
+    .limit(1)
+    .executeTakeFirst();
+}
+
+/** Resolves the lesson that owns a media asset for HLS request authorization. */
+export async function findPlaybackMediaContext(
+  database: Kysely<Database>,
+  mediaId: string,
+) {
+  return await database
+    .selectFrom("course_lessons")
+    .innerJoin("courses", "courses.id", "course_lessons.course_id")
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin(
+      "media_assets",
+      "media_assets.id",
+      "course_lessons.content_media_id",
+    )
+    .select([
+      "courses.id as course_id",
+      "courses.slug as course_slug",
+      "courses.status as course_status",
+      "courses.creator_id as course_creator_id",
+      "course_pricing.pricing_type as pricing_type",
+      "course_lessons.id as lesson_id",
+      "course_lessons.title as lesson_title",
+      "course_lessons.content_type as lesson_content_type",
+      "course_lessons.is_preview as is_preview",
+      "media_assets.id as media_id",
+      "media_assets.status as media_status",
+      "media_assets.duration_seconds as duration_seconds",
+    ])
+    .where("course_lessons.content_media_id", "=", mediaId)
+    .where("media_assets.id", "=", mediaId)
+    .where("courses.deleted_at", "is", null)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("course_lessons.is_published", "=", true)
+    .executeTakeFirst();
+}
+
+export async function findWorkerProgressByWorkerId(
+  database: Kysely<Database>,
+  workerId: string,
+) {
+  return await database
+    .selectFrom("worker_monitoring")
+    .select("progress_percent")
+    .where("worker_id", "=", workerId)
     .executeTakeFirst();
 }
 

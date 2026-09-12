@@ -18,6 +18,7 @@
     "purge:course-deletions": "pnpm --filter @veolms/api purge:course-deletions",
     "notifications:process": "pnpm --filter @veolms/api notifications:process",
     "instructor:cli": "pnpm --filter @veolms/api instructor:cli",
+    "import:youtube": "pnpm --filter @veolms/api import:youtube",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",

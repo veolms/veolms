@@ -48,7 +48,7 @@ import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
-import { courses, getVisibleCourses } from "./courses/catalogue";
+import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -63,7 +63,7 @@ import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { autosyncManager } from "./lib/autosync";
-import { useCurrentUser, useSignOut, useLogout } from "./services/auth";
+import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
 import {
@@ -103,6 +103,7 @@ import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   getUserRoles,
   getVisibleWorkspaceRoles,
+  hasAdminRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
 } from "./shell/workspaceRole";
@@ -386,7 +387,7 @@ function SidebarTooltipSurface() {
 
   const viewBoxWidth = surfaceWidth
     ? (surfaceWidth * SIDEBAR_TOOLTIP_SOURCE_HEIGHT) /
-      SIDEBAR_TOOLTIP_RENDER_HEIGHT
+    SIDEBAR_TOOLTIP_RENDER_HEIGHT
     : SIDEBAR_TOOLTIP_SOURCE_WIDTH;
   const rightEdge = viewBoxWidth - 1;
   const topRightCurveStart = viewBoxWidth - 21;
@@ -551,7 +552,15 @@ export function CoursesPage({
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
-  const [role, setRole] = useState<CourseRole>("student");
+  const [role, setRole] = useState<CourseRole>(() => {
+    if (typeof window === "undefined") return "student";
+    try {
+      const stored = localStorage.getItem("veolms-role");
+      return stored === "creator" ? "creator" : "student";
+    } catch {
+      return "student";
+    }
+  });
   const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
@@ -708,6 +717,7 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
   const learningSpaceSessionsQuery = useLearningSpaceSessions({
     userId: activeUser?.id,
@@ -715,7 +725,10 @@ export function CoursesPage({
     // need Learning Space sessions before the video can mount. Load these
     // sessions when the panel is opened; keep the existing eager behavior on
     // catalogue/home surfaces.
-    enabled: isAuthenticated && (!renderMain || learningSpaceExpanded),
+    enabled:
+      isAuthenticated &&
+      !isEditingOrCreatingCourse &&
+      (!renderMain || learningSpaceExpanded),
   });
   const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
     activeUser?.id,
@@ -737,10 +750,16 @@ export function CoursesPage({
     [navigationItems],
   );
   const userRoles = getUserRoles(activeUser);
+  const isAdmin = hasAdminRole(userRoles);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
   );
+  const effectiveRole = useMemo(
+    () => (isAuthenticated ? resolveWorkspaceRole(userRoles, role) : "student"),
+    [isAuthenticated, role, userRoles],
+  );
+  const isAuthReady = Boolean(storeUser) || authUserFetched;
   const { isPending: isSigningOut, signOut } = useSignOut();
   const signOutAfterSync = useCallback(async () => {
     try {
@@ -750,28 +769,58 @@ export function CoursesPage({
       setNotice("Couldn't sign out yet. Please try again.");
     }
   }, [setNotice, signOut]);
-  const shouldLoadCourseSurface = !renderMain || Boolean(learningBackground);
-  const { data: publishedCoursesData } = useCourses({
-    enabled: shouldLoadCourseSurface && role === "student",
+  const shouldLoadCourseSurface =
+    (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
+  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
+
+  const {
+    data: publishedCoursesData,
+    isPending: isPublishedPending,
+  } = useCourses({
+    enabled: shouldQueryCourses && effectiveRole === "student",
   });
   const { data: enrolledCoursesData } = useEnrolledCourses({
-    enabled: shouldLoadCourseSurface && role === "student",
+    enabled: shouldLoadCourseSurface && effectiveRole === "student",
   });
-  const { data: myCoursesData } = useMyCourses({
+  const {
+    data: myCoursesData,
+    isPending: isMyCoursesPending,
+  } = useMyCourses({
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
-  const { data: deletedCoursesData } = useDeletedCourses(undefined, {
+  const {
+    data: deletedCoursesData,
+    isPending: isDeletedPending,
+  } = useDeletedCourses(undefined, {
     enabled:
-      shouldLoadCourseSurface &&
-      role === "creator" &&
+      shouldQueryCourses &&
+      isAdmin &&
+      effectiveRole === "creator" &&
       enrollmentFilter === "bin",
   });
+
+  const isLoadingCourses =
+    !isAuthReady ||
+    (effectiveRole === "student"
+      ? isPublishedPending
+      : enrollmentFilter === "bin"
+        ? isDeletedPending
+        : isMyCoursesPending);
+
+  useEffect(() => {
+    if (
+      enrollmentFilter === "bin" &&
+      (!isAdmin || effectiveRole !== "creator")
+    ) {
+      setEnrollmentFilter("all");
+    }
+  }, [enrollmentFilter, isAdmin, effectiveRole]);
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
-  const [deletedMockCourseIds, setDeletedMockCourseIds] = useState<Set<string>>(
+  const [deletingCourseIds, setDeletingCourseIds] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -923,12 +972,9 @@ export function CoursesPage({
         new Set(
           Array.isArray(storedWishlist)
             ? storedWishlist.filter(
-                (courseId): courseId is string =>
-                  typeof courseId === "string" &&
-                  courses.some(
-                    (course) => course.id === courseId && !course.enrolled,
-                  ),
-              )
+              (courseId): courseId is string =>
+                typeof courseId === "string" && Boolean(courseId.trim()),
+            )
             : [],
         ),
       );
@@ -1372,7 +1418,7 @@ export function CoursesPage({
       Math.max(
         0,
         document.scrollingElement?.scrollTop ??
-          document.documentElement.scrollTop,
+        document.documentElement.scrollTop,
       );
     const resolveScrollSource = (target: EventTarget | null): ScrollSource => {
       if (
@@ -1650,7 +1696,7 @@ export function CoursesPage({
   }, [compactNavigation, navigation, role, sidebarMode]);
 
   const allCourses = useMemo(() => {
-    if (role !== "creator") {
+    if (effectiveRole !== "creator") {
       const enrolledSet = new Set<string>();
       const progressMap = new Map<string, number | null>();
       if (enrolledCoursesData?.courses) {
@@ -1704,49 +1750,41 @@ export function CoursesPage({
           }
         }
       }
-      const apiCourses = (publishedCoursesData?.courses || []).map((summary) =>
+      return (publishedCoursesData?.courses || []).map((summary) =>
         adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
-      // Use one catalogue source at a time. The local catalogue is the
-      // intentional fallback for an empty API response; merging both sources
-      // creates duplicate-looking courses with incompatible IDs.
-      if (apiCourses.length > 0) return apiCourses;
-      return courses.map((c) => ({
-        ...c,
-        enrolled:
-          enrolledSet.has(c.id) || (c.slug ? enrolledSet.has(c.slug) : false),
-        progress:
-          progressMap.get(c.id) ??
-          (c.slug ? progressMap.get(c.slug) : null) ??
-          null,
-      }));
     }
     if (enrollmentFilter === "bin") {
-      const apiDeletedCourses = (deletedCoursesData?.courses || []).map(
+      return (deletedCoursesData?.courses || []).map(
         adaptDeletedCourseToCatalogueCourse,
       );
-      const mockDeletedCourses = courses.filter((c) =>
-        deletedMockCourseIds.has(c.id),
-      );
-      return [...apiDeletedCourses, ...mockDeletedCourses];
     }
-    const apiCourses = (myCoursesData?.courses || []).map(
+    return (myCoursesData?.courses || []).map(
       adaptApiCourseToCatalogueCourse,
     );
-    const existingIds = new Set(apiCourses.map((c) => c.id));
-    const nonConflictingMockCourses = courses.filter(
-      (c) => !existingIds.has(c.id) && !deletedMockCourseIds.has(c.id),
-    );
-    return [...apiCourses, ...nonConflictingMockCourses];
   }, [
     deletedCoursesData?.courses,
-    deletedMockCourseIds,
+    effectiveRole,
     enrollmentFilter,
     enrolledCoursesData?.courses,
     learningSpaceSessionsQuery.data?.sessions,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
-    role,
+  ]);
+
+  const totalCoursesCount = useMemo(() => {
+    if (effectiveRole !== "creator") {
+      return publishedCoursesData?.courses?.length ?? 0;
+    }
+    return (
+      (myCoursesData?.courses?.length ?? 0) +
+      (deletedCoursesData?.courses?.length ?? 0)
+    );
+  }, [
+    deletedCoursesData?.courses?.length,
+    effectiveRole,
+    myCoursesData?.courses?.length,
+    publishedCoursesData?.courses?.length,
   ]);
 
   // Authenticated Learning Space entries must be backed by a real API course.
@@ -1763,16 +1801,7 @@ export function CoursesPage({
   }, [allCourses]);
 
   const handleDeleteCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => new Set(prev).add(course.id));
-      setNotice(`${course.title} moved to Bin.`);
-      return;
-    }
-
+    setDeletingCourseIds((prev) => new Set(prev).add(course.id));
     try {
       await deleteCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} moved to Bin.`);
@@ -1780,27 +1809,19 @@ export function CoursesPage({
       const apiError = err as { message?: string };
       setNotice(
         apiError?.message ||
-          `Failed to move "${course.title}" to Bin. Please try again.`,
+        `Failed to move "${course.title}" to Bin. Please try again.`,
       );
       throw err;
-    }
-  };
-
-  const handleRestoreCourse = async (course: Course) => {
-    const isMock = !course.id.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-
-    if (isMock) {
-      setDeletedMockCourseIds((prev) => {
+    } finally {
+      setDeletingCourseIds((prev) => {
         const next = new Set(prev);
         next.delete(course.id);
         return next;
       });
-      setNotice(`${course.title} was restored.`);
-      return;
     }
+  };
 
+  const handleRestoreCourse = async (course: Course) => {
     try {
       await restoreCourseMutation.mutateAsync(course.id);
       setNotice(`${course.title} was restored.`);
@@ -1808,7 +1829,7 @@ export function CoursesPage({
       const apiError = err as { message?: string };
       setNotice(
         apiError?.message ||
-          `Failed to restore "${course.title}". Please try again.`,
+        `Failed to restore "${course.title}". Please try again.`,
       );
       throw err;
     }
@@ -1819,7 +1840,7 @@ export function CoursesPage({
       getVisibleCourses(allCourses, {
         activeSection,
         wishlisted,
-        role,
+        role: effectiveRole,
         enrollmentFilter,
         statusFilter,
         search,
@@ -1828,8 +1849,8 @@ export function CoursesPage({
     [
       activeSection,
       allCourses,
+      effectiveRole,
       enrollmentFilter,
-      role,
       search,
       sort,
       statusFilter,
@@ -1892,7 +1913,7 @@ export function CoursesPage({
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
           ? current[role] ||
-            getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
           : isPublicNavigation
             ? getDefaultNavigationOrder(navigationItems)
             : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
@@ -1915,7 +1936,7 @@ export function CoursesPage({
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
         ? navigationOrders[role] ||
-          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+        getInitialNavigationOrder(role, navigationItems, activeUser?.id)
         : isPublicNavigation
           ? getDefaultNavigationOrder(navigationItems)
           : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
@@ -2112,6 +2133,7 @@ export function CoursesPage({
   const sidebarPresentedAsOverlay = sidebarHidden || compactNavigation;
   const sidebarVisuallyCollapsed =
     sidebarCollapsed && !sidebarPresentedAsOverlay;
+
   const sidebarControlAction = compactNavigation
     ? "Close navigation"
     : sidebarHidden
@@ -2138,7 +2160,7 @@ export function CoursesPage({
     !sidebarVisuallyCollapsed ||
     (sidebarResizing &&
       (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
-        SIDEBAR_MIN_WIDTH);
+      SIDEBAR_MIN_WIDTH);
 
   useLayoutEffect(() => {
     const group = appearanceControlsRef.current;
@@ -2632,7 +2654,7 @@ export function CoursesPage({
   const sidebarResizeContentVisible =
     sidebarResizing &&
     (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
-      SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
+    SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
     sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
@@ -3012,7 +3034,7 @@ export function CoursesPage({
         !cancelled &&
         (Math.abs(totalDistance) >= SIDEBAR_FLING_MIN_DISTANCE ||
           Math.max(Math.abs(resize.velocityX), Math.abs(averageVelocity)) >=
-            SIDEBAR_FLING_VELOCITY);
+          SIDEBAR_FLING_VELOCITY);
 
       if (intentionalSwipe && totalDistance < 0) {
         setEdgeSidebarOpen(false);
@@ -3065,16 +3087,16 @@ export function CoursesPage({
     const fastFling =
       Math.abs(totalDistance) >= SIDEBAR_FLING_MIN_DISTANCE &&
       Math.max(Math.abs(resize.velocityX), Math.abs(averageVelocity)) >=
-        SIDEBAR_FLING_VELOCITY;
+      SIDEBAR_FLING_VELOCITY;
     const halfwayWidth =
       SIDEBAR_COLLAPSED_WIDTH +
       (resize.expandedWidthAtStart - SIDEBAR_COLLAPSED_WIDTH) / 2;
     const shouldExpand = resize.collapsedAtStart
       ? (fastFling && totalDistance > 0) || resize.previewWidth >= halfwayWidth
       : !(
-          (fastFling && totalDistance < 0) ||
-          resize.previewWidth <= halfwayWidth
-        );
+        (fastFling && totalDistance < 0) ||
+        resize.previewWidth <= halfwayWidth
+      );
 
     if (!shouldExpand) {
       setSidebarWidth(resize.expandedWidthAtStart);
@@ -3271,7 +3293,7 @@ export function CoursesPage({
       onNavigatePage,
       upsertLearningSpaceSession,
     ],
-  );``
+  ); ``
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
@@ -3367,10 +3389,10 @@ export function CoursesPage({
               : isPublicNavigation
                 ? getDefaultNavigationVisibility(navigationItems)
                 : getInitialNavigationVisibility(
-                    role,
-                    navigationItems,
-                    activeUser?.id,
-                  )
+                  role,
+                  navigationItems,
+                  activeUser?.id,
+                )
           }
           onNavigationVisibilityChange={(visibleItems) =>
             setNavigationVisibility((current) => ({
@@ -3416,6 +3438,7 @@ export function CoursesPage({
             courseSlug={surfaceCourseSlug}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
+            role={role}
           />
         </Suspense>
       );
@@ -3459,7 +3482,9 @@ export function CoursesPage({
     return (
       <CourseCatalogue
         activeSection={surfaceActiveSection}
-        role={role}
+        role={effectiveRole}
+        isAdmin={isAdmin}
+        isLoading={isLoadingCourses}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
         onEnrollmentFilterChange={setEnrollmentFilter}
@@ -3470,6 +3495,7 @@ export function CoursesPage({
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         visibleCourses={visibleCourses}
+        totalCoursesCount={totalCoursesCount}
         onWishlist={toggleWishlist}
         onOpenCourse={onOpenCourse}
         courseMenu={courseMenu}
@@ -3479,6 +3505,7 @@ export function CoursesPage({
         onResetCatalogue={resetCatalogue}
         onDeleteCourse={handleDeleteCourse}
         onRestoreCourse={handleRestoreCourse}
+        deletingCourseIds={deletingCourseIds}
       />
     );
   };
@@ -3544,53 +3571,53 @@ export function CoursesPage({
           >
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
-              <div
-                className="sidebar-resize-handle"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize sidebar"
-                aria-keyshortcuts={`${primaryShortcutModifier}+B`}
-                title={
-                  showKeyboardShortcuts
-                    ? `Resize sidebar | ${sidebarShortcutTitle}`
-                    : "Resize sidebar"
-                }
-                aria-valuemin={
-                  sidebarPresentedAsOverlay
-                    ? SIDEBAR_MIN_WIDTH
-                    : SIDEBAR_COLLAPSED_WIDTH
-                }
-                aria-valuemax={sidebarMaxWidth}
-                aria-valuenow={Math.round(
-                  sidebarResizePreviewWidth ??
+                <div
+                  className="sidebar-resize-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize sidebar"
+                  aria-keyshortcuts={`${primaryShortcutModifier}+B`}
+                  title={
+                    showKeyboardShortcuts
+                      ? `Resize sidebar | ${sidebarShortcutTitle}`
+                      : "Resize sidebar"
+                  }
+                  aria-valuemin={
+                    sidebarPresentedAsOverlay
+                      ? SIDEBAR_MIN_WIDTH
+                      : SIDEBAR_COLLAPSED_WIDTH
+                  }
+                  aria-valuemax={sidebarMaxWidth}
+                  aria-valuenow={Math.round(
+                    sidebarResizePreviewWidth ??
                     (sidebarPresentedAsOverlay
                       ? renderedSidebarWidth
                       : sidebarCollapsed
                         ? SIDEBAR_COLLAPSED_WIDTH
                         : renderedSidebarWidth),
-                )}
-                aria-valuetext={
-                  sidebarPresentedAsOverlay
-                    ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
-                    : sidebarCollapsed
-                      ? "Collapsed sidebar"
-                      : `${Math.round(renderedSidebarWidth)} pixels wide`
-                }
-                tabIndex={0}
-                onKeyDown={handleSidebarResizeKeyDown}
-                onDoubleClick={toggleSidebarWidth}
-                onPointerEnter={dismissSidebarTooltipImmediately}
-                onPointerDown={startSidebarResize}
-                onPointerMove={moveSidebarResize}
-                onPointerUp={endSidebarResize}
-                onPointerCancel={(event) => endSidebarResize(event, true)}
-                onLostPointerCapture={(event) => {
-                  if (sidebarResizeRef.current?.pointerId === event.pointerId) {
-                    endSidebarResize(event, true);
+                  )}
+                  aria-valuetext={
+                    sidebarPresentedAsOverlay
+                      ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
+                      : sidebarCollapsed
+                        ? "Collapsed sidebar"
+                        : `${Math.round(renderedSidebarWidth)} pixels wide`
                   }
-                }}
-              />
-            )}
+                  tabIndex={0}
+                  onKeyDown={handleSidebarResizeKeyDown}
+                  onDoubleClick={toggleSidebarWidth}
+                  onPointerEnter={dismissSidebarTooltipImmediately}
+                  onPointerDown={startSidebarResize}
+                  onPointerMove={moveSidebarResize}
+                  onPointerUp={endSidebarResize}
+                  onPointerCancel={(event) => endSidebarResize(event, true)}
+                  onLostPointerCapture={(event) => {
+                    if (sidebarResizeRef.current?.pointerId === event.pointerId) {
+                      endSidebarResize(event, true);
+                    }
+                  }}
+                />
+              )}
             <div
               className="courses-sidebar__brand"
               title={sidebarBrandTitle}
@@ -3788,9 +3815,8 @@ export function CoursesPage({
                 <button
                   type="button"
                   className="courses-profile__button"
-                  aria-label={`${shellProfileDisplayName}, ${
-                    role === "creator" ? "Instructor" : "Student"
-                  }. Open role and appearance menu`}
+                  aria-label={`${shellProfileDisplayName}, ${role === "creator" ? "Instructor" : "Student"
+                    }. Open role and appearance menu`}
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
@@ -4360,7 +4386,7 @@ export function CoursesPage({
                         ? "is-drop-target"
                         : "",
                       navigationDropTarget?.label === label &&
-                      navigationDropTarget.position === "after"
+                        navigationDropTarget.position === "after"
                         ? "is-drop-after"
                         : "",
                     ]

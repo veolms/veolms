@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   useLocation,
   useNavigate,
@@ -10,15 +10,14 @@ import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
   getLearningHlsBootstrap,
   getLearningHlsPreconnectHref,
+  getLearningPlaybackRequestMetadata,
+  LEARNING_COURSE_SLUG_META_NAME,
   LEARNING_HLS_MANIFEST_META_NAME,
   LEARNING_HLS_MEDIA_KEY_META_NAME,
+  LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
-import {
-  courses as localCourses,
-  getApiCourseSlugForLegacyKey,
-  getCourseRouteKey,
-} from "../courses/catalogue";
+import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerOrigin,
   getCoursePlayerPath,
@@ -30,45 +29,12 @@ import {
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
-import { useCourseOverview } from "../services/courses";
+import { useCourseOverview, useCourses } from "../services/courses";
 import { useUpsertLearningSpaceSession } from "../services/learning-space";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
-
-const COURSE_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-type IdleSchedulerWindow = Window & {
-  requestIdleCallback?: (
-    callback: () => void,
-    options?: { timeout: number },
-  ) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-function scheduleLearningSessionSync(sync: () => void) {
-  const idleWindow = window as IdleSchedulerWindow;
-  let idleHandle: number | undefined;
-  let timeoutHandle: number | undefined;
-
-  if (idleWindow.requestIdleCallback) {
-    idleHandle = idleWindow.requestIdleCallback(sync, { timeout: 1500 });
-  } else {
-    // Keep the fallback outside the initial render window in browsers without
-    // requestIdleCallback.
-    timeoutHandle = window.setTimeout(sync, 1000);
-  }
-
-  return () => {
-    if (idleHandle !== undefined && idleWindow.cancelIdleCallback) {
-      idleWindow.cancelIdleCallback(idleHandle);
-    }
-    if (timeoutHandle !== undefined) {
-      window.clearTimeout(timeoutHandle);
-    }
-  };
-}
+import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -77,9 +43,23 @@ export function meta({ location, params }: Route.MetaArgs) {
     name === "title" ? { title: content } : { name, content },
   );
   const bootstrap = getLearningHlsBootstrap(params);
-  if (!bootstrap) return descriptors;
+  const requestMetadata = getLearningPlaybackRequestMetadata(params);
+  const safeMetadata = requestMetadata
+    ? [
+        {
+          name: LEARNING_COURSE_SLUG_META_NAME,
+          content: requestMetadata.courseSlug,
+        },
+        {
+          name: LEARNING_LESSON_NUMBER_META_NAME,
+          content: String(requestMetadata.lessonNumber),
+        },
+      ]
+    : [];
+  if (!bootstrap) return [...descriptors, ...safeMetadata];
   return [
     ...descriptors,
+    ...safeMetadata,
     { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
     { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
   ];
@@ -87,7 +67,12 @@ export function meta({ location, params }: Route.MetaArgs) {
 
 export function links(args?: Pick<Route.MetaArgs, "params">) {
   const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
-  if (!bootstrap) return [];
+  if (!bootstrap) {
+    const apiOrigin = getVideoPlaybackApiOrigin();
+    return apiOrigin
+      ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
+      : [];
+  }
   const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
   return preconnectHref
     ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
@@ -108,26 +93,6 @@ export default function LearningRoute() {
     persistentPlayerMounted,
     registerPersistentPlayer,
   } = useOutletContext<AcademyOutletContext>();
-  const origin = getCoursePlayerOrigin(location.search);
-  const routeReturnPath = getCoursePlayerReturnPath(location.search);
-  const resolvesLegacyCourseId = Boolean(
-    courseSlug && COURSE_ID_PATTERN.test(courseSlug),
-  );
-  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
-  const isLocalCourseKey = localCourses.some(
-    (course) => getCourseRouteKey(course) === courseSlug,
-  );
-  // Start the curriculum request from the route itself. It must not wait for
-  // `/auth/me`: the player and the SSG curriculum can render immediately,
-  // while this query refreshes the static fallback in parallel.
-  const courseOverviewKey =
-    courseSlug &&
-    (resolvesLegacyCourseId || apiCourseSlugForKey || !isLocalCourseKey)
-      ? (apiCourseSlugForKey ?? courseSlug)
-      : undefined;
-  const { data: courseOverview } = useCourseOverview(courseOverviewKey, {
-    enabled: Boolean(courseOverviewKey),
-  });
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
@@ -135,13 +100,47 @@ export default function LearningRoute() {
     activeUser?.id,
   );
   const lastSyncedSessionRef = useRef<string | null>(null);
+  const origin = getCoursePlayerOrigin(location.search);
+  const routeReturnPath = getCoursePlayerReturnPath(location.search);
+  const { data: courseOverview } = useCourseOverview(courseSlug, {
+    enabled: Boolean(courseSlug),
+  });
+  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
+  const { data: publishedCoursesData } = useCourses({
+    // Canonical API routes already resolve their session key from the
+    // overview response. Only legacy local keys need the catalogue lookup to
+    // discover their mapped API course.
+    enabled: Boolean(activeUser && apiCourseSlugForKey),
+  });
+  const apiCourse = publishedCoursesData?.courses.find(
+    (course) =>
+      course.id === courseSlug ||
+      course.slug === courseSlug ||
+      course.slug === apiCourseSlugForKey,
+  );
   const canonicalCourseSlug = courseOverview?.course.slug;
   const lessonId = courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
     : 1;
+
+  useLayoutEffect(() => {
+    if (!courseSlug) return;
+
+    // Hard navigations start from the root head script. This covers SPA lesson
+    // changes, where React Router updates the lesson meta tags without a new
+    // document and therefore cannot execute that script again.
+    void import("../learning/earlyHlsPreload")
+      .then(({ startEarlyHlsPreload }) =>
+        startEarlyHlsPreload(
+          getLearningHlsBootstrap({ courseSlug, lectureSlug }),
+          getLearningPlaybackRequestMetadata({ courseSlug, lectureSlug }),
+        ),
+      )
+      .catch(() => undefined);
+  }, [courseSlug, lectureSlug]);
+
   useEffect(() => {
-    let cancelScheduledSessionSync = () => {};
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
       ? upsertCoursePlayerSessionFromRoute(
@@ -154,16 +153,13 @@ export default function LearningRoute() {
       void navigate(nextPath, { replace: true });
     }
 
-    // Keep local playback working for demo/legacy routes without fetching the
-    // full course catalogue just to resolve a session key. Known legacy keys
-    // map synchronously; real API slugs can be persisted directly, while
-    // local/demo-only keys are intentionally not sent to the API.
-    const resolvedApiCourseKey =
-      canonicalCourseSlug ??
-      apiCourseSlugForKey ??
-      (courseSlug && !resolvesLegacyCourseId && !isLocalCourseKey
-        ? courseSlug
-        : undefined);
+    // Keep local playback working for demo/legacy routes, but only persist a
+    // session when the course key is known by the API. This prevents stale
+    // local IDs such as "backend-nodejs" from producing COURSE_NOT_FOUND.
+    // A legacy key is eligible for persistence only when the current API
+    // catalogue confirms its mapped course exists. If the API catalogue is
+    // empty, this route belongs to the local/dummy catalogue instead.
+    const resolvedApiCourseKey = apiCourse?.slug ?? canonicalCourseSlug;
     if (courseSlug && activeUser && resolvedApiCourseKey) {
       const session = getCoursePlayerSession(courseSlug);
       const courseKey = resolvedApiCourseKey;
@@ -175,28 +171,23 @@ export default function LearningRoute() {
         session?.returnPath ?? routeReturnPath,
       ].join(":");
       if (lastSyncedSessionRef.current !== syncKey) {
-        cancelScheduledSessionSync = scheduleLearningSessionSync(() => {
-          if (lastSyncedSessionRef.current === syncKey) return;
-          lastSyncedSessionRef.current = syncKey;
-          upsertLearningSpaceSession({
-            courseKey,
-            payload: {
-              lessonKey: String(session?.lessonId ?? lessonId),
-              origin: session?.origin ?? origin,
-              returnPath: session?.returnPath ?? routeReturnPath,
-            },
-          });
+        lastSyncedSessionRef.current = syncKey;
+        upsertLearningSpaceSession({
+          courseKey,
+          payload: {
+            lessonKey: String(session?.lessonId ?? lessonId),
+            origin: session?.origin ?? origin,
+            returnPath: session?.returnPath ?? routeReturnPath,
+          },
         });
       }
     }
-
-    return () => cancelScheduledSessionSync();
   }, [
     activeUser,
+    apiCourse,
     apiCourseSlugForKey,
     canonicalCourseSlug,
     courseSlug,
-    isLocalCourseKey,
     lessonId,
     location.pathname,
     location.search,
@@ -274,6 +265,7 @@ export default function LearningRoute() {
     <LearningWorkspace
       key={courseSlug}
       courseSlug={courseSlug}
+      userId={activeUser?.id}
       lessonId={lessonId}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
@@ -290,7 +282,6 @@ export default function LearningRoute() {
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
-      courseOverview={courseOverview}
     />
   );
 }
