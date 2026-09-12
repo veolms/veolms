@@ -12,6 +12,10 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import {
+  createNotesRepository,
+  type NotesRepository,
+} from "../notes/notes.repository.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { EngagementsRepository } from "./engagements.repository.ts";
@@ -58,10 +62,12 @@ export interface EngagementsService {
 export function createEngagementsService({
   threadsRepo,
   repliesRepo,
+  notesRepo = createNotesRepository(),
   engagementsRepo,
 }: {
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
+  notesRepo?: NotesRepository;
   engagementsRepo: EngagementsRepository;
 }): EngagementsService {
   const courseAccess = createDiscussionAccess();
@@ -86,7 +92,7 @@ export function createEngagementsService({
             thread.courseId,
             thread.kind,
           );
-        } else {
+        } else if (targetType === "reply") {
           const reply = await repliesRepo.findReplyById(trx, targetId);
           if (!reply) {
             throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
@@ -108,6 +114,23 @@ export function createEngagementsService({
             thread.courseId,
             thread.kind,
           );
+        } else if (targetType === "note") {
+          const note = await notesRepo.findNoteById(trx, targetId);
+          if (!note) {
+            throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+          }
+          if (note.visibility === "private" && note.userId !== actor.userId) {
+            throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+          }
+          if (note.userId !== actor.userId) {
+            await courseAccess.assertCanAccessCourse(trx, actor, note.courseId);
+          }
+          await courseAccess.assertNotSuspended(
+            trx,
+            actor.userId,
+            note.courseId,
+            "commenting",
+          );
         }
 
         const alreadyLiked = await engagementsRepo.findLike(
@@ -127,8 +150,10 @@ export function createEngagementsService({
           if (removed) {
             if (targetType === "thread") {
               await threadsRepo.incrementLikesCount(trx, targetId, -1);
-            } else {
+            } else if (targetType === "reply") {
               await repliesRepo.incrementLikesCount(trx, targetId, -1);
+            } else if (targetType === "note") {
+              await notesRepo.incrementLikesCount(trx, targetId, -1);
             }
           }
         } else {
@@ -141,8 +166,10 @@ export function createEngagementsService({
           if (added) {
             if (targetType === "thread") {
               await threadsRepo.incrementLikesCount(trx, targetId, 1);
-            } else {
+            } else if (targetType === "reply") {
               await repliesRepo.incrementLikesCount(trx, targetId, 1);
+            } else if (targetType === "note") {
+              await notesRepo.incrementLikesCount(trx, targetId, 1);
             }
           }
         }
@@ -157,12 +184,22 @@ export function createEngagementsService({
           };
         }
 
-        const reply = await repliesRepo.findReplyById(trx, targetId);
+        if (targetType === "reply") {
+          const reply = await repliesRepo.findReplyById(trx, targetId);
+          return {
+            targetType,
+            targetId,
+            liked: !alreadyLiked,
+            likesCount: Number(reply?.likesCount || 0),
+          };
+        }
+
+        const note = await notesRepo.findNoteById(trx, targetId);
         return {
           targetType,
           targetId,
           liked: !alreadyLiked,
-          likesCount: Number(reply?.likesCount || 0),
+          likesCount: Number(note?.likesCount || 0),
         };
       });
     },

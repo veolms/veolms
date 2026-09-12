@@ -33,6 +33,10 @@ import {
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
+import {
+  createNotesRepository,
+  type NotesRepository,
+} from "../notes/notes.repository.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type {
@@ -119,10 +123,12 @@ export interface ModerationService {
 export function createModerationService({
   threadsRepo,
   repliesRepo,
+  notesRepo = createNotesRepository(),
   moderationRepo,
 }: {
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
+  notesRepo?: NotesRepository;
   moderationRepo: ModerationRepository;
 }): ModerationService {
   const courseAccess = createDiscussionAccess();
@@ -161,6 +167,12 @@ export function createModerationService({
         }
         const thread = await threadsRepo.findThreadById(db, reply.threadId);
         courseId = thread?.courseId ?? null;
+      } else if (input.targetType === "note") {
+        const note = await notesRepo.findNoteById(db, input.targetId);
+        if (!note) {
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
+        }
+        courseId = note.courseId;
       }
 
       // 2. Prevent spam / duplicate pending reports by the same reporter

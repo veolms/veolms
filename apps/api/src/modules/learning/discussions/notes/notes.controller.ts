@@ -68,7 +68,11 @@ export function createNotesController({
       const user = request.user!;
       const { noteId } = request.params;
 
-      const note = await service.getNote(database, noteId, user.id);
+      const note = await service.getNote(
+        database,
+        noteId,
+        discussionActor(user),
+      );
       reply.status(200).send(note);
     },
 
@@ -76,7 +80,11 @@ export function createNotesController({
       const user = request.user!;
       const query = request.query;
 
-      const result = await service.listNotes(database, user.id, query);
+      const result = await service.listNotes(
+        database,
+        discussionActor(user),
+        query,
+      );
       reply.status(200).send(result);
     },
 
@@ -97,7 +105,12 @@ export function createNotesController({
       const { noteId } = request.params;
       const body = request.body;
 
-      const updated = await service.updateNote(database, noteId, user.id, body);
+      const updated = await service.updateNote(
+        database,
+        noteId,
+        discussionActor(user),
+        body,
+      );
       reply.status(200).send(updated);
     },
 
@@ -105,7 +118,7 @@ export function createNotesController({
       const user = request.user!;
       const { noteId } = request.params;
 
-      await service.deleteNote(database, noteId, user.id);
+      await service.deleteNote(database, noteId, discussionActor(user));
       reply.status(200).send({ message: "Note deleted successfully." });
     },
   };
