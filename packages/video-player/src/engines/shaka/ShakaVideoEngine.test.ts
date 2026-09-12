@@ -172,11 +172,26 @@ class FakeShakaPlayer {
     for (const candidate of this.audios) candidate.active = candidate === track;
   }
 
+  textTrackVisible = false;
+
+  isTextTrackVisible(): boolean {
+    return this.textTrackVisible;
+  }
+
+  setTextTrackVisibility(visible: boolean): void {
+    this.textTrackVisible = visible;
+  }
+
   getTextTracks(): typeof this.texts {
     return this.texts;
   }
 
   selectTextTrack(track: (typeof this.texts)[number] | null): void {
+    // Shaka returns early when the HLS default text stream is already
+    // selected, so visibility must be enabled separately.
+    if (track && this.texts.some((candidate) => candidate === track && candidate.active)) {
+      return;
+    }
     for (const candidate of this.texts) candidate.active = candidate === track;
   }
 }
@@ -345,8 +360,45 @@ describe("ShakaVideoEngine", () => {
       selectedAudioTrackId: hindiTrack?.id,
       selectedTextTrackId: "shaka-text:20",
     });
+    expect(player.textTrackVisible).toBe(true);
     engine.selectTextTrack(null);
     expect(engine.getSnapshot().selectedTextTrackId).toBeNull();
+    expect(player.textTrackVisible).toBe(false);
+  });
+
+  it("lists HLS text tracks without sidecar files and only selects them when visible", async () => {
+    const player = new FakeShakaPlayer();
+    player.texts[0]!.active = true;
+    player.textTrackVisible = false;
+    const engine = new ShakaVideoEngine({
+      runtimeLoader: async () => runtimeFor(player),
+    });
+    await engine.attach(asMediaElement(new FakeMediaElement()));
+    await engine.load({ src: "lesson.m3u8", kind: "hls" });
+
+    expect(player.addTextTrackAsync).not.toHaveBeenCalled();
+    expect(engine.getTextTracks()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "shaka-text:20",
+          label: "English",
+          language: "en",
+        }),
+      ]),
+    );
+    expect(engine.getSnapshot().selectedTextTrackId).toBeNull();
+    expect(
+      engine.getTextTracks().find((track) => track.id === "shaka-text:20")?.active,
+    ).toBe(false);
+
+    engine.selectTextTrack("shaka-text:20");
+    expect(player.textTrackVisible).toBe(true);
+    expect(engine.getSnapshot()).toMatchObject({
+      selectedTextTrackId: "shaka-text:20",
+    });
+    expect(engine.getTextTracks().find((track) => track.id === "shaka-text:20")).toMatchObject({
+      active: true,
+    });
   });
 
   it("maps DRM, retry configuration, and mutable networking hooks", async () => {
@@ -394,6 +446,10 @@ describe("ShakaVideoEngine", () => {
         retryParameters: { maxAttempts: 2 },
       },
     });
+    expect(
+      (player.configurations[0] as { streaming: Record<string, unknown> })
+        .streaming,
+    ).not.toHaveProperty("alwaysStreamText");
 
     const request: ShakaNetworkRequestLike = {
       uris: ["https://license.example/widevine"],
