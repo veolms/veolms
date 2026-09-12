@@ -78,6 +78,7 @@ import {
   useLearningSpaceSessions,
   useUpsertLearningSpaceSession,
 } from "./services/learning-space";
+import { useEnrolledCourses } from "./services/enrollments";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -386,7 +387,7 @@ function SidebarTooltipSurface() {
 
   const viewBoxWidth = surfaceWidth
     ? (surfaceWidth * SIDEBAR_TOOLTIP_SOURCE_HEIGHT) /
-      SIDEBAR_TOOLTIP_RENDER_HEIGHT
+    SIDEBAR_TOOLTIP_RENDER_HEIGHT
     : SIDEBAR_TOOLTIP_SOURCE_WIDTH;
   const rightEdge = viewBoxWidth - 1;
   const topRightCurveStart = viewBoxWidth - 21;
@@ -778,6 +779,9 @@ export function CoursesPage({
   } = useCourses({
     enabled: shouldQueryCourses && effectiveRole === "student",
   });
+  const { data: enrolledCoursesData } = useEnrolledCourses({
+    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+  });
   const {
     data: myCoursesData,
     isPending: isMyCoursesPending,
@@ -968,9 +972,9 @@ export function CoursesPage({
         new Set(
           Array.isArray(storedWishlist)
             ? storedWishlist.filter(
-                (courseId): courseId is string =>
-                  typeof courseId === "string" && Boolean(courseId.trim()),
-              )
+              (courseId): courseId is string =>
+                typeof courseId === "string" && Boolean(courseId.trim()),
+            )
             : [],
         ),
       );
@@ -1414,7 +1418,7 @@ export function CoursesPage({
       Math.max(
         0,
         document.scrollingElement?.scrollTop ??
-          document.documentElement.scrollTop,
+        document.documentElement.scrollTop,
       );
     const resolveScrollSource = (target: EventTarget | null): ScrollSource => {
       if (
@@ -1693,8 +1697,61 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
-      return (publishedCoursesData?.courses || []).map(
-        adaptCourseSummaryToCatalogueCourse,
+      const enrolledSet = new Set<string>();
+      const progressMap = new Map<string, number | null>();
+      if (enrolledCoursesData?.courses) {
+        for (const ec of enrolledCoursesData.courses) {
+          enrolledSet.add(ec.courseId);
+          if (ec.courseSlug) enrolledSet.add(ec.courseSlug);
+          progressMap.set(ec.courseId, ec.progress);
+          if (ec.courseSlug) progressMap.set(ec.courseSlug, ec.progress);
+        }
+      }
+      if (learningSpaceSessionsQuery.data?.sessions) {
+        for (const session of learningSpaceSessionsQuery.data.sessions) {
+          if (session.lessonNumber != null && session.lessonNumber > 0) {
+            const calculatedProgress = Math.min(100, Math.round((session.lessonNumber / 84) * 100));
+            const current = progressMap.get(session.courseId);
+            if (current == null || current === 0) {
+              progressMap.set(session.courseId, calculatedProgress);
+              if (session.courseSlug) progressMap.set(session.courseSlug, calculatedProgress);
+            }
+          }
+        }
+      }
+      if (typeof window !== "undefined") {
+        for (const ec of enrolledCoursesData?.courses || []) {
+          try {
+            const courseKey = encodeURIComponent(ec.courseSlug);
+            const detailedProgStr = localStorage.getItem(`veolms-learning-${courseKey}-progress`);
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            if (detailedProgStr) {
+              const progMap = JSON.parse(detailedProgStr) as Record<string, number>;
+              const vals = Object.values(progMap);
+              if (vals.length > 0) {
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const calc = Math.min(100, Math.round(sum / total));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+                continue;
+              }
+            }
+            const lastLessonStr = localStorage.getItem(`veolms-last-lesson-${courseKey}`);
+            if (lastLessonStr) {
+              const lessonNum = parseInt(lastLessonStr, 10);
+              if (!isNaN(lessonNum) && lessonNum > 0) {
+                const calc = Math.min(100, Math.round((lessonNum / total) * 100));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+              }
+            }
+          } catch {
+            // Ignore storage errors
+          }
+        }
+      }
+      return (publishedCoursesData?.courses || []).map((summary) =>
+        adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
     }
     if (enrollmentFilter === "bin") {
@@ -1709,6 +1766,8 @@ export function CoursesPage({
     deletedCoursesData?.courses,
     effectiveRole,
     enrollmentFilter,
+    enrolledCoursesData?.courses,
+    learningSpaceSessionsQuery.data?.sessions,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
   ]);
@@ -1750,7 +1809,7 @@ export function CoursesPage({
       const apiError = err as { message?: string };
       setNotice(
         apiError?.message ||
-          `Failed to move "${course.title}" to Bin. Please try again.`,
+        `Failed to move "${course.title}" to Bin. Please try again.`,
       );
       throw err;
     } finally {
@@ -1770,7 +1829,7 @@ export function CoursesPage({
       const apiError = err as { message?: string };
       setNotice(
         apiError?.message ||
-          `Failed to restore "${course.title}". Please try again.`,
+        `Failed to restore "${course.title}". Please try again.`,
       );
       throw err;
     }
@@ -1854,7 +1913,7 @@ export function CoursesPage({
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
           ? current[role] ||
-            getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
           : isPublicNavigation
             ? getDefaultNavigationOrder(navigationItems)
             : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
@@ -1877,7 +1936,7 @@ export function CoursesPage({
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
         ? navigationOrders[role] ||
-          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+        getInitialNavigationOrder(role, navigationItems, activeUser?.id)
         : isPublicNavigation
           ? getDefaultNavigationOrder(navigationItems)
           : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
@@ -2101,7 +2160,7 @@ export function CoursesPage({
     !sidebarVisuallyCollapsed ||
     (sidebarResizing &&
       (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
-        SIDEBAR_MIN_WIDTH);
+      SIDEBAR_MIN_WIDTH);
 
   useLayoutEffect(() => {
     const group = appearanceControlsRef.current;
@@ -2595,7 +2654,7 @@ export function CoursesPage({
   const sidebarResizeContentVisible =
     sidebarResizing &&
     (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
-      SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
+    SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
     sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
@@ -2975,7 +3034,7 @@ export function CoursesPage({
         !cancelled &&
         (Math.abs(totalDistance) >= SIDEBAR_FLING_MIN_DISTANCE ||
           Math.max(Math.abs(resize.velocityX), Math.abs(averageVelocity)) >=
-            SIDEBAR_FLING_VELOCITY);
+          SIDEBAR_FLING_VELOCITY);
 
       if (intentionalSwipe && totalDistance < 0) {
         setEdgeSidebarOpen(false);
@@ -3028,16 +3087,16 @@ export function CoursesPage({
     const fastFling =
       Math.abs(totalDistance) >= SIDEBAR_FLING_MIN_DISTANCE &&
       Math.max(Math.abs(resize.velocityX), Math.abs(averageVelocity)) >=
-        SIDEBAR_FLING_VELOCITY;
+      SIDEBAR_FLING_VELOCITY;
     const halfwayWidth =
       SIDEBAR_COLLAPSED_WIDTH +
       (resize.expandedWidthAtStart - SIDEBAR_COLLAPSED_WIDTH) / 2;
     const shouldExpand = resize.collapsedAtStart
       ? (fastFling && totalDistance > 0) || resize.previewWidth >= halfwayWidth
       : !(
-          (fastFling && totalDistance < 0) ||
-          resize.previewWidth <= halfwayWidth
-        );
+        (fastFling && totalDistance < 0) ||
+        resize.previewWidth <= halfwayWidth
+      );
 
     if (!shouldExpand) {
       setSidebarWidth(resize.expandedWidthAtStart);
@@ -3234,7 +3293,7 @@ export function CoursesPage({
       onNavigatePage,
       upsertLearningSpaceSession,
     ],
-  );``
+  ); ``
   const closeLearningSession = useCallback(
     (session: CoursePlayerSession) => {
       const closesVisibleSession =
@@ -3330,10 +3389,10 @@ export function CoursesPage({
               : isPublicNavigation
                 ? getDefaultNavigationVisibility(navigationItems)
                 : getInitialNavigationVisibility(
-                    role,
-                    navigationItems,
-                    activeUser?.id,
-                  )
+                  role,
+                  navigationItems,
+                  activeUser?.id,
+                )
           }
           onNavigationVisibilityChange={(visibleItems) =>
             setNavigationVisibility((current) => ({
@@ -3512,53 +3571,53 @@ export function CoursesPage({
           >
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
-              <div
-                className="sidebar-resize-handle"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize sidebar"
-                aria-keyshortcuts={`${primaryShortcutModifier}+B`}
-                title={
-                  showKeyboardShortcuts
-                    ? `Resize sidebar | ${sidebarShortcutTitle}`
-                    : "Resize sidebar"
-                }
-                aria-valuemin={
-                  sidebarPresentedAsOverlay
-                    ? SIDEBAR_MIN_WIDTH
-                    : SIDEBAR_COLLAPSED_WIDTH
-                }
-                aria-valuemax={sidebarMaxWidth}
-                aria-valuenow={Math.round(
-                  sidebarResizePreviewWidth ??
+                <div
+                  className="sidebar-resize-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize sidebar"
+                  aria-keyshortcuts={`${primaryShortcutModifier}+B`}
+                  title={
+                    showKeyboardShortcuts
+                      ? `Resize sidebar | ${sidebarShortcutTitle}`
+                      : "Resize sidebar"
+                  }
+                  aria-valuemin={
+                    sidebarPresentedAsOverlay
+                      ? SIDEBAR_MIN_WIDTH
+                      : SIDEBAR_COLLAPSED_WIDTH
+                  }
+                  aria-valuemax={sidebarMaxWidth}
+                  aria-valuenow={Math.round(
+                    sidebarResizePreviewWidth ??
                     (sidebarPresentedAsOverlay
                       ? renderedSidebarWidth
                       : sidebarCollapsed
                         ? SIDEBAR_COLLAPSED_WIDTH
                         : renderedSidebarWidth),
-                )}
-                aria-valuetext={
-                  sidebarPresentedAsOverlay
-                    ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
-                    : sidebarCollapsed
-                      ? "Collapsed sidebar"
-                      : `${Math.round(renderedSidebarWidth)} pixels wide`
-                }
-                tabIndex={0}
-                onKeyDown={handleSidebarResizeKeyDown}
-                onDoubleClick={toggleSidebarWidth}
-                onPointerEnter={dismissSidebarTooltipImmediately}
-                onPointerDown={startSidebarResize}
-                onPointerMove={moveSidebarResize}
-                onPointerUp={endSidebarResize}
-                onPointerCancel={(event) => endSidebarResize(event, true)}
-                onLostPointerCapture={(event) => {
-                  if (sidebarResizeRef.current?.pointerId === event.pointerId) {
-                    endSidebarResize(event, true);
+                  )}
+                  aria-valuetext={
+                    sidebarPresentedAsOverlay
+                      ? `${Math.round(sidebarResizePreviewWidth ?? renderedSidebarWidth)} pixel temporary sidebar`
+                      : sidebarCollapsed
+                        ? "Collapsed sidebar"
+                        : `${Math.round(renderedSidebarWidth)} pixels wide`
                   }
-                }}
-              />
-            )}
+                  tabIndex={0}
+                  onKeyDown={handleSidebarResizeKeyDown}
+                  onDoubleClick={toggleSidebarWidth}
+                  onPointerEnter={dismissSidebarTooltipImmediately}
+                  onPointerDown={startSidebarResize}
+                  onPointerMove={moveSidebarResize}
+                  onPointerUp={endSidebarResize}
+                  onPointerCancel={(event) => endSidebarResize(event, true)}
+                  onLostPointerCapture={(event) => {
+                    if (sidebarResizeRef.current?.pointerId === event.pointerId) {
+                      endSidebarResize(event, true);
+                    }
+                  }}
+                />
+              )}
             <div
               className="courses-sidebar__brand"
               title={sidebarBrandTitle}
@@ -3756,9 +3815,8 @@ export function CoursesPage({
                 <button
                   type="button"
                   className="courses-profile__button"
-                  aria-label={`${shellProfileDisplayName}, ${
-                    role === "creator" ? "Instructor" : "Student"
-                  }. Open role and appearance menu`}
+                  aria-label={`${shellProfileDisplayName}, ${role === "creator" ? "Instructor" : "Student"
+                    }. Open role and appearance menu`}
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
@@ -4328,7 +4386,7 @@ export function CoursesPage({
                         ? "is-drop-target"
                         : "",
                       navigationDropTarget?.label === label &&
-                      navigationDropTarget.position === "after"
+                        navigationDropTarget.position === "after"
                         ? "is-drop-after"
                         : "",
                     ]

@@ -61,6 +61,30 @@ export async function listOrdersByUserId(
     .execute();
 }
 
+/**
+ * Cursor-based paginated variant of listOrdersByUserId. Returns up to `limit`
+ * orders created before `cursor` (ISO 8601 timestamp), ordered newest-first.
+ * Returns `limit + 1` rows so the caller can detect whether a next page exists.
+ */
+export async function listOrdersByUserIdPaginated(
+  database: Executor,
+  userId: string,
+  options: { cursor?: string; limit: number },
+) {
+  let query = database
+    .selectFrom("orders")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .orderBy("created_at", "desc")
+    .limit(options.limit + 1);
+
+  if (options.cursor) {
+    query = query.where("created_at", "<", new Date(options.cursor));
+  }
+
+  return await query.execute();
+}
+
 export async function listOrderItems(database: Executor, orderId: string) {
   return await database
     .selectFrom("order_items")
