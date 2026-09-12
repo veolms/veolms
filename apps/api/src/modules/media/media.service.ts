@@ -604,8 +604,8 @@ export function createMediaService({
       lessonId: context.lesson_id,
       mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
       manifestUrl:
-        publicManifestUrl ??
-        `/api/v1/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
+        (isPublicPlayback ? publicManifestUrl : null) ??
+        `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
       ...(media.duration_seconds !== null &&
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
