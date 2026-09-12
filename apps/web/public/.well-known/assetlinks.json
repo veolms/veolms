@@ -1,0 +1,13 @@
+[
+    {
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.procodrr.app",
+            "sha256_cert_fingerprints": [
+                "03:BC:CD:D0:A2:E6:76:F9:74:AC:A8:6D:23:3C:0A:84:C2:D9:4C:6A:D4:06:21:C7:D7:E6:C0:77:6C:A3:9D:B6",
+                "1B:6E:DE:D6:D4:B7:E5:01:FA:2D:41:B0:BE:2C:08:62:AB:D9:AB:75:2D:B7:2F:98:ED:CD:49:B6:9A:9E:26:21"
+            ]
+        }
+    }
+]
