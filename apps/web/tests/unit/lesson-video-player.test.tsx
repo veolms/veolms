@@ -1829,15 +1829,7 @@ describe("LessonVideoPlayer adapter", () => {
           bufferBehind: 60,
         },
         networking: { requestFilter: appendLearningHlsCacheVersion },
-        textTracks: [
-          {
-            src: "/assets/designing-users.vtt",
-            language: "en",
-            label: "English",
-            kind: "captions",
-            mimeType: "text/vtt",
-          },
-        ],
+        textTracks: undefined,
       },
       options: undefined,
     });

@@ -55,6 +55,6 @@ export function createLearningLessonVideoSource(options: {
           }),
         }
       : undefined,
-    textTracks: [...LEARNING_LESSON_TEXT_TRACKS],
+    textTracks: undefined,
   };
 }
