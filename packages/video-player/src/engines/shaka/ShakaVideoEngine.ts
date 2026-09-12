@@ -316,6 +316,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const player = this.requirePlayer();
     if (id === null) {
       player.selectTextTrack(null);
+      player.setTextTrackVisibility?.(false);
       this.refreshTracks(false);
       this.setTrackState({ selectedTextTrackId: null });
       this.emit("texttrackchange", { track: null });
@@ -332,6 +333,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
 
     player.selectTextTrack(track);
+    player.setTextTrackVisibility?.(true);
     this.refreshTracks(false);
     const selected = this.getTextTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedTextTrackId: id });
