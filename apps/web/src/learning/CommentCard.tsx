@@ -60,6 +60,7 @@ export interface Comment {
   isOwn?: boolean;
   createdAt?: string | number;
   timestampSeconds?: number | null;
+  role?: "Student" | "Instructor" | "Admin";
 }
 
 interface CommentCardProps {
@@ -190,6 +191,11 @@ export function CommentCard({
                   <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {comment.name}
                   </h2>
+                  {comment.role === "Instructor" && (
+                    <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                      Instructor
+                    </span>
+                  )}
                   {comment.visibility && comment.visibility !== "public" && (
                     <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
                       {comment.visibility}
@@ -457,6 +463,11 @@ function ReplyCard({
                   <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {reply.name}
                   </h3>
+                  {reply.role === "Instructor" && (
+                    <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                      Instructor
+                    </span>
+                  )}
                   <span
                     data-reply-time-separator
                     aria-hidden="true"

@@ -32,15 +32,30 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
   });
 }
 
-export function useUpdateThread(threadId: string) {
+export function useUpdateThread(threadId?: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, UpdateLearningThreadRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.updateThread(threadId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadDetails(threadId),
-      });
+  return useMutation<
+    any,
+    ApiError,
+    | { threadId?: string; payload: UpdateLearningThreadRequest }
+    | UpdateLearningThreadRequest
+  >({
+    mutationFn: (variables) => {
+      if ("payload" in variables) {
+        const id = variables.threadId ?? threadId;
+        if (!id) throw new Error("threadId is required to update thread");
+        return learningInteractionsService.updateThread(id, variables.payload);
+      }
+      if (!threadId) throw new Error("threadId is required to update thread");
+      return learningInteractionsService.updateThread(threadId, variables);
+    },
+    onSuccess: (_data, variables) => {
+      const id = "payload" in variables ? (variables.threadId ?? threadId) : threadId;
+      if (id) {
+        queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.threadDetails(id),
+        });
+      }
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
       });
