@@ -5,6 +5,7 @@ import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { CourseCard } from "./CourseCard";
+import { CourseCardSkeleton } from "./CourseCardSkeleton";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -28,6 +29,7 @@ export interface CourseCatalogueProps {
   sort: CourseSort;
   onSortChange: (sort: CourseSort) => void;
   visibleCourses: readonly Course[];
+  totalCoursesCount?: number;
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course, options?: CourseOpenOptions) => void;
   courseMenu: string | null;
@@ -35,13 +37,18 @@ export interface CourseCatalogueProps {
   setNotice: (notice: string) => void;
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
+  isAdmin?: boolean;
+  isLoading?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
+  deletingCourseIds?: ReadonlySet<string>;
 }
 
 export function CourseCatalogue({
   activeSection,
   role,
+  isAdmin = false,
+  isLoading = false,
   wishlisted,
   enrollmentFilter,
   onEnrollmentFilterChange,
@@ -52,6 +59,7 @@ export function CourseCatalogue({
   sort,
   onSortChange,
   visibleCourses,
+  totalCoursesCount,
   onWishlist,
   onOpenCourse,
   courseMenu,
@@ -61,9 +69,23 @@ export function CourseCatalogue({
   onResetCatalogue,
   onDeleteCourse,
   onRestoreCourse,
+  deletingCourseIds,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
+  const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  const isFiltered =
+    Boolean(search.trim()) ||
+    enrollmentFilter !== "all" ||
+    statusFilter !== "all";
+  const hasCourses =
+    totalCoursesCount !== undefined ? totalCoursesCount > 0 : isFiltered;
+
+  const isCourseDeleting = (courseId: string) =>
+    Boolean(deletingCourseIds?.has(courseId) || localDeletingIds.has(courseId));
 
   const quickFilters = (
     role === "creator"
@@ -71,7 +93,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["published", "Published"],
           ["draft", "Draft"],
-          ["bin", "Bin"],
+          ...(isAdmin ? [["bin", "Bin"] as const] : []),
         ]
       : [
           ["all", "All"],
@@ -148,6 +170,7 @@ export function CourseCatalogue({
       setNotice={setNotice}
       imagePriority={index === 0}
       isBin={enrollmentFilter === "bin"}
+      isDeleting={isCourseDeleting(course.id)}
     />
   );
 
@@ -218,7 +241,7 @@ export function CourseCatalogue({
                 aria-selected={enrollmentFilter === value}
                 tabIndex={enrollmentFilter === value ? 0 : -1}
                 key={value}
-                className="min-h-9 shrink-0 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-(--text) aria-selected:bg-(--text) aria-selected:text-(--canvas) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_28%,transparent)] aria-selected:hover:bg-(--text) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!"
+                className="min-h-9 shrink-0 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!"
                 onClick={() => onEnrollmentFilterChange(value)}
                 onKeyDown={handleRovingTabKeyDown}
               >
@@ -228,13 +251,13 @@ export function CourseCatalogue({
           </div>
         </div>
 
-        <div className="hidden grid-cols-2 gap-3 min-[821px]:col-span-2 min-[821px]:grid min-[1080px]:flex min-[1080px]:shrink-0 min-[1080px]:gap-2.5">
+        <div className="hidden min-[821px]:flex min-[821px]:shrink-0 min-[821px]:items-center min-[821px]:gap-2.5">
           <ThemedSelect
             value={sort}
             onValueChange={onSortChange}
             ariaLabel="Sort courses"
             options={sortOptions}
-            triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-42.5!"
+            triggerClassName="h-10! w-42.5! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
           />
           {role === "student" && (
             <ThemedSelect
@@ -242,13 +265,21 @@ export function CourseCatalogue({
               onValueChange={onStatusFilterChange}
               ariaLabel="Filter course status"
               options={statusOptions}
-              triggerClassName="h-11! w-full! min-w-0! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! min-[1080px]:h-10! min-[1080px]:w-35!"
+              triggerClassName="h-10! w-35! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
             />
           )}
         </div>
       </div>
 
-      {visibleCourses.length ? (
+      {isLoading ? (
+        <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
+          <div className={gridClasses} data-testid="course-catalogue-skeleton">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CourseCardSkeleton key={i} role={role} />
+            ))}
+          </div>
+        </div>
+      ) : visibleCourses.length ? (
         <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
           <div className={gridClasses}>
             {visibleCourses.map((course, index) => renderCard(course, index))}
@@ -260,21 +291,38 @@ export function CourseCatalogue({
           <h2 className="mt-3 text-base font-semibold text-(--text)">
             {activeSection === "Wishlist"
               ? "Your wishlist is empty"
-              : "No courses found"}
+              : hasCourses
+                ? "No courses found"
+                : "No courses yet"}
           </h2>
           <p className="mt-1.5 max-w-sm text-[0.82rem] leading-6 text-(--muted)">
             {activeSection === "Wishlist"
               ? "Save a not-enrolled course with its heart button and it will appear here."
-              : "Try a different search or filter."}
+              : hasCourses
+                ? "Try a different search or filter."
+                : role === "creator"
+                  ? "You haven't created any courses yet. Create your first course to get started."
+                  : "You don't have any courses available to you yet."}
           </p>
-          <button
-            type="button"
-            className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            data-control-radius-action
-            onClick={onResetCatalogue}
-          >
-            View all courses
-          </button>
+          {activeSection === "Wishlist" || hasCourses ? (
+            <button
+              type="button"
+              className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              data-control-radius-action
+              onClick={onResetCatalogue}
+            >
+              View all courses
+            </button>
+          ) : role === "creator" ? (
+            <button
+              type="button"
+              className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              data-control-radius-action
+              onClick={() => onNavigatePage("Create Course")}
+            >
+              Create course
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -291,6 +339,7 @@ export function CourseCatalogue({
         onConfirm={async () => {
           if (!pendingDelete) return;
           const target = pendingDelete;
+          setLocalDeletingIds((prev) => new Set(prev).add(target.id));
           try {
             if (onDeleteCourse) {
               await onDeleteCourse(target);
@@ -300,6 +349,11 @@ export function CourseCatalogue({
           } catch {
             // Failure is handled by onDeleteCourse toast notification
           } finally {
+            setLocalDeletingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(target.id);
+              return next;
+            });
             setPendingDelete(null);
           }
         }}

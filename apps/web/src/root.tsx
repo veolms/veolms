@@ -186,6 +186,7 @@ export function Layout({ children }: LayoutProps) {
             __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
           }}
         />
+        <Meta />
         <script
           dangerouslySetInnerHTML={{
             __html: getEarlyHlsPreloadInlineScript(
@@ -211,7 +212,6 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <link rel="stylesheet" href={fullAppStylesheet} />
-        <Meta />
         {/* The complete app stylesheet is linked above. In development,
             React Router otherwise synthesizes an additional route-critical
             stylesheet on every document request, delaying first paint by

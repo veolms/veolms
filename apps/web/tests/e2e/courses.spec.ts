@@ -776,7 +776,7 @@ test("creator course cards keep playback, overview, editing, and preview indepen
   await refreshedCourse
     .getByRole("button", { name: "Actions for Complete Backend with Node.js" })
     .click();
-  await page.getByRole("menuitem", { name: "Course Preview" }).click();
+  await page.getByRole("menuitem", { name: "Course Overview" }).click();
 
   await expect(page).toHaveURL(/\/courses\/backend-nodejs\/overview$/);
   await expect(

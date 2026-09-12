@@ -3,6 +3,8 @@ import {
   initialBasicsState,
   normalizeBasicsState,
   isBasicsEqual,
+  isBasicsMetaEqual,
+  isBasicsSettingsEqual,
   type BasicsFormState,
 } from "../../src/courses/CourseCreatePage";
 import { coursesService } from "../../src/services/courses/courses.service";
@@ -434,4 +436,50 @@ describe("Course Wizard Basics Server-Confirmed vs Local Draft State", () => {
       expect(isSaveDisabledSaving).toBe(true);
     });
   });
+
+  describe("Sub-Domain Persistence Isolation (Basics Metadata vs Settings)", () => {
+    it("distinguishes between course metadata changes and settings changes", () => {
+      const baseline: BasicsFormState = {
+        title: "Clean Title",
+        shortDescription: "Clean Short Desc",
+        description: "Clean Description",
+        categoryId: "cat-1",
+        difficulty: "beginner",
+        language: "en",
+        instructorAlias: "Clean Alias",
+        showInstructorName: true,
+      };
+
+      // 1. Only title changed
+      const metaOnlyDraft: BasicsFormState = {
+        ...baseline,
+        title: "Updated Title",
+      };
+      expect(isBasicsMetaEqual(metaOnlyDraft, baseline)).toBe(false);
+      expect(isBasicsSettingsEqual(metaOnlyDraft, baseline)).toBe(true);
+
+      // 2. Only language / settings changed
+      const settingsOnlyDraft: BasicsFormState = {
+        ...baseline,
+        language: "fr",
+        showInstructorName: false,
+      };
+      expect(isBasicsMetaEqual(settingsOnlyDraft, baseline)).toBe(true);
+      expect(isBasicsSettingsEqual(settingsOnlyDraft, baseline)).toBe(false);
+
+      // 3. Both changed
+      const bothDraft: BasicsFormState = {
+        ...baseline,
+        title: "Updated Title",
+        language: "es",
+      };
+      expect(isBasicsMetaEqual(bothDraft, baseline)).toBe(false);
+      expect(isBasicsSettingsEqual(bothDraft, baseline)).toBe(false);
+
+      // 4. Clean
+      expect(isBasicsMetaEqual(baseline, baseline)).toBe(true);
+      expect(isBasicsSettingsEqual(baseline, baseline)).toBe(true);
+    });
+  });
 });
+
