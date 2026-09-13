@@ -94,12 +94,12 @@ export async function createApp({
       config.NODE_ENV === "production"
         ? config.WEB_URL
         : [
-            config.WEB_URL,
-            "http://localhost:3000",
-            "http://localhost:4173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:4173",
-          ],
+          config.WEB_URL,
+          "http://localhost:3000",
+          "http://localhost:4173",
+          "http://127.0.0.1:3000",
+          "http://127.0.0.1:4173",
+        ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

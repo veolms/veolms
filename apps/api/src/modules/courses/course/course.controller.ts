@@ -1,9 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type {
-  CreateCourseRequest,
-  UpdateCourseBasicsRequest,
-  CourseSlugParams,
-} from "@veolms/contracts";
+import type { UpdateCourseBasicsRequest } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import type { CourseService } from "./course.service.ts";
 
@@ -12,22 +8,15 @@ export function createCourseController({
 }: {
   service: CourseService;
 }) {
-  async function listCourses(
-    request: FastifyRequest<{
-      Querystring: { creatorId?: string };
-    }>,
-  ) {
-    const courses = await service.listPublishedCourses({
-      creatorId: request.query.creatorId,
-    });
+  async function listCourses(request: FastifyRequest) {
+    const { creatorId } = request.query as { creatorId?: string };
+    const courses = await service.listPublishedCourses({ creatorId });
     return { courses };
   }
 
-  async function getCourseBySlug(
-    request: FastifyRequest<{ Params: CourseSlugParams }>,
-    reply: FastifyReply,
-  ) {
-    const course = await service.getPublishedCourseBySlug(request.params.slug);
+  async function getCourseBySlug(request: FastifyRequest, reply: FastifyReply) {
+    const { slug } = request.params as { slug: string };
+    const course = await service.getPublishedCourseBySlug(slug);
 
     if (!course) {
       return reply
@@ -36,7 +25,7 @@ export function createCourseController({
           httpError(
             404,
             "COURSE_NOT_FOUND",
-            `No published course exists with slug "${request.params.slug}".`,
+            `No published course exists with slug "${slug}".`,
           ),
         );
     }
@@ -44,18 +33,17 @@ export function createCourseController({
     return course;
   }
 
-  async function listCreatorCourses(
-    request: FastifyRequest<{ Params: { creatorId: string } }>,
-  ) {
-    const { creatorId } = request.params;
+  async function listCreatorCourses(request: FastifyRequest) {
+    const { creatorId } = request.params as { creatorId: string };
     return await service.listAvailableCoursesByCreator(creatorId);
   }
 
-  async function createCourse(
-    request: FastifyRequest<{ Body: CreateCourseRequest }>,
-    reply: FastifyReply,
-  ) {
-    const payload = request.body;
+  async function createCourse(request: FastifyRequest, reply: FastifyReply) {
+    const payload = request.body as {
+      title: string;
+      slug?: string;
+      categoryId?: string;
+    };
     const creatorId = request.user!.id;
     const course = await service.createCourse(payload, creatorId);
     reply.code(201);
@@ -67,27 +55,22 @@ export function createCourseController({
     return await service.listMyCourses(creatorId);
   }
 
-  async function getCourseEditor(
-    request: FastifyRequest<{ Params: { id: string } }>,
-  ) {
-    const { id } = request.params;
+  async function getCourseEditor(request: FastifyRequest) {
+    const { id } = request.params as { id: string };
     const creatorId = request.user!.id;
     return await service.getCourseEditorData(id, creatorId);
   }
 
   async function updateCourseBasics(
-    request: FastifyRequest<{
-      Params: { id: string };
-      Body: UpdateCourseBasicsRequest;
-    }>,
+    request: FastifyRequest,
     reply: FastifyReply,
   ) {
-    const { id } = request.params;
+    const { id } = request.params as { id: string };
     const creatorId = request.user!.id;
     const result = await service.updateCourseBasics(
       id,
       creatorId,
-      request.body,
+      request.body as UpdateCourseBasicsRequest,
       request.log,
     );
 
@@ -103,22 +86,16 @@ export function createCourseController({
     return result.course;
   }
 
-  async function getCourseOverview(
-    request: FastifyRequest<{
-      Params: { idOrSlug: string };
-    }>,
-  ) {
-    const { idOrSlug } = request.params;
+  async function getCourseOverview(request: FastifyRequest) {
+    const { idOrSlug } = request.params as { idOrSlug: string };
     const user = request.user
       ? { id: request.user.id, roles: request.user.roles }
       : undefined;
     return await service.getCourseOverviewData(idOrSlug, user);
   }
 
-  async function deleteCourse(
-    request: FastifyRequest<{ Params: { id: string } }>,
-  ) {
-    const { id } = request.params;
+  async function deleteCourse(request: FastifyRequest) {
+    const { id } = request.params as { id: string };
     const creatorId = request.user!.id;
     return await service.deleteCourse(id, creatorId);
   }
