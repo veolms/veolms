@@ -2753,6 +2753,21 @@ You can change them if needed.
       if (endpointUrl) {
         probeEnvVars["AWS_ENDPOINT_URL"] = endpointUrl;
       }
+      if (process.env.S3_ENDPOINT) {
+        probeEnvVars["S3_ENDPOINT"] = process.env.S3_ENDPOINT;
+      }
+      if (process.env.S3_REGION) {
+        probeEnvVars["S3_REGION"] = process.env.S3_REGION;
+      }
+      if (process.env.S3_ACCESS_KEY_ID) {
+        probeEnvVars["S3_ACCESS_KEY_ID"] = process.env.S3_ACCESS_KEY_ID;
+      }
+      if (process.env.S3_SECRET_ACCESS_KEY) {
+        probeEnvVars["S3_SECRET_ACCESS_KEY"] = process.env.S3_SECRET_ACCESS_KEY;
+      }
+      if (process.env.S3_FORCE_PATH_STYLE) {
+        probeEnvVars["S3_FORCE_PATH_STYLE"] = process.env.S3_FORCE_PATH_STYLE;
+      }
       probeLambdaArn = await setupProbeLambda(
         region,
         workerRoleArn, // Same shared IAM role
@@ -3177,6 +3192,21 @@ ${bold("Next Steps:")}
       }
       if (endpointUrl) {
         probeEnvVars["AWS_ENDPOINT_URL"] = endpointUrl;
+      }
+      if (process.env.S3_ENDPOINT) {
+        probeEnvVars["S3_ENDPOINT"] = process.env.S3_ENDPOINT;
+      }
+      if (process.env.S3_REGION) {
+        probeEnvVars["S3_REGION"] = process.env.S3_REGION;
+      }
+      if (process.env.S3_ACCESS_KEY_ID) {
+        probeEnvVars["S3_ACCESS_KEY_ID"] = process.env.S3_ACCESS_KEY_ID;
+      }
+      if (process.env.S3_SECRET_ACCESS_KEY) {
+        probeEnvVars["S3_SECRET_ACCESS_KEY"] = process.env.S3_SECRET_ACCESS_KEY;
+      }
+      if (process.env.S3_FORCE_PATH_STYLE) {
+        probeEnvVars["S3_FORCE_PATH_STYLE"] = process.env.S3_FORCE_PATH_STYLE;
       }
       probeLambdaArn = await setupProbeLambda(
         region,
