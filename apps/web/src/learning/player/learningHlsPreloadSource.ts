@@ -3,6 +3,7 @@ import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
+  toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 function shouldResumeFromLastPosition(): boolean {
@@ -31,7 +32,7 @@ export function createLearningHlsPreloadSource(options: {
       : 0;
   return {
     id: options.mediaKey,
-    src: options.manifestUrl,
+    src: toAbsoluteLearningMediaUrl(options.manifestUrl),
     type: LEARNING_HLS_MIME_TYPE,
     kind: "hls" as const,
     startTime,

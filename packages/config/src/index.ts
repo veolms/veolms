@@ -145,6 +145,8 @@ const serverConfigSchema = z.object({
   PROBE_LAMBDA_NAME: z.string().optional(),
   FLEET_MANAGER_LAMBDA_REGION: z.string().optional(),
   FLEET_MANAGER_HEARTBEAT_SECONDS: z.coerce.number().int().min(1).default(10),
+  FLEET_MANAGER_ACCESS_KEY_ID: z.string().optional(),
+  FLEET_MANAGER_SECRET_ACCESS_KEY: z.string().optional(),
 
   // Razorpay Gateway
   RAZORPAY_KEY_ID: z.string().optional(),

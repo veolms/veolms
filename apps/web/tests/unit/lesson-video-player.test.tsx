@@ -1177,7 +1177,7 @@ describe("LessonVideoPlayer adapter", () => {
           lessonTitle: "Designing for real users",
           mediaKey: "lesson-one.mp4",
           source: expect.objectContaining({
-            src: "/course-hls/lesson-one/master.m3u8",
+            src: `${window.location.origin}/course-hls/lesson-one/master.m3u8`,
           }),
         }),
       );
@@ -1814,7 +1814,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engine.loadCalls[0]).toEqual({
       source: {
         id: "lesson-one.mp4",
-        src: "/course-hls/lesson-one/master.m3u8",
+        src: `${window.location.origin}/course-hls/lesson-one/master.m3u8`,
         type: "application/x-mpegurl",
         kind: "hls",
         startTime: 0,
@@ -2958,7 +2958,7 @@ describe("LessonVideoPlayer adapter", () => {
     expect(engine.getSnapshot().lifecycle).not.toBe("destroyed");
     expect(engine.loadCalls[1]?.source).toMatchObject({
       id: "lesson-two.mp4",
-      src: "/course-hls/lesson-two/master.m3u8",
+      src: `${window.location.origin}/course-hls/lesson-two/master.m3u8`,
       metadata: { title: "The design mindset" },
     });
   });
