@@ -2,13 +2,18 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { CourseOverviewResponse } from "@veolms/contracts";
+import type {
+  CourseEditorDataResponse,
+  CourseOverviewResponse,
+} from "@veolms/contracts";
 import {
   CourseOverviewPage,
   CourseOverviewSkeleton,
   adaptCourseOverviewResponse,
+  adaptPreviewDataToOverview,
 } from "../../src/courses/CourseOverviewPage";
 import type { Course } from "../../src/courses/catalogue";
+import type { CourseSection } from "../../src/learning/courseContent";
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -471,6 +476,318 @@ describe("CourseOverviewPage", () => {
       fireEvent.click(continueBtn);
       expect(onNavigatePage).toHaveBeenCalledTimes(1);
       expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);
+    });
+  });
+
+  describe("Curriculum Lesson Row Navigation", () => {
+    const multiSections: CourseSection[] = [
+      {
+        id: 1,
+        title: "Section 1: Foundations",
+        progress: "0/2",
+        lessons: [
+          [1, "Introduction to Web Design", "5m", "todo", true, "video"],
+          [2, "Tools and Environment", "12m", "todo", false, "video"],
+        ],
+      },
+      {
+        id: 2,
+        title: "Section 2: Advanced Techniques",
+        progress: "0/2",
+        lessons: [
+          [3, "Typography and Spacing", "18m", "todo", false, "video"],
+          [4, "Building Responsive Layouts", "25m", "todo", false, "document"],
+        ],
+      },
+    ];
+
+    it("assigns global 1-based sequential lesson numbers across sections in adaptCourseOverviewResponse", () => {
+      const mockOverview: CourseOverviewResponse = {
+        course: {
+          id: "c1",
+          slug: "advanced-css",
+          title: "Advanced CSS",
+          shortDescription: "Short",
+          description: "Full description",
+          difficulty: "intermediate",
+          status: "published",
+          creatorId: "user-1",
+          categoryId: "cat-1",
+          thumbnailMediaId: null,
+          trailerMediaId: null,
+          instructorAlias: "Alex",
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          publishedAt: "2026-01-01T00:00:00.000Z",
+        },
+        sections: [
+          {
+            id: "s1",
+            courseId: "c1",
+            title: "Section 1",
+            position: 1,
+            lessons: [
+              {
+                id: "l1",
+                courseId: "c1",
+                sectionId: "s1",
+                title: "S1 Lesson 1",
+                position: 1,
+                contentType: "video",
+                isPreview: true,
+                isPublished: true,
+              },
+              {
+                id: "l2",
+                courseId: "c1",
+                sectionId: "s1",
+                title: "S1 Lesson 2",
+                position: 2,
+                contentType: "video",
+                isPreview: false,
+                isPublished: true,
+              },
+            ],
+          },
+          {
+            id: "s2",
+            courseId: "c1",
+            title: "Section 2",
+            position: 2,
+            lessons: [
+              {
+                id: "l3",
+                courseId: "c1",
+                sectionId: "s2",
+                title: "S2 Lesson 1",
+                position: 1,
+                contentType: "video",
+                isPreview: false,
+                isPublished: true,
+              },
+              {
+                id: "l4",
+                courseId: "c1",
+                sectionId: "s2",
+                title: "S2 Lesson 2",
+                position: 2,
+                contentType: "video",
+                isPreview: false,
+                isPublished: true,
+              },
+            ],
+          },
+        ],
+        stats: {
+          totalSections: 2,
+          totalLessons: 4,
+          totalDurationSeconds: 1200,
+        },
+      };
+
+      const adapted = adaptCourseOverviewResponse(mockOverview, "Default Instructor");
+      expect(adapted.sections).toHaveLength(2);
+      expect(adapted.sections[0]?.lessons[0]?.[0]).toBe(1);
+      expect(adapted.sections[0]?.lessons[1]?.[0]).toBe(2);
+      expect(adapted.sections[1]?.lessons[0]?.[0]).toBe(3); // Global numbering
+      expect(adapted.sections[1]?.lessons[1]?.[0]).toBe(4); // Global numbering
+    });
+
+    it("assigns global 1-based sequential lesson numbers across sections in adaptPreviewDataToOverview", () => {
+      const mockPreviewData: CourseEditorDataResponse = {
+        course: {
+          id: "c2",
+          slug: "preview-course",
+          title: "Preview Course",
+          shortDescription: "Short",
+          description: "Full description",
+          difficulty: "beginner",
+          status: "draft",
+          creatorId: "user-2",
+          categoryId: "cat-2",
+          thumbnailMediaId: null,
+          trailerMediaId: null,
+          instructorAlias: "Sam",
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          publishedAt: null,
+        },
+        sections: [
+          {
+            id: "ps1",
+            courseId: "c2",
+            title: "Preview Section 1",
+            position: 1,
+            lessons: [
+              {
+                id: "pl1",
+                courseId: "c2",
+                sectionId: "ps1",
+                title: "P1 Lesson 1",
+                position: 1,
+                contentType: "video",
+                isPreview: true,
+                isPublished: true,
+              },
+              {
+                id: "pl2",
+                courseId: "c2",
+                sectionId: "ps1",
+                title: "P1 Lesson 2",
+                position: 2,
+                contentType: "video",
+                isPreview: false,
+                isPublished: true,
+              },
+            ],
+          },
+          {
+            id: "ps2",
+            courseId: "c2",
+            title: "Preview Section 2",
+            position: 2,
+            lessons: [
+              {
+                id: "pl3",
+                courseId: "c2",
+                sectionId: "ps2",
+                title: "P2 Lesson 1",
+                position: 1,
+                contentType: "video",
+                isPreview: false,
+                isPublished: true,
+              },
+            ],
+          },
+        ],
+        pricing: null,
+        settings: null,
+        includes: [],
+      };
+
+      const adapted = adaptPreviewDataToOverview(mockPreviewData, [], "Sam");
+      expect(adapted.sections).toHaveLength(2);
+      expect(adapted.sections[0]?.lessons[0]?.[0]).toBe(1);
+      expect(adapted.sections[0]?.lessons[1]?.[0]).toBe(2);
+      expect(adapted.sections[1]?.lessons[0]?.[0]).toBe(3); // Global numbering
+    });
+
+    it("clicking first lesson in section 1 routes to canonical lecture-1 with from and returnTo context", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={multiSections}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Introduction to Web Design/i,
+      });
+      expect(lesson1Button).toBeVisible();
+      fireEvent.click(lesson1Button);
+
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/learn/test-course/lecture-1?from=courses&returnTo=%2Fcourses%2Ftest-course%2Foverview`,
+      );
+    });
+
+    it("clicking second lesson in section 1 routes correctly to canonical lecture-2", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={multiSections}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      const lesson2Button = screen.getByRole("button", {
+        name: /Lesson 2: Tools and Environment/i,
+      });
+      expect(lesson2Button).toBeVisible();
+      fireEvent.click(lesson2Button);
+
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/learn/test-course/lecture-2?from=courses&returnTo=%2Fcourses%2Ftest-course%2Foverview`,
+      );
+    });
+
+    it("clicking first lesson in section 2 uses GLOBAL numbering (lecture-3)", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={multiSections}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      // Section 2 starts collapsed; expand section 2
+      const section2Toggle = screen.getByRole("button", {
+        name: /Section 2: Advanced Techniques/i,
+      });
+      fireEvent.click(section2Toggle);
+
+      const lesson3Button = screen.getByRole("button", {
+        name: /Lesson 3: Typography and Spacing/i,
+      });
+      expect(lesson3Button).toBeVisible();
+      fireEvent.click(lesson3Button);
+
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/learn/test-course/lecture-3?from=courses&returnTo=%2Fcourses%2Ftest-course%2Foverview`,
+      );
+    });
+
+    it("supports keyboard activation on curriculum lesson rows", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={multiSections}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Introduction to Web Design/i,
+      });
+      lesson1Button.focus();
+      expect(document.activeElement).toBe(lesson1Button);
+      fireEvent.click(lesson1Button);
+
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/learn/test-course/lecture-1?from=courses&returnTo=%2Fcourses%2Ftest-course%2Foverview`,
+      );
+    });
+
+    it("does not navigate in read-only creator preview mode", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={multiSections}
+          isReadOnlyPreview={true}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Introduction to Web Design/i,
+      });
+      expect(lesson1Button).toBeDisabled();
+      expect(lesson1Button).toHaveClass("cursor-default");
+
+      fireEvent.click(lesson1Button);
+      expect(onNavigatePage).not.toHaveBeenCalled();
     });
   });
 });

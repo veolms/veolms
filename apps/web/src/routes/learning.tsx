@@ -119,10 +119,13 @@ export default function LearningRoute() {
       course.slug === apiCourseSlugForKey,
   );
   const canonicalCourseSlug = courseOverview?.course.slug;
-  const lessonId = courseSlug
-    ? (resolveLessonIdentifier(lectureSlug) ??
-      getStoredCourseLessonId(courseSlug))
-    : 1;
+  const hasExplicitLectureSlug = lectureSlug !== undefined;
+  const resolvedExplicitLessonId = hasExplicitLectureSlug
+    ? resolveLessonIdentifier(lectureSlug)
+    : null;
+  const lessonId = hasExplicitLectureSlug
+    ? (resolvedExplicitLessonId ?? 1)
+    : (courseSlug ? getStoredCourseLessonId(courseSlug) : 1);
 
   useLayoutEffect(() => {
     if (!courseSlug) return;
