@@ -155,18 +155,25 @@ export function useToggleFollow() {
   });
 }
 
-export function useAcceptReply(threadId: string) {
+export function useAcceptReply(defaultThreadId?: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, { replyId: string; payload?: AcceptReplyRequest }>({
+  return useMutation<
+    any,
+    ApiError,
+    { threadId?: string; replyId: string; payload?: AcceptReplyRequest }
+  >({
     mutationFn: ({ replyId, payload }) =>
       learningInteractionsService.acceptReply(replyId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadDetails(threadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
-      });
+    onSuccess: (_data, variables) => {
+      const targetThreadId = variables.threadId || defaultThreadId;
+      if (targetThreadId) {
+        queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.threadDetails(targetThreadId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.threadRepliesRoot(targetThreadId),
+        });
+      }
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
       });
@@ -174,15 +181,35 @@ export function useAcceptReply(threadId: string) {
   });
 }
 
-export function useLockThread(threadId: string) {
+export function useLockThread(defaultThreadId?: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, LockThreadRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.lockThread(threadId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadDetails(threadId),
-      });
+  return useMutation<
+    any,
+    ApiError,
+    | { threadId?: string; payload: LockThreadRequest }
+    | LockThreadRequest
+  >({
+    mutationFn: (variables) => {
+      const threadId =
+        "threadId" in variables && variables.threadId
+          ? variables.threadId
+          : defaultThreadId!;
+      const payload =
+        "payload" in variables && variables.payload
+          ? variables.payload
+          : (variables as LockThreadRequest);
+      return learningInteractionsService.lockThread(threadId, payload);
+    },
+    onSuccess: (_data, variables) => {
+      const targetThreadId =
+        "threadId" in variables && variables.threadId
+          ? variables.threadId
+          : defaultThreadId;
+      if (targetThreadId) {
+        queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.threadDetails(targetThreadId),
+        });
+      }
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
       });

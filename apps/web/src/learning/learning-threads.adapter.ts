@@ -52,5 +52,8 @@ export function adaptLearningThreadToComment(
       (currentUserId ? thread.userId === currentUserId : false),
     createdAt: thread.createdAt,
     timestampSeconds: thread.timestampSeconds ?? null,
+    acceptedAnswerId: thread.acceptedAnswerId ?? null,
+    isSolved: Boolean(thread.acceptedAnswerId),
+    isLocked: Boolean(thread.isLocked),
   };
 }

@@ -49,11 +49,13 @@ import {
 } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
 import {
+  useAcceptReply,
   useCreateLessonThread,
   useCreateNote,
   useDeleteNote,
   useDeleteThread,
   useLessonThreads,
+  useLockThread,
   useToggleLike,
   useUpdateNote,
   useUpdateThread,
@@ -398,6 +400,22 @@ export function Discussion({
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread();
   const toggleLikeMutation = useToggleLike();
+  const acceptReplyMutation = useAcceptReply();
+  const lockThreadMutation = useLockThread();
+
+  const currentUserRole = useMemo(() => {
+    if (!currentUser?.roles) return "Student";
+    const lowerRoles = currentUser.roles.map((r) => r.toLowerCase());
+    if (lowerRoles.includes("admin")) return "Admin";
+    if (
+      lowerRoles.includes("instructor") ||
+      lowerRoles.includes("creator") ||
+      lowerRoles.includes("teacher")
+    ) {
+      return "Instructor";
+    }
+    return "Student";
+  }, [currentUser?.roles]);
 
   const isSubmitting =
     createNoteMutation.isPending ||
@@ -869,6 +887,68 @@ export function Discussion({
     setPostedEntries(update);
   };
 
+  const handleToggleAcceptReply = async (
+    threadId: string | number,
+    replyId: string | number,
+    accepted: boolean,
+  ) => {
+    if (isBackendMode) {
+      try {
+        await acceptReplyMutation.mutateAsync({
+          threadId: String(threadId),
+          replyId: String(replyId),
+          payload: { accepted },
+        });
+      } catch (err: any) {
+        setNotice(err?.message || "Failed to update accepted answer.");
+      }
+    } else {
+      const nextAcceptedId = accepted ? String(replyId) : null;
+      const update = (current: Comment[]) =>
+        current.map((entry) => {
+          if (entry.id !== threadId) return entry;
+          return {
+            ...entry,
+            acceptedAnswerId: nextAcceptedId,
+            isSolved: Boolean(nextAcceptedId),
+            thread: (entry.thread ?? []).map((r) => ({
+              ...r,
+              isAccepted: accepted
+                ? String(r.id) === String(replyId)
+                : String(r.id) === String(replyId)
+                  ? false
+                  : Boolean(r.isAccepted),
+            })),
+          };
+        });
+      setEntries(update);
+      setPostedEntries(update);
+    }
+  };
+
+  const handleToggleLockThread = async (
+    threadId: string | number,
+    locked: boolean,
+  ) => {
+    if (isBackendMode) {
+      try {
+        await lockThreadMutation.mutateAsync({
+          threadId: String(threadId),
+          payload: { isLocked: locked },
+        });
+      } catch (err: any) {
+        setNotice(err?.message || "Failed to update discussion lock status.");
+      }
+    } else {
+      const update = (current: Comment[]) =>
+        current.map((entry) =>
+          entry.id === threadId ? { ...entry, isLocked: locked } : entry,
+        );
+      setEntries(update);
+      setPostedEntries(update);
+    }
+  };
+
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
       <ThreadSurface
@@ -961,6 +1041,9 @@ export function Discussion({
         }}
         isBackendMode={isBackendMode}
         currentUserId={currentUser?.id}
+        userRole={currentUserRole}
+        onToggleAcceptReply={handleToggleAcceptReply}
+        onToggleLockThread={handleToggleLockThread}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
@@ -968,6 +1051,7 @@ export function Discussion({
         entries={threadEntries}
         isBackendMode={isBackendMode}
         currentUserId={currentUser?.id}
+        userRole={currentUserRole}
         currentUser={{ name: authorName, avatar: authorAvatar }}
         focusComposerOnOpen={Boolean(openThread?.focusComposer)}
         onOpenChange={(open) => {
@@ -987,6 +1071,8 @@ export function Discussion({
         onReport={() =>
           setNotice("Report received. Our moderation team will review it.")
         }
+        onToggleAcceptReply={handleToggleAcceptReply}
+        onToggleLockThread={handleToggleLockThread}
       />
     </section>
   );
@@ -1035,6 +1121,16 @@ interface ThreadSurfaceProps {
   onOpenThread: (id: string | number, focusComposer?: boolean) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
+  userRole?: string;
+  onToggleAcceptReply?: (
+    threadId: string | number,
+    replyId: string | number,
+    accepted: boolean,
+  ) => void;
+  onToggleLockThread?: (
+    threadId: string | number,
+    locked: boolean,
+  ) => void;
 }
 
 function ThreadSurface({
@@ -1079,6 +1175,9 @@ function ThreadSurface({
   onOpenThread,
   isBackendMode = false,
   currentUserId,
+  userRole,
+  onToggleAcceptReply,
+  onToggleLockThread,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -1440,6 +1539,9 @@ function ThreadSurface({
                 onOpenThread={onOpenThread}
                 isBackendMode={isBackendMode}
                 currentUserId={currentUserId}
+                userRole={userRole}
+                onToggleAcceptReply={onToggleAcceptReply}
+                onToggleLockThread={onToggleLockThread}
               />
             ))}
             {entries.length === 0 && (

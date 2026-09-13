@@ -25,5 +25,6 @@ export function adaptLearningReplyToCommentReply(
     isOwn:
       reply.isOwn ??
       (currentUserId ? reply.userId === currentUserId : false),
+    isAccepted: Boolean(reply.isAccepted),
   };
 }

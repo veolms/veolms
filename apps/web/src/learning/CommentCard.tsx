@@ -2,8 +2,11 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
+import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
@@ -49,6 +52,7 @@ export interface CommentReply {
   liked?: boolean;
   role?: "Instructor";
   isOwn?: boolean;
+  isAccepted?: boolean;
 }
 
 export interface Comment {
@@ -74,6 +78,9 @@ export interface Comment {
   createdAt?: string | number;
   timestampSeconds?: number | null;
   role?: "Student" | "Instructor" | "Admin";
+  acceptedAnswerId?: string | null;
+  isSolved?: boolean;
+  isLocked?: boolean;
 }
 
 interface CommentCardProps {
@@ -83,8 +90,18 @@ interface CommentCardProps {
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
   onReport?: (id: string | number) => void;
+  onToggleAcceptReply?: (
+    threadId: string | number,
+    replyId: string | number,
+    accepted: boolean,
+  ) => Promise<boolean> | void;
+  onToggleLockThread?: (
+    threadId: string | number,
+    isLocked: boolean,
+  ) => Promise<boolean> | void;
   isBackendMode?: boolean;
   currentUserId?: string;
+  userRole?: string;
 }
 
 export function CommentCard({
@@ -94,8 +111,11 @@ export function CommentCard({
   onEdit = () => undefined,
   onDelete = () => undefined,
   onReport = () => undefined,
+  onToggleAcceptReply,
+  onToggleLockThread,
   isBackendMode = false,
   currentUserId,
+  userRole,
 }: CommentCardProps) {
   const [liked, setLiked] = useState(Boolean(comment.liked));
   const [repliesOpen, setRepliesOpen] = useState(
@@ -123,6 +143,21 @@ export function CommentCard({
   const threadId = String(comment.id);
   const { data: authUser } = useCurrentUser();
   const effectiveUserId = currentUserId ?? authUser?.id;
+  const isQuestion = entryKind === "question" || Boolean(comment.isQuestion);
+  const isModerator = Boolean(
+    userRole === "Instructor" ||
+      userRole === "Admin" ||
+      authUser?.roles?.some(
+        (r) =>
+          r.toLowerCase() === "admin" ||
+          r.toLowerCase() === "instructor" ||
+          r.toLowerCase() === "creator",
+      ) ||
+      (authUser as any)?.role === "Instructor" ||
+      (authUser as any)?.role === "Admin",
+  );
+  const canLock = !isNote && (Boolean(comment.isOwn) || isModerator);
+  const canAcceptAnswer = isQuestion && (Boolean(comment.isOwn) || isModerator);
 
   const {
     data: repliesData,
@@ -347,6 +382,25 @@ export function CommentCard({
                       />
                     )}
                   </span>
+                  {isQuestion && Boolean(comment.isSolved) && (
+                    <span
+                      data-testid="qa-solved-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
+                    >
+                      <CheckCircle size={13} weight="bold" aria-hidden="true" />
+                      <span>Solved</span>
+                    </span>
+                  )}
+                  {Boolean(comment.isLocked) && (
+                    <span
+                      data-testid="thread-locked-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400"
+                      title="Locked"
+                    >
+                      <Lock size={12} weight="bold" aria-hidden="true" />
+                      <span>Locked</span>
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={comment.name}
@@ -362,6 +416,13 @@ export function CommentCard({
                   }
                   onDelete={deletion.begin}
                   onReport={() => onReport(comment.id)}
+                  canLock={canLock}
+                  isLocked={Boolean(comment.isLocked)}
+                  onToggleLock={() => {
+                    if (onToggleLockThread) {
+                      void onToggleLockThread(comment.id, !comment.isLocked);
+                    }
+                  }}
                   className="absolute -top-1 -right-1 z-20 shrink-0"
                 />
               </div>
@@ -428,34 +489,47 @@ export function CommentCard({
                     </button>
                   )}
 
-                  <button
-                    type="button"
-                    aria-label="Reply"
-                    title="Reply"
-                    data-reply-action
-                    data-discussion-thread-trigger={
-                      onOpenThread ? "true" : undefined
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (onOpenThread) onOpenThread(comment.id, true);
-                      else setReplyComposerOpen((open) => !open);
-                    }}
-                    aria-expanded={replyComposerOpen}
-                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-                  >
-                    <ArrowBendUpLeft
-                      data-reply-icon
-                      size={20}
-                      weight="bold"
-                      className="origin-center scale-x-[1.16]"
-                      aria-hidden="true"
-                    />
-                  </button>
+                  {comment.isLocked && (
+                    <span
+                      data-testid="inline-locked-indicator"
+                      className="inline-flex min-h-9 items-center gap-1.5 px-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                      title="Discussion is locked"
+                    >
+                      <Lock size={14} weight="bold" aria-hidden="true" />
+                      <span>Locked</span>
+                    </span>
+                  )}
+
+                  {(!comment.isLocked || onOpenThread) && (
+                    <button
+                      type="button"
+                      aria-label={comment.isLocked ? "View thread" : "Reply"}
+                      title={comment.isLocked ? "View thread" : "Reply"}
+                      data-reply-action={!comment.isLocked ? "" : undefined}
+                      data-discussion-thread-trigger={
+                        onOpenThread ? "true" : undefined
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (onOpenThread) onOpenThread(comment.id, !comment.isLocked);
+                        else if (!comment.isLocked) setReplyComposerOpen((open) => !open);
+                      }}
+                      aria-expanded={replyComposerOpen}
+                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                    >
+                      <ArrowBendUpLeft
+                        data-reply-icon
+                        size={20}
+                        weight="bold"
+                        className="origin-center scale-x-[1.16]"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
                 </div>
               )}
 
-              {replyComposerOpen && !onOpenThread && !isNote && (
+              {replyComposerOpen && !onOpenThread && !isNote && !comment.isLocked && (
                 <div className="mt-3 flex max-w-2xl items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="sr-only">Reply to {comment.name}</span>
@@ -513,6 +587,11 @@ export function CommentCard({
                     key={reply.id}
                     reply={reply}
                     isBackendMode={isBackendMode}
+                    isQuestion={isQuestion}
+                    canAcceptAnswer={canAcceptAnswer}
+                    onToggleAccept={(replyId, accepted) =>
+                      onToggleAcceptReply?.(comment.id, replyId, accepted)
+                    }
                     onReply={() => {
                       if (onOpenThread) onOpenThread(comment.id, true);
                       else setReplyComposerOpen(true);
@@ -550,6 +629,9 @@ export function CommentCard({
 interface ReplyCardProps {
   reply: CommentReply;
   isBackendMode?: boolean;
+  isQuestion?: boolean;
+  canAcceptAnswer?: boolean;
+  onToggleAccept?: (replyId: string | number, accepted: boolean) => void;
   onReply: () => void;
   onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean> | void;
   onDelete: (replyId: string | number) => Promise<boolean> | void;
@@ -560,6 +642,9 @@ interface ReplyCardProps {
 function ReplyCard({
   reply,
   isBackendMode = false,
+  isQuestion = false,
+  canAcceptAnswer = false,
+  onToggleAccept,
   onReply,
   onEdit,
   onDelete,
@@ -624,6 +709,15 @@ function ReplyCard({
                       Instructor
                     </span>
                   )}
+                  {reply.isAccepted && (
+                    <span
+                      data-testid="accepted-answer-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+                    >
+                      <CheckCircle size={13} weight="fill" />
+                      Accepted Answer
+                    </span>
+                  )}
                   <span
                     data-reply-time-separator
                     aria-hidden="true"
@@ -639,6 +733,13 @@ function ReplyCard({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
+                  canAcceptAnswer={isQuestion && canAcceptAnswer}
+                  isAccepted={Boolean(reply.isAccepted)}
+                  onToggleAccept={
+                    isQuestion && canAcceptAnswer && onToggleAccept
+                      ? () => onToggleAccept(reply.id, !reply.isAccepted)
+                      : undefined
+                  }
                   onEdit={() => {
                     setEditDraft(
                       reply.content ?? createDiscussionDraft(reply.text),
@@ -707,6 +808,23 @@ function ReplyCard({
                   />
                   <span>{replyLikesCount}</span>
                 </button>
+                {isQuestion && canAcceptAnswer && onToggleAccept && (
+                  <button
+                    type="button"
+                    data-testid={`accept-reply-btn-${reply.id}`}
+                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    onClick={() => onToggleAccept(reply.id, !reply.isAccepted)}
+                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
+                      reply.isAccepted
+                        ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                        : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+                    }`}
+                  >
+                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
+                    <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Reply"
@@ -803,6 +921,12 @@ interface CommentActionMenuProps {
   name: string;
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
+  canLock?: boolean;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
+  canAcceptAnswer?: boolean;
+  isAccepted?: boolean;
+  onToggleAccept?: () => void;
   onEdit: () => void;
   onShare: () => void;
   onDelete: () => void;
@@ -814,6 +938,12 @@ export function CommentActionMenu({
   name,
   kind,
   isOwn,
+  canLock = false,
+  isLocked = false,
+  onToggleLock,
+  canAcceptAnswer = false,
+  isAccepted = false,
+  onToggleAccept,
   onEdit,
   onShare,
   onDelete,
@@ -865,6 +995,20 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {canLock && onToggleLock && (
+            <MenuAction
+              Icon={isLocked ? LockOpen : Lock}
+              label={isLocked ? `Unlock ${actionLabel}` : `Lock ${actionLabel}`}
+              onClick={onToggleLock}
+            />
+          )}
+          {canAcceptAnswer && onToggleAccept && (
+            <MenuAction
+              Icon={CheckCircle}
+              label={isAccepted ? "Unaccept answer" : "Accept as answer"}
+              onClick={onToggleAccept}
+            />
+          )}
           <MenuDivider />
           <MenuAction
             Icon={Trash}
@@ -880,6 +1024,20 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {canLock && onToggleLock && (
+            <MenuAction
+              Icon={isLocked ? LockOpen : Lock}
+              label={isLocked ? `Unlock ${actionLabel}` : `Lock ${actionLabel}`}
+              onClick={onToggleLock}
+            />
+          )}
+          {canAcceptAnswer && onToggleAccept && (
+            <MenuAction
+              Icon={CheckCircle}
+              label={isAccepted ? "Unaccept answer" : "Accept as answer"}
+              onClick={onToggleAccept}
+            />
+          )}
           <MenuDivider />
           <MenuAction
             Icon={Flag}

@@ -191,6 +191,8 @@ const mockInteractions = vi.hoisted(() => ({
   useCreateReply: vi.fn(),
   useUpdateReply: vi.fn(),
   useDeleteReply: vi.fn(),
+  useAcceptReply: vi.fn(),
+  useLockThread: vi.fn(),
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -220,6 +222,8 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useCreateReply: (...args: any[]) => mockInteractions.useCreateReply(...args),
   useUpdateReply: (...args: any[]) => mockInteractions.useUpdateReply(...args),
   useDeleteReply: (...args: any[]) => mockInteractions.useDeleteReply(...args),
+  useAcceptReply: (...args: any[]) => mockInteractions.useAcceptReply(...args),
+  useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
 }));
 
 describe("Learning Discussion Replies (Phase 2 Integration)", () => {
@@ -326,6 +330,14 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
     });
     mockInteractions.useDeleteReply.mockReturnValue({
       mutateAsync: deleteReplyMutateAsync.mockResolvedValue({}),
+      isPending: false,
+    });
+    mockInteractions.useAcceptReply.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    mockInteractions.useLockThread.mockReturnValue({
+      mutateAsync: vi.fn(),
       isPending: false,
     });
   });

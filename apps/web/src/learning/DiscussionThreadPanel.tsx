@@ -1,9 +1,12 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ArrowsInIcon as ArrowsIn } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsOutIcon as ArrowsOut } from "@phosphor-icons/react/ArrowsOut";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
+import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import {
@@ -81,6 +84,7 @@ interface DiscussionThreadPanelProps {
   entries: Comment[];
   isBackendMode?: boolean;
   currentUserId?: string;
+  userRole?: string;
   currentUser?: {
     name: string;
     avatar: string;
@@ -99,6 +103,15 @@ interface DiscussionThreadPanelProps {
   ) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (id: string | number) => void;
+  onToggleAcceptReply?: (
+    threadId: string | number,
+    replyId: string | number,
+    accepted: boolean,
+  ) => void;
+  onToggleLockThread?: (
+    threadId: string | number,
+    locked: boolean,
+  ) => void;
 }
 
 export function DiscussionThreadPanel({
@@ -107,6 +120,7 @@ export function DiscussionThreadPanel({
   entries,
   isBackendMode = false,
   currentUserId,
+  userRole,
   currentUser,
   focusComposerOnOpen = false,
   onOpenChange,
@@ -118,6 +132,8 @@ export function DiscussionThreadPanel({
   onEditReply,
   onDeleteReply,
   onReport,
+  onToggleAcceptReply,
+  onToggleLockThread,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
@@ -618,6 +634,7 @@ export function DiscussionThreadPanel({
                   active={entry.id === activeEntryId}
                   isBackendMode={isBackendMode}
                   currentUserId={currentUserId}
+                  userRole={userRole}
                   currentUser={currentUser}
                   focusRequest={
                     composerFocusRequest.entryId === entry.id
@@ -639,6 +656,8 @@ export function DiscussionThreadPanel({
                   onEditReply={onEditReply}
                   onDeleteReply={onDeleteReply}
                   onReport={onReport}
+                  onToggleAcceptReply={onToggleAcceptReply}
+                  onToggleLockThread={onToggleLockThread}
                 />
               </SwiperSlide>
             ))}
@@ -654,6 +673,7 @@ interface ThreadSlideProps {
   active: boolean;
   isBackendMode?: boolean;
   currentUserId?: string;
+  userRole?: string;
   currentUser?: {
     name: string;
     avatar: string;
@@ -672,6 +692,15 @@ interface ThreadSlideProps {
   ) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (id: string | number) => void;
+  onToggleAcceptReply?: (
+    threadId: string | number,
+    replyId: string | number,
+    accepted: boolean,
+  ) => void;
+  onToggleLockThread?: (
+    threadId: string | number,
+    locked: boolean,
+  ) => void;
 }
 
 function ThreadSlide({
@@ -679,6 +708,7 @@ function ThreadSlide({
   active,
   isBackendMode = false,
   currentUserId,
+  userRole,
   currentUser,
   focusRequest,
   onFocusComposer,
@@ -690,7 +720,15 @@ function ThreadSlide({
   onEditReply,
   onDeleteReply,
   onReport,
+  onToggleAcceptReply,
+  onToggleLockThread,
 }: ThreadSlideProps) {
+  const isQuestion =
+    entry.entryKind === "question" || Boolean(entry.isQuestion);
+  const isModerator = userRole === "Instructor" || userRole === "Admin";
+  const canLock = Boolean(entry.isOwn || isModerator);
+  const canAcceptAnswer = isQuestion && Boolean(entry.isOwn || isModerator);
+
   const isBackend = Boolean(isBackendMode && typeof entry.id === "string");
   const threadId = String(entry.id);
 
@@ -825,8 +863,10 @@ function ThreadSlide({
       <div className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <ThreadRootEntry
           entry={entry}
+          canLock={canLock}
+          onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
           onLike={onLike}
-          onReply={focusComposer}
+          onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
           onDelete={() => onDeleteEntry(entry.id)}
           onReport={() => onReport(entry.id)}
@@ -864,8 +904,13 @@ function ThreadSlide({
                 key={reply.id}
                 parentId={entry.id}
                 reply={reply}
+                isQuestion={isQuestion}
+                canAcceptAnswer={canAcceptAnswer}
+                onToggleAcceptReply={(replyId, accepted) =>
+                  onToggleAcceptReply?.(entry.id, replyId, accepted)
+                }
                 isLikePending={pendingLikeReplyIds.has(reply.id)}
-                onReply={focusComposer}
+                onReply={entry.isLocked ? () => {} : focusComposer}
                 onEdit={handleEditReply}
                 onDelete={handleDeleteReply}
                 onLikeReply={handleLikeReply}
@@ -892,14 +937,24 @@ function ThreadSlide({
       </div>
 
       {active && (
-        <ThreadReplyComposer
-          entry={entry}
-          currentUser={currentUser}
-          focusRequest={focusRequest}
-          onFocusHandled={onComposerFocusHandled}
-          onSubmit={handleAddReply}
-          isPending={createReplyMutation.isPending}
-        />
+        entry.isLocked ? (
+          <div
+            data-testid="thread-locked-notice"
+            className="-mx-4 -mb-4 mt-0 flex items-center justify-center gap-2 rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-3.5 text-xs font-semibold text-(--muted) border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:mx-0 sm:mb-0 sm:rounded-xl"
+          >
+            <Lock size={16} weight="bold" />
+            <span>This conversation is locked. Replies are disabled.</span>
+          </div>
+        ) : (
+          <ThreadReplyComposer
+            entry={entry}
+            currentUser={currentUser}
+            focusRequest={focusRequest}
+            onFocusHandled={onComposerFocusHandled}
+            onSubmit={handleAddReply}
+            isPending={createReplyMutation.isPending}
+          />
+        )
       )}
     </div>
   );
@@ -907,6 +962,8 @@ function ThreadSlide({
 
 function ThreadRootEntry({
   entry,
+  canLock = false,
+  onToggleLock,
   onLike,
   onReply,
   onEdit,
@@ -914,6 +971,8 @@ function ThreadRootEntry({
   onReport,
 }: {
   entry: Comment;
+  canLock?: boolean;
+  onToggleLock?: () => void;
   onLike: (id: string | number, liked: boolean) => void;
   onReply: () => void;
   onEdit: () => void;
@@ -942,6 +1001,29 @@ function ThreadRootEntry({
               <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                 {entry.name}
               </h2>
+              {entry.role === "Instructor" && (
+                <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                  Instructor
+                </span>
+              )}
+              {entry.isQuestion && Boolean(entry.acceptedAnswerId) && (
+                <span
+                  data-testid="qa-solved-badge"
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                >
+                  <CheckCircle size={14} weight="fill" />
+                  Solved
+                </span>
+              )}
+              {entry.isLocked && (
+                <span
+                  data-testid="thread-locked-badge"
+                  className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400"
+                >
+                  <Lock size={14} weight="fill" />
+                  Locked
+                </span>
+              )}
               <span aria-hidden="true" className="text-(--muted)">
                 ·
               </span>
@@ -955,6 +1037,9 @@ function ThreadRootEntry({
                 entry.entryKind ?? (entry.isQuestion ? "question" : "comment")
               }
               isOwn={Boolean(entry.isOwn)}
+              canLock={canLock}
+              isLocked={Boolean(entry.isLocked)}
+              onToggleLock={onToggleLock}
               onEdit={onEdit}
               onShare={() =>
                 void shareDiscussionEntry(entry.id, entry.name, entry.text)
@@ -997,25 +1082,27 @@ function ThreadRootEntry({
               <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
               {entry.likes}
             </button>
-            <button
-              type="button"
-              data-reply-action
-              onClick={onReply}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-            >
-              <ArrowBendUpLeft
-                data-reply-icon
-                size={20}
-                weight="bold"
-                className="origin-center scale-x-[1.16]"
-                aria-hidden="true"
-              />
-              <span className="font-medium">
-                {replyCount > 0
-                  ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
-                  : "Reply"}
-              </span>
-            </button>
+            {!entry.isLocked && (
+              <button
+                type="button"
+                data-reply-action
+                onClick={onReply}
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+              >
+                <ArrowBendUpLeft
+                  data-reply-icon
+                  size={20}
+                  weight="bold"
+                  className="origin-center scale-x-[1.16]"
+                  aria-hidden="true"
+                />
+                <span className="font-medium">
+                  {replyCount > 0
+                    ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
+                    : "Reply"}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1026,6 +1113,9 @@ function ThreadRootEntry({
 function ThreadReplyEntry({
   parentId,
   reply,
+  isQuestion = false,
+  canAcceptAnswer = false,
+  onToggleAcceptReply,
   isLikePending = false,
   onReply,
   onEdit,
@@ -1035,6 +1125,9 @@ function ThreadReplyEntry({
 }: {
   parentId: string | number;
   reply: CommentReply;
+  isQuestion?: boolean;
+  canAcceptAnswer?: boolean;
+  onToggleAcceptReply?: (replyId: string | number, accepted: boolean) => void;
   isLikePending?: boolean;
   onReply: () => void;
   onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean>;
@@ -1103,6 +1196,15 @@ function ThreadReplyEntry({
                       Instructor
                     </span>
                   )}
+                  {reply.isAccepted && (
+                    <span
+                      data-testid="accepted-answer-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+                    >
+                      <CheckCircle size={13} weight="fill" />
+                      Accepted Answer
+                    </span>
+                  )}
                   <span aria-hidden="true" className="text-(--muted)">
                     ·
                   </span>
@@ -1114,6 +1216,13 @@ function ThreadReplyEntry({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
+                  canAcceptAnswer={isQuestion && canAcceptAnswer}
+                  isAccepted={Boolean(reply.isAccepted)}
+                  onToggleAccept={
+                    isQuestion && canAcceptAnswer && onToggleAcceptReply
+                      ? () => onToggleAcceptReply(reply.id, !reply.isAccepted)
+                      : undefined
+                  }
                   onEdit={() => {
                     setEditDraft(
                       reply.content ?? createDiscussionDraft(reply.text),
@@ -1174,6 +1283,23 @@ function ThreadReplyEntry({
                   <ThumbsUp size={18} weight={reply.liked ? "fill" : "regular"} />
                   <span>{reply.likes}</span>
                 </button>
+                {isQuestion && canAcceptAnswer && onToggleAcceptReply && (
+                  <button
+                    type="button"
+                    data-testid={`accept-reply-btn-${reply.id}`}
+                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    onClick={() => onToggleAcceptReply(reply.id, !reply.isAccepted)}
+                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
+                      reply.isAccepted
+                        ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                        : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+                    }`}
+                  >
+                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
+                    <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Reply"
