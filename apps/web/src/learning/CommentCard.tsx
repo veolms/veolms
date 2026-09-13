@@ -10,7 +10,7 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
   DiscussionContent,
@@ -25,15 +25,28 @@ import {
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
+import {
+  useUndoableDeletion,
+  UndoDeleteButton,
+} from "./useUndoableDeletion";
+import {
+  useDeleteReply,
+  useThreadReplies,
+  useToggleLike,
+  useUpdateReply,
+} from "../services/learning-interactions";
+import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
+import { useCurrentUser } from "../services/auth";
 
 export interface CommentReply {
-  id: number;
+  id: string | number;
   name: string;
   time: string;
   avatar: string;
   text: string;
   content?: DiscussionContent;
   likes: number;
+  liked?: boolean;
   role?: "Instructor";
   isOwn?: boolean;
 }
@@ -70,6 +83,8 @@ interface CommentCardProps {
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
   onReport?: (id: string | number) => void;
+  isBackendMode?: boolean;
+  currentUserId?: string;
 }
 
 export function CommentCard({
@@ -79,6 +94,8 @@ export function CommentCard({
   onEdit = () => undefined,
   onDelete = () => undefined,
   onReport = () => undefined,
+  isBackendMode = false,
+  currentUserId,
 }: CommentCardProps) {
   const [liked, setLiked] = useState(Boolean(comment.liked));
   const [repliesOpen, setRepliesOpen] = useState(
@@ -92,11 +109,7 @@ export function CommentCard({
     comment.thread ?? [],
   );
   const deletion = useUndoableDeletion(() => onDelete(comment.id));
-  const unloadedReplyCount = Math.max(
-    0,
-    (comment.replies ?? 0) - (comment.thread?.length ?? 0),
-  );
-  const replyCount = unloadedReplyCount + localReplies.length;
+
   const entryKind =
     comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
   const isNote = entryKind === "note";
@@ -106,6 +119,44 @@ export function CommentCard({
       : isNote
         ? "Note"
         : "Comment";
+
+  const threadId = String(comment.id);
+  const { data: authUser } = useCurrentUser();
+  const effectiveUserId = currentUserId ?? authUser?.id;
+
+  const {
+    data: repliesData,
+    isLoading: isRepliesLoading,
+    isError: isRepliesError,
+    refetch: refetchReplies,
+  } = useThreadReplies(threadId, undefined, {
+    enabled: isBackendMode && repliesOpen && !isNote,
+  });
+
+  const updateReplyMutation = useUpdateReply(threadId);
+  const deleteReplyMutation = useDeleteReply(threadId);
+  const toggleLikeMutation = useToggleLike();
+
+  const backendReplies = useMemo<CommentReply[]>(() => {
+    if (!repliesData?.replies) return [];
+    return repliesData.replies.map((reply) =>
+      adaptLearningReplyToCommentReply(reply, effectiveUserId),
+    );
+  }, [repliesData?.replies, effectiveUserId]);
+
+  const effectiveReplies = isBackendMode ? backendReplies : localReplies;
+
+  const unloadedReplyCount = Math.max(
+    0,
+    (comment.replies ?? 0) - (comment.thread?.length ?? 0),
+  );
+  const backendCount =
+    repliesData?.totalCount !== undefined
+      ? repliesData.totalCount
+      : repliesData?.replies?.length;
+  const replyCount = isBackendMode
+    ? (backendCount !== undefined ? backendCount : (comment.replies ?? 0))
+    : unloadedReplyCount + localReplies.length;
   const hasReplies = !isNote && replyCount > 0;
 
   const toggleReplies = () => {
@@ -114,8 +165,14 @@ export function CommentCard({
   };
 
   useEffect(() => {
-    setLocalReplies(comment.thread ?? []);
-  }, [comment.thread]);
+    if (!isBackendMode) {
+      setLocalReplies(comment.thread ?? []);
+    }
+  }, [isBackendMode, comment.thread]);
+
+  useEffect(() => {
+    setLiked(Boolean(comment.liked));
+  }, [comment.liked]);
 
   const addReply = () => {
     const text = replyDraft.plainText.trim();
@@ -138,7 +195,7 @@ export function CommentCard({
     setRepliesOpen(true);
   };
 
-  const updateReply = (id: number, draft: DiscussionDraft) => {
+  const updateReply = (id: string | number, draft: DiscussionDraft) => {
     const text = draft.plainText.trim();
     setLocalReplies((current) =>
       current.map((reply) =>
@@ -147,6 +204,59 @@ export function CommentCard({
           : reply,
       ),
     );
+  };
+
+  const handleEditReply = async (
+    replyId: string | number,
+    draft: DiscussionDraft,
+  ): Promise<boolean> => {
+    if (isBackendMode) {
+      try {
+        await updateReplyMutation.mutateAsync({
+          replyId: String(replyId),
+          payload: {
+            content: draft.markdown || draft.plainText.trim(),
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
+      updateReply(replyId, draft);
+      return true;
+    }
+  };
+
+  const handleDeleteReply = async (
+    replyId: string | number,
+  ): Promise<boolean> => {
+    if (isBackendMode) {
+      try {
+        await deleteReplyMutation.mutateAsync(String(replyId));
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
+      setLocalReplies((current) =>
+        current.filter((item) => item.id !== replyId),
+      );
+      return true;
+    }
+  };
+
+  const handleLikeReply = async (replyId: string | number) => {
+    if (isBackendMode) {
+      try {
+        await toggleLikeMutation.mutateAsync({
+          targetType: "reply",
+          targetId: String(replyId),
+        });
+      } catch {
+        // Handled cleanly via React Query cache
+      }
+    }
   };
 
   return (
@@ -373,25 +483,54 @@ export function CommentCard({
             </div>
           </div>
 
-          {repliesOpen && localReplies.length > 0 && !isNote && (
-            <div className="mt-2.5 space-y-2.5">
-              {localReplies.map((reply) => (
-                <ReplyCard
-                  key={reply.id}
-                  reply={reply}
-                  onReply={() => {
-                    if (onOpenThread) onOpenThread(comment.id, true);
-                    else setReplyComposerOpen(true);
-                  }}
-                  onEdit={(text) => updateReply(reply.id, text)}
-                  onDelete={() =>
-                    setLocalReplies((current) =>
-                      current.filter((item) => item.id !== reply.id),
-                    )
-                  }
-                  onReport={() => onReport(reply.id)}
-                />
-              ))}
+          {repliesOpen && !isNote && (
+            <div className="mt-2.5 space-y-2.5" data-testid="inline-replies-container">
+              {isBackendMode && isRepliesLoading ? (
+                <div
+                  className="py-4 text-center"
+                  data-testid="learning-replies-loading"
+                >
+                  <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                  <p className="text-xs font-medium text-(--muted)">Loading replies…</p>
+                </div>
+              ) : isBackendMode && isRepliesError ? (
+                <div
+                  className="py-4 text-center"
+                  data-testid="learning-replies-error"
+                >
+                  <p className="text-sm font-semibold text-(--text)">Failed to load replies</p>
+                  <button
+                    type="button"
+                    onClick={() => refetchReplies()}
+                    className="mt-2 inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : effectiveReplies.length > 0 ? (
+                effectiveReplies.map((reply) => (
+                  <ReplyCard
+                    key={reply.id}
+                    reply={reply}
+                    isBackendMode={isBackendMode}
+                    onReply={() => {
+                      if (onOpenThread) onOpenThread(comment.id, true);
+                      else setReplyComposerOpen(true);
+                    }}
+                    onEdit={handleEditReply}
+                    onDelete={handleDeleteReply}
+                    onLike={handleLikeReply}
+                    onReport={() => onReport(reply.id)}
+                  />
+                ))
+              ) : (
+                <div
+                  className="py-4 text-center text-xs text-(--muted)"
+                  data-testid="learning-replies-empty"
+                >
+                  No replies yet.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -410,17 +549,21 @@ export function CommentCard({
 
 interface ReplyCardProps {
   reply: CommentReply;
+  isBackendMode?: boolean;
   onReply: () => void;
-  onEdit: (draft: DiscussionDraft) => void;
-  onDelete: () => void;
+  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean> | void;
+  onDelete: (replyId: string | number) => Promise<boolean> | void;
+  onLike: (replyId: string | number) => void;
   onReport: () => void;
 }
 
 function ReplyCard({
   reply,
+  isBackendMode = false,
   onReply,
   onEdit,
   onDelete,
+  onLike,
   onReport,
 }: ReplyCardProps) {
   const [liked, setLiked] = useState(false);
@@ -428,12 +571,25 @@ function ReplyCard({
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
     reply.content ?? createDiscussionDraft(reply.text),
   );
-  const deletion = useUndoableDeletion(onDelete);
+  const [editError, setEditError] = useState("");
+  const deletion = useUndoableDeletion(() => {
+    void onDelete(reply.id);
+  });
 
-  const saveEdit = () => {
+  const isReplyLiked = isBackendMode ? Boolean(reply.liked) : liked;
+  const replyLikesCount = isBackendMode
+    ? reply.likes
+    : reply.likes + (liked ? 1 : 0);
+
+  const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
-    onEdit(editDraft);
-    setEditing(false);
+    setEditError("");
+    const result = await onEdit(reply.id, editDraft);
+    if (result !== false) {
+      setEditing(false);
+    } else {
+      setEditError("Failed to update reply. Please try again.");
+    }
   };
 
   return (
@@ -499,19 +655,27 @@ function ReplyCard({
               </div>
 
               {editing ? (
-                <InlineEditForm
-                  documentId={`reply-edit-${reply.id}`}
-                  label={`Edit reply by ${reply.name}`}
-                  value={editDraft}
-                  onChange={setEditDraft}
-                  onCancel={() => {
-                    setEditDraft(
-                      reply.content ?? createDiscussionDraft(reply.text),
-                    );
-                    setEditing(false);
-                  }}
-                  onSave={saveEdit}
-                />
+                <div>
+                  <InlineEditForm
+                    documentId={`reply-edit-${reply.id}`}
+                    label={`Edit reply by ${reply.name}`}
+                    value={editDraft}
+                    onChange={setEditDraft}
+                    onCancel={() => {
+                      setEditDraft(
+                        reply.content ?? createDiscussionDraft(reply.text),
+                      );
+                      setEditing(false);
+                      setEditError("");
+                    }}
+                    onSave={saveEdit}
+                  />
+                  {editError && (
+                    <p role="alert" className="mt-1 text-xs text-red-500">
+                      {editError}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <DiscussionMarkdown
                   content={reply.content ?? createDiscussionDraft(reply.text)}
@@ -526,13 +690,22 @@ function ReplyCard({
               >
                 <button
                   type="button"
-                  onClick={() => setLiked((current) => !current)}
-                  aria-pressed={liked}
-                  aria-label={liked ? "Unlike reply" : "Like reply"}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                  onClick={() => {
+                    if (isBackendMode) {
+                      onLike(reply.id);
+                    } else {
+                      setLiked((current) => !current);
+                    }
+                  }}
+                  aria-pressed={isReplyLiked}
+                  aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                 >
-                  <ThumbsUp size={18} weight={liked ? "fill" : "regular"} />
-                  <span>{reply.likes + (liked ? 1 : 0)}</span>
+                  <ThumbsUp
+                    size={18}
+                    weight={isReplyLiked ? "fill" : "regular"}
+                  />
+                  <span>{replyLikesCount}</span>
                 </button>
                 <button
                   type="button"
@@ -716,85 +889,6 @@ export function CommentActionMenu({
         </>
       )}
     </CourseActionMenu>
-  );
-}
-
-const UNDO_DELETE_TIMEOUT_MS = 10_000;
-
-function useUndoableDeletion(onCommit: () => void) {
-  const commitRef = useRef(onCommit);
-  const [deadline, setDeadline] = useState<number | null>(null);
-  const [seconds, setSeconds] = useState(10);
-
-  useEffect(() => {
-    commitRef.current = onCommit;
-  }, [onCommit]);
-
-  useEffect(() => {
-    if (deadline === null) return;
-
-    const updateSeconds = () => {
-      setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
-    };
-    updateSeconds();
-    const interval = window.setInterval(updateSeconds, 250);
-    const timeout = window.setTimeout(
-      () => {
-        setDeadline(null);
-        commitRef.current();
-      },
-      Math.max(0, deadline - Date.now()),
-    );
-
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(timeout);
-    };
-  }, [deadline]);
-
-  return {
-    pending: deadline !== null,
-    seconds,
-    begin: () => {
-      setSeconds(10);
-      setDeadline(Date.now() + UNDO_DELETE_TIMEOUT_MS);
-    },
-    undo: () => setDeadline(null),
-  };
-}
-
-interface UndoDeleteButtonProps {
-  name: string;
-  seconds: number;
-  onUndo: () => void;
-  className: string;
-}
-
-function UndoDeleteButton({
-  name,
-  seconds,
-  onUndo,
-  className,
-}: UndoDeleteButtonProps) {
-  return (
-    <button
-      type="button"
-      data-undo-delete
-      aria-label={`Undo deletion of ${name}'s entry`}
-      onClick={onUndo}
-      className={`${className} z-30 inline-flex h-9 items-center gap-2 rounded-full bg-(--surface-elevated,var(--surface)) px-3 text-xs font-semibold text-(--text) shadow-[0_10px_30px_rgba(0,0,0,0.28),0_0_0_1px_color-mix(in_srgb,var(--accent)_38%,transparent)] transition-[background-color,box-shadow] hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)`}
-    >
-      <ArrowCounterClockwise
-        size={16}
-        weight="bold"
-        className="text-(--accent-ink,var(--accent))"
-        aria-hidden="true"
-      />
-      <span>Undo</span>
-      <span className="min-w-5 text-right font-medium tabular-nums text-(--muted)">
-        {seconds}s
-      </span>
-    </button>
   );
 }
 

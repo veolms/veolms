@@ -32,6 +32,18 @@ import {
   type Comment,
   type CommentReply,
 } from "./CommentCard";
+import {
+  useCreateReply,
+  useDeleteReply,
+  useThreadReplies,
+  useToggleLike,
+  useUpdateReply,
+} from "../services/learning-interactions";
+import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
+import {
+  useUndoableDeletion,
+  UndoDeleteButton,
+} from "./useUndoableDeletion";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import {
   DiscussionEditor,
@@ -67,6 +79,12 @@ interface DiscussionThreadPanelProps {
   open: boolean;
   activeEntryId: string | number | null;
   entries: Comment[];
+  isBackendMode?: boolean;
+  currentUserId?: string;
+  currentUser?: {
+    name: string;
+    avatar: string;
+  };
   focusComposerOnOpen?: boolean;
   onOpenChange: (open: boolean) => void;
   onActiveEntryChange: (entryId: string | number) => void;
@@ -76,10 +94,10 @@ interface DiscussionThreadPanelProps {
   onDeleteEntry: (id: string | number) => void;
   onEditReply: (
     entryId: string | number,
-    replyId: number,
+    replyId: string | number,
     draft: DiscussionDraft,
   ) => void;
-  onDeleteReply: (entryId: string | number, replyId: number) => void;
+  onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (id: string | number) => void;
 }
 
@@ -87,6 +105,9 @@ export function DiscussionThreadPanel({
   open,
   activeEntryId,
   entries,
+  isBackendMode = false,
+  currentUserId,
+  currentUser,
   focusComposerOnOpen = false,
   onOpenChange,
   onActiveEntryChange,
@@ -595,6 +616,9 @@ export function DiscussionThreadPanel({
                 <ThreadSlide
                   entry={entry}
                   active={entry.id === activeEntryId}
+                  isBackendMode={isBackendMode}
+                  currentUserId={currentUserId}
+                  currentUser={currentUser}
                   focusRequest={
                     composerFocusRequest.entryId === entry.id
                       ? composerFocusRequest.id
@@ -628,6 +652,12 @@ export function DiscussionThreadPanel({
 interface ThreadSlideProps {
   entry: Comment;
   active: boolean;
+  isBackendMode?: boolean;
+  currentUserId?: string;
+  currentUser?: {
+    name: string;
+    avatar: string;
+  };
   focusRequest: number;
   onFocusComposer: (entryId: string | number) => void;
   onComposerFocusHandled: (entryId: string | number, requestId: number) => void;
@@ -637,16 +667,19 @@ interface ThreadSlideProps {
   onDeleteEntry: (id: string | number) => void;
   onEditReply: (
     entryId: string | number,
-    replyId: number,
+    replyId: string | number,
     draft: DiscussionDraft,
   ) => void;
-  onDeleteReply: (entryId: string | number, replyId: number) => void;
+  onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (id: string | number) => void;
 }
 
 function ThreadSlide({
   entry,
   active,
+  isBackendMode = false,
+  currentUserId,
+  currentUser,
   focusRequest,
   onFocusComposer,
   onComposerFocusHandled,
@@ -658,7 +691,129 @@ function ThreadSlide({
   onDeleteReply,
   onReport,
 }: ThreadSlideProps) {
-  const replies = entry.thread ?? [];
+  const isBackend = Boolean(isBackendMode && typeof entry.id === "string");
+  const threadId = String(entry.id);
+
+  const {
+    data: repliesData,
+    isLoading: isRepliesLoading,
+    isError: isRepliesError,
+    refetch: refetchReplies,
+  } = useThreadReplies(threadId, undefined, {
+    enabled: isBackend && active,
+  });
+
+  const createReplyMutation = useCreateReply(threadId);
+  const updateReplyMutation = useUpdateReply(threadId);
+  const deleteReplyMutation = useDeleteReply(threadId);
+  const toggleLikeMutation = useToggleLike();
+
+  const [pendingLikeReplyIds, setPendingLikeReplyIds] = useState<
+    Set<string | number>
+  >(new Set());
+
+  const replies = useMemo<CommentReply[]>(() => {
+    if (!isBackend) {
+      return entry.thread ?? [];
+    }
+    if (!repliesData?.replies) {
+      return [];
+    }
+    return repliesData.replies.map((reply) =>
+      adaptLearningReplyToCommentReply(reply, currentUserId),
+    );
+  }, [isBackend, entry.thread, repliesData?.replies, currentUserId]);
+
+  const handleAddReply = async (draft: DiscussionDraft): Promise<boolean> => {
+    if (isBackend) {
+      try {
+        await createReplyMutation.mutateAsync({
+          content: draft.markdown || draft.plainText.trim(),
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
+      onAddReply(entry.id, {
+        id: Date.now(),
+        name: currentUser?.name || "Ashi Singh",
+        time: "Just now",
+        avatar: currentUser?.avatar || "/assets/sofia-avatar-160.webp",
+        text: draft.plainText.trim(),
+        content: draft,
+        likes: 0,
+        isOwn: true,
+      });
+      return true;
+    }
+  };
+
+  const handleEditReply = async (
+    replyId: string | number,
+    draft: DiscussionDraft,
+  ): Promise<boolean> => {
+    if (isBackend) {
+      try {
+        await updateReplyMutation.mutateAsync({
+          replyId: String(replyId),
+          payload: {
+            content: draft.markdown || draft.plainText.trim(),
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
+      onEditReply(entry.id, replyId, draft);
+      return true;
+    }
+  };
+
+  const handleDeleteReply = async (
+    replyId: string | number,
+  ): Promise<boolean> => {
+    if (isBackend) {
+      try {
+        await deleteReplyMutation.mutateAsync(String(replyId));
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
+      onDeleteReply(entry.id, replyId);
+      return true;
+    }
+  };
+
+  const handleLikeReply = async (replyId: string | number) => {
+    if (pendingLikeReplyIds.has(replyId)) return;
+    if (isBackend) {
+      setPendingLikeReplyIds((prev) => new Set(prev).add(replyId));
+      try {
+        await toggleLikeMutation.mutateAsync({
+          targetType: "reply",
+          targetId: String(replyId),
+        });
+      } catch {
+        // Handled cleanly; query cache reflects backend state
+      } finally {
+        setPendingLikeReplyIds((prev) => {
+          const next = new Set(prev);
+          next.delete(replyId);
+          return next;
+        });
+      }
+    } else {
+      const reply = replies.find((r) => r.id === replyId);
+      if (reply) {
+        reply.liked = !reply.liked;
+        reply.likes += reply.liked ? 1 : -1;
+      }
+    }
+  };
+
   const focusComposer = () => onFocusComposer(entry.id);
 
   return (
@@ -678,20 +833,50 @@ function ThreadSlide({
         />
 
         <div className="mx-auto max-w-4xl">
-          {replies.length > 0 ? (
+          {!active ? null : isBackend && isRepliesLoading ? (
+            <div
+              className="py-12 text-center"
+              data-testid="learning-replies-loading"
+            >
+              <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+              <p className="text-sm font-medium text-(--muted)">Loading replies…</p>
+            </div>
+          ) : isBackend && isRepliesError ? (
+            <div
+              className="py-12 text-center"
+              data-testid="learning-replies-error"
+            >
+              <p className="font-semibold text-(--text)">Failed to load replies</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+                There was a problem loading replies for this discussion.
+              </p>
+              <button
+                type="button"
+                onClick={() => refetchReplies()}
+                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+              >
+                Retry
+              </button>
+            </div>
+          ) : replies.length > 0 ? (
             replies.map((reply) => (
               <ThreadReplyEntry
                 key={reply.id}
                 parentId={entry.id}
                 reply={reply}
+                isLikePending={pendingLikeReplyIds.has(reply.id)}
                 onReply={focusComposer}
-                onEdit={onEditReply}
-                onDelete={onDeleteReply}
+                onEdit={handleEditReply}
+                onDelete={handleDeleteReply}
+                onLikeReply={handleLikeReply}
                 onReport={onReport}
               />
             ))
           ) : (
-            <div className="px-4 py-12 text-center sm:py-16">
+            <div
+              className="px-4 py-12 text-center sm:py-16"
+              data-testid="learning-replies-empty"
+            >
               <div className="mx-auto grid size-11 place-items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_11%,transparent)] text-(--accent-ink,var(--accent))">
                 <ChatCenteredDots size={22} aria-hidden="true" />
               </div>
@@ -709,9 +894,11 @@ function ThreadSlide({
       {active && (
         <ThreadReplyComposer
           entry={entry}
+          currentUser={currentUser}
           focusRequest={focusRequest}
           onFocusHandled={onComposerFocusHandled}
-          onSubmit={(reply) => onAddReply(entry.id, reply)}
+          onSubmit={handleAddReply}
+          isPending={createReplyMutation.isPending}
         />
       )}
     </div>
@@ -734,6 +921,11 @@ function ThreadRootEntry({
   onReport: () => void;
 }) {
   const [liked, setLiked] = useState(Boolean(entry.liked));
+
+  useEffect(() => {
+    setLiked(Boolean(entry.liked));
+  }, [entry.liked]);
+
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
   return (
@@ -834,128 +1026,203 @@ function ThreadRootEntry({
 function ThreadReplyEntry({
   parentId,
   reply,
+  isLikePending = false,
   onReply,
   onEdit,
   onDelete,
+  onLikeReply,
   onReport,
 }: {
   parentId: string | number;
   reply: CommentReply;
+  isLikePending?: boolean;
   onReply: () => void;
-  onEdit: (entryId: string | number, replyId: number, draft: DiscussionDraft) => void;
-  onDelete: (entryId: string | number, replyId: number) => void;
+  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean>;
+  onDelete: (replyId: string | number) => Promise<boolean>;
+  onLikeReply: (replyId: string | number) => void;
   onReport: (id: string | number) => void;
 }) {
-  const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(
     reply.content ?? createDiscussionDraft(reply.text),
   );
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const deletion = useUndoableDeletion(async () => {
+    const success = await onDelete(reply.id);
+    if (!success) {
+      setDeleteError("Failed to delete reply. Please try again.");
+    }
+  });
+
+  const saveEdit = async () => {
+    if (!hasDiscussionDraftContent(editDraft) || isUpdating) return;
+    setIsUpdating(true);
+    setUpdateError("");
+    try {
+      const success = await onEdit(reply.id, editDraft);
+      if (success) {
+        setEditing(false);
+      } else {
+        setUpdateError("Failed to update reply. Please try again.");
+      }
+    } catch {
+      setUpdateError("Failed to update reply. Please try again.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
-    <article data-thread-reply-entry className="px-3 py-2.5 sm:px-8">
-      <div className="flex gap-3.5">
-        <img
-          src={reply.avatar}
-          alt=""
-          className="size-9 shrink-0 rounded-full object-cover sm:size-10"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="relative flex items-start gap-2 pr-9">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
-                {reply.name}
-              </h3>
-              <span aria-hidden="true" className="text-(--muted)">
-                ·
-              </span>
-              <span className="text-xs text-(--muted) sm:text-sm">
-                {reply.time}
-              </span>
+    <article
+      data-thread-reply-entry
+      data-deletion-pending={deletion.pending || undefined}
+      className={`relative px-3 py-2.5 sm:px-8 ${deletion.pending ? "min-h-9" : ""}`}
+    >
+      <div
+        inert={deletion.pending ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex gap-3.5">
+            <img
+              src={reply.avatar}
+              alt=""
+              className="size-9 shrink-0 rounded-full object-cover sm:size-10"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="relative flex items-start gap-2 pr-9">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                  <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
+                    {reply.name}
+                  </h3>
+                  {reply.role === "Instructor" && (
+                    <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                      Instructor
+                    </span>
+                  )}
+                  <span aria-hidden="true" className="text-(--muted)">
+                    ·
+                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">
+                    {reply.time}
+                  </span>
+                </div>
+                <CommentActionMenu
+                  name={reply.name}
+                  kind="reply"
+                  isOwn={Boolean(reply.isOwn)}
+                  onEdit={() => {
+                    setEditDraft(
+                      reply.content ?? createDiscussionDraft(reply.text),
+                    );
+                    setEditing(true);
+                  }}
+                  onShare={() =>
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text)
+                  }
+                  onDelete={deletion.begin}
+                  onReport={() => onReport(reply.id)}
+                  className="absolute -top-1 right-0 z-20 shrink-0"
+                />
+              </div>
+              {editing ? (
+                <div>
+                  <InlineEditForm
+                    documentId={`thread-reply-edit-${reply.id}`}
+                    label={`Edit reply by ${reply.name}`}
+                    value={editDraft}
+                    onChange={setEditDraft}
+                    onCancel={() => {
+                      setEditDraft(
+                        reply.content ?? createDiscussionDraft(reply.text),
+                      );
+                      setEditing(false);
+                      setUpdateError("");
+                    }}
+                    onSave={saveEdit}
+                  />
+                  {updateError && (
+                    <p role="alert" className="mt-1 text-xs text-red-500">
+                      {updateError}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <DiscussionMarkdown
+                  content={reply.content ?? createDiscussionDraft(reply.text)}
+                  label={`Reply by ${reply.name}`}
+                  className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
+                />
+              )}
+              {deleteError && (
+                <p role="alert" className="mt-1 text-xs text-red-500">
+                  {deleteError}
+                </p>
+              )}
+              <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
+                <button
+                  type="button"
+                  aria-pressed={Boolean(reply.liked)}
+                  aria-label={reply.liked ? "Unlike reply" : "Like reply"}
+                  disabled={isLikePending}
+                  onClick={() => onLikeReply(reply.id)}
+                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                >
+                  <ThumbsUp size={18} weight={reply.liked ? "fill" : "regular"} />
+                  <span>{reply.likes}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Reply"
+                  title="Reply"
+                  data-reply-action
+                  onClick={onReply}
+                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                >
+                  <ArrowBendUpLeft
+                    data-reply-icon
+                    size={20}
+                    weight="bold"
+                    className="origin-center scale-x-[1.16]"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             </div>
-            <CommentActionMenu
-              name={reply.name}
-              kind="reply"
-              isOwn={Boolean(reply.isOwn)}
-              onEdit={() => setEditing(true)}
-              onShare={() =>
-                void shareDiscussionEntry(reply.id, reply.name, reply.text)
-              }
-              onDelete={() => onDelete(parentId, reply.id)}
-              onReport={() => onReport(reply.id)}
-              className="absolute -top-1 right-0 z-20 shrink-0"
-            />
-          </div>
-          {editing ? (
-            <InlineEditForm
-              documentId={`thread-reply-edit-${reply.id}`}
-              label={`Edit reply by ${reply.name}`}
-              value={editDraft}
-              onChange={setEditDraft}
-              onCancel={() => {
-                setEditDraft(
-                  reply.content ?? createDiscussionDraft(reply.text),
-                );
-                setEditing(false);
-              }}
-              onSave={() => {
-                if (!hasDiscussionDraftContent(editDraft)) return;
-                onEdit(parentId, reply.id, editDraft);
-                setEditing(false);
-              }}
-            />
-          ) : (
-            <DiscussionMarkdown
-              content={reply.content ?? createDiscussionDraft(reply.text)}
-              label={`Reply by ${reply.name}`}
-              className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
-            />
-          )}
-          <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
-            <button
-              type="button"
-              aria-pressed={liked}
-              aria-label={liked ? "Unlike reply" : "Like reply"}
-              onClick={() => setLiked((current) => !current)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
-            >
-              <ThumbsUp size={18} weight={liked ? "fill" : "regular"} />
-              {reply.likes + (liked ? 1 : 0)}
-            </button>
-            <button
-              type="button"
-              aria-label="Reply"
-              title="Reply"
-              data-reply-action
-              onClick={onReply}
-              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-            >
-              <ArrowBendUpLeft
-                data-reply-icon
-                size={20}
-                weight="bold"
-                className="origin-center scale-x-[1.16]"
-                aria-hidden="true"
-              />
-            </button>
           </div>
         </div>
       </div>
+      {deletion.pending && (
+        <UndoDeleteButton
+          name={reply.name}
+          seconds={deletion.seconds}
+          onUndo={deletion.undo}
+          className="absolute top-2 right-2"
+        />
+      )}
     </article>
   );
 }
 
 function ThreadReplyComposer({
   entry,
+  currentUser,
   focusRequest,
   onFocusHandled,
   onSubmit,
+  isPending = false,
 }: {
   entry: Comment;
+  currentUser?: { name: string; avatar: string };
   focusRequest: number;
   onFocusHandled: (entryId: string | number, requestId: number) => void;
-  onSubmit: (reply: CommentReply) => void;
+  onSubmit: (draft: DiscussionDraft) => Promise<boolean>;
+  isPending?: boolean;
 }) {
+  const [composerKey, setComposerKey] = useState(0);
   const [draft, setDraft] = useState<DiscussionDraft>(
     createEmptyDiscussionDraft,
   );
@@ -963,9 +1230,14 @@ function ThreadReplyComposer({
     useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const shouldFocusRef = useRef(false);
 
   useEffect(() => {
     setDraft(createEmptyDiscussionDraft());
+    setComposerKey(0);
+    setSubmitError("");
   }, [entry.id]);
 
   useEffect(() => {
@@ -974,22 +1246,47 @@ function ThreadReplyComposer({
     onFocusHandled(entry.id, focusRequest);
   }, [editorController, entry.id, focusRequest, onFocusHandled]);
 
-  const canSubmit = hasDiscussionDraftContent(draft);
-  const submit = () => {
-    if (!canSubmit) return;
-    onSubmit({
-      id: Date.now(),
-      name: "Ashi Singh",
-      time: "Just now",
-      avatar: "/assets/sofia-avatar-160.webp",
-      text: draft.plainText.trim(),
-      content: draft,
-      likes: 0,
-      isOwn: true,
-    });
-    setDraft(createEmptyDiscussionDraft());
-    window.setTimeout(() => editorController?.focus(), 0);
+  const isPendingSubmission = isSubmitting || isPending;
+  const canSubmit = hasDiscussionDraftContent(draft) && !isPendingSubmission;
+
+  const submit = async () => {
+    if (!canSubmit || isPendingSubmission) return;
+    setIsSubmitting(true);
+    setSubmitError("");
+    try {
+      const success = await onSubmit(draft);
+      if (success) {
+        shouldFocusRef.current = true;
+        setDraft(createEmptyDiscussionDraft());
+        setComposerKey((k) => k + 1);
+        setSubmitError("");
+        window.setTimeout(() => {
+          editorController?.focus();
+        }, 0);
+      } else {
+        setSubmitError("Failed to post reply. Please try again.");
+      }
+    } catch {
+      setSubmitError("Failed to post reply. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const handleControllerChange = (
+    controller: DiscussionEditorController | null,
+  ) => {
+    setEditorController(controller);
+    if (controller && shouldFocusRef.current) {
+      shouldFocusRef.current = false;
+      window.setTimeout(() => {
+        controller.focus();
+      }, 0);
+    }
+  };
+
+  const composerAvatar =
+    currentUser?.avatar || "/assets/sofia-avatar-160.webp";
 
   return (
     <div
@@ -997,18 +1294,24 @@ function ThreadReplyComposer({
       className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
-        documentId={`thread-reply-${entry.id}`}
+        documentId={`thread-reply-${entry.id}-${composerKey}`}
         value={draft}
         label={`Reply to ${entry.name}`}
         placeholderText="Write a reply…"
         autoGrow
+        autoFocus={shouldFocusRef.current}
         onChange={setDraft}
-        onControllerChange={setEditorController}
+        onControllerChange={handleControllerChange}
         onFormattingStateChange={setFormattingState}
       />
+      {submitError && (
+        <p role="alert" className="px-3 pt-1 text-xs text-red-500">
+          {submitError}
+        </p>
+      )}
       <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
         <img
-          src="/assets/sofia-avatar-160.webp"
+          src={composerAvatar}
           alt=""
           className="size-9 shrink-0 rounded-full object-cover sm:size-10"
         />
@@ -1021,7 +1324,7 @@ function ThreadReplyComposer({
         <button
           type="button"
           aria-label="Post reply"
-          disabled={!canSubmit}
+          disabled={!canSubmit || isPendingSubmission}
           onClick={submit}
           className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
         >
@@ -1031,6 +1334,7 @@ function ThreadReplyComposer({
     </div>
   );
 }
+
 
 interface PanelWidthResize {
   pointerId: number;

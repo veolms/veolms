@@ -99,6 +99,10 @@ const mockInteractions = vi.hoisted(() => ({
   useUpdateThread: vi.fn(),
   useDeleteThread: vi.fn(),
   useToggleLike: vi.fn(),
+  useThreadReplies: vi.fn(),
+  useCreateReply: vi.fn(),
+  useUpdateReply: vi.fn(),
+  useDeleteReply: vi.fn(),
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -124,6 +128,10 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useUpdateThread: (...args: any[]) => mockInteractions.useUpdateThread(...args),
   useDeleteThread: (...args: any[]) => mockInteractions.useDeleteThread(...args),
   useToggleLike: (...args: any[]) => mockInteractions.useToggleLike(...args),
+  useThreadReplies: (...args: any[]) => mockInteractions.useThreadReplies(...args),
+  useCreateReply: (...args: any[]) => mockInteractions.useCreateReply(...args),
+  useUpdateReply: (...args: any[]) => mockInteractions.useUpdateReply(...args),
+  useDeleteReply: (...args: any[]) => mockInteractions.useDeleteReply(...args),
 }));
 
 describe("Learning Discussion Threads (Phase 1 Integration)", () => {
@@ -174,6 +182,25 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     });
     mockInteractions.useToggleLike.mockReturnValue({
       mutate: toggleLikeMutate,
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    mockInteractions.useThreadReplies.mockReturnValue({
+      data: { replies: [], nextCursor: null, totalCount: 0 },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    mockInteractions.useCreateReply.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    mockInteractions.useUpdateReply.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    mockInteractions.useDeleteReply.mockReturnValue({
+      mutateAsync: vi.fn(),
       isPending: false,
     });
   });
@@ -469,10 +496,10 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     vi.useRealTimers();
   });
 
-  it("8. root-thread opening: onOpenThread is temporarily disabled for backend Comments/Q&A in Phase 1", () => {
+  it("8. root-thread opening: onOpenThread opens DiscussionThreadPanel in Phase 2", () => {
     render(
       <Discussion
-        persistenceKey="test-phase1-panel-disabled"
+        persistenceKey="test-phase2-panel-enabled"
         courseId="course-1"
         lessonId="lesson-1"
         interactionCapabilities={{
@@ -487,7 +514,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     const replyButton = screen.getAllByRole("button", { name: "Reply" })[0]!;
     fireEvent.click(replyButton);
 
-    // DiscussionThreadPanel drawer or sheet must NOT be opened
-    expect(screen.queryByRole("dialog")).toBeNull();
+    // DiscussionThreadPanel is now opened in Phase 2
+    expect(
+      screen.getByRole("heading", { name: "Discussion thread" }),
+    ).toBeInTheDocument();
   });
 });

@@ -544,7 +544,11 @@ export function Discussion({
   const threadEntries = useMemo(
     () =>
       Array.from(
-        new Map(combinedEntries.map((entry) => [entry.id, entry])).values(),
+        new Map(
+          combinedEntries
+            .filter((entry) => entry.entryKind !== "note")
+            .map((entry) => [entry.id, entry]),
+        ).values(),
       ),
     [combinedEntries],
   );
@@ -818,7 +822,7 @@ export function Discussion({
 
   const editReply = (
     entryId: string | number,
-    replyId: number,
+    replyId: string | number,
     replyDraft: DiscussionDraft,
   ) => {
     if (isBackendMode) return;
@@ -844,7 +848,10 @@ export function Discussion({
     setPostedEntries(update);
   };
 
-  const deleteReply = (entryId: string | number, replyId: number) => {
+  const deleteReply = (
+    entryId: string | number,
+    replyId: string | number,
+  ) => {
     if (isBackendMode) return;
     const update = (current: Comment[]) =>
       current.map((entry) => {
@@ -948,17 +955,20 @@ export function Discussion({
           setNotice("Report received. Our moderation team will review it.")
         }
         onOpenThread={(id, focusComposer = false) => {
-          if (isBackendMode) {
-            // In Phase 1, root-thread opening is temporarily disabled for backend Comments/Q&A
-            return;
-          }
+          const entry = combinedEntries.find((e) => e.id === id);
+          if (entry?.entryKind === "note") return;
           setOpenThread({ id, focusComposer });
         }}
+        isBackendMode={isBackendMode}
+        currentUserId={currentUser?.id}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
         activeEntryId={openThread?.id ?? null}
         entries={threadEntries}
+        isBackendMode={isBackendMode}
+        currentUserId={currentUser?.id}
+        currentUser={{ name: authorName, avatar: authorAvatar }}
         focusComposerOnOpen={Boolean(openThread?.focusComposer)}
         onOpenChange={(open) => {
           if (!open) setOpenThread(null);
@@ -1023,6 +1033,8 @@ interface ThreadSurfaceProps {
   onDelete: (id: string | number) => void;
   onReport: (id: string | number) => void;
   onOpenThread: (id: string | number, focusComposer?: boolean) => void;
+  isBackendMode?: boolean;
+  currentUserId?: string;
 }
 
 function ThreadSurface({
@@ -1065,6 +1077,8 @@ function ThreadSurface({
   onDelete,
   onReport,
   onOpenThread,
+  isBackendMode = false,
+  currentUserId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -1424,6 +1438,8 @@ function ThreadSurface({
                 onDelete={onDelete}
                 onReport={onReport}
                 onOpenThread={onOpenThread}
+                isBackendMode={isBackendMode}
+                currentUserId={currentUserId}
               />
             ))}
             {entries.length === 0 && (
