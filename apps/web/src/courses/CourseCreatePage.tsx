@@ -95,7 +95,10 @@ import {
   usePublishCourse,
   useUnpublishCourse,
 } from "../services/courses";
-import { getCourseThumbnailCdnUrl } from "./courseMedia";
+import {
+  getCourseThumbnailCdnUrl,
+  waitForCourseThumbnailCdnUrl,
+} from "./courseMedia";
 import { useIsMutating } from "@tanstack/react-query";
 import type {
   Category,
@@ -156,6 +159,7 @@ type ThumbnailUploadStatus =
   | "idle"
   | "uploading"
   | "confirming"
+  | "processing"
   | "saving"
   | "error";
 
@@ -2709,6 +2713,7 @@ export function CourseCreatePage({
   const isThumbnailBusy =
     thumbnailUploadStatus === "uploading" ||
     thumbnailUploadStatus === "confirming" ||
+    thumbnailUploadStatus === "processing" ||
     thumbnailUploadStatus === "saving";
 
   useEffect(() => {
@@ -2818,6 +2823,13 @@ export function CourseCreatePage({
       await mediaService.confirmUpload(presigned.mediaAssetId);
 
       if (!requestIsActive()) return;
+      setThumbnailUploadStatus("processing");
+      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(
+        presigned.mediaAssetId,
+        { signal: uploadAbortController.signal },
+      );
+
+      if (!requestIsActive()) return;
       setThumbnailUploadStatus("saving");
 
       const updated = await updateBasicsMutation.mutateAsync({
@@ -2834,7 +2846,7 @@ export function CourseCreatePage({
       courseVersionRef.current = updated.version;
       thumbnailMediaIdRef.current = presigned.mediaAssetId;
       setThumbnailMediaId(presigned.mediaAssetId);
-      setThumbnail(getCourseThumbnailCdnUrl(presigned.mediaAssetId) ?? null);
+      setThumbnail(processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
       setThumbnailUploadProgress(100);
       setThumbnailUploadStatus("idle");
@@ -9311,6 +9323,8 @@ export function CourseCreatePage({
                             ? `Uploading thumbnail… ${thumbnailUploadProgress}%`
                             : thumbnailUploadStatus === "confirming"
                               ? "Confirming thumbnail upload…"
+                              : thumbnailUploadStatus === "processing"
+                                ? "Processing thumbnail…"
                               : "Saving thumbnail to this course…"}
                         </p>
                       ) : null}

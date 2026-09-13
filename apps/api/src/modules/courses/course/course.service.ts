@@ -939,7 +939,11 @@ export function createCourseService({
         creatorId: course.creator_id,
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
-        ...resolvePublicThumbnailUrls(services, thumbnailAsset?.metadata),
+        ...resolvePublicThumbnailUrls(
+          services,
+          thumbnailAsset?.metadata,
+          course.thumbnail_media_id,
+        ),
         trailerMediaId: course.trailer_media_id,
         instructorAlias: course.instructor_alias ?? null,
         version: course.version,
