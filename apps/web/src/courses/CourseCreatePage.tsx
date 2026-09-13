@@ -204,6 +204,19 @@ export const normalizeBasicsState = (
       : true,
 });
 
+function getThumbnailUploadErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return "Thumbnail upload failed. Please try again.";
+}
+
 export const isBasicsMetaEqual = (
   a: BasicsFormState,
   b: BasicsFormState,
@@ -2864,11 +2877,7 @@ export function CourseCreatePage({
 
       restorePreviousThumbnail();
       setThumbnailUploadStatus("error");
-      setThumbnailUploadError(
-        error instanceof Error
-          ? error.message
-          : "Thumbnail upload failed. Please try again.",
-      );
+      setThumbnailUploadError(getThumbnailUploadErrorMessage(error));
     } finally {
       if (
         thumbnailUploadAbortControllerRef.current === uploadAbortController

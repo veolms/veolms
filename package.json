@@ -8,7 +8,7 @@
     "pnpm": ">=11 <12"
   },
   "scripts": {
-    "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web",
+    "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web --filter=@veolms/media-worker",
     "dev:web": "pnpm --filter @veolms/web dev",
     "dev:web:lan": "pnpm --filter @veolms/web dev --host",
     "dev:webweb": "pnpm --filter @veolms/web preview",

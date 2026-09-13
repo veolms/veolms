@@ -32,7 +32,7 @@ export async function waitForCourseThumbnailCdnUrl(
     throw new Error("Course thumbnail CDN URL is not configured.");
   }
 
-  const timeoutMs = options.timeoutMs ?? 60_000;
+  const timeoutMs = options.timeoutMs ?? 5 * 60_000;
   const pollIntervalMs = options.pollIntervalMs ?? 1_000;
   const deadline = Date.now() + timeoutMs;
 
