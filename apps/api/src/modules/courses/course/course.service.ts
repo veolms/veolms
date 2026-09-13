@@ -127,8 +127,24 @@ export function createCourseService({
             salePrice: null,
           };
 
+      const thumbnailMetadata = row.thumbnail_metadata;
+      const metadataRecord = typeof thumbnailMetadata === "object" && thumbnailMetadata !== null && !Array.isArray(thumbnailMetadata) ? thumbnailMetadata as Record<string, unknown> : null;
+      const thumbnailVariants = metadataRecord && Array.isArray(metadataRecord.variants)
+        ? metadataRecord.variants.filter((variant): variant is { key: string; width: number; height: number } => typeof variant === "object" && variant !== null && !Array.isArray(variant) && typeof (variant as Record<string, unknown>).key === "string" && typeof (variant as Record<string, unknown>).width === "number" && typeof (variant as Record<string, unknown>).height === "number")
+        : [];
+      const fullKey =
+        metadataRecord &&
+        typeof metadataRecord.full === "object" &&
+        metadataRecord.full !== null &&
+        !Array.isArray(metadataRecord.full) &&
+        typeof (metadataRecord.full as Record<string, unknown>).key === "string"
+          ? ((metadataRecord.full as Record<string, unknown>).key as string)
+          : null;
       const thumbnailUrl = row.thumbnail_media_id
-        ? `/api/v1/media/${row.thumbnail_media_id}`
+        ? fullKey
+          ? services.storage.getPublicObjectUrl(fullKey) ??
+            `/api/v1/media/${row.thumbnail_media_id}`
+          : `/api/v1/media/${row.thumbnail_media_id}`
         : null;
 
       const instructorName =
@@ -143,6 +159,13 @@ export function createCourseService({
           (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
           null,
         thumbnailUrl,
+        thumbnailSrcSet: thumbnailVariants.map((variant) => ({
+          url:
+            services.storage.getPublicObjectUrl(variant.key) ??
+            `/api/v1/media/${row.thumbnail_media_id}/variants/${variant.width}`,
+          width: variant.width,
+          height: variant.height,
+        })),
         instructorName,
         categoryName: row.category_name ?? null,
         totalSections: Number(row.total_sections ?? 0),

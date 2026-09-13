@@ -110,6 +110,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
+    thumbnailSrcSet: summary.thumbnailSrcSet,
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,

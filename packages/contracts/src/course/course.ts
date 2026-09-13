@@ -15,6 +15,7 @@ export interface CourseSummary {
   shortDescription: string;
   difficulty?: "beginner" | "intermediate" | "advanced" | null;
   thumbnailUrl?: string | null;
+  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
   instructorName?: string | null;
   categoryName?: string | null;
   totalSections: number;
@@ -57,6 +58,7 @@ const courseSummaryObjectSchema = z.strictObject({
     .nullable()
     .optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  thumbnailSrcSet: z.array(z.object({ url: z.string(), width: z.number().int().positive(), height: z.number().int().positive() })).optional(),
   instructorName: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
   totalSections: z.number().int().nonnegative().default(0),

@@ -124,7 +124,7 @@ The workflow uses the GitHub `development` environment and exchanges GitHub's OI
 - `AWS_REGION`
 - `AWS_S3_BUCKET`
 - `AWS_CLOUDFRONT_DISTRIBUTION_ID`
-- `VITE_COURSE_MEDIA_BASE_URL` (optional)
+- `VITE_COURSE_MEDIA_BASE_URL` (optional Cloudflare R2 public media origin)
 
 Do not add long-lived AWS access keys as GitHub secrets. Restrict the role's trust policy to the repository's immutable `development` environment subject, `repo:veolms@301170291/veolms@1320067532:environment:development`. Its permissions should be limited to listing the deployment bucket, putting and deleting objects in that bucket, and creating and reading invalidations for the development CloudFront distribution.
 
