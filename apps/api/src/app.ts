@@ -9,8 +9,10 @@ import Fastify, {
 import type { Kysely } from "kysely";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
+import fastifyRateLimit from "@fastify/rate-limit";
 
 import { registerErrorHandler } from "./middlewares/error.middleware.ts";
+import { AppError } from "./lib/errors.ts";
 import type { RoutePluginOptions } from "./lib/route-plugin.ts";
 import { registerOpenApi } from "./openapi.ts";
 import { createServices, type AppServices } from "./services/index.ts";
@@ -86,6 +88,24 @@ export async function createApp({
   // Register cookie support for stateful sessions
   await app.register(fastifyCookie, {
     secret: config.SESSION_SECRET,
+  });
+
+  // Registered globally but inert (`global: false`) except on routes that
+  // opt in via `config: { rateLimit: {...} }` — see otp.routes.ts. Keyed by
+  // `request.ip`, which respects `trustProxy` above, so it caps abuse per
+  // source IP regardless of how many identifiers (emails/phones) it rotates
+  // through — the per-identifier limit in otp.service.ts alone doesn't.
+  await app.register(fastifyRateLimit, {
+    global: false,
+    // The plugin `throw`s whatever this returns, so it must be an Error —
+    // returning a plain object skips the `AppError` branch in
+    // registerErrorHandler and renders as a generic 500 instead of a 429.
+    errorResponseBuilder: (_request, context) =>
+      new AppError(
+        429,
+        "RATE_LIMIT_EXCEEDED",
+        `Too many requests. Please try again in ${context.after}.`,
+      ),
   });
 
   // Configure CORS
