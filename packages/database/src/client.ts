@@ -12,7 +12,10 @@ types.setTypeParser(20, (value: string) => parseInt(value, 10));
 export function createDatabase(databaseUrl: string): Kysely<Database> {
   return new Kysely<Database>({
     dialect: new PostgresDialect({
-      pool: new Pool({ connectionString: databaseUrl }),
+      pool: new Pool({
+        connectionString: databaseUrl,
+        statement_timeout: 5000, // 10 seconds (kills runaway queries)
+      }),
     }),
   });
 }
