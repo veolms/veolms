@@ -3,6 +3,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
+  PutBucketCorsCommand,
   S3Client,
   type S3ClientConfig,
   S3ServiceException,
@@ -44,6 +45,7 @@ export class S3StorageService {
   private client: S3Client;
   private bucket: string;
   private publicBaseUrl: string | null;
+  private bucketCorsEnsured: Promise<void> | null = null;
 
   constructor(options: StorageOptions) {
     if (!options.bucket) {
@@ -279,6 +281,44 @@ export class S3StorageService {
   }
 
   /**
+   * Configures S3 bucket CORS to allow direct browser uploads (PUT, GET, HEAD, POST, DELETE).
+   *
+   * The bucket-wide setting never changes per-upload, so the actual S3 call is
+   * made at most once per process — repeat callers (e.g. every presigned
+   * upload request) await the same cached result instead of re-issuing it.
+   */
+  async ensureBucketCors(): Promise<void> {
+    if (!this.bucketCorsEnsured) {
+      this.bucketCorsEnsured = this.client
+        .send(
+          new PutBucketCorsCommand({
+            Bucket: this.bucket,
+            CORSConfiguration: {
+              CORSRules: [
+                {
+                  AllowedHeaders: ["*"],
+                  AllowedMethods: ["GET", "HEAD", "PUT", "POST", "DELETE"],
+                  AllowedOrigins: ["*"],
+                  ExposeHeaders: ["ETag", "Content-Length", "Content-Type"],
+                  MaxAgeSeconds: 3600,
+                },
+              ],
+            },
+          }),
+        )
+        .then(
+          () => undefined,
+          () => {
+            // Ignored if permissions don't allow or if provider does not
+            // support it. Clear the cache so a future call can retry.
+            this.bucketCorsEnsured = null;
+          },
+        );
+    }
+    await this.bucketCorsEnsured;
+  }
+
+  /**
    * Generates a presigned PUT URL for direct browser-to-S3 uploads.
    *
    * The URL is single-use and expires after `expiresIn` seconds (default 300).
@@ -296,7 +336,10 @@ export class S3StorageService {
       ContentType: contentType,
       ContentLength: contentLength,
     });
-    return getSignedUrl(this.client, command, { expiresIn });
+    return getSignedUrl(this.client, command, {
+      expiresIn,
+      unhoistableHeaders: new Set(["content-length"]),
+    });
   }
 
   /**

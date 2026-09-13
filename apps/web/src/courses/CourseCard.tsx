@@ -76,6 +76,8 @@ export interface CourseCardProps {
   imagePriority?: boolean;
   isBin?: boolean;
   isDeleting?: boolean;
+  isAdmin?: boolean;
+  currentUserId?: string;
 }
 
 export function CourseCard({
@@ -97,7 +99,14 @@ export function CourseCard({
   imagePriority = false,
   isBin = false,
   isDeleting = false,
+  isAdmin = false,
+  currentUserId,
 }: CourseCardProps) {
+  const canEdit =
+    isAdmin ||
+    (Boolean(currentUserId) &&
+      Boolean(course.creatorId) &&
+      course.creatorId === currentUserId);
   const studentStatus = getStudentStatus(course);
   const progress = course.progress ?? 0;
   const overviewPath = courseOverviewPath(course);
@@ -324,14 +333,14 @@ export function CourseCard({
             >
             {role === "creator" ? (
               isBin || course.deletedAt ? (
-                onRestoreRequested ? (
+                onRestoreRequested && canEdit ? (
                   <MenuAction
                     Icon={ArrowCounterClockwise}
                     label="Restore Course"
                     onClick={() => closeThen(() => void handleRestore(course))}
                   />
                 ) : null
-              ) : (
+              ) : canEdit ? (
                 <>
                   <MenuAction
                     Icon={PencilSimple}
@@ -398,6 +407,29 @@ export function CourseCard({
                     label="Delete Course"
                     destructive
                     onClick={() => closeThen(() => onDeleteRequested?.(course))}
+                  />
+                </>
+              ) : (
+                <>
+                  <MenuAction
+                    Icon={ListBullets}
+                    label="View Curriculum"
+                    onClick={() => closeThen(() => onExplore(course))}
+                  />
+                  <MenuAction
+                    Icon={ChartBar}
+                    label="Analytics"
+                    onClick={() =>
+                      closeThen(() =>
+                        onNavigatePage(`/analytics?course=${course.id}`),
+                      )
+                    }
+                  />
+                  <MenuDivider />
+                  <MenuAction
+                    Icon={CopySimple}
+                    label="Copy Course Link"
+                    onClick={() => closeThen(() => void copyCourseLink())}
                   />
                 </>
               )
@@ -529,14 +561,14 @@ export function CourseCard({
 
           {role === "creator" &&
           (isBin || course.deletedAt) &&
-          !onRestoreRequested ? null : (
+          (!onRestoreRequested || !canEdit) ? null : (
             <button
               type="button"
               disabled={
                 isDeleting ||
                 (role === "creator" &&
                   Boolean(isBin || course.deletedAt) &&
-                  !onRestoreRequested)
+                  (!onRestoreRequested || !canEdit))
               }
               className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
                 role === "creator"
@@ -548,9 +580,13 @@ export function CourseCard({
                 if (isDeleting) return;
                 if (role === "creator") {
                   if (isBin || course.deletedAt) {
-                    if (onRestoreRequested) {
+                    if (onRestoreRequested && canEdit) {
                       void handleRestore(course);
                     }
+                    return;
+                  }
+                  if (!canEdit) {
+                    onExplore(course);
                     return;
                   }
                   onEdit?.(course);
@@ -575,6 +611,16 @@ export function CourseCard({
                       aria-hidden="true"
                     />
                     <span>Restore Course</span>
+                  </>
+                ) : !canEdit ? (
+                  <>
+                    <ListBullets
+                      className="shrink-0"
+                      size={17}
+                      weight="regular"
+                      aria-hidden="true"
+                    />
+                    <span>View Curriculum</span>
                   </>
                 ) : (
                   <>

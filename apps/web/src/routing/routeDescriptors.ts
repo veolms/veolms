@@ -86,7 +86,7 @@ export const routeDescriptors = {
     kind: "shell",
     page: "home",
     title: "Dashboard",
-    description: "Review academy performance and creator activity in ProCodrr.",
+    description: "Review academy performance and instructor activity in ProCodrr.",
   },
   courses: {
     kind: "shell",

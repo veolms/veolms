@@ -194,6 +194,64 @@ export async function findPublishedCourseBySlug(
   };
 }
 
+export async function listAllCourses(database: Kysely<Database>) {
+  return await database
+    .selectFrom("courses")
+    .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    .select((eb) => [
+      "courses.id",
+      "courses.slug",
+      "courses.title",
+      "courses.short_description",
+      "courses.description",
+      "courses.difficulty",
+      "courses.status",
+      "courses.creator_id",
+      "courses.category_id",
+      "courses.thumbnail_media_id",
+      "courses.trailer_media_id",
+      "courses.instructor_alias",
+      "courses.version",
+      "courses.created_at",
+      "courses.updated_at",
+      "courses.published_at",
+      "course_settings.estimated_duration",
+      eb
+        .selectFrom("course_sections")
+        .select((sub) => sub.fn.count("id").as("count"))
+        .whereRef("course_sections.course_id", "=", "courses.id")
+        .where("course_sections.deleted_at", "is", null)
+        .as("total_sections"),
+      eb
+        .selectFrom("course_lessons")
+        .select((sub) => sub.fn.count("id").as("count"))
+        .whereRef("course_lessons.course_id", "=", "courses.id")
+        .where("course_lessons.deleted_at", "is", null)
+        .as("total_lessons"),
+      eb
+        .selectFrom("course_lessons")
+        .leftJoin(
+          "media_assets as lesson_media",
+          "lesson_media.id",
+          "course_lessons.content_media_id",
+        )
+        .select((sub) =>
+          sub.fn
+            .coalesce(
+              sub.fn.sum("lesson_media.duration_seconds"),
+              sql<number>`0`,
+            )
+            .as("sum"),
+        )
+        .whereRef("course_lessons.course_id", "=", "courses.id")
+        .where("course_lessons.deleted_at", "is", null)
+        .as("lesson_duration_seconds"),
+    ])
+    .where("courses.deleted_at", "is", null)
+    .orderBy("courses.created_at", "desc")
+    .execute();
+}
+
 export async function listCoursesByCreator(
   database: Kysely<Database>,
   creatorId: string,

@@ -28,8 +28,12 @@ export function createCurriculumService({
 }: CurriculumServiceOptions) {
   const mediaService = createMediaService({ database, services });
 
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
   // --- Sections ---
@@ -38,8 +42,9 @@ export function createCurriculumService({
     courseId: string,
     creatorId: string,
     title: string,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const maxPos = await curriculumRepo.findMaxSectionPosition(
       database,
@@ -66,8 +71,9 @@ export function createCurriculumService({
     sectionId: string,
     creatorId: string,
     title?: string,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -90,8 +96,9 @@ export function createCurriculumService({
     courseId: string,
     sectionId: string,
     creatorId: string,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -130,8 +137,9 @@ export function createCurriculumService({
     creatorId: string,
     orderedSectionIds: string[],
     version: number,
+    userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -190,8 +198,9 @@ export function createCurriculumService({
     sectionId: string,
     creatorId: string,
     payload: CreateCourseLessonRequest,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -233,8 +242,9 @@ export function createCurriculumService({
     creatorId: string,
     payload: UpdateCourseLessonRequest,
     logger: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -262,6 +272,7 @@ export function createCurriculumService({
       const media = await mediaService.getMediaAsset(
         effectiveMediaId,
         creatorId,
+        userRoles,
       );
       if (!media) {
         throw new AppError(400, "INVALID_MEDIA", "Media asset not found.");
@@ -300,6 +311,7 @@ export function createCurriculumService({
         effectiveMediaId,
         creatorId,
         logger,
+        userRoles,
       );
     }
 
@@ -318,8 +330,9 @@ export function createCurriculumService({
     courseId: string,
     lessonId: string,
     creatorId: string,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -345,8 +358,9 @@ export function createCurriculumService({
     creatorId: string,
     orderedLessonIds: string[],
     version: number,
+    userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -414,8 +428,9 @@ export function createCurriculumService({
     lessonId: string,
     creatorId: string,
     payload: CreateLessonResourceRequest,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -429,6 +444,7 @@ export function createCurriculumService({
     const media = await mediaService.getMediaAsset(
       payload.mediaAssetId,
       creatorId,
+      userRoles,
     );
     if (!media) {
       throw new AppError(400, "INVALID_MEDIA", "Media asset not found.");
@@ -487,8 +503,9 @@ export function createCurriculumService({
     courseId: string,
     resourceId: string,
     creatorId: string,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const resource = await curriculumRepo.findResourceById(
       database,

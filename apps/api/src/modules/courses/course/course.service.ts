@@ -22,6 +22,7 @@ import {
 } from "../shared/courses.utils.ts";
 import {
   ADMIN_ROLE,
+  INSTRUCTOR_ROLE,
   createAuthService,
   type AuthService,
 } from "../../auth/index.ts";
@@ -85,8 +86,12 @@ export function createCourseService({
   /**
    * Verifies course existence and owner permissions.
    */
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
   /**
@@ -293,10 +298,14 @@ export function createCourseService({
   }
 
   /**
-   * Lists all courses owned by the authenticated creator.
+   * Lists all courses for the authoring/management view.
    */
-  async function listMyCourses(creatorId: string) {
-    const rows = await courseRepo.listCoursesByCreator(database, creatorId);
+  async function listMyCourses(creatorId: string, userRoles?: readonly string[]) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourses(database)
+      : await courseRepo.listCoursesByCreator(database, creatorId);
     const courses = rows.map((c) => {
       const lessonDuration = Number(c.lesson_duration_seconds ?? 0);
       const totalDurationSeconds =
@@ -340,9 +349,10 @@ export function createCourseService({
     creatorId: string,
     payload: UpdateCourseBasicsRequest,
     logger: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ) {
     const { version, ...updates } = payload;
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     if (course.version !== version) {
       throw new AppError(
@@ -381,6 +391,7 @@ export function createCourseService({
       const thumb = await mediaService.getMediaAsset(
         updates.thumbnailMediaId,
         creatorId,
+        userRoles,
       );
       if (
         !thumb ||
@@ -399,6 +410,7 @@ export function createCourseService({
       const trailer = await mediaService.getMediaAsset(
         updates.trailerMediaId,
         creatorId,
+        userRoles,
       );
       if (!trailer || trailer.type !== "video") {
         throw new AppError(
@@ -441,6 +453,7 @@ export function createCourseService({
         updates.trailerMediaId,
         creatorId,
         logger,
+        userRoles,
       );
     }
 
@@ -503,8 +516,20 @@ export function createCourseService({
   /**
    * Assembles the full editor payload for authoring view.
    */
-  async function getCourseEditorData(courseId: string, creatorId: string) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+  async function getCourseEditorData(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isInstructor = userRoles?.includes("instructor");
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+    if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+      throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
+    }
 
     const [sections, lessons, accessRules, pricing, settings, includes] =
       await Promise.all([
@@ -520,7 +545,8 @@ export function createCourseService({
       await curriculumService.listResourcesForLessons(lessonIds);
     const resourceMediaAssets = await mediaService.getMediaAssets(
       Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
-      creatorId,
+      course.creator_id ?? creatorId,
+      userRoles,
     );
     const resourceMediaById = new Map(
       resourceMediaAssets.map((media) => [media.id, media]),
@@ -533,7 +559,8 @@ export function createCourseService({
             .filter((id): id is string => Boolean(id)),
         ),
       ),
-      creatorId,
+      course.creator_id ?? creatorId,
+      userRoles,
     );
     const contentMediaDurations = new Map(
       contentMediaAssets
@@ -684,9 +711,15 @@ export function createCourseService({
     const isAdmin = Boolean(
       user && user.roles && user.roles.includes(ADMIN_ROLE),
     );
+    const isInstructor = Boolean(
+      user &&
+        user.roles &&
+        (user.roles.includes(INSTRUCTOR_ROLE) ||
+          user.roles.includes("creator")),
+    );
 
     if (course.status !== "published") {
-      if (!isOwner && !isAdmin) {
+      if (!isOwner && !isAdmin && !isInstructor) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
       }
     }
@@ -875,8 +908,16 @@ export function createCourseService({
   /**
    * Soft deletes a course after verifying ownership.
    */
-  async function deleteCourse(courseId: string, creatorId: string) {
-    return await deletionService.scheduleCourseDeletion(courseId, creatorId);
+  async function deleteCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return await deletionService.scheduleCourseDeletion(
+      courseId,
+      creatorId,
+      userRoles,
+    );
   }
 
   return {

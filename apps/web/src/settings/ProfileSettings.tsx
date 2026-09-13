@@ -59,6 +59,7 @@ import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
 import { authKeys, authService } from "../services/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { getRoleDisplayName, getUserRoles } from "../shell/workspaceRole";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -119,7 +120,7 @@ const profileIdentityFromUser = (
   githubPublic: Boolean(user?.githubPublic && user?.githubUrl),
   websitePublic: Boolean(user?.websitePublic && user?.websiteUrl),
   websiteUrl: user?.websiteUrl ?? "",
-  roleLabel: role === "creator" ? "Instructor" : "Student",
+  roleLabel: getRoleDisplayName(role, getUserRoles(user)),
 });
 
 const normalizedMobileNumber = (value: string | null | undefined) =>

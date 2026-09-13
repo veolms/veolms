@@ -154,6 +154,7 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
+    creatorId: apiCourse.creatorId,
     isApi: true,
   };
 }
@@ -189,6 +190,7 @@ export function adaptDeletedCourseToCatalogueCourse(
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
     purgeAt: deletedCourse.purgeAt,
+    creatorId: deletedCourse.creatorId,
     isApi: true,
   };
 }

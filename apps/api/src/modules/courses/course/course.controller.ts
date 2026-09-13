@@ -64,7 +64,7 @@ export function createCourseController({
 
   async function listMyCourses(request: FastifyRequest) {
     const creatorId = request.user!.id;
-    return await service.listMyCourses(creatorId);
+    return await service.listMyCourses(creatorId, request.user?.roles);
   }
 
   async function getCourseEditor(
@@ -72,7 +72,7 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.getCourseEditorData(id, creatorId);
+    return await service.getCourseEditorData(id, creatorId, request.user?.roles);
   }
 
   async function updateCourseBasics(
@@ -89,6 +89,7 @@ export function createCourseController({
       creatorId,
       request.body,
       request.log,
+      request.user?.roles,
     );
 
     if (result.accepted) {
@@ -120,7 +121,7 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.deleteCourse(id, creatorId);
+    return await service.deleteCourse(id, creatorId, request.user?.roles);
   }
 
   return {

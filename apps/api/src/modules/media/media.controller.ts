@@ -18,7 +18,12 @@ export function createMediaController({ service }: { service: MediaService }) {
   ) {
     const { mediaId } = request.params;
     const ownerId = request.user!.id;
-    const result = await service.confirmUpload(mediaId, ownerId, request.log);
+    const result = await service.confirmUpload(
+      mediaId,
+      ownerId,
+      request.log,
+      request.user?.roles,
+    );
     return { status: result.status };
   }
 
@@ -27,7 +32,11 @@ export function createMediaController({ service }: { service: MediaService }) {
   ) {
     const { mediaId } = request.params;
     const ownerId = request.user!.id;
-    return await service.getVideoJobProgress(mediaId, ownerId);
+    return await service.getVideoJobProgress(
+      mediaId,
+      ownerId,
+      request.user?.roles,
+    );
   }
 
   async function getPlaybackBootstrap(
@@ -82,6 +91,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       request.params.mediaId,
       request.user!.id,
       request.log,
+      request.user?.roles,
     );
   }
 
@@ -92,6 +102,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       request.params.mediaId,
       request.user!.id,
       request.log,
+      request.user?.roles,
     );
   }
 
@@ -141,6 +152,7 @@ export function createMediaController({ service }: { service: MediaService }) {
         const progress = await service.getVideoJobProgress(
           request.params.mediaId,
           request.user!.id,
+          request.user?.roles,
         );
         response.write(
           `event: progress\ndata: ${JSON.stringify(progress)}\n\n`,
@@ -164,7 +176,11 @@ export function createMediaController({ service }: { service: MediaService }) {
   ) {
     const { mediaId } = request.params;
     const requestingUserId = request.user?.id;
-    const result = await service.getMediaStream(mediaId, requestingUserId);
+    const result = await service.getMediaStream(
+      mediaId,
+      requestingUserId,
+      request.user?.roles,
+    );
     reply.header("Content-Type", result.contentType);
     if (result.contentLength !== undefined) {
       reply.header("Content-Length", result.contentLength);

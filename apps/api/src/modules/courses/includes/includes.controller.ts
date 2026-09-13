@@ -25,6 +25,7 @@ export function createIncludesController({
       id,
       creatorId,
       request.body,
+      request.user?.roles,
     );
     reply.code(201);
     return item;
@@ -52,6 +53,7 @@ export function createIncludesController({
       includeId,
       creatorId,
       request.body,
+      request.user?.roles,
     );
   }
 
@@ -63,7 +65,12 @@ export function createIncludesController({
     const { id, includeId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseInclude(id, includeId, creatorId);
+    return await service.deleteCourseInclude(
+      id,
+      includeId,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function reorderCourseIncludes(
@@ -76,7 +83,12 @@ export function createIncludesController({
     const creatorId = request.user!.id;
     const { orderedIds } = request.body;
 
-    return await service.reorderCourseIncludes(id, creatorId, orderedIds);
+    return await service.reorderCourseIncludes(
+      id,
+      creatorId,
+      orderedIds,
+      request.user?.roles,
+    );
   }
 
   return {

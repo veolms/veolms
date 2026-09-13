@@ -87,6 +87,8 @@ export function createMediaService({
       payload.fileSize,
     );
 
+    void services.storage.ensureBucketCors().catch(() => {});
+
     await mediaRepo.insertMediaAsset(database, {
       id: mediaId,
       owner_id: ownerId,
@@ -113,11 +115,13 @@ export function createMediaService({
     mediaId: string,
     ownerId: string,
     logger?: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ): Promise<{ status: MediaAssetStatus; jobId?: string | null }> {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
-      ownerId,
+      isAdmin ? undefined : ownerId,
     );
 
     if (!media) {
@@ -159,7 +163,12 @@ export function createMediaService({
     let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
     if (media.type === "video" && logger) {
-      const transcodeResult = await queueTranscodeJob(mediaId, ownerId, logger);
+      const transcodeResult = await queueTranscodeJob(
+        mediaId,
+        ownerId,
+        logger,
+        userRoles,
+      );
       jobId = transcodeResult.jobId;
     }
 
@@ -175,11 +184,13 @@ export function createMediaService({
     mediaId: string,
     ownerId: string,
     logger?: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ): Promise<{ should202: boolean; jobId: string | null }> {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
-      ownerId,
+      isAdmin ? undefined : ownerId,
     );
 
     if (!media) {
@@ -314,11 +325,13 @@ export function createMediaService({
     mediaId: string,
     ownerId: string,
     logger?: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
-      ownerId,
+      isAdmin ? undefined : ownerId,
     );
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
@@ -332,7 +345,7 @@ export function createMediaService({
     }
 
     const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
-    if (!job) return queueTranscodeJob(mediaId, ownerId, logger);
+    if (!job) return queueTranscodeJob(mediaId, ownerId, logger, userRoles);
     if (["queued", "provisioning", "processing"].includes(job.status)) {
       return { should202: true, jobId: job.id };
     }
@@ -374,8 +387,14 @@ export function createMediaService({
     mediaId: string,
     ownerId: string,
     logger?: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ) {
-    const media = await mediaRepo.findMediaAssetById(database, mediaId, ownerId);
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const media = await mediaRepo.findMediaAssetById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
@@ -417,26 +436,49 @@ export function createMediaService({
    * Retrieves a single media asset by ID with optional owner verification.
    * Inter-module API method (Rule 11 compliance).
    */
-  async function getMediaAsset(mediaId: string, ownerId?: string) {
-    return await mediaRepo.findMediaAssetById(database, mediaId, ownerId);
+  async function getMediaAsset(
+    mediaId: string,
+    ownerId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    return await mediaRepo.findMediaAssetById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
   }
 
   /**
    * Retrieves multiple media assets by IDs with optional owner verification.
    * Inter-module API method (Rule 11 compliance).
    */
-  async function getMediaAssets(mediaIds: string[], ownerId?: string) {
-    return await mediaRepo.findMediaAssetsByIds(database, mediaIds, ownerId);
+  async function getMediaAssets(
+    mediaIds: string[],
+    ownerId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    return await mediaRepo.findMediaAssetsByIds(
+      database,
+      mediaIds,
+      isAdmin ? undefined : ownerId,
+    );
   }
 
   /**
    * Fetches transcoding progress for a video asset.
    */
-  async function getVideoJobProgress(videoId: string, ownerId?: string) {
+  async function getVideoJobProgress(
+    videoId: string,
+    ownerId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
       database,
       videoId,
-      ownerId,
+      isAdmin ? undefined : ownerId,
     );
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
@@ -656,7 +698,12 @@ export function createMediaService({
    * a caller can't distinguish "doesn't exist" from "exists but isn't
    * yours" by probing IDs.
    */
-  async function getMediaStream(mediaId: string, requestingUserId?: string) {
+  async function getMediaStream(
+    mediaId: string,
+    requestingUserId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(database, mediaId);
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
@@ -666,7 +713,7 @@ export function createMediaService({
       database,
       mediaId,
     );
-    if (!isPublic && media.owner_id !== requestingUserId) {
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 

@@ -66,6 +66,7 @@ import {
 } from "../shell/navigation";
 import type { NavigationItemWithMetadata } from "../shell/navigation";
 import type { ProfileRole } from "./profileTypes";
+import { getRoleDisplayName } from "../shell/workspaceRole";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
 // deliberately the shared registry rather than a display-only subset.
@@ -202,6 +203,7 @@ export interface SidebarSettingsProps {
   sidebarMode: SidebarMode;
   onSidebarModeChange?: (mode: SidebarMode) => void;
   role?: ProfileRole;
+  userRoles?: readonly string[] | null;
   navigationItems?: readonly NavigationItemWithMetadata[];
   navigationVisibleItems?: readonly string[];
   onNavigationVisibilityChange?: (visibleItems: string[]) => void;
@@ -214,6 +216,7 @@ export function SidebarSettings({
   sidebarMode,
   onSidebarModeChange,
   role = "student",
+  userRoles,
   navigationItems: providedNavigationItems,
   navigationVisibleItems,
   onNavigationVisibilityChange,
@@ -543,7 +546,7 @@ export function SidebarSettings({
           </div>
           <div
             className="settings-row-list"
-            aria-label={`${role === "creator" ? "Creator" : "Student"} sidebar menu items`}
+            aria-label={`${getRoleDisplayName(role, userRoles)} sidebar menu items`}
           >
             {navigationItems.map(([label, Icon]) => {
               const selected = visibleNavigationItems.has(label);
