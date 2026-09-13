@@ -14,7 +14,7 @@ export function createDatabase(databaseUrl: string): Kysely<Database> {
     dialect: new PostgresDialect({
       pool: new Pool({
         connectionString: databaseUrl,
-        statement_timeout: 5000, // 10 seconds (kills runaway queries)
+        statement_timeout: 5000, // 5 seconds (kills runaway queries)
       }),
     }),
   });
