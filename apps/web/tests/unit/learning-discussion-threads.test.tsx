@@ -105,6 +105,7 @@ const mockInteractions = vi.hoisted(() => ({
   useDeleteReply: vi.fn(),
   useAcceptReply: vi.fn(),
   useLockThread: vi.fn(),
+  useCreateReport: vi.fn(),
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -136,6 +137,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useDeleteReply: (...args: any[]) => mockInteractions.useDeleteReply(...args),
   useAcceptReply: (...args: any[]) => mockInteractions.useAcceptReply(...args),
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
+  useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
 }));
 
 describe("Learning Discussion Threads (Phase 1 Integration)", () => {
@@ -212,6 +214,10 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
       isPending: false,
     });
     mockInteractions.useLockThread.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    mockInteractions.useCreateReport.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
     });

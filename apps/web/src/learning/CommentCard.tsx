@@ -89,7 +89,15 @@ interface CommentCardProps {
   onOpenThread?: (id: string | number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
-  onReport?: (id: string | number) => void;
+  onReport?: (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => void;
   onToggleAcceptReply?: (
     threadId: string | number,
     replyId: string | number,
@@ -415,7 +423,13 @@ export function CommentCard({
                     )
                   }
                   onDelete={deletion.begin}
-                  onReport={() => onReport(comment.id)}
+                  onReport={() =>
+                    onReport?.({
+                      targetType: "thread",
+                      targetId: comment.id,
+                      authorName: comment.name,
+                    })
+                  }
                   canLock={canLock}
                   isLocked={Boolean(comment.isLocked)}
                   onToggleLock={() => {
@@ -599,7 +613,13 @@ export function CommentCard({
                     onEdit={handleEditReply}
                     onDelete={handleDeleteReply}
                     onLike={handleLikeReply}
-                    onReport={() => onReport(reply.id)}
+                    onReport={() =>
+                      onReport?.({
+                        targetType: "reply",
+                        targetId: reply.id,
+                        authorName: reply.name,
+                      })
+                    }
                   />
                 ))
               ) : (

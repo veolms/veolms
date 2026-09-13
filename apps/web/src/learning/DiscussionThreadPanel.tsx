@@ -102,7 +102,15 @@ interface DiscussionThreadPanelProps {
     draft: DiscussionDraft,
   ) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
-  onReport: (id: string | number) => void;
+  onReport: (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => void;
   onToggleAcceptReply?: (
     threadId: string | number,
     replyId: string | number,
@@ -691,7 +699,15 @@ interface ThreadSlideProps {
     draft: DiscussionDraft,
   ) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
-  onReport: (id: string | number) => void;
+  onReport: (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => void;
   onToggleAcceptReply?: (
     threadId: string | number,
     replyId: string | number,
@@ -869,7 +885,13 @@ function ThreadSlide({
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
           onDelete={() => onDeleteEntry(entry.id)}
-          onReport={() => onReport(entry.id)}
+          onReport={() =>
+            onReport({
+              targetType: "thread",
+              targetId: entry.id,
+              authorName: entry.name,
+            })
+          }
         />
 
         <div className="mx-auto max-w-4xl">
@@ -1133,7 +1155,15 @@ function ThreadReplyEntry({
   onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean>;
   onDelete: (replyId: string | number) => Promise<boolean>;
   onLikeReply: (replyId: string | number) => void;
-  onReport: (id: string | number) => void;
+  onReport: (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(
@@ -1233,7 +1263,13 @@ function ThreadReplyEntry({
                     void shareDiscussionEntry(reply.id, reply.name, reply.text)
                   }
                   onDelete={deletion.begin}
-                  onReport={() => onReport(reply.id)}
+                  onReport={() =>
+                    onReport({
+                      targetType: "reply",
+                      targetId: reply.id,
+                      authorName: reply.name,
+                    })
+                  }
                   className="absolute -top-1 right-0 z-20 shrink-0"
                 />
               </div>

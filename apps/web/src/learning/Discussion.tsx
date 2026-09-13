@@ -52,6 +52,7 @@ import {
   useAcceptReply,
   useCreateLessonThread,
   useCreateNote,
+  useCreateReport,
   useDeleteNote,
   useDeleteThread,
   useLessonThreads,
@@ -61,6 +62,11 @@ import {
   useUpdateThread,
   useUserNotes,
 } from "../services/learning-interactions";
+import {
+  DiscussionReportDialog,
+  type ReportTarget,
+  type ReportSubmissionPayload,
+} from "./DiscussionReportDialog";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
 import {
   adaptLearningThreadToComment,
@@ -402,6 +408,7 @@ export function Discussion({
   const toggleLikeMutation = useToggleLike();
   const acceptReplyMutation = useAcceptReply();
   const lockThreadMutation = useLockThread();
+  const createReportMutation = useCreateReport();
 
   const currentUserRole = useMemo(() => {
     if (!currentUser?.roles) return "Student";
@@ -503,6 +510,10 @@ export function Discussion({
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
     null,
   );
+  const [reportingTarget, setReportingTarget] = useState<ReportTarget | null>(
+    null,
+  );
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
@@ -949,6 +960,64 @@ export function Discussion({
     }
   };
 
+  const handleOpenReport = (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => {
+    if (typeof target === "object") {
+      setReportingTarget({
+        targetType: target.targetType,
+        targetId: String(target.targetId),
+        authorName: target.authorName,
+      });
+    } else {
+      setReportingTarget({
+        targetType: "thread",
+        targetId: String(target),
+      });
+    }
+    setReportDialogOpen(true);
+  };
+
+  const handleCloseReport = () => {
+    if (!createReportMutation.isPending) {
+      setReportDialogOpen(false);
+      setReportingTarget(null);
+    }
+  };
+
+  const handleSubmitReport = async (
+    payload: ReportSubmissionPayload,
+  ): Promise<boolean> => {
+    if (isBackendMode) {
+      try {
+        await createReportMutation.mutateAsync({
+          targetType: payload.targetType,
+          targetId: payload.targetId,
+          courseId: courseId || undefined,
+          reason: payload.reason,
+          details: payload.details,
+        });
+        setReportDialogOpen(false);
+        setReportingTarget(null);
+        setNotice("Report received. Our moderation team will review it.");
+        return true;
+      } catch (err: any) {
+        throw err;
+      }
+    } else {
+      setReportDialogOpen(false);
+      setReportingTarget(null);
+      setNotice("Report received. Our moderation team will review it.");
+      return true;
+    }
+  };
+
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
       <ThreadSurface
@@ -1031,9 +1100,7 @@ export function Discussion({
         onLike={onLike}
         onEdit={beginEditingEntry}
         onDelete={deleteEntry}
-        onReport={() =>
-          setNotice("Report received. Our moderation team will review it.")
-        }
+        onReport={handleOpenReport}
         onOpenThread={(id, focusComposer = false) => {
           const entry = combinedEntries.find((e) => e.id === id);
           if (entry?.entryKind === "note") return;
@@ -1068,11 +1135,17 @@ export function Discussion({
         onDeleteEntry={deleteEntry}
         onEditReply={editReply}
         onDeleteReply={deleteReply}
-        onReport={() =>
-          setNotice("Report received. Our moderation team will review it.")
-        }
+        onReport={handleOpenReport}
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
+      />
+      <DiscussionReportDialog
+        open={reportDialogOpen}
+        target={reportingTarget}
+        courseId={courseId}
+        onClose={handleCloseReport}
+        onSubmit={handleSubmitReport}
+        isSubmitting={Boolean(createReportMutation?.isPending)}
       />
     </section>
   );
@@ -1117,7 +1190,15 @@ interface ThreadSurfaceProps {
   onLike: (id: string | number, liked: boolean) => void;
   onEdit: (comment: Comment) => void;
   onDelete: (id: string | number) => void;
-  onReport: (id: string | number) => void;
+  onReport: (
+    target:
+      | {
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+        }
+      | (string | number),
+  ) => void;
   onOpenThread: (id: string | number, focusComposer?: boolean) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
