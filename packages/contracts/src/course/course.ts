@@ -393,6 +393,10 @@ export const courseSchema = z.object({
   creatorId: z.uuid().nullable(),
   categoryId: z.uuid().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
+  thumbnailUrl: z.url().nullable().optional(),
+  thumbnailSrcSet: z
+    .array(z.object({ url: z.url(), width: z.number().int().positive(), height: z.number().int().positive() }))
+    .optional(),
   trailerMediaId: z.uuid().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),

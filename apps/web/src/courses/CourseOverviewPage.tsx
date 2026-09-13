@@ -1256,9 +1256,7 @@ export function adaptCourseOverviewResponse(
   );
   const resolvedDuration = formatDuration(resolvedDurationSeconds);
 
-  const resolvedThumbnail = c.thumbnailMediaId
-    ? `/api/v1/media/${c.thumbnailMediaId}`
-    : "";
+  const resolvedThumbnail = c.thumbnailUrl || "";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1274,6 +1272,7 @@ export function adaptCourseOverviewResponse(
     duration: resolvedDuration,
     students: 0,
     thumbnail: resolvedThumbnail,
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
@@ -1393,9 +1392,8 @@ export function adaptPreviewDataToOverview(
     enrolled: false,
     duration: formatDuration(totalDurationSeconds),
     students: 0,
-    thumbnail: c.thumbnailMediaId
-      ? `/api/v1/media/${c.thumbnailMediaId}`
-      : "",
+    thumbnail: c.thumbnailUrl || "",
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,

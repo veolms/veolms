@@ -52,6 +52,57 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/gif",
   "image/avif",
 ]);
+
+type PublicThumbnailVariant = {
+  url: string;
+  width: number;
+  height: number;
+};
+
+function resolvePublicThumbnailUrls(
+  services: AppServices,
+  metadata: unknown,
+): {
+  thumbnailUrl: string | null;
+  thumbnailSrcSet: PublicThumbnailVariant[];
+} {
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+    return { thumbnailUrl: null, thumbnailSrcSet: [] };
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const full = record.full;
+  const fullKey =
+    typeof full === "object" && full !== null && !Array.isArray(full) &&
+    typeof (full as Record<string, unknown>).key === "string"
+      ? (full as Record<string, string>).key
+      : null;
+  const thumbnailUrl = fullKey
+    ? services.storage.getPublicObjectUrl(fullKey)
+    : null;
+  const variants = Array.isArray(record.variants)
+    ? record.variants.flatMap((variant): PublicThumbnailVariant[] => {
+        if (typeof variant !== "object" || variant === null || Array.isArray(variant)) {
+          return [];
+        }
+        const item = variant as Record<string, unknown>;
+        if (
+          typeof item.key !== "string" ||
+          typeof item.width !== "number" ||
+          typeof item.height !== "number"
+        ) {
+          return [];
+        }
+        const url = services.storage.getPublicObjectUrl(item.key);
+        return url ? [{ url, width: item.width, height: item.height }] : [];
+      })
+    : [];
+
+  return {
+    thumbnailUrl,
+    thumbnailSrcSet: variants,
+  };
+}
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -127,25 +178,10 @@ export function createCourseService({
             salePrice: null,
           };
 
-      const thumbnailMetadata = row.thumbnail_metadata;
-      const metadataRecord = typeof thumbnailMetadata === "object" && thumbnailMetadata !== null && !Array.isArray(thumbnailMetadata) ? thumbnailMetadata as Record<string, unknown> : null;
-      const thumbnailVariants = metadataRecord && Array.isArray(metadataRecord.variants)
-        ? metadataRecord.variants.filter((variant): variant is { key: string; width: number; height: number } => typeof variant === "object" && variant !== null && !Array.isArray(variant) && typeof (variant as Record<string, unknown>).key === "string" && typeof (variant as Record<string, unknown>).width === "number" && typeof (variant as Record<string, unknown>).height === "number")
-        : [];
-      const fullKey =
-        metadataRecord &&
-        typeof metadataRecord.full === "object" &&
-        metadataRecord.full !== null &&
-        !Array.isArray(metadataRecord.full) &&
-        typeof (metadataRecord.full as Record<string, unknown>).key === "string"
-          ? ((metadataRecord.full as Record<string, unknown>).key as string)
-          : null;
-      const thumbnailUrl = row.thumbnail_media_id
-        ? fullKey
-          ? services.storage.getPublicObjectUrl(fullKey) ??
-            `/api/v1/media/${row.thumbnail_media_id}`
-          : `/api/v1/media/${row.thumbnail_media_id}`
-        : null;
+      const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
+        services,
+        row.thumbnail_metadata,
+      );
 
       const instructorName =
         row.instructor_alias || row.creator_display_name || null;
@@ -159,13 +195,7 @@ export function createCourseService({
           (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
           null,
         thumbnailUrl,
-        thumbnailSrcSet: thumbnailVariants.map((variant) => ({
-          url:
-            services.storage.getPublicObjectUrl(variant.key) ??
-            `/api/v1/media/${row.thumbnail_media_id}/variants/${variant.width}`,
-          width: variant.width,
-          height: variant.height,
-        })),
+        thumbnailSrcSet,
         instructorName,
         categoryName: row.category_name ?? null,
         totalSections: Number(row.total_sections ?? 0),
@@ -758,6 +788,7 @@ export function createCourseService({
       pricing,
       settings,
       includes,
+      thumbnailAsset,
     ] = await Promise.all([
       course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
@@ -769,6 +800,9 @@ export function createCourseService({
       configurationService.findPricingByCourseId(courseId),
       configurationService.findSettingsByCourseId(courseId),
       includesService.listCourseIncludes(courseId),
+      course.thumbnail_media_id
+        ? mediaService.getMediaAsset(course.thumbnail_media_id)
+        : null,
     ]);
 
     const creator = creatorUser
@@ -877,6 +911,7 @@ export function createCourseService({
         creatorId: course.creator_id,
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
+        ...resolvePublicThumbnailUrls(services, thumbnailAsset?.metadata),
         trailerMediaId: course.trailer_media_id,
         instructorAlias: course.instructor_alias ?? null,
         version: course.version,
