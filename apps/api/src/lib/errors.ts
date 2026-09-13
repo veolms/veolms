@@ -40,19 +40,6 @@ export class AppError extends Error {
     this.statusCode = statusCode;
     this.code = code;
     this.issues = issues;
-
-    // `name`/`code`/`issues` exist so error.middleware.ts can read them off a
-    // thrown AppError, but only `statusCode` is a top-level field in the
-    // documented `ErrorResponse` (`code`/`issues` are nested under `.error`
-    // there; `name` isn't part of the shape at all). Hide them from
-    // JSON.stringify/Object.keys so `httpError()` below can safely add real
-    // `success`/`error` properties without leaking these as extra top-level
-    // fields whenever its result is `.send()`'d directly. This only flips
-    // `enumerable`, so `.name`/`.code`/`.issues` stay readable via normal
-    // property access.
-    Object.defineProperty(this, "name", { enumerable: false });
-    Object.defineProperty(this, "code", { enumerable: false });
-    Object.defineProperty(this, "issues", { enumerable: false });
   }
 }
 
@@ -61,10 +48,15 @@ export function httpError(
   code: string,
   message: string,
   issues?: ValidationIssue[],
-): AppError & ErrorResponse {
-  const err = new AppError(statusCode, code, message, issues);
-  return Object.assign(err, {
-    success: false as const,
-    error: { code, message, ...(issues ? { issues } : {}) },
-  });
+): ErrorResponse {
+  return {
+    success: false,
+    statusCode,
+    error: {
+      code,
+      message,
+      ...(issues ? { issues } : {}),
+    },
+  };
 }
+

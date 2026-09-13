@@ -60,7 +60,7 @@ function parseAuditLogDetails(value: string): Record<string, unknown> | null {
 export interface ModerationService {
   createReport(
     db: DatabaseExecutor,
-    reporterId: string,
+    reporter: DiscussionActor | string,
     input: CreateReportRequest,
   ): Promise<{ message: string }>;
 
@@ -147,7 +147,13 @@ export function createModerationService({
   }
 
   return {
-    async createReport(db, reporterId, input) {
+    async createReport(db, reporter, input) {
+      const actor: DiscussionActor =
+        typeof reporter === "string"
+          ? { userId: reporter, roles: [] }
+          : reporter;
+      const reporterId = actor.userId;
+
       // 1. Verify target item exists and derive its actual course
       let courseId: string | null = null;
       if (input.targetType === "thread") {
@@ -171,6 +177,13 @@ export function createModerationService({
         const note = await notesRepo.findNoteById(db, input.targetId);
         if (!note) {
           throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
+        }
+        const isOwner = note.userId === actor.userId;
+        if (!isOwner) {
+          if (note.visibility === "private") {
+            throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
+          }
+          await courseAccess.assertCanAccessCourse(db, actor, note.courseId);
         }
         courseId = note.courseId;
       }

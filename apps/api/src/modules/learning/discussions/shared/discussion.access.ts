@@ -136,6 +136,7 @@ export function createDiscussionAccess(): DiscussionAccess {
         isOpenCourseAccess(eb).as("isOpen"),
       ])
       .where("c.id", "=", courseId)
+      .where("c.deleted_at", "is", null)
       .executeTakeFirst();
 
     if (!course) return false;

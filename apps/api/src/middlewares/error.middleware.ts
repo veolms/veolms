@@ -4,7 +4,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 
-import { httpError } from "../lib/errors.ts";
+import { AppError, httpError } from "../lib/errors.ts";
 
 /**
  * Makes every failure share the documented `ErrorResponse` shape, so the error
@@ -60,40 +60,39 @@ export function registerErrorHandler(app: FastifyInstance): void {
         );
     }
 
-    const statusCode =
-      typeof error?.statusCode === "number"
-        ? error.statusCode
-        : typeof (error as any)?.status === "number"
-          ? (error as any).status
-          : typeof (error as any)?.error?.statusCode === "number"
-            ? (error as any).error.statusCode
-            : 500;
+    if (error instanceof AppError) {
+      if (error.statusCode >= 500) {
+        request.log.error({ err: error }, "Unhandled error");
 
-    const code =
-      error?.code || (error as any)?.error?.code || "INTERNAL_SERVER_ERROR";
-
-    const message =
-      typeof error?.message === "string" && error.message.length > 0
-        ? error.message
-        : typeof (error as any)?.error?.message === "string" &&
-            (error as any).error.message.length > 0
-          ? (error as any).error.message
-          : typeof error === "string"
-            ? error
-            : "An unexpected error occurred.";
-
-    const issues = (error as any)?.issues ?? (error as any)?.error?.issues;
-
-    if (statusCode >= 500) {
-      request.log.error({ err: error }, "Unhandled error");
+        return reply
+          .code(error.statusCode)
+          .send(
+            httpError(
+              error.statusCode,
+              error.code,
+              "An unexpected error occurred.",
+            ),
+          );
+      }
 
       return reply
-        .code(statusCode)
-        .send(httpError(statusCode, code, "An unexpected error occurred."));
+        .code(error.statusCode)
+        .send(
+          httpError(error.statusCode, error.code, error.message, error.issues),
+        );
     }
 
+    request.log.error({ err: error }, "Unhandled error");
+
     return reply
-      .code(statusCode)
-      .send(httpError(statusCode, code, message, issues));
+      .code(500)
+      .send(
+        httpError(
+          500,
+          "INTERNAL_SERVER_ERROR",
+          "An unexpected error occurred.",
+        ),
+      );
   });
 }
+
