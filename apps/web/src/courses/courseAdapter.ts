@@ -122,9 +122,7 @@ export function adaptCourseSummaryToCatalogueCourse(
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
-  const thumbnail = apiCourse.thumbnailMediaId
-    ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
-    : "";
+  const thumbnail = apiCourse.thumbnailUrl ?? "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||

@@ -25,6 +25,8 @@ export function createLearningHlsPreloadSource(options: {
   manifestUrl: string;
   mediaKey?: string;
   protectedPlayback?: boolean;
+  segmentToken?: string;
+  segmentTokenExpiresAt?: number;
 }) {
   const startTime =
     options.mediaKey && shouldResumeFromLastPosition()
@@ -40,6 +42,8 @@ export function createLearningHlsPreloadSource(options: {
     networking: {
       requestFilter: createLearningHlsRequestFilter({
         protectedPlayback: options.protectedPlayback,
+        segmentToken: options.segmentToken,
+        segmentTokenExpiresAt: options.segmentTokenExpiresAt,
       }),
     },
   };

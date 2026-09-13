@@ -24,7 +24,13 @@ export function createMediaController({ service }: { service: MediaService }) {
       request.log,
       request.user?.roles,
     );
-    return { status: result.status };
+    return {
+      status: result.status,
+      ...(result.deliveryUrl ? { deliveryUrl: result.deliveryUrl } : {}),
+      ...(result.deliveryUrlExpiresAt
+        ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
+        : {}),
+    };
   }
 
   async function getVideoJobProgress(
@@ -54,34 +60,14 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
-  async function streamHlsResource(
-    request: FastifyRequest<{
-      Params: { mediaId: string; "*": string };
-    }>,
-    reply: FastifyReply,
+  async function getMediaDelivery(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
   ) {
-    const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
-      : undefined;
-    const result = await service.getHlsStream(
+    return service.getMediaDelivery(
       request.params.mediaId,
-      request.params["*"],
-      user,
+      request.user?.id,
+      request.user?.roles,
     );
-    reply.header("Content-Type", result.contentType);
-    if (result.contentLength !== undefined) {
-      reply.header("Content-Length", result.contentLength);
-    }
-    reply.header(
-      "Cache-Control",
-      result.isPublic
-        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
-        : result.isManifest
-          ? "private, no-store"
-          : "private, max-age=86400",
-    );
-    reply.header("X-Content-Type-Options", "nosniff");
-    return reply.send(result.stream);
   }
 
   async function retryVideoJob(
@@ -170,37 +156,15 @@ export function createMediaController({ service }: { service: MediaService }) {
     response.end();
   }
 
-  async function getMediaAssetStream(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-    reply: FastifyReply,
-  ) {
-    const { mediaId } = request.params;
-    const requestingUserId = request.user?.id;
-    const result = await service.getMediaStream(
-      mediaId,
-      requestingUserId,
-      request.user?.roles,
-    );
-    reply.header("Content-Type", result.contentType);
-    if (result.contentLength !== undefined) {
-      reply.header("Content-Length", result.contentLength);
-    }
-    // Assets whose public access can be revoked (e.g. unpublished/deleted courses
-    // or replaced thumbnails) must not be retained in shared caches.
-    reply.header("Cache-Control", "no-store");
-    return reply.send(result.stream);
-  }
-
   return {
     presignMediaUpload,
     confirmMediaUpload,
     getVideoJobProgress,
     getPlaybackBootstrap,
-    streamHlsResource,
+    getMediaDelivery,
     retryVideoJob,
     cancelVideoJob,
     streamVideoJobProgress,
-    getMediaAssetStream,
   };
 }
 

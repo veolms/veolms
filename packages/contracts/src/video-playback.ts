@@ -18,6 +18,8 @@ export const videoPlaybackBootstrapSchema = z.strictObject({
   lessonId: z.union([z.string().min(1), z.number().int().positive()]),
   mediaKey: z.string().min(1),
   manifestUrl: z.string().min(1),
+  segmentToken: z.string().min(1).optional(),
+  segmentTokenExpiresAt: z.number().int().positive().optional(),
   duration: z.number().nonnegative().optional(),
   title: z.string().min(1).optional(),
   posterUrl: z.string().min(1).optional(),

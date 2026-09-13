@@ -392,6 +392,8 @@ export const courseSchema = z.object({
   categoryId: z.uuid().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   trailerMediaId: z.uuid().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  trailerUrl: z.string().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),
   createdAt: z.string(),

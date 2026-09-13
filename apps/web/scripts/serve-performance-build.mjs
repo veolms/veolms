@@ -43,13 +43,6 @@ const apiTargetValue =
     : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
 const apiTarget = new URL(apiTargetValue);
 const apiOrigin = apiTarget.origin;
-const mediaTargetArgumentIndex = process.argv.indexOf("--media-target");
-const mediaTargetValue =
-  mediaTargetArgumentIndex >= 0 && process.argv[mediaTargetArgumentIndex + 1]
-    ? process.argv[mediaTargetArgumentIndex + 1]
-    : process.env.VITE_COURSE_MEDIA_BASE_URL || "https://dev.veolms.org";
-const mediaTarget = new URL(mediaTargetValue);
-const mediaOrigin = mediaTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -160,17 +153,6 @@ createServer(async (request, response) => {
     });
     return;
   }
-  if (
-    requestUrl.pathname === "/course-hls" ||
-    requestUrl.pathname.startsWith("/course-hls/")
-  ) {
-    proxyRequestToOrigin(request, response, requestUrl, mediaOrigin, {
-      code: "COURSE_MEDIA_UNAVAILABLE",
-      message: "The preview server could not reach the course media origin.",
-    });
-    return;
-  }
-
   const filePath = await resolveRequestPath(requestUrl.pathname);
   if (!filePath) {
     response.writeHead(400).end("Bad request");

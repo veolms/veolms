@@ -50,6 +50,8 @@ function startPreloadForBootstrap(
       manifestUrl: bootstrap.manifestUrl,
       mediaKey: bootstrap.mediaKey || undefined,
       protectedPlayback,
+      segmentToken: bootstrap.segmentToken,
+      segmentTokenExpiresAt: bootstrap.segmentTokenExpiresAt,
     }),
   );
   inFlight = { key, promise };

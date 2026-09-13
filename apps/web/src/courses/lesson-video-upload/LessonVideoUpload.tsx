@@ -31,6 +31,7 @@ import { mediaService } from "../../services/media";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
+  visibility?: "public" | "protected";
   disabled?: boolean;
   hideUploadWhenAttached?: boolean;
   attachedActionLabel?: string;
@@ -77,6 +78,7 @@ const SECONDARY_ACTION_CLASS =
 
 export function LessonVideoUpload({
   mediaAssetId,
+  visibility = "protected",
   disabled = false,
   hideUploadWhenAttached = false,
   attachedActionLabel = "Change Video",
@@ -659,6 +661,7 @@ export function LessonVideoUpload({
           filename: file.name,
           contentType: file.type,
           fileSize: file.size,
+          ...(visibility === "public" ? { visibility } : {}),
         });
 
         if (!mountedRef.current || requestId !== requestIdRef.current) return;

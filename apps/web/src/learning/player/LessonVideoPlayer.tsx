@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
@@ -111,7 +118,9 @@ export interface LessonVideoPlayerProps {
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
-  /** Keeps HLS requests credentialed while the protected bootstrap resolves. */
+  /** Refreshes the short-lived CDN segment token when playback runs long. */
+  refreshPlaybackBootstrap?: () => Promise<VideoPlaybackBootstrap>;
+  /** Legacy caller hint retained while all protected access moves to tokens. */
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
@@ -155,6 +164,7 @@ export function LessonVideoPlayer({
   theaterMode,
   presentation = "full",
   playbackBootstrap,
+  refreshPlaybackBootstrap,
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -211,8 +221,29 @@ export function LessonVideoPlayer({
       protectedPlayback: playbackBootstrap
         ? playbackBootstrap.source === "paid-bootstrap-api"
         : protectedPlayback,
+      segmentToken: playbackBootstrap?.segmentToken,
+      segmentTokenExpiresAt: playbackBootstrap?.segmentTokenExpiresAt,
+      refreshSegmentToken:
+        playbackBootstrap?.segmentToken && refreshPlaybackBootstrap
+          ? async () => {
+              const refreshed = await refreshPlaybackBootstrap();
+              return refreshed.segmentToken
+                ? {
+                    token: refreshed.segmentToken,
+                    expiresAt: refreshed.segmentTokenExpiresAt,
+                  }
+                : null;
+            }
+          : undefined,
     });
-  }, [lessonTitle, mediaKey, playbackBootstrap, playbackMedia, protectedPlayback]);
+  }, [
+    lessonTitle,
+    mediaKey,
+    playbackBootstrap,
+    playbackMedia,
+    protectedPlayback,
+    refreshPlaybackBootstrap,
+  ]);
 
   useEffect(() => {
     setShowEndScreen(false);

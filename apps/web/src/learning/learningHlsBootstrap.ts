@@ -15,6 +15,8 @@ export const EARLY_HLS_PRELOAD_URL_PLACEHOLDER =
 export interface LearningHlsBootstrap {
   manifestUrl: string;
   mediaKey: string;
+  segmentToken?: string;
+  segmentTokenExpiresAt?: number;
 }
 
 export interface LearningPlaybackRequestMetadata {

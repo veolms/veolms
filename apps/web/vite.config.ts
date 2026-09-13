@@ -121,10 +121,9 @@ function earlyHlsPreloadPlugin(): Plugin {
           "../client/.vite/manifest.json",
         );
         try {
-          const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<
-            string,
-            { file?: string; name?: string; src?: string }
-          >;
+          const manifest = JSON.parse(
+            fs.readFileSync(manifestPath, "utf8"),
+          ) as Record<string, { file?: string; name?: string; src?: string }>;
           const entry = Object.values(manifest).find(
             (item) =>
               item.name === "early-hls-preload" ||
@@ -142,7 +141,10 @@ function earlyHlsPreloadPlugin(): Plugin {
       if (!url) return;
 
       for (const item of Object.values(bundle)) {
-        if (item.type === "chunk" && item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)) {
+        if (
+          item.type === "chunk" &&
+          item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)
+        ) {
           item.code = replacePlaceholder(item.code, url);
         }
         if (
@@ -173,9 +175,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
         config.STATIC_BUILD_API_URL,
       ),
-      "import.meta.env.VITE_COURSE_MEDIA_BASE_URL": JSON.stringify(
-        config.VITE_COURSE_MEDIA_BASE_URL ?? "",
-      ),
+      "import.meta.env.CDN_URL": JSON.stringify(config.CDN_URL),
     },
     plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
     resolve: {
@@ -242,13 +242,6 @@ export default defineConfig(({ mode }) => {
             : "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,
-        },
-        "/course-hls": {
-          target: config.VITE_COURSE_MEDIA_BASE_URL
-            ? new URL(config.VITE_COURSE_MEDIA_BASE_URL).origin
-            : "https://dev.veolms.org",
-          changeOrigin: true,
-          secure: true,
         },
       },
     },

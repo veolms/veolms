@@ -4,6 +4,7 @@ import {
 } from "@veolms/contracts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const CDN_URL = import.meta.env.CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
 
@@ -33,6 +34,16 @@ export function resolveVideoPlaybackApiUrl(path: string): string {
     return cleanPath;
   }
   return `${base}${cleanPath}`;
+}
+
+export function resolveVideoPlaybackCdnUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = String(CDN_URL).replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (base && (cleanPath === base || cleanPath.startsWith(`${base}/`))) {
+    return cleanPath;
+  }
+  return `${base}${cleanPath}` || cleanPath;
 }
 
 export function getVideoPlaybackApiOrigin(): string | null {
@@ -105,7 +116,7 @@ async function requestBootstrap(
 
   return {
     ...parsed.data,
-    manifestUrl: resolveVideoPlaybackApiUrl(parsed.data.manifestUrl),
+    manifestUrl: resolveVideoPlaybackCdnUrl(parsed.data.manifestUrl),
   };
 }
 
@@ -129,6 +140,13 @@ export function getVideoPlaybackBootstrap(
     }
   });
   return promise;
+}
+
+export function refreshVideoPlaybackBootstrap(
+  options: VideoPlaybackBootstrapRequest,
+): Promise<VideoPlaybackBootstrap> {
+  bootstrapRequests.delete(requestKey(options));
+  return getVideoPlaybackBootstrap(options);
 }
 
 export function clearVideoPlaybackBootstrapCache(): void {

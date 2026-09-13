@@ -71,7 +71,10 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import { getVideoPlaybackBootstrap } from "./videoPlaybackBootstrap";
+import {
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackBootstrap,
+} from "./videoPlaybackBootstrap";
 import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -346,8 +349,13 @@ export function LearningWorkspace({
     if (isCourseOverviewError) {
       return courseSlug || "";
     }
-    return isApiRoute ? (courseSlug || "") : getCourseTitle(courseSlug);
-  }, [courseOverview?.course.title, courseSlug, isApiRoute, isCourseOverviewError]);
+    return isApiRoute ? courseSlug || "" : getCourseTitle(courseSlug);
+  }, [
+    courseOverview?.course.title,
+    courseSlug,
+    isApiRoute,
+    isCourseOverviewError,
+  ]);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
@@ -441,10 +449,7 @@ export function LearningWorkspace({
     root.dataset.learningCurriculumState = shellState.curriculumCollapsed
       ? "collapsed"
       : "expanded";
-    root.style.setProperty(
-      "--learning-curriculum-width",
-      `${rootWidth}px`,
-    );
+    root.style.setProperty("--learning-curriculum-width", `${rootWidth}px`);
     root.style.setProperty(
       "--learning-curriculum-expanded-width",
       `${shellState.curriculumWidth}px`,
@@ -626,6 +631,15 @@ export function LearningWorkspace({
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
+  const refreshPlaybackBootstrap = useCallback(async () => {
+    if (!courseSlug) {
+      throw new Error("A course is required to refresh playback access.");
+    }
+    return refreshVideoPlaybackBootstrap({
+      courseSlug,
+      lessonNumber: selectedLesson,
+    });
+  }, [courseSlug, selectedLesson]);
 
   useEffect(() => {
     if (!courseSlug || publicPlaybackBootstrap) {
@@ -668,15 +682,13 @@ export function LearningWorkspace({
         : undefined,
     [adaptedCurriculum],
   );
-  const {
-    lessonProgress: persistedLessonProgress,
-    recordProgress,
-  } = useLearningProgress({
-    courseKey: courseOverview?.course.slug,
-    userId,
-    lessonIdsByNumber,
-    enabled: Boolean(courseOverview?.course.slug),
-  });
+  const { lessonProgress: persistedLessonProgress, recordProgress } =
+    useLearningProgress({
+      courseKey: courseOverview?.course.slug,
+      userId,
+      lessonIdsByNumber,
+      enabled: Boolean(courseOverview?.course.slug),
+    });
   const lessonProgress = useMemo(() => {
     if (Object.keys(localLessonProgress).length === 0) {
       return persistedLessonProgress;
@@ -699,9 +711,7 @@ export function LearningWorkspace({
       : undefined;
   const courseThumbnail = useMemo(() => {
     if (courseOverview) {
-      return courseOverview.course.thumbnailMediaId
-        ? `/api/v1/media/${courseOverview.course.thumbnailMediaId}`
-        : undefined;
+      return courseOverview.course.thumbnailUrl || undefined;
     }
     if (isCourseOverviewError) {
       return undefined;
@@ -1884,6 +1894,7 @@ export function LearningWorkspace({
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
       playbackBootstrap,
+      refreshPlaybackBootstrap,
       protectedPlayback,
       lessonTitle: currentLesson[1],
       courseTitle,
@@ -1946,6 +1957,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
+      refreshPlaybackBootstrap,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
       playerCourseLessonsSidePanel,
@@ -2103,7 +2115,9 @@ export function LearningWorkspace({
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
+                isLessonDescriptionLoading={
+                  isApiRoute && isCourseOverviewLoading
+                }
               />
             </article>
           </div>
@@ -2113,63 +2127,63 @@ export function LearningWorkspace({
           <div
             className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
           >
-          <div
-            className="learning-curriculum__resize-rail"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize course curriculum"
-            aria-keyshortcuts="Alt+C"
-            title={`Resize course content | ${curriculumShortcutLabel}`}
-            aria-valuemin={CURRICULUM_MIN_WIDTH}
-            aria-valuemax={CURRICULUM_MAX_WIDTH}
-            aria-valuenow={
-              curriculumCollapsed
-                ? undefined
-                : Math.round(curriculumAccessibleWidth)
-            }
-            aria-valuetext={
-              curriculumCollapsed
-                ? "Course curriculum collapsed"
+            <div
+              className="learning-curriculum__resize-rail"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize course curriculum"
+              aria-keyshortcuts="Alt+C"
+              title={`Resize course content | ${curriculumShortcutLabel}`}
+              aria-valuemin={CURRICULUM_MIN_WIDTH}
+              aria-valuemax={CURRICULUM_MAX_WIDTH}
+              aria-valuenow={
+                curriculumCollapsed
+                  ? undefined
+                  : Math.round(curriculumAccessibleWidth)
+              }
+              aria-valuetext={
+                curriculumCollapsed
+                  ? "Course curriculum collapsed"
                   : `${Math.round(curriculumAccessibleWidth)} pixels wide${
-                    curriculumResizing &&
-                    (curriculumResizePreviewWidth ??
-                      (curriculumCollapsed
-                        ? CURRICULUM_COLLAPSED_WIDTH
-                        : curriculumWidth)) < CURRICULUM_MIN_WIDTH
-                      ? ", sliding closed"
-                      : ""
-                  }`
-            }
-            tabIndex={0}
-            onKeyDown={handleCurriculumResizeKeyDown}
-            onDoubleClick={toggleCurriculumFromResizeRail}
-            onPointerDown={startCurriculumResize}
-            onPointerMove={moveCurriculumResize}
-            onPointerUp={endCurriculumResize}
-            onPointerCancel={(event) => endCurriculumResize(event, true)}
-          />
-          <div
-            id="learning-course-content"
-            className="learning-curriculum__viewport"
-          >
-            <Curriculum
-              sections={curriculumSections}
-              lessonsById={curriculumLessonsById}
-              scrollportRef={curriculumScrollportRef}
-              scrollportId="learning-course-curriculum-scrollport"
-              selectedLesson={selectedLesson}
-              lessonProgress={lessonProgress}
-              onSelectLesson={selectLesson}
-              isLessonAvailable={isLessonAvailable}
-              onOpenCourseOverview={onOpenCourseOverview}
-              courseTitle={courseTitle}
-              courseThumbnail={courseThumbnail}
-              focusRequest={curriculumFocusRequest}
-              persistenceKey={coursePersistenceKey}
-              isLoading={isApiRoute && isCourseOverviewLoading}
+                      curriculumResizing &&
+                      (curriculumResizePreviewWidth ??
+                        (curriculumCollapsed
+                          ? CURRICULUM_COLLAPSED_WIDTH
+                          : curriculumWidth)) < CURRICULUM_MIN_WIDTH
+                        ? ", sliding closed"
+                        : ""
+                    }`
+              }
+              tabIndex={0}
+              onKeyDown={handleCurriculumResizeKeyDown}
+              onDoubleClick={toggleCurriculumFromResizeRail}
+              onPointerDown={startCurriculumResize}
+              onPointerMove={moveCurriculumResize}
+              onPointerUp={endCurriculumResize}
+              onPointerCancel={(event) => endCurriculumResize(event, true)}
             />
+            <div
+              id="learning-course-content"
+              className="learning-curriculum__viewport"
+            >
+              <Curriculum
+                sections={curriculumSections}
+                lessonsById={curriculumLessonsById}
+                scrollportRef={curriculumScrollportRef}
+                scrollportId="learning-course-curriculum-scrollport"
+                selectedLesson={selectedLesson}
+                lessonProgress={lessonProgress}
+                onSelectLesson={selectLesson}
+                isLessonAvailable={isLessonAvailable}
+                onOpenCourseOverview={onOpenCourseOverview}
+                courseTitle={courseTitle}
+                courseThumbnail={courseThumbnail}
+                focusRequest={curriculumFocusRequest}
+                persistenceKey={coursePersistenceKey}
+                isLoading={isApiRoute && isCourseOverviewLoading}
+              />
+            </div>
           </div>
-        </div>
         </div>
       </main>
 

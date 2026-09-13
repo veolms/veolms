@@ -68,7 +68,6 @@ export function createServices({
     );
   }
 
-
   if (config.NODE_ENV === "production") {
     if (config.EMAIL_TRANSPORT === "console") {
       logger.warn(
@@ -116,7 +115,11 @@ export function createServices({
     }),
     storage: new S3StorageService({
       endpoint: config.STORAGE_ENDPOINT,
-      publicBaseUrl: config.STORAGE_PUBLIC_BASE_URL,
+      publicBaseUrl: config.CDN_URL,
+      cdnSigningSecret: config.CDN_SIGNING_SECRET,
+      cdnTokenTtlSeconds: config.CDN_TOKEN_TTL_SECONDS,
+      cdnHlsTokenTtlSeconds: config.CDN_HLS_TOKEN_TTL_SECONDS,
+      cdnPublicFolders: config.CDN_PUBLIC_FOLDERS,
       region: config.STORAGE_REGION,
       accessKeyId: config.STORAGE_ACCESS_KEY_ID,
       secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,

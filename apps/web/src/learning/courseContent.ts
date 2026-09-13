@@ -43,10 +43,8 @@ export function resolveCourseMediaBaseUrl(configuredBaseUrl?: string) {
 }
 
 export const courseMediaBaseUrl = resolveCourseMediaBaseUrl(
-  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
-    (typeof process !== "undefined"
-      ? process.env.VITE_COURSE_MEDIA_BASE_URL
-      : undefined),
+  import.meta.env.CDN_URL ||
+    (typeof process !== "undefined" ? process.env.CDN_URL : undefined),
 );
 
 export function resolveCourseVideoSrc(
@@ -62,10 +60,8 @@ export function resolveCourseHlsBaseUrl(configuredBaseUrl?: string) {
 }
 
 export const courseHlsBaseUrl = resolveCourseHlsBaseUrl(
-  import.meta.env.VITE_COURSE_MEDIA_BASE_URL ||
-    (typeof process !== "undefined"
-      ? process.env.VITE_COURSE_MEDIA_BASE_URL
-      : undefined),
+  import.meta.env.CDN_URL ||
+    (typeof process !== "undefined" ? process.env.CDN_URL : undefined),
 );
 
 export function getCourseVideoHlsSlug(fileName: string) {
