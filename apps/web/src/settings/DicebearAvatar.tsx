@@ -16,24 +16,28 @@ const URL_ATTRIBUTES = new Set(["href", "xlink:href", "src"]);
  * profile (not just its owner), so it's sanitized on principle rather than
  * trusted outright. */
 function sanitizeSvgElement(root: Element): void {
+  const sanitizeAttributes = (node: Element) => {
+    for (const attr of Array.from(node.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on")) {
+        node.removeAttribute(attr.name);
+      } else if (
+        URL_ATTRIBUTES.has(name) &&
+        attr.value.trim().toLowerCase().startsWith("javascript:")
+      ) {
+        node.removeAttribute(attr.name);
+      }
+    }
+  };
+
   const walk = (node: Element) => {
+    sanitizeAttributes(node);
     // Snapshot first — removing a child while iterating its live sibling
     // list would skip the next one.
     for (const child of Array.from(node.children)) {
       if (DISALLOWED_TAGS.has(child.tagName.toLowerCase())) {
         child.remove();
         continue;
-      }
-      for (const attr of Array.from(child.attributes)) {
-        const name = attr.name.toLowerCase();
-        if (name.startsWith("on")) {
-          child.removeAttribute(attr.name);
-        } else if (
-          URL_ATTRIBUTES.has(name) &&
-          attr.value.trim().toLowerCase().startsWith("javascript:")
-        ) {
-          child.removeAttribute(attr.name);
-        }
       }
       walk(child);
     }

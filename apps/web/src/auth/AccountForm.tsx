@@ -59,9 +59,7 @@ export function AccountForm({
   const creating = status === "creating";
   const [invalidReason, setInvalidReason] = useState<string | null>(null);
   const error = invalidReason ?? errorMessage ?? null;
-  // Mirrors the server's own default-avatar seed (the trimmed display name),
-  // so this preview is the exact avatar the account will get, not a stand-in.
-  const previewSeed = name.trim();
+  const hasName = Boolean(name.trim());
 
   const changeName = (next: string) => {
     setInvalidReason(null);
@@ -119,11 +117,11 @@ export function AccountForm({
 
             <div className="auth-account-form__identity-row">
               <span className="auth-account-form__avatar-circle" aria-hidden="true">
-                {previewSeed ? (
+                {hasName ? (
                   <img
                     alt=""
                     height={44}
-                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, previewSeed)}
+                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, "preview")}
                     width={44}
                   />
                 ) : (

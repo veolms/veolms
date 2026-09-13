@@ -31,6 +31,10 @@ export function AvatarStylePicker({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [style, setStyle] = useState<AvatarStyle>(AVATAR_STYLES[0]);
   const [shuffleCount, setShuffleCount] = useState(0);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [failedThumbnails, setFailedThumbnails] = useState<
+    Record<string, boolean>
+  >({});
   const effectiveSeed = shuffleCount > 0 ? `${seed}-${shuffleCount}` : seed;
   const previewUrl = buildDicebearSvgUrl(style, effectiveSeed);
 
@@ -45,8 +49,14 @@ export function AvatarStylePicker({
     if (open) {
       setStyle(AVATAR_STYLES[0]);
       setShuffleCount(0);
+      setPreviewFailed(false);
+      setFailedThumbnails({});
     }
   }, [open]);
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [style, shuffleCount]);
 
   if (!open) return null;
 
@@ -59,6 +69,7 @@ export function AvatarStylePicker({
   };
 
   const confirm = () => {
+    if (previewFailed) return;
     onSelect(previewUrl);
     closeDialog();
   };
@@ -89,7 +100,24 @@ export function AvatarStylePicker({
       </div>
 
       <div className="settings-profile__avatar-style-preview">
-        <img src={previewUrl} alt="" width={96} height={96} />
+        {previewFailed ? (
+          <span
+            className="settings-profile__avatar-fallback"
+            role="img"
+            aria-label="Avatar preview unavailable"
+          >
+            Preview unavailable
+          </span>
+        ) : (
+          <img
+            src={previewUrl}
+            alt=""
+            width={96}
+            height={96}
+            onError={() => setPreviewFailed(true)}
+            onLoad={() => setPreviewFailed(false)}
+          />
+        )}
         <button
           type="button"
           className="settings-profile__avatar-style-shuffle"
@@ -116,12 +144,24 @@ export function AvatarStylePicker({
             }`}
             onClick={() => setStyle(option)}
           >
-            <img
-              src={buildDicebearSvgUrl(option, seed)}
-              alt=""
-              width={40}
-              height={40}
-            />
+            {failedThumbnails[option] ? (
+              <span
+                className="settings-profile__avatar-thumbnail-fallback"
+                aria-hidden="true"
+              >
+                {option.slice(0, 2).toUpperCase()}
+              </span>
+            ) : (
+              <img
+                src={buildDicebearSvgUrl(option, seed)}
+                alt=""
+                width={40}
+                height={40}
+                onError={() =>
+                  setFailedThumbnails((prev) => ({ ...prev, [option]: true }))
+                }
+              />
+            )}
             <span>{option}</span>
           </button>
         ))}
@@ -131,7 +171,7 @@ export function AvatarStylePicker({
         <button type="button" onClick={closeDialog}>
           Cancel
         </button>
-        <button type="button" onClick={confirm}>
+        <button type="button" onClick={confirm} disabled={previewFailed}>
           Use this avatar
         </button>
       </div>

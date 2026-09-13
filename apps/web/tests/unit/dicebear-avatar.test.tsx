@@ -39,7 +39,7 @@ describe("DicebearAvatar", () => {
         ok: true,
         text: () =>
           Promise.resolve(
-            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><circle r="5" onload="alert(2)" /></svg>',
+            '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(0)"><script>alert(1)</script><circle r="5" onload="alert(2)" /></svg>',
           ),
       }),
     );
@@ -52,6 +52,7 @@ describe("DicebearAvatar", () => {
       expect(container.querySelector("svg")).not.toBeNull();
     });
 
+    expect(container.querySelector("svg")?.hasAttribute("onload")).toBe(false);
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("circle")?.hasAttribute("onload")).toBe(
       false,

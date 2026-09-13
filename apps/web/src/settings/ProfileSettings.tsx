@@ -937,16 +937,21 @@ export function ProfileSettings({
       return;
     }
 
+    const activeUserId = authStore.getState().user?.id;
+    if (!activeUserId) return;
+
     setPhotoError("");
     setPhotoUploading(true);
     authService
       .uploadAvatarPhoto(file)
       .then((updated) => {
+        if (authStore.getState().user?.id !== activeUserId) return;
         authStore.setUser(updated);
         queryClient.setQueryData(authKeys.me(), updated);
         mergeFromServer({ avatarDataUrl: updated.avatarDataUrl });
       })
       .catch((error: unknown) => {
+        if (authStore.getState().user?.id !== activeUserId) return;
         const message =
           error && typeof error === "object" && "message" in error
             ? String((error as { message?: unknown }).message)
@@ -1102,7 +1107,12 @@ export function ProfileSettings({
                     <button
                       type="button"
                       className="settings-profile__generate-avatar"
-                      onClick={() => setAvatarPickerOpen(true)}
+                      disabled={photoUploading}
+                      onClick={() => {
+                        if (!photoUploading) {
+                          setAvatarPickerOpen(true);
+                        }
+                      }}
                     >
                       <MagicWand size={14} weight="fill" aria-hidden="true" />
                       Generate avatar

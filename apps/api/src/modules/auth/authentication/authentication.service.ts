@@ -130,6 +130,34 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
+const avatarMutationLocks = new Map<string, Promise<unknown>>();
+
+async function withAvatarLock<T>(
+  userId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previous = avatarMutationLocks.get(userId) ?? Promise.resolve();
+  let resolveCurrent: () => void;
+  const current = new Promise<void>((resolve) => {
+    resolveCurrent = resolve;
+  });
+  const chain = previous.then(
+    () => current,
+    () => current,
+  );
+  avatarMutationLocks.set(userId, chain);
+
+  try {
+    await previous.catch(() => {});
+    return await fn();
+  } finally {
+    resolveCurrent!();
+    if (avatarMutationLocks.get(userId) === chain) {
+      avatarMutationLocks.delete(userId);
+    }
+  }
+}
+
   async function updateProfile(userId: string, input: ProfileUpdateRequest) {
     const username = input.username?.trim().toLowerCase();
     if (
@@ -139,100 +167,107 @@ export function createAuthService({
       throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
     }
 
-    const currentUser = await userRepository.findUserById(database, userId);
-    if (!currentUser) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    const performUpdate = async () => {
+      const currentUser = await userRepository.findUserById(database, userId);
+      if (!currentUser) {
+        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+      }
+
+      const linkedinUrl =
+        input.linkedinUrl !== undefined
+          ? input.linkedinUrl?.trim() || null
+          : currentUser.linkedin_url;
+      const githubUrl =
+        input.githubUrl !== undefined
+          ? input.githubUrl?.trim() || null
+          : currentUser.github_url;
+      const websiteUrl =
+        input.websiteUrl !== undefined
+          ? input.websiteUrl?.trim() || null
+          : currentUser.website_url;
+
+      const user = await userRepository.updateUserProfile(database, userId, {
+        ...(username ? { username } : {}),
+        ...(input.displayName !== undefined
+          ? { displayName: input.displayName.trim() }
+          : {}),
+        ...(input.avatarDataUrl !== undefined
+          ? { avatarDataUrl: input.avatarDataUrl }
+          : {}),
+        ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+        ...(input.emailPublic !== undefined
+          ? {
+              emailPublic: Boolean(
+                input.emailPublic &&
+                currentUser.email &&
+                currentUser.email_verified_at,
+              ),
+            }
+          : {}),
+        ...(input.mobilePublic !== undefined
+          ? {
+              // A phone number is only publishable after the exact number on the
+              // account has completed the verification flow.
+              mobilePublic: Boolean(
+                input.mobilePublic &&
+                currentUser.phone_no &&
+                currentUser.phone_verified_at,
+              ),
+            }
+          : {}),
+        ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
+        ...(input.linkedinPublic !== undefined || input.linkedinUrl !== undefined
+          ? {
+              linkedinPublic: Boolean(
+                (input.linkedinPublic ?? currentUser.linkedin_public) &&
+                linkedinUrl,
+              ),
+            }
+          : {}),
+        ...(input.githubUrl !== undefined ? { githubUrl } : {}),
+        ...(input.githubPublic !== undefined || input.githubUrl !== undefined
+          ? {
+              githubPublic: Boolean(
+                (input.githubPublic ?? currentUser.github_public) && githubUrl,
+              ),
+            }
+          : {}),
+        ...(input.websiteUrl !== undefined ? { websiteUrl } : {}),
+        ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
+          ? {
+              websitePublic: Boolean(
+                (input.websitePublic ?? currentUser.website_public) && websiteUrl,
+              ),
+            }
+          : {}),
+      });
+
+      if (!user) {
+        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+      }
+
+      // Moving away from an R2-hosted avatar (e.g. onto a DiceBear pick, or
+      // clearing it) leaves the old object orphaned in storage unless we clean
+      // it up here. A fresh upload/provider photo overwrites the same fixed
+      // key in place, so no cleanup is needed on that path.
+      if (
+        storage &&
+        input.avatarDataUrl !== undefined &&
+        isStoredAvatarUrl(currentUser.avatar_data_url) &&
+        currentUser.avatar_data_url !== user.avatar_data_url &&
+        !isStoredAvatarUrl(user.avatar_data_url)
+      ) {
+        await removeAvatar(storage, userId);
+      }
+
+      const roles = await getUserRoles(userId);
+      return { ...user, roles };
+    };
+
+    if (input.avatarDataUrl !== undefined) {
+      return withAvatarLock(userId, performUpdate);
     }
-
-    const linkedinUrl =
-      input.linkedinUrl !== undefined
-        ? input.linkedinUrl?.trim() || null
-        : currentUser.linkedin_url;
-    const githubUrl =
-      input.githubUrl !== undefined
-        ? input.githubUrl?.trim() || null
-        : currentUser.github_url;
-    const websiteUrl =
-      input.websiteUrl !== undefined
-        ? input.websiteUrl?.trim() || null
-        : currentUser.website_url;
-
-    const user = await userRepository.updateUserProfile(database, userId, {
-      ...(username ? { username } : {}),
-      ...(input.displayName !== undefined
-        ? { displayName: input.displayName.trim() }
-        : {}),
-      ...(input.avatarDataUrl !== undefined
-        ? { avatarDataUrl: input.avatarDataUrl }
-        : {}),
-      ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
-      ...(input.emailPublic !== undefined
-        ? {
-            emailPublic: Boolean(
-              input.emailPublic &&
-              currentUser.email &&
-              currentUser.email_verified_at,
-            ),
-          }
-        : {}),
-      ...(input.mobilePublic !== undefined
-        ? {
-            // A phone number is only publishable after the exact number on the
-            // account has completed the verification flow.
-            mobilePublic: Boolean(
-              input.mobilePublic &&
-              currentUser.phone_no &&
-              currentUser.phone_verified_at,
-            ),
-          }
-        : {}),
-      ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
-      ...(input.linkedinPublic !== undefined || input.linkedinUrl !== undefined
-        ? {
-            linkedinPublic: Boolean(
-              (input.linkedinPublic ?? currentUser.linkedin_public) &&
-              linkedinUrl,
-            ),
-          }
-        : {}),
-      ...(input.githubUrl !== undefined ? { githubUrl } : {}),
-      ...(input.githubPublic !== undefined || input.githubUrl !== undefined
-        ? {
-            githubPublic: Boolean(
-              (input.githubPublic ?? currentUser.github_public) && githubUrl,
-            ),
-          }
-        : {}),
-      ...(input.websiteUrl !== undefined ? { websiteUrl } : {}),
-      ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
-        ? {
-            websitePublic: Boolean(
-              (input.websitePublic ?? currentUser.website_public) && websiteUrl,
-            ),
-          }
-        : {}),
-    });
-
-    if (!user) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
-    }
-
-    // Moving away from an R2-hosted avatar (e.g. onto a DiceBear pick, or
-    // clearing it) leaves the old object orphaned in storage unless we clean
-    // it up here. A fresh upload/provider photo overwrites the same fixed
-    // key in place, so no cleanup is needed on that path.
-    if (
-      storage &&
-      input.avatarDataUrl !== undefined &&
-      isStoredAvatarUrl(currentUser.avatar_data_url) &&
-      currentUser.avatar_data_url !== user.avatar_data_url &&
-      !isStoredAvatarUrl(user.avatar_data_url)
-    ) {
-      await removeAvatar(storage, userId);
-    }
-
-    const roles = await getUserRoles(userId);
-    return { ...user, roles };
+    return performUpdate();
   }
 
   async function sendPhoneVerificationOtp(
@@ -707,21 +742,23 @@ export function createAuthService({
       );
     }
 
-    const avatarDataUrl = await storeAvatarBuffer(
-      storage,
-      userId,
-      data,
-      contentType,
-    );
-    const user = await userRepository.updateUserProfile(database, userId, {
-      avatarDataUrl,
-    });
-    if (!user) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
-    }
+    return withAvatarLock(userId, async () => {
+      const avatarDataUrl = await storeAvatarBuffer(
+        storage,
+        userId,
+        data,
+        contentType,
+      );
+      const user = await userRepository.updateUserProfile(database, userId, {
+        avatarDataUrl,
+      });
+      if (!user) {
+        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+      }
 
-    const roles = await getUserRoles(userId);
-    return { ...user, roles };
+      const roles = await getUserRoles(userId);
+      return { ...user, roles };
+    });
   }
 
   return {

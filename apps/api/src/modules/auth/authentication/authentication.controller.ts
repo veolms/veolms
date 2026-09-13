@@ -8,7 +8,11 @@ import {
   normalizePhoneIdentifier,
   resolveIdentifier,
 } from "../shared/auth.utils.ts";
-import { AVATAR_CONTENT_TYPES } from "../../avatars/index.ts";
+import {
+  AVATAR_CONTENT_TYPES,
+  AVATAR_UPLOAD_MAX_BYTES,
+  detectImageContentType,
+} from "../../avatars/index.ts";
 import { AppError } from "../../../lib/errors.ts";
 import type {
   LoginRequest,
@@ -169,7 +173,7 @@ export function createAuthController(context: AuthContext) {
     const user = request.user!;
 
     const file = await request.file();
-    if (!file || !AVATAR_CONTENT_TYPES.has(file.mimetype)) {
+    if (!file) {
       throw new AppError(
         400,
         "INVALID_AVATAR_FILE",
@@ -178,10 +182,19 @@ export function createAuthController(context: AuthContext) {
     }
 
     const buffer = await file.toBuffer();
+    const contentType = detectImageContentType(buffer);
+    if (!contentType || !AVATAR_CONTENT_TYPES.has(contentType)) {
+      throw new AppError(
+        400,
+        "INVALID_AVATAR_FILE",
+        "Choose a JPEG, PNG, WebP, or GIF image.",
+      );
+    }
+
     const updated = await authService.uploadAvatarPhoto(
       user.id,
       buffer,
-      file.mimetype,
+      contentType,
     );
 
     return {

@@ -4,6 +4,7 @@ export {
   AVATAR_URL_PREFIX,
   avatarKey,
   avatarPublicUrl,
+  detectImageContentType,
   isStoredAvatarUrl,
   removeAvatar,
   storeAvatarBuffer,
