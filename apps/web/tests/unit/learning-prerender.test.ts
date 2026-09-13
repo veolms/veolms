@@ -18,9 +18,9 @@ describe("learning page prerender paths", () => {
       PRERENDERED_LEARNING_COURSE_SLUGS.length * (firstSectionLectureCount + 1),
     );
     expect(paths).toContain("/learn/backend-nodejs");
-    expect(paths).toContain("/learn/backend-nodejs/career-opportunities");
+    expect(paths).toContain("/learn/backend-nodejs/lecture-5");
     expect(paths).not.toContain(
-      "/learn/backend-nodejs/understanding-your-users",
+      "/learn/backend-nodejs/lecture-6",
     );
     expect(new Set(paths).size).toBe(paths.length);
   });

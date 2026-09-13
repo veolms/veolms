@@ -455,15 +455,13 @@ export const lessonIdBySlug = new Map<string, number>(
 );
 
 export function getLessonSlug(lessonId: number): string {
-  if (lessonSlugById.has(lessonId)) return lessonSlugById.get(lessonId)!;
-  if (
+  const normalizedId =
     Number.isInteger(lessonId) &&
     lessonId > 0 &&
     lessonId <= CURRICULUM_LECTURE_COUNT_MAX
-  ) {
-    return `lecture-${lessonId}`;
-  }
-  return lessonSlugById.get(1)!;
+      ? lessonId
+      : 1;
+  return `lecture-${normalizedId}`;
 }
 
 export function resolveLessonIdentifier(

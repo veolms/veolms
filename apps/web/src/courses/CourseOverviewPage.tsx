@@ -37,6 +37,7 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
@@ -182,6 +183,8 @@ interface CurriculumSectionProps {
   index: number;
   isOpen: boolean;
   onToggle: () => void;
+  onSelectLesson?: (lessonNumber: number) => void;
+  isReadOnlyPreview?: boolean;
 }
 
 function parseDurationLabel(label: string): number {
@@ -195,6 +198,8 @@ function CurriculumSectionItem({
   index,
   isOpen,
   onToggle,
+  onSelectLesson,
+  isReadOnlyPreview = false,
 }: CurriculumSectionProps) {
   const panelId = `cov-section-panel-${section.id}`;
   const buttonId = `cov-section-toggle-${section.id}`;
@@ -261,13 +266,28 @@ function CurriculumSectionItem({
                 ([number, title, duration, status, isPreview, contentType]) => {
                   const isDoc = contentType === "document";
                   return (
-                    <div
-                      className="group/lesson flex items-center gap-3 min-h-11.5 px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                    <button
+                      type="button"
+                      className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
+                        isReadOnlyPreview
+                          ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                      }`}
                       key={number}
+                      disabled={isReadOnlyPreview}
+                      onClick={() => {
+                        if (isReadOnlyPreview) return;
+                        onSelectLesson?.(number);
+                      }}
+                      aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
                     >
                       {/* Content type icon */}
                       <span
-                        className="inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 group-hover/lesson:text-(--accent)"
+                        className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+                          isReadOnlyPreview
+                            ? ""
+                            : "group-hover/lesson:text-(--accent)"
+                        }`}
                         aria-hidden="true"
                       >
                         {isDoc ? (
@@ -319,7 +339,7 @@ function CurriculumSectionItem({
                           <Circle size={16} className="text-(--muted)" />
                         </span>
                       ) : null}
-                    </div>
+                    </button>
                   );
                 },
               )
@@ -1113,6 +1133,8 @@ interface CourseCurriculumCardProps {
   onToggleSection: (index: number) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onSelectLesson?: (lessonNumber: number) => void;
+  isReadOnlyPreview?: boolean;
 }
 
 function CourseCurriculumCard({
@@ -1122,6 +1144,8 @@ function CourseCurriculumCard({
   onToggleSection,
   onExpandAll,
   onCollapseAll,
+  onSelectLesson,
+  isReadOnlyPreview = false,
 }: CourseCurriculumCardProps) {
   const allSectionsExpanded =
     courseSections.length > 0 && openSections.size === courseSections.length;
@@ -1178,6 +1202,8 @@ function CourseCurriculumCard({
               index={index}
               isOpen={openSections.has(index)}
               onToggle={() => onToggleSection(index)}
+              onSelectLesson={onSelectLesson}
+              isReadOnlyPreview={isReadOnlyPreview}
             />
           ))}
         </div>
@@ -1192,6 +1218,7 @@ export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
+  onSelectLesson?: (lessonNumber: number) => void;
   role?: CourseRole;
   isCreator?: boolean;
   // API Preview Data
@@ -1280,6 +1307,7 @@ export function adaptCourseOverviewResponse(
     creatorId: c.creatorId ?? overview.creator?.id ?? null,
   };
 
+  let sequentialLessonIndex = 1;
   const adaptedSections: CourseSection[] = (overview.sections || [])
     .slice()
     .sort((a, b) => a.position - b.position)
@@ -1290,16 +1318,19 @@ export function adaptCourseOverviewResponse(
       lessons: (sec.lessons || [])
         .slice()
         .sort((a, b) => a.position - b.position)
-        .map((les, lesIdx) => [
-          lesIdx + 1,
-          les.title || `Lesson ${lesIdx + 1}`,
-          les.durationSeconds && les.durationSeconds > 0
-            ? formatDuration(les.durationSeconds)
-            : "",
-          "todo" as const,
-          les.isPreview,
-          les.contentType ?? "video",
-        ]),
+        .map((les) => {
+          const lessonNumber = sequentialLessonIndex++;
+          return [
+            lessonNumber,
+            les.title || `Lesson ${lessonNumber}`,
+            les.durationSeconds && les.durationSeconds > 0
+              ? formatDuration(les.durationSeconds)
+              : "",
+            "todo" as const,
+            les.isPreview,
+            les.contentType ?? "video",
+          ];
+        }),
     }));
 
   const finalPerks: string[] = Array.isArray(overview.includes)
@@ -1402,6 +1433,7 @@ export function adaptPreviewDataToOverview(
     creatorId: c.creatorId ?? null,
   };
 
+  let sequentialLessonIndex = 1;
   const adaptedSections: CourseSection[] = (previewData.sections || [])
     .slice()
     .sort((a, b) => a.position - b.position)
@@ -1412,16 +1444,19 @@ export function adaptPreviewDataToOverview(
       lessons: (sec.lessons || [])
         .slice()
         .sort((a, b) => a.position - b.position)
-        .map((les, lesIdx) => [
-          lesIdx + 1,
-          les.title || `Lesson ${lesIdx + 1}`,
-          les.durationSeconds && les.durationSeconds > 0
-            ? formatDuration(les.durationSeconds)
-            : "",
-          "todo" as const,
-          les.isPreview,
-          les.contentType ?? "video",
-        ]),
+        .map((les) => {
+          const lessonNumber = sequentialLessonIndex++;
+          return [
+            lessonNumber,
+            les.title || `Lesson ${lessonNumber}`,
+            les.durationSeconds && les.durationSeconds > 0
+              ? formatDuration(les.durationSeconds)
+              : "",
+            "todo" as const,
+            les.isPreview,
+            les.contentType ?? "video",
+          ];
+        }),
     }));
 
   const finalPerks: string[] = Array.isArray(previewData.includes)
@@ -1659,6 +1694,7 @@ function CourseOverviewContent({
   adaptedFromPreview,
   onNavigateCourses,
   onNavigatePage,
+  onSelectLesson,
   customCourse,
   customInstructor,
   customDescription,
@@ -1673,6 +1709,20 @@ function CourseOverviewContent({
   isReadOnlyPreview = false,
   isCreator = false,
 }: CourseOverviewContentProps) {
+  const handleSelectLesson = (lessonNumber: number) => {
+    if (isReadOnlyPreview) return;
+    onSelectLesson?.(lessonNumber);
+    if (!onNavigatePage) return;
+    const courseRouteKey = getCourseRouteKey(course);
+    const returnPath = `/courses/${encodeURIComponent(courseRouteKey)}/overview`;
+    const targetUrl = getCoursePlayerPath(
+      courseRouteKey,
+      "courses",
+      lessonNumber,
+      returnPath,
+    );
+    onNavigatePage(targetUrl);
+  };
   const locationHash =
     typeof window === "undefined" ? "" : window.location.hash;
 
@@ -1841,6 +1891,8 @@ function CourseOverviewContent({
         onToggleSection={toggleSection}
         onExpandAll={expandAllSections}
         onCollapseAll={collapseAllSections}
+        onSelectLesson={handleSelectLesson}
+        isReadOnlyPreview={isReadOnlyPreview}
       />
     </div>
   );

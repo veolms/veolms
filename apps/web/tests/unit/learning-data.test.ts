@@ -162,8 +162,8 @@ describe("learning course content", () => {
   });
 
   it("assigns stable unique lecture slugs and resolves legacy lecture IDs", () => {
-    expect(getLessonSlug(3)).toBe("the-design-mindset");
-    expect(getLessonSlug(13)).toBe("the-design-mindset-13");
+    expect(getLessonSlug(3)).toBe("lecture-3");
+    expect(getLessonSlug(13)).toBe("lecture-13");
     expect(new Set(lessonSlugById.values()).size).toBe(lessonSequence.length);
     expect(lessonIdBySlug.get("the-design-mindset")).toBe(3);
     expect(resolveLessonIdentifier("the-design-mindset")).toBe(3);

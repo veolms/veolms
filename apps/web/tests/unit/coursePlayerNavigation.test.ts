@@ -22,6 +22,10 @@ import {
   postPendingCourseCommentDraft,
   upsertCoursePlayerSessionFromRoute,
 } from "../../src/learning/coursePlayerNavigation";
+import {
+  getLessonSlug,
+  resolveLessonIdentifier,
+} from "../../src/learning/courseContent";
 
 const getSearch = (path: string) =>
   new URL(path, "https://procodrr.local").search;
@@ -62,13 +66,13 @@ describe("course player navigation", () => {
 
   it("builds backward-compatible learning URLs and decorates exact launch sources", () => {
     expect(getCoursePlayerLaunchPath("typescript/course", "/courses", 1)).toBe(
-      "/learn/typescript%2Fcourse/the-beginning-of-a-design-journey?from=courses",
+      "/learn/typescript%2Fcourse/lecture-1?from=courses",
     );
     expect(getCoursePlayerLaunchPath("course-one", "/", 2)).toBe(
-      "/learn/course-one/what-is-ui-ux-design?from=home",
+      "/learn/course-one/lecture-2?from=home",
     );
     expect(getCoursePlayerLaunchPath("course-one", "/home", 2)).toBe(
-      "/learn/course-one/what-is-ui-ux-design?from=home&returnTo=%2Fhome",
+      "/learn/course-one/lecture-2?from=home&returnTo=%2Fhome",
     );
     expect(
       getCoursePlayerLaunchPath(
@@ -77,7 +81,7 @@ describe("course player navigation", () => {
         3,
       ),
     ).toBe(
-      "/learn/course-one/the-design-mindset?from=courses&returnTo=%2Fcourses%2Fcourse-one%2Foverview%3Ftab%3Dcurriculum%23lecture-3",
+      "/learn/course-one/lecture-3?from=courses&returnTo=%2Fcourses%2Fcourse-one%2Foverview%3Ftab%3Dcurriculum%23lecture-3",
     );
 
     expect(getCoursePlayerOrigin("?from=home")).toBe("home");
@@ -121,7 +125,7 @@ describe("course player navigation", () => {
 
     expect(
       getCoursePlayerLaunchPath("course-one", "https://example.com/steal", 1),
-    ).toBe("/learn/course-one/the-beginning-of-a-design-journey?from=courses");
+    ).toBe("/learn/course-one/lecture-1?from=courses");
     expect(getCoursePlayerParentPath("home")).toBe("/");
     expect(getCoursePlayerBackLabel("/courses/course-one/overview")).toBe(
       "Return to Course Overview",
@@ -423,7 +427,7 @@ describe("course player navigation", () => {
           courseId: "typescript-course",
           lessonId: 3,
           origin: "courses",
-          path: "/learn/typescript-course/the-design-mindset?from=courses",
+          path: "/learn/typescript-course/lecture-3?from=courses",
           returnPath: "/courses",
           updatedAt: 42,
         },
@@ -544,5 +548,95 @@ describe("course player navigation", () => {
     const discardDraft = getPendingCourseCommentDraft(session!);
     discardPendingCourseCommentDraft(discardDraft!);
     expect(sessionStorage.getItem(draftKey)).toBeNull();
+  });
+
+  describe("canonical Learning Space lesson navigation", () => {
+    it("generates canonical lecture-N slugs for all lesson numbers", () => {
+      expect(getLessonSlug(1)).toBe("lecture-1");
+      expect(getLessonSlug(2)).toBe("lecture-2");
+      expect(getLessonSlug(3)).toBe("lecture-3");
+      expect(getLessonSlug(10)).toBe("lecture-10");
+      expect(getLessonSlug(100)).toBe("lecture-100");
+    });
+
+    it("resolves both canonical and legacy mock slugs for backward compatibility", () => {
+      expect(resolveLessonIdentifier("lecture-1")).toBe(1);
+      expect(resolveLessonIdentifier("lecture-2")).toBe(2);
+      expect(resolveLessonIdentifier("lesson-3")).toBe(3);
+      expect(resolveLessonIdentifier("4")).toBe(4);
+      // Legacy slugs remain resolvable:
+      expect(resolveLessonIdentifier("the-beginning-of-a-design-journey")).toBe(1);
+      expect(resolveLessonIdentifier("what-is-ui-ux-design")).toBe(2);
+      expect(resolveLessonIdentifier("the-design-mindset")).toBe(3);
+      // Unrecognized slugs return null:
+      expect(resolveLessonIdentifier("invalid-slug")).toBeNull();
+      expect(resolveLessonIdentifier("unknown-lecture")).toBeNull();
+    });
+
+    it("uses authoritative explicit lecture-N without falling back to localStorage", () => {
+      localStorage.setItem("veolms-last-lesson-the-ultimate-no", "5");
+
+      // Simulating routes/learning.tsx lessonId resolution logic:
+      const lectureSlug = "lecture-2";
+      const hasExplicitLectureSlug = lectureSlug !== undefined;
+      const resolvedExplicitLessonId = hasExplicitLectureSlug
+        ? resolveLessonIdentifier(lectureSlug)
+        : null;
+      const lessonId = hasExplicitLectureSlug
+        ? (resolvedExplicitLessonId ?? 1)
+        : getStoredCourseLessonId("the-ultimate-no");
+
+      expect(lessonId).toBe(2);
+    });
+
+    it("falls back to stored lesson only when lectureSlug is missing", () => {
+      localStorage.setItem("veolms-last-lesson-the-ultimate-no", "5");
+
+      const lectureSlug = undefined;
+      const hasExplicitLectureSlug = lectureSlug !== undefined;
+      const resolvedExplicitLessonId = hasExplicitLectureSlug
+        ? resolveLessonIdentifier(lectureSlug)
+        : null;
+      const lessonId = hasExplicitLectureSlug
+        ? (resolvedExplicitLessonId ?? 1)
+        : getStoredCourseLessonId("the-ultimate-no");
+
+      expect(lessonId).toBe(5);
+
+      const path = upsertCoursePlayerSessionFromRoute("the-ultimate-no", "?from=courses", lessonId);
+      expect(path).toBe("/learn/the-ultimate-no/lecture-5?from=courses");
+    });
+
+    it("does not use stored lesson when an explicit invalid slug is passed, canonicalizing to lecture-1", () => {
+      localStorage.setItem("veolms-last-lesson-the-ultimate-no", "5");
+
+      const lectureSlug = "invalid-value";
+      const hasExplicitLectureSlug = lectureSlug !== undefined;
+      const resolvedExplicitLessonId = hasExplicitLectureSlug
+        ? resolveLessonIdentifier(lectureSlug)
+        : null;
+      const lessonId = hasExplicitLectureSlug
+        ? (resolvedExplicitLessonId ?? 1)
+        : getStoredCourseLessonId("the-ultimate-no");
+
+      // Must NOT be 5 (stored lesson). Must fall back safely to 1.
+      expect(lessonId).toBe(1);
+
+      const path = upsertCoursePlayerSessionFromRoute("the-ultimate-no", "?from=courses", lessonId);
+      expect(path).toBe("/learn/the-ultimate-no/lecture-1?from=courses");
+    });
+
+    it("generates canonical lecture-N paths for sidebar navigation preserving from/returnTo", () => {
+      const returnPath = "/courses/the-ultimate-no/overview";
+      const lesson1Path = getCoursePlayerPath("the-ultimate-no", "courses", 1, returnPath);
+      expect(lesson1Path).toBe(
+        "/learn/the-ultimate-no/lecture-1?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview",
+      );
+
+      const lesson2Path = getCoursePlayerPath("the-ultimate-no", "courses", 2, returnPath);
+      expect(lesson2Path).toBe(
+        "/learn/the-ultimate-no/lecture-2?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview",
+      );
+    });
   });
 });
