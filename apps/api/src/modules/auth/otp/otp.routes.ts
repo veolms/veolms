@@ -20,6 +20,16 @@ const otpRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/otp/send",
     {
+      // Unauthenticated, so the per-identifier checks in otp.service.ts are
+      // not enough on their own — an attacker can rotate identifiers from a
+      // single IP to bypass them. This caps sends per IP regardless of which
+      // identifier is being targeted.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "sendOtp",
         tags: ["Auth"],

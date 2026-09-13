@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - development
+    paths:
+      - "apps/web/**"
+      - "packages/contracts/**"
+      - "packages/database/**"
+      - "packages/config/**"
+      - "packages/storage/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-development-ui.yml"
   workflow_dispatch:
 
 permissions:

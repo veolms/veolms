@@ -8,6 +8,12 @@ import {
   normalizePhoneIdentifier,
   resolveIdentifier,
 } from "../shared/auth.utils.ts";
+import {
+  AVATAR_CONTENT_TYPES,
+  AVATAR_UPLOAD_MAX_BYTES,
+  detectImageContentType,
+} from "../../avatars/index.ts";
+import { AppError } from "../../../lib/errors.ts";
 import type {
   LoginRequest,
   ProfileUpdateRequest,
@@ -163,6 +169,64 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
+  async function uploadAvatar(request: FastifyRequest) {
+    const user = request.user!;
+
+    const file = await request.file();
+    if (!file) {
+      throw new AppError(
+        400,
+        "INVALID_AVATAR_FILE",
+        "Choose a JPEG, PNG, WebP, or GIF image.",
+      );
+    }
+
+    const buffer = await file.toBuffer();
+    const contentType = detectImageContentType(buffer);
+    if (!contentType || !AVATAR_CONTENT_TYPES.has(contentType)) {
+      throw new AppError(
+        400,
+        "INVALID_AVATAR_FILE",
+        "Choose a JPEG, PNG, WebP, or GIF image.",
+      );
+    }
+
+    const updated = await authService.uploadAvatarPhoto(
+      user.id,
+      buffer,
+      contentType,
+    );
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      avatarDataUrl: updated.avatar_data_url,
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
   async function deactivateAccount(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -179,6 +243,7 @@ export function createAuthController(context: AuthContext) {
     logout,
     me,
     updateProfile,
+    uploadAvatar,
     deactivateAccount,
   };
 }
