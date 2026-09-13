@@ -528,11 +528,23 @@ export function createMediaService({
       course_creator_id: string | null;
       pricing_type: string | null;
       is_preview: boolean;
+      is_published?: boolean;
     },
     user?: PlaybackUser,
   ): Promise<void> {
+    const isOwner = Boolean(user && context.course_creator_id === user.id);
+    const isAdmin = Boolean(
+      user?.roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+    );
+
+    if (isOwner || isAdmin) return;
+
     if (context.course_status !== "published") {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    if (context.is_published === false) {
+      throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
     // Preview lessons and explicitly free courses are intentionally public.
@@ -545,10 +557,6 @@ export function createMediaService({
         "Authentication is required to play this lesson.",
       );
     }
-
-    const isOwner = context.course_creator_id === user.id;
-    const isAdmin = user.roles?.includes(ADMIN_ROLE) ?? false;
-    if (isOwner || isAdmin) return;
 
     const hasAccess = await accessService.hasActiveAccess(
       database,
@@ -609,10 +617,43 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        courseIdOrSlug,
+      );
+    const course = await (isUuid
+      ? database
+          .selectFrom("courses")
+          .select(["id", "creator_id", "status"])
+          .where("id", "=", courseIdOrSlug)
+          .where("deleted_at", "is", null)
+          .executeTakeFirst()
+      : database
+          .selectFrom("courses")
+          .select(["id", "creator_id", "status"])
+          .where("slug", "=", courseIdOrSlug)
+          .where("deleted_at", "is", null)
+          .executeTakeFirst());
+
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    const isOwner = Boolean(user && user.id === course.creator_id);
+    const isAdmin = Boolean(
+      user?.roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+    );
+    const canManageCourse = isOwner || isAdmin;
+
+    if (course.status !== "published" && !canManageCourse) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
+    }
+
     const context = await mediaRepo.findPlaybackLessonContext(
       database,
-      courseIdOrSlug,
+      course.id,
       lessonNumber,
+      { includeUnpublished: canManageCourse },
     );
     if (!context) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
@@ -680,7 +721,9 @@ export function createMediaService({
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
       isManifest: /\.m3u8$/i.test(hlsPath),
-      isPublic: context.is_preview || context.pricing_type === "free",
+      isPublic:
+        context.course_status === "published" &&
+        (context.is_preview || context.pricing_type === "free"),
     };
   }
 
