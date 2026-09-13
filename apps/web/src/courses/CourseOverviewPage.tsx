@@ -176,6 +176,15 @@ export interface CourseOverviewPricingProps {
   discount?: string;
 }
 
+export function isFreeCoursePricing(
+  pricing?: CourseOverviewPricingProps | null,
+): boolean {
+  if (!pricing || !pricing.price) return true;
+  const p = pricing.price.trim().toLowerCase();
+  if (p === "free" || p === "0") return true;
+  return /^(?:[$₹€£]\s*0+(?:\.0+)?|0+(?:\.0+)?)$/.test(p);
+}
+
 // ─── sub-components ──────────────────────────────────────────────────────────
 
 interface CurriculumSectionProps {
@@ -185,6 +194,7 @@ interface CurriculumSectionProps {
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
   isReadOnlyPreview?: boolean;
+  isPaidCourse?: boolean;
 }
 
 function parseDurationLabel(label: string): number {
@@ -200,6 +210,7 @@ function CurriculumSectionItem({
   onToggle,
   onSelectLesson,
   isReadOnlyPreview = false,
+  isPaidCourse = false,
 }: CurriculumSectionProps) {
   const panelId = `cov-section-panel-${section.id}`;
   const buttonId = `cov-section-toggle-${section.id}`;
@@ -309,15 +320,15 @@ function CurriculumSectionItem({
                         </span>
                       ) : null}
 
-                      {/* Free preview badge */}
-                      {isPreview && (
+                      {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
+                      {isPaidCourse && isPreview ? (
                         <span
                           className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
                           aria-label="Free preview"
                         >
                           Free
                         </span>
-                      )}
+                      ) : null}
 
                       {/* Progress status */}
                       {status === "done" ? (
@@ -435,12 +446,7 @@ function CourseHeroSection({
 
   const isPreview = Boolean(isReadOnlyPreview);
   const isCreatorNormal = Boolean(isCreator && !isPreview);
-  const isFree =
-    !pricing?.price ||
-    pricing.price.trim().toLowerCase() === "free" ||
-    pricing.price.trim() === "0" ||
-    pricing.price.trim() === "$0" ||
-    pricing.price.trim() === "₹0";
+  const isFree = isFreeCoursePricing(pricing);
 
   const handleApplyCoupon = async () => {
     const code = couponCodeInput.trim().toUpperCase();
@@ -1135,6 +1141,7 @@ interface CourseCurriculumCardProps {
   onCollapseAll: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
   isReadOnlyPreview?: boolean;
+  isPaidCourse?: boolean;
 }
 
 function CourseCurriculumCard({
@@ -1146,6 +1153,7 @@ function CourseCurriculumCard({
   onCollapseAll,
   onSelectLesson,
   isReadOnlyPreview = false,
+  isPaidCourse = false,
 }: CourseCurriculumCardProps) {
   const allSectionsExpanded =
     courseSections.length > 0 && openSections.size === courseSections.length;
@@ -1204,6 +1212,7 @@ function CourseCurriculumCard({
               onToggle={() => onToggleSection(index)}
               onSelectLesson={onSelectLesson}
               isReadOnlyPreview={isReadOnlyPreview}
+              isPaidCourse={isPaidCourse}
             />
           ))}
         </div>
@@ -1221,6 +1230,7 @@ export interface CourseOverviewPageProps {
   onSelectLesson?: (lessonNumber: number) => void;
   role?: CourseRole;
   isCreator?: boolean;
+  isPaidCourse?: boolean;
   // API Preview Data
   previewData?: CourseEditorDataResponse;
   categories?: Category[];
@@ -1708,6 +1718,7 @@ function CourseOverviewContent({
   customTrailerMediaId,
   isReadOnlyPreview = false,
   isCreator = false,
+  isPaidCourse: propIsPaidCourse,
 }: CourseOverviewContentProps) {
   const handleSelectLesson = (lessonNumber: number) => {
     if (isReadOnlyPreview) return;
@@ -1771,7 +1782,14 @@ function CourseOverviewContent({
   const courseSections = adaptedFromPreview?.sections ?? customSections ?? [];
   const activeDescription =
     adaptedFromPreview?.description ?? customDescription ?? course.description;
-  const activePricing = adaptedFromPreview?.pricing ?? customPricing;
+  const activePricing =
+    adaptedFromPreview?.pricing ??
+    customPricing ??
+    (course.pricing ? { price: course.pricing.price } : undefined);
+  const isPaidCourse =
+    propIsPaidCourse !== undefined
+      ? propIsPaidCourse
+      : !isFreeCoursePricing(activePricing);
 
   const inclusions: string[] | undefined = adaptedFromPreview
     ? adaptedFromPreview.inclusions
@@ -1893,6 +1911,7 @@ function CourseOverviewContent({
         onCollapseAll={collapseAllSections}
         onSelectLesson={handleSelectLesson}
         isReadOnlyPreview={isReadOnlyPreview}
+        isPaidCourse={isPaidCourse}
       />
     </div>
   );

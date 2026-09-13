@@ -242,10 +242,13 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
         screen.getByRole("heading", { name: "Generic Constraints" }),
       ).toBeInTheDocument();
 
-      // Should display empty description notice, not the mock "UI and UX work together..."
+      // Loaded lesson with no description should render no Description card and not fall back to mock text
       expect(
-        screen.getByText("No description provided for this lesson."),
-      ).toBeInTheDocument();
+        screen.queryByText("No description provided for this lesson."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Description"),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByText(/UI and UX work together/i),
       ).not.toBeInTheDocument();
@@ -411,13 +414,16 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
         </QueryClientProvider>,
       );
 
-      // Must NEVER show mock demo text
+      // Must NEVER show mock demo text or empty description fallback, and Description card should be absent
       expect(
         screen.queryByText(/UI and UX work together/i),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByText("No description provided for this lesson."),
-      ).toBeInTheDocument();
+        screen.queryByText("No description provided for this lesson."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Description"),
+      ).not.toBeInTheDocument();
     });
   });
 });
