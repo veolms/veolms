@@ -59,15 +59,42 @@ type PublicThumbnailVariant = {
   height: number;
 };
 
+const FALLBACK_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
+
+function resolveFallbackThumbnailVariants(
+  services: AppServices,
+  thumbnailMediaId?: string | null,
+): PublicThumbnailVariant[] {
+  if (!thumbnailMediaId) return [];
+
+  return FALLBACK_THUMBNAIL_WIDTHS.flatMap((width) => {
+    const url = services.storage.getPublicObjectUrl(
+      `thumbnails/${thumbnailMediaId}/processed/${width}.webp`,
+    );
+    return url ? [{ url, width, height: Math.round((width * 9) / 16) }] : [];
+  });
+}
+
 function resolvePublicThumbnailUrls(
   services: AppServices,
   metadata: unknown,
+  thumbnailMediaId?: string | null,
 ): {
   thumbnailUrl: string | null;
   thumbnailSrcSet: PublicThumbnailVariant[];
 } {
+  const fallbackUrl = thumbnailMediaId
+    ? services.storage.getPublicObjectUrl(
+        `thumbnails/${thumbnailMediaId}/processed/full.webp`,
+      )
+    : null;
+  const fallbackVariants = resolveFallbackThumbnailVariants(
+    services,
+    thumbnailMediaId,
+  );
+
   if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
-    return { thumbnailUrl: null, thumbnailSrcSet: [] };
+    return { thumbnailUrl: fallbackUrl, thumbnailSrcSet: fallbackVariants };
   }
 
   const record = metadata as Record<string, unknown>;
@@ -79,7 +106,7 @@ function resolvePublicThumbnailUrls(
       : null;
   const thumbnailUrl = fullKey
     ? services.storage.getPublicObjectUrl(fullKey)
-    : null;
+    : fallbackUrl;
   const variants = Array.isArray(record.variants)
     ? record.variants.flatMap((variant): PublicThumbnailVariant[] => {
         if (typeof variant !== "object" || variant === null || Array.isArray(variant)) {
@@ -100,7 +127,7 @@ function resolvePublicThumbnailUrls(
 
   return {
     thumbnailUrl,
-    thumbnailSrcSet: variants,
+    thumbnailSrcSet: variants.length > 0 ? variants : fallbackVariants,
   };
 }
 import {
@@ -181,6 +208,7 @@ export function createCourseService({
       const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
         services,
         row.thumbnail_metadata,
+        row.thumbnail_media_id,
       );
 
       const instructorName =
