@@ -699,9 +699,7 @@ export function LearningWorkspace({
       : undefined;
   const courseThumbnail = useMemo(() => {
     if (courseOverview) {
-      return courseOverview.course.thumbnailMediaId
-        ? `/api/v1/media/${courseOverview.course.thumbnailMediaId}`
-        : undefined;
+      return courseOverview.course.thumbnailUrl || undefined;
     }
     if (isCourseOverviewError) {
       return undefined;

@@ -11,6 +11,10 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
+import {
+  getCourseThumbnailCdnSrcSet,
+  getCourseThumbnailCdnUrl,
+} from "./courseMedia";
 
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "0h 0m";
@@ -110,6 +114,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
+    thumbnailSrcSet: summary.thumbnailSrcSet,
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,
@@ -122,9 +127,10 @@ export function adaptCourseSummaryToCatalogueCourse(
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
-  const thumbnail = apiCourse.thumbnailMediaId
-    ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
-    : "";
+  const thumbnail =
+    apiCourse.thumbnailUrl ||
+    getCourseThumbnailCdnUrl(apiCourse.thumbnailMediaId) ||
+    "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
@@ -151,6 +157,9 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
     thumbnail,
+    thumbnailSrcSet:
+      apiCourse.thumbnailSrcSet ||
+      getCourseThumbnailCdnSrcSet(apiCourse.thumbnailMediaId),
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,

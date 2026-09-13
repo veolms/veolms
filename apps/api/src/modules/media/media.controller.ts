@@ -191,6 +191,13 @@ export function createMediaController({ service }: { service: MediaService }) {
     return reply.send(result.stream);
   }
 
+  async function getImageVariantStream(request: FastifyRequest<{ Params: { mediaId: string; width: number } }>, reply: FastifyReply) {
+    const result = await service.getImageVariantStream(request.params.mediaId, Number(request.params.width), request.user?.id, request.user?.roles);
+    reply.header("Content-Type", result.contentType).header("Cache-Control", "public, max-age=31536000, immutable");
+    if (result.contentLength !== undefined) reply.header("Content-Length", result.contentLength);
+    return reply.send(result.stream);
+  }
+
   return {
     presignMediaUpload,
     confirmMediaUpload,
@@ -201,6 +208,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     cancelVideoJob,
     streamVideoJobProgress,
     getMediaAssetStream,
+    getImageVariantStream,
   };
 }
 

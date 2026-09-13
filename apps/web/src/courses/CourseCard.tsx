@@ -41,6 +41,13 @@ const studentStatusStyles = {
   completed: "course-tag--completed",
 } as const;
 
+// Keep the image slot declaration aligned with CourseCatalogue's grid:
+// one column below 560px, two columns from 560px, three from 1280px, and
+// four from 1536px. Avoid `auto` here because eager images cannot use the
+// auto-size shortcut consistently across browsers.
+const courseThumbnailSizes =
+  "(min-width: 1536px) 23vw, (min-width: 1280px) 31vw, (min-width: 560px) 47vw, 100vw";
+
 const getStudentStatus = (course: Course) => {
   if (!course.enrolled) return "not-enrolled" as const;
   const progress = course.progress ?? 0;
@@ -199,6 +206,8 @@ export function CourseCard({
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
+            srcSet={course.thumbnailSrcSet?.map((variant) => `${variant.url} ${variant.width}w`).join(", ")}
+            sizes={courseThumbnailSizes}
             alt={course.title}
             className="h-full w-full object-cover"
             width={960}

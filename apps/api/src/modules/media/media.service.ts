@@ -15,6 +15,7 @@ import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
+import { enqueueImageJob } from "@veolms/database";
 
 export interface MediaServiceOptions {
   database: Kysely<Database>;
@@ -79,7 +80,9 @@ export function createMediaService({
     const ext = payload.filename.includes(".")
       ? payload.filename.split(".").pop()
       : "";
-    const storageKey = `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
+    const storageKey = payload.type === "image"
+      ? `thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
+      : `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
 
     const uploadUrl = await services.storage.getPresignedPutUrl(
       storageKey,
@@ -159,6 +162,13 @@ export function createMediaService({
     }
 
     await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
+
+    if (media.type === "image") {
+      const jobId = crypto.randomUUID();
+      await enqueueImageJob(database, { id: jobId, media_id: mediaId });
+      await mediaRepo.updateMediaAssetStatus(database, mediaId, "processing");
+      return { status: "processing", jobId };
+    }
 
     let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
@@ -760,7 +770,10 @@ export function createMediaService({
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const file = await services.storage.getObject(media.storage_key);
+    const fullKey = media.type === "image" && media.status === "ready" && typeof media.metadata === "object" && media.metadata !== null && "full" in media.metadata && typeof media.metadata.full === "object" && media.metadata.full !== null && "key" in media.metadata.full && typeof media.metadata.full.key === "string"
+      ? media.metadata.full.key
+      : media.storage_key;
+    const file = await services.storage.getObject(fullKey);
     if (!file) {
       throw new AppError(
         404,
@@ -771,13 +784,27 @@ export function createMediaService({
     return {
       stream: file.body,
       contentType:
-        media.mime_type || file.contentType || "application/octet-stream",
+        fullKey === media.storage_key ? media.mime_type || file.contentType || "application/octet-stream" : "image/webp",
       contentLength:
         file.contentLength ??
         (media.size_bytes ? Number(media.size_bytes) : undefined),
       filename: media.original_filename,
       isPublic,
     };
+  }
+
+  async function getImageVariantStream(mediaId: string, width: number, requestingUserId?: string, userRoles?: readonly string[]) {
+    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    if (!media || media.type !== "image") throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(database, mediaId);
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    const variants = typeof media.metadata === "object" && media.metadata !== null && "variants" in media.metadata && Array.isArray(media.metadata.variants) ? media.metadata.variants : [];
+    const variant = variants.find((item) => typeof item === "object" && item !== null && "width" in item && item.width === width && "key" in item && typeof item.key === "string");
+    if (!variant || typeof variant !== "object" || !("key" in variant) || typeof variant.key !== "string") throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
+    const file = await services.storage.getObject(variant.key);
+    if (!file) throw new AppError(404, "FILE_NOT_FOUND", "Image variant not found in storage.");
+    return { stream: file.body, contentType: "image/webp", contentLength: file.contentLength };
   }
 
   return {
@@ -792,6 +819,7 @@ export function createMediaService({
     getPlaybackBootstrap,
     getHlsStream,
     getMediaStream,
+    getImageVariantStream,
   };
 }
 

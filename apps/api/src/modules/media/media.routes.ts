@@ -180,6 +180,15 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.get(
+    "/media/:mediaId/variants/:width",
+    {
+      schema: { params: z.object({ mediaId: z.uuid(), width: z.coerce.number().int().positive() }) },
+      preHandler: [authMiddleware.authenticate],
+    },
+    controller.getImageVariantStream,
+  );
+
+  app.get(
     "/media/:mediaId",
     {
       schema: {
