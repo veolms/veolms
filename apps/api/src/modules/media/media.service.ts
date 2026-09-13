@@ -588,30 +588,24 @@ export function createMediaService({
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the manifest request itself remains the authoritative final check.
-    const { media, outputPrefix } = await getReadyPlaybackOutput(
-      context.content_media_id,
-      { verifyManifest: false },
-    );
-    const publicManifestUrl = services.storage.getPublicObjectUrl(
-      `${outputPrefix}/master.m3u8`,
-    );
-    const isPublicPlayback =
-      Boolean(publicManifestUrl) &&
-      (context.is_preview || context.pricing_type === "free");
+    const { media } = await getReadyPlaybackOutput(context.content_media_id, {
+      verifyManifest: false,
+    });
+    // TEMP: free/preview lessons also route through the protected /api/v1
+    // stream instead of the public CDN URL, until the CDN branch is
+    // revisited. See media.service.ts history for the public-CDN path.
     return {
       version: 1,
       courseSlug: context.course_slug,
       lessonId: context.lesson_id,
       mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
-      manifestUrl:
-        (isPublicPlayback ? publicManifestUrl : null) ??
-        `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
+      manifestUrl: `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
       ...(media.duration_seconds !== null &&
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
         : {}),
       title: context.lesson_title,
-      source: isPublicPlayback ? "public-cdn" : "paid-bootstrap-api",
+      source: "paid-bootstrap-api",
     };
   }
 

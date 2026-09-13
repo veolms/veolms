@@ -871,10 +871,17 @@ export function createJobManager(options: {
           storage ??
           new S3StorageService({
             bucket,
-            region: process.env.AWS_REGION || "us-east-1",
+            region:
+              process.env.S3_REGION || process.env.AWS_REGION || "us-east-1",
             endpoint:
-              process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT,
-            forcePathStyle: Boolean(process.env.AWS_ENDPOINT_URL),
+              process.env.S3_ENDPOINT ||
+              process.env.AWS_ENDPOINT_URL ||
+              process.env.LOCALSTACK_ENDPOINT,
+            accessKeyId: process.env.S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+            forcePathStyle:
+              process.env.S3_FORCE_PATH_STYLE === "true" ||
+              Boolean(process.env.AWS_ENDPOINT_URL),
           });
 
         try {

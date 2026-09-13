@@ -156,6 +156,21 @@ function buildWorkerEnvironment(options: {
     ...(databaseUrl
       ? { DATABASE_URL: databaseUrl }
       : {}),
+    ...(process.env.STORAGE_PROVIDER
+      ? { STORAGE_PROVIDER: process.env.STORAGE_PROVIDER }
+      : {}),
+    ...(process.env.S3_BUCKET ? { S3_BUCKET: process.env.S3_BUCKET } : {}),
+    ...(process.env.S3_ENDPOINT ? { S3_ENDPOINT: process.env.S3_ENDPOINT } : {}),
+    ...(process.env.S3_REGION ? { S3_REGION: process.env.S3_REGION } : {}),
+    ...(process.env.S3_ACCESS_KEY_ID
+      ? { S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID }
+      : {}),
+    ...(process.env.S3_SECRET_ACCESS_KEY
+      ? { S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY }
+      : {}),
+    ...(process.env.S3_FORCE_PATH_STYLE
+      ? { S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE }
+      : {}),
     WORKER_ID: options.workerId,
     PROVIDER: "docker",
     LOCAL_STORAGE_ROOT: "/app/s3-bucket",
