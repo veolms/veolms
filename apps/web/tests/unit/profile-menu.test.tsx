@@ -60,7 +60,7 @@ describe("ProfileMenu", () => {
     expect(
       screen.getByRole("menuitemradio", { name: "Student" }),
     ).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Creator" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Instructor" }));
     expect(onRoleChange).toHaveBeenCalledWith("creator");
     expect(onClose).toHaveBeenCalled();
   });
