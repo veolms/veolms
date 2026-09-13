@@ -295,6 +295,7 @@ export async function processProbeAndForward(
             endpoint: s3Endpoint,
             forcePathStyle:
               process.env["S3_FORCE_PATH_STYLE"] === "true" ||
+              Boolean(process.env["S3_ENDPOINT"]) ||
               Boolean(process.env["AWS_ENDPOINT_URL"]),
           }
         : {}),
@@ -359,6 +360,9 @@ export async function processProbeAndForward(
   let probed = false;
 
   if (videoKey) {
+    const cleanVideoKey = videoKey
+      .replace(/^[/\\]+/, "")
+      .replace(/^s3-bucket[/\\]/, "");
     try {
       let videoUrl = videoKey;
       if (!/^https?:\/\//i.test(videoKey)) {
@@ -367,10 +371,10 @@ export async function processProbeAndForward(
             "S3_BUCKET is required to presign videoKey for ffprobe metadata extraction.",
           );
         }
-        videoUrl = await resolveS3VideoUrl(s3, s3Bucket, videoKey);
+        videoUrl = await resolveS3VideoUrl(s3, s3Bucket, cleanVideoKey);
       }
 
-      console.info(`[probe-lambda] Probing video metadata for: ${videoKey}`);
+      console.info(`[probe-lambda] Probing video metadata for: ${cleanVideoKey}`);
       videoMetadata = await probeVideoMetadata(videoUrl, {
         ffprobePath: customConfig.ffprobePath,
       });
@@ -399,11 +403,14 @@ export async function processProbeAndForward(
     videoKey &&
     !/^https?:\/\//i.test(videoKey)
   ) {
+    const cleanVideoKey = videoKey
+      .replace(/^[/\\]+/, "")
+      .replace(/^s3-bucket[/\\]/, "");
     try {
       const head = await s3.send(
         new HeadObjectCommand({
           Bucket: s3Bucket,
-          Key: videoKey,
+          Key: cleanVideoKey,
         }),
       );
       if (head.ContentLength) {

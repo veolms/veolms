@@ -11,4 +11,5 @@ export * from "./learning-space.ts";
 export * from "./learning-progress.ts";
 export * from "./health.ts";
 export * from "./error.ts";
+export * from "./stream.ts";
 export * from "./fleet.ts";

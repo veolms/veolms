@@ -146,6 +146,18 @@ export async function findLessonById(
     .executeTakeFirst();
 }
 
+export async function findLessonByIdOnly(
+  database: Kysely<Database>,
+  lessonId: string,
+) {
+  return await database
+    .selectFrom("course_lessons")
+    .selectAll()
+    .where("id", "=", lessonId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
 export async function updateLesson(
   database: Kysely<Database>,
   lessonId: string,
