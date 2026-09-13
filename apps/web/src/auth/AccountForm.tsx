@@ -121,7 +121,7 @@ export function AccountForm({
                   <img
                     alt=""
                     height={44}
-                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, "preview")}
+                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, name.trim())}
                     width={44}
                   />
                 ) : (
