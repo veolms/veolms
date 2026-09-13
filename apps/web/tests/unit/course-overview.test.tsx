@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import {
   CourseOverviewSkeleton,
   adaptCourseOverviewResponse,
   adaptPreviewDataToOverview,
+  isFreeCoursePricing,
 } from "../../src/courses/CourseOverviewPage";
 import type { Course } from "../../src/courses/catalogue";
 import type { CourseSection } from "../../src/learning/courseContent";
@@ -788,6 +789,195 @@ describe("CourseOverviewPage", () => {
 
       fireEvent.click(lesson1Button);
       expect(onNavigatePage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Curriculum Lesson Free Preview Badge Presentation", () => {
+    const testSectionsWithPreview: CourseSection[] = [
+      {
+        id: 1,
+        title: "Curriculum Section",
+        progress: "0/2",
+        lessons: [
+          [1, "Lesson 1: Free Preview Marked", "5m", "todo", true, "video"],
+          [2, "Lesson 2: Standard Lesson", "10m", "todo", false, "video"],
+        ],
+      },
+    ];
+
+    it("evaluates isFreeCoursePricing helper accurately for free and paid strings", () => {
+      expect(isFreeCoursePricing(undefined)).toBe(true);
+      expect(isFreeCoursePricing(null)).toBe(true);
+      expect(isFreeCoursePricing({ price: "Free" })).toBe(true);
+      expect(isFreeCoursePricing({ price: "free" })).toBe(true);
+      expect(isFreeCoursePricing({ price: "0" })).toBe(true);
+      expect(isFreeCoursePricing({ price: "$0" })).toBe(true);
+      expect(isFreeCoursePricing({ price: "₹0" })).toBe(true);
+      expect(isFreeCoursePricing({ price: "₹1,999" })).toBe(false);
+      expect(isFreeCoursePricing({ price: "$49.99" })).toBe(false);
+    });
+
+    it("FREE COURSE: hides Free preview badge on preview lessons and normal lessons", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={testSectionsWithPreview}
+          customPricing={{ price: "Free" }}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Free Preview Marked/i,
+      });
+      const lesson2Button = screen.getByRole("button", {
+        name: /Lesson 2: Standard Lesson/i,
+      });
+
+      // Neither lesson should show a Free badge
+      expect(within(lesson1Button).queryByLabelText("Free preview")).toBeNull();
+      expect(within(lesson1Button).queryByText("Free")).toBeNull();
+      expect(within(lesson2Button).queryByLabelText("Free preview")).toBeNull();
+      expect(within(lesson2Button).queryByText("Free")).toBeNull();
+    });
+
+    it("PAID COURSE: shows Free preview badge ONLY on preview lessons, NOT on normal lessons", () => {
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={testSectionsWithPreview}
+          customPricing={{ price: "₹1,999", originalPrice: "₹2,999" }}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Free Preview Marked/i,
+      });
+      const lesson2Button = screen.getByRole("button", {
+        name: /Lesson 2: Standard Lesson/i,
+      });
+
+      // Preview lesson on paid course MUST show Free preview badge
+      const previewBadge = within(lesson1Button).getByLabelText("Free preview");
+      expect(previewBadge).toBeVisible();
+      expect(previewBadge).toHaveTextContent("Free");
+
+      // Normal lesson on paid course must NOT show Free badge
+      expect(within(lesson2Button).queryByLabelText("Free preview")).toBeNull();
+      expect(within(lesson2Button).queryByText("Free")).toBeNull();
+    });
+
+    it("CREATOR PREVIEW: applies the same rule for previewData (free vs paid)", () => {
+      const freePreviewData: CourseEditorDataResponse = {
+        course: {
+          id: "preview-free-id",
+          slug: "free-preview-course",
+          title: "Free Preview Course",
+          shortDescription: "Short",
+          description: "Full description",
+          difficulty: "beginner",
+          status: "draft",
+          creatorId: "user-1",
+          categoryId: "cat-1",
+          thumbnailMediaId: null,
+          trailerMediaId: null,
+          instructorAlias: "Instructor",
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          publishedAt: null,
+        },
+        sections: [
+          {
+            id: "ps-1",
+            courseId: "preview-free-id",
+            title: "Section 1",
+            position: 1,
+            lessons: [
+              {
+                id: "pl-1",
+                courseId: "preview-free-id",
+                sectionId: "ps-1",
+                title: "Lesson A (Preview)",
+                position: 1,
+                contentType: "video",
+                isPreview: true,
+                isPublished: true,
+              },
+            ],
+          },
+        ],
+        pricing: {
+          id: "pr-1",
+          courseId: "preview-free-id",
+          pricingType: "free",
+          price: 0,
+          currency: "INR",
+        },
+        settings: null,
+        includes: [],
+      };
+
+      const { unmount } = renderWithClient(
+        <CourseOverviewPage
+          previewData={freePreviewData}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      const freeRow = screen.getByRole("button", {
+        name: /Lesson A \(Preview\)/i,
+      });
+      expect(within(freeRow).queryByLabelText("Free preview")).toBeNull();
+
+      unmount();
+
+      // Now paid previewData
+      const paidPreviewData: CourseEditorDataResponse = {
+        ...freePreviewData,
+        pricing: {
+          id: "pr-2",
+          courseId: "preview-free-id",
+          pricingType: "paid",
+          price: 1999,
+          currency: "INR",
+        },
+      };
+
+      renderWithClient(
+        <CourseOverviewPage
+          previewData={paidPreviewData}
+          isReadOnlyPreview={true}
+        />,
+      );
+
+      const paidRow = screen.getByRole("button", {
+        name: /Lesson A \(Preview\)/i,
+      });
+      const badge = within(paidRow).getByLabelText("Free preview");
+      expect(badge).toBeVisible();
+      expect(badge).toHaveTextContent("Free");
+    });
+
+    it("preserves curriculum navigation on paid courses with free-preview badges", () => {
+      const onNavigatePage = vi.fn();
+      renderWithClient(
+        <CourseOverviewPage
+          customCourse={sampleCourse}
+          customSections={testSectionsWithPreview}
+          customPricing={{ price: "₹1,999" }}
+          onNavigatePage={onNavigatePage}
+        />,
+      );
+
+      const lesson1Button = screen.getByRole("button", {
+        name: /Lesson 1: Free Preview Marked/i,
+      });
+      fireEvent.click(lesson1Button);
+
+      expect(onNavigatePage).toHaveBeenCalledTimes(1);
+      expect(onNavigatePage).toHaveBeenCalledWith(
+        `/learn/test-course/lecture-1?from=courses&returnTo=%2Fcourses%2Ftest-course%2Foverview`,
+      );
     });
   });
 });

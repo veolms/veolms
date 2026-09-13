@@ -1401,7 +1401,10 @@ describe("Discussion", () => {
 
     try {
       const { container } = render(
-        <Discussion persistenceKey="lesson-description-placement-test" />,
+        <Discussion
+          persistenceKey="lesson-description-placement-test"
+          lessonDescription="Overview of key concepts."
+        />,
       );
       const discussion = container.querySelector(".learning-discussion");
       const description = discussion?.querySelector("[data-lesson-description]");
@@ -1443,7 +1446,10 @@ describe("Discussion", () => {
 
     try {
       const { container } = render(
-        <Discussion persistenceKey="lesson-description-mobile-placement-test" />,
+        <Discussion
+          persistenceKey="lesson-description-mobile-placement-test"
+          lessonDescription="Overview of key concepts."
+        />,
       );
       const discussion = container.querySelector(".learning-discussion");
       const description = discussion?.querySelector("[data-lesson-description]");
@@ -2136,12 +2142,103 @@ See the [Nielsen Norman Group glossary](https://www.nngroup.com/articles/definit
 `;
 
 describe("LessonDescription", () => {
-  it("renders empty fallback without mock text when rendered with no description prop", () => {
-    render(<LessonDescription />);
+  it("1. lesson loading -> Description skeleton remains visible", () => {
+    const { unmount } = render(<LessonDescription isLoading={true} />);
+    expect(screen.getByText("Loading lesson description...")).toBeVisible();
+    expect(screen.getByText("Description")).toBeInTheDocument();
     expect(
-      screen.getByText("No description provided for this lesson."),
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    // Even if description is null or empty, skeleton remains visible while loading
+    render(<LessonDescription isLoading={true} description={null} />);
+    expect(screen.getByText("Loading lesson description...")).toBeVisible();
+    expect(screen.getByText("Description")).toBeInTheDocument();
+  });
+
+  it("2. loaded lesson with meaningful description -> Description card renders normally", () => {
+    render(
+      <LessonDescription
+        isLoading={false}
+        description="This lesson introduces Node.js fundamentals."
+      />,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Show more of the lesson description",
+      }),
     ).toBeVisible();
-    expect(screen.queryByText(/UI and UX work together/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Description")).toBeInTheDocument();
+    expect(
+      screen.getByText(/This lesson introduces Node.js fundamentals\./i),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("Loading lesson description..."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("3. loaded lesson with undefined/null description -> Description card is absent", () => {
+    const { container, unmount } = render(
+      <LessonDescription isLoading={false} description={undefined} />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(
+      screen.queryByText("Description"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    const { container: containerNull } = render(
+      <LessonDescription isLoading={false} description={null} />,
+    );
+    expect(containerNull.firstChild).toBeNull();
+    expect(
+      screen.queryByText("Description"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("4. loaded lesson with empty-string description -> Description card is absent", () => {
+    const { container } = render(
+      <LessonDescription isLoading={false} description="" />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(
+      screen.queryByText("Description"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("5. loaded lesson with whitespace-only description -> Description card is absent", () => {
+    const { container, unmount } = render(
+      <LessonDescription isLoading={false} description="   " />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(
+      screen.queryByText("Description"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    const { container: containerEscaped } = render(
+      <LessonDescription isLoading={false} description={"   \n\t  "} />,
+    );
+    expect(containerEscaped.firstChild).toBeNull();
+    expect(
+      screen.queryByText("Description"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this lesson."),
+    ).not.toBeInTheDocument();
   });
 
   it("clamps the example markdown behind more until expanded", () => {
@@ -2342,18 +2439,5 @@ Here is custom content for this lesson:
     expect(screen.getByText("Point A")).toBeVisible();
     expect(screen.getByText("Point B")).toBeVisible();
     expect(description.querySelector("blockquote")).toBeTruthy();
-  });
-
-  it("renders empty fallback when custom description is empty string or null", () => {
-    const { unmount } = render(<LessonDescription description="" />);
-    expect(
-      screen.getByText("No description provided for this lesson."),
-    ).toBeVisible();
-    unmount();
-
-    render(<LessonDescription description={null} />);
-    expect(
-      screen.getByText("No description provided for this lesson."),
-    ).toBeVisible();
   });
 });
