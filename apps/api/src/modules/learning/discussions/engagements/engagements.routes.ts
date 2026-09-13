@@ -13,6 +13,7 @@ import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
+import { createNotesRepository } from "../notes/notes.repository.ts";
 import { createRepliesRepository } from "../replies/replies.repository.ts";
 import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createEngagementsController } from "./engagements.controller.ts";
@@ -23,10 +24,12 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
+  const notesRepo = createNotesRepository();
   const engagementsRepo = createEngagementsRepository();
   const service = createEngagementsService({
     threadsRepo,
     repliesRepo,
+    notesRepo,
     engagementsRepo,
   });
   const controller = createEngagementsController({
@@ -34,7 +37,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     service,
   });
 
-  // 1. POST /interactions/likes - Toggle like on thread or reply
+  // 1. POST /interactions/likes - Toggle like on thread, reply, or note
   app.post(
     "/interactions/likes",
     {
@@ -42,12 +45,12 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "toggleLearningLike",
         tags: ["Learning Engagements"],
-        summary: "Toggle like on a discussion thread or reply",
+        summary: "Toggle like on a discussion thread, reply, or learning note",
         body: toggleLikeRequestSchema,
         response: {
           200: jsonResponse("Like state toggled", toggleLikeResponseSchema),
           401: errorResponse("Unauthorized"),
-          404: errorResponse("Discussion thread or reply not found"),
+          404: errorResponse("Target resource not found"),
         },
       },
     },

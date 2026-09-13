@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
-import type { Database, DatabaseExecutor } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  MentionSourceType,
+} from "@veolms/database";
 import type { EngagementTargetType } from "@veolms/contracts";
 import type { Kysely, Transaction } from "kysely";
 import {
@@ -82,7 +86,7 @@ export async function syncMentionsAndNotify(
   db: Transaction<Database>,
   outbox: OutboxService,
   input: {
-    sourceType: EngagementTargetType;
+    sourceType: MentionSourceType;
     sourceId: string;
     actorUserId: string;
     content: string;

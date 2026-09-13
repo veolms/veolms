@@ -4,7 +4,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 
-import { httpError } from "../lib/errors.ts";
+import { AppError, httpError } from "../lib/errors.ts";
 
 /**
  * Makes every failure share the documented `ErrorResponse` shape, so the error
@@ -60,20 +60,39 @@ export function registerErrorHandler(app: FastifyInstance): void {
         );
     }
 
-    const statusCode = error.statusCode ?? 500;
-    // A plain `Error` thrown from a handler carries no `code`, despite the type.
-    const code = error.code || "INTERNAL_SERVER_ERROR";
+    if (error instanceof AppError) {
+      if (error.statusCode >= 500) {
+        request.log.error({ err: error }, "Unhandled error");
 
-    if (statusCode >= 500) {
-      request.log.error({ err: error }, "Unhandled error");
+        return reply
+          .code(error.statusCode)
+          .send(
+            httpError(
+              error.statusCode,
+              error.code,
+              "An unexpected error occurred.",
+            ),
+          );
+      }
 
       return reply
-        .code(statusCode)
-        .send(httpError(statusCode, code, "An unexpected error occurred."));
+        .code(error.statusCode)
+        .send(
+          httpError(error.statusCode, error.code, error.message, error.issues),
+        );
     }
 
+    request.log.error({ err: error }, "Unhandled error");
+
     return reply
-      .code(statusCode)
-      .send(httpError(statusCode, code, error.message));
+      .code(500)
+      .send(
+        httpError(
+          500,
+          "INTERNAL_SERVER_ERROR",
+          "An unexpected error occurred.",
+        ),
+      );
   });
 }
+
