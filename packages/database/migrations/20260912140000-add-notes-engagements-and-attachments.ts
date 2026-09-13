@@ -35,20 +35,24 @@ export async function down(database: Kysely<unknown>): Promise<void> {
   `.execute(database);
 
   await sql`
+    DELETE FROM learning_likes WHERE target_type = 'note';
     ALTER TABLE learning_likes DROP CONSTRAINT IF EXISTS learning_likes_target_type_check;
     ALTER TABLE learning_likes ADD CONSTRAINT learning_likes_target_type_check
       CHECK (target_type IN ('thread', 'reply'));
   `.execute(database);
 
   await sql`
+    DELETE FROM learning_attachments WHERE target_type = 'note';
     ALTER TABLE learning_attachments DROP CONSTRAINT IF EXISTS learning_attachments_target_type_check;
     ALTER TABLE learning_attachments ADD CONSTRAINT learning_attachments_target_type_check
       CHECK (target_type IS NULL OR target_type IN ('thread', 'reply'));
   `.execute(database);
 
   await sql`
+    DELETE FROM learning_reports WHERE target_type = 'note';
     ALTER TABLE learning_reports DROP CONSTRAINT IF EXISTS learning_reports_target_type_check;
     ALTER TABLE learning_reports ADD CONSTRAINT learning_reports_target_type_check
       CHECK (target_type IN ('thread', 'reply'));
   `.execute(database);
 }
+

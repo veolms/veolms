@@ -4,6 +4,7 @@ export type DiscussionEntryKind = "comment" | "question" | "note";
 export type DiscussionVisibility = "public" | "unlisted" | "private";
 export type InteractionStatus = "active" | "hidden" | "deleted";
 export type EngagementTargetType = "thread" | "reply" | "note";
+export type MentionSourceType = "thread" | "reply";
 export type AttachmentKind = "image" | "screenshot" | "code" | "document";
 export type AttachmentTargetType = "thread" | "reply" | "note";
 export type AttachmentStatus = "uploading" | "ready" | "rejected" | "deleted";
@@ -79,7 +80,7 @@ export interface LearningFollowTable {
 
 export interface LearningMentionTable {
   id: string;
-  source_type: EngagementTargetType;
+  source_type: MentionSourceType;
   source_id: string;
   mentioned_user_id: string;
   created_at: Generated<Date>;

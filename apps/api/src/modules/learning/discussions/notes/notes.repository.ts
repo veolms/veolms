@@ -349,7 +349,7 @@ export function createNotesRepository(): NotesRepository {
       await db
         .updateTable("learning_notes")
         .set((eb) => ({
-          likes_count: sql`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
+          likes_count: sql<number>`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
           updated_at: new Date(),
         }))
         .where("id", "=", noteId)

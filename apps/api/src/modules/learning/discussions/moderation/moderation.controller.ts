@@ -142,7 +142,11 @@ export function createModerationController({
       const user = request.user!;
       const body = request.body;
 
-      const result = await service.createReport(database, user.id, body);
+      const result = await service.createReport(
+        database,
+        discussionActor(user),
+        body,
+      );
       reply.status(201).send(result);
     },
 
