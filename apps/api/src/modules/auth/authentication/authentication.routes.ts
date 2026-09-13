@@ -1,3 +1,4 @@
+import fastifyMultipart from "@fastify/multipart";
 import {
   authConfigResponseSchema,
   authMessageResponseSchema,
@@ -12,10 +13,15 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { AVATAR_UPLOAD_MAX_BYTES } from "../../avatars/index.ts";
 import { createAuthContext } from "../shared/auth.context.ts";
 import { createAuthController } from "./authentication.controller.ts";
 
 const authenticationRoutes: RoutePlugin = async (app, options) => {
+  await app.register(fastifyMultipart, {
+    limits: { files: 1, fileSize: AVATAR_UPLOAD_MAX_BYTES },
+  });
+
   const context = createAuthContext(options);
   const controller = createAuthController(context);
   const { middleware } = context;
@@ -136,6 +142,29 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       preHandler: [middleware.authenticate, middleware.requireAuthenticated],
     },
     controller.updateProfile,
+  );
+
+  app.post(
+    "/auth/me/avatar",
+    {
+      schema: {
+        operationId: "uploadCurrentUserAvatar",
+        tags: ["Auth"],
+        summary: "Upload a profile photo",
+        description:
+          "Stores an image as the authenticated user's avatar in object storage.",
+        consumes: ["multipart/form-data"],
+        response: {
+          200: jsonResponse("Avatar updated.", userProfileResponseSchema),
+          400: errorResponse("A supported image file is required."),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("User account was not found."),
+          413: errorResponse("The file is too large."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.uploadAvatar,
   );
 
   app.delete(

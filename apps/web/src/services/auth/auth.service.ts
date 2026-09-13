@@ -144,6 +144,12 @@ export const authService = {
     return api.patch<UserProfileResponse>("/auth/me", payload);
   },
 
+  uploadAvatarPhoto: (file: File): Promise<UserProfileResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<UserProfileResponse>("/auth/me/avatar", formData);
+  },
+
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
   },

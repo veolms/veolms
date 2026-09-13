@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 
 import type { Database } from "@veolms/database";
 import type { ProfileUpdateRequest } from "@veolms/contracts";
+import { buildDicebearSvgUrl, DEFAULT_AVATAR_STYLE } from "@veolms/contracts";
+import type { S3StorageService } from "@veolms/storage";
 import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
@@ -17,20 +19,36 @@ import * as userRepository from "./authentication.repository.ts";
 import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { normalizePhoneNumber } from "../shared/auth.utils.ts";
+import {
+  isStoredAvatarUrl,
+  removeAvatar,
+  storeAvatarBuffer,
+  storeAvatarFromUrl,
+} from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
   otpService?: OtpService;
   sessionService?: SessionService;
+  /** Omitted by the read-only callers (notification worker, course lookups)
+   * that never create a user or touch an avatar. */
+  storage?: S3StorageService;
 }
 
 export function createAuthService({
   database,
   otpService,
   sessionService,
+  storage,
 }: AuthServiceOptions) {
   const outbox = createOutboxService();
+
+  /** DiceBear needs no fetch at all — it's served straight from DiceBear's
+   * own CDN, so this is just the deterministic default URL for a new user. */
+  function defaultAvatarUrl(seed: string): string {
+    return buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, seed);
+  }
 
   function findUserById(userId: string) {
     return userRepository.findUserById(database, userId);
@@ -197,6 +215,20 @@ export function createAuthService({
 
     if (!user) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    // Moving away from an R2-hosted avatar (e.g. onto a DiceBear pick, or
+    // clearing it) leaves the old object orphaned in storage unless we clean
+    // it up here. A fresh upload/provider photo overwrites the same fixed
+    // key in place, so no cleanup is needed on that path.
+    if (
+      storage &&
+      input.avatarDataUrl !== undefined &&
+      isStoredAvatarUrl(currentUser.avatar_data_url) &&
+      currentUser.avatar_data_url !== user.avatar_data_url &&
+      !isStoredAvatarUrl(user.avatar_data_url)
+    ) {
+      await removeAvatar(storage, userId);
     }
 
     const roles = await getUserRoles(userId);
@@ -589,6 +621,16 @@ export function createAuthService({
    */
   async function createUser(input: CreateUserInput): Promise<string> {
     const userId = crypto.randomUUID();
+    // A provider (Google/GitHub) photo is downloaded into R2 and used as the
+    // avatar; any failure there — or no provider photo at all — falls back to
+    // a deterministic DiceBear default seeded by the display name rather than
+    // the (not-yet-known-to-the-client) user id. That lets the registration
+    // screen preview this exact avatar live as the name is typed, before the
+    // account — and its id — even exist.
+    const avatarDataUrl =
+      (input.avatarSourceUrl && storage
+        ? await storeAvatarFromUrl(storage, userId, input.avatarSourceUrl)
+        : null) ?? defaultAvatarUrl(input.displayName.trim() || userId);
 
     await database.transaction().execute(async (trx) => {
       await sql`select pg_advisory_xact_lock(hashtext('veolms:user-bootstrap'))`.execute(
@@ -606,6 +648,7 @@ export function createAuthService({
         emailVerifiedAt: input.emailVerified ? new Date() : null,
         phoneVerifiedAt: input.phoneVerified ? new Date() : null,
         mfaMandatory: isFirstUser,
+        avatarDataUrl,
       });
 
       if (input.oauth) {
@@ -648,6 +691,39 @@ export function createAuthService({
     return user as SessionUser;
   }
 
+  /** Stores a manually uploaded photo in R2 and persists the served URL,
+   * reusing the same fixed per-user key an OAuth-downloaded photo would use
+   * — so re-uploading just overwrites the previous one in place. */
+  async function uploadAvatarPhoto(
+    userId: string,
+    data: Buffer,
+    contentType: string,
+  ) {
+    if (!storage) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires storage to upload an avatar photo.",
+      );
+    }
+
+    const avatarDataUrl = await storeAvatarBuffer(
+      storage,
+      userId,
+      data,
+      contentType,
+    );
+    const user = await userRepository.updateUserProfile(database, userId, {
+      avatarDataUrl,
+    });
+    if (!user) {
+      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    }
+
+    const roles = await getUserRoles(userId);
+    return { ...user, roles };
+  }
+
   return {
     findUserById,
     findUserByIdForNotification,
@@ -661,6 +737,7 @@ export function createAuthService({
     countUsers,
     usernameExists,
     updateProfile,
+    uploadAvatarPhoto,
     sendPhoneVerificationOtp,
     verifyPhoneNumber,
     sendEmailVerificationOtp,

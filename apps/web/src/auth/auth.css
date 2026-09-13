@@ -636,6 +636,47 @@
   font-weight: 600;
 }
 
+.auth-account-form__identity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-account-form__identity-row .auth-form__input-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.auth-account-form__avatar-circle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--auth-line),
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+  overflow: hidden;
+}
+
+.auth-account-form__avatar-circle img {
+  width: 100%;
+  height: 100%;
+}
+
+.auth-account-form__avatar-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .auth-account-form__label {
   color: var(--text);
   font-size: 0.8rem;

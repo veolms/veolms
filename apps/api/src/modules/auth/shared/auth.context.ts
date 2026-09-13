@@ -59,6 +59,7 @@ export function createAuthContext({
     database,
     otpService,
     sessionService,
+    storage: services.storage,
   });
   const oauthService = createOauthService({ authService, sessionService });
   const mfaService = createMfaService({ database, sessionService });
