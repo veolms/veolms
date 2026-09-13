@@ -1,8 +1,9 @@
 import { readResumePosition } from "./lessonPlayerPersistence";
 import {
-  appendLearningHlsCacheVersion,
+  createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
+  toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 function shouldResumeFromLastPosition(): boolean {
@@ -23,6 +24,7 @@ function shouldResumeFromLastPosition(): boolean {
 export function createLearningHlsPreloadSource(options: {
   manifestUrl: string;
   mediaKey?: string;
+  protectedPlayback?: boolean;
 }) {
   const startTime =
     options.mediaKey && shouldResumeFromLastPosition()
@@ -30,11 +32,15 @@ export function createLearningHlsPreloadSource(options: {
       : 0;
   return {
     id: options.mediaKey,
-    src: options.manifestUrl,
+    src: toAbsoluteLearningMediaUrl(options.manifestUrl),
     type: LEARNING_HLS_MIME_TYPE,
     kind: "hls" as const,
     startTime,
     streaming: { ...LEARNING_HLS_STREAMING },
-    networking: { requestFilter: appendLearningHlsCacheVersion },
+    networking: {
+      requestFilter: createLearningHlsRequestFilter({
+        protectedPlayback: options.protectedPlayback,
+      }),
+    },
   };
 }

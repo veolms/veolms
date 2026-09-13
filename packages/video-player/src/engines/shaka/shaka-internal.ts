@@ -135,6 +135,8 @@ export interface ShakaPlayerLike {
   selectAudioTrack(track: ShakaAudioTrackLike, safeMargin?: number): void;
   getTextTracks(): ShakaTextTrackLike[];
   selectTextTrack(track: ShakaTextTrackLike | null): void;
+  isTextTrackVisible?(): boolean;
+  setTextTrackVisibility?(visible: boolean): void;
   addTextTrackAsync?(
     uri: string,
     language: string,

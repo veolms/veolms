@@ -1,9 +1,14 @@
 import { z } from "zod";
-import { discussionVisibilitySchema } from "./threads.ts";
+import {
+  discussionVisibilitySchema,
+  learningThreadAttachmentSummarySchema,
+} from "./threads.ts";
 
 export const learningNoteSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
+  authorName: z.string().nullable().optional(),
+  authorUsername: z.string().nullable().optional(),
   courseId: z.uuid(),
   courseTitle: z.string().optional(),
   sectionId: z.uuid().optional(),
@@ -20,6 +25,12 @@ export const learningNoteSchema = z.object({
   tags: z.array(z.string().min(1).max(50)).default([]),
   likesCount: z.number().int().nonnegative().default(0).optional(),
   repliesCount: z.number().int().nonnegative().default(0).optional(),
+  isLiked: z.boolean().optional(),
+  isOwn: z.boolean().optional(),
+  attachments: z
+    .array(learningThreadAttachmentSummarySchema)
+    .optional()
+    .default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -33,6 +44,7 @@ export const createLearningNoteRequestSchema = z.object({
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.default("private").optional(),
   tags: z.array(z.string().min(1).max(50)).optional(),
+  attachmentIds: z.array(z.uuid()).max(20).optional(),
 });
 export type CreateLearningNoteRequest = z.infer<
   typeof createLearningNoteRequestSchema
@@ -44,6 +56,7 @@ export const updateLearningNoteRequestSchema = z.object({
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.optional(),
   tags: z.array(z.string().min(1).max(50)).optional(),
+  attachmentIds: z.array(z.uuid()).max(20).optional(),
 });
 export type UpdateLearningNoteRequest = z.infer<
   typeof updateLearningNoteRequestSchema
@@ -53,6 +66,7 @@ export const listLearningNotesQuerySchema = z.object({
   courseId: z.uuid().optional(),
   lessonId: z.uuid().optional(),
   visibility: discussionVisibilitySchema.optional(),
+  mine: z.stringbool().optional(),
   query: z.string().max(200).optional(),
   tag: z.string().max(50).optional(),
   cursor: z.string().max(512).optional(),

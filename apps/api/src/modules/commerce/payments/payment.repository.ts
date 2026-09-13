@@ -143,6 +143,8 @@ export async function updatePayment(
     gateway_order_id?: string;
     gateway_payment_id?: string | null;
     gateway_key_id?: string | null;
+    amount?: number;
+    currency?: string;
     status?: PaymentStatus;
     payment_method?: Json | null;
     error_code?: string | null;

@@ -1,9 +1,10 @@
 import type { ExternalTextTrack, VideoSource } from "@veolms/video-player";
 import type { CourseVideo } from "../courseContent";
 import {
-  appendLearningHlsCacheVersion,
+  createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
+  toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 export {
@@ -31,11 +32,12 @@ export function createLearningLessonVideoSource(options: {
   lessonTitle: string;
   mediaKey: string;
   startTime: number;
+  protectedPlayback?: boolean;
 }): VideoSource {
   const hls = isHlsUrl(options.media.src);
   return {
     id: options.mediaKey,
-    src: options.media.src,
+    src: hls ? toAbsoluteLearningMediaUrl(options.media.src) : options.media.src,
     type: hls ? LEARNING_HLS_MIME_TYPE : "video/mp4",
     kind: hls ? "hls" : "file",
     // The catalog duration can be stale after an asset replacement. Shaka
@@ -48,8 +50,12 @@ export function createLearningLessonVideoSource(options: {
     },
     streaming: hls ? { ...LEARNING_HLS_STREAMING } : undefined,
     networking: hls
-      ? { requestFilter: appendLearningHlsCacheVersion }
+      ? {
+          requestFilter: createLearningHlsRequestFilter({
+            protectedPlayback: options.protectedPlayback,
+          }),
+        }
       : undefined,
-    textTracks: [...LEARNING_LESSON_TEXT_TRACKS],
+    textTracks: undefined,
   };
 }

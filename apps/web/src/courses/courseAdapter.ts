@@ -11,16 +11,25 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
-import { getCourseThumbnail } from "../learning/courseMetadata";
-import typescriptThumbnail from "../assets/course-thumbnails/typescript-960.webp";
 
 export function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return "Self-paced";
+  if (!seconds || seconds <= 0) return "0h 0m";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
   if (hours > 0) return `${hours}h`;
   return `${minutes}m`;
+}
+
+export function resolveCourseDurationSeconds(
+  durationSeconds?: number | null,
+  estimatedDurationMinutes?: number | null,
+): number {
+  if (durationSeconds && durationSeconds > 0) return durationSeconds;
+  if (estimatedDurationMinutes && estimatedDurationMinutes > 0) {
+    return estimatedDurationMinutes * 60;
+  }
+  return 0;
 }
 
 export function formatCoursePricing(
@@ -42,14 +51,14 @@ export function formatCoursePricing(
       maximumFractionDigits: 0,
     }).format(amount);
 
-  const formattedPrice = formatAmount(Number(pricing.price) / 100);
+  const formattedPrice = formatAmount(Number(pricing.price));
 
   if (
     pricing.salePrice !== null &&
     pricing.salePrice !== undefined &&
     pricing.salePrice < pricing.price
   ) {
-    const formattedSalePrice = formatAmount(Number(pricing.salePrice) / 100);
+    const formattedSalePrice = formatAmount(Number(pricing.salePrice));
     const discountPercent = Math.round(
       ((pricing.price - pricing.salePrice) / pricing.price) * 100,
     );
@@ -74,10 +83,6 @@ export function formatCoursePricing(
 export function adaptCourseSummaryToCatalogueCourse(
   summary: CourseSummary,
 ): Course {
-  const fallbackThumbnail = summary.slug
-    ? getCourseThumbnail(summary.slug)
-    : typescriptThumbnail;
-
   const validLevel: CourseLevel =
     summary.difficulty === "advanced" || summary.difficulty === "intermediate"
       ? "Intermediate"
@@ -104,7 +109,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     enrolled: false,
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
-    thumbnail: summary.thumbnailUrl || fallbackThumbnail,
+    thumbnail: summary.thumbnailUrl || "",
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,
@@ -117,9 +122,9 @@ export function adaptCourseSummaryToCatalogueCourse(
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
-  const fallbackThumbnail = apiCourse.slug
-    ? getCourseThumbnail(apiCourse.slug)
-    : typescriptThumbnail;
+  const thumbnail = apiCourse.thumbnailMediaId
+    ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
+    : "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
@@ -145,7 +150,7 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     enrolled: false,
     duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
-    thumbnail: fallbackThumbnail,
+    thumbnail,
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
@@ -160,10 +165,6 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
 export function adaptDeletedCourseToCatalogueCourse(
   deletedCourse: DeletedCourse,
 ): Course {
-  const fallbackThumbnail = deletedCourse.slug
-    ? getCourseThumbnail(deletedCourse.slug)
-    : typescriptThumbnail;
-
   const validStatus: CourseLifecycleStatus =
     deletedCourse.status === "published" ||
     deletedCourse.status === "draft" ||
@@ -182,9 +183,9 @@ export function adaptDeletedCourseToCatalogueCourse(
     lectures: 0,
     progress: null,
     enrolled: false,
-    duration: "Self-paced",
+    duration: "0h 0m",
     students: 0,
-    thumbnail: fallbackThumbnail,
+    thumbnail: "",
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
     purgeAt: deletedCourse.purgeAt,

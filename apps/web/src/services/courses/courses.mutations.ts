@@ -11,12 +11,14 @@ import type {
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
+  CreateLessonResourceRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   RestoreCourseResponse,
+  LessonResource,
   UpdateCourseAccessRuleRequest,
   UpdateCourseBasicsRequest,
   UpdateCourseIncludeRequest,
@@ -133,6 +135,9 @@ export function useCreateSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -158,6 +163,9 @@ export function useUpdateCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -179,6 +187,9 @@ export function useDeleteCourseSection() {
       });
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
       });
     },
   });
@@ -251,6 +262,9 @@ export function useReorderCourseSections() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -277,6 +291,9 @@ export function useCreateLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -302,6 +319,9 @@ export function useUpdateCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -324,10 +344,59 @@ export function useDeleteCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
 export const useDeleteLesson = useDeleteCourseLesson;
+
+export function useCreateLessonResource() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LessonResource,
+    ApiError,
+    {
+      courseId: string;
+      lessonId: string;
+      payload: CreateLessonResourceRequest;
+    }
+  >({
+    mutationFn: ({ courseId, lessonId, payload }) =>
+      coursesService.createLessonResource(courseId, lessonId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
+
+export function useDeleteLessonResource() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: boolean },
+    ApiError,
+    { courseId: string; resourceId: string }
+  >({
+    mutationFn: ({ courseId, resourceId }) =>
+      coursesService.deleteLessonResource(courseId, resourceId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+    },
+  });
+}
 
 export function useReorderSectionLessons() {
   const queryClient = useQueryClient();
@@ -404,6 +473,9 @@ export function useReorderSectionLessons() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.overview(variables.courseId),
+      });
     },
   });
 }
@@ -419,10 +491,17 @@ export function useUpsertAccessRules() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertAccessRules(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            accessRules: data,
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
@@ -441,10 +520,20 @@ export function useUpsertSettings() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertSettings(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            settings: {
+              ...(old.settings || ({} as CourseSettings)),
+              ...variables.payload,
+            },
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
@@ -463,10 +552,17 @@ export function useUpsertPricing() {
   >({
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertPricing(courseId, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.editor(variables.courseId),
-      });
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(variables.courseId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pricing: data,
+          };
+        },
+      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });

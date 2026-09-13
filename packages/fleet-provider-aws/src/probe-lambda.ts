@@ -267,6 +267,17 @@ export async function processProbeAndForward(
     process.env["S3_BUCKET"] ??
     process.env["STORAGE_BUCKET"];
 
+  const s3Endpoint =
+    process.env["S3_ENDPOINT"] ||
+    process.env["AWS_ENDPOINT_URL"] ||
+    process.env["LOCALSTACK_ENDPOINT"];
+  const s3AccessKeyId = process.env["S3_ACCESS_KEY_ID"];
+  const s3SecretAccessKey = process.env["S3_SECRET_ACCESS_KEY"];
+  const s3Credentials =
+    s3AccessKeyId && s3SecretAccessKey
+      ? { accessKeyId: s3AccessKeyId, secretAccessKey: s3SecretAccessKey }
+      : undefined;
+
   const endpoint =
     process.env["AWS_ENDPOINT_URL"] || process.env["LOCALSTACK_ENDPOINT"];
   const lambda =
@@ -278,8 +289,16 @@ export async function processProbeAndForward(
   const s3 =
     customConfig.s3Client ??
     new S3Client({
-      region,
-      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+      region: process.env["S3_REGION"] || region,
+      ...(s3Endpoint
+        ? {
+            endpoint: s3Endpoint,
+            forcePathStyle:
+              process.env["S3_FORCE_PATH_STYLE"] === "true" ||
+              Boolean(process.env["AWS_ENDPOINT_URL"]),
+          }
+        : {}),
+      ...(s3Credentials ? { credentials: s3Credentials } : {}),
     });
 
   if (payload.status === "cancelled") {
