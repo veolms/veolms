@@ -19,7 +19,9 @@ import { MFA_CONFIG } from "../auth/mfa.config";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { validateOtpCode } from "../auth/authFlow";
 import { isPasskeySupported, startPasskeyRegistration } from "../auth/webauthn";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  authKeys,
   useCurrentUser,
   useSetupTotp,
   useEnableTotp,
@@ -172,6 +174,8 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
     void startSetup();
   }
 
+  const queryClient = useQueryClient();
+
   const submitCode = async (codeToVerify: string) => {
     const validationError = validateOtpCode(codeToVerify);
     if (validationError) {
@@ -184,6 +188,8 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
         code: codeToVerify,
         secret,
       });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
       onSuccess(result.backupCodes);
     } catch (err: unknown) {
       const errorObj = err as { message?: string };

@@ -191,14 +191,8 @@ export function useSetupTotp() {
 }
 
 export function useEnableTotp() {
-  const queryClient = useQueryClient();
-
   return useMutation<{ backupCodes: string[] }, ApiError, TotpEnableRequest>({
     mutationFn: (payload) => authService.enableTotp(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
-    },
   });
 }
 

@@ -97,4 +97,25 @@ describe("mfa setup route", () => {
       screen.queryByRole("heading", { name: "Two-factor authentication" }),
     ).not.toBeInTheDocument();
   });
+
+  it("does not prematurely redirect when user becomes verified in background during enrollment", async () => {
+    userState.passkeyEnabled = false;
+    userState.totpEnabled = false;
+    const { rerender } = renderWithAppProviders(<MfaSetupRoute />, ["/mfa-setup"]);
+
+    expect(
+      await screen.findByRole("heading", { name: "Secure your account" }),
+    ).toBeInTheDocument();
+
+    // Simulate query cache update in background
+    userState.totpEnabled = true;
+    userState.mfaVerified = true;
+    rerender(<MfaSetupRoute />);
+
+    // Screen should still be in enrollment flow (not redirected or unmounted)
+    expect(
+      screen.getByRole("heading", { name: "Secure your account" }),
+    ).toBeInTheDocument();
+  });
 });
+

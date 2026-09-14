@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { MFA_CONFIG } from "./mfa.config.ts";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
@@ -7,6 +8,7 @@ import { Icon } from "../icons/Icon.tsx";
 import { AUTH_CARD_HEADING_ID, validateOtpCode } from "./authFlow.ts";
 import { isPasskeySupported, startPasskeyRegistration } from "./webauthn.ts";
 import {
+  authKeys,
   useSetupTotp,
   useEnableTotp,
   usePasskeyRegisterOptions,
@@ -121,6 +123,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [codeError, setCodeError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const setupTotpMutation = useSetupTotp();
   const enableTotpMutation = useEnableTotp();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
@@ -134,6 +137,8 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
       const credential = await startPasskeyRegistration(serverOptions);
       await passkeyVerifyMutation.mutateAsync(credential);
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
       onDone();
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
@@ -191,8 +196,19 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
     }
   };
 
+  const handleBackupCodesContinue = async () => {
+    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+    onDone();
+  };
+
   if (screen === "backupCodes") {
-    return <BackupCodesScreen codes={backupCodes} onContinue={onDone} />;
+    return (
+      <BackupCodesScreen
+        codes={backupCodes}
+        onContinue={handleBackupCodesContinue}
+      />
+    );
   }
 
   if (screen === "passkeyPending") {
@@ -419,33 +435,28 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
         )}
 
         {MFA_CONFIG.ALLOW_TOTP && (
-          <button
-            aria-busy={setupTotpMutation.isPending}
-            className={
-              MFA_CONFIG.ALLOW_PASSKEY && passkeySupported
-                ? "auth-two-factor__alternate"
-                : "auth-form__submit"
-            }
-            disabled={setupTotpMutation.isPending}
-            onClick={handleSetupTotp}
-            type="button"
-          >
-            {MFA_CONFIG.ALLOW_PASSKEY && passkeySupported ? (
-              setupTotpMutation.isPending
-                ? "Loading…"
-                : "Use authenticator app instead"
-            ) : (
-              <>
-                <span className="auth-form__submit-label">
-                  <Icon aria-hidden name="authenticator" size={18} />
-                  {setupTotpMutation.isPending
-                    ? "Loading…"
-                    : "Set up authenticator app"}
-                </span>
-                <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
-              </>
+          <>
+            {MFA_CONFIG.ALLOW_PASSKEY && passkeySupported && (
+              <div className="auth-social__divider" aria-hidden="true">
+                <span>or</span>
+              </div>
             )}
-          </button>
+
+            <button
+              aria-busy={setupTotpMutation.isPending}
+              className="auth-secondary-btn"
+              disabled={setupTotpMutation.isPending}
+              onClick={handleSetupTotp}
+              type="button"
+            >
+              <Icon aria-hidden name="authenticator" size={18} />
+              <span>
+                {setupTotpMutation.isPending
+                  ? "Loading…"
+                  : "Use authenticator app"}
+              </span>
+            </button>
+          </>
         )}
       </div>
     </div>

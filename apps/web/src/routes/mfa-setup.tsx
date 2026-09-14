@@ -10,23 +10,24 @@ export default function MfaSetupRoute() {
   const navigate = useNavigate();
   const { data: user, isLoading } = useCurrentUser();
   const [error, setError] = useState<string | null>(null);
-  const view = resolveMfaSetupView(user);
+  const [initialView, setInitialView] = useState<MfaSetupView | null>(null);
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading || initialView !== null) {
       return;
     }
 
-    if (view === "login") {
-      return;
-    }
+    const resolved = resolveMfaSetupView(user);
+    setInitialView(resolved);
 
-    if (view === "done") {
+    if (resolved === "done") {
       navigate(APP_HOME_PATH, { replace: true });
     }
-  }, [isLoading, navigate, view]);
+  }, [isLoading, initialView, navigate, user]);
 
-  if (isLoading || view === "login" || view === "done") {
+  const view = initialView ?? (isLoading ? null : resolveMfaSetupView(user));
+
+  if (isLoading || view === null || view === "login" || view === "done") {
     return (
       <section aria-label="Checking your account" className="auth-card">
         <p className="auth-mfa-setup__loading" style={{ margin: 0 }}>

@@ -55,6 +55,7 @@ export const iconRegistry = {
   person: { lucide: CircleUserRound, phosphor: UserCircleIcon },
   passkey: { lucide: UserRoundKey, phosphor: KeyIcon },
   authenticator: { lucide: Lock, phosphor: LockIcon },
+  lock: { lucide: Lock, phosphor: LockIcon },
   recommended: { lucide: Star, phosphor: StarIcon },
   shield: { lucide: ShieldCheck, phosphor: ShieldCheckIcon },
   refreshTimer: { lucide: Clock, phosphor: ClockIcon },

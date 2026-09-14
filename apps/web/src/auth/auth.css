@@ -470,6 +470,43 @@
   background: var(--hover);
 }
 
+.auth-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--auth-h-submit, 44px);
+  padding: 0 16px;
+  border: 1px solid var(--auth-line);
+  border-radius: var(--auth-radius);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: none;
+  font: inherit;
+  font-size: clamp(0.84rem, 1.1vw, 0.92rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.auth-secondary-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 25%, var(--auth-line));
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
+}
+
+.auth-secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-secondary-btn > svg {
+  flex: 0 0 auto;
+}
+
 .auth-brand-panel {
   display: grid;
   align-content: center;
