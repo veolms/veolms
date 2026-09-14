@@ -28,6 +28,7 @@ import {
 } from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
+  type DiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
 import type {
@@ -102,9 +103,9 @@ export interface ThreadsService {
 
 export function createThreadsService(
   threadsRepo: ThreadsRepository,
+  courseAccess: DiscussionAccess = createDiscussionAccess(),
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
-  const courseAccess = createDiscussionAccess();
 
   function mapThreadRow(
     row: ThreadRowWithAuthor,
@@ -203,6 +204,15 @@ export function createThreadsService(
         input.courseId,
       );
 
+      const threadKind =
+        input.kind === "qna" ? "question" : input.kind || "comment";
+
+      await courseAccess.assertThreadKindEnabled(
+        db,
+        input.courseId,
+        threadKind,
+      );
+
       // Validate lesson hierarchy
       if (input.lessonId) {
         const lesson = await db
@@ -220,8 +230,6 @@ export function createThreadsService(
         }
       }
 
-      const threadKind =
-        input.kind === "qna" ? "question" : input.kind || "comment";
       await courseAccess.assertNotSuspended(
         db,
         input.userId,

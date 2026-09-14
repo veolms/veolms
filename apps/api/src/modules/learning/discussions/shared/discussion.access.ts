@@ -63,6 +63,19 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     courseId: string,
   ): Promise<void>;
+  assertCommentsEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+  ): Promise<void>;
+  assertQaEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+  ): Promise<void>;
+  assertThreadKindEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+    kind: string,
+  ): Promise<void>;
   assertCanAccessThreadCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -181,7 +194,41 @@ export function createDiscussionAccess(): DiscussionAccess {
     async assertNotesEnabled(db, courseId) {
       const settings = await findSettingsByCourseId(db, courseId);
       if (settings && settings.allow_notes === false) {
-        throw DiscussionErrors.forbidden("Notes are disabled for this course.");
+        throw DiscussionErrors.notesDisabled();
+      }
+    },
+
+    async assertCommentsEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_comments === false) {
+        throw DiscussionErrors.commentsDisabled();
+      }
+    },
+
+    async assertQaEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_qa === false) {
+        throw DiscussionErrors.qaDisabled();
+      }
+    },
+
+    async assertThreadKindEnabled(db, courseId, kind) {
+      const normalized = kind === "qna" ? "question" : kind;
+      if (normalized === "question") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_qa === false) {
+          throw DiscussionErrors.qaDisabled();
+        }
+      } else if (normalized === "comment") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_comments === false) {
+          throw DiscussionErrors.commentsDisabled();
+        }
+      } else if (normalized === "note") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_notes === false) {
+          throw DiscussionErrors.notesDisabled();
+        }
       }
     },
 

@@ -19,6 +19,19 @@ export const DiscussionErrors = {
   ) {
     return httpError(403, "FORBIDDEN", message);
   },
+  commentsDisabled() {
+    return httpError(
+      403,
+      "FORBIDDEN",
+      "Comments are disabled for this course.",
+    );
+  },
+  qaDisabled() {
+    return httpError(403, "FORBIDDEN", "Q&A is disabled for this course.");
+  },
+  notesDisabled() {
+    return httpError(403, "FORBIDDEN", "Notes are disabled for this course.");
+  },
   suspended(reason: string, scope?: string) {
     return httpError(
       403,
