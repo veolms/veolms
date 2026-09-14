@@ -88,6 +88,7 @@ export function LessonResourceManager({
         contentType,
         fileSize: file.size,
         type: "document",
+        visibility: "protected",
       });
 
       await mediaService.uploadFileToPresignedUrl(

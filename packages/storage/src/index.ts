@@ -11,17 +11,36 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { createHmac } from "node:crypto";
 import { createReadStream, createWriteStream, statSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
+function createHmacSignature(secret: string, value: string): string {
+  return createHmac("sha256", secret).update(value, "utf8").digest("base64url");
+}
+
+function normalizeCdnTokenTtlSeconds(value: number | undefined): number {
+  return Math.max(60, Math.min(86_400, Math.floor(value ?? 900)));
+}
+
 export interface StorageOptions extends Partial<S3ClientConfig> {
   bucket: string;
   endpoint?: string;
+  /** Reject object-storage writes whose key is not visibility-prefixed. */
+  requireVisibilityPrefix?: boolean;
   /** Public CDN origin mapped to the storage bucket root, if configured. */
   publicBaseUrl?: string;
+  /** Secret shared with the CDN Worker for short-lived HMAC access tokens. */
+  cdnSigningSecret?: string;
+  /** Lifetime for normal protected-media HMAC tokens issued by this facade. */
+  cdnTokenTtlSeconds?: number;
+  /** Lifetime for protected HLS segment HMAC tokens issued by this facade. */
+  cdnHlsTokenTtlSeconds?: number;
+  /** Prefixes served without a token by the CDN Worker. */
+  cdnPublicFolders?: readonly string[];
   region?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
@@ -41,10 +60,35 @@ export interface StorageUploadItem {
   contentType?: string;
 }
 
+export type StorageVisibility = "public" | "protected";
+
+/**
+ * Returns a normalized key when it starts with the visibility namespace used
+ * by the media bucket. Keeping this check in the storage adapter prevents a
+ * newly added API upload path from accidentally bypassing CDN access rules.
+ */
+export function assertVisibilityPrefixedKey(key: string): string {
+  const normalized = key.replace(/^\/+/, "");
+  if (
+    !normalized.startsWith("public/") &&
+    !normalized.startsWith("protected/")
+  ) {
+    throw new Error(
+      "Storage object keys must start with public/ or protected/.",
+    );
+  }
+  return normalized;
+}
+
 export class S3StorageService {
   private client: S3Client;
   private bucket: string;
   private publicBaseUrl: string | null;
+  private cdnSigningSecret: string | null;
+  private cdnTokenTtlSeconds: number;
+  private cdnHlsTokenTtlSeconds: number;
+  private cdnPublicFolders: readonly string[];
+  private requireVisibilityPrefix: boolean;
   private bucketCorsEnsured: Promise<void> | null = null;
 
   constructor(options: StorageOptions) {
@@ -54,6 +98,24 @@ export class S3StorageService {
     this.bucket = options.bucket;
     this.publicBaseUrl =
       options.publicBaseUrl?.trim().replace(/\/+$/, "") || null;
+    this.cdnSigningSecret = options.cdnSigningSecret?.trim() || null;
+    this.cdnTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
+      options.cdnTokenTtlSeconds,
+    );
+    this.cdnHlsTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
+      options.cdnHlsTokenTtlSeconds,
+    );
+    this.requireVisibilityPrefix = options.requireVisibilityPrefix ?? false;
+    this.cdnPublicFolders = (
+      options.cdnPublicFolders ?? [
+        "public",
+        "thumbnails",
+        "course-hls",
+        "course-videos",
+      ]
+    )
+      .map((folder) => folder.trim().replace(/^\/+|\/+$/g, ""))
+      .filter(Boolean);
 
     if (options.client) {
       this.client = options.client;
@@ -61,6 +123,12 @@ export class S3StorageService {
       const {
         bucket: _bucket,
         client: _client,
+        requireVisibilityPrefix: _requireVisibilityPrefix,
+        publicBaseUrl: _publicBaseUrl,
+        cdnSigningSecret: _cdnSigningSecret,
+        cdnTokenTtlSeconds: _cdnTokenTtlSeconds,
+        cdnHlsTokenTtlSeconds: _cdnHlsTokenTtlSeconds,
+        cdnPublicFolders: _cdnPublicFolders,
         accessKeyId,
         secretAccessKey,
         region = "us-east-1",
@@ -97,6 +165,12 @@ export class S3StorageService {
     return this.bucket;
   }
 
+  private keyForWrite(key: string): string {
+    return this.requireVisibilityPrefix
+      ? assertVisibilityPrefixedKey(key)
+      : key;
+  }
+
   /**
    * Resolves a storage key against the configured public CDN origin. This is
    * intentionally opt-in; callers must never infer a public URL from the
@@ -111,6 +185,50 @@ export class S3StorageService {
       .map((segment) => encodeURIComponent(segment))
       .join("/");
     return `${this.publicBaseUrl}/${encodedKey}`;
+  }
+
+  /** Resolves a storage key against the configured CDN URL. */
+  getCdnObjectUrl(key: string, token?: string): string | null {
+    const url = this.getPublicObjectUrl(key);
+    if (!url) return null;
+    if (!token) return url;
+
+    const hashIndex = url.indexOf("#");
+    const hash = hashIndex === -1 ? "" : url.slice(hashIndex);
+    const withoutHash = hashIndex === -1 ? url : url.slice(0, hashIndex);
+    const separator = withoutHash.includes("?") ? "&" : "?";
+    return `${withoutHash}${separator}veo_token=${encodeURIComponent(token)}${hash}`;
+  }
+
+  /** Returns whether the object is in a configured public prefix. */
+  isCdnPublicKey(key: string): boolean {
+    const normalized = key.replace(/^\/+/, "");
+    return this.cdnPublicFolders.some(
+      (folder) => normalized === folder || normalized.startsWith(`${folder}/`),
+    );
+  }
+
+  /** Creates a Worker-compatible HMAC token scoped to a key or key prefix. */
+  createCdnAccessToken(key: string, expiresAt?: number): string | null {
+    if (!this.cdnSigningSecret) return null;
+    const normalizedKey = key.replace(/^\/+|\/+$/g, "");
+    if (!normalizedKey) return null;
+    const expiry =
+      expiresAt ?? Math.floor(Date.now() / 1000) + this.cdnTokenTtlSeconds;
+    const payload = Buffer.from(
+      JSON.stringify({ v: 1, k: normalizedKey, e: Math.floor(expiry) }),
+      "utf8",
+    ).toString("base64url");
+    const signature = createHmacSignature(this.cdnSigningSecret, payload);
+    return `${payload}.${signature}`;
+  }
+
+  getCdnTokenTtlSeconds(): number {
+    return this.cdnTokenTtlSeconds;
+  }
+
+  getCdnHlsTokenTtlSeconds(): number {
+    return this.cdnHlsTokenTtlSeconds;
   }
 
   /**
@@ -174,12 +292,13 @@ export class S3StorageService {
     localFilePath: string,
     contentType: string,
   ): Promise<void> {
+    const storageKey = this.keyForWrite(key);
     const fileBuffer = await readFile(localFilePath);
 
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: storageKey,
         Body: fileBuffer,
         ContentType: contentType,
         ContentLength: fileBuffer.byteLength,
@@ -250,7 +369,11 @@ export class S3StorageService {
     s3Prefix: string,
     concurrency = 6,
   ): Promise<number> {
-    const cleanPrefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
+    const cleanPrefix = this.requireVisibilityPrefix
+      ? `${this.keyForWrite(s3Prefix).replace(/\/+$/, "")}/`
+      : s3Prefix.endsWith("/")
+        ? s3Prefix
+        : `${s3Prefix}/`;
     const fileList: StorageUploadItem[] = [];
 
     const collectFiles = async (
@@ -330,9 +453,10 @@ export class S3StorageService {
     contentLength?: number,
     expiresIn = 300,
   ): Promise<string> {
+    const storageKey = this.keyForWrite(key);
     const command = new PutObjectCommand({
       Bucket: this.bucket,
-      Key: key,
+      Key: storageKey,
       ContentType: contentType,
       ContentLength: contentLength,
     });
@@ -352,10 +476,11 @@ export class S3StorageService {
     contentType: string,
     contentLength?: number,
   ): Promise<void> {
+    const storageKey = this.keyForWrite(key);
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: storageKey,
         Body: body,
         ContentType: contentType,
         ContentLength: contentLength,

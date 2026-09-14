@@ -449,8 +449,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
 
     const manifestMatches = session.manifestUrl === source.src;
-    const mediaKeyMatches =
-      !session.mediaKey || !source.id || session.mediaKey === source.id;
+    const mediaKeyMatches = Boolean(
+      session.mediaKey && source.id && session.mediaKey === source.id,
+    );
     // The paid bootstrap can resolve after the player source was created. A
     // stable media key is sufficient to adopt that session; its manifest URL
     // may be the protected API HLS path rather than the local fallback URL.

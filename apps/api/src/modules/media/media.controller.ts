@@ -24,7 +24,13 @@ export function createMediaController({ service }: { service: MediaService }) {
       request.log,
       request.user?.roles,
     );
-    return { status: result.status };
+    return {
+      status: result.status,
+      ...(result.deliveryUrl ? { deliveryUrl: result.deliveryUrl } : {}),
+      ...(result.deliveryUrlExpiresAt
+        ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
+        : {}),
+    };
   }
 
   async function getVideoJobProgress(
@@ -54,34 +60,31 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
-  async function streamHlsResource(
+  async function getPlaybackToken(
     request: FastifyRequest<{
-      Params: { mediaId: string; "*": string };
+      Params: { idOrSlug: string; lessonNumber: number };
     }>,
     reply: FastifyReply,
   ) {
     const user = request.user
       ? { id: request.user.id, roles: request.user.roles }
       : undefined;
-    const result = await service.getHlsStream(
-      request.params.mediaId,
-      request.params["*"],
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getPlaybackToken(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
       user,
     );
-    reply.header("Content-Type", result.contentType);
-    if (result.contentLength !== undefined) {
-      reply.header("Content-Length", result.contentLength);
-    }
-    reply.header(
-      "Cache-Control",
-      result.isPublic
-        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
-        : result.isManifest
-          ? "private, no-store"
-          : "private, max-age=86400",
+  }
+
+  async function getMediaDelivery(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return service.getMediaDelivery(
+      request.params.mediaId,
+      request.user?.id,
+      request.user?.roles,
     );
-    reply.header("X-Content-Type-Options", "nosniff");
-    return reply.send(result.stream);
   }
 
   async function retryVideoJob(
@@ -169,6 +172,35 @@ export function createMediaController({ service }: { service: MediaService }) {
     }
     response.end();
   }
+    async function streamHlsResource(
+    request: FastifyRequest<{
+      Params: { mediaId: string; "*": string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    const result = await service.getHlsStream(
+      request.params.mediaId,
+      request.params["*"],
+      user,
+    );
+    reply.header("Content-Type", result.contentType);
+    if (result.contentLength !== undefined) {
+      reply.header("Content-Length", result.contentLength);
+    }
+    reply.header(
+      "Cache-Control",
+      result.isPublic
+        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
+        : result.isManifest
+          ? "private, no-store"
+          : "private, max-age=86400",
+    );
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(result.stream);
+  }
 
   async function getMediaAssetStream(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
@@ -203,12 +235,14 @@ export function createMediaController({ service }: { service: MediaService }) {
     confirmMediaUpload,
     getVideoJobProgress,
     getPlaybackBootstrap,
-    streamHlsResource,
+    getPlaybackToken,
+    getMediaDelivery,
     retryVideoJob,
     cancelVideoJob,
     streamVideoJobProgress,
     getMediaAssetStream,
     getImageVariantStream,
+    streamHlsResource,
   };
 }
 

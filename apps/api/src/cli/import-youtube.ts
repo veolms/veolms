@@ -550,8 +550,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const RATE_LIMIT_PATTERN =
-  /HTTP Error 429|429:|too many requests|rate.?limit/i;
+const RATE_LIMIT_PATTERN = /HTTP Error 429|429:|too many requests|rate.?limit/i;
 
 function isRateLimitedError(text: string): boolean {
   return RATE_LIMIT_PATTERN.test(text);
@@ -571,7 +570,11 @@ const INTER_VIDEO_DELAY_MS =
 const RATE_LIMIT_BACKOFF_MS =
   Number(process.env.VEOLMS_IMPORT_RATE_LIMIT_BACKOFF_MS) || 45_000;
 
-function capAppend(existing: string, addition: string, maxBytes: number): string {
+function capAppend(
+  existing: string,
+  addition: string,
+  maxBytes: number,
+): string {
   const combined = existing + addition;
   return combined.length <= maxBytes
     ? combined
@@ -619,7 +622,12 @@ async function runProcess(
   cmd: string,
   args: string[],
   options?: RunProcessOptions,
-): Promise<{ stdout: string; stderr: string; code: number; timedOut: boolean }> {
+): Promise<{
+  stdout: string;
+  stderr: string;
+  code: number;
+  timedOut: boolean;
+}> {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { shell: false, windowsHide: true });
     activeChildren.add(proc);
@@ -1121,11 +1129,9 @@ async function extractPlaylistMetadata(
     ytCtx,
   );
 
-  const { stdout, stderr, code, timedOut } = await runProcess(
-    ytdlpPath,
-    args,
-    { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-  );
+  const { stdout, stderr, code, timedOut } = await runProcess(ytdlpPath, args, {
+    timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
+  });
 
   if (code !== 0) {
     if (
@@ -1239,9 +1245,10 @@ async function probeMediaStreamInfo(
   });
   const text = res.stderr || res.stdout;
 
-  const videoLine = /Stream #\d+:\d+.*?: Video:\s*([a-zA-Z0-9_]+).*?(\d{2,5})x(\d{2,5})(?:.*?(\d+(?:\.\d+)?)\s*fps)?/.exec(
-    text,
-  );
+  const videoLine =
+    /Stream #\d+:\d+.*?: Video:\s*([a-zA-Z0-9_]+).*?(\d{2,5})x(\d{2,5})(?:.*?(\d+(?:\.\d+)?)\s*fps)?/.exec(
+      text,
+    );
   const audioLine = /Stream #\d+:\d+.*?: Audio:\s*([a-zA-Z0-9_]+)/.exec(text);
 
   return {
@@ -1476,7 +1483,9 @@ function vttTimeToSeconds(ts: string): number {
   if (parts.length !== 3) return 0;
   const [h, m, s] = parts as [string, string, string];
   const seconds = Number(s);
-  return Number(h) * 3600 + Number(m) * 60 + (Number.isFinite(seconds) ? seconds : 0);
+  return (
+    Number(h) * 3600 + Number(m) * 60 + (Number.isFinite(seconds) ? seconds : 0)
+  );
 }
 
 function parseWebVttCues(rawContent: string): CleanedVttCue[] {
@@ -1763,7 +1772,10 @@ async function packageDirectHls(
 
     for (let segIdx = 0; segIdx < segmentCount; segIdx++) {
       const segStart = segIdx * SUBTITLE_SEGMENT_SECONDS;
-      const segEnd = Math.min(segStart + SUBTITLE_SEGMENT_SECONDS, totalDuration);
+      const segEnd = Math.min(
+        segStart + SUBTITLE_SEGMENT_SECONDS,
+        totalDuration,
+      );
       // Cues aren't split at segment boundaries — each cue's own absolute
       // (whole-video) timestamps stay intact and are just delivered in
       // whichever segment its start time falls into; every segment shares
@@ -1888,7 +1900,10 @@ function sanitizeStateKey(id: string): string {
 }
 
 function importStateFilePath(playlistId: string): string {
-  return path.join(veolmsImportStateDir(), `${sanitizeStateKey(playlistId)}.json`);
+  return path.join(
+    veolmsImportStateDir(),
+    `${sanitizeStateKey(playlistId)}.json`,
+  );
 }
 
 async function loadImportState(
@@ -2128,7 +2143,11 @@ ${bold("Examples:")}
     const playlistId =
       playlist.id && playlist.id.trim().length > 0
         ? playlist.id.trim()
-        : crypto.createHash("sha256").update(playlistUrl).digest("hex").slice(0, 16);
+        : crypto
+            .createHash("sha256")
+            .update(playlistUrl)
+            .digest("hex")
+            .slice(0, 16);
     let importState = cliArgs.noResume
       ? null
       : await loadImportState(playlistId);
@@ -2320,148 +2339,150 @@ ${bold("Examples:")}
       );
       const thumbData = await downloadThumbnail(firstVideo, tempDir);
 
-    if (thumbData) {
-      const thumbStat = await fsp.stat(thumbData.filePath);
-      thumbnailMediaId = crypto.randomUUID();
-      const storageKey = `media/${instructor.id}/${thumbnailMediaId}.jpg`;
+      if (thumbData) {
+        const thumbStat = await fsp.stat(thumbData.filePath);
+        thumbnailMediaId = crypto.randomUUID();
+        const storageKey = `public/image/${instructor.id}/${thumbnailMediaId}.jpg`;
 
-      await services.storage.uploadFile(
-        storageKey,
-        thumbData.filePath,
-        thumbData.mimeType,
-      );
+        await services.storage.uploadFile(
+          storageKey,
+          thumbData.filePath,
+          thumbData.mimeType,
+        );
 
-      await mediaRepo.insertMediaAsset(database, {
-        id: thumbnailMediaId,
-        owner_id: instructor.id,
-        type: "image",
-        storage_provider: "s3",
-        storage_key: storageKey,
-        original_filename: "playlist_thumbnail.jpg",
-        mime_type: thumbData.mimeType,
-        size_bytes: thumbStat.size,
-        status: "ready",
+        await mediaRepo.insertMediaAsset(database, {
+          id: thumbnailMediaId,
+          owner_id: instructor.id,
+          type: "image",
+          storage_provider: "s3",
+          storage_key: storageKey,
+          original_filename: "playlist_thumbnail.jpg",
+          mime_type: thumbData.mimeType,
+          size_bytes: thumbStat.size,
+          status: "ready",
+        });
+
+        console.log(
+          `${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`,
+        );
+      }
+
+      // 5. Create Course in Database
+      const baseSlug = slugify(finalCourseTitle);
+      slug = baseSlug;
+      let attempts = 0;
+      while (
+        await courseRepo.findCourseBySlugIncludingDeleted(database, slug)
+      ) {
+        attempts++;
+        slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
+        if (attempts > 5) {
+          slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
+          break;
+        }
+      }
+
+      courseId = crypto.randomUUID();
+      const now = new Date();
+
+      await courseRepo.insertCourse(database, {
+        id: courseId,
+        slug,
+        title: finalCourseTitle,
+        short_description: playlist.description
+          ? playlist.description.slice(0, 160)
+          : null,
+        description: playlist.description || null,
+        creator_id: instructor.id,
+        category_id: null,
+        difficulty: "beginner",
+        thumbnail_media_id: thumbnailMediaId,
+        trailer_media_id: null,
+        instructor_alias: instructor.display_name,
+        status: "draft",
+        version: 1,
+        created_at: now,
+        updated_at: now,
       });
 
-      console.log(
-        `${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`,
-      );
-    }
-
-    // 5. Create Course in Database
-    const baseSlug = slugify(finalCourseTitle);
-    slug = baseSlug;
-    let attempts = 0;
-    while (await courseRepo.findCourseBySlugIncludingDeleted(database, slug)) {
-      attempts++;
-      slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
-      if (attempts > 5) {
-        slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
-        break;
+      // If requested published, update status and published_at
+      if (cliArgs.status === "published") {
+        await database
+          .updateTable("courses")
+          .set({ status: "published", published_at: now })
+          .where("id", "=", courseId)
+          .execute();
       }
-    }
 
-    courseId = crypto.randomUUID();
-    const now = new Date();
+      // Default Settings, Access Rules, Pricing
+      await configRepo.upsertSettings(database, {
+        id: crypto.randomUUID(),
+        course_id: courseId,
+        allow_qa: true,
+        allow_comments: true,
+        allow_downloads: false,
+        certificate_enabled: false,
+        show_instructor_name: true,
+        language: "en",
+        estimated_duration: null,
+        created_at: now,
+        updated_at: now,
+      });
 
-    await courseRepo.insertCourse(database, {
-      id: courseId,
-      slug,
-      title: finalCourseTitle,
-      short_description: playlist.description
-        ? playlist.description.slice(0, 160)
-        : null,
-      description: playlist.description || null,
-      creator_id: instructor.id,
-      category_id: null,
-      difficulty: "beginner",
-      thumbnail_media_id: thumbnailMediaId,
-      trailer_media_id: null,
-      instructor_alias: instructor.display_name,
-      status: "draft",
-      version: 1,
-      created_at: now,
-      updated_at: now,
-    });
+      await configRepo.upsertAccessRule(database, {
+        id: crypto.randomUUID(),
+        course_id: courseId,
+        access_type: "everyone",
+        duration_type: "lifetime",
+        duration_days: null,
+        created_at: now,
+        updated_at: now,
+      });
 
-    // If requested published, update status and published_at
-    if (cliArgs.status === "published") {
-      await database
-        .updateTable("courses")
-        .set({ status: "published", published_at: now })
-        .where("id", "=", courseId)
-        .execute();
-    }
+      await configRepo.upsertPricing(database, {
+        id: crypto.randomUUID(),
+        course_id: courseId,
+        pricing_type: cliArgs.pricingType,
+        price: cliArgs.price,
+        currency: cliArgs.currency,
+        sale_price: cliArgs.salePrice,
+        created_at: now,
+        updated_at: now,
+      });
 
-    // Default Settings, Access Rules, Pricing
-    await configRepo.upsertSettings(database, {
-      id: crypto.randomUUID(),
-      course_id: courseId,
-      allow_qa: true,
-      allow_comments: true,
-      allow_downloads: false,
-      certificate_enabled: false,
-      show_instructor_name: true,
-      language: "en",
-      estimated_duration: null,
-      created_at: now,
-      updated_at: now,
-    });
+      // 6. Create Section(s)
+      sectionIds = [];
+      splitSize =
+        cliArgs.splitSections && cliArgs.splitSections > 0
+          ? cliArgs.splitSections
+          : videoEntries.length;
+      const totalSections = Math.ceil(videoEntries.length / splitSize);
 
-    await configRepo.upsertAccessRule(database, {
-      id: crypto.randomUUID(),
-      course_id: courseId,
-      access_type: "everyone",
-      duration_type: "lifetime",
-      duration_days: null,
-      created_at: now,
-      updated_at: now,
-    });
+      for (let sIdx = 0; sIdx < totalSections; sIdx++) {
+        const sId = crypto.randomUUID();
+        const sTitle =
+          totalSections > 1
+            ? `${cliArgs.sectionTitle} - Part ${sIdx + 1} (Lessons ${sIdx * splitSize + 1}-${Math.min((sIdx + 1) * splitSize, videoEntries.length)})`
+            : cliArgs.sectionTitle;
 
-    await configRepo.upsertPricing(database, {
-      id: crypto.randomUUID(),
-      course_id: courseId,
-      pricing_type: cliArgs.pricingType,
-      price: cliArgs.price,
-      currency: cliArgs.currency,
-      sale_price: cliArgs.salePrice,
-      created_at: now,
-      updated_at: now,
-    });
+        await database
+          .insertInto("course_sections")
+          .values({
+            id: sId,
+            course_id: courseId,
+            title: sTitle,
+            position: sIdx,
+            created_at: now,
+            updated_at: now,
+          })
+          .execute();
 
-    // 6. Create Section(s)
-    sectionIds = [];
-    splitSize =
-      cliArgs.splitSections && cliArgs.splitSections > 0
-        ? cliArgs.splitSections
-        : videoEntries.length;
-    const totalSections = Math.ceil(videoEntries.length / splitSize);
+        sectionIds.push(sId);
+      }
 
-    for (let sIdx = 0; sIdx < totalSections; sIdx++) {
-      const sId = crypto.randomUUID();
-      const sTitle =
-        totalSections > 1
-          ? `${cliArgs.sectionTitle} - Part ${sIdx + 1} (Lessons ${sIdx * splitSize + 1}-${Math.min((sIdx + 1) * splitSize, videoEntries.length)})`
-          : cliArgs.sectionTitle;
-
-      await database
-        .insertInto("course_sections")
-        .values({
-          id: sId,
-          course_id: courseId,
-          title: sTitle,
-          position: sIdx,
-          created_at: now,
-          updated_at: now,
-        })
-        .execute();
-
-      sectionIds.push(sId);
-    }
-
-    console.log(
-      `${green("✓")} Course and ${sectionIds.length} Section(s) created (Course ID: ${dim(courseId)}, Slug: ${cyan(slug)})`,
-    );
+      console.log(
+        `${green("✓")} Course and ${sectionIds.length} Section(s) created (Course ID: ${dim(courseId)}, Slug: ${cyan(slug)})`,
+      );
 
       importState = {
         version: 1,
@@ -2526,9 +2547,8 @@ ${bold("Examples:")}
       // below so a crash/exception never leaves "ready" media with no
       // lesson pointing at it (matches the transaction boundary
       // apps/media-worker/src/processor.ts already uses for these tables).
-      let pendingMediaWrite:
-        | ((trx: typeof database) => Promise<void>)
-        | null = null;
+      let pendingMediaWrite: ((trx: typeof database) => Promise<void>) | null =
+        null;
       let shouldQueueTranscode = false;
       let wasTranscoded = false;
 
@@ -2556,7 +2576,9 @@ ${bold("Examples:")}
             `  ${green("✓")} Captions downloaded: ${cyan(downloadedSubtitles.map((s) => s.label).join(", "))}`,
           );
         } else {
-          console.log(`  ${dim("•")} No YouTube captions found for this video.`);
+          console.log(
+            `  ${dim("•")} No YouTube captions found for this video.`,
+          );
         }
       }
 
@@ -2666,7 +2688,9 @@ ${bold("Examples:")}
 
           if (hlsResult.success) {
             downloadedQualityNames = downloadedVariants.map((v) => v.quality);
-            const outputPrefix = `transcoded/${videoMediaId}`;
+            const outputVisibility =
+              cliArgs.pricingType === "paid" ? "protected" : "public";
+            const outputPrefix = `${outputVisibility}/transcoded/${videoMediaId}`;
             console.log(
               `  ${dim("•")} Uploading multi-quality HLS streams to storage (${downloadedQualityNames.join(", ")})...`,
             );
@@ -2674,12 +2698,10 @@ ${bold("Examples:")}
             await services.storage.uploadDirectory(hlsOutputDir, outputPrefix);
 
             // Playback always resolves through video_outputs.master_playlist_path
-            // when it's set (see stream.service.ts) — the web player only ever
-            // requests /media/:id for thumbnails, never for video. Uploading the
-            // full source .mp4 on top of the HLS renditions would double both
-            // storage and upload time for a file nothing reads, so
-            // media_assets.storage_key just references the HLS output instead
-            // of a separate re-upload.
+            // when it is set. The CDN serves the HLS output directly, so
+            // media_assets.storage_key references the master playlist instead
+            // of requiring a second source-file upload that the player never
+            // reads.
             const masterPlaylistPath = `${outputPrefix}/master.m3u8`;
 
             // Defer the media_assets/video_outputs/video_jobs writes until
@@ -2829,7 +2851,7 @@ ${bold("Examples:")}
         const vStat = await fsp.stat(localVideoPath);
         const videoExt = path.extname(localVideoPath) || ".mp4";
         const mimeType = resolveVideoMimeType(localVideoPath);
-        const videoStorageKey = `media/${instructor.id}/${videoMediaId}${videoExt}`;
+        const videoStorageKey = `protected/source/${instructor.id}/${videoMediaId}${videoExt}`;
 
         console.log(
           `  ${dim("•")} Uploading to storage (${(vStat.size / 1024 / 1024).toFixed(1)} MB)...`,

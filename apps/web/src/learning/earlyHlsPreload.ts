@@ -6,7 +6,10 @@ import {
   type LearningPlaybackRequestMetadata,
 } from "./learningHlsBootstrap";
 import { createLearningHlsPreloadSource } from "./player/learningHlsPreloadSource";
-import { getVideoPlaybackBootstrap } from "./videoPlaybackBootstrap";
+import {
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+} from "./videoPlaybackBootstrap";
 
 let inFlight:
   | {
@@ -40,6 +43,10 @@ function mark(name: string): void {
 function startPreloadForBootstrap(
   bootstrap: LearningHlsBootstrap,
   protectedPlayback: boolean,
+  refreshSegmentToken?: () => Promise<{
+    token: string;
+    expiresAt?: number;
+  } | null>,
 ) {
   const key = `${bootstrap.mediaKey}\u0000${bootstrap.manifestUrl}`;
   if (inFlight?.key === key) return inFlight.promise;
@@ -50,6 +57,9 @@ function startPreloadForBootstrap(
       manifestUrl: bootstrap.manifestUrl,
       mediaKey: bootstrap.mediaKey || undefined,
       protectedPlayback,
+      segmentToken: bootstrap.segmentToken,
+      segmentTokenExpiresAt: bootstrap.segmentTokenExpiresAt,
+      refreshSegmentToken,
     }),
   );
   inFlight = { key, promise };
@@ -83,9 +93,16 @@ export async function startEarlyHlsPreload(
     });
     if (requestKey !== latestRequestKey) return null;
     mark("playback-bootstrap-ready");
+    const refreshSegmentToken = playbackBootstrap.segmentToken
+      ? async () => {
+          const token = await refreshVideoPlaybackToken(requestMetadata);
+          return { token: token.token, expiresAt: token.expiresAt };
+        }
+      : undefined;
     return startPreloadForBootstrap(
       playbackBootstrap,
       playbackBootstrap.source === "paid-bootstrap-api",
+      refreshSegmentToken,
     );
   } catch {
     mark("playback-bootstrap-failed");

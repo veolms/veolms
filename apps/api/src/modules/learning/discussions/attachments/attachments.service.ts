@@ -12,6 +12,7 @@ import type {
 import { httpError } from "../../../../lib/errors.ts";
 import {
   discussionUploadPublicUrl,
+  discussionUploadStorageKey,
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
@@ -93,7 +94,9 @@ export function createAttachmentsService(
     async initiateUpload(db, userId, input) {
       const id = crypto.randomUUID();
       const ext = path.extname(input.fileName) || ".bin";
-      const storageKey = `discussion-uploads/${id}${sanitizeExtension(ext)}`;
+      const storageKey = discussionUploadStorageKey(
+        `${id}${sanitizeExtension(ext)}`,
+      );
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
@@ -154,7 +157,7 @@ export function createAttachmentsService(
         await db
           .updateTable("learning_attachments")
           .set({
-            storage_key: `discussion-uploads/${sanitizedName}`,
+            storage_key: discussionUploadStorageKey(sanitizedName),
             file_name: file.filename,
             file_url: fileUrl,
             mime_type: file.mimetype,
@@ -253,7 +256,7 @@ export function createAttachmentsService(
       const id = crypto.randomUUID();
       const ext = sanitizeExtension(path.extname(file.filename));
       const sanitizedName = `${id}${ext}`;
-      const storageKey = `discussion-uploads/${sanitizedName}`;
+      const storageKey = discussionUploadStorageKey(sanitizedName);
       const kind = getAttachmentKind(file.mimetype, file.filename);
       const mediaType = getMediaType(kind, file.mimetype);
 

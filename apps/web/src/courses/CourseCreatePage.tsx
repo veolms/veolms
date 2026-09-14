@@ -2818,6 +2818,7 @@ export function CourseCreatePage({
         contentType: file.type,
         fileSize: file.size,
         type: "image",
+        visibility: "public",
       });
 
       if (!requestIsActive()) return;
@@ -2833,7 +2834,14 @@ export function CourseCreatePage({
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("confirming");
-      await mediaService.confirmUpload(presigned.mediaAssetId);
+      const confirmation = await mediaService.confirmUpload(presigned.mediaAssetId);
+
+      if (!requestIsActive()) return;
+      setThumbnailUploadStatus("processing");
+      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(
+        presigned.mediaAssetId,
+        { signal: uploadAbortController.signal },
+      );
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("processing");
@@ -2879,9 +2887,7 @@ export function CourseCreatePage({
       setThumbnailUploadStatus("error");
       setThumbnailUploadError(getThumbnailUploadErrorMessage(error));
     } finally {
-      if (
-        thumbnailUploadAbortControllerRef.current === uploadAbortController
-      ) {
+      if (thumbnailUploadAbortControllerRef.current === uploadAbortController) {
         thumbnailUploadAbortControllerRef.current = null;
       }
     }
@@ -9027,31 +9033,32 @@ export function CourseCreatePage({
                               : undefined
                         }
                         className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                      {courseTitle.length} / 120
-                    </span>
+                      />
+                      <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                        {courseTitle.length} / 120
+                      </span>
+                    </div>
+                    {!isDownstreamUnlocked && (
+                      <p
+                        className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                        role="status"
+                        data-testid="basics-title-helper"
+                      >
+                        {createCourseMutation.isPending ||
+                        isInitialCourseCreationPending ? (
+                          <>
+                            <CircleNotch
+                              size={13}
+                              className="animate-spin text-(--accent) shrink-0"
+                            />
+                            <span>Creating course…</span>
+                          </>
+                        ) : (
+                          "Add a course title to continue."
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {!isDownstreamUnlocked && (
-                    <p
-                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
-                      role="status"
-                      data-testid="basics-title-helper"
-                    >
-                      {createCourseMutation.isPending || isInitialCourseCreationPending ? (
-                <>
-                          <CircleNotch
-                            size={13}
-                            className="animate-spin text-(--accent) shrink-0"
-                          />
-                          <span>Creating course…</span>
-                        </>
-                      ) : (
-                        "Add a course title to continue."
-                      )}
-                    </p>
-                  )}
-                </div>
                   <div className="flex flex-col gap-2 mb-5">
                     <div className="flex items-center justify-between">
                       <label
@@ -9409,6 +9416,7 @@ export function CourseCreatePage({
                             <LessonVideoUpload
                               disabled={!isDownstreamUnlocked || isBasicsSaving}
                               mediaAssetId={editorData?.course?.trailerMediaId}
+                              visibility="public"
                               hideUploadWhenAttached={Boolean(
                                 editorData?.course?.trailerMediaId,
                               )}
@@ -10411,7 +10419,7 @@ export function CourseCreatePage({
                                               className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                             >
                                               <UploadSimple size={15} />
-                                              Upload 
+                                              Upload
                                             </button>
                                             <button
                                               type="button"
@@ -13272,7 +13280,10 @@ export function CourseCreatePage({
               >
                 {actionLoading === "publish" ? (
                   <>
-                    <CircleNotch size={15} className="animate-spin text-white" />
+                    <CircleNotch
+                      size={15}
+                      className="animate-spin text-white"
+                    />
                     <span>Publishing...</span>
                   </>
                 ) : (
