@@ -14,6 +14,7 @@ import {
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
+  getCoursePlayerThread,
   getOpenCoursePlayerSessions,
   mapLearningSpaceSessionToCoursePlayerSession,
   getPendingCourseCommentDraft,
@@ -636,6 +637,40 @@ describe("course player navigation", () => {
       const lesson2Path = getCoursePlayerPath("the-ultimate-no", "courses", 2, returnPath);
       expect(lesson2Path).toBe(
         "/learn/the-ultimate-no/lecture-2?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview",
+      );
+    });
+
+    it("extracts thread parameter from search string", () => {
+      expect(getCoursePlayerThread("?thread=thr-123")).toBe("thr-123");
+      expect(getCoursePlayerThread("?from=courses&thread=%20thr-456%20")).toBe("thr-456");
+      expect(getCoursePlayerThread("?from=courses")).toBeNull();
+      expect(getCoursePlayerThread("?thread=")).toBeNull();
+    });
+
+    it("preserves thread parameter in getCoursePlayerPath", () => {
+      const path = getCoursePlayerPath(
+        "the-ultimate-no",
+        "courses",
+        2,
+        "/courses/the-ultimate-no/overview",
+        "thr-789",
+      );
+      expect(path).toBe(
+        "/learn/the-ultimate-no/lecture-2?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview&thread=thr-789",
+      );
+    });
+
+    it("preserves thread parameter in upsertCoursePlayerSessionFromRoute", () => {
+      const path = upsertCoursePlayerSessionFromRoute(
+        "the-ultimate-no",
+        "?from=courses&thread=thr-abc",
+        1,
+      );
+      expect(path).toBe("/learn/the-ultimate-no/lecture-1?from=courses&thread=thr-abc");
+
+      const session = getCoursePlayerSession("the-ultimate-no");
+      expect(session?.path).toBe(
+        "/learn/the-ultimate-no/lecture-1?from=courses&thread=thr-abc",
       );
     });
   });

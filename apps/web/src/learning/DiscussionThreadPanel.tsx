@@ -197,10 +197,10 @@ export function DiscussionThreadPanel({
     id: number;
     entryId: string | number | null;
   }>({ id: 0, entryId: null });
-  const activeIndex = Math.max(
-    0,
-    entries.findIndex((entry) => entry.id === activeEntryId),
+  const foundIndex = entries.findIndex(
+    (entry) => String(entry.id) === String(activeEntryId),
   );
+  const activeIndex = foundIndex >= 0 ? foundIndex : 0;
   const requestComposerFocus = useCallback((entryId: string | number) => {
     setComposerFocusRequest((current) => ({
       id: current.id + 1,
@@ -260,6 +260,7 @@ export function DiscussionThreadPanel({
     wasOpenRef.current = true;
     if (
       activeEntryId !== null &&
+      foundIndex >= 0 &&
       (isOpening || focusComposerOnOpen || !isPhone)
     ) {
       requestComposerFocus(activeEntryId);
@@ -652,13 +653,13 @@ export function DiscussionThreadPanel({
               <SwiperSlide key={entry.id} className="h-full!">
                 <ThreadSlide
                   entry={entry}
-                  active={entry.id === activeEntryId}
+                  active={String(entry.id) === String(activeEntryId)}
                   isBackendMode={isBackendMode}
                   currentUserId={currentUserId}
                   userRole={userRole}
                   currentUser={currentUser}
                   focusRequest={
-                    composerFocusRequest.entryId === entry.id
+                    String(composerFocusRequest.entryId) === String(entry.id)
                       ? composerFocusRequest.id
                       : 0
                   }
@@ -1357,7 +1358,9 @@ function ThreadReplyEntry({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(reply.id, reply.name, reply.text)
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId: parentId,
+                    })
                   }
                   onDelete={deletion.begin}
                   onReport={() =>

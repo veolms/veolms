@@ -110,6 +110,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useAcceptReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useLockThread: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCreateReport: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useThreadDetails: () => ({ data: undefined, isLoading: false, isError: false }),
   useThreadReplies: () => ({ data: { replies: [] }, isLoading: false, isError: false }),
   useCreateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),

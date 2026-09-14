@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import {
   Drawer,
@@ -58,6 +59,7 @@ import {
   useDeleteThread,
   useLessonThreads,
   useLockThread,
+  useThreadDetails,
   useToggleBookmark,
   useToggleFollow,
   useToggleLike,
@@ -220,6 +222,7 @@ export const getDiscussionComposerViewportGeometry = (
 
 export interface DiscussionProps {
   persistenceKey: string;
+  courseSlug?: string;
   courseId?: string;
   lessonId?: string;
   mobileBottomNavigation?: boolean;
@@ -296,8 +299,21 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
         typeof (entry as Comment).isOwn === "boolean"),
   );
 
-export function Discussion({
+type SetURLSearchParams = (
+  nextInit?:
+    | URLSearchParams
+    | ((prev: URLSearchParams) => URLSearchParams),
+  navigateOpts?: { replace?: boolean },
+) => void;
+
+interface DiscussionInnerProps extends DiscussionProps {
+  searchParams: URLSearchParams;
+  setSearchParams: SetURLSearchParams;
+}
+
+function DiscussionInner({
   persistenceKey,
+  courseSlug,
   courseId,
   lessonId,
   mobileBottomNavigation = false,
@@ -306,7 +322,9 @@ export function Discussion({
   isLessonDescriptionLoading = false,
   interactionCapabilities,
   isInteractionCapabilitiesLoading = false,
-}: DiscussionProps) {
+  searchParams,
+  setSearchParams,
+}: DiscussionInnerProps) {
   const capabilities = interactionCapabilities ?? DEFAULT_CAPABILITIES;
   const enabledKinds = useMemo<DiscussionEntryKind[]>(() => {
     const kinds: DiscussionEntryKind[] = [];
@@ -466,13 +484,42 @@ export function Discussion({
     authorAvatar,
   ]);
 
-  const isBackendMode = Boolean(courseId);
+  const isBackendMode = Boolean(
+    courseId || courseSlug || isInteractionCapabilitiesLoading,
+  );
   const [bookmarkOverrides, setBookmarkOverrides] = useState<
     Record<string, boolean>
   >({});
   const [followOverrides, setFollowOverrides] = useState<
     Record<string, boolean>
   >({});
+
+  const rawThreadId = searchParams.get("thread");
+  const threadIdFromUrl =
+    rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
+
+  const {
+    data: directThreadData,
+    isLoading: isDirectThreadLoading,
+    isError: isDirectThreadError,
+  } = useThreadDetails(threadIdFromUrl ?? "", {
+    enabled: Boolean(threadIdFromUrl && isBackendMode),
+  });
+
+  const directThreadComment = useMemo<Comment | null>(() => {
+    if (!directThreadData || !isCommentOrQaThread(directThreadData)) return null;
+    const comment = adaptLearningThreadToComment(
+      directThreadData,
+      currentUser?.id,
+    );
+    if (typeof bookmarkOverrides[String(directThreadData.id)] === "boolean") {
+      comment.isBookmarked = bookmarkOverrides[String(directThreadData.id)];
+    }
+    if (typeof followOverrides[String(directThreadData.id)] === "boolean") {
+      comment.isFollowing = followOverrides[String(directThreadData.id)];
+    }
+    return comment;
+  }, [bookmarkOverrides, currentUser?.id, directThreadData, followOverrides]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -628,17 +675,113 @@ export function Discussion({
       }),
     [authorName, capabilities, combinedEntries, entryFilter, feedSort],
   );
-  const threadEntries = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          combinedEntries
-            .filter((entry) => entry.entryKind !== "note")
-            .map((entry) => [entry.id, entry]),
-        ).values(),
-      ),
-    [combinedEntries],
-  );
+  const threadEntries = useMemo(() => {
+    const list = combinedEntries.filter((entry) => entry.entryKind !== "note");
+    if (!directThreadComment) {
+      return Array.from(
+        new Map(list.map((entry) => [String(entry.id), entry])).values(),
+      );
+    }
+    const exists = list.some(
+      (entry) => String(entry.id) === String(directThreadComment.id),
+    );
+    if (!exists) {
+      return [directThreadComment, ...list];
+    }
+    return list.map((entry) =>
+      String(entry.id) === String(directThreadComment.id)
+        ? directThreadComment
+        : entry,
+    );
+  }, [combinedEntries, directThreadComment]);
+
+  const lastHandledErrorThreadRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!threadIdFromUrl) {
+      if (openThread !== null) {
+        setOpenThread(null);
+      }
+      return;
+    }
+
+    if (String(openThread?.id) === threadIdFromUrl) {
+      return;
+    }
+
+    const matchingEntry = threadEntries.find(
+      (entry) => String(entry.id) === threadIdFromUrl,
+    );
+
+    if (matchingEntry) {
+      setOpenThread({ id: matchingEntry.id, focusComposer: false });
+      return;
+    }
+
+    if (!isBackendMode && !isInteractionCapabilitiesLoading) {
+      if (lastHandledErrorThreadRef.current !== threadIdFromUrl) {
+        lastHandledErrorThreadRef.current = threadIdFromUrl;
+        setNotice("This discussion thread is unavailable or has been removed.");
+        if (openThread !== null) {
+          setOpenThread(null);
+        }
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete("thread");
+            return next;
+          },
+          { replace: true },
+        );
+      }
+    }
+  }, [
+    isBackendMode,
+    isInteractionCapabilitiesLoading,
+    openThread,
+    setSearchParams,
+    threadEntries,
+    threadIdFromUrl,
+  ]);
+
+  useEffect(() => {
+    if (!threadIdFromUrl || !isBackendMode) {
+      lastHandledErrorThreadRef.current = null;
+      return;
+    }
+
+    const isDirectFetchFailed =
+      isDirectThreadError ||
+      (!isDirectThreadLoading &&
+        directThreadData &&
+        !isCommentOrQaThread(directThreadData));
+
+    if (isDirectFetchFailed) {
+      if (lastHandledErrorThreadRef.current !== threadIdFromUrl) {
+        lastHandledErrorThreadRef.current = threadIdFromUrl;
+        setNotice("This discussion thread is unavailable or has been removed.");
+        if (openThread !== null) {
+          setOpenThread(null);
+        }
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete("thread");
+            return next;
+          },
+          { replace: true },
+        );
+      }
+    }
+  }, [
+    directThreadData,
+    isBackendMode,
+    isDirectThreadError,
+    isDirectThreadLoading,
+    openThread,
+    setSearchParams,
+    threadIdFromUrl,
+  ]);
 
   const submitEntry = async (): Promise<boolean> => {
     if (draftIsTooLong) {
@@ -1248,9 +1391,14 @@ export function Discussion({
         onDelete={deleteEntry}
         onReport={handleOpenReport}
         onOpenThread={(id, focusComposer = false) => {
-          const entry = combinedEntries.find((e) => e.id === id);
+          const entry = combinedEntries.find((e) => String(e.id) === String(id));
           if (entry?.entryKind === "note") return;
           setOpenThread({ id, focusComposer });
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("thread", String(id));
+            return next;
+          });
         }}
         isBackendMode={isBackendMode}
         currentUserId={currentUser?.id}
@@ -1262,7 +1410,10 @@ export function Discussion({
         courseId={courseId}
       />
       <DiscussionThreadPanel
-        open={openThread !== null}
+        open={
+          openThread !== null &&
+          threadEntries.some((e) => String(e.id) === String(openThread.id))
+        }
         activeEntryId={openThread?.id ?? null}
         entries={threadEntries}
         isBackendMode={isBackendMode}
@@ -1272,13 +1423,29 @@ export function Discussion({
         courseId={courseId}
         focusComposerOnOpen={Boolean(openThread?.focusComposer)}
         onOpenChange={(open) => {
-          if (!open) setOpenThread(null);
+          if (!open) {
+            setOpenThread(null);
+            setSearchParams((prev) => {
+              if (!prev.has("thread")) return prev;
+              const next = new URLSearchParams(prev);
+              next.delete("thread");
+              return next;
+            });
+          }
         }}
-        onActiveEntryChange={(id) =>
+        onActiveEntryChange={(id) => {
           setOpenThread((current) =>
             current ? { id, focusComposer: false } : current,
-          )
-        }
+          );
+          setSearchParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("thread", String(id));
+              return next;
+            },
+            { replace: true },
+          );
+        }}
         onLike={onLike}
         onAddReply={addReply}
         onEditEntry={beginEditingEntry}
@@ -1301,6 +1468,44 @@ export function Discussion({
       />
     </section>
   );
+}
+
+function DiscussionRouterBridge(props: DiscussionProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  return (
+    <DiscussionInner
+      {...props}
+      searchParams={searchParams}
+      setSearchParams={setSearchParams}
+    />
+  );
+}
+
+function DiscussionFallbackBridge(props: DiscussionProps) {
+  const [searchParams, setSearchParams] = useState(() => new URLSearchParams());
+  const updateParams: SetURLSearchParams = useCallback((nextInit) => {
+    setSearchParams((prev) => {
+      if (typeof nextInit === "function") {
+        return nextInit(prev);
+      }
+      return nextInit ? new URLSearchParams(nextInit) : new URLSearchParams();
+    });
+  }, []);
+  return (
+    <DiscussionInner
+      {...props}
+      searchParams={searchParams}
+      setSearchParams={updateParams}
+    />
+  );
+}
+
+export function Discussion(props: DiscussionProps) {
+  const inRouter = useInRouterContext();
+  if (inRouter) {
+    return <DiscussionRouterBridge {...props} />;
+  }
+  return <DiscussionFallbackBridge {...props} />;
 }
 
 interface ThreadSurfaceProps {

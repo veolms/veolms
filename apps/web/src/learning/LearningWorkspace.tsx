@@ -2123,6 +2123,7 @@ export function LearningWorkspace({
               <Discussion
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
+                courseSlug={courseSlug}
                 courseId={courseId}
                 lessonId={backendLessonId}
                 mobileBottomNavigation={mobileBottomNavigation}

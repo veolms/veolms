@@ -23,6 +23,7 @@ import {
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
+  getCoursePlayerThread,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
@@ -83,16 +84,18 @@ export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const outletContext = useOutletContext<AcademyOutletContext>() ?? {};
   const {
-    mobileBottomNavigation,
-    mobileBottomNavigationHidden,
-    navigateTo,
+    mobileBottomNavigation = false,
+    mobileBottomNavigationHidden = false,
+    navigateTo = (dest: any) =>
+      navigate(typeof dest === "string" ? dest : dest.path),
     onLearningPlayerMinimizeGestureChange,
     onMiniPlayerRestoreReady,
-    openLearningMiniPlayer,
-    persistentPlayerMounted,
+    openLearningMiniPlayer = () => {},
+    persistentPlayerMounted = false,
     registerPersistentPlayer,
-  } = useOutletContext<AcademyOutletContext>();
+  } = outletContext;
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
@@ -211,17 +214,20 @@ export default function LearningRoute() {
       return;
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
+    const threadId = getCoursePlayerThread(location.search);
     const nextPath = getCoursePlayerPath(
       canonicalCourseSlug,
       origin,
       lessonId,
       routeReturnPath,
+      threadId,
     );
     void navigate(nextPath, { replace: true });
   }, [
     canonicalCourseSlug,
     courseSlug,
     lessonId,
+    location.search,
     navigate,
     origin,
     routeReturnPath,
@@ -230,15 +236,17 @@ export default function LearningRoute() {
   const selectLesson = useCallback(
     (nextLessonId: number) => {
       if (!courseSlug) return;
+      const threadId = getCoursePlayerThread(location.search);
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
+        threadId,
       );
       navigateTo(path, { exact: true });
     },
-    [courseSlug, navigateTo, origin, routeReturnPath],
+    [courseSlug, location.search, navigateTo, origin, routeReturnPath],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;

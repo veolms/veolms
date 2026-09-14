@@ -457,6 +457,7 @@ export function CommentCard({
                       comment.id,
                       comment.name,
                       comment.text,
+                      { isNote: comment.entryKind === "note" },
                     )
                   }
                   onDelete={deletion.begin}
@@ -693,6 +694,7 @@ export function CommentCard({
                         authorName: reply.name,
                       })
                     }
+                    parentThreadId={comment.id}
                     courseId={courseId}
                   />
                 ))
@@ -721,6 +723,7 @@ export function CommentCard({
 }
 
 interface ReplyCardProps {
+  parentThreadId?: string | number;
   reply: CommentReply;
   isBackendMode?: boolean;
   isQuestion?: boolean;
@@ -738,6 +741,7 @@ interface ReplyCardProps {
 }
 
 function ReplyCard({
+  parentThreadId,
   reply,
   isBackendMode = false,
   isQuestion = false,
@@ -846,7 +850,9 @@ function ReplyCard({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(reply.id, reply.name, reply.text)
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId,
+                    })
                   }
                   onDelete={deletion.begin}
                   onReport={onReport}
@@ -1207,11 +1213,20 @@ export async function shareDiscussionEntry(
   entryId: string | number,
   name: string,
   text: string,
+  options?: { parentThreadId?: string | number; isNote?: boolean },
 ) {
   if (typeof window === "undefined") return;
 
   const url = new URL(window.location.href);
-  url.hash = `discussion-entry-${entryId}`;
+  if (options?.isNote) {
+    url.hash = `discussion-entry-${entryId}`;
+  } else if (options?.parentThreadId) {
+    url.searchParams.set("thread", String(options.parentThreadId));
+    url.hash = `discussion-entry-${entryId}`;
+  } else {
+    url.searchParams.set("thread", String(entryId));
+    url.hash = "";
+  }
   const shareText = text.trim();
 
   try {

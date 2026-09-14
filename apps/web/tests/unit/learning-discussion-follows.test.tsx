@@ -143,6 +143,7 @@ const mockInteractions = vi.hoisted(() => ({
   useAcceptReply: vi.fn(),
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
+  useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -177,6 +178,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useAcceptReply: (...args: any[]) => mockInteractions.useAcceptReply(...args),
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
+  useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
 }));
 
 describe("Learning Space Thread Follow Functionality", () => {
