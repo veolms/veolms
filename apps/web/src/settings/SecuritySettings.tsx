@@ -57,6 +57,8 @@ function SettingsModalOverlay({
   );
 }
 
+import { downloadBackupCodesTxt } from "../auth/backupCodes.ts";
+
 interface BackupCodesModalProps {
   codes: string[];
   onClose: () => void;
@@ -64,6 +66,7 @@ interface BackupCodesModalProps {
 
 function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
 
   const copyAll = async () => {
     try {
@@ -73,6 +76,12 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
     } catch {
       /* clipboard write error */
     }
+  };
+
+  const handleDownload = () => {
+    downloadBackupCodesTxt(codes);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2500);
   };
 
   return (
@@ -107,13 +116,22 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
           className="auth-mfa-setup__modal-actions"
           style={{ justifyContent: "space-between" }}
         >
-          <button
-            className="auth-mfa-setup__copy-button"
-            onClick={copyAll}
-            type="button"
-          >
-            {copied ? "Copied!" : "Copy all codes"}
-          </button>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={copyAll}
+              type="button"
+            >
+              {copied ? "Copied!" : "Copy all codes"}
+            </button>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={handleDownload}
+              type="button"
+            >
+              {downloaded ? "Downloaded!" : "Download .txt"}
+            </button>
+          </div>
           <button className="settings-action" onClick={onClose} type="button">
             Done
           </button>

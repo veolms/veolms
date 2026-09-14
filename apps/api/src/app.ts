@@ -110,16 +110,7 @@ export async function createApp({
 
   // Configure CORS
   await app.register(fastifyCors, {
-    origin:
-      config.NODE_ENV === "production"
-        ? config.WEB_URL
-        : [
-            config.WEB_URL,
-            "http://localhost:3000",
-            "http://localhost:4173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:4173",
-          ],
+    origin: config.WEBAUTHN_ORIGINS,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

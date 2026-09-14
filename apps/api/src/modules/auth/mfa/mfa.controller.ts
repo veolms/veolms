@@ -12,6 +12,20 @@ import {
   presentPasskeyRegistrationOptions,
 } from "./mfa.presenters.ts";
 
+function extractRequestOrigin(request: FastifyRequest): string | undefined {
+  if (typeof request.headers.origin === "string" && request.headers.origin) {
+    return request.headers.origin;
+  }
+  if (typeof request.headers.referer === "string" && request.headers.referer) {
+    try {
+      return new URL(request.headers.referer).origin;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 export function createMfaController(context: AuthContext) {
   const { mfaService } = context;
 
@@ -46,6 +60,7 @@ export function createMfaController(context: AuthContext) {
       await mfaService.getPasskeyRegisterOptions(
         request.user!,
         request.session!.mfa_verified,
+        extractRequestOrigin(request),
       ),
     );
   }
@@ -62,7 +77,10 @@ export function createMfaController(context: AuthContext) {
 
   async function loginOptions(request: FastifyRequest) {
     return presentPasskeyAuthenticationOptions(
-      await mfaService.getPasskeyLoginOptions(request.user!.id),
+      await mfaService.getPasskeyLoginOptions(
+        request.user!.id,
+        extractRequestOrigin(request),
+      ),
     );
   }
 
