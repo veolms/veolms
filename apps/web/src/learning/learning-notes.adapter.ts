@@ -22,27 +22,43 @@ export function formatRelativeTime(dateInput: string | Date): string {
 
 export function adaptLearningNoteToComment(
   note: LearningNote,
-  currentUserName: string,
-  currentUserAvatar: string,
+  currentUserName?: string,
+  currentUserAvatar?: string,
+  currentUserId?: string,
 ): Comment {
   const contentDraft = createDiscussionDraft(note.content);
   if (note.plainText) {
     contentDraft.plainText = note.plainText;
   }
 
+  // Derive ownership primarily from note.isOwn with userId comparison as fallback
+  const isOwn =
+    note.isOwn ??
+    (currentUserId ? String(note.userId) === String(currentUserId) : false);
+
+  const name =
+    note.authorName?.trim() ||
+    note.authorUsername?.trim() ||
+    (isOwn && currentUserName?.trim() ? currentUserName.trim() : "Learner");
+
+  // Real note author avatar if DTO provides one, else current user avatar if own, else safe fallback
+  const avatar =
+    (note as { authorAvatarUrl?: string }).authorAvatarUrl ||
+    (isOwn && currentUserAvatar ? currentUserAvatar : "/assets/sofia-avatar-160.webp");
+
   return {
     id: note.id,
-    name: currentUserName,
+    name,
     time: formatRelativeTime(note.createdAt),
-    avatar: currentUserAvatar,
+    avatar,
     text: note.plainText || note.content,
     content: contentDraft,
     visibility: note.visibility || "private",
-    likes: 0,
-    liked: false,
-    replies: 0,
+    likes: note.likesCount ?? 0,
+    liked: Boolean(note.isLiked),
+    replies: note.repliesCount ?? 0,
     entryKind: "note",
-    isOwn: true,
+    isOwn,
     createdAt: note.createdAt,
     timestampSeconds: note.timestampSeconds ?? null,
     attachments: note.attachments || [],

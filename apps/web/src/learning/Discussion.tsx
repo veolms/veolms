@@ -473,13 +473,19 @@ function DiscussionInner({
     if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes)
       return [];
     return notesData.notes.map((note) =>
-      adaptLearningNoteToComment(note, authorName, authorAvatar),
+      adaptLearningNoteToComment(
+        note,
+        authorName,
+        authorAvatar,
+        currentUser?.id,
+      ),
     );
   }, [
     capabilities.allowNotes,
     courseId,
     lessonId,
     notesData?.notes,
+    currentUser?.id,
     authorName,
     authorAvatar,
   ]);

@@ -1104,16 +1104,32 @@ export function CommentActionMenu({
       triggerClassName="size-9"
     >
       {isNote ? (
-        <>
-          <MenuAction Icon={PencilSimple} label="Edit note" onClick={onEdit} />
-          <MenuDivider />
-          <MenuAction
-            Icon={Trash}
-            label="Delete note"
-            destructive
-            onClick={onDelete}
-          />
-        </>
+        isOwn ? (
+          <>
+            <MenuAction Icon={PencilSimple} label="Edit note" onClick={onEdit} />
+            <MenuDivider />
+            <MenuAction
+              Icon={Trash}
+              label="Delete note"
+              destructive
+              onClick={onDelete}
+            />
+          </>
+        ) : (
+          <>
+            <MenuAction
+              Icon={ShareNetwork}
+              label={`Share ${actionLabel}`}
+              onClick={onShare}
+            />
+            <MenuDivider />
+            <MenuAction
+              Icon={Flag}
+              label={`Report ${actionLabel}`}
+              onClick={onReport}
+            />
+          </>
+        )
       ) : isOwn ? (
         <>
           <MenuAction

@@ -33,6 +33,7 @@ import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import { learningSpaceKeys } from "../learning-space";
 import { navigationKeys } from "../navigation";
+import { learningInteractionKeys } from "../learning-interactions";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -69,6 +70,7 @@ function persistAuthenticatedSession(
   clearCoursePlayerSessions();
   authStore.setUser(data.user);
   queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
+  queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.setQueryData(authKeys.me(), currentUser);
   queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
@@ -283,6 +285,7 @@ export function useLogout() {
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
+      queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
       queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       queryClient.invalidateQueries({ queryKey: navigationKeys.all });
