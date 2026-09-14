@@ -15,7 +15,7 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
   DiscussionContent,
@@ -31,11 +31,12 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
+import { QueryClientContext } from "@tanstack/react-query";
 import {
   useDeleteReply,
   useThreadReplies,
-  useToggleLike,
   useUpdateReply,
+  desiredStateCoordinator,
 } from "../services/learning-interactions";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
@@ -46,6 +47,7 @@ import {
 
 export interface CommentReply {
   id: string | number;
+  clientId?: string;
   name: string;
   time: string;
   avatar: string;
@@ -61,6 +63,7 @@ export interface CommentReply {
 
 export interface Comment {
   id: string | number;
+  clientId?: string;
   name: string;
   time: string;
   avatar: string;
@@ -144,7 +147,9 @@ export function CommentCard({
   userRole,
   courseId,
 }: CommentCardProps) {
-  const [liked, setLiked] = useState(Boolean(comment.liked));
+  const queryClient = useContext(QueryClientContext);
+  const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
+  const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
   const [repliesOpen, setRepliesOpen] = useState(
     comment.repliesExpanded ?? false,
   );
@@ -160,6 +165,7 @@ export function CommentCard({
   const entryKind =
     comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
   const isNote = entryKind === "note";
+  const showEngagement = !isNote || comment.visibility === "public";
   const entryLabel =
     entryKind === "question" ? "Q&A" : isNote ? "Note" : "Comment";
 
@@ -193,7 +199,6 @@ export function CommentCard({
 
   const updateReplyMutation = useUpdateReply(threadId);
   const deleteReplyMutation = useDeleteReply(threadId);
-  const toggleLikeMutation = useToggleLike();
 
   const backendReplies = useMemo<CommentReply[]>(() => {
     if (!repliesData?.replies) return [];
@@ -229,10 +234,6 @@ export function CommentCard({
       setLocalReplies(comment.thread ?? []);
     }
   }, [isBackendMode, comment.thread]);
-
-  useEffect(() => {
-    setLiked(Boolean(comment.liked));
-  }, [comment.liked]);
 
   const addReply = () => {
     const text = replyDraft.plainText.trim();
@@ -306,16 +307,34 @@ export function CommentCard({
     }
   };
 
-  const handleLikeReply = async (replyId: string | number) => {
+  const handleLikeReply = (replyId: string | number) => {
     if (isBackendMode) {
-      try {
-        await toggleLikeMutation.mutateAsync({
-          targetType: "reply",
-          targetId: String(replyId),
-        });
-      } catch {
-        // Handled cleanly via React Query cache
-      }
+      const reply = effectiveReplies.find(
+        (r) => String(r.id) === String(replyId),
+      );
+      const currentLiked = Boolean(reply?.liked);
+      const nextLiked = !currentLiked;
+      desiredStateCoordinator.setLiked({
+        targetType: "reply",
+        targetId: String(replyId),
+        threadId,
+        desiredLiked: nextLiked,
+        currentBaseline: currentLiked,
+        lessonContext: courseId ? { courseId, lessonId: "" } : undefined,
+        queryClient,
+      });
+    } else {
+      setLocalReplies((current) =>
+        current.map((r) => {
+          if (r.id !== replyId) return r;
+          const nextLiked = !Boolean(r.liked);
+          return {
+            ...r,
+            liked: nextLiked,
+            likes: Math.max(0, r.likes + (nextLiked ? 1 : -1)),
+          };
+        }),
+      );
     }
   };
 
@@ -526,7 +545,7 @@ export function CommentCard({
                 </div>
               ) : null}
 
-              {!isNote && (
+              {showEngagement && (
                 <div
                   data-comment-engagement
                   className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
@@ -534,18 +553,20 @@ export function CommentCard({
                   <button
                     type="button"
                     onClick={() => {
-                      setLiked(!liked);
-                      onLike(comment.id, !liked);
+                      if (!isBackendMode) {
+                        setLocalLiked((current) => !current);
+                      }
+                      onLike(comment.id, !isCommentLiked);
                     }}
-                    aria-pressed={liked}
-                    aria-label={liked ? "Unlike" : "Like"}
-                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                    aria-pressed={isCommentLiked}
+                    aria-label={isCommentLiked ? "Unlike" : "Like"}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
-                    <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
+                    <ThumbsUp size={19} weight={isCommentLiked ? "fill" : "regular"} />
                     <span>{comment.likes}</span>
                   </button>
 
-                  {replyCount > 0 && (
+                  {!isNote && replyCount > 0 && (
                     <button
                       type="button"
                       onClick={(event) => {
@@ -563,7 +584,7 @@ export function CommentCard({
                     </button>
                   )}
 
-                  {comment.isLocked && (
+                  {!isNote && comment.isLocked && (
                     <span
                       data-testid="inline-locked-indicator"
                       className="inline-flex min-h-9 items-center gap-1.5 px-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"
@@ -574,7 +595,7 @@ export function CommentCard({
                     </span>
                   )}
 
-                  {(!comment.isLocked || onOpenThread) && (
+                  {!isNote && (!comment.isLocked || onOpenThread) && (
                     <button
                       type="button"
                       aria-label={comment.isLocked ? "View thread" : "Reply"}
@@ -754,7 +775,6 @@ function ReplyCard({
   onReport,
   courseId,
 }: ReplyCardProps) {
-  const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
     reply.content ?? createDiscussionDraft(reply.text),
@@ -764,10 +784,11 @@ function ReplyCard({
     void onDelete(reply.id);
   });
 
-  const isReplyLiked = isBackendMode ? Boolean(reply.liked) : liked;
+  const [localLiked, setLocalLiked] = useState(reply.liked ?? false);
+  const isReplyLiked = isBackendMode ? Boolean(reply.liked) : localLiked;
   const replyLikesCount = isBackendMode
     ? reply.likes
-    : reply.likes + (liked ? 1 : 0);
+    : reply.likes + (localLiked ? 1 : 0);
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
@@ -903,11 +924,10 @@ function ReplyCard({
                 <button
                   type="button"
                   onClick={() => {
-                    if (isBackendMode) {
-                      onLike(reply.id);
-                    } else {
-                      setLiked((current) => !current);
+                    if (!isBackendMode) {
+                      setLocalLiked((current) => !current);
                     }
+                    onLike(reply.id);
                   }}
                   aria-pressed={isReplyLiked}
                   aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}

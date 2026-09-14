@@ -109,6 +109,10 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -144,6 +148,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 describe("Learning Discussion Threads (Phase 1 Integration)", () => {
@@ -418,10 +423,12 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     const likeBtn = screen.getByRole("button", { name: "Like" });
     fireEvent.click(likeBtn);
 
-    expect(toggleLikeMutate).toHaveBeenCalledWith({
-      targetType: "thread",
-      targetId: "thread-comment-1",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "thread",
+        targetId: "thread-comment-1",
+      }),
+    );
   });
 
   it("6. deletion: 10s undo cancels before DELETE; commit calls deleteThreadMutation", async () => {

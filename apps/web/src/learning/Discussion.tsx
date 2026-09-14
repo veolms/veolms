@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { QueryClientContext } from "@tanstack/react-query";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import {
@@ -62,7 +63,7 @@ import {
   useThreadDetails,
   useToggleBookmark,
   useToggleFollow,
-  useToggleLike,
+  desiredStateCoordinator,
   useUpdateNote,
   useUpdateThread,
   useUserNotes,
@@ -385,6 +386,7 @@ function DiscussionInner({
   }, [enabledKinds]);
 
   const { data: currentUser } = useCurrentUser();
+  const queryClient = React.useContext(QueryClientContext);
   const authorName =
     currentUser?.displayName?.trim() ||
     currentUser?.username?.trim() ||
@@ -405,7 +407,7 @@ function DiscussionInner({
     {
       enabled: Boolean(courseId && lessonId && capabilities.allowNotes),
     },
-  );
+  ) ?? {};
 
   const shouldFetchThreads = Boolean(
     courseId &&
@@ -430,7 +432,7 @@ function DiscussionInner({
     {
       enabled: shouldFetchThreads,
     },
-  );
+  ) ?? {};
 
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
@@ -442,7 +444,6 @@ function DiscussionInner({
   );
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread();
-  const toggleLikeMutation = useToggleLike();
   const toggleBookmarkMutation = useToggleBookmark();
   const toggleFollowMutation = useToggleFollow();
   const acceptReplyMutation = useAcceptReply();
@@ -981,10 +982,17 @@ function DiscussionInner({
       const isNote =
         entry?.entryKind === "note" || backendNotes.some((n) => n.id === id);
       const targetType: "note" | "thread" = isNote ? "note" : "thread";
+      const currentLiked = Boolean(entry?.liked);
+      const desiredLiked = typeof liked === "boolean" ? liked : !currentLiked;
 
-      toggleLikeMutation.mutate({
+      desiredStateCoordinator.setLiked({
         targetType,
         targetId: String(id),
+        desiredLiked,
+        currentBaseline: currentLiked,
+        lessonContext:
+          courseId && lessonId ? { courseId, lessonId } : undefined,
+        queryClient,
       });
       return;
     }

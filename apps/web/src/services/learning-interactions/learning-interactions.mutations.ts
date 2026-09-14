@@ -127,14 +127,8 @@ export function useDeleteReply(threadId: string) {
 }
 
 export function useToggleLike() {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, ToggleLikeRequest>({
     mutationFn: (payload) => learningInteractionsService.toggleLike(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
   });
 }
 

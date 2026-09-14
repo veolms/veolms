@@ -120,6 +120,10 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -149,6 +153,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 // Mock CommentCard to inject test trigger buttons for testing onLike delegation from Discussion
@@ -236,10 +241,12 @@ describe("Learning Space Like targetType Discrimination", () => {
     const commentLikeBtn = screen.getByTestId("like-btn-thread-comment-1");
     fireEvent.click(commentLikeBtn);
 
-    expect(toggleLikeMutate).toHaveBeenCalledWith({
-      targetType: "thread",
-      targetId: "thread-comment-1",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "thread",
+        targetId: "thread-comment-1",
+      }),
+    );
   });
 
   it("2. sends targetType 'thread' when liking a Q&A question entry", () => {
@@ -259,10 +266,12 @@ describe("Learning Space Like targetType Discrimination", () => {
     const qaLikeBtn = screen.getByTestId("like-btn-thread-qa-1");
     fireEvent.click(qaLikeBtn);
 
-    expect(toggleLikeMutate).toHaveBeenCalledWith({
-      targetType: "thread",
-      targetId: "thread-qa-1",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "thread",
+        targetId: "thread-qa-1",
+      }),
+    );
   });
 
   it("3. sends targetType 'note' when liking a Note entry", () => {
@@ -282,10 +291,12 @@ describe("Learning Space Like targetType Discrimination", () => {
     const noteLikeBtn = screen.getByTestId("like-btn-note-1");
     fireEvent.click(noteLikeBtn);
 
-    expect(toggleLikeMutate).toHaveBeenCalledWith({
-      targetType: "note",
-      targetId: "note-1",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "note",
+        targetId: "note-1",
+      }),
+    );
   });
 
   it("4. leaves reply liking unaffected (sends targetType 'reply')", () => {
@@ -323,9 +334,11 @@ describe("Learning Space Like targetType Discrimination", () => {
     const likeReplyBtn = screen.getByRole("button", { name: "Like reply" });
     fireEvent.click(likeReplyBtn);
 
-    expect(toggleLikeMutateAsync).toHaveBeenCalledWith({
-      targetType: "reply",
-      targetId: "reply-1",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "reply",
+        targetId: "reply-1",
+      }),
+    );
   });
 });

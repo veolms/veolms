@@ -197,6 +197,10 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -232,6 +236,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 describe("Learning Discussion Replies (Phase 2 Integration)", () => {
@@ -697,10 +702,12 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
       fireEvent.click(likeReplyButton);
     });
 
-    expect(toggleLikeMutateAsync).toHaveBeenCalledWith({
-      targetType: "reply",
-      targetId: "reply-comment-101",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "reply",
+        targetId: "reply-comment-101",
+      }),
+    );
   });
 
   it("10. reply count stays synchronized between root thread card and thread panel", () => {
@@ -1046,10 +1053,12 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
     });
     fireEvent.click(likeBtn);
 
-    expect(toggleLikeMutateAsync).toHaveBeenCalledWith({
-      targetType: "reply",
-      targetId: "reply-comment-101",
-    });
+    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "reply",
+        targetId: "reply-comment-101",
+      }),
+    );
   });
 
   it("20. Phase 2.1: inline reply edit and delete (with undo) call useUpdateReply and useDeleteReply", async () => {

@@ -33,6 +33,7 @@ export function adaptLearningThreadToComment(
 
   return {
     id: thread.id,
+    clientId: (thread as any).clientId ?? thread.id,
     name: thread.author.displayName || thread.author.username || "Learner",
     time: formatRelativeTime(thread.createdAt),
     avatar: thread.author.avatarUrl || "/assets/sofia-avatar-160.webp",

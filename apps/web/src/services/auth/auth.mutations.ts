@@ -33,7 +33,7 @@ import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import { learningSpaceKeys } from "../learning-space";
 import { navigationKeys } from "../navigation";
-import { learningInteractionKeys } from "../learning-interactions";
+import { learningInteractionKeys, desiredStateCoordinator } from "../learning-interactions";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -69,6 +69,7 @@ function persistAuthenticatedSession(
   // associated with the newly authenticated account.
   clearCoursePlayerSessions();
   authStore.setUser(data.user);
+  desiredStateCoordinator.reset();
   queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.setQueryData(authKeys.me(), currentUser);
@@ -281,6 +282,7 @@ export function useLogout() {
     mutationFn: () => authService.logout(),
     onSuccess: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
@@ -300,6 +302,7 @@ export function useDeactivateAccount() {
     mutationFn: () => authService.deactivateAccount(),
     onSuccess: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
       clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client

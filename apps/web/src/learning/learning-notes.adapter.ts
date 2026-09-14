@@ -48,6 +48,7 @@ export function adaptLearningNoteToComment(
 
   return {
     id: note.id,
+    clientId: (note as any).clientId ?? note.id,
     name,
     time: formatRelativeTime(note.createdAt),
     avatar,

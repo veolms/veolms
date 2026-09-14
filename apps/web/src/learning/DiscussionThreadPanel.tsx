@@ -13,6 +13,7 @@ import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/Pape
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -21,6 +22,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { QueryClientContext } from "@tanstack/react-query";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperInstance } from "swiper/types";
 import "swiper/css";
@@ -41,8 +43,8 @@ import {
   useCreateReply,
   useDeleteReply,
   useThreadReplies,
-  useToggleLike,
   useUpdateReply,
+  desiredStateCoordinator,
 } from "../services/learning-interactions";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
@@ -773,6 +775,7 @@ function ThreadSlide({
 
   const isBackend = Boolean(isBackendMode && typeof entry.id === "string");
   const threadId = String(entry.id);
+  const queryClient = useContext(QueryClientContext);
 
   const {
     data: repliesData,
@@ -786,11 +789,6 @@ function ThreadSlide({
   const createReplyMutation = useCreateReply(threadId);
   const updateReplyMutation = useUpdateReply(threadId);
   const deleteReplyMutation = useDeleteReply(threadId);
-  const toggleLikeMutation = useToggleLike();
-
-  const [pendingLikeReplyIds, setPendingLikeReplyIds] = useState<
-    Set<string | number>
-  >(new Set());
 
   const replies = useMemo<CommentReply[]>(() => {
     if (!isBackend) {
@@ -874,29 +872,24 @@ function ThreadSlide({
     }
   };
 
-  const handleLikeReply = async (replyId: string | number) => {
-    if (pendingLikeReplyIds.has(replyId)) return;
+  const handleLikeReply = (replyId: string | number) => {
     if (isBackend) {
-      setPendingLikeReplyIds((prev) => new Set(prev).add(replyId));
-      try {
-        await toggleLikeMutation.mutateAsync({
-          targetType: "reply",
-          targetId: String(replyId),
-        });
-      } catch {
-        // Handled cleanly; query cache reflects backend state
-      } finally {
-        setPendingLikeReplyIds((prev) => {
-          const next = new Set(prev);
-          next.delete(replyId);
-          return next;
-        });
-      }
+      const reply = replies.find((r) => String(r.id) === String(replyId));
+      const currentLiked = Boolean(reply?.liked);
+      const nextLiked = !currentLiked;
+      desiredStateCoordinator.setLiked({
+        targetType: "reply",
+        targetId: String(replyId),
+        threadId,
+        desiredLiked: nextLiked,
+        currentBaseline: currentLiked,
+        queryClient,
+      });
     } else {
       const reply = replies.find((r) => r.id === replyId);
       if (reply) {
         reply.liked = !reply.liked;
-        reply.likes += reply.liked ? 1 : -1;
+        reply.likes = Math.max(0, reply.likes + (reply.liked ? 1 : -1));
       }
     }
   };
@@ -970,7 +963,6 @@ function ThreadSlide({
                 onToggleAcceptReply={(replyId, accepted) =>
                   onToggleAcceptReply?.(entry.id, replyId, accepted)
                 }
-                isLikePending={pendingLikeReplyIds.has(reply.id)}
                 onReply={entry.isLocked ? () => {} : focusComposer}
                 onEdit={handleEditReply}
                 onDelete={handleDeleteReply}
@@ -1051,12 +1043,8 @@ function ThreadRootEntry({
   onDelete: () => void;
   onReport: () => void;
 }) {
-  const [liked, setLiked] = useState(Boolean(entry.liked));
+  const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
-
-  useEffect(() => {
-    setLiked(Boolean(entry.liked));
-  }, [entry.liked]);
 
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
@@ -1185,16 +1173,14 @@ function ThreadRootEntry({
           <div className="mt-2 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
             <button
               type="button"
-              aria-pressed={liked}
-              aria-label={liked ? "Unlike" : "Like"}
+              aria-pressed={isEntryLiked}
+              aria-label={isEntryLiked ? "Unlike" : "Like"}
               onClick={() => {
-                const nextLiked = !liked;
-                setLiked(nextLiked);
-                onLike(entry.id, nextLiked);
+                onLike(entry.id, !isEntryLiked);
               }}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isEntryLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
             >
-              <ThumbsUp size={19} weight={liked ? "fill" : "regular"} />
+              <ThumbsUp size={19} weight={isEntryLiked ? "fill" : "regular"} />
               {entry.likes}
             </button>
             {!entry.isLocked && (
@@ -1231,7 +1217,6 @@ function ThreadReplyEntry({
   isQuestion = false,
   canAcceptAnswer = false,
   onToggleAcceptReply,
-  isLikePending = false,
   onReply,
   onEdit,
   onDelete,
@@ -1244,7 +1229,6 @@ function ThreadReplyEntry({
   isQuestion?: boolean;
   canAcceptAnswer?: boolean;
   onToggleAcceptReply?: (replyId: string | number, accepted: boolean) => void;
-  isLikePending?: boolean;
   onReply: () => void;
   onEdit: (
     replyId: string | number,
@@ -1417,7 +1401,6 @@ function ThreadReplyEntry({
                   type="button"
                   aria-pressed={Boolean(reply.liked)}
                   aria-label={reply.liked ? "Unlike reply" : "Like reply"}
-                  disabled={isLikePending}
                   onClick={() => onLikeReply(reply.id)}
                   className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
                 >
@@ -1526,7 +1509,7 @@ function ThreadReplyComposer({
     setReplyAttachments([]);
     setComposerKey(0);
     setSubmitError("");
-  }, [entry.id]);
+  }, [entry.clientId ?? entry.id]);
 
   useEffect(() => {
     if (!editorController || focusRequest <= 0) return;
