@@ -155,6 +155,63 @@ export function createMediaController({ service }: { service: MediaService }) {
     }
     response.end();
   }
+    async function streamHlsResource(
+    request: FastifyRequest<{
+      Params: { mediaId: string; "*": string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    const result = await service.getHlsStream(
+      request.params.mediaId,
+      request.params["*"],
+      user,
+    );
+    reply.header("Content-Type", result.contentType);
+    if (result.contentLength !== undefined) {
+      reply.header("Content-Length", result.contentLength);
+    }
+    reply.header(
+      "Cache-Control",
+      result.isPublic
+        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
+        : result.isManifest
+          ? "private, no-store"
+          : "private, max-age=86400",
+    );
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(result.stream);
+  }
+
+  async function getMediaAssetStream(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+    reply: FastifyReply,
+  ) {
+    const { mediaId } = request.params;
+    const requestingUserId = request.user?.id;
+    const result = await service.getMediaStream(
+      mediaId,
+      requestingUserId,
+      request.user?.roles,
+    );
+    reply.header("Content-Type", result.contentType);
+    if (result.contentLength !== undefined) {
+      reply.header("Content-Length", result.contentLength);
+    }
+    // Assets whose public access can be revoked (e.g. unpublished/deleted courses
+    // or replaced thumbnails) must not be retained in shared caches.
+    reply.header("Cache-Control", "no-store");
+    return reply.send(result.stream);
+  }
+
+  async function getImageVariantStream(request: FastifyRequest<{ Params: { mediaId: string; width: number } }>, reply: FastifyReply) {
+    const result = await service.getImageVariantStream(request.params.mediaId, Number(request.params.width), request.user?.id, request.user?.roles);
+    reply.header("Content-Type", result.contentType).header("Cache-Control", "public, max-age=31536000, immutable");
+    if (result.contentLength !== undefined) reply.header("Content-Length", result.contentLength);
+    return reply.send(result.stream);
+  }
 
   return {
     presignMediaUpload,
@@ -165,6 +222,9 @@ export function createMediaController({ service }: { service: MediaService }) {
     retryVideoJob,
     cancelVideoJob,
     streamVideoJobProgress,
+    getMediaAssetStream,
+    getImageVariantStream,
+    streamHlsResource,
   };
 }
 

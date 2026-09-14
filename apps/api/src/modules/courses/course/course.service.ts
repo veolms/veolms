@@ -52,6 +52,84 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/gif",
   "image/avif",
 ]);
+
+type PublicThumbnailVariant = {
+  url: string;
+  width: number;
+  height: number;
+};
+
+const FALLBACK_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
+
+function resolveFallbackThumbnailVariants(
+  services: AppServices,
+  thumbnailMediaId?: string | null,
+): PublicThumbnailVariant[] {
+  if (!thumbnailMediaId) return [];
+
+  return FALLBACK_THUMBNAIL_WIDTHS.flatMap((width) => {
+    const url = services.storage.getPublicObjectUrl(
+      `thumbnails/${thumbnailMediaId}/processed/${width}.webp`,
+    );
+    return url ? [{ url, width, height: Math.round((width * 9) / 16) }] : [];
+  });
+}
+
+function resolvePublicThumbnailUrls(
+  services: AppServices,
+  metadata: unknown,
+  thumbnailMediaId?: string | null,
+): {
+  thumbnailUrl: string | null;
+  thumbnailSrcSet: PublicThumbnailVariant[];
+} {
+  const fallbackUrl = thumbnailMediaId
+    ? services.storage.getPublicObjectUrl(
+        `thumbnails/${thumbnailMediaId}/processed/full.webp`,
+      )
+    : null;
+  const fallbackVariants = resolveFallbackThumbnailVariants(
+    services,
+    thumbnailMediaId,
+  );
+
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+    return { thumbnailUrl: fallbackUrl, thumbnailSrcSet: fallbackVariants };
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const full = record.full;
+  const fullKey =
+    typeof full === "object" && full !== null && !Array.isArray(full) &&
+    typeof (full as Record<string, unknown>).key === "string"
+      ? (full as Record<string, string>).key
+      : null;
+  const thumbnailUrl = fullKey
+    ? services.storage.getPublicObjectUrl(fullKey)
+    : fallbackUrl;
+  const variants = Array.isArray(record.variants)
+    ? record.variants.flatMap((variant): PublicThumbnailVariant[] => {
+        if (typeof variant !== "object" || variant === null || Array.isArray(variant)) {
+          return [];
+        }
+        const item = variant as Record<string, unknown>;
+        if (
+          typeof item.key !== "string" ||
+          typeof item.width !== "number" ||
+          typeof item.height !== "number"
+        ) {
+          return [];
+        }
+        const url = services.storage.getPublicObjectUrl(item.key);
+        return url ? [{ url, width: item.width, height: item.height }] : [];
+      })
+    : [];
+
+  return {
+    thumbnailUrl,
+    thumbnailSrcSet: variants.length > 0 ? variants : fallbackVariants,
+  };
+}
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -160,33 +238,34 @@ export function createCourseService({
               salePrice: null,
             };
 
-        const { thumbnailUrl } = await resolveCourseMediaUrls(
-          row.thumbnail_media_id,
+      const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
+        services,
+        row.thumbnail_metadata,
+        row.thumbnail_media_id,
+      );
+
+      const instructorName =
+        row.instructor_alias || row.creator_display_name || null;
+
+      return {
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        shortDescription: row.short_description ?? "",
+        difficulty:
+          (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
           null,
-        );
-
-        const instructorName =
-          row.instructor_alias || row.creator_display_name || null;
-
-        return {
-          id: row.id,
-          slug: row.slug,
-          title: row.title,
-          shortDescription: row.short_description ?? "",
-          difficulty:
-            (row.difficulty as
-              "beginner" | "intermediate" | "advanced" | null) ?? null,
-          thumbnailUrl,
-          instructorName,
-          categoryName: row.category_name ?? null,
-          totalSections: Number(row.total_sections ?? 0),
-          totalLessons: Number(row.total_lessons ?? 0),
-          totalDurationSeconds,
-          pricing,
-          certificateEnabled: Boolean(row.certificate_enabled ?? false),
-        };
-      }),
-    );
+        thumbnailUrl,
+        thumbnailSrcSet,
+        instructorName,
+        categoryName: row.category_name ?? null,
+        totalSections: Number(row.total_sections ?? 0),
+        totalLessons: Number(row.total_lessons ?? 0),
+        totalDurationSeconds,
+        pricing,
+        certificateEnabled: Boolean(row.certificate_enabled ?? false),
+      };
+    }));
   }
 
   /**
@@ -807,6 +886,7 @@ export function createCourseService({
       pricing,
       settings,
       includes,
+      thumbnailAsset,
     ] = await Promise.all([
       course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
@@ -818,6 +898,9 @@ export function createCourseService({
       configurationService.findPricingByCourseId(courseId),
       configurationService.findSettingsByCourseId(courseId),
       includesService.listCourseIncludes(courseId),
+      course.thumbnail_media_id
+        ? mediaService.getMediaAsset(course.thumbnail_media_id)
+        : null,
     ]);
 
     const creator = creatorUser
@@ -933,6 +1016,11 @@ export function createCourseService({
         creatorId: course.creator_id,
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
+        ...resolvePublicThumbnailUrls(
+          services,
+          thumbnailAsset?.metadata,
+          course.thumbnail_media_id,
+        ),
         trailerMediaId: course.trailer_media_id,
         thumbnailUrl,
         trailerUrl,

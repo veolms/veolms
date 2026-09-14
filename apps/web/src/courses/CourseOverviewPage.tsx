@@ -1265,7 +1265,7 @@ export function adaptCourseOverviewResponse(
   );
   const resolvedDuration = formatDuration(resolvedDurationSeconds);
 
-  const resolvedThumbnail = c.thumbnailUrl ?? "";
+  const resolvedThumbnail = c.thumbnailUrl || "";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1281,6 +1281,7 @@ export function adaptCourseOverviewResponse(
     duration: resolvedDuration,
     students: 0,
     thumbnail: resolvedThumbnail,
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
@@ -1400,7 +1401,8 @@ export function adaptPreviewDataToOverview(
     enrolled: false,
     duration: formatDuration(totalDurationSeconds),
     students: 0,
-    thumbnail: c.thumbnailUrl ?? "",
+    thumbnail: c.thumbnailUrl || "",
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,

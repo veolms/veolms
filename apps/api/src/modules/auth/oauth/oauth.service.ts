@@ -182,6 +182,7 @@ export function createOauthService({
           emailVerified: true,
           phoneVerified: false,
           oauth: { provider, providerUserId: profile.providerUserId },
+          avatarSourceUrl: profile.pictureUrl,
         });
         user = await authService.requireUser(userId);
       }
@@ -243,6 +244,7 @@ export function createOauthService({
         emailVerified: true,
         phoneVerified: false,
         oauth: { provider, providerUserId: profile.providerUserId },
+        avatarSourceUrl: profile.pictureUrl,
       });
       user = await authService.requireUser(userId);
     }

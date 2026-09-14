@@ -162,9 +162,42 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getMediaDelivery",
         tags: ["Media"],
-        summary: "Resolve a direct CDN URL for a media asset",
-        description:
-          "Validates media access and returns a CDN URL. The API does not stream media bytes.",
+        summary: "Stream an authorized HLS playlist or segment",
+        params: z.object({
+          mediaId: z.string().uuid(),
+          "*": z.string().min(1),
+        }),
+        response: {
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("HLS resource not found"),
+          409: errorResponse("Video is not ready for playback"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.streamHlsResource,
+  );
+
+  app.get(
+    "/media/:mediaId/variants/:width",
+    {
+      schema: { params: z.object({ mediaId: z.uuid(), width: z.coerce.number().int().positive() }) },
+      preHandler: [authMiddleware.authenticate],
+    },
+    controller.getImageVariantStream,
+  );
+
+  app.get(
+    "/media/:mediaId",
+    {
+      schema: {
+        operationId: "getMediaAssetStream",
+        tags: ["Media"],
+        summary: "Stream media file content by media ID",
         params: z.object({ mediaId: z.string().uuid() }),
         response: {
           200: jsonResponse(

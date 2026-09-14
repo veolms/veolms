@@ -110,6 +110,7 @@ export async function listPublishedCourses(
       "courses.difficulty",
       "courses.instructor_alias",
       "courses.thumbnail_media_id",
+      eb.selectFrom("media_assets as thumbnail_media").select("thumbnail_media.metadata").whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id").as("thumbnail_metadata"),
       "categories.name as category_name",
       "users.display_name as creator_display_name",
       "course_pricing.pricing_type",

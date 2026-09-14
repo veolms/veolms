@@ -15,6 +15,7 @@ import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
+import { enqueueImageJob } from "@veolms/database";
 
 export interface MediaServiceOptions {
   database: Kysely<Database>;
@@ -39,6 +40,18 @@ function resolveMediaVisibility(storageKey: string): "public" | "protected" {
     : "protected";
 }
 
+function isSafeHlsPath(path: string): boolean {
+  const segments = path.split("/");
+  return (
+    segments.length > 0 &&
+    segments.every(
+      (segment) => segment.length > 0 && segment !== "." && segment !== "..",
+    ) &&
+    /\.(?:m3u8|ts|m4s|mp4|aac|vtt)$/i.test(path)
+  );
+}
+
+
 /** Postgres unique_violation (23505), as raised by the pg driver via node-postgres. */
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -47,6 +60,16 @@ function isUniqueViolation(err: unknown): boolean {
     "code" in err &&
     (err as { code?: unknown }).code === "23505"
   );
+}
+
+function hlsContentType(path: string): string {
+  if (/\.m3u8$/i.test(path)) return "application/vnd.apple.mpegurl";
+  if (/\.ts$/i.test(path)) return "video/mp2t";
+  if (/\.m4s$/i.test(path)) return "video/iso.segment";
+  if (/\.mp4$/i.test(path)) return "video/mp4";
+  if (/\.aac$/i.test(path)) return "audio/aac";
+  if (/\.vtt$/i.test(path)) return "text/vtt";
+  return "application/octet-stream";
 }
 
 export function createMediaService({
@@ -68,9 +91,9 @@ export function createMediaService({
           ?.replace(/[^a-z0-9]/giu, "")
           .toLowerCase()
       : "";
-    const storagePrefix =
-      payload.visibility === "public" ? "public" : "protected";
-    const storageKey = `${storagePrefix}/${payload.type}/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
+    const storageKey = payload.type === "image"
+      ? `thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
+      : `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
 
     const uploadUrl = await services.storage.getPresignedPutUrl(
       storageKey,
@@ -161,6 +184,13 @@ export function createMediaService({
     }
 
     await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
+
+    if (media.type === "image") {
+      const jobId = crypto.randomUUID();
+      await enqueueImageJob(database, { id: jobId, media_id: mediaId });
+      await mediaRepo.updateMediaAssetStatus(database, mediaId, "processing");
+      return { status: "processing", jobId };
+    }
 
     let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
@@ -801,8 +831,113 @@ export function createMediaService({
         ? { duration: Number(media.duration_seconds) }
         : {}),
       title: context.lesson_title,
-      source: protectedLesson ? "paid-bootstrap-api" : "public-cdn",
+      source: "paid-bootstrap-api",
     };
+  }
+
+  async function getHlsStream(
+    mediaId: string,
+    requestedPath: string,
+    user?: PlaybackUser,
+  ) {
+    const context = await mediaRepo.findPlaybackMediaContext(database, mediaId);
+    if (!context) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
+    }
+
+    await assertPlaybackAccess(context, user);
+    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, {
+      verifyManifest: false,
+    });
+    const hlsPath = requestedPath.replace(/^\/+/, "");
+    if (!isSafeHlsPath(hlsPath)) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "HLS resource not found.");
+    }
+
+    const file = await services.storage.getObject(`${outputPrefix}/${hlsPath}`);
+    if (!file) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "HLS resource not found.");
+    }
+
+    return {
+      stream: file.body,
+      contentType: hlsContentType(hlsPath),
+      contentLength: file.contentLength,
+      isManifest: /\.m3u8$/i.test(hlsPath),
+      isPublic:
+        context.course_status === "published" &&
+        (context.is_preview || context.pricing_type === "free"),
+    };
+  }
+
+  /**
+   * Fetches the media file stream and metadata from storage.
+   *
+   * Access rule: an asset is servable without restriction if it's the
+   * thumbnail/trailer of a published course (those render as plain
+   * <img>/<video> src on public, logged-out marketing pages). Anything
+   * else — draft-course assets, unattached uploads, other media types —
+   * is only servable to its owner. `requestingUserId` is undefined for
+   * anonymous requests.
+   *
+   * Returns MEDIA_NOT_FOUND (not 403) for an authorization failure too, so
+   * a caller can't distinguish "doesn't exist" from "exists but isn't
+   * yours" by probing IDs.
+   */
+  async function getMediaStream(
+    mediaId: string,
+    requestingUserId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
+      database,
+      mediaId,
+    );
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const fullKey = media.type === "image" && media.status === "ready" && typeof media.metadata === "object" && media.metadata !== null && "full" in media.metadata && typeof media.metadata.full === "object" && media.metadata.full !== null && "key" in media.metadata.full && typeof media.metadata.full.key === "string"
+      ? media.metadata.full.key
+      : media.storage_key;
+    const file = await services.storage.getObject(fullKey);
+    if (!file) {
+      throw new AppError(
+        404,
+        "FILE_NOT_FOUND",
+        "Media file not found in storage.",
+      );
+    }
+    return {
+      stream: file.body,
+      contentType:
+        fullKey === media.storage_key ? media.mime_type || file.contentType || "application/octet-stream" : "image/webp",
+      contentLength:
+        file.contentLength ??
+        (media.size_bytes ? Number(media.size_bytes) : undefined),
+      filename: media.original_filename,
+      isPublic,
+    };
+  }
+
+  async function getImageVariantStream(mediaId: string, width: number, requestingUserId?: string, userRoles?: readonly string[]) {
+    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    if (!media || media.type !== "image") throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(database, mediaId);
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    const variants = typeof media.metadata === "object" && media.metadata !== null && "variants" in media.metadata && Array.isArray(media.metadata.variants) ? media.metadata.variants : [];
+    const variant = variants.find((item) => typeof item === "object" && item !== null && "width" in item && item.width === width && "key" in item && typeof item.key === "string");
+    if (!variant || typeof variant !== "object" || !("key" in variant) || typeof variant.key !== "string") throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
+    const file = await services.storage.getObject(variant.key);
+    if (!file) throw new AppError(404, "FILE_NOT_FOUND", "Image variant not found in storage.");
+    return { stream: file.body, contentType: "image/webp", contentLength: file.contentLength };
   }
 
   return {
@@ -816,6 +951,9 @@ export function createMediaService({
     getVideoJobProgress,
     getPlaybackBootstrap,
     getMediaDelivery,
+    getHlsStream,
+    getMediaStream,
+    getImageVariantStream,
   };
 }
 

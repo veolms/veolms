@@ -1895,6 +1895,125 @@ html:has(.settings-profile__verification-dialog-overlay) {
   cursor: not-allowed;
 }
 
+.settings-profile__generate-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 999px;
+  padding: 7px 14px;
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 680;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.settings-profile__generate-avatar:hover {
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  transform: translateY(-1px);
+}
+
+.settings-profile__generate-avatar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-profile__avatar-dialog {
+  width: min(calc(100vw - 32px), 400px);
+}
+
+.settings-profile__avatar-style-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.settings-profile__avatar-style-preview img {
+  width: 88px;
+  height: 88px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 50%;
+  background: var(--canvas);
+}
+
+.settings-profile__avatar-style-shuffle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  border-radius: 9px;
+  padding: 6px 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.settings-profile__avatar-style-shuffle:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.settings-profile__avatar-style-shuffle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-profile__avatar-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.settings-profile__avatar-style-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 11px;
+  padding: 8px 4px;
+  color: var(--text-secondary);
+  background: var(--canvas);
+  font-size: 0.66rem;
+  font-weight: 620;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.settings-profile__avatar-style-option img {
+  border-radius: 50%;
+}
+
+.settings-profile__avatar-style-option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.settings-profile__avatar-style-option.is-selected {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--canvas));
+}
+
+.settings-profile__avatar-style-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .settings-profile__error {
   color: var(--danger, #f27991) !important;
 }

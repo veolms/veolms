@@ -1,5 +1,5 @@
 import type { Kysely } from "kysely";
-import type { Database, MediaAssetStatus } from "@veolms/database";
+import type { Database, Json, MediaAssetStatus } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -95,6 +95,7 @@ export async function insertMediaAsset(
     mime_type: string;
     size_bytes: number;
     status: MediaAssetStatus;
+    metadata?: Json;
   },
 ) {
   await database.insertInto("media_assets").values(values).execute();
@@ -110,6 +111,14 @@ export async function updateMediaAssetStatus(
     .set({ status, updated_at: new Date() })
     .where("id", "=", mediaId)
     .execute();
+}
+
+export async function updateMediaAssetMetadata(
+  database: Kysely<Database>,
+  mediaId: string,
+  metadata: Json,
+) {
+  await database.updateTable("media_assets").set({ metadata, updated_at: new Date() }).where("id", "=", mediaId).execute();
 }
 
 export async function insertVideoJob(
