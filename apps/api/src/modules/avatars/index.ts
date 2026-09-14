@@ -6,6 +6,7 @@ export {
   avatarPublicUrl,
   detectImageContentType,
   isStoredAvatarUrl,
+  legacyAvatarKey,
   removeAvatar,
   storeAvatarBuffer,
   storeAvatarFromUrl,

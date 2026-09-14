@@ -120,6 +120,7 @@ export function createServices({
       cdnTokenTtlSeconds: config.CDN_TOKEN_TTL_SECONDS,
       cdnHlsTokenTtlSeconds: config.CDN_HLS_TOKEN_TTL_SECONDS,
       cdnPublicFolders: config.CDN_PUBLIC_FOLDERS,
+      requireVisibilityPrefix: true,
       region: config.STORAGE_REGION,
       accessKeyId: config.STORAGE_ACCESS_KEY_ID,
       secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,

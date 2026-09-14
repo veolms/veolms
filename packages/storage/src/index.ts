@@ -29,6 +29,8 @@ function normalizeCdnTokenTtlSeconds(value: number | undefined): number {
 export interface StorageOptions extends Partial<S3ClientConfig> {
   bucket: string;
   endpoint?: string;
+  /** Reject object-storage writes whose key is not visibility-prefixed. */
+  requireVisibilityPrefix?: boolean;
   /** Public CDN origin mapped to the storage bucket root, if configured. */
   publicBaseUrl?: string;
   /** Secret shared with the CDN Worker for short-lived HMAC access tokens. */
@@ -58,6 +60,26 @@ export interface StorageUploadItem {
   contentType?: string;
 }
 
+export type StorageVisibility = "public" | "protected";
+
+/**
+ * Returns a normalized key when it starts with the visibility namespace used
+ * by the media bucket. Keeping this check in the storage adapter prevents a
+ * newly added API upload path from accidentally bypassing CDN access rules.
+ */
+export function assertVisibilityPrefixedKey(key: string): string {
+  const normalized = key.replace(/^\/+/, "");
+  if (
+    !normalized.startsWith("public/") &&
+    !normalized.startsWith("protected/")
+  ) {
+    throw new Error(
+      "Storage object keys must start with public/ or protected/.",
+    );
+  }
+  return normalized;
+}
+
 export class S3StorageService {
   private client: S3Client;
   private bucket: string;
@@ -66,6 +88,7 @@ export class S3StorageService {
   private cdnTokenTtlSeconds: number;
   private cdnHlsTokenTtlSeconds: number;
   private cdnPublicFolders: readonly string[];
+  private requireVisibilityPrefix: boolean;
   private bucketCorsEnsured: Promise<void> | null = null;
 
   constructor(options: StorageOptions) {
@@ -82,6 +105,7 @@ export class S3StorageService {
     this.cdnHlsTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
       options.cdnHlsTokenTtlSeconds,
     );
+    this.requireVisibilityPrefix = options.requireVisibilityPrefix ?? false;
     this.cdnPublicFolders = (
       options.cdnPublicFolders ?? [
         "public",
@@ -99,6 +123,7 @@ export class S3StorageService {
       const {
         bucket: _bucket,
         client: _client,
+        requireVisibilityPrefix: _requireVisibilityPrefix,
         publicBaseUrl: _publicBaseUrl,
         cdnSigningSecret: _cdnSigningSecret,
         cdnTokenTtlSeconds: _cdnTokenTtlSeconds,
@@ -138,6 +163,12 @@ export class S3StorageService {
 
   getBucket(): string {
     return this.bucket;
+  }
+
+  private keyForWrite(key: string): string {
+    return this.requireVisibilityPrefix
+      ? assertVisibilityPrefixedKey(key)
+      : key;
   }
 
   /**
@@ -261,12 +292,13 @@ export class S3StorageService {
     localFilePath: string,
     contentType: string,
   ): Promise<void> {
+    const storageKey = this.keyForWrite(key);
     const fileBuffer = await readFile(localFilePath);
 
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: storageKey,
         Body: fileBuffer,
         ContentType: contentType,
         ContentLength: fileBuffer.byteLength,
@@ -337,7 +369,11 @@ export class S3StorageService {
     s3Prefix: string,
     concurrency = 6,
   ): Promise<number> {
-    const cleanPrefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
+    const cleanPrefix = this.requireVisibilityPrefix
+      ? `${this.keyForWrite(s3Prefix).replace(/\/+$/, "")}/`
+      : s3Prefix.endsWith("/")
+        ? s3Prefix
+        : `${s3Prefix}/`;
     const fileList: StorageUploadItem[] = [];
 
     const collectFiles = async (
@@ -417,9 +453,10 @@ export class S3StorageService {
     contentLength?: number,
     expiresIn = 300,
   ): Promise<string> {
+    const storageKey = this.keyForWrite(key);
     const command = new PutObjectCommand({
       Bucket: this.bucket,
-      Key: key,
+      Key: storageKey,
       ContentType: contentType,
       ContentLength: contentLength,
     });
@@ -439,10 +476,11 @@ export class S3StorageService {
     contentType: string,
     contentLength?: number,
   ): Promise<void> {
+    const storageKey = this.keyForWrite(key);
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: storageKey,
         Body: body,
         ContentType: contentType,
         ContentLength: contentLength,

@@ -299,7 +299,7 @@ export function createMediaService({
 
     const jobId = crypto.randomUUID();
     const now = new Date();
-    const outputPrefix = `${resolveMediaVisibility(media.storage_key)}/hls/${media.id}`;
+    const outputPrefix = `${resolveMediaVisibility(media.storage_key)}/transcoded/${media.id}`;
 
     try {
       await mediaRepo.insertVideoJob(database, {

@@ -137,7 +137,13 @@ domain. `.m3u8` files are public, while non-manifest objects in
 `CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
 New direct uploads use `public/...` or `protected/...` keys. Existing legacy
 `thumbnails/...`, `media/...`, and `transcoded/...` keys remain supported by
-the Worker defaults.
+the Worker defaults. Newly generated HLS output uses
+`public/transcoded/<mediaId>/` or `protected/transcoded/<mediaId>/`; the
+manifest is `master.m3u8` inside that prefix.
+Profile avatars use `public/avatars/<userId>`, while authenticated discussion
+attachments use `protected/discussion-uploads/<fileName>`. The API still reads
+legacy avatar keys for compatibility, but discussion attachments use only the
+protected path.
 
 ## Development UI deployment
 

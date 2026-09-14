@@ -2690,7 +2690,7 @@ ${bold("Examples:")}
             downloadedQualityNames = downloadedVariants.map((v) => v.quality);
             const outputVisibility =
               cliArgs.pricingType === "paid" ? "protected" : "public";
-            const outputPrefix = `${outputVisibility}/hls/${videoMediaId}`;
+            const outputPrefix = `${outputVisibility}/transcoded/${videoMediaId}`;
             console.log(
               `  ${dim("•")} Uploading multi-quality HLS streams to storage (${downloadedQualityNames.join(", ")})...`,
             );
