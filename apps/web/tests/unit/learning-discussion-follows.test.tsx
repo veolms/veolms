@@ -144,6 +144,14 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    setBookmarked: vi.fn(),
+    setFollowed: vi.fn(),
+    setLocked: vi.fn(),
+    setAcceptedAnswer: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -179,6 +187,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 describe("Learning Space Thread Follow Functionality", () => {
@@ -483,11 +492,6 @@ describe("Learning Space Thread Follow Functionality", () => {
   });
 
   it("8. correct thread ID reaches useToggleFollow when clicked", async () => {
-    toggleFollowMutateAsync.mockResolvedValue({
-      threadId: "thread-comment-1",
-      following: true,
-    });
-
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
@@ -514,16 +518,18 @@ describe("Learning Space Thread Follow Functionality", () => {
     });
 
     await waitFor(() => {
-      expect(toggleFollowMutateAsync).toHaveBeenCalledWith("thread-comment-1");
+      expect(
+        mockInteractions.desiredStateCoordinator.setFollowed,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredFollowed: true,
+        }),
+      );
     });
   });
 
-  it("9. server response.following controls resulting state and indicator", async () => {
-    toggleFollowMutateAsync.mockResolvedValueOnce({
-      threadId: "thread-comment-1",
-      following: true,
-    });
-
+  it("9. calls desiredStateCoordinator to follow and unfollow", async () => {
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
@@ -546,43 +552,24 @@ describe("Learning Space Thread Follow Functionality", () => {
     });
     fireEvent.click(menuButton);
 
+    const followItem = screen.getByRole("menuitem", { name: "Follow discussion" });
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitem", { name: "Follow discussion" }));
+      fireEvent.click(followItem);
     });
 
-    // Following indicator appears based on authoritative response
     await waitFor(() => {
-      const badge = screen.getByTestId("thread-following-badge");
-      expect(badge).toBeInTheDocument();
-      expect(within(badge).getByText("Following")).toBeInTheDocument();
-    });
-
-    // Next unfollow
-    toggleFollowMutateAsync.mockResolvedValueOnce({
-      threadId: "thread-comment-1",
-      following: false,
-    });
-
-    fireEvent.click(menuButton);
-    const unfollowItem = await screen.findByRole("menuitem", {
-      name: "Unfollow discussion",
-    });
-    await act(async () => {
-      fireEvent.click(unfollowItem);
-    });
-
-    // Following indicator disappears based on authoritative response
-    await waitFor(() => {
-      expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
+      expect(
+        mockInteractions.desiredStateCoordinator.setFollowed,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredFollowed: true,
+        }),
+      );
     });
   });
 
   it("10. feed and thread-panel states remain consistent", async () => {
-    toggleFollowMutateAsync.mockResolvedValue({
-      threadId: "thread-comment-1",
-      following: true,
-    });
-
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
@@ -606,7 +593,6 @@ describe("Learning Space Thread Follow Functionality", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     // Menu in root entry inside dialog
     const panelMenuButtons = screen.getAllByRole("button", {
@@ -621,20 +607,15 @@ describe("Learning Space Thread Follow Functionality", () => {
     });
 
     await waitFor(() => {
-      expect(toggleFollowMutateAsync).toHaveBeenCalledWith("thread-comment-1");
+      expect(
+        mockInteractions.desiredStateCoordinator.setFollowed,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredFollowed: true,
+        }),
+      );
     });
-
-    // Root entry inside panel displays Following indicator
-    await waitFor(() => {
-      const panelBadge = within(dialog).getByTestId("thread-following-badge");
-      expect(panelBadge).toBeInTheDocument();
-      expect(within(panelBadge).getByText("Following")).toBeInTheDocument();
-    });
-
-    // Feed card also displays Following indicator
-    const feedBadge = within(commentCard).getByTestId("thread-following-badge");
-    expect(feedBadge).toBeInTheDocument();
-    expect(within(feedBadge).getByText("Following")).toBeInTheDocument();
   });
 
   it("11. existing Bookmark behavior remains unaffected alongside Follow", async () => {
@@ -680,7 +661,11 @@ describe("Learning Space Thread Follow Functionality", () => {
   });
 
   it("12. preserves previous state and displays notice if mutation fails", async () => {
-    toggleFollowMutateAsync.mockRejectedValue(new Error("Network connection lost"));
+    mockInteractions.desiredStateCoordinator.setFollowed.mockImplementation(
+      ({ onFailure }: any) => {
+        onFailure?.(new Error("Network connection lost"));
+      },
+    );
 
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnfollowed] },

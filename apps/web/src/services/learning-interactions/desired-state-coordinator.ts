@@ -2,9 +2,13 @@ import type { QueryClient } from "@tanstack/react-query";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
+  updateAcceptedAnswerInCache,
   updateNoteLikeInCache,
   updateReplyLikeInCache,
+  updateThreadBookmarkInCache,
+  updateThreadFollowInCache,
   updateThreadLikeInCache,
+  updateThreadLockInCache,
 } from "./cache-updaters";
 
 export type OptimisticSyncStatus = "pending" | "confirmed" | "failed";
@@ -46,9 +50,79 @@ interface EntityLikeState {
   queryClient: QueryClient;
 }
 
+export type BooleanTargetType = "bookmark" | "follow" | "lock";
+
+export interface SetBookmarkedOptions {
+  threadId: string;
+  desiredBookmarked: boolean;
+  currentBaseline?: boolean;
+  lessonContext?: { courseId: string; lessonId: string };
+  debounceMs?: number;
+  onFailure?: (error: unknown) => void;
+  queryClient?: QueryClient;
+}
+
+export interface SetFollowedOptions {
+  threadId: string;
+  desiredFollowed: boolean;
+  currentBaseline?: boolean;
+  lessonContext?: { courseId: string; lessonId: string };
+  debounceMs?: number;
+  onFailure?: (error: unknown) => void;
+  queryClient?: QueryClient;
+}
+
+export interface SetLockedOptions {
+  threadId: string;
+  desiredLocked: boolean;
+  currentBaseline?: boolean;
+  lessonContext?: { courseId: string; lessonId: string };
+  debounceMs?: number;
+  onFailure?: (error: unknown) => void;
+  queryClient?: QueryClient;
+}
+
+interface ThreadBooleanState {
+  targetType: BooleanTargetType;
+  threadId: string;
+  serverBaseline: boolean;
+  desiredState: boolean;
+  inFlightState: boolean | null;
+  abortController: AbortController | null;
+  lessonContext?: { courseId: string; lessonId: string };
+  dispatchTimer: ReturnType<typeof setTimeout> | null;
+  onFailure?: (error: unknown) => void;
+  queryClient: QueryClient;
+}
+
+export interface SetAcceptedAnswerOptions {
+  threadId: string;
+  desiredAcceptedReplyId: string | null;
+  currentBaselineReplyId?: string | null;
+  lessonContext?: { courseId: string; lessonId: string };
+  debounceMs?: number;
+  onFailure?: (error: unknown) => void;
+  queryClient?: QueryClient;
+}
+
+interface ThreadAcceptedAnswerState {
+  threadId: string;
+  serverBaselineAcceptedReplyId: string | null;
+  desiredAcceptedReplyId: string | null;
+  inFlightTargetReplyId: string | null;
+  inFlightAccepted: boolean | null;
+  abortController: AbortController | null;
+  lessonContext?: { courseId: string; lessonId: string };
+  dispatchTimer: ReturnType<typeof setTimeout> | null;
+  onFailure?: (error: unknown) => void;
+  queryClient: QueryClient;
+}
+
 export class DesiredStateCoordinator {
   private generation = 1;
   private entries = new Map<string, EntityLikeState>();
+  private booleanEntries = new Map<string, ThreadBooleanState>();
+  private acceptAnswerEntries = new Map<string, ThreadAcceptedAnswerState>();
   private queryClient: QueryClient;
 
   constructor(queryClient: QueryClient = defaultQueryClient) {
@@ -89,19 +163,84 @@ export class DesiredStateCoordinator {
         entry.abortController = null;
       }
     }
-
     this.entries.clear();
+
+    for (const entry of this.booleanEntries.values()) {
+      if (entry.dispatchTimer !== null) {
+        clearTimeout(entry.dispatchTimer);
+        entry.dispatchTimer = null;
+      }
+      if (entry.abortController) {
+        try {
+          entry.abortController.abort();
+        } catch {
+          // ignore abort errors
+        }
+        entry.abortController = null;
+      }
+    }
+    this.booleanEntries.clear();
+
+    for (const entry of this.acceptAnswerEntries.values()) {
+      if (entry.dispatchTimer !== null) {
+        clearTimeout(entry.dispatchTimer);
+        entry.dispatchTimer = null;
+      }
+      if (entry.abortController) {
+        try {
+          entry.abortController.abort();
+        } catch {
+          // ignore abort errors
+        }
+        entry.abortController = null;
+      }
+    }
+    this.acceptAnswerEntries.clear();
   }
 
   /**
-   * Returns current internal state for a target (useful for tests and inspection).
+   * Returns current internal like state for a target (useful for tests and inspection).
    */
   getState(
     targetType: TargetLikeType,
     targetId: string,
   ): Readonly<EntityLikeState> | undefined {
-    return this.entries.get(this.key(targetType, targetId));
+    return this.entries.get(this.likeKey(targetType, targetId));
   }
+
+  /**
+   * Returns current internal bookmark state for a thread.
+   */
+  getBookmarkState(threadId: string): Readonly<ThreadBooleanState> | undefined {
+    return this.booleanEntries.get(this.booleanKey("bookmark", threadId));
+  }
+
+  /**
+   * Returns current internal follow state for a thread.
+   */
+  getFollowState(threadId: string): Readonly<ThreadBooleanState> | undefined {
+    return this.booleanEntries.get(this.booleanKey("follow", threadId));
+  }
+
+  /**
+   * Returns current internal lock state for a thread.
+   */
+  getLockState(threadId: string): Readonly<ThreadBooleanState> | undefined {
+    return this.booleanEntries.get(this.booleanKey("lock", threadId));
+  }
+
+  /**
+   * Returns current internal accept answer state for a thread.
+   */
+  getAcceptedAnswerState(
+    threadId: string,
+  ): Readonly<ThreadAcceptedAnswerState> | undefined {
+    return this.acceptAnswerEntries.get(this.acceptAnswerKey(threadId));
+  }
+
+  // ==========================================
+  // LIKES (Thread, Reply, Note)
+  // ==========================================
 
   /**
    * Sets the user's desired like state for a thread, reply, or note.
@@ -119,7 +258,7 @@ export class DesiredStateCoordinator {
     onFailure,
     queryClient,
   }: SetLikedOptions): void {
-    const key = this.key(targetType, targetId);
+    const key = this.likeKey(targetType, targetId);
     let state = this.entries.get(key);
     const activeClient = queryClient ?? this.queryClient;
 
@@ -148,7 +287,7 @@ export class DesiredStateCoordinator {
     }
 
     // 1. Immediately apply transition to TanStack Query cache
-    this.applyCacheUpdate(
+    this.applyLikeCacheUpdate(
       targetType,
       targetId,
       desiredLiked,
@@ -158,14 +297,14 @@ export class DesiredStateCoordinator {
     );
 
     // 2. Schedule convergence dispatch
-    this.scheduleConvergence(state, debounceMs);
+    this.scheduleLikeConvergence(state, debounceMs);
   }
 
-  private key(targetType: TargetLikeType, targetId: string): string {
+  private likeKey(targetType: TargetLikeType, targetId: string): string {
     return `${targetType}:${targetId}`;
   }
 
-  private applyCacheUpdate(
+  private applyLikeCacheUpdate(
     targetType: TargetLikeType,
     targetId: string,
     desiredLiked: boolean,
@@ -194,7 +333,7 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private scheduleConvergence(state: EntityLikeState, delayMs: number): void {
+  private scheduleLikeConvergence(state: EntityLikeState, delayMs: number): void {
     if (state.dispatchTimer !== null) {
       clearTimeout(state.dispatchTimer);
       state.dispatchTimer = null;
@@ -203,37 +342,23 @@ export class DesiredStateCoordinator {
     const capturedGen = this.generation;
 
     if (delayMs <= 0) {
-      this.processConvergence(state, capturedGen);
+      this.processLikeConvergence(state, capturedGen);
     } else {
       state.dispatchTimer = setTimeout(() => {
         state.dispatchTimer = null;
-        this.processConvergence(state, capturedGen);
+        this.processLikeConvergence(state, capturedGen);
       }, delayMs);
     }
   }
 
-  private processConvergence(
+  private processLikeConvergence(
     state: EntityLikeState,
     capturedGen: number,
   ): void {
-    // Auth guard: If generation changed (e.g. user logged out or switched account), discard immediately
-    if (this.generation !== capturedGen) {
-      return;
-    }
+    if (this.generation !== capturedGen) return;
+    if (state.inFlightState !== null) return;
+    if (state.desiredState === state.serverBaseline) return;
 
-    // If an API request is already in-flight for this entity, do NOT dispatch in parallel.
-    // When the in-flight request settles, it will check again and converge.
-    if (state.inFlightState !== null) {
-      return;
-    }
-
-    // If desiredState already matches serverBaseline, we have converged!
-    // If rapid opposing actions occurred before dispatch, this completely neutralizes network requests.
-    if (state.desiredState === state.serverBaseline) {
-      return;
-    }
-
-    // Begin network dispatch
     const targetState = state.desiredState;
     state.inFlightState = targetState;
 
@@ -246,51 +371,491 @@ export class DesiredStateCoordinator {
         targetId: state.targetId,
       })
       .then((response) => {
-        // Auth guard on late completion: If generation changed, discard completely
-        if (this.generation !== capturedGen) {
-          return;
-        }
+        if (this.generation !== capturedGen) return;
 
         state.abortController = null;
         state.inFlightState = null;
 
-        // Server confirmed the new baseline
         const confirmedLiked =
           typeof response?.liked === "boolean" ? response.liked : targetState;
         state.serverBaseline = confirmedLiked;
 
-        // Check if user changed their desired state while this request was in-flight
         if (state.desiredState !== state.serverBaseline) {
-          // Immediately dispatch compensating request
-          this.processConvergence(state, capturedGen);
+          this.processLikeConvergence(state, capturedGen);
         }
       })
       .catch((error) => {
-        // Auth guard on late completion: If generation changed, discard completely
-        if (this.generation !== capturedGen) {
-          return;
-        }
-
-        // If aborted deliberately (e.g. during reset), do not roll back or notify
-        if (controller.signal.aborted) {
-          return;
-        }
+        if (this.generation !== capturedGen) return;
+        if (controller.signal.aborted) return;
 
         state.abortController = null;
         state.inFlightState = null;
 
-        // Roll back desired state to the last known server baseline
         const rollbackLiked = state.serverBaseline;
         state.desiredState = rollbackLiked;
 
-        // Revert cache
-        this.applyCacheUpdate(
+        this.applyLikeCacheUpdate(
           state.targetType,
           state.targetId,
           rollbackLiked,
           state.queryClient,
           state.lessonContext,
           state.threadId,
+        );
+
+        if (state.onFailure) {
+          state.onFailure(error);
+        }
+      });
+  }
+
+  // ==========================================
+  // BOOLEAN ACTIONS (Bookmark, Follow, Lock)
+  // ==========================================
+
+  /**
+   * Sets the user's desired bookmark state for a thread.
+   */
+  setBookmarked({
+    threadId,
+    desiredBookmarked,
+    currentBaseline,
+    lessonContext,
+    debounceMs = 30,
+    onFailure,
+    queryClient,
+  }: SetBookmarkedOptions): void {
+    this.setBooleanDesiredState({
+      targetType: "bookmark",
+      threadId,
+      desiredState: desiredBookmarked,
+      currentBaseline,
+      lessonContext,
+      debounceMs,
+      onFailure,
+      queryClient,
+    });
+  }
+
+  /**
+   * Sets the user's desired follow state for a thread.
+   */
+  setFollowed({
+    threadId,
+    desiredFollowed,
+    currentBaseline,
+    lessonContext,
+    debounceMs = 30,
+    onFailure,
+    queryClient,
+  }: SetFollowedOptions): void {
+    this.setBooleanDesiredState({
+      targetType: "follow",
+      threadId,
+      desiredState: desiredFollowed,
+      currentBaseline,
+      lessonContext,
+      debounceMs,
+      onFailure,
+      queryClient,
+    });
+  }
+
+  /**
+   * Sets the user's desired lock state for a thread.
+   */
+  setLocked({
+    threadId,
+    desiredLocked,
+    currentBaseline,
+    lessonContext,
+    debounceMs = 30,
+    onFailure,
+    queryClient,
+  }: SetLockedOptions): void {
+    this.setBooleanDesiredState({
+      targetType: "lock",
+      threadId,
+      desiredState: desiredLocked,
+      currentBaseline,
+      lessonContext,
+      debounceMs,
+      onFailure,
+      queryClient,
+    });
+  }
+
+  private booleanKey(targetType: BooleanTargetType, threadId: string): string {
+    return `${targetType}:${threadId}`;
+  }
+
+  private setBooleanDesiredState({
+    targetType,
+    threadId,
+    desiredState,
+    currentBaseline,
+    lessonContext,
+    debounceMs = 30,
+    onFailure,
+    queryClient,
+  }: {
+    targetType: BooleanTargetType;
+    threadId: string;
+    desiredState: boolean;
+    currentBaseline?: boolean;
+    lessonContext?: { courseId: string; lessonId: string };
+    debounceMs?: number;
+    onFailure?: (error: unknown) => void;
+    queryClient?: QueryClient;
+  }): void {
+    const key = this.booleanKey(targetType, threadId);
+    let state = this.booleanEntries.get(key);
+    const activeClient = queryClient ?? this.queryClient;
+
+    if (!state) {
+      const baseline = currentBaseline ?? !desiredState;
+      state = {
+        targetType,
+        threadId,
+        serverBaseline: baseline,
+        desiredState,
+        inFlightState: null,
+        abortController: null,
+        lessonContext,
+        dispatchTimer: null,
+        onFailure,
+        queryClient: activeClient,
+      };
+      this.booleanEntries.set(key, state);
+    } else {
+      state.desiredState = desiredState;
+      state.queryClient = activeClient;
+      if (lessonContext) state.lessonContext = lessonContext;
+      if (onFailure) state.onFailure = onFailure;
+    }
+
+    // 1. Instantly apply transition to TanStack Query cache
+    this.applyBooleanCacheUpdate(
+      targetType,
+      threadId,
+      desiredState,
+      state.queryClient,
+      state.lessonContext,
+    );
+
+    // 2. Schedule convergence
+    this.scheduleBooleanConvergence(state, debounceMs);
+  }
+
+  private applyBooleanCacheUpdate(
+    targetType: BooleanTargetType,
+    threadId: string,
+    desiredValue: boolean,
+    client: QueryClient,
+    lessonContext?: { courseId: string; lessonId: string },
+  ): void {
+    if (targetType === "bookmark") {
+      updateThreadBookmarkInCache(client, threadId, desiredValue, lessonContext);
+    } else if (targetType === "follow") {
+      updateThreadFollowInCache(client, threadId, desiredValue, lessonContext);
+    } else if (targetType === "lock") {
+      updateThreadLockInCache(client, threadId, desiredValue, lessonContext);
+    }
+  }
+
+  private scheduleBooleanConvergence(
+    state: ThreadBooleanState,
+    delayMs: number,
+  ): void {
+    if (state.dispatchTimer !== null) {
+      clearTimeout(state.dispatchTimer);
+      state.dispatchTimer = null;
+    }
+
+    const capturedGen = this.generation;
+
+    if (delayMs <= 0) {
+      this.processBooleanConvergence(state, capturedGen);
+    } else {
+      state.dispatchTimer = setTimeout(() => {
+        state.dispatchTimer = null;
+        this.processBooleanConvergence(state, capturedGen);
+      }, delayMs);
+    }
+  }
+
+  private processBooleanConvergence(
+    state: ThreadBooleanState,
+    capturedGen: number,
+  ): void {
+    if (this.generation !== capturedGen) return;
+
+    // Never allow parallel requests for the same thread
+    if (state.inFlightState !== null) return;
+
+    // If desiredState matches serverBaseline, we have converged!
+    // Rapid toggles before dispatch coalesce to zero network calls.
+    if (state.desiredState === state.serverBaseline) return;
+
+    const targetState = state.desiredState;
+    state.inFlightState = targetState;
+
+    const controller = new AbortController();
+    state.abortController = controller;
+
+    let apiCall: Promise<any>;
+    if (state.targetType === "bookmark") {
+      apiCall = learningInteractionsService.toggleBookmark(state.threadId);
+    } else if (state.targetType === "follow") {
+      apiCall = learningInteractionsService.toggleFollow(state.threadId);
+    } else {
+      apiCall = learningInteractionsService.lockThread(state.threadId, {
+        isLocked: targetState,
+      });
+    }
+
+    apiCall
+      .then((response) => {
+        if (this.generation !== capturedGen) return;
+
+        state.abortController = null;
+        state.inFlightState = null;
+
+        // Authoritative reconciliation:
+        // Bookmark & Follow are toggle endpoints that return the resulting state.
+        // Lock returns the resulting isLocked state.
+        let authoritativeBaseline: boolean;
+        if (state.targetType === "bookmark") {
+          authoritativeBaseline =
+            typeof response?.bookmarked === "boolean"
+              ? response.bookmarked
+              : targetState;
+        } else if (state.targetType === "follow") {
+          authoritativeBaseline =
+            typeof response?.following === "boolean"
+              ? response.following
+              : targetState;
+        } else {
+          authoritativeBaseline =
+            typeof response?.isLocked === "boolean"
+              ? response.isLocked
+              : targetState;
+        }
+
+        state.serverBaseline = authoritativeBaseline;
+
+        // Compare authoritative response baseline against latest desiredState
+        if (state.desiredState !== state.serverBaseline) {
+          // Immediately continue convergence from the authoritative response
+          this.processBooleanConvergence(state, capturedGen);
+        } else if (authoritativeBaseline !== targetState) {
+          // If server response unexpectedly differed from what was predicted,
+          // ensure the cache matches the authoritative server state.
+          this.applyBooleanCacheUpdate(
+            state.targetType,
+            state.threadId,
+            authoritativeBaseline,
+            state.queryClient,
+            state.lessonContext,
+          );
+        }
+      })
+      .catch((error) => {
+        if (this.generation !== capturedGen) return;
+        if (controller.signal.aborted) return;
+
+        state.abortController = null;
+        state.inFlightState = null;
+
+        // Roll back desired state to the last known server baseline
+        const rollbackValue = state.serverBaseline;
+        state.desiredState = rollbackValue;
+
+        this.applyBooleanCacheUpdate(
+          state.targetType,
+          state.threadId,
+          rollbackValue,
+          state.queryClient,
+          state.lessonContext,
+        );
+
+        if (state.onFailure) {
+          state.onFailure(error);
+        }
+      });
+  }
+
+  // ==========================================
+  // ACCEPT / UNACCEPT ANSWER (Intent-Based)
+  // ==========================================
+
+  private acceptAnswerKey(threadId: string): string {
+    return `accept-answer:${threadId}`;
+  }
+
+  /**
+   * Sets the user's desired accepted reply ID for a question thread.
+   * Passing `null` indicates that no reply should be accepted (unaccept).
+   * 1. Updates replies and thread caches immediately.
+   * 2. Converges to desired state via minimal compensating API requests.
+   */
+  setAcceptedAnswer({
+    threadId,
+    desiredAcceptedReplyId,
+    currentBaselineReplyId,
+    lessonContext,
+    debounceMs = 30,
+    onFailure,
+    queryClient,
+  }: SetAcceptedAnswerOptions): void {
+    const key = this.acceptAnswerKey(threadId);
+    let state = this.acceptAnswerEntries.get(key);
+    const activeClient = queryClient ?? this.queryClient;
+
+    if (!state) {
+      const baseline =
+        currentBaselineReplyId !== undefined ? currentBaselineReplyId : null;
+      state = {
+        threadId,
+        serverBaselineAcceptedReplyId: baseline,
+        desiredAcceptedReplyId,
+        inFlightTargetReplyId: null,
+        inFlightAccepted: null,
+        abortController: null,
+        lessonContext,
+        dispatchTimer: null,
+        onFailure,
+        queryClient: activeClient,
+      };
+      this.acceptAnswerEntries.set(key, state);
+    } else {
+      state.desiredAcceptedReplyId = desiredAcceptedReplyId;
+      state.queryClient = activeClient;
+      if (lessonContext) state.lessonContext = lessonContext;
+      if (onFailure) state.onFailure = onFailure;
+    }
+
+    // 1. Instantly apply mutual exclusivity transition to TanStack Query cache
+    updateAcceptedAnswerInCache(
+      state.queryClient,
+      threadId,
+      desiredAcceptedReplyId,
+      state.lessonContext,
+    );
+
+    // 2. Schedule convergence
+    this.scheduleAcceptedConvergence(state, debounceMs);
+  }
+
+  private scheduleAcceptedConvergence(
+    state: ThreadAcceptedAnswerState,
+    delayMs: number,
+  ): void {
+    if (state.dispatchTimer !== null) {
+      clearTimeout(state.dispatchTimer);
+      state.dispatchTimer = null;
+    }
+
+    const capturedGen = this.generation;
+
+    if (delayMs <= 0) {
+      this.processAcceptedConvergence(state, capturedGen);
+    } else {
+      state.dispatchTimer = setTimeout(() => {
+        state.dispatchTimer = null;
+        this.processAcceptedConvergence(state, capturedGen);
+      }, delayMs);
+    }
+  }
+
+  private processAcceptedConvergence(
+    state: ThreadAcceptedAnswerState,
+    capturedGen: number,
+  ): void {
+    if (this.generation !== capturedGen) return;
+
+    // Never allow parallel accept/unaccept requests for the same thread
+    if (state.inFlightTargetReplyId !== null) return;
+
+    // If desired matches serverBaseline, we have converged!
+    if (state.desiredAcceptedReplyId === state.serverBaselineAcceptedReplyId) {
+      return;
+    }
+
+    let targetReplyId: string;
+    let targetAccepted: boolean;
+
+    if (state.desiredAcceptedReplyId !== null) {
+      // User wants desiredAcceptedReplyId to be accepted
+      targetReplyId = state.desiredAcceptedReplyId;
+      targetAccepted = true;
+    } else {
+      // User wants no accepted answer.
+      // Unaccept whatever reply is currently accepted on the server
+      if (state.serverBaselineAcceptedReplyId === null) {
+        // Both are null, already converged
+        return;
+      }
+      targetReplyId = state.serverBaselineAcceptedReplyId;
+      targetAccepted = false;
+    }
+
+    state.inFlightTargetReplyId = targetReplyId;
+    state.inFlightAccepted = targetAccepted;
+
+    const controller = new AbortController();
+    state.abortController = controller;
+
+    learningInteractionsService
+      .acceptReply(targetReplyId, { accepted: targetAccepted })
+      .then((response) => {
+        if (this.generation !== capturedGen) return;
+
+        state.abortController = null;
+        state.inFlightTargetReplyId = null;
+        state.inFlightAccepted = null;
+
+        // Authoritative reconciliation:
+        // Response contains acceptedAnswerId: string | null
+        const authoritativeReplyId =
+          response?.acceptedAnswerId !== undefined
+            ? response.acceptedAnswerId
+            : targetAccepted
+              ? targetReplyId
+              : null;
+
+        state.serverBaselineAcceptedReplyId = authoritativeReplyId;
+
+        if (state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId) {
+          // Intent changed while request was in-flight, continue convergence
+          this.processAcceptedConvergence(state, capturedGen);
+        } else if (authoritativeReplyId !== state.desiredAcceptedReplyId) {
+          // If server result differed from expected, reconcile cache
+          updateAcceptedAnswerInCache(
+            state.queryClient,
+            state.threadId,
+            authoritativeReplyId,
+            state.lessonContext,
+          );
+        }
+      })
+      .catch((error) => {
+        if (this.generation !== capturedGen) return;
+        if (controller.signal.aborted) return;
+
+        state.abortController = null;
+        state.inFlightTargetReplyId = null;
+        state.inFlightAccepted = null;
+
+        // Roll back desired state to authoritative server baseline
+        const rollbackReplyId = state.serverBaselineAcceptedReplyId;
+        state.desiredAcceptedReplyId = rollbackReplyId;
+
+        updateAcceptedAnswerInCache(
+          state.queryClient,
+          state.threadId,
+          rollbackReplyId,
+          state.lessonContext,
         );
 
         if (state.onFailure) {

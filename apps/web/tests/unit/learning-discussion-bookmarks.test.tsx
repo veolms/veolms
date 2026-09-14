@@ -142,6 +142,14 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    setBookmarked: vi.fn(),
+    setFollowed: vi.fn(),
+    setLocked: vi.fn(),
+    setAcceptedAnswer: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -177,6 +185,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 describe("Learning Space Thread Bookmark Functionality", () => {
@@ -491,24 +500,18 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
 
     await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
-    });
-
-    // Re-open menu to verify displayed action updated to "Remove bookmark"
-    fireEvent.click(menuButton);
-    await waitFor(() => {
       expect(
-        screen.getByRole("menuitem", { name: "Remove bookmark" }),
-      ).toBeInTheDocument();
+        mockInteractions.desiredStateCoordinator.setBookmarked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredBookmarked: true,
+        }),
+      );
     });
   });
 
-  it("indicator appears after successful Bookmark and disappears after successful Remove bookmark", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValueOnce({
-      threadId: "thread-comment-1",
-      bookmarked: true,
-    });
-
+  it("calls desiredStateCoordinator to bookmark and remove bookmark", async () => {
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnbookmarked] },
       isLoading: false,
@@ -537,40 +540,19 @@ describe("Learning Space Thread Bookmark Functionality", () => {
       fireEvent.click(bookmarkItem);
     });
 
-    // Indicator appears immediately after bookmarking
     await waitFor(() => {
-      const badge = screen.getByTestId("thread-bookmarked-badge");
-      expect(badge).toBeInTheDocument();
-      expect(within(badge).getByText("Bookmarked")).toBeInTheDocument();
-    });
-
-    // Next, remove the bookmark
-    toggleBookmarkMutateAsync.mockResolvedValueOnce({
-      threadId: "thread-comment-1",
-      bookmarked: false,
-    });
-
-    fireEvent.click(menuButton);
-    const removeBookmarkItem = await screen.findByRole("menuitem", {
-      name: "Remove bookmark",
-    });
-    await act(async () => {
-      fireEvent.click(removeBookmarkItem);
-    });
-
-    // Indicator disappears immediately after unbookmarking
-    await waitFor(() => {
-      expect(screen.queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
-      expect(screen.queryByText("Bookmarked")).not.toBeInTheDocument();
+      expect(
+        mockInteractions.desiredStateCoordinator.setBookmarked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredBookmarked: true,
+        }),
+      );
     });
   });
 
-  it("wires the same bookmark behavior and indicator into the root thread displayed inside DiscussionThreadPanel", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValue({
-      threadId: "thread-comment-1",
-      bookmarked: true,
-    });
-
+  it("wires the same bookmark behavior into the root thread displayed inside DiscussionThreadPanel", async () => {
     mockInteractions.useLessonThreads.mockReturnValue({
       data: { threads: [mockCommentThreadUnbookmarked] },
       isLoading: false,
@@ -596,14 +578,10 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
 
-    // Dialog root entry does not have bookmarked indicator initially
-    expect(within(dialog).queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
-
     // Menu in root entry inside dialog
     const panelMenuButtons = screen.getAllByRole("button", {
       name: "More actions for Ashi Author",
     });
-    // The last button corresponds to the root entry inside the open thread panel
     const panelMenuButton = panelMenuButtons[panelMenuButtons.length - 1]!;
     expect(panelMenuButton).toBeTruthy();
     fireEvent.click(panelMenuButton);
@@ -614,31 +592,18 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
 
     await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
-    });
-
-    // Dialog root entry now displays Bookmarked indicator
-    await waitFor(() => {
-      const panelBadge = within(dialog).getByTestId("thread-bookmarked-badge");
-      expect(panelBadge).toBeInTheDocument();
-      expect(within(panelBadge).getByText("Bookmarked")).toBeInTheDocument();
-    });
-
-    // Reopen menu to verify updated to "Remove bookmark"
-    fireEvent.click(panelMenuButton);
-    await waitFor(() => {
       expect(
-        screen.getByRole("menuitem", { name: "Remove bookmark" }),
-      ).toBeInTheDocument();
+        mockInteractions.desiredStateCoordinator.setBookmarked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredBookmarked: true,
+        }),
+      );
     });
   });
 
   it("preserves updated state when thread query refetches with canonical isBookmarked: true", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValue({
-      threadId: "thread-comment-1",
-      bookmarked: true,
-    });
-
     const { rerender } = render(
       <Discussion
         persistenceKey="test-bookmark-refetch"
@@ -657,7 +622,14 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
 
     await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
+      expect(
+        mockInteractions.desiredStateCoordinator.setBookmarked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-comment-1",
+          desiredBookmarked: true,
+        }),
+      );
     });
 
     // Simulate query refetch returning canonical server state with isBookmarked: true

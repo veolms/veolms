@@ -159,6 +159,14 @@ const mockInteractions = vi.hoisted(() => ({
   useLockThread: vi.fn(),
   useCreateReport: vi.fn(),
   useThreadDetails: vi.fn((..._args: any[]) => ({ data: undefined, isLoading: false, isError: false })),
+  desiredStateCoordinator: {
+    setLiked: vi.fn(),
+    setBookmarked: vi.fn(),
+    setFollowed: vi.fn(),
+    setLocked: vi.fn(),
+    setAcceptedAnswer: vi.fn(),
+    reset: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/services/auth", () => ({
@@ -194,6 +202,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useLockThread: (...args: any[]) => mockInteractions.useLockThread(...args),
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
   useThreadDetails: (...args: any[]) => mockInteractions.useThreadDetails(...args),
+  desiredStateCoordinator: mockInteractions.desiredStateCoordinator,
 }));
 
 describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () => {
@@ -303,11 +312,14 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
       fireEvent.click(acceptBtn);
     });
 
-    expect(acceptReplyMutateAsync).toHaveBeenCalledWith({
-      threadId: "thread-question-1",
-      replyId: "reply-qa-1",
-      payload: { accepted: true },
-    });
+    expect(
+      mockInteractions.desiredStateCoordinator.setAcceptedAnswer,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-question-1",
+        desiredAcceptedReplyId: "reply-qa-1",
+      }),
+    );
   });
 
   it("2. accepted answer displays accepted-answer-badge on reply, and qa-solved-badge on thread when acceptedAnswerId is set", async () => {
@@ -400,11 +412,14 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
       fireEvent.click(acceptBtn);
     });
 
-    expect(acceptReplyMutateAsync).toHaveBeenCalledWith({
-      threadId: "thread-question-1",
-      replyId: "reply-qa-1",
-      payload: { accepted: false },
-    });
+    expect(
+      mockInteractions.desiredStateCoordinator.setAcceptedAnswer,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-question-1",
+        desiredAcceptedReplyId: null,
+      }),
+    );
   });
 
   it("4. thread author or moderator can lock thread calling useLockThread with isLocked: true", async () => {
@@ -433,10 +448,14 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
     });
 
     await waitFor(() => {
-      expect(lockThreadMutateAsync).toHaveBeenCalledWith({
-        threadId: "thread-question-1",
-        payload: { isLocked: true },
-      });
+      expect(
+        mockInteractions.desiredStateCoordinator.setLocked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-question-1",
+          desiredLocked: true,
+        }),
+      );
     });
   });
 
@@ -512,10 +531,14 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
     });
 
     await waitFor(() => {
-      expect(lockThreadMutateAsync).toHaveBeenCalledWith({
-        threadId: "thread-question-1",
-        payload: { isLocked: false },
-      });
+      expect(
+        mockInteractions.desiredStateCoordinator.setLocked,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-question-1",
+          desiredLocked: false,
+        }),
+      );
     });
   });
 

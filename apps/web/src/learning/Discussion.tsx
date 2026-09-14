@@ -52,17 +52,13 @@ import {
 } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
 import {
-  useAcceptReply,
   useCreateLessonThread,
   useCreateNote,
   useCreateReport,
   useDeleteNote,
   useDeleteThread,
   useLessonThreads,
-  useLockThread,
   useThreadDetails,
-  useToggleBookmark,
-  useToggleFollow,
   desiredStateCoordinator,
   useUpdateNote,
   useUpdateThread,
@@ -444,10 +440,6 @@ function DiscussionInner({
   );
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread();
-  const toggleBookmarkMutation = useToggleBookmark();
-  const toggleFollowMutation = useToggleFollow();
-  const acceptReplyMutation = useAcceptReply();
-  const lockThreadMutation = useLockThread();
   const createReportMutation = useCreateReport();
 
   const currentUserRole = useMemo(() => {
@@ -494,12 +486,6 @@ function DiscussionInner({
   const isBackendMode = Boolean(
     courseId || courseSlug || isInteractionCapabilitiesLoading,
   );
-  const [bookmarkOverrides, setBookmarkOverrides] = useState<
-    Record<string, boolean>
-  >({});
-  const [followOverrides, setFollowOverrides] = useState<
-    Record<string, boolean>
-  >({});
 
   const rawThreadId = searchParams.get("thread");
   const threadIdFromUrl =
@@ -515,18 +501,11 @@ function DiscussionInner({
 
   const directThreadComment = useMemo<Comment | null>(() => {
     if (!directThreadData || !isCommentOrQaThread(directThreadData)) return null;
-    const comment = adaptLearningThreadToComment(
+    return adaptLearningThreadToComment(
       directThreadData,
       currentUser?.id,
     );
-    if (typeof bookmarkOverrides[String(directThreadData.id)] === "boolean") {
-      comment.isBookmarked = bookmarkOverrides[String(directThreadData.id)];
-    }
-    if (typeof followOverrides[String(directThreadData.id)] === "boolean") {
-      comment.isFollowing = followOverrides[String(directThreadData.id)];
-    }
-    return comment;
-  }, [bookmarkOverrides, currentUser?.id, directThreadData, followOverrides]);
+  }, [currentUser?.id, directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -540,23 +519,12 @@ function DiscussionInner({
 
     return threadsData.threads
       .filter(isCommentOrQaThread)
-      .map((thread) => {
-        const comment = adaptLearningThreadToComment(thread, currentUser?.id);
-        if (typeof bookmarkOverrides[String(thread.id)] === "boolean") {
-          comment.isBookmarked = bookmarkOverrides[String(thread.id)];
-        }
-        if (typeof followOverrides[String(thread.id)] === "boolean") {
-          comment.isFollowing = followOverrides[String(thread.id)];
-        }
-        return comment;
-      });
+      .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id));
   }, [
-    bookmarkOverrides,
     capabilities.allowComments,
     capabilities.allowQa,
     courseId,
     currentUser?.id,
-    followOverrides,
     lessonId,
     threadsData?.threads,
   ]);
@@ -1134,16 +1102,19 @@ function DiscussionInner({
     replyId: string | number,
     accepted: boolean,
   ) => {
+    const threadIdStr = String(threadId);
+    const replyIdStr = String(replyId);
     if (isBackendMode) {
-      try {
-        await acceptReplyMutation.mutateAsync({
-          threadId: String(threadId),
-          replyId: String(replyId),
-          payload: { accepted },
-        });
-      } catch (err: any) {
-        setNotice(err?.message || "Failed to update accepted answer.");
-      }
+      desiredStateCoordinator.setAcceptedAnswer({
+        threadId: threadIdStr,
+        desiredAcceptedReplyId: accepted ? replyIdStr : null,
+        lessonContext:
+          courseId && lessonId ? { courseId, lessonId } : undefined,
+        queryClient: queryClient ?? undefined,
+        onFailure: (err: any) => {
+          setNotice(err?.message || "Failed to update accepted answer.");
+        },
+      });
     } else {
       const nextAcceptedId = accepted ? String(replyId) : null;
       const update = (current: Comment[]) =>
@@ -1172,15 +1143,19 @@ function DiscussionInner({
     threadId: string | number,
     locked: boolean,
   ) => {
+    const threadIdStr = String(threadId);
     if (isBackendMode) {
-      try {
-        await lockThreadMutation.mutateAsync({
-          threadId: String(threadId),
-          payload: { isLocked: locked },
-        });
-      } catch (err: any) {
-        setNotice(err?.message || "Failed to update discussion lock status.");
-      }
+      desiredStateCoordinator.setLocked({
+        threadId: threadIdStr,
+        desiredLocked: locked,
+        currentBaseline: !locked,
+        lessonContext:
+          courseId && lessonId ? { courseId, lessonId } : undefined,
+        queryClient: queryClient ?? undefined,
+        onFailure: (err: any) => {
+          setNotice(err?.message || "Failed to update discussion lock status.");
+        },
+      });
     } else {
       const update = (current: Comment[]) =>
         current.map((entry) =>
@@ -1197,18 +1172,18 @@ function DiscussionInner({
   ): Promise<boolean> => {
     const threadIdStr = String(threadId);
     if (isBackendMode) {
-      try {
-        const response = await toggleBookmarkMutation.mutateAsync(threadIdStr);
-        const finalBookmarked = response.bookmarked;
-        setBookmarkOverrides((current) => ({
-          ...current,
-          [threadIdStr]: finalBookmarked,
-        }));
-        return finalBookmarked;
-      } catch (err: any) {
-        setNotice(err?.message || "Failed to update bookmark status.");
-        throw err;
-      }
+      desiredStateCoordinator.setBookmarked({
+        threadId: threadIdStr,
+        desiredBookmarked: bookmarked,
+        currentBaseline: !bookmarked,
+        lessonContext:
+          courseId && lessonId ? { courseId, lessonId } : undefined,
+        queryClient: queryClient ?? undefined,
+        onFailure: (err: any) => {
+          setNotice(err?.message || "Failed to update bookmark status.");
+        },
+      });
+      return bookmarked;
     } else {
       setEntries((current) =>
         current.map((entry) =>
@@ -1234,18 +1209,18 @@ function DiscussionInner({
   ): Promise<boolean> => {
     const threadIdStr = String(threadId);
     if (isBackendMode) {
-      try {
-        const response = await toggleFollowMutation.mutateAsync(threadIdStr);
-        const finalFollowing = response.following;
-        setFollowOverrides((current) => ({
-          ...current,
-          [threadIdStr]: finalFollowing,
-        }));
-        return finalFollowing;
-      } catch (err: any) {
-        setNotice(err?.message || "Failed to update follow status.");
-        throw err;
-      }
+      desiredStateCoordinator.setFollowed({
+        threadId: threadIdStr,
+        desiredFollowed: following,
+        currentBaseline: !following,
+        lessonContext:
+          courseId && lessonId ? { courseId, lessonId } : undefined,
+        queryClient: queryClient ?? undefined,
+        onFailure: (err: any) => {
+          setNotice(err?.message || "Failed to update follow status.");
+        },
+      });
+      return following;
     } else {
       setEntries((current) =>
         current.map((entry) =>

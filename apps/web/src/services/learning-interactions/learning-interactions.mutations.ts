@@ -133,28 +133,16 @@ export function useToggleLike() {
 }
 
 export function useToggleBookmark() {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (threadId) =>
       learningInteractionsService.toggleBookmark(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
   });
 }
 
 export function useToggleFollow() {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (threadId) =>
       learningInteractionsService.toggleFollow(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
   });
 }
 
@@ -177,9 +165,6 @@ export function useAcceptReply(defaultThreadId?: string) {
           queryKey: learningInteractionKeys.threadRepliesRoot(targetThreadId),
         });
       }
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
     },
   });
 }
@@ -212,9 +197,6 @@ export function useLockThread(defaultThreadId?: string) {
           queryKey: learningInteractionKeys.threadDetails(targetThreadId),
         });
       }
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
     },
   });
 }

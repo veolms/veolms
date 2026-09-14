@@ -37,6 +37,30 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
         liked: true,
         likesCount: 1,
       });
+
+    vi.spyOn(learningInteractionsService, "toggleBookmark").mockResolvedValue({
+      threadId: "thread-1",
+      bookmarked: true,
+    });
+
+    vi.spyOn(learningInteractionsService, "toggleFollow").mockResolvedValue({
+      threadId: "thread-1",
+      following: true,
+    });
+
+    vi.spyOn(learningInteractionsService, "lockThread").mockResolvedValue({
+      threadId: "thread-1",
+      isLocked: true,
+    });
+
+    vi.spyOn(learningInteractionsService, "acceptReply").mockImplementation(
+      async (replyId, payload) => ({
+        replyId,
+        threadId: "thread-1",
+        isAccepted: payload?.accepted ?? true,
+        acceptedAnswerId: (payload?.accepted ?? true) ? replyId : null,
+      }),
+    );
   });
 
   describe("1. Transition-Aware Like Counter", () => {
@@ -346,6 +370,564 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
 
       // Internal coordinator state for thread-1 was cleared and remains inert
       expect(coordinator.getState("thread", "thread-1")).toBeUndefined();
+    });
+  });
+
+  describe("6. Optimistic Bookmark Convergence", () => {
+    const threadKey = [
+      ...learningInteractionKeys.all,
+      "lesson-threads",
+      "c1",
+      "l1",
+    ];
+    const detailsKey = learningInteractionKeys.threadDetails("thread-1");
+
+    beforeEach(() => {
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isBookmarked: false } as any],
+        nextCursor: null,
+      });
+      queryClient.setQueryData(detailsKey, {
+        id: "thread-1",
+        isBookmarked: false,
+      } as any);
+    });
+
+    it("immediately updates thread bookmark status in cache (0ms UI latency)", () => {
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      const listCache = queryClient.getQueryData<LearningThreadsListResponse>(threadKey);
+      const detailCache = queryClient.getQueryData<any>(detailsKey);
+      expect(listCache?.threads[0]?.isBookmarked).toBe(true);
+      expect(detailCache?.isBookmarked).toBe(true);
+    });
+
+    it("coalesces bookmark -> remove before dispatch into zero network calls", async () => {
+      const toggleBookmarkSpy = vi.spyOn(
+        learningInteractionsService,
+        "toggleBookmark",
+      );
+
+      // Bookmark
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      // Remove bookmark before 50ms timer expires
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: false,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      // UI returns to false immediately
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isBookmarked,
+      ).toBe(false);
+
+      // Advance timer past debounce
+      vi.advanceTimersByTime(60);
+      await Promise.resolve();
+
+      expect(toggleBookmarkSpy).not.toHaveBeenCalled();
+    });
+
+    it("issues minimal compensating toggle if desired changes while in-flight", async () => {
+      let resolveFirstToggle: any;
+      const firstTogglePromise = new Promise<{ threadId: string; bookmarked: boolean }>(
+        (resolve) => {
+          resolveFirstToggle = resolve;
+        },
+      );
+
+      const toggleBookmarkSpy = vi
+        .spyOn(learningInteractionsService, "toggleBookmark")
+        .mockReturnValueOnce(firstTogglePromise)
+        .mockResolvedValueOnce({ threadId: "thread-1", bookmarked: false });
+
+      // Dispatch bookmark
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      expect(toggleBookmarkSpy).toHaveBeenCalledTimes(1);
+
+      // While in-flight, user removes bookmark
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      // First request resolves with server confirming bookmarked: true
+      resolveFirstToggle({ threadId: "thread-1", bookmarked: true });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Coordinator automatically issues exactly 1 compensating toggle to reach desired: false
+      expect(toggleBookmarkSpy).toHaveBeenCalledTimes(2);
+
+      await Promise.resolve();
+      const listCache = queryClient.getQueryData<LearningThreadsListResponse>(threadKey);
+      expect(listCache?.threads[0]?.isBookmarked).toBe(false);
+    });
+
+    it("rolls back to server baseline on network failure", async () => {
+      vi.spyOn(learningInteractionsService, "toggleBookmark").mockRejectedValueOnce(
+        new Error("Network disconnect"),
+      );
+
+      let failureReported = false;
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+        onFailure: () => {
+          failureReported = true;
+        },
+      });
+
+      // Initially true
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isBookmarked,
+      ).toBe(true);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Reverts to baseline false
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isBookmarked,
+      ).toBe(false);
+      expect(failureReported).toBe(true);
+    });
+  });
+
+  describe("7. Optimistic Follow Convergence", () => {
+    const threadKey = [
+      ...learningInteractionKeys.all,
+      "lesson-threads",
+      "c1",
+      "l1",
+    ];
+
+    beforeEach(() => {
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isFollowing: false } as any],
+        nextCursor: null,
+      });
+    });
+
+    it("immediately updates thread follow status in cache", () => {
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isFollowing,
+      ).toBe(true);
+    });
+
+    it("coalesces follow -> unfollow into zero requests", async () => {
+      const toggleFollowSpy = vi.spyOn(learningInteractionsService, "toggleFollow");
+
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 40,
+      });
+
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: false,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 40,
+      });
+
+      vi.advanceTimersByTime(50);
+      await Promise.resolve();
+
+      expect(toggleFollowSpy).not.toHaveBeenCalled();
+    });
+
+    it("rolls back follow status on failure", async () => {
+      vi.spyOn(learningInteractionsService, "toggleFollow").mockRejectedValueOnce(
+        new Error("Server error"),
+      );
+
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isFollowing,
+      ).toBe(false);
+    });
+  });
+
+  describe("8. Optimistic Lock/Unlock Convergence", () => {
+    const threadKey = [
+      ...learningInteractionKeys.all,
+      "lesson-threads",
+      "c1",
+      "l1",
+    ];
+    const detailsKey = learningInteractionKeys.threadDetails("thread-1");
+
+    beforeEach(() => {
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isLocked: false } as any],
+        nextCursor: null,
+      });
+      queryClient.setQueryData(detailsKey, {
+        id: "thread-1",
+        isLocked: false,
+      } as any);
+    });
+
+    it("immediately locks thread in list and details cache (0ms UI latency)", () => {
+      coordinator.setLocked({
+        threadId: "thread-1",
+        desiredLocked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isLocked,
+      ).toBe(true);
+      expect(queryClient.getQueryData<any>(detailsKey)?.isLocked).toBe(true);
+    });
+
+    it("never allows parallel lock requests for the same thread", async () => {
+      let resolveFirstLock: any;
+      const firstLockPromise = new Promise<{ threadId: string; isLocked: boolean }>(
+        (resolve) => {
+          resolveFirstLock = resolve;
+        },
+      );
+
+      const lockSpy = vi
+        .spyOn(learningInteractionsService, "lockThread")
+        .mockReturnValueOnce(firstLockPromise)
+        .mockResolvedValueOnce({ threadId: "thread-1", isLocked: false });
+
+      // Dispatch lock
+      coordinator.setLocked({
+        threadId: "thread-1",
+        desiredLocked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      expect(lockSpy).toHaveBeenCalledTimes(1);
+
+      // User unlocks while 1st request is in flight
+      coordinator.setLocked({
+        threadId: "thread-1",
+        desiredLocked: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      // Second request MUST NOT have fired in parallel
+      expect(lockSpy).toHaveBeenCalledTimes(1);
+
+      // Settle first request
+      resolveFirstLock({ threadId: "thread-1", isLocked: true });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Now the compensating unlock request fires sequentially
+      expect(lockSpy).toHaveBeenCalledTimes(2);
+      expect(lockSpy).toHaveBeenLastCalledWith("thread-1", { isLocked: false });
+    });
+
+    it("rolls back lock state on failure", async () => {
+      vi.spyOn(learningInteractionsService, "lockThread").mockRejectedValueOnce(
+        new Error("Forbidden"),
+      );
+
+      coordinator.setLocked({
+        threadId: "thread-1",
+        desiredLocked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isLocked,
+      ).toBe(false);
+      expect(queryClient.getQueryData<any>(detailsKey)?.isLocked).toBe(false);
+    });
+  });
+
+  describe("9. Optimistic Accept / Unaccept Answer (Intent-Based)", () => {
+    const threadKey = [
+      ...learningInteractionKeys.all,
+      "lesson-threads",
+      "c1",
+      "l1",
+    ];
+    const detailsKey = learningInteractionKeys.threadDetails("thread-1");
+    const repliesKey = learningInteractionKeys.threadRepliesRoot("thread-1");
+
+    beforeEach(() => {
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [
+          {
+            id: "thread-1",
+            acceptedAnswerId: null,
+            isSolved: false,
+          } as any,
+        ],
+        nextCursor: null,
+      });
+      queryClient.setQueryData(detailsKey, {
+        id: "thread-1",
+        acceptedAnswerId: null,
+        isSolved: false,
+      } as any);
+      queryClient.setQueryData<LearningRepliesListResponse>(repliesKey, {
+        replies: [
+          { id: "reply-A", threadId: "thread-1", isAccepted: false } as any,
+          { id: "reply-B", threadId: "thread-1", isAccepted: false } as any,
+        ],
+        nextCursor: null,
+        totalCount: 2,
+      });
+    });
+
+    it("accepts reply and marks thread solved immediately", () => {
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-A",
+        currentBaselineReplyId: null,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      const replies = queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)?.replies;
+      expect(replies?.[0]?.isAccepted).toBe(true);
+      expect(replies?.[1]?.isAccepted).toBe(false);
+
+      const thread = queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0];
+      expect(thread?.acceptedAnswerId).toBe("reply-A");
+    });
+
+    it("unaccepts reply and marks thread unsolved immediately", () => {
+      // Set baseline to reply-A accepted
+      queryClient.setQueryData<LearningRepliesListResponse>(repliesKey, {
+        replies: [
+          { id: "reply-A", threadId: "thread-1", isAccepted: true } as any,
+          { id: "reply-B", threadId: "thread-1", isAccepted: false } as any,
+        ],
+        nextCursor: null,
+        totalCount: 2,
+      });
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: null,
+        currentBaselineReplyId: "reply-A",
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      const replies = queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)?.replies;
+      expect(replies?.[0]?.isAccepted).toBe(false);
+
+      const thread = queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0];
+      expect(thread?.acceptedAnswerId).toBeNull();
+    });
+
+    it("switching from reply A -> B never displays both accepted simultaneously", () => {
+      queryClient.setQueryData<LearningRepliesListResponse>(repliesKey, {
+        replies: [
+          { id: "reply-A", threadId: "thread-1", isAccepted: true } as any,
+          { id: "reply-B", threadId: "thread-1", isAccepted: false } as any,
+        ],
+        nextCursor: null,
+        totalCount: 2,
+      });
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-B",
+        currentBaselineReplyId: "reply-A",
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      const replies = queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)?.replies;
+      expect(replies?.[0]?.isAccepted).toBe(false); // A is false
+      expect(replies?.[1]?.isAccepted).toBe(true);  // B is true
+      expect(
+        replies?.filter((r) => r.isAccepted).length,
+      ).toBe(1);
+
+      const thread = queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0];
+      expect(thread?.acceptedAnswerId).toBe("reply-B");
+    });
+
+    it("coalesces rapid switch (null -> A -> B) before micro-tick into single request for B", async () => {
+      const acceptSpy = vi.spyOn(learningInteractionsService, "acceptReply");
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-A",
+        currentBaselineReplyId: null,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-B",
+        currentBaselineReplyId: null,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 50,
+      });
+
+      vi.advanceTimersByTime(60);
+      await Promise.resolve();
+
+      // Only ONE network call fired directly for reply-B
+      expect(acceptSpy).toHaveBeenCalledTimes(1);
+      expect(acceptSpy).toHaveBeenCalledWith("reply-B", { accepted: true });
+    });
+
+    it("rolls back to previous accepted answer on failure", async () => {
+      // Baseline was reply-A accepted
+      queryClient.setQueryData<LearningRepliesListResponse>(repliesKey, {
+        replies: [
+          { id: "reply-A", threadId: "thread-1", isAccepted: true } as any,
+          { id: "reply-B", threadId: "thread-1", isAccepted: false } as any,
+        ],
+        nextCursor: null,
+        totalCount: 2,
+      });
+
+      vi.spyOn(learningInteractionsService, "acceptReply").mockRejectedValueOnce(
+        new Error("Failed to accept"),
+      );
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-B",
+        currentBaselineReplyId: "reply-A",
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Rolled back to reply-A
+      const replies = queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)?.replies;
+      expect(replies?.[0]?.isAccepted).toBe(true);
+      expect(replies?.[1]?.isAccepted).toBe(false);
+
+      const thread = queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0];
+      expect(thread?.acceptedAnswerId).toBe("reply-A");
+    });
+  });
+
+  describe("10. Auth Boundary Isolation for All Phase 2 Operations", () => {
+    it("reset() cancels pending coordinator timers and makes late network responses inert", async () => {
+      let resolveBookmark: any;
+      const bookmarkPromise = new Promise<{ threadId: string; bookmarked: boolean }>(
+        (resolve) => {
+          resolveBookmark = resolve;
+        },
+      );
+      vi.spyOn(learningInteractionsService, "toggleBookmark").mockReturnValueOnce(
+        bookmarkPromise,
+      );
+
+      const threadKey = [
+        ...learningInteractionKeys.all,
+        "lesson-threads",
+        "c1",
+        "l1",
+      ];
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isBookmarked: false } as any],
+        nextCursor: null,
+      });
+
+      // User A bookmarks
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      await Promise.resolve();
+
+      // User A logs out
+      coordinator.reset();
+
+      // User B logs in with false bookmark
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isBookmarked: false } as any],
+        nextCursor: null,
+      });
+
+      // User A's late bookmark arrives
+      resolveBookmark({ threadId: "thread-1", bookmarked: true });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // User B's cache remains untouched
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isBookmarked,
+      ).toBe(false);
+      expect(coordinator.getBookmarkState("thread-1")).toBeUndefined();
     });
   });
 });
