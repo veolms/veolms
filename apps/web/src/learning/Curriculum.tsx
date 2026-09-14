@@ -195,12 +195,16 @@ export function Curriculum({
       curriculum.getBoundingClientRect().top +
       curriculum.scrollTop;
 
-    curriculum.scrollTo({
-      top: itemTop,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
+    if (typeof curriculum.scrollTo === "function") {
+      curriculum.scrollTo({
+        top: itemTop,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    } else {
+      curriculum.scrollTop = itemTop;
+    }
   };
 
   const revealAndScrollTo = (
@@ -692,35 +696,6 @@ export function Curriculum({
                               <span className="min-w-0 flex-1 truncate">
                                 {title}
                               </span>
-                              {hasLessonQuiz?.(number) ? (
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenLessonQuiz?.(number);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      onOpenLessonQuiz?.(number);
-                                    }
-                                  }}
-                                  className={`learning-curriculum__quiz-trigger ${
-                                    isLessonQuizActive?.(number) ? "is-active" : ""
-                                  }`}
-                                  title={
-                                    isLessonQuizActive?.(number)
-                                      ? "Currently viewing quiz"
-                                      : "Open lesson quiz"
-                                  }
-                                  aria-label={`Open quiz for lesson ${number}: ${title}`}
-                                >
-                                  <Exam size={12} weight="bold" />
-                                  <span>Quiz</span>
-                                </span>
-                              ) : null}
                               <span className="learning-curriculum__lesson-duration">
                                 {duration}
                               </span>

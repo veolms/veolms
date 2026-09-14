@@ -35,6 +35,10 @@ export const quizzesService = {
     quizSchema.parse(
       await api.patch<unknown>(`/quizzes/${encodeURIComponent(id)}`, payload),
     ),
+  deleteQuiz: async (id: string) =>
+    quizDeleteResponseSchema.parse(
+      await api.delete<unknown>(`/quizzes/${encodeURIComponent(id)}`),
+    ),
   addQuestion: async (id: string, payload: CreateQuizQuestionRequest) =>
     quizSchema.parse(
       await api.post<unknown>(
@@ -85,6 +89,12 @@ export const quizzesService = {
       await api.patch<unknown>(
         `/quiz-assignments/${encodeURIComponent(id)}`,
         payload,
+      ),
+    ),
+  deleteAssignment: async (id: string) =>
+    quizDeleteResponseSchema.parse(
+      await api.delete<unknown>(
+        `/quiz-assignments/${encodeURIComponent(id)}`,
       ),
     ),
   listMineAssignments: async () =>

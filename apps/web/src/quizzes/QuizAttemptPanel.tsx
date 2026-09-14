@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { LearnerQuizAttempt, QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
@@ -26,6 +28,9 @@ interface QuizAttemptPanelProps {
   activeAttemptId?: string | null;
   maxAttempts?: number;
   onContinueCourse?: () => void;
+  onBackToVideo?: () => void;
+  onPassed?: (result: QuizResult) => void;
+  lessonBadge?: string;
 }
 
 export function QuizAttemptPanel({
@@ -33,9 +38,25 @@ export function QuizAttemptPanel({
   activeAttemptId = null,
   maxAttempts = 1,
   onContinueCourse,
+  onBackToVideo,
+  onPassed,
+  lessonBadge,
 }: QuizAttemptPanelProps) {
   const [attemptId, setAttemptId] = useState(activeAttemptId);
   const [result, setResult] = useState<QuizResult | null>(null);
+  const prevAssignmentIdRef = useRef(assignmentId);
+
+  useEffect(() => {
+    if (prevAssignmentIdRef.current !== assignmentId) {
+      prevAssignmentIdRef.current = assignmentId;
+      setAttemptId(activeAttemptId);
+      setResult(null);
+      return;
+    }
+    if (!attemptId && activeAttemptId && !result) {
+      setAttemptId(activeAttemptId);
+    }
+  }, [assignmentId, activeAttemptId, attemptId, result]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -76,9 +97,9 @@ export function QuizAttemptPanel({
   const flushAutosync = autosync.flush;
 
   useEffect(() => {
-    if (attemptId || start.isPending) return;
+    if (attemptId || start.isPending || result) return;
     start.mutate(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
-  }, [assignmentId, attemptId, start]);
+  }, [assignmentId, attemptId, start, result]);
 
   useEffect(() => {
     if (
@@ -129,6 +150,8 @@ export function QuizAttemptPanel({
     return (
       <QuizResultCard
         result={result}
+        maxAttempts={maxAttempts}
+        onBackToVideo={onBackToVideo}
         onContinueCourse={onContinueCourse}
         onRetry={result.attemptNumber < maxAttempts ? retry : undefined}
       />
@@ -141,6 +164,28 @@ export function QuizAttemptPanel({
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--text)"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
+        {onBackToVideo || lessonBadge ? (
+          <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            {onBackToVideo ? (
+              <button
+                type="button"
+                onClick={onBackToVideo}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+              >
+                <ArrowLeft size={13} weight="bold" />
+                <span>Back to video</span>
+              </button>
+            ) : (
+              <span />
+            )}
+            {lessonBadge ? (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                <Exam size={14} className="text-(--accent)" weight="bold" />
+                <span>{lessonBadge}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <p role="alert" className="text-red-400">Unable to open this Quiz. {error?.message}</p>
       </section>
     );
@@ -151,6 +196,28 @@ export function QuizAttemptPanel({
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--muted)"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
+        {onBackToVideo || lessonBadge ? (
+          <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            {onBackToVideo ? (
+              <button
+                type="button"
+                onClick={onBackToVideo}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+              >
+                <ArrowLeft size={13} weight="bold" />
+                <span>Back to video</span>
+              </button>
+            ) : (
+              <span />
+            )}
+            {lessonBadge ? (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                <Exam size={14} className="text-(--accent)" weight="bold" />
+                <span>{lessonBadge}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <p role="status">Loading Quiz…</p>
       </section>
     );
@@ -161,6 +228,28 @@ export function QuizAttemptPanel({
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--text)"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
+        {onBackToVideo || lessonBadge ? (
+          <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            {onBackToVideo ? (
+              <button
+                type="button"
+                onClick={onBackToVideo}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+              >
+                <ArrowLeft size={13} weight="bold" />
+                <span>Back to video</span>
+              </button>
+            ) : (
+              <span />
+            )}
+            {lessonBadge ? (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                <Exam size={14} className="text-(--accent)" weight="bold" />
+                <span>{lessonBadge}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <p className="text-(--muted)">This attempt is no longer active.</p>
       </section>
     );
@@ -206,6 +295,9 @@ export function QuizAttemptPanel({
       const next = await submit.mutateAsync(attemptId);
       setResult(next);
       autosync.discard();
+      if (next.passed && onPassed) {
+        onPassed(next);
+      }
     } catch {
       /* Autosync keeps the draft for retry. */
     } finally {
@@ -219,32 +311,66 @@ export function QuizAttemptPanel({
   };
 
   return (
-    <section className="mx-auto w-full max-w-4xl text-(--text)">
+    <section data-quiz-surface="" className="mx-auto w-full max-w-4xl text-(--text)">
       <div
         className="overflow-hidden rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) transition-all"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
-        <header className="border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))] p-4 sm:p-7">
-          <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+        <header className="border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))] p-3.5 sm:p-5">
+          {onBackToVideo || lessonBadge ? (
+            <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+              {onBackToVideo ? (
+                <button
+                  type="button"
+                  onClick={onBackToVideo}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+                >
+                  <ArrowLeft size={13} weight="bold" />
+                  <span>Back to video</span>
+                </button>
+              ) : (
+                <span />
+              )}
+              {lessonBadge ? (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                  <Exam size={14} className="text-(--accent)" weight="bold" />
+                  <span>{lessonBadge}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[0.68rem] sm:text-xs font-bold uppercase tracking-[0.16em] text-(--accent)">
-                Assessment
-              </p>
-              <h1 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <div className="flex items-center gap-2">
+                <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-[0.14em] text-(--accent)">
+                  Assessment
+                </p>
+                <span className="rounded-md bg-(--accent)/10 px-1.5 py-0.5 text-[0.68rem] font-semibold text-(--accent)">
+                  Attempt {attempt.attemptNumber}{maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
+                </span>
+              </div>
+              <h1 className="mt-0.5 text-base sm:text-lg font-semibold tracking-tight text-(--text)">
                 Question {currentIndex + 1} of {attempt.questions.length}
               </h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted)"
+                style={{ boxShadow: "var(--card-compact-shadow)" }}
+              >
+                <Exam size={13} weight="bold" className="text-(--accent)" aria-hidden="true" />
+                <span>Attempt {attempt.attemptNumber}{maxAttempts > 1 ? ` / ${maxAttempts}` : ""}</span>
+              </span>
+              <span
                 aria-live="polite"
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
                   timeExpired
                     ? "border-red-500/30 bg-red-500/12 text-red-400"
                     : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] text-(--muted)"
                 }`}
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <Clock size={14} weight="bold" aria-hidden="true" />
+                <Clock size={13} weight="bold" aria-hidden="true" />
                 {remainingSeconds === null
                   ? "No time limit"
                   : timeExpired
@@ -252,151 +378,187 @@ export function QuizAttemptPanel({
                     : formatQuizRemainingTime(remainingSeconds)}
               </span>
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400"
+                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400"
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <CheckCircle size={14} weight="bold" className="text-emerald-400" aria-hidden="true" />
+                <CheckCircle size={13} weight="bold" className="text-emerald-400" aria-hidden="true" />
                 <AutosaveStatus status={autosync.status} />
               </span>
             </div>
           </div>
         </header>
-        <div className="p-4 sm:p-8 md:p-9">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-(--muted) mb-3 sm:mb-4">
-            <span className="rounded-full bg-(--accent)/10 px-2.5 py-0.5 text-[0.7rem] sm:text-xs font-semibold text-(--accent)">
+        <div className="p-4 sm:p-6 md:p-7">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-(--muted) mb-2.5 sm:mb-3">
+            <span className="rounded-md bg-(--accent)/10 px-2 py-0.5 text-[0.68rem] sm:text-xs font-semibold text-(--accent)">
               {question.questionType === "multiple_choice"
                 ? "Select all that apply"
                 : question.questionType === "true_false"
                   ? "True or false"
-                  : "Single choice"}
+                  : question.questionType === "short_answer"
+                    ? "Input box (Type your answer)"
+                    : "Single choice"}
             </span>
-            <span className="text-[0.7rem] sm:text-xs text-(--muted)">
+            <span className="text-[0.68rem] sm:text-xs text-(--muted)">
               {question.points} point{question.points === 1 ? "" : "s"}
             </span>
           </div>
-          <h2 className="text-lg sm:text-2xl font-bold leading-snug sm:leading-8 tracking-tight text-(--text)">
+          <h2 className="text-base sm:text-lg font-medium leading-relaxed tracking-normal text-(--text)">
             {question.prompt}
           </h2>
-          <fieldset disabled={timeExpired} className="mt-5 sm:mt-8 grid gap-2.5 sm:gap-3.5">
-            <legend className="sr-only">Answer choices</legend>
-            {question.options.map((option, index) => {
-              const isSelected = selected.includes(option.id);
-              const isMultiple = question.questionType === "multiple_choice";
-              return (
-                <label
-                  key={option.id}
-                  className={`group flex min-h-12 sm:min-h-14 cursor-pointer items-center gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border p-3 sm:p-4 transition-all duration-150 active:scale-[0.995] ${
-                    isSelected
-                      ? "border-2 border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--card-surface,var(--surface)))] ring-1 ring-(--accent)/30"
-                      : "border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--card-surface,var(--surface))_95%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover)"
-                  }`}
-                  style={{
-                    boxShadow: isSelected
-                      ? "0 4px 20px color-mix(in srgb, var(--accent) 18%, transparent), var(--card-compact-shadow)"
-                      : "var(--card-compact-shadow)",
+          {question.questionType === "short_answer" ? (
+            <div className="mt-4 sm:mt-6 space-y-2.5">
+              <label
+                htmlFor={`question-input-${question.id}`}
+                className="block text-xs font-medium uppercase tracking-wider text-(--muted)"
+              >
+                Type your answer below
+              </label>
+              <div className="relative">
+                <input
+                  id={`question-input-${question.id}`}
+                  type="text"
+                  disabled={timeExpired}
+                  value={
+                    autosync.value.answers[question.id]?.textResponse ?? ""
+                  }
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    autosync.update((current) => ({
+                      ...current,
+                      answers: {
+                        ...current.answers,
+                        [question.id]: {
+                          selectedOptionIds: [],
+                          textResponse: val,
+                        },
+                      },
+                    }));
                   }}
-                >
-                  <input
-                    type={isMultiple ? "checkbox" : "radio"}
-                    name={`question-${question.id}`}
-                    checked={isSelected}
-                    onChange={() => setSelected(option.id)}
-                    className="sr-only"
-                  />
-                  {/* Custom radio/checkbox indicator */}
-                  <span
-                    className={`size-5 sm:size-5.5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${
+                  placeholder="Type your answer here..."
+                  autoComplete="off"
+                  className="h-11 sm:h-12 w-full rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-4 text-sm font-normal text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20"
+                  style={{ boxShadow: "var(--card-compact-shadow)" }}
+                />
+              </div>
+              <p className="text-[0.72rem] sm:text-xs text-(--muted)">
+                Grading is case-insensitive. Answer will be checked against accepted responses.
+              </p>
+            </div>
+          ) : (
+            <fieldset disabled={timeExpired} className="mt-4 sm:mt-6 grid gap-2 sm:gap-2.5">
+              <legend className="sr-only">Answer choices</legend>
+              {question.options.map((option, index) => {
+                const isSelected = selected.includes(option.id);
+                const isMultiple = question.questionType === "multiple_choice";
+                return (
+                  <label
+                    key={option.id}
+                    className={`group flex min-h-10 sm:min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-all duration-150 active:scale-[0.995] ${
                       isSelected
-                        ? "border-(--accent)"
-                        : "border-[color-mix(in_srgb,var(--text)_30%,transparent)] group-hover:border-[color-mix(in_srgb,var(--text)_50%,transparent)]"
+                        ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--card-surface,var(--surface)))] ring-1 ring-(--accent)/30"
+                        : "border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--card-surface,var(--surface))_95%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover)"
                     }`}
-                    aria-hidden="true"
+                    style={{
+                      boxShadow: isSelected
+                        ? "0 2px 14px color-mix(in srgb, var(--accent) 14%, transparent), var(--card-compact-shadow)"
+                        : "var(--card-compact-shadow)",
+                    }}
                   >
-                    {isSelected ? (
-                      isMultiple ? (
-                        <span className="size-2 sm:size-2.5 rounded-sm bg-(--accent)" />
-                      ) : (
-                        <span className="size-2.5 sm:size-3 rounded-full bg-(--accent)" />
-                      )
-                    ) : null}
-                  </span>
+                    <input
+                      type={isMultiple ? "checkbox" : "radio"}
+                      name={`question-${question.id}`}
+                      checked={isSelected}
+                      onChange={() => setSelected(option.id)}
+                      className="sr-only"
+                    />
+                    {/* Custom indicator: square [] checkbox for multiple choice, circle for single choice */}
+                    <span
+                      className={`size-4.5 sm:size-5 shrink-0 flex items-center justify-center transition-all ${
+                        isMultiple
+                          ? `rounded-md border ${
+                              isSelected
+                                ? "border-(--accent) bg-(--accent) text-(--on-accent,white)"
+                                : "border-[color-mix(in_srgb,var(--text)_35%,transparent)] bg-transparent group-hover:border-[color-mix(in_srgb,var(--text)_55%,transparent)]"
+                            }`
+                          : `rounded-full border-2 ${
+                              isSelected
+                                ? "border-(--accent)"
+                                : "border-[color-mix(in_srgb,var(--text)_30%,transparent)] group-hover:border-[color-mix(in_srgb,var(--text)_50%,transparent)]"
+                            }`
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {isSelected ? (
+                        isMultiple ? (
+                          <Check size={12} weight="bold" className="text-(--on-accent,white)" />
+                        ) : (
+                          <span className="size-2 sm:size-2.5 rounded-full bg-(--accent)" />
+                        )
+                      ) : null}
+                    </span>
 
-                  {/* Letter Badge (A, B, C, D...) */}
-                  <span
-                    className={`flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-                      isSelected
-                        ? "bg-(--accent)/20 text-(--accent) border border-(--accent)/40"
-                        : "border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--muted) group-hover:text-(--text)"
-                    }`}
-                  >
-                    {String.fromCharCode(65 + index)}
-                  </span>
+                    {/* Letter Badge (A, B, C, D...) */}
+                    <span
+                      className={`flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors ${
+                        isSelected
+                          ? "bg-(--accent)/20 text-(--accent) border border-(--accent)/40"
+                          : "border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--muted) group-hover:text-(--text)"
+                      }`}
+                    >
+                      {String.fromCharCode(65 + index)}
+                    </span>
 
-                  {/* Option text */}
-                  <span
-                    className={`text-sm sm:text-base leading-relaxed ${
-                      isSelected
-                        ? "font-semibold text-(--text)"
-                        : "font-normal text-(--text)"
-                    }`}
-                  >
-                    {option.text}
-                  </span>
-                </label>
-              );
-            })}
-          </fieldset>
+                    {/* Option text */}
+                    <span
+                      className={`text-xs sm:text-sm leading-relaxed ${
+                        isSelected
+                          ? "font-medium text-(--text)"
+                          : "font-normal text-(--text)"
+                      }`}
+                    >
+                      {option.text}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          )}
 
-          {/* Bottom pagination & action footer matching mockup */}
-          <footer className="mt-8 sm:mt-10 flex items-center justify-between gap-3 sm:gap-6 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-5 sm:pt-7">
+          {/* Bottom progress bar & navigation footer */}
+          <footer className="mt-6 sm:mt-8 flex items-center justify-between gap-3 sm:gap-4 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-4 sm:pt-5">
             <button
               type="button"
               aria-label="Previous question"
               disabled={currentIndex === 0}
               onClick={() => goTo(currentIndex - 1)}
-              className="size-10 sm:size-11 shrink-0 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) text-(--text) flex items-center justify-center transition-all hover:border-(--accent) hover:text-(--accent) disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+              className="size-9 sm:size-10 shrink-0 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) text-(--text) flex items-center justify-center transition-all hover:border-(--accent) hover:text-(--accent) disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:scale-95"
               style={{ boxShadow: "var(--card-compact-shadow)" }}
             >
-              <ArrowLeft size={18} weight="bold" />
+              <ArrowLeft size={16} weight="bold" />
             </button>
 
-            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto py-1 px-1 max-w-[12rem] sm:max-w-xs md:max-w-md no-scrollbar">
-              {attempt.questions.map((item, index) => {
-                const answered =
-                  (autosync.value.answers[item.id]?.selectedOptionIds.length ?? 0) >
-                  0;
-                const isCurrent = index === currentIndex;
-                return (
-                  <div key={item.id} className="flex flex-col items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      aria-label={`Go to question ${index + 1}`}
-                      aria-current={isCurrent ? "step" : undefined}
-                      onClick={() => goTo(index)}
-                      className={`size-9 sm:size-10 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer ${
-                        isCurrent
-                          ? "bg-(--accent) text-(--on-accent,white) shadow-[0_2px_12px_color-mix(in_srgb,var(--accent)_45%,transparent)]"
-                          : "border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) text-(--text) hover:border-(--accent)/50"
-                      }`}
-                      style={{
-                        boxShadow: isCurrent ? undefined : "var(--card-compact-shadow)",
-                      }}
-                    >
-                      {index + 1}
-                    </button>
-                    <span
-                      className={`size-1.5 rounded-full transition-colors ${
-                        isCurrent
-                          ? "bg-(--accent)"
-                          : answered
-                            ? "bg-emerald-500"
-                            : "bg-[color-mix(in_srgb,var(--text)_25%,transparent)]"
-                      }`}
-                      aria-hidden="true"
-                    />
-                  </div>
-                );
-              })}
+            {/* Compact Multi-gradient Progress Bar */}
+            <div
+              className="flex flex-1 max-w-40 sm:max-w-52 flex-col items-center gap-1 px-1"
+              role="progressbar"
+              aria-valuenow={currentIndex + 1}
+              aria-valuemin={1}
+              aria-valuemax={attempt.questions.length}
+              aria-label={`Progress: Question ${currentIndex + 1} of ${attempt.questions.length}`}
+            >
+              <span className="text-[0.68rem] sm:text-[0.72rem] font-semibold text-(--muted)">
+                {Math.round(((currentIndex + 1) / attempt.questions.length) * 100)}%
+              </span>
+              <div className="h-1 sm:h-1.5 w-full overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                <div
+                  className="h-full rounded-full transition-all duration-300 ease-out"
+                  style={{
+                    width: `${((currentIndex + 1) / attempt.questions.length) * 100}%`,
+                    background:
+                      "linear-gradient(90deg, #f59e0b 0%, var(--accent, #eab308) 50%, #10b981 100%)",
+                  }}
+                />
+              </div>
             </div>
 
             {currentIndex < attempt.questions.length - 1 ? (
@@ -405,9 +567,9 @@ export function QuizAttemptPanel({
                 aria-label="Next question"
                 disabled={timeExpired}
                 onClick={() => goTo(currentIndex + 1)}
-                className="size-10 sm:size-11 shrink-0 rounded-xl bg-(--accent) text-(--on-accent,white) flex items-center justify-center transition-all hover:opacity-95 shadow-[0_2px_12px_color-mix(in_srgb,var(--accent)_35%,transparent)] cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="size-9 sm:size-10 shrink-0 rounded-xl bg-(--accent) text-(--on-accent,white) flex items-center justify-center transition-all hover:opacity-95 shadow-[0_2px_12px_color-mix(in_srgb,var(--accent)_35%,transparent)] cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <ArrowRight size={18} weight="bold" />
+                <ArrowRight size={16} weight="bold" />
               </button>
             ) : (
               <Button
@@ -415,10 +577,10 @@ export function QuizAttemptPanel({
                   !complete || submit.isPending || isSubmitting || timeExpired
                 }
                 onClick={requestSubmit}
-                className="h-10 sm:h-11 px-4 sm:px-6 rounded-xl font-bold text-xs sm:text-sm shadow-[0_2px_12px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl font-semibold text-xs sm:text-sm shadow-[0_2px_12px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
               >
                 {submit.isPending || isSubmitting ? "Submitting…" : "Submit"}
-                <CheckCircle size={18} weight="bold" />
+                <CheckCircle size={16} weight="bold" />
               </Button>
             )}
           </footer>
@@ -493,18 +655,35 @@ export function QuizAttemptPanel({
 
 function QuizResultCard({
   result,
+  maxAttempts = 1,
+  onBackToVideo,
   onContinueCourse,
   onRetry,
 }: {
   result: QuizResult;
+  maxAttempts?: number;
+  onBackToVideo?: () => void;
   onContinueCourse?: () => void;
   onRetry?: () => void;
 }) {
   return (
     <section
+      data-quiz-surface=""
       className="mx-auto max-w-2xl rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-8 text-(--text)"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
+      {onBackToVideo ? (
+        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+          <button
+            type="button"
+            onClick={onBackToVideo}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+          >
+            <ArrowLeft size={13} weight="bold" />
+            <span>Back to video</span>
+          </button>
+        </div>
+      ) : null}
       <p className="text-[0.68rem] sm:text-xs font-bold uppercase tracking-[0.18em] text-(--accent)">
         Quiz completed
       </p>
@@ -531,7 +710,9 @@ function QuizResultCard({
           style={{ boxShadow: "var(--card-compact-shadow)" }}
         >
           <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">Attempt</span>
-          <strong className="text-base sm:text-lg font-bold text-(--text)">#{result.attemptNumber}</strong>
+          <strong className="text-base sm:text-lg font-bold text-(--text)">
+            #{result.attemptNumber}{maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
+          </strong>
         </div>
       </div>
       <div className="mt-5 sm:mt-6 flex flex-wrap gap-2.5">
@@ -568,12 +749,14 @@ function QuizResultCard({
                 </p>
                 <p className="mt-2 text-sm text-(--muted)">
                   <span className="font-semibold text-(--text)">Your answer:</span>{" "}
-                  {answer.selectedOptionTexts.join(", ") || "No answer"}
+                  {answer.textResponse !== undefined && answer.textResponse !== null
+                    ? answer.textResponse || "No answer"
+                    : answer.selectedOptionTexts?.join(", ") || "No answer"}
                 </p>
                 {!answer.isCorrect ? (
                   <p className="mt-1 text-sm text-(--muted)">
                     <span className="font-semibold text-(--text)">Correct answer:</span>{" "}
-                    {answer.correctOptionTexts.join(", ")}
+                    {answer.correctOptionTexts?.join(" or ") || "None"}
                   </p>
                 ) : null}
                 {answer.explanation ? (

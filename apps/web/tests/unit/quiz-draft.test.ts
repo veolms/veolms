@@ -80,4 +80,38 @@ describe("quiz attempt draft", () => {
     expect(formatQuizRemainingTime(125)).toBe("2:05");
     expect(formatQuizRemainingTime(0)).toBe("0:00");
   });
+
+  it("handles short_answer questions with text responses", () => {
+    const shortAnswerAttempt: LearnerQuizAttempt = {
+      ...attempt,
+      questions: [
+        {
+          id: "question-input-1",
+          questionType: "short_answer",
+          prompt: "What is the capital of France?",
+          points: 5,
+          position: 0,
+          options: [],
+        },
+      ],
+    };
+
+    const emptyDraft: QuizAttemptDraft = {
+      currentQuestionId: "question-input-1",
+      answers: {
+        "question-input-1": { selectedOptionIds: [], textResponse: "" },
+      },
+    };
+    expect(answeredQuestionCount(shortAnswerAttempt, emptyDraft)).toBe(0);
+    expect(hasAnsweredEveryQuestion(shortAnswerAttempt, emptyDraft)).toBe(false);
+
+    const answeredDraft: QuizAttemptDraft = {
+      currentQuestionId: "question-input-1",
+      answers: {
+        "question-input-1": { selectedOptionIds: [], textResponse: "Paris" },
+      },
+    };
+    expect(answeredQuestionCount(shortAnswerAttempt, answeredDraft)).toBe(1);
+    expect(hasAnsweredEveryQuestion(shortAnswerAttempt, answeredDraft)).toBe(true);
+  });
 });

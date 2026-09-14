@@ -6,7 +6,6 @@ interface Props {
 }
 
 export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
-  const createNew = !quizId;
   return (
     <main
       data-quiz-surface=""
@@ -14,7 +13,6 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
     >
       <QuizAuthoringPanel
         initialQuizId={quizId ?? null}
-        createNew={createNew}
         onBack={() => onNavigatePage?.("/quizzes")}
       />
     </main>

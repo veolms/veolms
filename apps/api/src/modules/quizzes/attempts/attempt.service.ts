@@ -4,6 +4,7 @@ import type {
   QuizResponseValue,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import type { QuizServiceOptions } from "../shared/quiz.types.ts";
 import { gradeQuizQuestion, hasQuizAnswer } from "../shared/quiz.grading.ts";
@@ -48,8 +49,45 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
+function shouldRevealAnswers(
+  feedbackMode: string,
+  attemptNumber: number,
+  maxAttempts: number,
+  availableUntil: Date | null,
+  now: Date = new Date(),
+) {
+  if (feedbackMode === "after_submit") return true;
+  if (feedbackMode === "after_attempt") {
+    return (
+      attemptNumber >= maxAttempts ||
+      Boolean(availableUntil && availableUntil <= now)
+    );
+  }
+  return false;
+}
+
+const startAttemptTimestamps = new Map<string, number[]>();
+const answerSaveTimestamps = new Map<string, number[]>();
+
+function checkRateLimit(
+  store: Map<string, number[]>,
+  key: string,
+  limit: number,
+  windowMs: number,
+  errorMessage: string,
+) {
+  const now = Date.now();
+  const timestamps = (store.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (timestamps.length >= limit) {
+    throw new AppError(429, "RATE_LIMIT_EXCEEDED", errorMessage);
+  }
+  timestamps.push(now);
+  store.set(key, timestamps);
+}
+
 export function createAttemptService(options: QuizServiceOptions) {
   const { database, accessService, courseService } = options;
+  const outbox = createOutboxService();
 
   async function getAssignment(assignmentId: string) {
     return assignmentDto(await repo.findAssignment(database, assignmentId));
@@ -112,17 +150,20 @@ export function createAttemptService(options: QuizServiceOptions) {
         prompt: question.prompt,
         points: Number(question.points),
         position: question.position,
-        options: (assignment.shuffle_options
-          ? stableShuffle(
-              options.filter((option) => option.question_id === question.id),
-              attempt.id,
-            )
-          : options.filter((option) => option.question_id === question.id)
-        ).map((option) => ({
-          id: option.id,
-          text: option.option_text,
-          position: option.position,
-        })),
+        options:
+          question.question_type === "short_answer"
+            ? []
+            : (assignment.shuffle_options
+                ? stableShuffle(
+                    options.filter((option) => option.question_id === question.id),
+                    attempt.id,
+                  )
+                : options.filter((option) => option.question_id === question.id)
+              ).map((option) => ({
+                id: option.id,
+                text: option.option_text,
+                position: option.position,
+              })),
       })),
       answers: Object.fromEntries(
         answers.map((answer) => [
@@ -134,6 +175,13 @@ export function createAttemptService(options: QuizServiceOptions) {
   }
 
   async function start(userId: string, assignmentId: string) {
+    checkRateLimit(
+      startAttemptTimestamps,
+      `${userId}:${assignmentId}`,
+      5,
+      60_000,
+      "Too many attempt start requests. Please wait a moment.",
+    );
     const { assignment, version } = await assertCanAttempt(
       assignmentId,
       userId,
@@ -243,7 +291,19 @@ export function createAttemptService(options: QuizServiceOptions) {
     response: QuizResponseValue,
     validOptionIds: Set<string>,
   ) {
-    const ids = response.selectedOptionIds;
+    if (question.question_type === "short_answer") {
+      if (
+        response.textResponse !== undefined &&
+        typeof response.textResponse !== "string"
+      )
+        throw new AppError(
+          400,
+          "INVALID_TEXT_RESPONSE",
+          "Short answer response must be a text string.",
+        );
+      return;
+    }
+    const ids = response.selectedOptionIds ?? [];
     if (new Set(ids).size !== ids.length)
       throw new AppError(
         400,
@@ -273,6 +333,13 @@ export function createAttemptService(options: QuizServiceOptions) {
     attemptId: string,
     payload: BulkQuizAnswersRequest,
   ) {
+    checkRateLimit(
+      answerSaveTimestamps,
+      attemptId,
+      60,
+      60_000,
+      "Saving answers too rapidly. Please slow down.",
+    );
     const attempt = await requireOwnedActiveAttempt(userId, attemptId);
     const ids = payload.answers.map((answer) => answer.questionId);
     if (new Set(ids).size !== ids.length)
@@ -343,16 +410,19 @@ export function createAttemptService(options: QuizServiceOptions) {
   }
 
   function grade(
-    question: { id: string; points: number },
-    questionType: string,
+    question: { id: string; points: number; question_type: string },
     selected: string[],
     correct: string[],
+    textResponse?: string | null,
+    acceptedOptionTexts?: string[],
   ) {
-    void questionType;
     return gradeQuizQuestion({
+      questionType: question.question_type,
       points: question.points,
       selectedOptionIds: selected,
       correctOptionIds: correct,
+      textResponse,
+      acceptedOptionTexts,
     });
   }
 
@@ -372,6 +442,12 @@ export function createAttemptService(options: QuizServiceOptions) {
     const answers = await repo.listAnswers(database, attempt.id);
     const includeFeedback =
       assignment.feedback_mode !== "never" && attempt.status !== "in_progress";
+    const revealAnswers = shouldRevealAnswers(
+      assignment.feedback_mode,
+      attempt.attempt_number,
+      assignment.max_attempts,
+      assignment.available_until,
+    );
     return {
       attemptId: attempt.id,
       assignmentId: attempt.assignment_id,
@@ -394,14 +470,21 @@ export function createAttemptService(options: QuizServiceOptions) {
               const question = questions.find(
                 (item) => item.id === answer.question_id,
               )!;
-              const selected = (answer.response_value as QuizResponseValue)
-                .selectedOptionIds;
+              const responseVal = answer.response_value as QuizResponseValue;
+              const selected = responseVal.selectedOptionIds ?? [];
+              const textResp = responseVal.textResponse ?? null;
               const correct = options
                 .filter(
                   (option) =>
                     option.question_id === question.id && option.is_correct,
                 )
                 .map((option) => option.id);
+              const acceptedTexts = options
+                .filter(
+                  (option) =>
+                    option.question_id === question.id && option.is_correct,
+                )
+                .map((option) => option.option_text);
               const selectedOptionTexts = options
                 .filter(
                   (option) =>
@@ -409,17 +492,17 @@ export function createAttemptService(options: QuizServiceOptions) {
                     selected.includes(option.id),
                 )
                 .map((option) => option.option_text);
-              const correctOptionTexts = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id && option.is_correct,
-                )
-                .map((option) => option.option_text);
+              const correctOptionTexts = revealAnswers ? acceptedTexts : [];
               const graded = grade(
-                { id: question.id, points: Number(question.points) },
-                question.question_type,
+                {
+                  id: question.id,
+                  points: Number(question.points),
+                  question_type: question.question_type,
+                },
                 selected,
                 correct,
+                textResp,
+                acceptedTexts,
               );
               return {
                 questionId: question.id,
@@ -427,11 +510,12 @@ export function createAttemptService(options: QuizServiceOptions) {
                 selectedOptionIds: selected,
                 selectedOptionTexts,
                 correctOptionTexts,
+                textResponse: textResp,
                 isCorrect: Boolean(answer.is_correct ?? graded.isCorrect),
                 pointsAwarded: Number(
                   answer.points_awarded ?? graded.pointsAwarded,
                 ),
-                explanation: question.explanation,
+                explanation: revealAnswers ? question.explanation : null,
               };
             }),
           }
@@ -477,27 +561,48 @@ export function createAttemptService(options: QuizServiceOptions) {
       const answers = await repo.listAnswers(trx, attemptId);
       const graded = questions.map((question) => {
         const answer = answers.find((item) => item.question_id === question.id);
-        const selected = answer
-          ? (answer.response_value as QuizResponseValue).selectedOptionIds
-          : [];
+        const responseVal = answer
+          ? (answer.response_value as QuizResponseValue)
+          : null;
+        const selected = responseVal?.selectedOptionIds ?? [];
+        const textResp = responseVal?.textResponse ?? null;
         const correct = options
           .filter(
             (option) => option.question_id === question.id && option.is_correct,
           )
           .map((option) => option.id);
+        const acceptedTexts = options
+          .filter(
+            (option) => option.question_id === question.id && option.is_correct,
+          )
+          .map((option) => option.option_text);
         const score = grade(
-          { id: question.id, points: Number(question.points) },
-          question.question_type,
+          {
+            id: question.id,
+            points: Number(question.points),
+            question_type: question.question_type,
+          },
           selected,
           correct,
+          textResp,
+          acceptedTexts,
         );
-        return { question, answer, selected, ...score };
+        return {
+          question,
+          answer,
+          selected,
+          textResp,
+          acceptedTexts,
+          ...score,
+        };
       });
       if (
         graded.some(
           (item) =>
             !hasQuizAnswer(
-              item.answer ? { selectedOptionIds: item.selected } : null,
+              item.answer
+                ? (item.answer.response_value as QuizResponseValue)
+                : null,
             ),
         )
       )
@@ -544,6 +649,55 @@ export function createAttemptService(options: QuizServiceOptions) {
           "ATTEMPT_NOT_FOUND",
           "Quiz attempt disappeared during grading.",
         );
+      const course = await courseService.findCourseById(assignment.course_id);
+      const quiz = await repo.findQuiz(trx, assignment.quiz_id);
+      if (course && quiz) {
+        if (passed) {
+          await outbox.publish(trx, {
+            type: "quiz.attempt.passed",
+            version: 1,
+            dedupeKey: `quiz:passed:${attemptId}`,
+            occurredAt: now,
+            payload: {
+              recipientUserId: userId,
+              courseId: course.id,
+              courseTitle: course.title,
+              courseSlug: course.slug,
+              quizId: quiz.id,
+              quizTitle: quiz.title,
+              score,
+              maxScore,
+              scorePercentage: percentage,
+              deepLink: `/learn/${course.slug}?lessonId=${assignment.lesson_id}&view=quiz`,
+            },
+          });
+        } else if (updated.attempt_number >= assignment.max_attempts) {
+          await outbox.publish(trx, {
+            type: "quiz.attempt.failed_final",
+            version: 1,
+            dedupeKey: `quiz:failed_final:${attemptId}`,
+            occurredAt: now,
+            payload: {
+              recipientUserId: userId,
+              courseId: course.id,
+              courseTitle: course.title,
+              courseSlug: course.slug,
+              quizId: quiz.id,
+              quizTitle: quiz.title,
+              maxAttempts: assignment.max_attempts,
+              scorePercentage: percentage,
+              deepLink: `/learn/${course.slug}?lessonId=${assignment.lesson_id}&view=quiz`,
+            },
+          });
+        }
+      }
+      const revealAnswers = shouldRevealAnswers(
+        assignment.feedback_mode,
+        updated.attempt_number,
+        assignment.max_attempts,
+        assignment.available_until,
+        now,
+      );
       const resultAnswers = graded.map((item) => ({
         questionId: item.question.id,
         prompt: item.question.prompt,
@@ -555,15 +709,11 @@ export function createAttemptService(options: QuizServiceOptions) {
               item.selected.includes(option.id),
           )
           .map((option) => option.option_text),
-        correctOptionTexts: options
-          .filter(
-            (option) =>
-              option.question_id === item.question.id && option.is_correct,
-          )
-          .map((option) => option.option_text),
+        correctOptionTexts: revealAnswers ? item.acceptedTexts : [],
+        textResponse: item.textResp,
         isCorrect: item.isCorrect,
         pointsAwarded: item.pointsAwarded,
-        explanation: item.question.explanation,
+        explanation: revealAnswers ? item.question.explanation : null,
       }));
       return {
         attemptId: updated.id,
@@ -719,6 +869,14 @@ export function createAttemptService(options: QuizServiceOptions) {
     };
   }
 
+  async function expireAbandonedAttempts(now: Date = new Date()) {
+    const expired = await repo.expireAbandonedAttempts(database, now);
+    return {
+      expiredCount: expired.length,
+      expiredAttempts: expired,
+    };
+  }
+
   return {
     start,
     getAttempt,
@@ -728,6 +886,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     listMine,
     listAssignments,
     assertCanAttempt,
+    expireAbandonedAttempts,
   };
 }
 export type AttemptService = ReturnType<typeof createAttemptService>;

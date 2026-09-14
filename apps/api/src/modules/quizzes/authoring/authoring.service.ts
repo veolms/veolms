@@ -24,19 +24,34 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
       "INVALID_TRUE_FALSE_OPTIONS",
       "True/False questions require exactly two options.",
     );
-  const correct = payload.options.filter((option) => option.isCorrect);
-  if (correct.length === 0)
-    throw new AppError(
-      400,
-      "QUESTION_NEEDS_CORRECT_OPTION",
-      "Every question needs at least one correct option.",
-    );
-  if (payload.questionType === "single_choice" && correct.length !== 1)
-    throw new AppError(
-      400,
-      "SINGLE_CHOICE_NEEDS_ONE_CORRECT_OPTION",
-      "Single-choice questions require exactly one correct option.",
-    );
+  if (payload.questionType === "short_answer") {
+    if (payload.options.length === 0)
+      throw new AppError(
+        400,
+        "SHORT_ANSWER_NEEDS_OPTION",
+        "Short answer questions require at least one accepted answer.",
+      );
+    if (payload.options.some((option) => !option.isCorrect))
+      throw new AppError(
+        400,
+        "SHORT_ANSWER_OPTIONS_MUST_BE_CORRECT",
+        "All accepted answers for short answer questions must be marked correct.",
+      );
+  } else {
+    const correct = payload.options.filter((option) => option.isCorrect);
+    if (correct.length === 0)
+      throw new AppError(
+        400,
+        "QUESTION_NEEDS_CORRECT_OPTION",
+        "Every question needs at least one correct option.",
+      );
+    if (payload.questionType === "single_choice" && correct.length !== 1)
+      throw new AppError(
+        400,
+        "SINGLE_CHOICE_NEEDS_ONE_CORRECT_OPTION",
+        "Single-choice questions require exactly one correct option.",
+      );
+  }
   const ids = payload.options.flatMap((option) =>
     option.id ? [option.id] : [],
   );
@@ -465,11 +480,33 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return getQuiz(actor, quizId);
   }
 
+  async function deleteQuiz(actor: QuizActor, quizId: string) {
+    await requireQuiz(quizId, actor);
+    await database.transaction().execute(async (trx) => {
+      const assignments = await repo.listAssignmentsForQuizzes(trx, [quizId]);
+      const lessonIds = assignments
+        .map((a) => a.lesson_id)
+        .filter((id): id is string => Boolean(id));
+      if (lessonIds.length > 0) {
+        await trx
+          .updateTable("course_lessons")
+          .set({ content_type: "video", updated_at: new Date() })
+          .where("id", "in", lessonIds)
+          .where("content_type", "=", "quiz")
+          .execute();
+      }
+      await repo.deleteAssignmentsByQuizId(trx, quizId);
+      await repo.softDeleteQuiz(trx, quizId);
+    });
+    return { success: true as const };
+  }
+
   return {
     createQuiz,
     listMine,
     getQuiz,
     updateQuiz,
+    deleteQuiz,
     addQuestion,
     updateQuestion,
     deleteQuestion,

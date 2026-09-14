@@ -83,6 +83,7 @@ export interface LessonVideoPlayerProps {
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
   autoplayEnabled?: boolean;
+  playbackSuspended?: boolean;
   canGoNext?: boolean;
   canGoPrevious?: boolean;
   nextLessonInfo?: NextLessonInfo;
@@ -120,6 +121,7 @@ export interface LessonVideoPlayerProps {
 export function LessonVideoPlayer({
   autoPlayOnMediaChange = false,
   autoplayEnabled = true,
+  playbackSuspended = false,
   canGoNext = false,
   canGoPrevious = false,
   nextLessonInfo,
@@ -218,6 +220,12 @@ export function LessonVideoPlayer({
     setAutoplayCancelled(false);
   }, [mediaKey]);
 
+  useEffect(() => {
+    if (playbackSuspended) {
+      playerRef.current?.pause();
+    }
+  }, [playbackSuspended]);
+
   const persistResumePosition = useCallback((force = false) => {
     const position = latestPositionRef.current;
     if (!Number.isFinite(position) || position <= 0) return;
@@ -304,6 +312,15 @@ export function LessonVideoPlayer({
 
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
+      if (playbackSuspended) {
+        if (
+          event.type === "playing" ||
+          event.type === "play" ||
+          event.type === "loaded"
+        ) {
+          playerRef.current?.pause();
+        }
+      }
       if (event.type === "loaded") {
         const loadedMediaKey = event.detail.source.id;
         if (loadedMediaKey && loadedMediaKey !== requestedMediaKeyRef.current) {
@@ -454,6 +471,7 @@ export function LessonVideoPlayer({
       onLessonEnded,
       onProgressChange,
       persistResumePosition,
+      playbackSuspended,
       showEndScreen,
       tryFinishPlayingMiniPlayerRestore,
     ],
@@ -689,8 +707,12 @@ export function LessonVideoPlayer({
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
-      autoPlay={autoPlayOnMediaChange || restoreAutoplayRef.current === true}
-      keyboardEnabled={presentation === "full"}
+      autoPlay={
+        playbackSuspended
+          ? false
+          : autoPlayOnMediaChange || restoreAutoplayRef.current === true
+      }
+      keyboardEnabled={presentation === "full" && !playbackSuspended}
       zoomEnabled={presentation === "full"}
       zoomOverflowBoundary={
         presentation === "full" && mobileLandscapeFullscreen

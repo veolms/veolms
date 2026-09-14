@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -61,6 +61,97 @@ function statusLabel(status: QuizStatus) {
       : "Draft";
 }
 
+function useInfiniteList<T>(
+  items: readonly T[],
+  initialLimit = 20,
+  step = 20,
+) {
+  const [limit, setLimit] = useState(initialLimit);
+
+  useEffect(() => {
+    setLimit(initialLimit);
+  }, [items.length, initialLimit]);
+
+  const hasMore = limit < items.length;
+  const loadMore = useCallback(() => {
+    setLimit((prev) => Math.min(prev + step, items.length));
+  }, [items.length, step]);
+
+  const displayedItems = useMemo(
+    () => items.slice(0, limit),
+    [items, limit],
+  );
+
+  return {
+    displayedItems,
+    hasMore,
+    loadMore,
+    totalCount: items.length,
+    displayedCount: Math.min(limit, items.length),
+  };
+}
+
+function InfiniteScrollSentinel({
+  hasMore,
+  onLoadMore,
+  containerRef,
+}: {
+  hasMore: boolean;
+  onLoadMore: () => void;
+  containerRef?: React.RefObject<HTMLElement | null>;
+}) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasMore) return undefined;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return undefined;
+
+    if (typeof IntersectionObserver !== "undefined") {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) {
+            onLoadMore();
+          }
+        },
+        {
+          root: containerRef?.current ?? null,
+          rootMargin: "140px",
+        },
+      );
+      observer.observe(sentinel);
+      return () => observer.disconnect();
+    }
+
+    const target = containerRef?.current ?? window;
+    const handleScroll = () => {
+      if (!sentinel) return;
+      const rect = sentinel.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      if (rect.top <= viewportHeight + 140) {
+        onLoadMore();
+      }
+    };
+    target.addEventListener("scroll", handleScroll, { passive: true });
+    return () => target.removeEventListener("scroll", handleScroll);
+  }, [hasMore, onLoadMore, containerRef]);
+
+  if (!hasMore) return null;
+
+  return (
+    <div
+      ref={sentinelRef}
+      className="flex items-center justify-center p-3 text-xs text-(--muted)"
+      aria-live="polite"
+    >
+      <span className="inline-flex items-center gap-1.5 opacity-75">
+        <span className="size-1.5 rounded-full bg-(--accent) animate-ping" />
+        Loading more…
+      </span>
+    </div>
+  );
+}
+
 export function QuizAnalyticsPage({ role, onNavigatePage }: Props) {
   if (role === "creator") {
     return <InstructorQuizHub onNavigatePage={onNavigatePage} />;
@@ -80,7 +171,7 @@ function QuizPageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-3 sm:gap-5 border-b border-(--border) pb-4 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
+    <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <p className="flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-(--accent)">
           <span
@@ -89,14 +180,14 @@ function QuizPageHeader({
           />
           {eyebrow}
         </p>
-        <h1 className="mt-2 text-[clamp(1.75rem,3vw,2.55rem)] font-semibold tracking-[-0.04em] text-(--text)">
+        <h1 className="mt-2.5 sm:mt-2 text-[clamp(1.75rem,3vw,2.55rem)] font-semibold tracking-[-0.04em] text-(--text)">
           {title}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">
           {description}
         </p>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div> : null}
     </header>
   );
 }
@@ -145,7 +236,7 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
   return (
     <main
       data-quiz-surface=""
-      className="mx-auto grid w-full max-w-[1320px] gap-2.5 sm:gap-6 px-0 py-0.5 sm:p-6 xl:p-8"
+      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6 px-0 py-0.5 sm:p-6 xl:p-8"
       aria-labelledby="quiz-hub-title"
     >
       <QuizPageHeader
@@ -153,9 +244,12 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
         title="Quiz command centre"
         description="Build assessments, configure course delivery, and understand exactly where learners are succeeding or getting stuck."
         action={
-          <Button onClick={() => onNavigatePage?.("/quizzes/create")}>
+          <Button
+            onClick={() => onNavigatePage?.("/quizzes/create")}
+            className="inline-flex items-center gap-2"
+          >
             <Plus size={18} weight="bold" aria-hidden="true" />
-            Create quiz
+            <span>Create quiz</span>
           </Button>
         }
       />
@@ -164,6 +258,7 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
         <InstructorOverview
           quizzes={quizzes.data ?? []}
           onNavigatePage={onNavigatePage}
+          onSelectView={setView}
         />
       ) : null}
       {view === "library" ? (
@@ -181,9 +276,11 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
 function InstructorOverview({
   quizzes,
   onNavigatePage,
+  onSelectView,
 }: {
   quizzes: NonNullable<ReturnType<typeof useMyQuizzes>["data"]>;
   onNavigatePage?: (destination: string) => void;
+  onSelectView?: (view: InstructorView) => void;
 }) {
   const courses = useMyCourses();
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -204,11 +301,47 @@ function InstructorOverview({
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "All courses"]];
-    for (const course of courses.data?.courses ?? []) {
+    const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
+      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
+      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      return dateB - dateA;
+    });
+    for (const course of sorted) {
       list.push([course.id, course.title]);
     }
     return list;
   }, [courses.data?.courses]);
+
+  const {
+    displayedItems: recentQuizzes,
+    hasMore: hasMoreRecentQuizzes,
+    loadMore: loadMoreRecentQuizzes,
+  } = useInfiniteList(quizzes, 20);
+
+  const handlePreviewLearnerView = () => {
+    const activeAssignment = assignments.data?.[0];
+    if (activeAssignment) {
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(activeAssignment.courseId)}?lessonId=${encodeURIComponent(activeAssignment.lessonId)}&view=quiz`,
+      );
+      return;
+    }
+    if (courseId) {
+      const match = courses.data?.courses.find((c) => c.id === courseId);
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(match?.slug || courseId)}?view=quiz`,
+      );
+      return;
+    }
+    const firstCourse = courses.data?.courses?.[0];
+    if (firstCourse) {
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(firstCourse.slug || firstCourse.id)}?view=quiz`,
+      );
+      return;
+    }
+    onNavigatePage?.("/quizzes");
+  };
 
   return (
     <div className="grid gap-3.5 sm:gap-6">
@@ -245,6 +378,9 @@ function InstructorOverview({
               value={courseId ?? ""}
               onValueChange={(val) => setCourseId(val || null)}
               options={courseOptions}
+              searchable
+              searchPlaceholder="Search courses..."
+              defaultLimit={5}
               ariaLabel="Choose a course for the overview"
               triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-semibold !text-(--text) focus:!border-(--accent)"
             />
@@ -254,7 +390,7 @@ function InstructorOverview({
           </div>
         </div>
       </section>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={<ChartBar size={20} weight="bold" />}
           label="Total quizzes"
@@ -292,21 +428,29 @@ function InstructorOverview({
             action={
               <button
                 type="button"
-                onClick={() => onNavigatePage?.("/quizzes")}
-                className="text-sm font-semibold text-(--accent) hover:underline"
+                onClick={() =>
+                  onSelectView
+                    ? onSelectView("library")
+                    : onNavigatePage?.("/quizzes")
+                }
+                className="text-sm font-semibold text-(--accent) hover:underline cursor-pointer"
               >
                 View library
               </button>
             }
           />
           <div className="divide-y divide-(--border)">
-            {quizzes.slice(0, 4).map((quiz) => (
+            {recentQuizzes.map((quiz) => (
               <QuizLibraryRow
                 key={quiz.id}
                 quiz={quiz}
                 onEdit={() => onNavigatePage?.(`/quizzes/${quiz.id}`)}
               />
             ))}
+            <InfiniteScrollSentinel
+              hasMore={hasMoreRecentQuizzes}
+              onLoadMore={loadMoreRecentQuizzes}
+            />
             {quizzes.length === 0 ? (
               <EmptyState
                 icon={<ChartBar size={22} />}
@@ -314,7 +458,8 @@ function InstructorOverview({
                 message="Create your first assessment to start measuring learning outcomes."
                 action={
                   <Button onClick={() => onNavigatePage?.("/quizzes/create")}>
-                    <Plus size={17} weight="bold" /> Create quiz
+                    <Plus size={17} weight="bold" />
+                    <span>Create quiz</span>
                   </Button>
                 }
               />
@@ -340,13 +485,17 @@ function InstructorOverview({
               icon={<ChartBar size={19} weight="bold" />}
               title="Review analytics"
               detail="Find learner friction"
-              onClick={() => onNavigatePage?.("/quizzes")}
+              onClick={() =>
+                onSelectView
+                  ? onSelectView("analytics")
+                  : onNavigatePage?.("/analytics")
+              }
             />
             <QuickAction
               icon={<Eye size={19} weight="bold" />}
               title="Preview learner view"
               detail="Check an attempt flow"
-              onClick={() => onNavigatePage?.("/quizzes")}
+              onClick={handlePreviewLearnerView}
             />
           </div>
         </section>
@@ -371,6 +520,11 @@ function QuizLibrary({
       (status === "all" || quiz.status === status) &&
       quiz.title.toLowerCase().includes(search.trim().toLowerCase()),
   );
+  const {
+    displayedItems: displayedLibraryQuizzes,
+    hasMore: hasMoreLibraryQuizzes,
+    loadMore: loadMoreLibraryQuizzes,
+  } = useInfiniteList(visible, 20);
 
   return (
     <section
@@ -391,7 +545,8 @@ function QuizLibrary({
             </p>
           </div>
           <Button onClick={() => onNavigatePage?.("/quizzes/create")} className="h-9 sm:h-10 text-xs sm:text-sm">
-            <Plus size={16} weight="bold" /> New quiz
+            <Plus size={16} weight="bold" />
+            <span>New quiz</span>
           </Button>
         </div>
         <div className="mt-4 sm:mt-6 grid gap-2.5 sm:gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
@@ -425,7 +580,7 @@ function QuizLibrary({
       <div className="divide-y divide-(--border)">
         {isLoading ? <LoadingRows /> : null}
         {!isLoading
-          ? visible.map((quiz) => (
+          ? displayedLibraryQuizzes.map((quiz) => (
               <QuizLibraryRow
                 key={quiz.id}
                 quiz={quiz}
@@ -434,6 +589,10 @@ function QuizLibrary({
               />
             ))
           : null}
+        <InfiniteScrollSentinel
+          hasMore={hasMoreLibraryQuizzes}
+          onLoadMore={loadMoreLibraryQuizzes}
+        />
         {!isLoading && visible.length === 0 ? (
           <EmptyState
             icon={<MagnifyingGlass size={22} />}
@@ -446,7 +605,8 @@ function QuizLibrary({
             action={
               !quizzes.length ? (
                 <Button onClick={() => onNavigatePage?.("/quizzes/create")}>
-                  <Plus size={17} weight="bold" /> Create quiz
+                  <Plus size={17} weight="bold" />
+                  <span>Create quiz</span>
                 </Button>
               ) : undefined
             }
@@ -466,6 +626,7 @@ function InstructorAnalytics() {
   const courseAnalytics = useCourseQuizAnalytics(courseId);
   const assignmentAnalytics = useQuizAnalytics(assignmentId);
   const studentReport = useStudentQuizReport(studentId);
+  const studentsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!courseId && courses.data?.courses[0]) {
@@ -485,7 +646,12 @@ function InstructorAnalytics() {
   const analytics = courseAnalytics.data;
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
-    return (courses.data?.courses ?? []).map((course) => [course.id, course.title] as const);
+    const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
+      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
+      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      return dateB - dateA;
+    });
+    return sorted.map((course) => [course.id, course.title] as const);
   }, [courses.data?.courses]);
 
   const assignmentOptions: readonly ThemedSelectOption[] = useMemo(() => {
@@ -495,6 +661,18 @@ function InstructorAnalytics() {
     }
     return list;
   }, [assignments.data]);
+
+  const {
+    displayedItems: displayedQuizzes,
+    hasMore: hasMoreQuizzes,
+    loadMore: loadMoreQuizzes,
+  } = useInfiniteList(analytics?.quizzes ?? [], 20);
+
+  const {
+    displayedItems: displayedStudents,
+    hasMore: hasMoreStudents,
+    loadMore: loadMoreStudents,
+  } = useInfiniteList(assignmentAnalytics.data?.students ?? [], 20);
 
   return (
     <div className="grid gap-3.5 sm:gap-6">
@@ -519,13 +697,16 @@ function InstructorAnalytics() {
                 setStudentId(null);
               }}
               options={courseOptions}
+              searchable
+              searchPlaceholder="Search courses..."
+              defaultLimit={5}
               ariaLabel="Select course for performance overview"
               triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
             />
           </div>
         </div>
       </section>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <StatCard
           label="Assigned"
           value={assignmentAnalytics.data?.assignedStudents ?? "—"}
@@ -614,7 +795,7 @@ function InstructorAnalytics() {
             </div>
           </div>
           {analytics ? (
-            <div className="grid gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
+            <div className="grid grid-cols-2 gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
               <MetricTile
                 label="Course quizzes"
                 value={analytics.totalQuizzes}
@@ -636,7 +817,7 @@ function InstructorAnalytics() {
             <span>Completion</span>
             <span>Pass rate</span>
           </div>
-          {analytics?.quizzes.map((quiz) => (
+          {displayedQuizzes.map((quiz) => (
             <div
               key={quiz.assignmentId}
               className={`grid gap-2.5 border-b border-(--border) px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_7rem_7rem_7rem] sm:items-center sm:gap-4 sm:px-7 sm:py-4 ${assignmentId === quiz.assignmentId ? "bg-(--accent)/5" : ""}`}
@@ -667,6 +848,10 @@ function InstructorAnalytics() {
               </span>
             </div>
           ))}
+          <InfiniteScrollSentinel
+            hasMore={hasMoreQuizzes}
+            onLoadMore={loadMoreQuizzes}
+          />
           {!analytics?.quizzes.length ? (
             <EmptyState
               icon={<ChartBar size={22} />}
@@ -683,8 +868,11 @@ function InstructorAnalytics() {
             title="Student outcomes"
             description="Choose a learner to open their quiz report."
           />
-          <div className="divide-y divide-(--border)">
-            {assignmentAnalytics.data?.students.map((student) => (
+          <div
+            ref={studentsContainerRef}
+            className="divide-y divide-(--border) max-h-[580px] overflow-y-auto"
+          >
+            {displayedStudents.map((student) => (
               <button
                 key={student.studentId}
                 type="button"
@@ -717,6 +905,11 @@ function InstructorAnalytics() {
                 </span>
               </button>
             ))}
+            <InfiniteScrollSentinel
+              hasMore={hasMoreStudents}
+              onLoadMore={loadMoreStudents}
+              containerRef={studentsContainerRef}
+            />
             {!assignmentAnalytics.data?.students.length ? (
               <EmptyState
                 compact
@@ -768,7 +961,7 @@ function StudentReportPanel({
           <X size={18} />
         </button>
       </div>
-      <div className="grid gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
+      <div className="grid grid-cols-2 gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
         <MetricTile label="Completed" value={report.completedQuizzes} />
         <MetricTile label="Passed" value={report.passed} />
         <MetricTile
@@ -832,7 +1025,7 @@ function LearnerQuizDashboard({
   return (
     <main
       data-quiz-surface=""
-      className="mx-auto grid w-full max-w-[1320px] gap-2.5 sm:gap-6 px-0 py-0.5 sm:p-8 xl:p-10"
+      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6 px-0 py-0.5 sm:p-8 xl:p-10"
       aria-labelledby="quiz-dashboard-title"
     >
       <QuizPageHeader
@@ -924,7 +1117,7 @@ function LearnerQuizDashboard({
                 assignment={assignment}
                 onOpen={() =>
                   onNavigatePage?.(
-                    `/quizzes/attempt/${encodeURIComponent(assignment.id)}`,
+                    `/learn/${encodeURIComponent(assignment.courseId)}?lessonId=${encodeURIComponent(assignment.lessonId)}&view=quiz`,
                   )
                 }
               />
@@ -1171,16 +1364,16 @@ function StatCard({
       }`}
       style={{ boxShadow: "var(--card-shadow)" }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-(--muted) tracking-wide">{label}</p>
+      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">{label}</p>
         {icon ? (
-          <span className="flex size-7 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
+          <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
             {icon}
           </span>
         ) : null}
       </div>
       <p
-        className={`mt-2.5 text-2xl sm:text-[1.75rem] font-bold tracking-tight ${
+        className={`mt-1.5 sm:mt-2.5 text-xl sm:text-[1.75rem] font-bold tracking-tight ${
           tone === "success"
             ? "text-emerald-500"
             : tone === "danger"
@@ -1191,7 +1384,7 @@ function StatCard({
         {value}
       </p>
       {detail ? (
-        <p className="mt-1 truncate text-xs text-(--muted)">{detail}</p>
+        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">{detail}</p>
       ) : null}
     </div>
   );

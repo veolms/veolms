@@ -123,6 +123,22 @@ const quizRoutes: RoutePlugin = async (app, options) => {
     },
     controller.update,
   );
+  app.delete(
+    "/quizzes/:id",
+    {
+      schema: {
+        operationId: "deleteQuiz",
+        tags: ["Quizzes"],
+        params: idParam("id"),
+        response: {
+          200: jsonResponse("Quiz deleted", quizDeleteResponseSchema),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.deleteQuiz,
+  );
   app.post(
     "/quizzes/:id/questions",
     {
@@ -241,6 +257,25 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: author,
     },
     controller.updateAssignment,
+  );
+  app.delete(
+    "/quiz-assignments/:assignmentId",
+    {
+      schema: {
+        operationId: "deleteQuizAssignment",
+        tags: ["Quizzes"],
+        params: idParam("assignmentId"),
+        response: {
+          200: jsonResponse(
+            "Quiz assignment deleted",
+            quizDeleteResponseSchema,
+          ),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.deleteAssignment,
   );
   app.get(
     "/me/quizzes",

@@ -4,6 +4,7 @@ import type {
   UpdateQuizAssignmentRequest,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
+import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
 import { isAdmin } from "../shared/quiz.types.ts";
@@ -34,7 +35,8 @@ function present(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
 }
 
 export function createAssignmentService(options: QuizServiceOptions) {
-  const { database, courseService } = options;
+  const { database, courseService, getAcademyId } = options;
+  const outbox = createOutboxService();
 
   async function assertAuthorAssignment(
     actor: QuizActor,
@@ -97,6 +99,13 @@ export function createAssignmentService(options: QuizServiceOptions) {
     const quiz = await repo.findQuiz(database, version.quiz_id);
     if (!quiz || (quiz.creator_id !== actor.id && !isAdmin(actor)))
       throw new AppError(403, "FORBIDDEN", "You do not own this Quiz.");
+    const currentAcademyId = await getAcademyId();
+    if (currentAcademyId && quiz.academy_id !== currentAcademyId)
+      throw new AppError(
+        403,
+        "ACADEMY_MISMATCH",
+        "Quiz must belong to the active Academy.",
+      );
     if (version.quiz_id !== quiz.id)
       throw new AppError(
         400,
@@ -120,23 +129,46 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "LESSON_ALREADY_ASSIGNED",
         "This lesson already has a Quiz assignment.",
       );
-    const row = await repo.insertAssignment(database, {
-      id: crypto.randomUUID(),
-      quiz_id: quiz.id,
-      quiz_version_id: version.id,
-      course_id: courseId,
-      lesson_id: lessonId,
-      required: payload.required ?? true,
-      pass_percentage: payload.passPercentage ?? 70,
-      max_attempts: payload.maxAttempts ?? 1,
-      time_limit_seconds: payload.timeLimitSeconds ?? null,
-      shuffle_questions: payload.shuffleQuestions ?? false,
-      shuffle_options: payload.shuffleOptions ?? false,
-      feedback_mode: payload.feedbackMode ?? "after_submit",
-      available_from: payload.availableFrom ?? null,
-      available_until: payload.availableUntil ?? null,
-      created_at: new Date(),
-      updated_at: new Date(),
+    const row = await database.transaction().execute(async (trx) => {
+      const inserted = await repo.insertAssignment(trx, {
+        id: crypto.randomUUID(),
+        quiz_id: quiz.id,
+        quiz_version_id: version.id,
+        course_id: courseId,
+        lesson_id: lessonId,
+        required: payload.required ?? true,
+        pass_percentage: payload.passPercentage ?? 70,
+        max_attempts: payload.maxAttempts ?? 1,
+        time_limit_seconds: payload.timeLimitSeconds ?? null,
+        shuffle_questions: payload.shuffleQuestions ?? false,
+        shuffle_options: payload.shuffleOptions ?? false,
+        feedback_mode: payload.feedbackMode ?? "after_submit",
+        available_from: payload.availableFrom ?? null,
+        available_until: payload.availableUntil ?? null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      if (course && lesson) {
+        await outbox.publish(trx, {
+          type: "quiz.assigned",
+          version: 1,
+          dedupeKey: `quiz:assigned:${inserted.id}`,
+          occurredAt: new Date(),
+          payload: {
+            courseId: course.id,
+            courseTitle: course.title,
+            courseSlug: course.slug,
+            quizId: quiz.id,
+            quizTitle: quiz.title,
+            lessonId: lesson.id,
+            lessonTitle: lesson.title,
+            deepLink: `/learn/${course.slug}?lessonId=${lesson.id}&view=quiz`,
+          },
+        });
+      }
+
+      return inserted;
     });
     return present(row);
   }
@@ -231,6 +263,29 @@ export function createAssignmentService(options: QuizServiceOptions) {
     return present(await repo.findAssignment(database, assignmentId));
   }
 
-  return { assign, update, listForCourse, get, assertAuthorAssignment };
+  async function deleteAssignment(actor: QuizActor, assignmentId: string) {
+    const assignment = await assertAuthorAssignment(actor, assignmentId);
+    await database.transaction().execute(async (trx) => {
+      if (assignment.lesson_id) {
+        await trx
+          .updateTable("course_lessons")
+          .set({ content_type: "video", updated_at: new Date() })
+          .where("id", "=", assignment.lesson_id)
+          .where("content_type", "=", "quiz")
+          .execute();
+      }
+      await repo.deleteAssignment(trx, assignmentId);
+    });
+    return { success: true as const };
+  }
+
+  return {
+    assign,
+    update,
+    deleteAssignment,
+    listForCourse,
+    get,
+    assertAuthorAssignment,
+  };
 }
 export type AssignmentService = ReturnType<typeof createAssignmentService>;

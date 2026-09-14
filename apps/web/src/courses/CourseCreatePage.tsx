@@ -29,6 +29,8 @@ import {
   Check,
   CheckCircle,
   CircleNotch,
+  CornersIn,
+  CornersOut,
   Clock,
   DotsSixVertical,
   DownloadSimple,
@@ -66,6 +68,7 @@ import {
 } from "../keyboardShortcuts";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
+import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import {
   coursesService,
   useCategories,
@@ -2459,9 +2462,36 @@ export function CourseCreatePage({
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
+  // Tracks which wizard tabs have been mounted. Starts with only the initial
+  // tab so the first tab renders instantly; others are added progressively in
+  // the background (via requestIdleCallback) or on-demand when the user
+  // navigates to them.
+  const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(
+    () => new Set<CourseWizardStepId>([initialStep]),
+  );
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
+  const [isCurriculumFocusMode, setIsCurriculumFocusMode] = useState(false);
+
+  // Automatically reset focus mode if navigating away from curriculum step
+  useEffect(() => {
+    if (activeStep !== "curriculum") {
+      setIsCurriculumFocusMode(false);
+    }
+  }, [activeStep]);
+
+  // Allow pressing Escape key to exit focus mode
+  useEffect(() => {
+    if (!isCurriculumFocusMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsCurriculumFocusMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCurriculumFocusMode]);
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
   >((async () => {}) as any);
@@ -2577,6 +2607,50 @@ export function CourseCreatePage({
       window.scrollTo(0, 0);
     }
   }, [activeStep]);
+
+  // Progressively mount the remaining wizard tabs in the background so they
+  // are ready when the user navigates to them without delaying the first render.
+  useEffect(() => {
+    const remaining = WIZARD_STEP_IDS.filter(
+      (id) => !mountedTabs.has(id),
+    );
+    if (remaining.length === 0) return;
+
+    const handles: number[] = [];
+    const mountNext = (ids: CourseWizardStepId[]) => {
+      if (ids.length === 0) return;
+      const [next, ...rest] = ids;
+      const schedule =
+        typeof requestIdleCallback === "function"
+          ? requestIdleCallback
+          : (cb: () => void) => setTimeout(cb, 16) as unknown as number;
+      const cancel =
+        typeof cancelIdleCallback === "function"
+          ? cancelIdleCallback
+          : clearTimeout;
+      const handle = schedule(() => {
+        setMountedTabs((prev) => {
+          if (prev.has(next!)) return prev;
+          const next_ = new Set(prev);
+          next_.add(next!);
+          return next_;
+        });
+        mountNext(rest);
+      });
+      handles.push(handle as number);
+    };
+    mountNext(remaining as CourseWizardStepId[]);
+
+    return () => {
+      const cancel =
+        typeof cancelIdleCallback === "function"
+          ? cancelIdleCallback
+          : clearTimeout;
+      handles.forEach((h) => cancel(h));
+    };
+    // Only run once on mount — remaining is derived from the initial mountedTabs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
@@ -3220,6 +3294,15 @@ export function CourseCreatePage({
   } = useCourseValidation(currentCourseId, {
     enabled: activeStep === "publish",
   });
+  const { data: courseQuizAssignments = [] } =
+    useCourseQuizAssignments(currentCourseId);
+  const lessonsWithQuizzes = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of courseQuizAssignments) {
+      if (a.lessonId) set.add(a.lessonId);
+    }
+    return set;
+  }, [courseQuizAssignments]);
   const createCourseMutation = useCreateCourse();
   const updateBasicsMutation = useUpdateCourseBasics();
   const createSectionMutation = useCreateSection();
@@ -8436,6 +8519,16 @@ export function CourseCreatePage({
       await flushPricingPersistence();
     }
 
+    // Eagerly mark destination as mounted so its content renders before the
+    // swipe animation begins — covers the case where background loading
+    // hasn't reached this tab yet.
+    setMountedTabs((prev) => {
+      if (prev.has(destination)) return prev;
+      const next = new Set(prev);
+      next.add(destination);
+      return next;
+    });
+
     if (!isStepDirty(activeStep)) {
       setActiveStep(destination);
       return;
@@ -8701,7 +8794,24 @@ export function CourseCreatePage({
     <div
       className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
+      data-focus-mode={isCurriculumFocusMode ? "true" : undefined}
     >
+      {/* Floating Exit Focus Button */}
+      {isCurriculumFocusMode && (
+        <button
+          type="button"
+          onClick={() => setIsCurriculumFocusMode(false)}
+          title="Exit focus mode (show topbar and bottom navigation) [Esc]"
+          aria-label="Exit focus mode"
+          className="fixed top-3.5 right-6 z-50 inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-full border border-(--accent) bg-[color-mix(in_srgb,var(--surface)_92%,var(--canvas))] text-(--text) shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_25%,transparent)] backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95"
+        >
+          <CornersIn size={15} weight="bold" className="text-(--accent)" />
+          <kbd className="inline-block px-1.5 py-0.5 text-[0.68rem] font-mono rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) font-bold">
+            Esc
+          </kbd>
+        </button>
+      )}
+
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
@@ -8758,6 +8868,18 @@ export function CourseCreatePage({
               </p>
             </div>
           </div>
+
+          {activeStep === "curriculum" && (
+            <button
+              type="button"
+              onClick={() => setIsCurriculumFocusMode(true)}
+              title="Focus mode (hide topbar and bottom bar for more workspace) [Esc]"
+              aria-label="Enter focus mode"
+              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-(--text-secondary) cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] shrink-0 self-start sm:self-center p-0"
+            >
+              <CornersOut size={15} weight="bold" />
+            </button>
+          )}
         </div>
 
         {/* Publish validation error toast if any */}
@@ -8853,7 +8975,7 @@ export function CourseCreatePage({
         spaceBetween={32}
       >
         {(panelStep) =>
-          panelStep === "basics" ? (
+          !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
               {/* Left Column: Form Sections */}
               <div className="flex flex-col gap-5">
@@ -9519,6 +9641,42 @@ export function CourseCreatePage({
                   )}
                   <button
                     type="button"
+                    onClick={() => setIsCurriculumFocusMode((prev) => !prev)}
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      borderRadius: "8px",
+                      padding: 0,
+                    }}
+                    className={`inline-flex items-center justify-center border text-xs font-semibold cursor-pointer transition-all duration-150 ease-out shrink-0 ${
+                      isCurriculumFocusMode
+                        ? "border-(--accent) text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                        : "border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                    }`}
+                    title={
+                      isCurriculumFocusMode
+                        ? "Exit focus mode (show topbar and bottom navigation) [Esc]"
+                        : "Focus mode (hide topbar and bottom bar for more workspace)"
+                    }
+                    aria-label={
+                      isCurriculumFocusMode
+                        ? "Exit focus mode"
+                        : "Enter focus mode"
+                    }
+                    aria-pressed={isCurriculumFocusMode}
+                  >
+                    {isCurriculumFocusMode ? (
+                      <CornersIn
+                        size={16}
+                        weight="bold"
+                        className="text-(--accent)"
+                      />
+                    ) : (
+                      <CornersOut size={16} weight="bold" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     disabled={
                       isCreatingSection ||
                       createSectionMutation.isPending ||
@@ -10036,15 +10194,19 @@ export function CourseCreatePage({
                                         <PlayCircle size={13} weight="fill" />{" "}
                                         Video
                                       </span>
-                                    ) : les.contentType === "quiz" ? (
-                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-                                        <PuzzlePiece size={13} weight="fill" />{" "}
-                                        Quiz
-                                      </span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
                                         <FileText size={13} weight="fill" />{" "}
                                         Document
+                                      </span>
+                                    )}
+                                    {lessonsWithQuizzes.has(les.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1.25 text-[color-mix(in_srgb,#8b5cf6_90%,var(--text))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#8b5cf6_12%,transparent)] border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]"
+                                        title="This lesson includes an attached quiz assessment"
+                                      >
+                                        <PuzzlePiece size={13} weight="fill" className="text-[#8b5cf6]" />{" "}
+                                        + Quiz
                                       </span>
                                     )}
                                     <button
@@ -10110,8 +10272,7 @@ export function CourseCreatePage({
                                       What type of lesson is this?
                                     </h3>
                                     <p className="m-0 text-(--muted) text-[0.82rem]">
-                                      Choose the type of content you want to add
-                                      to this lesson.
+                                      Choose whether this lesson delivers video or document content. Quizzes can be added as assessments to either type.
                                     </p>
                                     <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
                                       <button
@@ -10147,23 +10308,6 @@ export function CourseCreatePage({
                                         <FileText size={18} weight="fill" />{" "}
                                         Document / PDF
                                       </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          fontSize: "0.84rem",
-                                          fontWeight: 600,
-                                          gap: "6px",
-                                        }}
-                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "quiz" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                        onClick={() =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            pendingContentType: "quiz",
-                                          })
-                                        }
-                                      >
-                                        <PuzzlePiece size={18} weight="fill" />{" "}
-                                        Quiz
-                                      </button>
                                     </div>
                                     <button
                                       type="button"
@@ -10189,8 +10333,7 @@ export function CourseCreatePage({
                                           {
                                             contentType: les.pendingContentType,
                                             ...(les.pendingContentType ===
-                                              "document" ||
-                                            les.pendingContentType === "quiz"
+                                            "document"
                                               ? { contentMediaId: null }
                                               : {}),
                                           },
@@ -10271,18 +10414,17 @@ export function CourseCreatePage({
 
                                         {/* Right column */}
                                         <div className="flex flex-col gap-4.5">
-                                          {/* Content Type Selector */}
-                                          {!les.contentTypeSelected && (
-                                            <div className="flex flex-col gap-2 mb-5">
+                                            {/* Content Type Selector */}
+                                            <div className="flex flex-col gap-2 mb-4">
                                               <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
                                                 Content Type{""}
                                                 <span className="text-[#ff5252] ml-0.5">
                                                   *
                                                 </span>
                                               </label>
-                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                                 <div
-                                                  className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                                     les.isPendingCreation
                                                       ? "opacity-60 cursor-not-allowed"
                                                       : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
@@ -10304,31 +10446,31 @@ export function CourseCreatePage({
                                                   }}
                                                 >
                                                   <div
-                                                    className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
                                                   >
                                                     {les.contentType ===
                                                       "video" && (
-                                                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
                                                     )}
                                                   </div>
-                                                  <div className="flex items-center justify-center text-(--accent) mt-px">
+                                                  <div className="flex items-center justify-center text-(--accent)">
                                                     <Video
-                                                      size={18}
+                                                      size={16}
                                                       weight="fill"
                                                     />
                                                   </div>
-                                                  <div className="flex flex-col gap-0.5">
-                                                    <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
+                                                  <div className="flex flex-col min-w-0">
+                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
                                                       Video
                                                     </span>
-                                                    <span className="text-(--muted) text-[0.75rem]">
-                                                      Upload or select a video
+                                                    <span className="text-(--muted) text-[0.70rem] truncate">
+                                                      Video lesson
                                                     </span>
                                                   </div>
                                                 </div>
 
                                                 <div
-                                                  className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                                     les.isPendingCreation
                                                       ? "opacity-60 cursor-not-allowed"
                                                       : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
@@ -10346,91 +10488,69 @@ export function CourseCreatePage({
                                                       les.id,
                                                       {
                                                         contentType: "document",
-                                                        contentMediaId: null,
                                                       },
                                                     );
                                                   }}
                                                 >
                                                   <div
-                                                    className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
                                                   >
                                                     {les.contentType ===
                                                       "document" && (
-                                                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
                                                     )}
                                                   </div>
-                                                  <div className="flex items-center justify-center text-(--accent) mt-px">
+                                                  <div className="flex items-center justify-center text-(--accent)">
                                                     <FileText
-                                                      size={18}
+                                                      size={16}
                                                       weight="fill"
                                                     />
                                                   </div>
-                                                  <div className="flex flex-col gap-0.5">
-                                                    <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                                      Document / PDF
+                                                  <div className="flex flex-col min-w-0">
+                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                      Document
                                                     </span>
-                                                    <span className="text-(--muted) text-[0.75rem]">
-                                                      Upload PDF or document
+                                                    <span className="text-(--muted) text-[0.70rem] truncate">
+                                                      PDF / Reading
                                                     </span>
                                                   </div>
                                                 </div>
                                               </div>
                                             </div>
-                                          )}
 
-                                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                            {/* Content Source Controls (Video or Document) */}
-                                            <div className="flex flex-col gap-2 mb-0">
-                                              <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                {les.contentType === "video"
-                                                  ? "Video Source"
-                                                  : les.contentType === "quiz"
-                                                    ? "Quiz Configuration"
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                              {/* Content Source Controls (Video or Document) */}
+                                              <div className="flex flex-col gap-2 mb-0">
+                                                <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                  {les.contentType === "video"
+                                                    ? "Video Source"
                                                     : "Document / PDF Source"}
-                                                {""}
-                                                <span className="text-[#ff5252] ml-0.5">
-                                                  *
-                                                </span>
-                                              </label>
-                                              {les.contentType === "video" ? (
-                                                <LessonVideoUpload
-                                                  mediaAssetId={
-                                                    les.contentMediaId
-                                                  }
-                                                  disabled={
-                                                    les.isPendingCreation
-                                                  }
-                                                  onMediaAttached={(
-                                                    mediaAssetId,
-                                                  ) =>
-                                                    handleLessonMediaAttached(
-                                                      sec.id,
-                                                      les.id,
+                                                  <span className="text-[#ff5252] ml-0.5">
+                                                    *
+                                                  </span>
+                                                </label>
+                                                {les.contentType === "video" ? (
+                                                  <LessonVideoUpload
+                                                    mediaAssetId={
+                                                      les.contentMediaId
+                                                    }
+                                                    disabled={
+                                                      les.isPendingCreation
+                                                    }
+                                                    onMediaAttached={(
                                                       mediaAssetId,
-                                                    )
-                                                  }
-                                                  onProcessingComplete={() =>
-                                                    handleLessonProcessingComplete()
-                                                  }
-                                                />
-                                              ) : les.contentType === "quiz" ? (
-                                                currentCourseId &&
-                                                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                                                  les.id,
-                                                ) ? (
-                                                  <QuizAuthoringPanel
-                                                    courseId={currentCourseId}
-                                                    lessonId={les.id}
-                                                    lessonTitle={les.title}
+                                                    ) =>
+                                                      handleLessonMediaAttached(
+                                                        sec.id,
+                                                        les.id,
+                                                        mediaAssetId,
+                                                      )
+                                                    }
+                                                    onProcessingComplete={() =>
+                                                      handleLessonProcessingComplete()
+                                                    }
                                                   />
                                                 ) : (
-                                                  <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                                    Save the course and lesson
-                                                    before configuring this
-                                                    Quiz.
-                                                  </div>
-                                                )
-                                              ) : (
                                                 <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
                                                   <button
                                                     type="button"
@@ -10580,6 +10700,60 @@ export function CourseCreatePage({
                                           />
                                         </div>
                                       </div>
+
+                                        {/* Attached Quiz Assessment (Optional) */}
+                                        <div className="mt-5 pt-4 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+                                          <details
+                                            open={lessonsWithQuizzes.has(les.id) ? true : undefined}
+                                            className="group rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3.5 transition-all"
+                                          >
+                                            <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-(--text) select-none">
+                                              <div className="flex items-center gap-2">
+                                                <PuzzlePiece
+                                                  size={16}
+                                                  className="text-(--accent)"
+                                                  weight="fill"
+                                                />
+                                                <span>
+                                                  Attached Quiz Assessment (Optional)
+                                                </span>
+                                                {lessonsWithQuizzes.has(les.id) && (
+                                                  <span className="inline-flex items-center gap-1 text-[0.70rem] font-bold text-[#8b5cf6] bg-[color-mix(in_srgb,#8b5cf6_15%,transparent)] px-2 py-0.5 rounded-full border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]">
+                                                    Quiz attached
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <span className="text-[0.72rem] text-(--accent) group-open:rotate-180 transition-transform">
+                                                ▼
+                                              </span>
+                                            </summary>
+                                            <div className="mt-3 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                              {currentCourseId &&
+                                              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                                les.id,
+                                              ) ? (
+                                                <QuizAuthoringPanel
+                                                  courseId={currentCourseId}
+                                                  lessonId={les.id}
+                                                  lessonTitle={les.title}
+                                                  onQuizDeleted={() => {
+                                                    // Quiz deleted, query invalidation in hook updates UI
+                                                  }}
+                                                  isFocusMode={isCurriculumFocusMode}
+                                                  onToggleFocusMode={() =>
+                                                    setIsCurriculumFocusMode(
+                                                      (prev) => !prev,
+                                                    )
+                                                  }
+                                                />
+                                              ) : (
+                                                <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                                  Save the course and lesson before configuring an attached Quiz.
+                                                </div>
+                                              )}
+                                            </div>
+                                          </details>
+                                        </div>
                                     </div>
                                   </div>
                                 )}

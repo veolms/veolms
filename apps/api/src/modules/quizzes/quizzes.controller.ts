@@ -43,6 +43,11 @@ export function createQuizController({
         (request.params as { id: string }).id,
         request.body as never,
       ),
+    deleteQuiz: async (request: FastifyRequest) =>
+      authoring.deleteQuiz(
+        actor(request),
+        (request.params as { id: string }).id,
+      ),
     addQuestion: async (request: FastifyRequest) =>
       authoring.addQuestion(
         actor(request),
@@ -84,6 +89,11 @@ export function createQuizController({
         actor(request),
         (request.params as { assignmentId: string }).assignmentId,
         request.body as never,
+      ),
+    deleteAssignment: async (request: FastifyRequest) =>
+      assignments.deleteAssignment(
+        actor(request),
+        (request.params as { assignmentId: string }).assignmentId,
       ),
     listCourseAssignments: async (request: FastifyRequest) =>
       assignments.listForCourse(

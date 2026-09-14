@@ -184,9 +184,9 @@ const parseCoursePlayerSessionCandidate = (
       !origin ||
       !pathOrigin ||
       pathOrigin !== origin ||
-      pathUrl.searchParams.size > 2 ||
+      pathUrl.searchParams.size > 3 ||
       [...pathUrl.searchParams.keys()].some(
-        (key) => key !== "from" && key !== "returnTo",
+        (key) => key !== "from" && key !== "returnTo" && key !== "view",
       )
     )
       return null;
@@ -362,6 +362,7 @@ export function getCoursePlayerPath(
   origin: CoursePlayerOrigin | LegacyCoursePlayerOrigin,
   lessonIdentifier: string | number = 1,
   returnPath?: string,
+  view?: "video" | "quiz",
 ): string {
   const normalizedOrigin =
     normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
@@ -374,6 +375,7 @@ export function getCoursePlayerPath(
   const search = new URLSearchParams({ from: normalizedOrigin });
   if (normalizedReturnPath !== fallbackReturnPath)
     search.set("returnTo", normalizedReturnPath);
+  if (view === "quiz") search.set("view", "quiz");
   return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
 }
 

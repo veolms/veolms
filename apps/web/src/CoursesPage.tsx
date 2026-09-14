@@ -36,6 +36,7 @@ import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
 import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { CourseCreatePage } from "./courses/CourseCreatePage";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
   getLearningPlayerSwipeSplitX,
@@ -208,11 +209,6 @@ const CreatorDashboard = lazy(() =>
 const ReadingModeQuickMenu = lazy(() =>
   import("./reading-mode/ReadingModeQuickMenu").then((module) => ({
     default: module.ReadingModeQuickMenu,
-  })),
-);
-const CourseCreatePage = lazy(() =>
-  import("./courses/CourseCreatePage").then((module) => ({
-    default: module.CourseCreatePage,
   })),
 );
 const CourseOverviewPage = lazy(() =>
@@ -3360,12 +3356,10 @@ export function CoursesPage({
     }
     if (surfacePage === "course-create") {
       return (
-        <Suspense fallback={null}>
-          <CourseCreatePage
-            onNavigatePage={onNavigatePage}
-            bottomNavHidden={mobileBottomNavHidden}
-          />
-        </Suspense>
+        <CourseCreatePage
+          onNavigatePage={onNavigatePage}
+          bottomNavHidden={mobileBottomNavHidden}
+        />
       );
     }
     if (surfacePage === "course-overview") {

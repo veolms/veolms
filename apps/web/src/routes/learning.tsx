@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   useLocation,
   useNavigate,
   useOutletContext,
   useParams,
 } from "react-router";
+import type { CourseLesson } from "@veolms/contracts";
 import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
@@ -120,19 +121,38 @@ export default function LearningRoute() {
     useMyQuizAssignments({
       enabled: Boolean(activeUser),
     });
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
+  );
+  const targetLessonUuid = searchParams.get("lessonId");
+  const isQuizViewRequested = searchParams.get("view") === "quiz";
+
   const canonicalCourseSlug = courseOverview?.course.slug;
-  const lessonId = courseSlug
+
+  const allApiLessons = useMemo<CourseLesson[]>(() => {
+    if (!courseOverview?.sections) return [];
+    return courseOverview.sections
+      .slice()
+      .sort((left, right) => left.position - right.position)
+      .flatMap((section) =>
+        (section.lessons ?? [])
+          .slice()
+          .sort((left, right) => left.position - right.position),
+      );
+  }, [courseOverview]);
+
+  const resolvedFromUuid = useMemo(() => {
+    if (!targetLessonUuid || allApiLessons.length === 0) return null;
+    const idx = allApiLessons.findIndex((l: CourseLesson) => l.id === targetLessonUuid);
+    return idx >= 0 ? idx + 1 : null;
+  }, [targetLessonUuid, allApiLessons]);
+
+  const lessonId = resolvedFromUuid ?? (courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
-    : 1;
-  const apiLesson = courseOverview?.sections
-    .slice()
-    .sort((left, right) => left.position - right.position)
-    .flatMap((section) =>
-      (section.lessons ?? [])
-        .slice()
-        .sort((left, right) => left.position - right.position),
-    )[lessonId - 1];
+    : 1);
+  const apiLesson = allApiLessons[lessonId - 1];
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
       assignment.courseId === courseOverview?.course.id &&
@@ -228,11 +248,13 @@ export default function LearningRoute() {
       origin,
       lessonId,
       routeReturnPath,
+      isQuizViewRequested ? "quiz" : undefined,
     );
     void navigate(nextPath, { replace: true });
   }, [
     canonicalCourseSlug,
     courseSlug,
+    isQuizViewRequested,
     lessonId,
     navigate,
     origin,
@@ -240,13 +262,14 @@ export default function LearningRoute() {
   ]);
 
   const selectLesson = useCallback(
-    (nextLessonId: number) => {
+    (nextLessonId: number, view?: "video" | "quiz") => {
       if (!courseSlug) return;
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
+        view,
       );
       navigateTo(path, { exact: true });
     },
@@ -281,6 +304,7 @@ export default function LearningRoute() {
       key={courseSlug}
       courseSlug={courseSlug}
       lessonId={lessonId}
+      initialLessonView={isQuizViewRequested ? "quiz" : "video"}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
       onSelectLesson={selectLesson}

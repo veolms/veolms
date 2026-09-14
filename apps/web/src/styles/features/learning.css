@@ -96,6 +96,10 @@
   box-shadow: none;
 }
 
+.learning-workspace__player-wrap {
+  anchor-name: --learning-persistent-player-slot;
+}
+
 [data-learning-player-anchor] {
   anchor-name: --learning-persistent-player-slot;
 }
@@ -110,6 +114,21 @@
 .courses-main:has([data-learning-persistent-player])
   [data-learning-player-initial-loader] {
   display: none;
+}
+
+.courses-main[data-learning-quiz-active="true"] .learning-persistent-player--full,
+.courses-main:has([data-learning-quiz-active="true"]) .learning-persistent-player--full,
+.courses-main[data-learning-quiz-active="true"] [data-learning-mini-player],
+.courses-main:has([data-learning-quiz-active="true"]) [data-learning-mini-player] {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(100%) !important;
+  transform: translate3d(-9999px, -9999px, 0) !important;
 }
 
 .learning-persistent-player--full {
@@ -326,6 +345,20 @@
 .learning-comment-card__like:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.learning-workspace__lesson-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.learning-workspace__lesson-header .learning-workspace__lesson-heading {
+  width: auto;
+  min-width: 0;
+  flex: 1;
 }
 
 .learning-workspace__lesson-heading {
@@ -1369,6 +1402,7 @@
 .learning-workspace.is-theater .learning-workspace__curriculum-column,
 .learning-workspace.is-theater .learning-workspace__curriculum-toggle,
 .learning-workspace.is-theater .learning-workspace__lesson-heading,
+.learning-workspace.is-theater .learning-workspace__lesson-header,
 .learning-workspace.is-theater .learning-discussion {
   display: none;
 }

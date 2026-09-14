@@ -48,6 +48,7 @@ export interface ThemedSelectProps<Value extends string = string> {
   contentClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
+  defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
 }
@@ -82,6 +83,7 @@ export function ThemedSelect<Value extends string>({
   contentClassName = "",
   searchable = false,
   searchPlaceholder = "Search...",
+  defaultLimit,
   action,
   compactOnMobile = false,
 }: ThemedSelectProps<Value>) {
@@ -94,12 +96,11 @@ export function ThemedSelect<Value extends string>({
   const [searchQuery, setSearchQuery] = useState("");
   const [position, setPosition] = useState<MenuPosition | null>(null);
 
-  const selectedIndex = Math.max(
-    0,
-    options.findIndex(([optionValue]) => optionValue === value),
-  );
-  const selectedOption = options[selectedIndex];
-  const selectedLabel = selectedOption?.[1] ?? value;
+  const foundIndex = options.findIndex(([optionValue]) => optionValue === value);
+  const selectedIndex = foundIndex >= 0 ? foundIndex : -1;
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedLabel =
+    selectedOption?.[1] ?? (value || searchPlaceholder || "Select...");
   const selectedFlag = selectedOption?.[2]?.flag;
   const triggerLabel = ariaLabel
     ? `${ariaLabel}: ${selectedLabel}`
@@ -107,7 +108,25 @@ export function ThemedSelect<Value extends string>({
   const menuId = id ? `${id}-menu` : undefined;
 
   const filteredOptions = useMemo(() => {
-    if (!searchable || !searchQuery.trim()) return options;
+    if (!searchable || !searchQuery.trim()) {
+      if (defaultLimit && defaultLimit > 0 && options.length > defaultLimit) {
+        const firstOption = options[0];
+        const hasHeaderOption = Boolean(firstOption && firstOption[0] === "");
+        const headerOption: ThemedSelectOption<Value>[] =
+          hasHeaderOption && firstOption ? [firstOption] : [];
+        const contentOptions = hasHeaderOption ? options.slice(1) : options;
+        const limited = contentOptions.slice(0, defaultLimit);
+
+        if (value && !limited.some(([val]) => val === value)) {
+          const currentOpt = options.find(([val]) => val === value);
+          if (currentOpt && (!hasHeaderOption || currentOpt[0] !== "")) {
+            limited.push(currentOpt);
+          }
+        }
+        return [...headerOption, ...limited];
+      }
+      return options;
+    }
     const query = searchQuery.trim().toLowerCase();
     return options.filter(([val, label, extra]) => {
       const matchLabel = label.toLowerCase().includes(query);
@@ -120,7 +139,7 @@ export function ThemedSelect<Value extends string>({
         matchLabel || matchVal || matchExtraLabel || matchKeywords,
       );
     });
-  }, [options, searchable, searchQuery]);
+  }, [options, searchable, searchQuery, defaultLimit, value]);
 
   const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
@@ -175,7 +194,8 @@ export function ThemedSelect<Value extends string>({
       if (searchable && searchInputRef.current) {
         searchInputRef.current.focus({ preventScroll: true });
       } else {
-        itemRefs.current[selectedIndex]?.focus({ preventScroll: true });
+        const focusIdx = selectedIndex >= 0 ? selectedIndex : 0;
+        itemRefs.current[focusIdx]?.focus({ preventScroll: true });
       }
     });
   };

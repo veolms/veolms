@@ -5,6 +5,7 @@ export const quizQuestionTypeSchema = z.enum([
   "single_choice",
   "multiple_choice",
   "true_false",
+  "short_answer",
 ]);
 export const quizAttemptStatusSchema = z.enum([
   "in_progress",
@@ -21,7 +22,8 @@ const uuid = z.uuid();
 const nonNegativeNumber = z.number().finite().nonnegative();
 
 export const quizResponseValueSchema = z.strictObject({
-  selectedOptionIds: z.array(uuid).max(100),
+  selectedOptionIds: z.array(uuid).max(100).default([]),
+  textResponse: z.string().max(2000).optional(),
 });
 export const quizAnswerInputSchema = z.strictObject({
   questionId: uuid,
@@ -126,12 +128,12 @@ export const createQuizQuestionRequestSchema = z.strictObject({
   points: z.number().finite().positive().max(10_000),
   position: z.number().int().nonnegative().optional(),
   explanation: z.string().max(5_000).nullable().optional(),
-  options: z.array(quizOptionInputSchema).min(2).max(100),
+  options: z.array(quizOptionInputSchema).min(1).max(100),
 });
 export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema
   .partial()
   .extend({
-    options: z.array(quizOptionInputSchema).min(2).max(100).optional(),
+    options: z.array(quizOptionInputSchema).min(1).max(100).optional(),
   });
 export const assignQuizRequestSchema = z.strictObject({
   quizVersionId: uuid,
@@ -163,7 +165,13 @@ export const learnerQuizAttemptSchema = z.strictObject({
   startedAt: z.string(),
   expiresAt: z.string().nullable(),
   questions: z.array(learnerQuizQuestionSchema),
-  answers: z.record(z.string(), z.object({ selectedOptionIds: z.array(uuid) })),
+  answers: z.record(
+    z.string(),
+    z.object({
+      selectedOptionIds: z.array(uuid).default([]),
+      textResponse: z.string().max(2000).optional(),
+    }),
+  ),
 });
 export const quizResultSchema = z.strictObject({
   attemptId: uuid,
@@ -185,6 +193,7 @@ export const quizResultSchema = z.strictObject({
         selectedOptionIds: z.array(uuid),
         selectedOptionTexts: z.array(z.string()),
         correctOptionTexts: z.array(z.string()),
+        textResponse: z.string().nullable().optional(),
         isCorrect: z.boolean(),
         pointsAwarded: nonNegativeNumber,
         explanation: z.string().nullable(),

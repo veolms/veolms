@@ -93,6 +93,21 @@ export async function updateQuiz(
     .executeTakeFirstOrThrow();
 }
 
+export async function softDeleteQuiz(
+  database: DatabaseExecutor,
+  quizId: string,
+) {
+  return await database
+    .updateTable("quizzes")
+    .set({
+      status: "archived",
+      deleted_at: new Date(),
+      updated_at: new Date(),
+    })
+    .where("id", "=", quizId)
+    .execute();
+}
+
 export async function updateVersion(
   database: DatabaseExecutor,
   versionId: string,
@@ -289,6 +304,26 @@ export async function updateAssignment(
     .executeTakeFirstOrThrow();
 }
 
+export async function deleteAssignment(
+  database: DatabaseExecutor,
+  assignmentId: string,
+) {
+  return await database
+    .deleteFrom("quiz_assignments")
+    .where("id", "=", assignmentId)
+    .executeTakeFirst();
+}
+
+export async function deleteAssignmentsByQuizId(
+  database: DatabaseExecutor,
+  quizId: string,
+) {
+  return await database
+    .deleteFrom("quiz_assignments")
+    .where("quiz_id", "=", quizId)
+    .execute();
+}
+
 export async function listAttemptsForUser(
   database: DatabaseExecutor,
   userId: string,
@@ -422,5 +457,37 @@ export async function listAnalyticsAttempts(
     ])
     .where("assignment_id", "=", assignmentId)
     .orderBy("created_at", "desc")
+    .execute();
+}
+
+export async function expireAbandonedAttempts(
+  database: DatabaseExecutor,
+  now: Date = new Date(),
+) {
+  return await database
+    .updateTable("quiz_attempts")
+    .set({
+      status: "expired",
+      updated_at: now,
+    })
+    .where("status", "=", "in_progress")
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb("expires_at", "is not", null),
+          eb("expires_at", "<=", now),
+        ]),
+        eb(
+          "assignment_id",
+          "in",
+          eb
+            .selectFrom("quiz_assignments")
+            .select("id")
+            .where("available_until", "is not", null)
+            .where("available_until", "<=", now),
+        ),
+      ]),
+    )
+    .returning(["id", "user_id", "assignment_id", "attempt_number"])
     .execute();
 }

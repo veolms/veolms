@@ -186,6 +186,18 @@ const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   "[data-player-menu]",
 ].join(",");
 
+const safeResumeVideo = (video: HTMLVideoElement | null) => {
+  if (!video || !video.paused) return;
+  try {
+    const playResult = video.play?.();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch(() => undefined);
+    }
+  } catch {
+    // Ignore environments where play() is unsupported (e.g. JSDOM) or rejected by browser policies
+  }
+};
+
 const isCurriculumSwipeExcludedTarget = (
   target: EventTarget | null,
   selector = CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
@@ -216,9 +228,10 @@ const getInitialFloatingLessonDrawerWidth = () => {
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   lessonId: number;
+  initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
-  onSelectLesson: (lessonId: number) => void;
+  onSelectLesson: (lessonId: number, view?: "video" | "quiz") => void;
   onOpenCourseOverview: () => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
@@ -292,6 +305,7 @@ interface CurriculumScreenSwipeStartEvent {
 export function LearningWorkspace({
   courseSlug,
   lessonId,
+  initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
   onSelectLesson,
@@ -629,12 +643,14 @@ export function LearningWorkspace({
     courseOverview?.course.id,
   );
   const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
-    () => (currentLesson[5] === "quiz" ? "quiz" : "video"),
+    initialLessonView,
   );
 
   useEffect(() => {
-    setActiveLessonView(currentLesson[5] === "quiz" ? "quiz" : "video");
-  }, [selectedLesson, currentLesson]);
+    if (initialLessonView && initialLessonView !== activeLessonView) {
+      setActiveLessonView(initialLessonView);
+    }
+  }, [initialLessonView]);
 
   const getLessonUuid = useCallback(
     (lessonNumber: number): string | undefined => {
@@ -647,16 +663,18 @@ export function LearningWorkspace({
 
   const hasLessonQuiz = useCallback(
     (lessonNumber: number): boolean => {
-      const les = curriculumLessonsById.get(lessonNumber);
-      if (les && les[5] === "quiz") return true;
       const uuid = getLessonUuid(lessonNumber);
       if (!uuid) {
+        const les = curriculumLessonsById.get(lessonNumber);
+        if (les && les[5] === "quiz") return true;
         return lessonNumber === selectedLesson ? Boolean(quizAssignment) : false;
       }
       return Boolean(
         quizAssignments?.some((a) => a.lessonId === uuid) ||
           courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
-          (lessonNumber === selectedLesson && quizAssignment),
+          (lessonNumber === selectedLesson &&
+            quizAssignment &&
+            (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
       );
     },
     [
@@ -678,7 +696,6 @@ export function LearningWorkspace({
 
   const currentLessonUuid = getLessonUuid(selectedLesson);
   const currentQuizAssignment = useMemo(() => {
-    if (quizAssignment) return quizAssignment;
     if (currentLessonUuid && quizAssignments) {
       const found = quizAssignments.find(
         (a) => a.lessonId === currentLessonUuid,
@@ -717,22 +734,92 @@ export function LearningWorkspace({
         };
       }
     }
+    if (
+      quizAssignment &&
+      (!currentLessonUuid || quizAssignment.lessonId === currentLessonUuid)
+    ) {
+      return quizAssignment;
+    }
     return null;
   }, [
-    quizAssignment,
     currentLessonUuid,
     quizAssignments,
     courseQuizAssignments.data,
+    quizAssignment,
     currentLesson,
     courseOverview?.course.title,
   ]);
 
   const isDedicatedQuizLesson = currentLesson[5] === "quiz";
-  const showingQuiz =
-    isDedicatedQuizLesson ||
-    (activeLessonView === "quiz" &&
-      (Boolean(currentQuizAssignment) || isDedicatedQuizLesson));
+  const hasQuizContent =
+    Boolean(currentQuizAssignment) ||
+    (isDedicatedQuizLesson && !currentLessonUuid);
+  const showingQuiz = activeLessonView === "quiz";
   const isQuizLesson = showingQuiz;
+
+  useLayoutEffect(() => {
+    const main = playerWrapRef.current?.closest<HTMLElement>(".courses-main");
+    if (!main) return;
+    if (showingQuiz) {
+      main.setAttribute("data-learning-quiz-active", "true");
+      const video = document.querySelector<HTMLVideoElement>("video");
+      if (video && !video.paused) {
+        video.pause();
+      }
+    } else {
+      main.removeAttribute("data-learning-quiz-active");
+      if (autoPlayOnLessonChange) {
+        const video = document.querySelector<HTMLVideoElement>("video");
+        safeResumeVideo(video);
+      }
+    }
+    return () => {
+      main.removeAttribute("data-learning-quiz-active");
+    };
+  }, [autoPlayOnLessonChange, showingQuiz]);
+
+  useEffect(() => {
+    if (!showingQuiz) return;
+
+    const pauseAllMedia = () => {
+      if (typeof document === "undefined") return;
+      const mediaElements =
+        document.querySelectorAll<HTMLMediaElement>("video, audio");
+      for (const el of mediaElements) {
+        if (!el.paused && typeof el.pause === "function") {
+          try {
+            el.pause();
+          } catch {
+            // ignore error
+          }
+        }
+      }
+    };
+
+    pauseAllMedia();
+
+    const handlePlayCapture = (event: Event) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLMediaElement &&
+        typeof target.pause === "function"
+      ) {
+        try {
+          target.pause();
+        } catch {
+          // ignore error
+        }
+      }
+    };
+
+    window.addEventListener("play", handlePlayCapture, true);
+    window.addEventListener("playing", handlePlayCapture, true);
+
+    return () => {
+      window.removeEventListener("play", handlePlayCapture, true);
+      window.removeEventListener("playing", handlePlayCapture, true);
+    };
+  }, [showingQuiz]);
   const publicPlaybackBootstrap = useMemo(
     () =>
       courseSlug
@@ -943,24 +1030,82 @@ export function LearningWorkspace({
     [phoneLessonDrawer],
   );
 
+  const resumeLessonVideoPlayback = useCallback(() => {
+    setActiveLessonView("video");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("view")) {
+        url.searchParams.delete("view");
+        window.history.replaceState(
+          null,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      }
+    }
+    setAutoPlayOnLessonChange(true);
+    requestAnimationFrame(() => {
+      const video = document.querySelector<HTMLVideoElement>("video");
+      safeResumeVideo(video);
+    });
+  }, []);
+
   const selectLesson = useCallback(
-    (lessonNumber: number) => {
-      setActiveLessonView("video");
+    (lessonNumber: number, view?: "video" | "quiz") => {
+      const targetLesson = curriculumLessonsById.get(lessonNumber);
+      const isTargetDedicatedQuiz = targetLesson?.[5] === "quiz";
+      const targetHasQuiz = hasLessonQuiz(lessonNumber);
+
+      if (
+        view === "quiz" ||
+        (view === undefined && isTargetDedicatedQuiz && targetHasQuiz)
+      ) {
+        setActiveLessonView("quiz");
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("view", "quiz");
+          window.history.replaceState(
+            null,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+        }
+      } else {
+        resumeLessonVideoPlayback();
+      }
       if (lessonNumber === selectedLesson) return;
       pendingLessonSelectionRef.current = lessonNumber;
-      setAutoPlayOnLessonChange(true);
       setSelectedLesson(lessonNumber);
-      onSelectLesson(lessonNumber);
+      if (view !== undefined) {
+        onSelectLesson(lessonNumber, view);
+      } else {
+        onSelectLesson(lessonNumber);
+      }
     },
-    [onSelectLesson, selectedLesson],
+    [
+      curriculumLessonsById,
+      hasLessonQuiz,
+      onSelectLesson,
+      resumeLessonVideoPlayback,
+      selectedLesson,
+    ],
   );
 
   const handleOpenLessonQuiz = useCallback(
     (lessonNumber: number) => {
-      if (lessonNumber !== selectedLesson) {
-        selectLesson(lessonNumber);
-      }
       setActiveLessonView("quiz");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("view", "quiz");
+        window.history.replaceState(
+          null,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      }
+      if (lessonNumber !== selectedLesson) {
+        selectLesson(lessonNumber, "quiz");
+      }
       if (phoneLessonDrawer && lessonDrawer) {
         setLessonDrawer(false);
       }
@@ -1997,8 +2142,9 @@ export function LearningWorkspace({
       totalLessons: lessonSequence.length,
       theaterMode,
       onTheaterToggle: toggleTheaterMode,
-      autoPlayOnMediaChange: autoPlayOnLessonChange,
+      autoPlayOnMediaChange: showingQuiz ? false : autoPlayOnLessonChange,
       autoplayEnabled,
+      playbackSuspended: showingQuiz,
       canGoNext: nextLessonId !== undefined,
       canGoPrevious: previousLessonId !== undefined,
       nextLessonInfo,
@@ -2057,6 +2203,7 @@ export function LearningWorkspace({
       playerCourseLessonsSidePanel,
       previousLessonId,
       selectedLesson,
+      showingQuiz,
       theaterMode,
       toggleLessonDrawerFromPlayer,
       toggleTheaterMode,
@@ -2139,6 +2286,7 @@ export function LearningWorkspace({
       <main
         ref={mainRef}
         data-learning-motion-surface=""
+        data-learning-quiz-active={showingQuiz ? "true" : undefined}
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
@@ -2151,41 +2299,43 @@ export function LearningWorkspace({
           >
             {showingQuiz ? (
               <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
-                {!isDedicatedQuizLesson && (
-                  <div className="flex items-center justify-between gap-3 mb-4 sm:mb-5">
-                    <button
-                      type="button"
-                      onClick={() => setActiveLessonView("video")}
-                      className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] px-3.5 py-2 text-xs sm:text-sm font-semibold text-(--text) shadow-(--card-compact-shadow) transition-all hover:border-(--accent) hover:bg-(--surface) hover:text-(--accent) cursor-pointer active:scale-95"
-                    >
-                      <ArrowLeft size={16} weight="bold" />
-                      <span>Back to video</span>
-                    </button>
-                    <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-(--muted)">
-                      <Exam size={15} className="text-(--accent)" weight="bold" />
-                      <span>Lesson {selectedLesson} Quiz</span>
-                    </div>
-                  </div>
-                )}
                 {currentQuizAssignment ? (
                   <QuizAttemptPanel
+                    key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
                     assignmentId={currentQuizAssignment.id}
                     activeAttemptId={currentQuizAssignment.activeAttemptId}
                     maxAttempts={currentQuizAssignment.maxAttempts}
+                    onBackToVideo={resumeLessonVideoPlayback}
+                    onPassed={() => updateSelectedLessonProgress(100)}
+                    lessonBadge={`Lesson ${selectedLesson} Quiz`}
                     onContinueCourse={
                       nextLessonId === undefined
                         ? undefined
                         : () => {
-                            setActiveLessonView("video");
+                            resumeLessonVideoPlayback();
                             onSelectLesson(nextLessonId);
                           }
                     }
                   />
                 ) : (
                   <section
-                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-6 text-(--text)"
+                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
                     style={{ boxShadow: "var(--card-shadow)" }}
                   >
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <button
+                        type="button"
+                        onClick={resumeLessonVideoPlayback}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95"
+                      >
+                        <ArrowLeft size={14} weight="bold" />
+                        <span>Back to video</span>
+                      </button>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                        <Exam size={14} className="text-(--accent)" weight="bold" />
+                        <span>Lesson {selectedLesson} Quiz</span>
+                      </div>
+                    </div>
                     <p
                       role={
                         quizAssignmentLoading || courseQuizAssignments.isLoading
@@ -2200,6 +2350,18 @@ export function LearningWorkspace({
                     </p>
                   </section>
                 )}
+              </div>
+            ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (
+              <div className="w-full max-w-4xl mx-auto p-8 sm:p-12 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
+                  <Exam size={28} weight="duotone" />
+                </div>
+                <h2 className="text-base font-semibold text-(--text)">
+                  Quiz Assessment Not Available
+                </h2>
+                <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
+                  This lesson does not currently have an active quiz assessment assigned.
+                </p>
               </div>
             ) : registerPersistentPlayer ? (
               <div
@@ -2221,11 +2383,7 @@ export function LearningWorkspace({
             )}
           </div>
 
-          <div
-            className={`learning-workspace__lesson-content-clip ${
-              showingQuiz ? "hidden" : ""
-            }`}
-          >
+          <div className="learning-workspace__lesson-content-clip">
             <article
               ref={lessonContentRef}
               className="learning-workspace__lesson-content"
@@ -2244,7 +2402,7 @@ export function LearningWorkspace({
                     }
               }
             >
-              <header>
+              <header className="learning-workspace__lesson-header">
                 <button
                   id="learning-course-content-trigger"
                   ref={lessonTriggerRef}
@@ -2258,6 +2416,34 @@ export function LearningWorkspace({
                     <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
                   </div>
                 </button>
+                {hasLessonQuiz(selectedLesson) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeLessonView === "quiz") {
+                        resumeLessonVideoPlayback();
+                      } else {
+                        handleOpenLessonQuiz(selectedLesson);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+                      activeLessonView === "quiz"
+                        ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
+                        : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
+                    }`}
+                    aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
+                    title={
+                      activeLessonView === "quiz"
+                        ? "Return to video lesson"
+                        : "Open lesson quiz"
+                    }
+                  >
+                    <Exam size={14} weight="bold" className="text-(--accent)" />
+                    <span>
+                      {activeLessonView === "quiz" ? "Back to video" : "Lesson Quiz"}
+                    </span>
+                  </button>
+                ) : null}
               </header>
               <Discussion
                 key={discussionPersistenceKey}

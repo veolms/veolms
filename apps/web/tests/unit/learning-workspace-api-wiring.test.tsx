@@ -448,7 +448,7 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
       latestPassed: null,
     };
 
-    it("renders Quiz trigger button to the left of lesson duration when a quiz is assigned", async () => {
+    it("renders Quiz trigger button below video player next to lesson title and removes quiz icon from curriculum", async () => {
       const mockOverview = createMockOverview();
       queryClient.setQueryData(
         courseKeys.overview("modern-ts-deep-dive"),
@@ -460,12 +460,21 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
         quizAssignments: [mockQuizAssignment],
       });
 
-      // The quiz trigger button for lesson 1 must be in the document
-      const quizTriggers = screen.getAllByRole("button", {
+      // The quiz trigger button for lesson 1 must be next to the lesson title
+      const quizTrigger = screen.getByRole("button", {
         name: /Open quiz for lesson 1/i,
       });
-      expect(quizTriggers.length).toBeGreaterThan(0);
-      expect(quizTriggers[0]).toHaveTextContent("Quiz");
+      expect(quizTrigger).toBeInTheDocument();
+      expect(quizTrigger).toHaveTextContent("Lesson Quiz");
+
+      // Curriculum playlist rows must NOT contain a quiz trigger icon
+      const curriculum = document.getElementById(
+        "learning-course-curriculum-scrollport",
+      );
+      expect(curriculum).toBeTruthy();
+      expect(
+        curriculum!.querySelector(".learning-curriculum__quiz-trigger"),
+      ).toBeNull();
     });
 
     it("toggles to quiz attempt view when clicking Quiz trigger and restores video with Back to video", async () => {
@@ -484,11 +493,11 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
       // Initially, "Back to video" is NOT present because video mode is active
       expect(screen.queryByRole("button", { name: /Back to video/i })).toBeNull();
 
-      // Click the Quiz trigger in the curriculum list
-      const quizTriggers = screen.getAllByRole("button", {
+      // Click the Quiz trigger beside the lesson title
+      const quizTrigger = screen.getByRole("button", {
         name: /Open quiz for lesson 1/i,
       });
-      fireEvent.click(quizTriggers[0]!);
+      fireEvent.click(quizTrigger);
 
       // Now "Back to video" button and Lesson Quiz label must be visible
       const backButton = screen.getByRole("button", { name: /Back to video/i });
@@ -500,6 +509,122 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
 
       // Now "Back to video" is gone and video player is restored
       expect(screen.queryByRole("button", { name: /Back to video/i })).toBeNull();
+    });
+
+    it("restores video view when clicking lesson in curriculum list while viewing quiz", async () => {
+      const mockOverview = createMockOverview();
+      queryClient.setQueryData(
+        courseKeys.overview("modern-ts-deep-dive"),
+        mockOverview,
+      );
+
+      renderWorkspaceWithClient(queryClient, {
+        lessonId: 1,
+        quizAssignment: mockQuizAssignment,
+        quizAssignments: [mockQuizAssignment],
+      });
+
+      // Open the quiz view
+      const quizTrigger = screen.getByRole("button", {
+        name: /Open quiz for lesson 1/i,
+      });
+      fireEvent.click(quizTrigger);
+      expect(screen.getByRole("button", { name: /Back to video/i })).toBeInTheDocument();
+
+      // Click on the lesson row button in the curriculum list
+      const curriculum = document.getElementById(
+        "learning-course-curriculum-scrollport",
+      );
+      expect(curriculum).toBeTruthy();
+      const lesson1Button = curriculum!.querySelector<HTMLButtonElement>(
+        ".learning-curriculum__lesson",
+      );
+      expect(lesson1Button).toBeTruthy();
+      fireEvent.click(lesson1Button!);
+
+      // Now "Back to video" is gone and video mode is restored
+      expect(screen.queryByRole("button", { name: /Back to video/i })).toBeNull();
+    });
+
+    it("renders distinct quiz assignments for different lessons rather than reusing the last opened quiz", async () => {
+      const mockOverview = createMockOverview();
+      queryClient.setQueryData(
+        courseKeys.overview("modern-ts-deep-dive"),
+        mockOverview,
+      );
+
+      const mockQuizAssignment2 = {
+        ...mockQuizAssignment,
+        id: "qa-22222222-2222-4222-a222-222222222222",
+        lessonId: "les-2-1-uuid",
+        quizTitle: "Lesson 2 Quiz Title",
+      };
+
+      renderWorkspaceWithClient(queryClient, {
+        lessonId: 1,
+        quizAssignments: [mockQuizAssignment, mockQuizAssignment2],
+      });
+
+      // Open lesson 1 quiz from trigger beside title
+      const quizTrigger1 = screen.getByRole("button", {
+        name: /Open quiz for lesson 1/i,
+      });
+      fireEvent.click(quizTrigger1);
+      expect(screen.getByText(/Lesson 1 Quiz/i)).toBeInTheDocument();
+
+      // Switch to lesson 2 by clicking lesson 2 in curriculum
+      const curriculum = document.getElementById(
+        "learning-course-curriculum-scrollport",
+      );
+      const lessonButtons = curriculum!.querySelectorAll<HTMLButtonElement>(
+        ".learning-curriculum__lesson",
+      );
+      fireEvent.click(lessonButtons[1]!);
+
+      // Now on lesson 2, click its Quiz trigger beside title
+      const quizTrigger2 = screen.getByRole("button", {
+        name: /Open quiz for lesson 2/i,
+      });
+      fireEvent.click(quizTrigger2);
+      expect(screen.getByText(/Lesson 2 Quiz/i)).toBeInTheDocument();
+    });
+
+    it("suspends background media playback and pauses media elements when quiz view is open", async () => {
+      const mockOverview = createMockOverview();
+      queryClient.setQueryData(
+        courseKeys.overview("modern-ts-deep-dive"),
+        mockOverview,
+      );
+
+      const testVideo = document.createElement("video");
+      const pauseSpy = vi.fn();
+      testVideo.pause = pauseSpy;
+      Object.defineProperty(testVideo, "paused", {
+        value: false,
+        writable: true,
+      });
+      document.body.appendChild(testVideo);
+
+      try {
+        renderWorkspaceWithClient(queryClient, {
+          lessonId: 1,
+          quizAssignment: mockQuizAssignment,
+          quizAssignments: [mockQuizAssignment],
+        });
+
+        const quizTrigger = screen.getByRole("button", {
+          name: /Open quiz for lesson 1/i,
+        });
+        fireEvent.click(quizTrigger);
+
+        expect(pauseSpy).toHaveBeenCalled();
+
+        pauseSpy.mockClear();
+        testVideo.dispatchEvent(new Event("play"));
+        expect(pauseSpy).toHaveBeenCalled();
+      } finally {
+        testVideo.remove();
+      }
     });
   });
 });

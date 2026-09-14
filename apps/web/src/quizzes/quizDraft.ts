@@ -13,10 +13,16 @@ export function answeredQuestionCount(
   attempt: LearnerQuizAttempt,
   draft: QuizAttemptDraft,
 ) {
-  return attempt.questions.filter(
-    (question) =>
-      (draft.answers[question.id]?.selectedOptionIds.length ?? 0) > 0,
-  ).length;
+  return attempt.questions.filter((question) => {
+    const answer = draft.answers[question.id];
+    if (!answer) return false;
+    if (question.questionType === "short_answer") {
+      return Boolean(
+        answer.textResponse && answer.textResponse.trim().length > 0,
+      );
+    }
+    return (answer.selectedOptionIds?.length ?? 0) > 0;
+  }).length;
 }
 
 export function hasAnsweredEveryQuestion(
@@ -41,5 +47,7 @@ export function toBulkQuizAnswers(
 }
 
 export function formatQuizRemainingTime(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
 }
+

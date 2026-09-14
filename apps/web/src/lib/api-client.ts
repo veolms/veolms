@@ -56,6 +56,51 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+function shouldClearAuthOnUnauthorized(
+  error: AxiosError,
+  apiError: ApiError,
+): boolean {
+  if (apiError.status !== 401) {
+    return false;
+  }
+
+  // An invalid credential, bad OTP code, or MFA challenge does not mean the
+  // existing session expired. Never clear auth for user input mistakes during
+  // login, verification, or step-up flows.
+  if (
+    apiError.code === "INVALID_CODE" ||
+    apiError.code === "INVALID_CREDENTIALS" ||
+    apiError.code === "MFA_REQUIRED" ||
+    apiError.code === "TOTP_REQUIRED" ||
+    apiError.code === "PASSKEY_REQUIRED"
+  ) {
+    return false;
+  }
+
+  const url = error.config?.url;
+  if (!url) {
+    return true;
+  }
+
+  const authInputEndpoints = [
+    "/auth/login",
+    "/auth/otp/verify",
+    "/auth/me/phone/otp/verify",
+    "/auth/me/email/otp/verify",
+    "/auth/totp/verify",
+    "/auth/totp/enable",
+    "/auth/passkey/login/verify",
+    "/auth/passkey/register/verify",
+    "/auth/mfa/step-up",
+  ];
+
+  if (authInputEndpoints.some((endpoint) => url.includes(endpoint))) {
+    return false;
+  }
+
+  return true;
+}
+
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
     if (
@@ -71,7 +116,7 @@ axiosInstance.interceptors.response.use(
   (error: AxiosError) => {
     const apiError = getApiError(error);
     redirectToMfaSetup(apiError);
-    if (apiError.status === 401 && error.config?.url !== "/auth/login") {
+    if (shouldClearAuthOnUnauthorized(error, apiError)) {
       authStore.clearAuth();
     }
     return Promise.reject(apiError);
