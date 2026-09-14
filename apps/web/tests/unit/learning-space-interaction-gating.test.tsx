@@ -105,6 +105,14 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useUpdateThread: (...args: any[]) => notesMocks.useUpdateThread(...args),
   useDeleteThread: (...args: any[]) => notesMocks.useDeleteThread(...args),
   useToggleLike: (...args: any[]) => notesMocks.useToggleLike(...args),
+  useToggleBookmark: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAcceptReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useLockThread: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateReport: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useThreadReplies: () => ({ data: { replies: [] }, isLoading: false, isError: false }),
+  useCreateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 describe("Learning Space Interaction Settings Gating", () => {

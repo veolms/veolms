@@ -1,5 +1,6 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
+import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -84,6 +85,7 @@ export interface Comment {
   acceptedAnswerId?: string | null;
   isSolved?: boolean;
   isLocked?: boolean;
+  isBookmarked?: boolean;
 }
 
 interface CommentCardProps {
@@ -110,6 +112,10 @@ interface CommentCardProps {
     threadId: string | number,
     isLocked: boolean,
   ) => Promise<boolean> | void;
+  onToggleBookmark?: (
+    id: string | number,
+    bookmarked: boolean,
+  ) => Promise<boolean> | void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
@@ -124,6 +130,7 @@ export function CommentCard({
   onReport = () => undefined,
   onToggleAcceptReply,
   onToggleLockThread,
+  onToggleBookmark,
   isBackendMode = false,
   currentUserId,
   userRole,
@@ -410,6 +417,16 @@ export function CommentCard({
                       <span>Locked</span>
                     </span>
                   )}
+                  {!isNote && Boolean(comment.isBookmarked) && (
+                    <span
+                      data-testid="thread-bookmarked-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
+                      title="Bookmarked"
+                    >
+                      <BookmarkSimple size={12} weight="bold" aria-hidden="true" />
+                      <span>Bookmarked</span>
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={comment.name}
@@ -438,6 +455,12 @@ export function CommentCard({
                       void onToggleLockThread(comment.id, !comment.isLocked);
                     }
                   }}
+                  isBookmarked={Boolean(comment.isBookmarked)}
+                  onToggleBookmark={
+                    onToggleBookmark
+                      ? () => onToggleBookmark(comment.id, !comment.isBookmarked)
+                      : undefined
+                  }
                   className="absolute -top-1 -right-1 z-20 shrink-0"
                 />
               </div>
@@ -976,6 +999,8 @@ interface CommentActionMenuProps {
   canAcceptAnswer?: boolean;
   isAccepted?: boolean;
   onToggleAccept?: () => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
   onEdit: () => void;
   onShare: () => void;
   onDelete: () => void;
@@ -993,6 +1018,8 @@ export function CommentActionMenu({
   canAcceptAnswer = false,
   isAccepted = false,
   onToggleAccept,
+  isBookmarked = false,
+  onToggleBookmark,
   onEdit,
   onShare,
   onDelete,
@@ -1006,6 +1033,8 @@ export function CommentActionMenu({
     actionLabel === "Q&A"
       ? actionLabel
       : actionLabel[0]?.toUpperCase() + actionLabel.slice(1);
+  const canBookmark =
+    (kind === "comment" || kind === "question") && Boolean(onToggleBookmark);
 
   return (
     <CourseActionMenu
@@ -1034,6 +1063,13 @@ export function CommentActionMenu({
             label={`Edit ${actionLabel}`}
             onClick={onEdit}
           />
+          {canBookmark && onToggleBookmark && (
+            <MenuAction
+              Icon={BookmarkSimple}
+              label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+              onClick={onToggleBookmark}
+            />
+          )}
           <MenuAction
             Icon={ShareNetwork}
             label={`Share ${actionLabel}`}
@@ -1063,6 +1099,13 @@ export function CommentActionMenu({
         </>
       ) : (
         <>
+          {canBookmark && onToggleBookmark && (
+            <MenuAction
+              Icon={BookmarkSimple}
+              label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+              onClick={onToggleBookmark}
+            />
+          )}
           <MenuAction
             Icon={ShareNetwork}
             label={`Share ${actionLabel}`}

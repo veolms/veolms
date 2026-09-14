@@ -1,5 +1,6 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
+import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ArrowsInIcon as ArrowsIn } from "@phosphor-icons/react/ArrowsIn";
@@ -119,6 +120,10 @@ interface DiscussionThreadPanelProps {
     accepted: boolean,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
+  onToggleBookmark?: (
+    threadId: string | number,
+    bookmarked: boolean,
+  ) => Promise<boolean> | void;
 }
 
 export function DiscussionThreadPanel({
@@ -141,6 +146,7 @@ export function DiscussionThreadPanel({
   onReport,
   onToggleAcceptReply,
   onToggleLockThread,
+  onToggleBookmark,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
@@ -665,6 +671,7 @@ export function DiscussionThreadPanel({
                   onReport={onReport}
                   onToggleAcceptReply={onToggleAcceptReply}
                   onToggleLockThread={onToggleLockThread}
+                  onToggleBookmark={onToggleBookmark}
                 />
               </SwiperSlide>
             ))}
@@ -713,6 +720,10 @@ interface ThreadSlideProps {
     accepted: boolean,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
+  onToggleBookmark?: (
+    threadId: string | number,
+    bookmarked: boolean,
+  ) => Promise<boolean> | void;
 }
 
 function ThreadSlide({
@@ -734,6 +745,7 @@ function ThreadSlide({
   onReport,
   onToggleAcceptReply,
   onToggleLockThread,
+  onToggleBookmark,
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
@@ -884,6 +896,7 @@ function ThreadSlide({
           entry={entry}
           canLock={canLock}
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
+          onToggleBookmark={onToggleBookmark}
           onLike={onLike}
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
@@ -992,6 +1005,7 @@ function ThreadRootEntry({
   entry,
   canLock = false,
   onToggleLock,
+  onToggleBookmark,
   onLike,
   onReply,
   onEdit,
@@ -1001,6 +1015,10 @@ function ThreadRootEntry({
   entry: Comment;
   canLock?: boolean;
   onToggleLock?: () => void;
+  onToggleBookmark?: (
+    threadId: string | number,
+    bookmarked: boolean,
+  ) => Promise<boolean> | void;
   onLike: (id: string | number, liked: boolean) => void;
   onReply: () => void;
   onEdit: () => void;
@@ -1008,6 +1026,7 @@ function ThreadRootEntry({
   onReport: () => void;
 }) {
   const [liked, setLiked] = useState(Boolean(entry.liked));
+  const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
 
   useEffect(() => {
     setLiked(Boolean(entry.liked));
@@ -1052,6 +1071,16 @@ function ThreadRootEntry({
                   Locked
                 </span>
               )}
+              {!isNote && Boolean(entry.isBookmarked) && (
+                <span
+                  data-testid="thread-bookmarked-badge"
+                  className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
+                  title="Bookmarked"
+                >
+                  <BookmarkSimple size={12} weight="bold" aria-hidden="true" />
+                  <span>Bookmarked</span>
+                </span>
+              )}
               <span aria-hidden="true" className="text-(--muted)">
                 ·
               </span>
@@ -1068,6 +1097,12 @@ function ThreadRootEntry({
               canLock={canLock}
               isLocked={Boolean(entry.isLocked)}
               onToggleLock={onToggleLock}
+              isBookmarked={Boolean(entry.isBookmarked)}
+              onToggleBookmark={
+                onToggleBookmark
+                  ? () => onToggleBookmark(entry.id, !entry.isBookmarked)
+                  : undefined
+              }
               onEdit={onEdit}
               onShare={() =>
                 void shareDiscussionEntry(entry.id, entry.name, entry.text)

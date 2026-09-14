@@ -18,6 +18,7 @@ import { getDiscussionFeedCountLabel } from "../../src/learning/discussionFeed";
 
 const uploadAttachment = vi.hoisted(() =>
   vi.fn(async (file: File) => ({
+    id: "test-upload-id",
     url: `/api/v1/dev/discussion-uploads/${encodeURIComponent(file.name)}`,
     fileName: file.name,
     mediaType: file.type.startsWith("video/")
@@ -25,12 +26,25 @@ const uploadAttachment = vi.hoisted(() =>
       : ("image" as const),
     mimeType: file.type,
     size: file.size,
+    kind: file.type.startsWith("video/")
+      ? ("video" as const)
+      : ("image" as const),
   })),
 );
 
 vi.mock("../../src/services/discussion", () => ({
   discussionService: { uploadAttachment },
 }));
+
+vi.mock(
+  "../../src/services/learning-interactions/learning-interactions.service",
+  () => ({
+    learningInteractionsService: {
+      uploadAttachmentDirect: uploadAttachment,
+      uploadAttachmentFile: uploadAttachment,
+    },
+  }),
+);
 
 vi.mock("../../src/services/auth", () => ({
   useCurrentUser: () => ({
@@ -184,6 +198,26 @@ vi.mock("../../src/services/learning-interactions", () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  useToggleBookmark: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useAcceptReply: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useLockThread: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useCreateReport: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useThreadReplies: () => ({ data: { replies: [] }, isLoading: false, isError: false }),
+  useCreateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 describe("CommentCard", () => {
@@ -1574,7 +1608,7 @@ describe("Discussion", () => {
       "Italic",
       "Highlight",
       "Add or edit link",
-      "Attach image or video",
+      "Attach file",
       "Inline code",
       "Code block",
     ]) {
@@ -1589,7 +1623,9 @@ describe("Discussion", () => {
     expect(
       screen.queryByRole("button", { name: /Drag block/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Choose image or video")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Choose image, video, document, or code file"),
+    ).toBeInTheDocument();
 
     expect(
       screen.queryByRole("button", { name: /Post type:/ }),
@@ -1751,9 +1787,12 @@ describe("Discussion", () => {
     const file = new File(["image-data"], "diagram.png", {
       type: "image/png",
     });
-    fireEvent.change(screen.getByLabelText("Choose image or video"), {
-      target: { files: [file] },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Choose image, video, document, or code file"),
+      {
+        target: { files: [file] },
+      },
+    );
 
     await waitFor(() => expect(next).toBeEnabled());
     fireEvent.click(next);
@@ -1937,11 +1976,11 @@ describe("Discussion", () => {
       });
       expect(
         within(toolbar).getByRole("button", {
-          name: "Attach image or video",
+          name: "Attach file",
         }),
       ).toBeVisible();
       expect(
-        screen.getByLabelText("Choose image or video"),
+        screen.getByLabelText("Choose image, video, document, or code file"),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "Add image or video" }),
@@ -1969,9 +2008,12 @@ describe("Discussion", () => {
       const file = new File(["video-data"], "demo.mp4", {
         type: "video/mp4",
       });
-      fireEvent.change(screen.getByLabelText("Choose image or video"), {
-        target: { files: [file] },
-      });
+      fireEvent.change(
+        screen.getByLabelText("Choose image, video, document, or code file"),
+        {
+          target: { files: [file] },
+        },
+      );
 
       await waitFor(() => expect(next).toBeEnabled());
       fireEvent.click(next);

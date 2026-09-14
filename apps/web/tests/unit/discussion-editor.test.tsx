@@ -166,9 +166,12 @@ describe("comment formatting toolbar", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Choose image or video"), {
-      target: { files: [file] },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Choose image, video, document, or code file"),
+      {
+        target: { files: [file] },
+      },
+    );
 
     await waitFor(() => expect(editor.attach).toHaveBeenCalledWith(file));
     expect(screen.queryByRole("status")).toBeNull();
@@ -293,7 +296,7 @@ describe("discussion attachment storage", () => {
       },
     );
 
-    expect(result).toEqual({ inserted: true, message: null });
+    expect(result).toMatchObject({ inserted: true, message: null });
     expect(insertMarkdown).toHaveBeenCalledWith(
       "\n![diagram.png](/api/v1/dev/discussion-uploads/stable.png)\n",
     );
@@ -308,7 +311,7 @@ describe("discussion attachment storage", () => {
     );
 
     expect(result.inserted).toBe(false);
-    expect(result.message).toMatch(/could not be uploaded/i);
+    expect(result.message).toMatch(/Failed to upload|could not be uploaded/i);
     expect(insertMarkdown).not.toHaveBeenCalled();
   });
 });

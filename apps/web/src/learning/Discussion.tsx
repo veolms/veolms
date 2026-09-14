@@ -58,6 +58,7 @@ import {
   useDeleteThread,
   useLessonThreads,
   useLockThread,
+  useToggleBookmark,
   useToggleLike,
   useUpdateNote,
   useUpdateThread,
@@ -286,6 +287,8 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
         isDiscussionVisibility((entry as Comment).visibility)) &&
       (typeof (entry as Comment).liked === "undefined" ||
         typeof (entry as Comment).liked === "boolean") &&
+      (typeof (entry as Comment).isBookmarked === "undefined" ||
+        typeof (entry as Comment).isBookmarked === "boolean") &&
       (typeof (entry as Comment).isOwn === "undefined" ||
         typeof (entry as Comment).isOwn === "boolean"),
   );
@@ -419,6 +422,7 @@ export function Discussion({
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread();
   const toggleLikeMutation = useToggleLike();
+  const toggleBookmarkMutation = useToggleBookmark();
   const acceptReplyMutation = useAcceptReply();
   const lockThreadMutation = useLockThread();
   const createReportMutation = useCreateReport();
@@ -458,6 +462,11 @@ export function Discussion({
     authorAvatar,
   ]);
 
+  const isBackendMode = Boolean(courseId);
+  const [bookmarkOverrides, setBookmarkOverrides] = useState<
+    Record<string, boolean>
+  >({});
+
   const backendThreads = useMemo<Comment[]>(() => {
     if (
       !courseId ||
@@ -470,8 +479,15 @@ export function Discussion({
 
     return threadsData.threads
       .filter(isCommentOrQaThread)
-      .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id));
+      .map((thread) => {
+        const comment = adaptLearningThreadToComment(thread, currentUser?.id);
+        if (typeof bookmarkOverrides[String(thread.id)] === "boolean") {
+          comment.isBookmarked = bookmarkOverrides[String(thread.id)];
+        }
+        return comment;
+      });
   }, [
+    bookmarkOverrides,
     capabilities.allowComments,
     capabilities.allowQa,
     courseId,
@@ -479,8 +495,6 @@ export function Discussion({
     lessonId,
     threadsData?.threads,
   ]);
-
-  const isBackendMode = Boolean(courseId);
 
   const [optimisticallyHiddenIds, setOptimisticallyHiddenIds] = useState<
     Set<string | number>
@@ -1009,6 +1023,43 @@ export function Discussion({
     }
   };
 
+  const handleToggleBookmark = async (
+    threadId: string | number,
+    bookmarked: boolean,
+  ): Promise<boolean> => {
+    const threadIdStr = String(threadId);
+    if (isBackendMode) {
+      try {
+        const response = await toggleBookmarkMutation.mutateAsync(threadIdStr);
+        const finalBookmarked = response.bookmarked;
+        setBookmarkOverrides((current) => ({
+          ...current,
+          [threadIdStr]: finalBookmarked,
+        }));
+        return finalBookmarked;
+      } catch (err: any) {
+        setNotice(err?.message || "Failed to update bookmark status.");
+        throw err;
+      }
+    } else {
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === threadId
+            ? { ...entry, isBookmarked: bookmarked }
+            : entry,
+        ),
+      );
+      setPostedEntries((current) =>
+        current.map((entry) =>
+          entry.id === threadId
+            ? { ...entry, isBookmarked: bookmarked }
+            : entry,
+        ),
+      );
+      return bookmarked;
+    }
+  };
+
   const handleOpenReport = (
     target:
       | {
@@ -1162,6 +1213,7 @@ export function Discussion({
         userRole={currentUserRole}
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
+        onToggleBookmark={handleToggleBookmark}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
@@ -1189,6 +1241,7 @@ export function Discussion({
         onReport={handleOpenReport}
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
+        onToggleBookmark={handleToggleBookmark}
       />
       <DiscussionReportDialog
         open={reportDialogOpen}
@@ -1262,6 +1315,10 @@ interface ThreadSurfaceProps {
     accepted: boolean,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
+  onToggleBookmark?: (
+    threadId: string | number,
+    bookmarked: boolean,
+  ) => Promise<boolean> | void;
 }
 
 function ThreadSurface({
@@ -1311,6 +1368,7 @@ function ThreadSurface({
   userRole,
   onToggleAcceptReply,
   onToggleLockThread,
+  onToggleBookmark,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -1680,6 +1738,7 @@ function ThreadSurface({
                 userRole={userRole}
                 onToggleAcceptReply={onToggleAcceptReply}
                 onToggleLockThread={onToggleLockThread}
+                onToggleBookmark={onToggleBookmark}
               />
             ))}
             {entries.length === 0 && (

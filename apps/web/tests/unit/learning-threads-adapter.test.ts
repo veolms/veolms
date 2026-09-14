@@ -146,5 +146,22 @@ describe("learning-threads.adapter", () => {
       };
       expect(adaptLearningThreadToComment(noDisplayName).name).toBe("jdoe");
     });
+
+    it("maps backend isBookmarked: false correctly", () => {
+      const thread: LearningThread = {
+        ...mockBaseThread,
+        isBookmarked: false,
+      };
+      expect(adaptLearningThreadToComment(thread).isBookmarked).toBe(false);
+    });
+
+    it("maps backend isBookmarked: true correctly", () => {
+      const thread: LearningThread = {
+        ...mockBaseThread,
+        isBookmarked: true,
+      };
+      expect(adaptLearningThreadToComment(thread).isBookmarked).toBe(true);
+    });
   });
 });
+
