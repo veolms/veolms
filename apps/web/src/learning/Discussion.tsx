@@ -799,8 +799,17 @@ export function Discussion({
 
   const onLike = (id: string | number, liked?: boolean) => {
     if (isBackendMode) {
+      const entry =
+        combinedEntries.find((e) => e.id === id) ??
+        backendNotes.find((n) => n.id === id) ??
+        backendThreads.find((t) => t.id === id) ??
+        entries.find((e) => e.id === id);
+      const isNote =
+        entry?.entryKind === "note" || backendNotes.some((n) => n.id === id);
+      const targetType: "note" | "thread" = isNote ? "note" : "thread";
+
       toggleLikeMutation.mutate({
-        targetType: "thread",
+        targetType,
         targetId: String(id),
       });
       return;
