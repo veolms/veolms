@@ -12,6 +12,9 @@ export type ShellPage =
   | "home"
   | "courses"
   | "reviews"
+  | "quizzes"
+  | "quiz-builder"
+  | "quiz-attempt"
   | "orders"
   | "order-history"
   | "notifications"
@@ -124,6 +127,34 @@ export const routeDescriptors = {
     section: "Reviews",
     title: "Reviews",
     description: "Keep an eye on learner feedback and course sentiment.",
+  },
+  quizzes: {
+    kind: "shell",
+    page: "quizzes",
+    section: "Quizzes",
+    title: "Quizzes",
+    description: "Manage quiz assignments, attempts, results, and analytics.",
+  },
+  "quiz-create": {
+    kind: "shell",
+    page: "quiz-builder",
+    section: "Quizzes",
+    title: "Create quiz",
+    description: "Build and publish a new assessment.",
+  },
+  "quiz-edit": {
+    kind: "shell",
+    page: "quiz-builder",
+    section: "Quizzes",
+    title: "Edit quiz",
+    description: "Maintain assessment content and delivery settings.",
+  },
+  "quiz-attempt": {
+    kind: "shell",
+    page: "quiz-attempt",
+    section: "Quizzes",
+    title: "Quiz attempt",
+    description: "Complete your assessment.",
   },
   discussions: {
     ...discussionsRouteBase,
@@ -285,6 +316,10 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   wishlist: "/wishlist",
   students: "/students",
   reviews: "/reviews",
+  quizzes: "/quizzes",
+  "quiz-create": "/quizzes/create",
+  "quiz-edit": "/quizzes/:quizId",
+  "quiz-attempt": "/quizzes/attempt/:assignmentId",
   discussions: "/discussions",
   analytics: "/analytics",
   orders: "/orders",
@@ -320,6 +355,10 @@ const canonicalPathsByRouteId = {
   wishlist: "/wishlist",
   students: "/students",
   reviews: "/reviews",
+  quizzes: "/quizzes",
+  "quiz-create": "/quizzes/create",
+  "quiz-edit": "/quizzes/:quizId",
+  "quiz-attempt": "/quizzes/attempt/:assignmentId",
   discussions: "/discussions",
   "discussions-q-and-a": "/discussions/q-and-a",
   "discussions-comments": "/discussions/comments",
@@ -394,6 +433,18 @@ export const getEffectiveRouteId = (
     } catch {
       return "home-fallback";
     }
+  }
+
+  if (routeId === "quiz-edit") {
+    return /^\/quizzes\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "quiz-attempt") {
+    return /^\/quizzes\/attempt\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
   }
 
   const canonicalPath = hasOwn(canonicalPathsByRouteId, routeId)

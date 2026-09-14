@@ -23,10 +23,6 @@ vi.mock("../../src/services/auth", async () => {
   };
 });
 
-vi.mock("../../src/auth/AuthBrandPanel.tsx", () => ({
-  AuthBrandPanel: () => null,
-}));
-
 function AppearanceHarness() {
   useAuthAppearance();
   return null;

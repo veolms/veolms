@@ -121,7 +121,7 @@ export async function insertLesson(
     section_id: string;
     title: string;
     description: string | null;
-    content_type: "video" | "document";
+    content_type: "video" | "document" | "quiz";
     position: number;
     is_preview: boolean;
     is_published: boolean;
@@ -153,7 +153,7 @@ export async function updateLesson(
   values: {
     title?: string;
     description?: string | null;
-    content_type?: "video" | "document";
+    content_type?: "video" | "document" | "quiz";
     content_media_id?: string | null;
     is_preview?: boolean;
     is_published?: boolean;

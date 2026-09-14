@@ -44,9 +44,12 @@ axiosInstance.interceptors.request.use(
   (config) => {
     if (isReactRouterBuildRequest()) {
       return Promise.reject(
-        Object.assign(new Error("API requests are disabled during prerender."), {
-          config,
-        }),
+        Object.assign(
+          new Error("API requests are disabled during prerender."),
+          {
+            config,
+          },
+        ),
       );
     }
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -56,6 +59,58 @@ axiosInstance.interceptors.request.use(
   },
   (error) => Promise.reject(error),
 );
+
+function shouldClearAuthOnUnauthorized(
+  error: AxiosError,
+  apiError: ApiError,
+): boolean {
+  if (apiError.status !== 401) {
+    return false;
+  }
+
+  // An invalid credential, bad OTP code, or MFA challenge does not mean the
+  // existing session expired. Never clear auth for user input mistakes during
+  // login, verification, or step-up flows.
+  if (
+    apiError.code === "INVALID_CODE" ||
+    apiError.code === "INVALID_CREDENTIALS" ||
+    apiError.code === "MFA_REQUIRED" ||
+    apiError.code === "TOTP_REQUIRED" ||
+    apiError.code === "PASSKEY_REQUIRED"
+  ) {
+    return false;
+  }
+
+  const url = error.config?.url;
+  if (!url) {
+    return false;
+  }
+
+  const authInputEndpoints = [
+    "/auth/login",
+    "/auth/otp/verify",
+    "/auth/me/phone/otp/verify",
+    "/auth/me/email/otp/verify",
+    "/auth/totp/verify",
+    "/auth/totp/enable",
+    "/auth/passkey/login/verify",
+    "/auth/passkey/register/verify",
+    "/auth/mfa/step-up",
+  ];
+
+  if (authInputEndpoints.some((endpoint) => url.includes(endpoint))) {
+    return false;
+  }
+
+  const isExplicitSessionFailure =
+    apiError.code === "UNAUTHORIZED" ||
+    apiError.code === "UNAUTHENTICATED" ||
+    apiError.code === "SESSION_EXPIRED" ||
+    apiError.code === "NO_SESSION" ||
+    apiError.code === "SESSION_REVOKED";
+
+  return isExplicitSessionFailure || url.endsWith("/auth/me");
+}
 
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -72,26 +127,7 @@ axiosInstance.interceptors.response.use(
   (error: AxiosError) => {
     const apiError = getApiError(error);
     redirectToMfaSetup(apiError);
-
-    const isVerificationOrAuthAction =
-      error.config?.url?.includes("/otp/") ||
-      error.config?.url?.includes("/totp/") ||
-      error.config?.url?.includes("/passkey/") ||
-      error.config?.url?.includes("/mfa/") ||
-      error.config?.url === "/auth/login";
-
-    const isExplicitSessionFailure =
-      apiError.code === "UNAUTHORIZED" ||
-      apiError.code === "UNAUTHENTICATED" ||
-      apiError.code === "SESSION_EXPIRED" ||
-      apiError.code === "NO_SESSION" ||
-      apiError.code === "SESSION_REVOKED";
-
-    if (
-      apiError.status === 401 &&
-      !isVerificationOrAuthAction &&
-      (isExplicitSessionFailure || error.config?.url === "/auth/me")
-    ) {
+    if (shouldClearAuthOnUnauthorized(error, apiError)) {
       authStore.clearAuth();
     }
     return Promise.reject(apiError);
@@ -108,7 +144,14 @@ export const api = {
     data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> {
-    return axiosInstance.post(url, data, config) as unknown as Promise<T>;
+    // Fastify rejects an empty request when the client advertises
+    // `application/json`. Treat a no-body POST as an empty JSON object so
+    // action endpoints (publish, logout, retry, etc.) work consistently.
+    return axiosInstance.post(
+      url,
+      data === undefined ? {} : data,
+      config,
+    ) as unknown as Promise<T>;
   },
 
   put<T = unknown>(

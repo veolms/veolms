@@ -6,6 +6,7 @@ import {
   getNavigationDestination,
   getNavigationIconColor,
   getNavigationItemsFromMenus,
+  getNavigationMenuSignature,
   getNavigationPreferenceStorageKey,
   getOrderedNavigation,
   getPublicNavigationItems,
@@ -101,15 +102,13 @@ describe("server menu navigation adapter", () => {
     expect(getNavigationDestination(navigation[1]!)).toBe("/settings");
   });
 
-  it("uses role menus when present and falls back to the default menu otherwise", () => {
+  it("uses the sidenav menu response as the complete menu source", () => {
     const withMenus = resolveShellNavigation(dynamicMenus);
     expect(withMenus.isDefault).toBe(false);
     expect(labels(withMenus.items)).toEqual([
       "Overview",
       "My Courses",
       "Notification",
-      "Courses",
-      "Settings",
     ]);
 
     const withCoreMenus = resolveShellNavigation([
@@ -129,29 +128,15 @@ describe("server menu navigation adapter", () => {
         icon: "GearSix",
       },
     ]);
-    expect(
-      labels(withCoreMenus.items)
-        .filter((label) =>
-          ["Courses", "Settings"].includes(label),
-        )
-        .sort(),
-    ).toEqual(["Courses", "Settings"]);
+    expect(labels(withCoreMenus.items)).toContain("Courses");
 
     const emptyMenus = resolveShellNavigation([]);
-    expect(emptyMenus.isDefault).toBe(true);
-    expect(labels(emptyMenus.items)).toEqual([
-      "Courses",
-      "Settings",
-    ]);
-    expect(getNavigationDestination(emptyMenus.items[0]!)).toBe("/courses");
-    expect(getNavigationDestination(emptyMenus.items[1]!)).toBe("/settings");
+    expect(emptyMenus.isDefault).toBe(false);
+    expect(emptyMenus.items).toEqual([]);
 
     const guestMenus = resolveShellNavigation(undefined);
-    expect(guestMenus.isDefault).toBe(true);
-    expect(labels(guestMenus.items)).toEqual([
-      "Courses",
-      "Settings",
-    ]);
+    expect(guestMenus.isDefault).toBe(false);
+    expect(guestMenus.items).toEqual([]);
   });
 
   it("applies existing order and visibility preferences to server menus", () => {
@@ -163,6 +148,10 @@ describe("server menu navigation adapter", () => {
     localStorage.setItem(
       "veolms-navigation-visibility-student",
       JSON.stringify(["My Courses"]),
+    );
+    localStorage.setItem(
+      "veolms-navigation-visibility-student-menu-signature",
+      getNavigationMenuSignature(navigation),
     );
 
     expect(
@@ -217,10 +206,9 @@ describe("navigation preferences", () => {
     const navigation = resolveShellNavigation(dynamicMenus).items;
     localStorage.setItem("veolms-navigation-visibility-student", "[]");
 
-    expect(getInitialNavigationVisibility("student", navigation)).toEqual([
-      "Courses",
-      "Settings",
-    ]);
+    expect(getInitialNavigationVisibility("student", navigation)).toEqual(
+      labels(navigation),
+    );
   });
 
   it("falls back to the supplied menu list when storage is invalid", () => {

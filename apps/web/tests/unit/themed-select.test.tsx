@@ -228,5 +228,55 @@ describe("ThemedSelect with search and flags", () => {
     fireEvent.keyDown(actionBtn, { key: "ArrowUp" });
     expect(document.activeElement).toBe(searchInput);
   });
+
+  it("respects defaultLimit by showing top N options initially and expanding when searching", () => {
+    const multiOptions: readonly ThemedSelectOption[] = [
+      ["", "All courses"],
+      ["c1", "Course 1 (React)"],
+      ["c2", "Course 2 (Next.js)"],
+      ["c3", "Course 3 (Vue)"],
+      ["c4", "Course 4 (Angular)"],
+      ["c5", "Course 5 (Svelte)"],
+      ["c6", "Course 6 (Node.js)"],
+    ];
+
+    render(
+      <ThemedSelect
+        ariaLabel="Course selector"
+        options={multiOptions}
+        value=""
+        onValueChange={vi.fn()}
+        searchable={true}
+        searchPlaceholder="Search courses..."
+        defaultLimit={3}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Course selector/i });
+    fireEvent.click(trigger);
+
+    // Initial view: header ("All courses") + 3 items = 4 options total
+    const optionsInitial = screen.getAllByRole("option");
+    expect(optionsInitial).toHaveLength(4);
+    expect(screen.getByRole("option", { name: "All courses" })).toBeInTheDocument();
+    expect(screen.getByText("Course 1 (React)")).toBeInTheDocument();
+    expect(screen.getByText("Course 2 (Next.js)")).toBeInTheDocument();
+    expect(screen.getByText("Course 3 (Vue)")).toBeInTheDocument();
+    expect(screen.queryByText("Course 6 (Node.js)")).not.toBeInTheDocument();
+
+    // Type search query for an item outside the top 3
+    const searchInput = screen.getByPlaceholderText("Search courses...");
+    fireEvent.change(searchInput, { target: { value: "Node" } });
+
+    // When searching, all matching courses appear
+    const searchResults = screen.getAllByRole("option");
+    expect(searchResults).toHaveLength(1);
+    expect(screen.getByText("Course 6 (Node.js)")).toBeInTheDocument();
+
+    // Clear search -> reverts back to header + top 3
+    fireEvent.change(searchInput, { target: { value: "" } });
+    const reverted = screen.getAllByRole("option");
+    expect(reverted).toHaveLength(4);
+  });
 });
 

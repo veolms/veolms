@@ -14,7 +14,7 @@ export interface CourseVideo {
 }
 
 export type LessonStatus = "done" | "active" | "todo";
-export type LessonContentType = "video" | "document";
+export type LessonContentType = "video" | "document" | "quiz";
 export type Lesson = [
   number,
   string,
@@ -22,6 +22,7 @@ export type Lesson = [
   LessonStatus,
   boolean?,
   LessonContentType?,
+  string?,
 ];
 
 export interface CourseSection {

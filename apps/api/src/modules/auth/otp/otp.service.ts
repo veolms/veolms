@@ -160,9 +160,9 @@ export function createOtpService({
     await sendOtpWithPurpose(email, "email", "email_verification");
   }
 
-  const invalidCode = () =>
+  const invalidCode = (statusCode = 401) =>
     new AppError(
-      401,
+      statusCode,
       "INVALID_CODE",
       "Verification code is invalid, expired, or revoked due to excessive attempts.",
     );
@@ -173,6 +173,10 @@ export function createOtpService({
     purpose: OtpPurpose,
     code: string,
   ): Promise<void> {
+    const isVerificationPurpose =
+      purpose === "phone_verification" || purpose === "email_verification";
+    const failureStatus = isVerificationPurpose ? 400 : 401;
+
     const now = new Date();
 
     const match = await otpRepository.findMatchingActiveOtp(database, {
@@ -195,17 +199,17 @@ export function createOtpService({
         await otpRepository.recordOtpAttempt(database, outstanding.id, now);
       }
 
-      throw invalidCode();
+      throw invalidCode(failureStatus);
     }
 
     if (match.attempts >= OTP_MAX_ATTEMPTS) {
-      throw invalidCode();
+      throw invalidCode(failureStatus);
     }
 
     const consumed = await otpRepository.consumeOtp(database, match.id, now);
     if (!consumed) {
       throw new AppError(
-        401,
+        failureStatus,
         "INVALID_CODE",
         "Verification code was already used or invalidated.",
       );

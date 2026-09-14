@@ -124,3 +124,52 @@ export const moderationReportResolvedEventSchema = z.strictObject({
   status: z.string().min(1).max(50),
   actionTaken: z.string().max(500).optional().nullable(),
 });
+
+export const quizAttemptPassedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  courseId: z.uuid(),
+  courseTitle: z.string().min(1).max(255),
+  courseSlug: z.string().min(1).max(160),
+  quizId: z.uuid(),
+  quizTitle: z.string().min(1).max(255),
+  score: z.number().nonnegative(),
+  maxScore: z.number().positive(),
+  scorePercentage: z.number().min(0).max(100),
+  deepLink: z
+    .string()
+    .min(1)
+    .max(1000)
+    .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+});
+
+export const quizAttemptFailedFinalEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  courseId: z.uuid(),
+  courseTitle: z.string().min(1).max(255),
+  courseSlug: z.string().min(1).max(160),
+  quizId: z.uuid(),
+  quizTitle: z.string().min(1).max(255),
+  maxAttempts: z.number().int().positive(),
+  scorePercentage: z.number().min(0).max(100),
+  deepLink: z
+    .string()
+    .min(1)
+    .max(1000)
+    .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+});
+
+export const quizAssignedEventSchema = z.strictObject({
+  courseId: z.uuid(),
+  courseTitle: z.string().min(1).max(255),
+  courseSlug: z.string().min(1).max(160),
+  quizId: z.uuid(),
+  quizTitle: z.string().min(1).max(255),
+  lessonId: z.uuid(),
+  lessonTitle: z.string().min(1).max(255),
+  deepLink: z
+    .string()
+    .min(1)
+    .max(1000)
+    .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+});
+

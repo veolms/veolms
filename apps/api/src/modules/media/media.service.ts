@@ -773,7 +773,7 @@ export function createMediaService({
     }
 
     await assertPlaybackAccess(context, user);
-    if (context.lesson_content_type !== "video" || !context.content_media_id) {
+    if (!context.content_media_id) {
       throw new AppError(
         404,
         "MEDIA_NOT_FOUND",

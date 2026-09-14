@@ -41,12 +41,43 @@ try {
       },
     },
   });
-  const result = await processor.process();
-  process.stdout.write(
-    `${JSON.stringify({ job: "notification-worker", ...result })}\n`,
-  );
-  if (result.outbox.failed > 0 || result.email.failed > 0) {
-    process.exitCode = 2;
+  const isWatch = process.argv.includes("--watch");
+  if (isWatch) {
+    process.stdout.write(
+      `${JSON.stringify({ job: "notification-worker", status: "watching", intervalSeconds: 3 })}\n`,
+    );
+    let running = true;
+    const onSignal = () => {
+      running = false;
+    };
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
+
+    while (running) {
+      const result = await processor.process();
+      if (
+        result.outbox.processed > 0 ||
+        result.email.sent > 0 ||
+        result.outbox.failed > 0
+      ) {
+        process.stdout.write(
+          `${JSON.stringify({
+            job: "notification-worker",
+            ...result,
+            timestamp: new Date().toISOString(),
+          })}\n`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  } else {
+    const result = await processor.process();
+    process.stdout.write(
+      `${JSON.stringify({ job: "notification-worker", ...result })}\n`,
+    );
+    if (result.outbox.failed > 0 || result.email.failed > 0) {
+      process.exitCode = 2;
+    }
   }
 } catch (error) {
   process.stderr.write(

@@ -36,6 +36,7 @@ import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
 import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { CourseCreatePage } from "./courses/CourseCreatePage";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
   getLearningPlayerSwipeSplitX,
@@ -48,6 +49,9 @@ import { ReviewsPage } from "./reviews/ReviewsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
+import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
+import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
+import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -193,11 +197,6 @@ const ReadingModeQuickMenu = lazy(() =>
     default: module.ReadingModeQuickMenu,
   })),
 );
-const CourseCreatePage = lazy(() =>
-  import("./courses/CourseCreatePage").then((module) => ({
-    default: module.CourseCreatePage,
-  })),
-);
 const CourseOverviewPage = lazy(() =>
   import("./courses/CourseOverviewPage").then((module) => ({
     default: module.CourseOverviewPage,
@@ -221,6 +220,8 @@ interface CoursesPageProps {
   settingsTab?: string;
   discussionTab?: string;
   courseSlug?: string;
+  quizId?: string;
+  assignmentId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -532,6 +533,8 @@ export function CoursesPage({
   settingsTab = "profile",
   discussionTab = "q-and-a",
   courseSlug,
+  quizId,
+  assignmentId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -733,31 +736,24 @@ export function CoursesPage({
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
 
-  const {
-    data: publishedCoursesData,
-    isPending: isPublishedPending,
-  } = useCourses({
-    enabled: shouldQueryCourses && effectiveRole === "student",
-  });
-  const {
-    data: myCoursesData,
-    isPending: isMyCoursesPending,
-  } = useMyCourses({
+  const { data: publishedCoursesData, isPending: isPublishedPending } =
+    useCourses({
+      enabled: shouldQueryCourses && effectiveRole === "student",
+    });
+  const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
       shouldQueryCourses &&
       effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
-  const {
-    data: deletedCoursesData,
-    isPending: isDeletedPending,
-  } = useDeletedCourses(undefined, {
-    enabled:
-      shouldQueryCourses &&
-      isAdmin &&
-      effectiveRole === "creator" &&
-      enrollmentFilter === "bin",
-  });
+  const { data: deletedCoursesData, isPending: isDeletedPending } =
+    useDeletedCourses(undefined, {
+      enabled:
+        shouldQueryCourses &&
+        isAdmin &&
+        effectiveRole === "creator" &&
+        enrollmentFilter === "bin",
+    });
 
   const isLoadingCourses =
     !isAuthReady ||
@@ -956,10 +952,7 @@ export function CoursesPage({
     const root = document.documentElement;
     root.dataset.sidebarState = shellState.mode;
     root.style.setProperty("--sidebar-width", `${shellState.width}px`);
-    root.style.setProperty(
-      "--sidebar-expanded-width",
-      `${shellState.width}px`,
-    );
+    root.style.setProperty("--sidebar-expanded-width", `${shellState.width}px`);
     window.__VEO_BOOTSTRAP__ = {
       ...window.__VEO_BOOTSTRAP__,
       sidebar: shellState,
@@ -1640,9 +1633,7 @@ export function CoursesPage({
         adaptDeletedCourseToCatalogueCourse,
       );
     }
-    return (myCoursesData?.courses || []).map(
-      adaptApiCourseToCatalogueCourse,
-    );
+    return (myCoursesData?.courses || []).map(adaptApiCourseToCatalogueCourse);
   }, [
     deletedCoursesData?.courses,
     effectiveRole,
@@ -3215,12 +3206,10 @@ export function CoursesPage({
     }
     if (surfacePage === "course-create") {
       return (
-        <Suspense fallback={null}>
-          <CourseCreatePage
-            onNavigatePage={onNavigatePage}
-            bottomNavHidden={mobileBottomNavHidden}
-          />
-        </Suspense>
+        <CourseCreatePage
+          onNavigatePage={onNavigatePage}
+          bottomNavHidden={mobileBottomNavHidden}
+        />
       );
     }
     if (surfacePage === "course-overview") {
@@ -3267,6 +3256,26 @@ export function CoursesPage({
           setNotice={setNotice}
         />
       );
+    }
+    if (surfacePage === "quiz-builder") {
+      return (
+        <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
+      );
+    }
+    if (surfacePage === "quiz-attempt") {
+      return (
+        <QuizDirectAttemptPage
+          assignmentId={assignmentId}
+          onNavigatePage={onNavigatePage}
+        />
+      );
+    }
+    if (
+      surfacePage === "quizzes" ||
+      surfaceActiveSection === "Analytics" ||
+      surfaceActiveSection === "Quizzes"
+    ) {
+      return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
     }
     if (surfacePage === "placeholder") {
       return (

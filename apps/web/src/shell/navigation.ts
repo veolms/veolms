@@ -16,6 +16,7 @@ import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
 import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 
 export interface NavigationItemMetadata {
   id: string;
@@ -72,6 +73,7 @@ const menuIcons: Record<string, Icon> = {
   ChartBar,
   ChatCircleDots,
   ChatTeardropDots,
+  CheckCircle,
   EnvelopeSimple,
   GearSix,
   GraduationCap,
@@ -134,16 +136,6 @@ export function getNavigationItemsFromMenus(
   return items;
 }
 
-function addMissingDefaultNavigationItems(
-  serverItems: readonly DynamicNavigationItem[],
-): NavigationItemWithMetadata[] {
-  const labels = new Set(serverItems.map(([label]) => label));
-  return [
-    ...serverItems,
-    ...publicNavigation.filter(([label]) => !labels.has(label)),
-  ];
-}
-
 export function hasNavigationMenu(
   menus: readonly AuthMenuNode[] | null | undefined,
   label: string,
@@ -160,10 +152,9 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 }
 
 /**
- * Sidebar items for the current session: role menus from `/auth/me` when the
- * backend returns any, otherwise the public Courses and Settings defaults.
- * Guests, empty `menus: []`, and menus that flatten to nothing all use the
- * same fallback so the sidebar never renders blank.
+ * Sidebar items for the current session. The navigation endpoint is the sole
+ * source of truth for effective menus and RBAC visibility; `/auth/me` only
+ * supplies identity/session data.
  */
 export function resolveShellNavigation(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -172,15 +163,7 @@ export function resolveShellNavigation(
   isDefault: boolean;
 } {
   const serverItems = getNavigationItemsFromMenus(menus);
-  const result =
-    serverItems.length > 0
-      ? {
-          items: addMissingDefaultNavigationItems(serverItems),
-          isDefault: false,
-        }
-      : { items: getPublicNavigationItems(), isDefault: true };
-
-  return result;
+  return { items: serverItems, isDefault: false };
 }
 
 const navigationTones: Record<string, string> = {
@@ -227,6 +210,16 @@ export function getNavigationPreferenceStorageKey(
     : `veolms-navigation-${preference}-${role}`;
 }
 
+export function getNavigationMenuSignature(
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string {
+  return navigationItems
+    .map(([label, , metadata]) =>
+      [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
+    )
+    .join("|");
+}
+
 export function getInitialNavigationOrder(
   role: string,
   navigationItems: readonly NavigationItemWithMetadata[],
@@ -268,12 +261,25 @@ export function getInitialNavigationVisibility(
   if (typeof window === "undefined") return defaultVisibility;
 
   try {
-    const parsedVisibility: unknown = JSON.parse(
-      localStorage.getItem(
-        getNavigationPreferenceStorageKey("visibility", role, userId),
-      ) || "null",
+    const visibilityKey = getNavigationPreferenceStorageKey(
+      "visibility",
+      role,
+      userId,
     );
-    if (!Array.isArray(parsedVisibility)) return defaultVisibility;
+    const menuSignatureKey = `${visibilityKey}-menu-signature`;
+    const menuSignature = getNavigationMenuSignature(navigationItems);
+    const parsedVisibility: unknown = JSON.parse(
+      localStorage.getItem(visibilityKey) || "null",
+    );
+    const previousMenuSignature = localStorage.getItem(menuSignatureKey);
+    const menuSetChanged = previousMenuSignature !== menuSignature;
+    localStorage.setItem(menuSignatureKey, menuSignature);
+    if (!Array.isArray(parsedVisibility) || menuSetChanged) {
+      // Reset once when the effective server menu set changes. This prevents
+      // stale localStorage from hiding newly permissioned backend menus.
+      localStorage.setItem(visibilityKey, JSON.stringify(defaultVisibility));
+      return defaultVisibility;
+    }
 
     const normalizedVisibility = parsedVisibility.filter(
       (label): label is string =>
