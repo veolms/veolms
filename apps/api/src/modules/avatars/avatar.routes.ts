@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FastifyReply } from "fastify";
 import { errorResponse } from "../../lib/errors.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
-import { avatarKey } from "./avatar-storage.ts";
+import { avatarKey, legacyAvatarKey } from "./avatar-storage.ts";
 
 /**
  * Serves stored avatars publicly (no auth): a profile photo needs to render
@@ -24,9 +24,13 @@ const avatarRoutes: RoutePlugin = async (app, options) => {
       },
     },
     async (request, reply) => {
-      const object = await options.services.storage.getObject(
-        avatarKey(request.params.userId),
-      );
+      const object =
+        (await options.services.storage.getObject(
+          avatarKey(request.params.userId),
+        )) ??
+        (await options.services.storage.getObject(
+          legacyAvatarKey(request.params.userId),
+        ));
       if (!object) {
         return reply.code(404).send({
           success: false,
@@ -37,7 +41,10 @@ const avatarRoutes: RoutePlugin = async (app, options) => {
       }
 
       return (reply as FastifyReply)
-        .header("Content-Type", object.contentType ?? "application/octet-stream")
+        .header(
+          "Content-Type",
+          object.contentType ?? "application/octet-stream",
+        )
         .header("Cache-Control", "public, max-age=300")
         .send(object.body);
     },

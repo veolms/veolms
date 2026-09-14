@@ -46,7 +46,10 @@ export async function findCourseById(
  * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
  * runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function findCoursesByIds(database: DatabaseExecutor, courseIds: string[]) {
+export async function findCoursesByIds(
+  database: DatabaseExecutor,
+  courseIds: string[],
+) {
   if (courseIds.length === 0) return [];
   return await database
     .selectFrom("courses")
@@ -110,7 +113,16 @@ export async function listPublishedCourses(
       "courses.difficulty",
       "courses.instructor_alias",
       "courses.thumbnail_media_id",
-      eb.selectFrom("media_assets as thumbnail_media").select("thumbnail_media.metadata").whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id").as("thumbnail_metadata"),
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.metadata")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_metadata"),
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.storage_key")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_storage_key"),
       "categories.name as category_name",
       "users.display_name as creator_display_name",
       "course_pricing.pricing_type",
@@ -210,6 +222,16 @@ export async function listAllCourses(database: Kysely<Database>) {
       "courses.creator_id",
       "courses.category_id",
       "courses.thumbnail_media_id",
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.metadata")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_metadata"),
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.storage_key")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_storage_key"),
       "courses.trailer_media_id",
       "courses.instructor_alias",
       "courses.version",
@@ -271,6 +293,16 @@ export async function listCoursesByCreator(
       "courses.creator_id",
       "courses.category_id",
       "courses.thumbnail_media_id",
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.metadata")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_metadata"),
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.storage_key")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_storage_key"),
       "courses.trailer_media_id",
       "courses.instructor_alias",
       "courses.version",

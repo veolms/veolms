@@ -22,6 +22,36 @@ const notificationRetryScheduleSchema = z
     return parsed;
   });
 
+const cdnUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => {
+    if (value !== "/" && /^\/(?!\/)[^\s?#]*$/u.test(value)) return true;
+    try {
+      const url = new URL(value);
+      return (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "CDN URL must be an absolute HTTP(S) URL or a root-relative path such as /cdn")
+  .transform((value) => value.replace(/\/+$/u, "") || "/");
+
+const folderListSchema = (defaultValue: string) =>
+  z
+    .string()
+    .default(defaultValue)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((part) => part.trim().replace(/^\/+|\/+$/gu, ""))
+        .filter(Boolean),
+    );
+
 const serverConfigSchema = z.object({
   DATABASE_URL: z
     .string()
@@ -131,9 +161,29 @@ const serverConfigSchema = z.object({
 
   // Storage Configs
   STORAGE_ENDPOINT: z.string().optional(),
-  // Optional public CDN origin for published free/preview HLS output. Keep
-  // this separate from STORAGE_ENDPOINT because the latter is private.
-  STORAGE_PUBLIC_BASE_URL: z.url().optional(),
+  // Public URL prefix. It may be a full Worker/custom-domain URL or the
+  // same-origin route mounted by the web server, for example /cdn.
+  CDN_URL: cdnUrlSchema.default("/cdn"),
+  CDN_SIGNING_SECRET: z
+    .string()
+    .min(32, "CDN_SIGNING_SECRET must be at least 32 characters")
+    .default("default_cdn_signing_secret_at_least_32_chars_long"),
+  CDN_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(900),
+  CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(900),
+  CDN_PUBLIC_FOLDERS: folderListSchema(
+    "public,thumbnails,course-hls,course-videos",
+  ),
+  CDN_PRIVATE_FOLDERS: folderListSchema("protected,media,transcoded"),
   STORAGE_REGION: z.string().default("us-east-1"),
   STORAGE_ACCESS_KEY_ID: z.string().optional(),
   STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
@@ -158,7 +208,8 @@ const serverConfigSchema = z.object({
 const webConfigSchema = z.object({
   WEB_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   VITE_API_BASE_URL: z.string().default("http://localhost:4000/api/v1"),
-  VITE_COURSE_MEDIA_BASE_URL: z.url().optional(),
+  VITE_CDN_URL: cdnUrlSchema.default("/cdn"),
+  CDN_URL: cdnUrlSchema.default("/cdn"),
   STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/api/v1"),
 });
 
@@ -166,6 +217,7 @@ const INSECURE_DEFAULTS: Record<string, string> = {
   SESSION_SECRET: "default_session_secret_at_least_32_chars_long",
   MFA_ENCRYPTION_KEY: "default_mfa_encryption_key_at_least_32_chars_long",
   SETUP_TOKEN: "veo_setup_token_123",
+  CDN_SIGNING_SECRET: "default_cdn_signing_secret_at_least_32_chars_long",
 };
 
 type ParsedServerConfig = z.output<typeof serverConfigSchema>;
@@ -331,7 +383,12 @@ export function loadServerConfig(
 }
 
 export function loadWebConfig(environment: Record<string, string | undefined>) {
-  return webConfigSchema.parse(environment);
+  return webConfigSchema.parse({
+    ...environment,
+    // VITE_CDN_URL is the browser-facing setting. Fall back to CDN_URL so
+    // existing local/server environments continue to configure the web app.
+    VITE_CDN_URL: environment.VITE_CDN_URL || environment.CDN_URL,
+  });
 }
 
 export {

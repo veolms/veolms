@@ -8,7 +8,7 @@ import type { S3StorageService } from "@veolms/storage";
 import { config } from "../../config.ts";
 
 const UPLOAD_DIRECTORY = join(process.cwd(), ".data", "discussion-uploads");
-const OBJECT_PREFIX = "discussion-uploads";
+const OBJECT_PREFIX = "protected/discussion-uploads";
 export const DISCUSSION_UPLOAD_URL_PREFIX = "/api/v1/discussion-uploads";
 
 const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
@@ -67,7 +67,7 @@ export interface DiscussionUploadStore {
   remove(fileName: string): Promise<void>;
 }
 
-function objectKey(fileName: string): string {
+export function discussionUploadStorageKey(fileName: string): string {
   return `${OBJECT_PREFIX}/${fileName}`;
 }
 
@@ -104,7 +104,11 @@ export function createDiscussionUploadStore(
       await writer(filePath);
       const fileStats = await stat(filePath);
       if (s3) {
-        await s3.uploadFile(objectKey(fileName), filePath, mimeType);
+        await s3.uploadFile(
+          discussionUploadStorageKey(fileName),
+          filePath,
+          mimeType,
+        );
       }
       return { fileName, mimeType, size: fileStats.size };
     } catch (error) {
@@ -139,7 +143,12 @@ export function createDiscussionUploadStore(
       }
 
       if (s3) {
-        await s3.putObject(objectKey(fileName), data, mimeType, data.length);
+        await s3.putObject(
+          discussionUploadStorageKey(fileName),
+          data,
+          mimeType,
+          data.length,
+        );
         return { fileName, mimeType, size: data.length };
       }
 
@@ -152,7 +161,7 @@ export function createDiscussionUploadStore(
       if (!isSafeDiscussionUploadFileName(fileName)) return null;
 
       if (s3) {
-        const object = await s3.getObject(objectKey(fileName));
+        const object = await s3.getObject(discussionUploadStorageKey(fileName));
         if (object) {
           return {
             stream: object.body,
@@ -180,7 +189,9 @@ export function createDiscussionUploadStore(
       if (!isSafeDiscussionUploadFileName(fileName)) return;
       await unlink(diskPath(fileName)).catch(() => undefined);
       if (s3) {
-        await s3.deleteObject(objectKey(fileName)).catch(() => undefined);
+        await s3
+          .deleteObject(discussionUploadStorageKey(fileName))
+          .catch(() => undefined);
       }
     },
   };

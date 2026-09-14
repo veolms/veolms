@@ -503,7 +503,9 @@ function CourseHeroSection({
 
       if (!order.gateway) {
         setIsPaymentBusy(false);
-        onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        onNavigatePage?.(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
         return;
       }
 
@@ -536,7 +538,9 @@ function CourseHeroSection({
               gatewaySignature: response.razorpay_signature,
             });
             setIsPaymentBusy(false);
-            onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+            onNavigatePage?.(
+              `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+            );
           } catch (error) {
             setPaymentError(
               error instanceof Error
@@ -589,7 +593,9 @@ function CourseHeroSection({
     ctaDisabled = false;
     ctaOnClick = () => {
       if (onNavigatePage) {
-        onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        onNavigatePage(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
       }
     };
   } else if (isPreview) {
@@ -813,7 +819,10 @@ function CourseHeroSection({
                     {appliedCoupon.code}
                   </span>
                   <span className="text-xs text-(--muted) whitespace-nowrap">
-                    applied {appliedCoupon.discountLabel ? `(${appliedCoupon.discountLabel})` : ""}
+                    applied{" "}
+                    {appliedCoupon.discountLabel
+                      ? `(${appliedCoupon.discountLabel})`
+                      : ""}
                   </span>
                 </div>
                 <button

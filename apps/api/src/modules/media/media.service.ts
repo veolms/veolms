@@ -9,6 +9,7 @@ import type {
 import type {
   PresignMediaRequest,
   VideoPlaybackBootstrap,
+  VideoPlaybackToken,
 } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
@@ -34,6 +35,12 @@ function normalizeOutputPrefix(outputPrefix: string): string {
   return outputPrefix.replace(/^\/+|\/+$/g, "");
 }
 
+function resolveMediaVisibility(storageKey: string): "public" | "protected" {
+  return storageKey.replace(/^\/+/, "").startsWith("public/")
+    ? "public"
+    : "protected";
+}
+
 function isSafeHlsPath(path: string): boolean {
   const segments = path.split("/");
   return (
@@ -45,16 +52,6 @@ function isSafeHlsPath(path: string): boolean {
   );
 }
 
-function hlsContentType(path: string): string {
-  if (/\.m3u8$/i.test(path)) return "application/vnd.apple.mpegurl";
-  if (/\.ts$/i.test(path)) return "video/mp2t";
-  if (/\.m4s$/i.test(path)) return "video/iso.segment";
-  if (/\.mp4$/i.test(path)) return "video/mp4";
-  if (/\.aac$/i.test(path)) return "audio/aac";
-  if (/\.vtt$/i.test(path)) return "text/vtt";
-  return "application/octet-stream";
-}
-
 /** Postgres unique_violation (23505), as raised by the pg driver via node-postgres. */
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -63,6 +60,16 @@ function isUniqueViolation(err: unknown): boolean {
     "code" in err &&
     (err as { code?: unknown }).code === "23505"
   );
+}
+
+function hlsContentType(path: string): string {
+  if (/\.m3u8$/i.test(path)) return "application/vnd.apple.mpegurl";
+  if (/\.ts$/i.test(path)) return "video/mp2t";
+  if (/\.m4s$/i.test(path)) return "video/iso.segment";
+  if (/\.mp4$/i.test(path)) return "video/mp4";
+  if (/\.aac$/i.test(path)) return "audio/aac";
+  if (/\.vtt$/i.test(path)) return "text/vtt";
+  return "application/octet-stream";
 }
 
 export function createMediaService({
@@ -78,11 +85,18 @@ export function createMediaService({
   ) {
     const mediaId = crypto.randomUUID();
     const ext = payload.filename.includes(".")
-      ? payload.filename.split(".").pop()
+      ? payload.filename
+          .split(".")
+          .pop()
+          ?.replace(/[^a-z0-9]/giu, "")
+          .toLowerCase()
       : "";
-    const storageKey = payload.type === "image"
-      ? `thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
-      : `media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
+    const visibilityPrefix =
+      payload.visibility === "public" ? "public" : "protected";
+    const storageKey =
+      payload.type === "image"
+        ? `${visibilityPrefix}/thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
+        : `${visibilityPrefix}/media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
 
     const uploadUrl = await services.storage.getPresignedPutUrl(
       storageKey,
@@ -119,7 +133,12 @@ export function createMediaService({
     ownerId: string,
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
-  ): Promise<{ status: MediaAssetStatus; jobId?: string | null }> {
+  ): Promise<{
+    status: MediaAssetStatus;
+    jobId?: string | null;
+    deliveryUrl?: string;
+    deliveryUrlExpiresAt?: number;
+  }> {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
       database,
@@ -137,7 +156,13 @@ export function createMediaService({
         const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
         existingJobId = job ? job.id : null;
       }
-      return { status: media.status, jobId: existingJobId };
+      const delivery = getDirectDelivery(media.storage_key);
+      return {
+        status: media.status,
+        jobId: existingJobId,
+        deliveryUrl: delivery.url,
+        deliveryUrlExpiresAt: delivery.expiresAt,
+      };
     }
 
     const metadata = await services.storage.headObject(media.storage_key);
@@ -182,7 +207,13 @@ export function createMediaService({
       jobId = transcodeResult.jobId;
     }
 
-    return { status: "uploaded", jobId };
+    const delivery = getDirectDelivery(media.storage_key);
+    return {
+      status: "uploaded",
+      jobId,
+      deliveryUrl: delivery.url,
+      deliveryUrlExpiresAt: delivery.expiresAt,
+    };
   }
 
   /**
@@ -268,7 +299,7 @@ export function createMediaService({
 
     const jobId = crypto.randomUUID();
     const now = new Date();
-    const outputPrefix = `transcoded/${media.id}`;
+    const outputPrefix = `${resolveMediaVisibility(media.storage_key)}/transcoded/${media.id}`;
 
     try {
       await mediaRepo.insertVideoJob(database, {
@@ -411,10 +442,18 @@ export function createMediaService({
 
     const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
     if (!job) {
-      throw new AppError(409, "MEDIA_JOB_NOT_FOUND", "No transcoding job exists for this video.");
+      throw new AppError(
+        409,
+        "MEDIA_JOB_NOT_FOUND",
+        "No transcoding job exists for this video.",
+      );
     }
     if (!["queued", "provisioning", "processing"].includes(job.status)) {
-      throw new AppError(409, "MEDIA_NOT_CANCELLABLE", "This video is no longer being transcoded.");
+      throw new AppError(
+        409,
+        "MEDIA_NOT_CANCELLABLE",
+        "This video is no longer being transcoded.",
+      );
     }
 
     try {
@@ -428,7 +467,10 @@ export function createMediaService({
         deleteMedia: false,
       });
     } catch (error) {
-      logger?.error({ err: error, jobId: job.id, mediaId }, "Failed to dispatch video cancellation cleanup");
+      logger?.error(
+        { err: error, jobId: job.id, mediaId },
+        "Failed to dispatch video cancellation cleanup",
+      );
       throw error;
     }
 
@@ -586,9 +628,10 @@ export function createMediaService({
     mediaId: string,
     options: { verifyManifest?: boolean } = {},
   ) {
-    const [media, job] = await Promise.all([
+    const [media, job, outputs] = await Promise.all([
       mediaRepo.findMediaAssetById(database, mediaId),
       mediaRepo.findVideoJobByVideoId(database, mediaId),
+      mediaRepo.findVideoOutputsByVideoIds(database, [mediaId]),
     ]);
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
@@ -603,7 +646,12 @@ export function createMediaService({
     }
 
     const outputPrefix = normalizeOutputPrefix(job.output_prefix);
-    const manifestKey = `${outputPrefix}/master.m3u8`;
+    const latestOutput = outputs
+      .filter((output) => output.video_id === mediaId)
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
+    const manifestKey = normalizeOutputPrefix(
+      latestOutput?.master_playlist_path || `${outputPrefix}/master.m3u8`,
+    );
     if (options.verifyManifest !== false) {
       const manifest = await services.storage.headObject(manifestKey);
       if (!manifest) {
@@ -618,11 +666,66 @@ export function createMediaService({
     return { media, job, outputPrefix, manifestKey };
   }
 
-  async function getPlaybackBootstrap(
+  function getDirectDelivery(storageKey: string) {
+    const requiresToken = !services.storage.isCdnPublicKey(storageKey);
+    const expiresAt = requiresToken
+      ? Math.floor(Date.now() / 1000) + services.storage.getCdnTokenTtlSeconds()
+      : undefined;
+    const token = requiresToken
+      ? services.storage.createCdnAccessToken(storageKey, expiresAt)
+      : undefined;
+    if (requiresToken && !token) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Protected media delivery is not configured.",
+      );
+    }
+    const url = services.storage.getCdnObjectUrl(
+      storageKey,
+      token ?? undefined,
+    );
+    if (!url) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Media delivery is not configured.",
+      );
+    }
+    return { url, expiresAt };
+  }
+
+  async function getMediaDelivery(
+    mediaId: string,
+    requestingUserId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
+      database,
+      mediaId,
+    );
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    const delivery = getDirectDelivery(media.storage_key);
+    return {
+      url: delivery.url,
+      ...(delivery.expiresAt ? { expiresAt: delivery.expiresAt } : {}),
+    };
+  }
+
+  async function resolveAuthorizedPlaybackLesson(
     courseIdOrSlug: string,
     lessonNumber: number,
     user?: PlaybackUser,
-  ): Promise<VideoPlaybackBootstrap> {
+  ) {
     if (!Number.isInteger(lessonNumber) || lessonNumber < 1) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
@@ -678,21 +781,74 @@ export function createMediaService({
       );
     }
 
+    return context;
+  }
+
+  function createPlaybackSegmentToken(
+    manifestKey: string,
+  ): VideoPlaybackToken | null {
+    const manifestPrefix = manifestKey.replace(/\/[^/]+$/u, "");
+    if (services.storage.isCdnPublicKey(manifestPrefix)) return null;
+
+    const expiresAt =
+      Math.floor(Date.now() / 1000) +
+      services.storage.getCdnHlsTokenTtlSeconds();
+    const token = services.storage.createCdnAccessToken(
+      manifestPrefix,
+      expiresAt,
+    );
+    if (!token) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Protected media delivery is not configured.",
+      );
+    }
+    return { token, expiresAt };
+  }
+
+  async function getPlaybackBootstrap(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ): Promise<VideoPlaybackBootstrap> {
+    const context = await resolveAuthorizedPlaybackLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
+
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
-    // the manifest request itself remains the authoritative final check.
-    const { media } = await getReadyPlaybackOutput(context.content_media_id, {
-      verifyManifest: false,
-    });
-    // TEMP: free/preview lessons also route through the protected /api/v1
-    // stream instead of the public CDN URL, until the CDN branch is
-    // revisited. See media.service.ts history for the public-CDN path.
+    // the CDN manifest request itself remains the authoritative final check.
+    const { media, manifestKey } = await getReadyPlaybackOutput(
+      context.content_media_id!,
+      {
+        verifyManifest: false,
+      },
+    );
+    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    if (!manifestUrl) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Media delivery is not configured.",
+      );
+    }
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
+
     return {
       version: 1,
       courseSlug: context.course_slug,
       lessonId: context.lesson_id,
       mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
-      manifestUrl: `/media/${encodeURIComponent(media.id)}/hls/master.m3u8`,
+      manifestUrl,
+      ...(playbackToken
+        ? {
+            segmentToken: playbackToken.token,
+            segmentTokenExpiresAt: playbackToken.expiresAt,
+          }
+        : {}),
       ...(media.duration_seconds !== null &&
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
@@ -700,6 +856,31 @@ export function createMediaService({
       title: context.lesson_title,
       source: "paid-bootstrap-api",
     };
+  }
+
+  async function getPlaybackToken(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ): Promise<VideoPlaybackToken> {
+    const context = await resolveAuthorizedPlaybackLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
+    const { manifestKey } = await getReadyPlaybackOutput(
+      context.content_media_id!,
+      { verifyManifest: false },
+    );
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
+    if (!playbackToken) {
+      throw new AppError(
+        409,
+        "CDN_TOKEN_NOT_REQUIRED",
+        "This lesson does not require a protected playback token.",
+      );
+    }
+    return playbackToken;
   }
 
   async function getHlsStream(
@@ -770,9 +951,18 @@ export function createMediaService({
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const fullKey = media.type === "image" && media.status === "ready" && typeof media.metadata === "object" && media.metadata !== null && "full" in media.metadata && typeof media.metadata.full === "object" && media.metadata.full !== null && "key" in media.metadata.full && typeof media.metadata.full.key === "string"
-      ? media.metadata.full.key
-      : media.storage_key;
+    const fullKey =
+      media.type === "image" &&
+      media.status === "ready" &&
+      typeof media.metadata === "object" &&
+      media.metadata !== null &&
+      "full" in media.metadata &&
+      typeof media.metadata.full === "object" &&
+      media.metadata.full !== null &&
+      "key" in media.metadata.full &&
+      typeof media.metadata.full.key === "string"
+        ? media.metadata.full.key
+        : media.storage_key;
     const file = await services.storage.getObject(fullKey);
     if (!file) {
       throw new AppError(
@@ -784,7 +974,9 @@ export function createMediaService({
     return {
       stream: file.body,
       contentType:
-        fullKey === media.storage_key ? media.mime_type || file.contentType || "application/octet-stream" : "image/webp",
+        fullKey === media.storage_key
+          ? media.mime_type || file.contentType || "application/octet-stream"
+          : "image/webp",
       contentLength:
         file.contentLength ??
         (media.size_bytes ? Number(media.size_bytes) : undefined),
@@ -793,18 +985,57 @@ export function createMediaService({
     };
   }
 
-  async function getImageVariantStream(mediaId: string, width: number, requestingUserId?: string, userRoles?: readonly string[]) {
+  async function getImageVariantStream(
+    mediaId: string,
+    width: number,
+    requestingUserId?: string,
+    userRoles?: readonly string[],
+  ) {
     const media = await mediaRepo.findMediaAssetById(database, mediaId);
-    if (!media || media.type !== "image") throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
+    if (!media || media.type !== "image")
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(database, mediaId);
-    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
-    const variants = typeof media.metadata === "object" && media.metadata !== null && "variants" in media.metadata && Array.isArray(media.metadata.variants) ? media.metadata.variants : [];
-    const variant = variants.find((item) => typeof item === "object" && item !== null && "width" in item && item.width === width && "key" in item && typeof item.key === "string");
-    if (!variant || typeof variant !== "object" || !("key" in variant) || typeof variant.key !== "string") throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
+    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
+      database,
+      mediaId,
+    );
+    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin)
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    const variants =
+      typeof media.metadata === "object" &&
+      media.metadata !== null &&
+      "variants" in media.metadata &&
+      Array.isArray(media.metadata.variants)
+        ? media.metadata.variants
+        : [];
+    const variant = variants.find(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        "width" in item &&
+        item.width === width &&
+        "key" in item &&
+        typeof item.key === "string",
+    );
+    if (
+      !variant ||
+      typeof variant !== "object" ||
+      !("key" in variant) ||
+      typeof variant.key !== "string"
+    )
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
     const file = await services.storage.getObject(variant.key);
-    if (!file) throw new AppError(404, "FILE_NOT_FOUND", "Image variant not found in storage.");
-    return { stream: file.body, contentType: "image/webp", contentLength: file.contentLength };
+    if (!file)
+      throw new AppError(
+        404,
+        "FILE_NOT_FOUND",
+        "Image variant not found in storage.",
+      );
+    return {
+      stream: file.body,
+      contentType: "image/webp",
+      contentLength: file.contentLength,
+    };
   }
 
   return {
@@ -817,6 +1048,8 @@ export function createMediaService({
     getMediaAssets,
     getVideoJobProgress,
     getPlaybackBootstrap,
+    getPlaybackToken,
+    getMediaDelivery,
     getHlsStream,
     getMediaStream,
     getImageVariantStream,

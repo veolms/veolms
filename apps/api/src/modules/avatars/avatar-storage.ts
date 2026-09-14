@@ -19,6 +19,11 @@ export const AVATAR_CONTENT_TYPES = new Set([
  * fresh upload or re-fetched provider photo simply overwrites it in place,
  * so "replace the existing avatar" never needs an explicit delete. */
 export function avatarKey(userId: string): string {
+  return `public/avatars/${userId}`;
+}
+
+/** Storage key used before media visibility namespaces were introduced. */
+export function legacyAvatarKey(userId: string): string {
   return `avatars/${userId}`;
 }
 
@@ -205,5 +210,9 @@ export async function removeAvatar(
   storage: S3StorageService,
   userId: string,
 ): Promise<void> {
-  await storage.deleteObject(avatarKey(userId)).catch(() => undefined);
+  await Promise.all(
+    [avatarKey(userId), legacyAvatarKey(userId)].map((key) =>
+      storage.deleteObject(key).catch(() => undefined),
+    ),
+  );
 }
