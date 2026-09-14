@@ -106,6 +106,7 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useDeleteThread: (...args: any[]) => notesMocks.useDeleteThread(...args),
   useToggleLike: (...args: any[]) => notesMocks.useToggleLike(...args),
   useToggleBookmark: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useToggleFollow: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAcceptReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useLockThread: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCreateReport: () => ({ mutateAsync: vi.fn(), isPending: false }),

@@ -59,6 +59,7 @@ import {
   useLessonThreads,
   useLockThread,
   useToggleBookmark,
+  useToggleFollow,
   useToggleLike,
   useUpdateNote,
   useUpdateThread,
@@ -289,6 +290,8 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
         typeof (entry as Comment).liked === "boolean") &&
       (typeof (entry as Comment).isBookmarked === "undefined" ||
         typeof (entry as Comment).isBookmarked === "boolean") &&
+      (typeof (entry as Comment).isFollowing === "undefined" ||
+        typeof (entry as Comment).isFollowing === "boolean") &&
       (typeof (entry as Comment).isOwn === "undefined" ||
         typeof (entry as Comment).isOwn === "boolean"),
   );
@@ -423,6 +426,7 @@ export function Discussion({
   const deleteThreadMutation = useDeleteThread();
   const toggleLikeMutation = useToggleLike();
   const toggleBookmarkMutation = useToggleBookmark();
+  const toggleFollowMutation = useToggleFollow();
   const acceptReplyMutation = useAcceptReply();
   const lockThreadMutation = useLockThread();
   const createReportMutation = useCreateReport();
@@ -466,6 +470,9 @@ export function Discussion({
   const [bookmarkOverrides, setBookmarkOverrides] = useState<
     Record<string, boolean>
   >({});
+  const [followOverrides, setFollowOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -484,6 +491,9 @@ export function Discussion({
         if (typeof bookmarkOverrides[String(thread.id)] === "boolean") {
           comment.isBookmarked = bookmarkOverrides[String(thread.id)];
         }
+        if (typeof followOverrides[String(thread.id)] === "boolean") {
+          comment.isFollowing = followOverrides[String(thread.id)];
+        }
         return comment;
       });
   }, [
@@ -492,6 +502,7 @@ export function Discussion({
     capabilities.allowQa,
     courseId,
     currentUser?.id,
+    followOverrides,
     lessonId,
     threadsData?.threads,
   ]);
@@ -1060,6 +1071,39 @@ export function Discussion({
     }
   };
 
+  const handleToggleFollow = async (
+    threadId: string | number,
+    following: boolean,
+  ): Promise<boolean> => {
+    const threadIdStr = String(threadId);
+    if (isBackendMode) {
+      try {
+        const response = await toggleFollowMutation.mutateAsync(threadIdStr);
+        const finalFollowing = response.following;
+        setFollowOverrides((current) => ({
+          ...current,
+          [threadIdStr]: finalFollowing,
+        }));
+        return finalFollowing;
+      } catch (err: any) {
+        setNotice(err?.message || "Failed to update follow status.");
+        throw err;
+      }
+    } else {
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === threadId ? { ...entry, isFollowing: following } : entry,
+        ),
+      );
+      setPostedEntries((current) =>
+        current.map((entry) =>
+          entry.id === threadId ? { ...entry, isFollowing: following } : entry,
+        ),
+      );
+      return following;
+    }
+  };
+
   const handleOpenReport = (
     target:
       | {
@@ -1214,6 +1258,7 @@ export function Discussion({
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
+        onToggleFollow={handleToggleFollow}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
@@ -1242,6 +1287,7 @@ export function Discussion({
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
+        onToggleFollow={handleToggleFollow}
       />
       <DiscussionReportDialog
         open={reportDialogOpen}
@@ -1319,6 +1365,10 @@ interface ThreadSurfaceProps {
     threadId: string | number,
     bookmarked: boolean,
   ) => Promise<boolean> | void;
+  onToggleFollow?: (
+    threadId: string | number,
+    following: boolean,
+  ) => Promise<boolean> | void;
 }
 
 function ThreadSurface({
@@ -1369,6 +1419,7 @@ function ThreadSurface({
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
+  onToggleFollow,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -1739,6 +1790,7 @@ function ThreadSurface({
                 onToggleAcceptReply={onToggleAcceptReply}
                 onToggleLockThread={onToggleLockThread}
                 onToggleBookmark={onToggleBookmark}
+                onToggleFollow={onToggleFollow}
               />
             ))}
             {entries.length === 0 && (

@@ -215,6 +215,7 @@ vi.mock("../../src/services/learning-interactions", async (importOriginal) => {
     useDeleteThread: (...args: any[]) => mockInteractions.useDeleteThread(...args),
     useToggleLike: (...args: any[]) => mockInteractions.useToggleLike(...args),
     useToggleBookmark: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+    useToggleFollow: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
     useThreadReplies: (...args: any[]) => mockInteractions.useThreadReplies(...args),
     useCreateReply: (...args: any[]) => mockInteractions.useCreateReply(...args),
     useUpdateReply: (...args: any[]) => mockInteractions.useUpdateReply(...args),

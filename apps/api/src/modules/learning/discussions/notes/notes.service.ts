@@ -286,13 +286,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
       }
 
-      const isOwner = note.userId === actor.userId;
-      if (!isOwner) {
-        if (note.visibility === "private") {
-          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
-        }
-        await courseAccess.assertCanAccessCourse(db, actor, note.courseId);
-      }
+      await courseAccess.assertCanAccessNote(db, actor, note);
 
       const [attachments, likeRow] = await Promise.all([
         db

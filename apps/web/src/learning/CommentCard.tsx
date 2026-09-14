@@ -1,5 +1,6 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
+import { BellSimpleIcon as BellSimple } from "@phosphor-icons/react/BellSimple";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
@@ -86,6 +87,7 @@ export interface Comment {
   isSolved?: boolean;
   isLocked?: boolean;
   isBookmarked?: boolean;
+  isFollowing?: boolean;
 }
 
 interface CommentCardProps {
@@ -116,6 +118,10 @@ interface CommentCardProps {
     id: string | number,
     bookmarked: boolean,
   ) => Promise<boolean> | void;
+  onToggleFollow?: (
+    id: string | number,
+    following: boolean,
+  ) => Promise<boolean> | void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
@@ -131,6 +137,7 @@ export function CommentCard({
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
+  onToggleFollow,
   isBackendMode = false,
   currentUserId,
   userRole,
@@ -427,6 +434,16 @@ export function CommentCard({
                       <span>Bookmarked</span>
                     </span>
                   )}
+                  {!isNote && Boolean(comment.isFollowing) && (
+                    <span
+                      data-testid="thread-following-badge"
+                      className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
+                      title="Following"
+                    >
+                      <BellSimple size={12} weight="bold" aria-hidden="true" />
+                      <span>Following</span>
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={comment.name}
@@ -458,7 +475,21 @@ export function CommentCard({
                   isBookmarked={Boolean(comment.isBookmarked)}
                   onToggleBookmark={
                     onToggleBookmark
-                      ? () => onToggleBookmark(comment.id, !comment.isBookmarked)
+                      ? () => {
+                          void Promise.resolve(
+                            onToggleBookmark(comment.id, !comment.isBookmarked),
+                          ).catch(() => {});
+                        }
+                      : undefined
+                  }
+                  isFollowing={Boolean(comment.isFollowing)}
+                  onToggleFollow={
+                    onToggleFollow
+                      ? () => {
+                          void Promise.resolve(
+                            onToggleFollow(comment.id, !comment.isFollowing),
+                          ).catch(() => {});
+                        }
                       : undefined
                   }
                   className="absolute -top-1 -right-1 z-20 shrink-0"
@@ -1001,6 +1032,8 @@ interface CommentActionMenuProps {
   onToggleAccept?: () => void;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
+  isFollowing?: boolean;
+  onToggleFollow?: () => void;
   onEdit: () => void;
   onShare: () => void;
   onDelete: () => void;
@@ -1020,6 +1053,8 @@ export function CommentActionMenu({
   onToggleAccept,
   isBookmarked = false,
   onToggleBookmark,
+  isFollowing = false,
+  onToggleFollow,
   onEdit,
   onShare,
   onDelete,
@@ -1035,6 +1070,8 @@ export function CommentActionMenu({
       : actionLabel[0]?.toUpperCase() + actionLabel.slice(1);
   const canBookmark =
     (kind === "comment" || kind === "question") && Boolean(onToggleBookmark);
+  const canFollow =
+    (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
 
   return (
     <CourseActionMenu
@@ -1068,6 +1105,13 @@ export function CommentActionMenu({
               Icon={BookmarkSimple}
               label={isBookmarked ? "Remove bookmark" : "Bookmark"}
               onClick={onToggleBookmark}
+            />
+          )}
+          {canFollow && onToggleFollow && (
+            <MenuAction
+              Icon={BellSimple}
+              label={isFollowing ? "Unfollow discussion" : "Follow discussion"}
+              onClick={onToggleFollow}
             />
           )}
           <MenuAction
@@ -1104,6 +1148,13 @@ export function CommentActionMenu({
               Icon={BookmarkSimple}
               label={isBookmarked ? "Remove bookmark" : "Bookmark"}
               onClick={onToggleBookmark}
+            />
+          )}
+          {canFollow && onToggleFollow && (
+            <MenuAction
+              Icon={BellSimple}
+              label={isFollowing ? "Unfollow discussion" : "Follow discussion"}
+              onClick={onToggleFollow}
             />
           )}
           <MenuAction

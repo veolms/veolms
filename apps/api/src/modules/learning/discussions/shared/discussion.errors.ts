@@ -4,6 +4,9 @@ export const DiscussionErrors = {
   notFound(resource: string = "Discussion thread") {
     return httpError(404, "NOT_FOUND", `${resource} not found`);
   },
+  noteNotFound() {
+    return httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+  },
   unauthorized() {
     return httpError(401, "UNAUTHORIZED", "Authentication required");
   },

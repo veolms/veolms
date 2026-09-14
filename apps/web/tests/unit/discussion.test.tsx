@@ -202,6 +202,10 @@ vi.mock("../../src/services/learning-interactions", () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
+  useToggleFollow: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
   useAcceptReply: () => ({
     mutateAsync: vi.fn(),
     isPending: false,

@@ -162,6 +162,22 @@ describe("learning-threads.adapter", () => {
       };
       expect(adaptLearningThreadToComment(thread).isBookmarked).toBe(true);
     });
+
+    it("maps backend isFollowing: false correctly", () => {
+      const thread: LearningThread = {
+        ...mockBaseThread,
+        isFollowing: false,
+      };
+      expect(adaptLearningThreadToComment(thread).isFollowing).toBe(false);
+    });
+
+    it("maps backend isFollowing: true correctly", () => {
+      const thread: LearningThread = {
+        ...mockBaseThread,
+        isFollowing: true,
+      };
+      expect(adaptLearningThreadToComment(thread).isFollowing).toBe(true);
+    });
   });
 });
 

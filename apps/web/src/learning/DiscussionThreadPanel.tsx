@@ -1,5 +1,6 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
+import { BellSimpleIcon as BellSimple } from "@phosphor-icons/react/BellSimple";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -124,6 +125,10 @@ interface DiscussionThreadPanelProps {
     threadId: string | number,
     bookmarked: boolean,
   ) => Promise<boolean> | void;
+  onToggleFollow?: (
+    threadId: string | number,
+    following: boolean,
+  ) => Promise<boolean> | void;
 }
 
 export function DiscussionThreadPanel({
@@ -147,6 +152,7 @@ export function DiscussionThreadPanel({
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
+  onToggleFollow,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
@@ -672,6 +678,7 @@ export function DiscussionThreadPanel({
                   onToggleAcceptReply={onToggleAcceptReply}
                   onToggleLockThread={onToggleLockThread}
                   onToggleBookmark={onToggleBookmark}
+                  onToggleFollow={onToggleFollow}
                 />
               </SwiperSlide>
             ))}
@@ -724,6 +731,10 @@ interface ThreadSlideProps {
     threadId: string | number,
     bookmarked: boolean,
   ) => Promise<boolean> | void;
+  onToggleFollow?: (
+    threadId: string | number,
+    following: boolean,
+  ) => Promise<boolean> | void;
 }
 
 function ThreadSlide({
@@ -746,6 +757,7 @@ function ThreadSlide({
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
+  onToggleFollow,
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
@@ -897,6 +909,7 @@ function ThreadSlide({
           canLock={canLock}
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
           onToggleBookmark={onToggleBookmark}
+          onToggleFollow={onToggleFollow}
           onLike={onLike}
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
@@ -1006,6 +1019,7 @@ function ThreadRootEntry({
   canLock = false,
   onToggleLock,
   onToggleBookmark,
+  onToggleFollow,
   onLike,
   onReply,
   onEdit,
@@ -1018,6 +1032,10 @@ function ThreadRootEntry({
   onToggleBookmark?: (
     threadId: string | number,
     bookmarked: boolean,
+  ) => Promise<boolean> | void;
+  onToggleFollow?: (
+    threadId: string | number,
+    following: boolean,
   ) => Promise<boolean> | void;
   onLike: (id: string | number, liked: boolean) => void;
   onReply: () => void;
@@ -1081,6 +1099,16 @@ function ThreadRootEntry({
                   <span>Bookmarked</span>
                 </span>
               )}
+              {!isNote && Boolean(entry.isFollowing) && (
+                <span
+                  data-testid="thread-following-badge"
+                  className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
+                  title="Following"
+                >
+                  <BellSimple size={12} weight="bold" aria-hidden="true" />
+                  <span>Following</span>
+                </span>
+              )}
               <span aria-hidden="true" className="text-(--muted)">
                 ·
               </span>
@@ -1100,7 +1128,21 @@ function ThreadRootEntry({
               isBookmarked={Boolean(entry.isBookmarked)}
               onToggleBookmark={
                 onToggleBookmark
-                  ? () => onToggleBookmark(entry.id, !entry.isBookmarked)
+                  ? () => {
+                      void Promise.resolve(
+                        onToggleBookmark(entry.id, !entry.isBookmarked),
+                      ).catch(() => {});
+                    }
+                  : undefined
+              }
+              isFollowing={Boolean(entry.isFollowing)}
+              onToggleFollow={
+                onToggleFollow
+                  ? () => {
+                      void Promise.resolve(
+                        onToggleFollow(entry.id, !entry.isFollowing),
+                      ).catch(() => {});
+                    }
                   : undefined
               }
               onEdit={onEdit}

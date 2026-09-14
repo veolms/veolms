@@ -12,7 +12,7 @@ let testCurrentUser = {
   roles: ["student"],
 };
 
-const mockCommentThreadUnbookmarked: LearningThread = {
+const mockCommentThreadUnfollowed: LearningThread = {
   id: "thread-comment-1",
   academyId: "academy-1",
   courseId: "course-1",
@@ -33,6 +33,7 @@ const mockCommentThreadUnbookmarked: LearningThread = {
   status: "active",
   isLocked: false,
   isBookmarked: false,
+  isFollowing: false,
   acceptedAnswerId: null,
   likesCount: 1,
   repliesCount: 1,
@@ -42,13 +43,13 @@ const mockCommentThreadUnbookmarked: LearningThread = {
   updatedAt: "2026-03-01T10:00:00.000Z",
 };
 
-const mockCommentThreadBookmarked: LearningThread = {
-  ...mockCommentThreadUnbookmarked,
+const mockCommentThreadFollowed: LearningThread = {
+  ...mockCommentThreadUnfollowed,
   id: "thread-comment-2",
-  isBookmarked: true,
+  isFollowing: true,
 };
 
-const mockQuestionThreadUnbookmarked: LearningThread = {
+const mockQuestionThreadUnfollowed: LearningThread = {
   id: "thread-question-1",
   academyId: "academy-1",
   courseId: "course-1",
@@ -69,6 +70,7 @@ const mockQuestionThreadUnbookmarked: LearningThread = {
   status: "active",
   isLocked: false,
   isBookmarked: false,
+  isFollowing: false,
   acceptedAnswerId: null,
   likesCount: 2,
   repliesCount: 0,
@@ -78,10 +80,10 @@ const mockQuestionThreadUnbookmarked: LearningThread = {
   updatedAt: "2026-03-01T10:00:00.000Z",
 };
 
-const mockQuestionThreadBookmarked: LearningThread = {
-  ...mockQuestionThreadUnbookmarked,
+const mockQuestionThreadFollowed: LearningThread = {
+  ...mockQuestionThreadUnfollowed,
   id: "thread-question-2",
-  isBookmarked: true,
+  isFollowing: true,
 };
 
 const mockNote: LearningNote = {
@@ -177,7 +179,8 @@ vi.mock("../../src/services/learning-interactions", () => ({
   useCreateReport: (...args: any[]) => mockInteractions.useCreateReport(...args),
 }));
 
-describe("Learning Space Thread Bookmark Functionality", () => {
+describe("Learning Space Thread Follow Functionality", () => {
+  const toggleFollowMutateAsync = vi.fn();
   const toggleBookmarkMutateAsync = vi.fn();
   const refetchThreads = vi.fn();
 
@@ -201,13 +204,6 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     mockInteractions.useDeleteNote.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    });
-
-    mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
-      isLoading: false,
-      isError: false,
-      refetch: refetchThreads,
     });
     mockInteractions.useCreateLessonThread.mockReturnValue({
       mutateAsync: vi.fn(),
@@ -233,7 +229,7 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
 
     mockInteractions.useToggleFollow.mockReturnValue({
-      mutateAsync: vi.fn(),
+      mutateAsync: toggleFollowMutateAsync,
       isPending: false,
     });
 
@@ -269,9 +265,9 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
   });
 
-  it("shows 'Bookmark' and no indicator when Comment is not bookmarked", () => {
+  it("1. Comment can be followed and shows 'Follow discussion' when unfollowed", () => {
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
+      data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -279,15 +275,13 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-1"
+        persistenceKey="test-follow-1"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    // Indicator is not present
-    expect(screen.queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
-    expect(screen.queryByText("Bookmarked")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     const menuButton = screen.getByRole("button", {
       name: "More actions for Ashi Author",
@@ -295,16 +289,16 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     fireEvent.click(menuButton);
 
     expect(
-      screen.getByRole("menuitem", { name: "Bookmark" }),
+      screen.getByRole("menuitem", { name: "Follow discussion" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "Remove bookmark" }),
+      screen.queryByRole("menuitem", { name: "Unfollow discussion" }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows 'Remove bookmark' and Bookmarked indicator when Comment is bookmarked", () => {
+  it("2. Q&A can be followed and shows 'Follow discussion' when unfollowed", () => {
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadBookmarked] },
+      data: { threads: [mockQuestionThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -312,74 +306,107 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-2"
+        persistenceKey="test-follow-2"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    // Persistent Bookmarked indicator is rendered
-    const badge = screen.getByTestId("thread-bookmarked-badge");
+    expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
+
+    const menuButton = screen.getByRole("button", {
+      name: "More actions for Ashi Author",
+    });
+    fireEvent.click(menuButton);
+
+    expect(
+      screen.getByRole("menuitem", { name: "Follow discussion" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Unfollow discussion" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("3. followed Comment shows 'Unfollow discussion'", () => {
+    mockInteractions.useLessonThreads.mockReturnValue({
+      data: { threads: [mockCommentThreadFollowed] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchThreads,
+    });
+
+    render(
+      <Discussion
+        persistenceKey="test-follow-3"
+        courseId="course-1"
+        lessonId="lesson-1"
+      />,
+    );
+
+    const menuButton = screen.getByRole("button", {
+      name: "More actions for Ashi Author",
+    });
+    fireEvent.click(menuButton);
+
+    expect(
+      screen.getByRole("menuitem", { name: "Unfollow discussion" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Follow discussion" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("4. followed Q&A shows 'Unfollow discussion'", () => {
+    mockInteractions.useLessonThreads.mockReturnValue({
+      data: { threads: [mockQuestionThreadFollowed] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchThreads,
+    });
+
+    render(
+      <Discussion
+        persistenceKey="test-follow-4"
+        courseId="course-1"
+        lessonId="lesson-1"
+      />,
+    );
+
+    const menuButton = screen.getByRole("button", {
+      name: "More actions for Ashi Author",
+    });
+    fireEvent.click(menuButton);
+
+    expect(
+      screen.getByRole("menuitem", { name: "Unfollow discussion" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Follow discussion" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("5. followed thread displays persistent 'Following' indicator", () => {
+    mockInteractions.useLessonThreads.mockReturnValue({
+      data: { threads: [mockCommentThreadFollowed] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchThreads,
+    });
+
+    render(
+      <Discussion
+        persistenceKey="test-follow-5"
+        courseId="course-1"
+        lessonId="lesson-1"
+      />,
+    );
+
+    const badge = screen.getByTestId("thread-following-badge");
     expect(badge).toBeInTheDocument();
-    expect(within(badge).getByText("Bookmarked")).toBeInTheDocument();
-
-    const menuButton = screen.getByRole("button", {
-      name: "More actions for Ashi Author",
-    });
-    fireEvent.click(menuButton);
-
-    expect(
-      screen.getByRole("menuitem", { name: "Remove bookmark" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("menuitem", { name: "Bookmark" }),
-    ).not.toBeInTheDocument();
+    expect(within(badge).getByText("Following")).toBeInTheDocument();
   });
 
-  it("supports bookmarking for Q&A threads (indicator and Bookmark when unbookmarked, indicator and Remove bookmark when bookmarked)", () => {
-    mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockQuestionThreadUnbookmarked, mockQuestionThreadBookmarked] },
-      isLoading: false,
-      isError: false,
-      refetch: refetchThreads,
-    });
-
-    render(
-      <Discussion
-        persistenceKey="test-bookmark-qa"
-        courseId="course-1"
-        lessonId="lesson-1"
-      />,
-    );
-
-    const unbookmarkedCard = document.getElementById("discussion-entry-thread-question-1")!;
-    expect(within(unbookmarkedCard).queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
-    const unbookmarkedMenuBtn = within(unbookmarkedCard).getByRole("button", {
-      name: "More actions for Ashi Author",
-    });
-    fireEvent.click(unbookmarkedMenuBtn);
-    expect(
-      screen.getByRole("menuitem", { name: "Bookmark" }),
-    ).toBeInTheDocument();
-
-    // Close menu
-    fireEvent.click(unbookmarkedMenuBtn);
-
-    const bookmarkedCard = document.getElementById("discussion-entry-thread-question-2")!;
-    const bookmarkedBadge = within(bookmarkedCard).getByTestId("thread-bookmarked-badge");
-    expect(bookmarkedBadge).toBeInTheDocument();
-    expect(within(bookmarkedBadge).getByText("Bookmarked")).toBeInTheDocument();
-
-    const bookmarkedMenuBtn = within(bookmarkedCard).getByRole("button", {
-      name: "More actions for Ashi Author",
-    });
-    fireEvent.click(bookmarkedMenuBtn);
-    expect(
-      screen.getByRole("menuitem", { name: "Remove bookmark" }),
-    ).toBeInTheDocument();
-  });
-
-  it("does NOT expose bookmark action or indicator for Notes", () => {
+  it("6. Note does NOT expose Follow action or Following indicator", () => {
     mockInteractions.useUserNotes.mockReturnValue({
       data: { notes: [mockNote] },
       isLoading: false,
@@ -395,13 +422,13 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-notes"
+        persistenceKey="test-follow-notes"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    expect(screen.queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     const menuButton = screen.getByRole("button", {
       name: "More actions for Ashi Author",
@@ -409,19 +436,16 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     fireEvent.click(menuButton);
 
     expect(
-      screen.queryByRole("menuitem", { name: "Bookmark" }),
+      screen.queryByRole("menuitem", { name: "Follow discussion" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "Remove bookmark" }),
+      screen.queryByRole("menuitem", { name: "Unfollow discussion" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: "Edit note" }),
-    ).toBeInTheDocument();
   });
 
-  it("does NOT expose bookmark action or indicator for Replies", async () => {
+  it("7. Reply does NOT expose Follow action or Following indicator", async () => {
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
+      data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -429,42 +453,41 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-replies"
+        persistenceKey="test-follow-replies"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    // Expand replies by clicking comment article
+    // Expand replies
     const commentArticle = screen.getByRole("article");
     fireEvent.click(commentArticle);
 
-    // Wait for replies to render
     const replyMenuButton = await screen.findByRole("button", {
       name: "More actions for Peer One",
     });
     const replyItem = replyMenuButton.closest("article");
     expect(replyItem).toBeTruthy();
-    expect(within(replyItem!).queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
+    expect(within(replyItem!).queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     fireEvent.click(replyMenuButton);
 
     expect(
-      screen.queryByRole("menuitem", { name: "Bookmark" }),
+      screen.queryByRole("menuitem", { name: "Follow discussion" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "Remove bookmark" }),
+      screen.queryByRole("menuitem", { name: "Unfollow discussion" }),
     ).not.toBeInTheDocument();
   });
 
-  it("clicking Bookmark calls the mutation with correct thread ID and updates displayed state", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValue({
+  it("8. correct thread ID reaches useToggleFollow when clicked", async () => {
+    toggleFollowMutateAsync.mockResolvedValue({
       threadId: "thread-comment-1",
-      bookmarked: true,
+      following: true,
     });
 
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
+      data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -472,7 +495,7 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-toggle"
+        persistenceKey="test-follow-thread-id"
         courseId="course-1"
         lessonId="lesson-1"
       />,
@@ -483,32 +506,24 @@ describe("Learning Space Thread Bookmark Functionality", () => {
     });
     fireEvent.click(menuButton);
 
-    const bookmarkItem = screen.getByRole("menuitem", { name: "Bookmark" });
+    const followItem = screen.getByRole("menuitem", { name: "Follow discussion" });
     await act(async () => {
-      fireEvent.click(bookmarkItem);
+      fireEvent.click(followItem);
     });
 
     await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
-    });
-
-    // Re-open menu to verify displayed action updated to "Remove bookmark"
-    fireEvent.click(menuButton);
-    await waitFor(() => {
-      expect(
-        screen.getByRole("menuitem", { name: "Remove bookmark" }),
-      ).toBeInTheDocument();
+      expect(toggleFollowMutateAsync).toHaveBeenCalledWith("thread-comment-1");
     });
   });
 
-  it("indicator appears after successful Bookmark and disappears after successful Remove bookmark", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValueOnce({
+  it("9. server response.following controls resulting state and indicator", async () => {
+    toggleFollowMutateAsync.mockResolvedValueOnce({
       threadId: "thread-comment-1",
-      bookmarked: true,
+      following: true,
     });
 
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
+      data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -516,61 +531,58 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-indicator-cycle"
+        persistenceKey="test-follow-authoritative-state"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    // Initial state: not bookmarked, indicator absent
-    expect(screen.queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     const menuButton = screen.getByRole("button", {
       name: "More actions for Ashi Author",
     });
     fireEvent.click(menuButton);
 
-    const bookmarkItem = screen.getByRole("menuitem", { name: "Bookmark" });
     await act(async () => {
-      fireEvent.click(bookmarkItem);
+      fireEvent.click(screen.getByRole("menuitem", { name: "Follow discussion" }));
     });
 
-    // Indicator appears immediately after bookmarking
+    // Following indicator appears based on authoritative response
     await waitFor(() => {
-      const badge = screen.getByTestId("thread-bookmarked-badge");
+      const badge = screen.getByTestId("thread-following-badge");
       expect(badge).toBeInTheDocument();
-      expect(within(badge).getByText("Bookmarked")).toBeInTheDocument();
+      expect(within(badge).getByText("Following")).toBeInTheDocument();
     });
 
-    // Next, remove the bookmark
-    toggleBookmarkMutateAsync.mockResolvedValueOnce({
+    // Next unfollow
+    toggleFollowMutateAsync.mockResolvedValueOnce({
       threadId: "thread-comment-1",
-      bookmarked: false,
+      following: false,
     });
 
     fireEvent.click(menuButton);
-    const removeBookmarkItem = await screen.findByRole("menuitem", {
-      name: "Remove bookmark",
+    const unfollowItem = await screen.findByRole("menuitem", {
+      name: "Unfollow discussion",
     });
     await act(async () => {
-      fireEvent.click(removeBookmarkItem);
+      fireEvent.click(unfollowItem);
     });
 
-    // Indicator disappears immediately after unbookmarking
+    // Following indicator disappears based on authoritative response
     await waitFor(() => {
-      expect(screen.queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
-      expect(screen.queryByText("Bookmarked")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
     });
   });
 
-  it("wires the same bookmark behavior and indicator into the root thread displayed inside DiscussionThreadPanel", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValue({
+  it("10. feed and thread-panel states remain consistent", async () => {
+    toggleFollowMutateAsync.mockResolvedValue({
       threadId: "thread-comment-1",
-      bookmarked: true,
+      following: true,
     });
 
     mockInteractions.useLessonThreads.mockReturnValue({
-      data: { threads: [mockCommentThreadUnbookmarked] },
+      data: { threads: [mockCommentThreadUnfollowed] },
       isLoading: false,
       isError: false,
       refetch: refetchThreads,
@@ -578,93 +590,59 @@ describe("Learning Space Thread Bookmark Functionality", () => {
 
     render(
       <Discussion
-        persistenceKey="test-bookmark-panel"
+        persistenceKey="test-follow-panel-consistency"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
-    // Click Reply button inside the comment article to open thread panel
+    // Open thread panel via Reply button
     const commentCard = document.getElementById("discussion-entry-thread-comment-1")!;
     const replyButton = commentCard.querySelector<HTMLButtonElement>('[data-reply-action]')!;
     expect(replyButton).toBeTruthy();
     fireEvent.click(replyButton);
 
-    // Thread panel dialog is open
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
-
-    // Dialog root entry does not have bookmarked indicator initially
-    expect(within(dialog).queryByTestId("thread-bookmarked-badge")).not.toBeInTheDocument();
+    expect(within(dialog).queryByTestId("thread-following-badge")).not.toBeInTheDocument();
 
     // Menu in root entry inside dialog
     const panelMenuButtons = screen.getAllByRole("button", {
       name: "More actions for Ashi Author",
     });
-    // The last button corresponds to the root entry inside the open thread panel
     const panelMenuButton = panelMenuButtons[panelMenuButtons.length - 1]!;
-    expect(panelMenuButton).toBeTruthy();
     fireEvent.click(panelMenuButton);
 
-    const bookmarkItem = screen.getByRole("menuitem", { name: "Bookmark" });
+    const followItem = screen.getByRole("menuitem", { name: "Follow discussion" });
     await act(async () => {
-      fireEvent.click(bookmarkItem);
+      fireEvent.click(followItem);
     });
 
     await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
+      expect(toggleFollowMutateAsync).toHaveBeenCalledWith("thread-comment-1");
     });
 
-    // Dialog root entry now displays Bookmarked indicator
+    // Root entry inside panel displays Following indicator
     await waitFor(() => {
-      const panelBadge = within(dialog).getByTestId("thread-bookmarked-badge");
+      const panelBadge = within(dialog).getByTestId("thread-following-badge");
       expect(panelBadge).toBeInTheDocument();
-      expect(within(panelBadge).getByText("Bookmarked")).toBeInTheDocument();
+      expect(within(panelBadge).getByText("Following")).toBeInTheDocument();
     });
 
-    // Reopen menu to verify updated to "Remove bookmark"
-    fireEvent.click(panelMenuButton);
-    await waitFor(() => {
-      expect(
-        screen.getByRole("menuitem", { name: "Remove bookmark" }),
-      ).toBeInTheDocument();
-    });
+    // Feed card also displays Following indicator
+    const feedBadge = within(commentCard).getByTestId("thread-following-badge");
+    expect(feedBadge).toBeInTheDocument();
+    expect(within(feedBadge).getByText("Following")).toBeInTheDocument();
   });
 
-  it("preserves updated state when thread query refetches with canonical isBookmarked: true", async () => {
-    toggleBookmarkMutateAsync.mockResolvedValue({
-      threadId: "thread-comment-1",
-      bookmarked: true,
-    });
-
-    const { rerender } = render(
-      <Discussion
-        persistenceKey="test-bookmark-refetch"
-        courseId="course-1"
-        lessonId="lesson-1"
-      />,
-    );
-
-    const menuButton = screen.getByRole("button", {
-      name: "More actions for Ashi Author",
-    });
-    fireEvent.click(menuButton);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("menuitem", { name: "Bookmark" }));
-    });
-
-    await waitFor(() => {
-      expect(toggleBookmarkMutateAsync).toHaveBeenCalledWith("thread-comment-1");
-    });
-
-    // Simulate query refetch returning canonical server state with isBookmarked: true
+  it("11. existing Bookmark behavior remains unaffected alongside Follow", async () => {
     mockInteractions.useLessonThreads.mockReturnValue({
       data: {
         threads: [
           {
-            ...mockCommentThreadUnbookmarked,
+            ...mockCommentThreadUnfollowed,
             isBookmarked: true,
+            isFollowing: false,
           },
         ],
       },
@@ -673,19 +651,71 @@ describe("Learning Space Thread Bookmark Functionality", () => {
       refetch: refetchThreads,
     });
 
-    rerender(
+    render(
       <Discussion
-        persistenceKey="test-bookmark-refetch"
+        persistenceKey="test-follow-bookmark-coexist"
         courseId="course-1"
         lessonId="lesson-1"
       />,
     );
 
+    // Bookmarked badge is present, Following badge is absent
+    expect(screen.getByTestId("thread-bookmarked-badge")).toBeInTheDocument();
+    expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
+
+    const menuButton = screen.getByRole("button", {
+      name: "More actions for Ashi Author",
+    });
     fireEvent.click(menuButton);
+
+    // Both actions coexist in the menu
+    expect(
+      screen.getByRole("menuitem", { name: "Remove bookmark" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Follow discussion" }),
+    ).toBeInTheDocument();
+  });
+
+  it("12. preserves previous state and displays notice if mutation fails", async () => {
+    toggleFollowMutateAsync.mockRejectedValue(new Error("Network connection lost"));
+
+    mockInteractions.useLessonThreads.mockReturnValue({
+      data: { threads: [mockCommentThreadUnfollowed] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchThreads,
+    });
+
+    render(
+      <Discussion
+        persistenceKey="test-follow-error"
+        courseId="course-1"
+        lessonId="lesson-1"
+      />,
+    );
+
+    const menuButton = screen.getByRole("button", {
+      name: "More actions for Ashi Author",
+    });
+    fireEvent.click(menuButton);
+
+    await act(async () => {
+      try {
+        fireEvent.click(screen.getByRole("menuitem", { name: "Follow discussion" }));
+      } catch {
+        // Expected error
+      }
+    });
+
+    // Following indicator does NOT appear
     await waitFor(() => {
-      expect(
-        screen.getByRole("menuitem", { name: "Remove bookmark" }),
-      ).toBeInTheDocument();
+      expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
+    });
+
+    // Error notice is displayed to user
+    await waitFor(() => {
+      expect(screen.getByText("Network connection lost")).toBeInTheDocument();
     });
   });
 });

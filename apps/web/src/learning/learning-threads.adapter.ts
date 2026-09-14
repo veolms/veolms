@@ -56,5 +56,7 @@ export function adaptLearningThreadToComment(
     isSolved: Boolean(thread.acceptedAnswerId),
     isLocked: Boolean(thread.isLocked),
     isBookmarked: Boolean(thread.isBookmarked),
+    isFollowing: Boolean(thread.isFollowing),
   };
 }
+

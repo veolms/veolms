@@ -1,5 +1,6 @@
 import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { ExpressionBuilder } from "kysely";
+import type { DiscussionVisibility } from "@veolms/contracts";
 import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
 import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
@@ -48,6 +49,12 @@ export interface ThreadAccessTarget {
   isLocked?: boolean;
 }
 
+export interface NoteAccessTarget {
+  userId: string;
+  courseId: string;
+  visibility: DiscussionVisibility;
+}
+
 export interface DiscussionAccess {
   canAccessCourse(
     db: DatabaseExecutor,
@@ -85,6 +92,12 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     actor: DiscussionActor,
     thread: ThreadAccessTarget,
+  ): Promise<void>;
+  assertCanAccessNote(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    note: NoteAccessTarget,
+    maskedNotFoundError?: unknown,
   ): Promise<void>;
   assertThreadIsActive(thread: ThreadAccessTarget): void;
   assertReplyIsActive(reply: { status?: string }): void;
@@ -258,6 +271,22 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
     },
 
+    async assertCanAccessNote(db, actor, note, maskedNotFoundError) {
+      const isOwner = note.userId === actor.userId;
+      if (isOwner) {
+        return;
+      }
+
+      if (note.visibility === "private") {
+        throw maskedNotFoundError ?? DiscussionErrors.noteNotFound();
+      }
+
+      const allowed = await canAccessCourse(db, actor, note.courseId);
+      if (!allowed) {
+        throw DiscussionErrors.courseAccessDenied();
+      }
+    },
+
     assertThreadIsActive(thread) {
       if (thread.status && thread.status !== "active") {
         throw DiscussionErrors.notFound("Discussion thread");
@@ -389,3 +418,14 @@ export function discussionActor(user: {
 }): DiscussionActor {
   return { userId: user.id, roles: user.roles };
 }
+
+export async function assertCanAccessNote(
+  db: DatabaseExecutor,
+  actor: DiscussionActor,
+  note: NoteAccessTarget,
+  maskedNotFoundError?: unknown,
+): Promise<void> {
+  const access = createDiscussionAccess();
+  return access.assertCanAccessNote(db, actor, note, maskedNotFoundError);
+}
+
