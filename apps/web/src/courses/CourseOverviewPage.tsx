@@ -584,7 +584,7 @@ function CourseHeroSection({
 
   if (isCreatorNormal) {
     // 1. Creator viewing their course normally:
-    // Show only "Continue Learning". Clicking it opens the existing Learning Space.
+    // Show only "Continue Learning". Clicking it opens the course player.
     // Do not show Pay Now or Apply Coupon.
     ctaLabel = "Continue Learning";
     ctaIcon = (
@@ -627,7 +627,7 @@ function CourseHeroSection({
     ctaOnClick = undefined; // Preview actions stay non-functional.
   } else {
     // 3. Student / Learner:
-    // Free course: show "Free" and "Continue Learning", which opens existing Learning Space.
+    // Free course: show "Free" and "Continue Learning", which opens the course player.
     // Paid course: show price, "Apply coupon", and "Pay Now" which triggers direct checkout.
     if (isFree) {
       ctaLabel = "Continue Learning";

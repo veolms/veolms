@@ -74,11 +74,6 @@ import {
   useRestoreCourse,
 } from "./services/courses";
 import {
-  useCloseLearningSpaceSession,
-  useLearningSpaceSessions,
-  useUpsertLearningSpaceSession,
-} from "./services/learning-space";
-import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
@@ -169,16 +164,6 @@ import {
   getDocumentFullscreenElement,
   toggleDocumentFullscreen,
 } from "./fullscreen";
-import {
-  activateCoursePlayerSession,
-  COURSE_PLAYER_SESSION_CHANGE_EVENT,
-  COURSE_PLAYER_SESSIONS_STORAGE_KEY,
-  closeCoursePlayerSession,
-  getOpenCoursePlayerSessions,
-  mapLearningSpaceSessionToCoursePlayerSession,
-} from "./learning/coursePlayerNavigation";
-import type { CoursePlayerSession } from "./learning/coursePlayerNavigation";
-import { LearningSpace } from "./learning-space/LearningSpace";
 import {
   isStoredString,
   useSessionStorageState,
@@ -637,13 +622,6 @@ export function CoursesPage({
     ...READING_MODE_DEFAULTS,
   });
   const readingModeEnabled = readingModePreferences.enabled;
-  // Local course-player sessions are browser state, so keep the first render
-  // deterministic for SSR. The stored sessions are loaded in the effect
-  // below before they are used for the interactive Learning Space control.
-  const [storedCoursePlayerSessions, setStoredCoursePlayerSessions] = useState<
-    CoursePlayerSession[]
-  >([]);
-  const [learningSpaceExpanded, setLearningSpaceExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState(() => {
     if (page === "home") return role === "creator" ? "Dashboard" : "Home";
     if (page === "courses") return "Courses";
@@ -719,23 +697,6 @@ export function CoursesPage({
   const isAuthenticated = Boolean(activeUser);
   const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
-  const learningSpaceSessionsQuery = useLearningSpaceSessions({
-    userId: activeUser?.id,
-    // The learning route already has its static player content and does not
-    // need Learning Space sessions before the video can mount. Load these
-    // sessions when the panel is opened; keep the existing eager behavior on
-    // catalogue/home surfaces.
-    enabled:
-      isAuthenticated &&
-      !isEditingOrCreatingCourse &&
-      (!renderMain || learningSpaceExpanded),
-  });
-  const upsertLearningSpaceSession = useUpsertLearningSpaceSession(
-    activeUser?.id,
-  );
-  const closeLearningSpaceSession = useCloseLearningSpaceSession(
-    activeUser?.id,
-  );
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(sidenavData?.menus),
     [sidenavData?.menus],
@@ -763,12 +724,11 @@ export function CoursesPage({
   const { isPending: isSigningOut, signOut } = useSignOut();
   const signOutAfterSync = useCallback(async () => {
     try {
-      await autosyncManager.requireSynced();
       await signOut();
     } catch {
-      setNotice("Couldn't sign out yet. Please try again.");
+      if (typeof window !== "undefined") window.location.href = "/";
     }
-  }, [setNotice, signOut]);
+  }, [signOut]);
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
@@ -1242,28 +1202,6 @@ export function CoursesPage({
   }, []);
 
   useEffect(() => {
-    const syncCoursePlayerSession = () =>
-      setStoredCoursePlayerSessions(getOpenCoursePlayerSessions());
-    syncCoursePlayerSession();
-    const syncCoursePlayerStorage = (event: StorageEvent) => {
-      if (event.key === COURSE_PLAYER_SESSIONS_STORAGE_KEY)
-        syncCoursePlayerSession();
-    };
-    window.addEventListener(
-      COURSE_PLAYER_SESSION_CHANGE_EVENT,
-      syncCoursePlayerSession,
-    );
-    window.addEventListener("storage", syncCoursePlayerStorage);
-    return () => {
-      window.removeEventListener(
-        COURSE_PLAYER_SESSION_CHANGE_EVENT,
-        syncCoursePlayerSession,
-      );
-      window.removeEventListener("storage", syncCoursePlayerStorage);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!storedPreferencesReady) return;
     setSidebarWidth((currentWidth) => {
       const nextWidth = clampSidebarWidth(currentWidth, sidebarMaxWidth);
@@ -1527,7 +1465,6 @@ export function CoursesPage({
   useEffect(() => {
     if (!compactNavigation) return;
 
-    setLearningSpaceExpanded(false);
     if (mobileSidebarNavigationActive) {
       setMobileMenuOpen(false);
       setMobilePaletteMenu(false);
@@ -1729,19 +1666,6 @@ export function CoursesPage({
     publishedCoursesData?.courses?.length,
   ]);
 
-  // Authenticated Learning Space entries must be backed by a real API course.
-  // Legacy/demo IDs such as "backend-nodejs" are valid for the local player,
-  // but the backend cannot resolve them as course UUIDs or slugs.
-  const apiCourseKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const course of allCourses) {
-      if (!course.isApi) continue;
-      keys.add(course.id);
-      if (course.slug) keys.add(course.slug);
-    }
-    return keys;
-  }, [allCourses]);
-
   const handleDeleteCourse = async (course: Course) => {
     setDeletingCourseIds((prev) => new Set(prev).add(course.id));
     try {
@@ -1837,10 +1761,6 @@ export function CoursesPage({
   ) => {
     setEdgeSidebarOpen(false);
     dismissMobileMenuThen(() => {
-      if (label === "Learning Space") {
-        setLearningSpaceExpanded(true);
-        return;
-      }
       onNavigatePage?.(getNavigationDestination(item ?? label));
     });
   };
@@ -3186,77 +3106,6 @@ export function CoursesPage({
     }
   };
 
-  const hasBackendCourses = (publishedCoursesData?.courses.length ?? 0) > 0;
-  const learningSessions = (() => {
-    if (
-      isAuthenticated &&
-      hasBackendCourses &&
-      learningSpaceSessionsQuery.isSuccess &&
-      learningSpaceSessionsQuery.data
-    ) {
-      // Once the authenticated request has completed, the server is the
-      // source of truth. Do not merge stale anonymous/local sessions here;
-      // they can contain IDs that no longer exist in the API.
-      return learningSpaceSessionsQuery.data.sessions.map(
-        mapLearningSpaceSessionToCoursePlayerSession,
-      );
-    }
-    // When the API catalogue is empty, the visible courses are the local
-    // catalogue, so its local player sessions are the correct source too.
-    if (!isAuthenticated || !hasBackendCourses) {
-      return storedCoursePlayerSessions;
-    }
-    // Avoid showing local records while an authenticated backend catalogue or
-    // session request is still loading.
-    return [];
-  })();
-  const fullLearningCourseId = isLearningSurface ? courseSlug : undefined;
-  const panelActiveLearningCourseId =
-    fullLearningCourseId ?? miniPlayerCourseId ?? undefined;
-  const activateLearningSession = useCallback(
-    (session: CoursePlayerSession) => {
-      const destination =
-        activateCoursePlayerSession(session.courseId) || session.path;
-      if (isAuthenticated && apiCourseKeys.has(session.courseId)) {
-        upsertLearningSpaceSession.mutate({
-          courseKey: session.courseId,
-          payload: {
-            lessonKey: String(session.lessonId),
-            origin: session.origin,
-            returnPath: session.returnPath,
-          },
-        });
-      }
-      onNavigatePage(destination);
-    },
-    [
-      apiCourseKeys,
-      isAuthenticated,
-      onNavigatePage,
-      upsertLearningSpaceSession,
-    ],
-  );``
-  const closeLearningSession = useCallback(
-    (session: CoursePlayerSession) => {
-      const closesVisibleSession =
-        isLearningSurface && courseSlug === session.courseId;
-      const nextSession = closeCoursePlayerSession(session.courseId);
-      if (isAuthenticated && apiCourseKeys.has(session.courseId)) {
-        closeLearningSpaceSession.mutate({ courseKey: session.courseId });
-      }
-      if (!closesVisibleSession) return;
-      onNavigatePage(nextSession?.path || session.returnPath);
-    },
-    [
-      closeLearningSpaceSession,
-      courseSlug,
-      apiCourseKeys,
-      isAuthenticated,
-      isLearningSurface,
-      onNavigatePage,
-    ],
-  );
-
   const mobileNavigation = getMobilePrimaryNavigation(role, navigation);
   const mobileMoreNavigation = getMobileOverflowNavigation(
     navigation,
@@ -3629,13 +3478,7 @@ export function CoursesPage({
               {navigation.map((item, navigationIndex) => {
                 const [label, Icon] = item;
                 const active = isNavigationItemActive(item);
-                const navigationShortcutIndex =
-                  navigation
-                    .slice(0, navigationIndex)
-                    .filter(
-                      ([navigationLabel]) =>
-                        navigationLabel !== "Learning Space",
-                    ).length + 1;
+                const navigationShortcutIndex = navigationIndex + 1;
                 const displayLabel = label;
                 const accessibleLabel = [
                   displayLabel,
@@ -3645,27 +3488,6 @@ export function CoursesPage({
                 ]
                   .filter(Boolean)
                   .join(", ");
-                if (label === "Learning Space") {
-                  return (
-                    <LearningSpace
-                      key={label}
-                      sessions={learningSessions}
-                      activeCourseId={fullLearningCourseId}
-                      panelActiveCourseId={panelActiveLearningCourseId}
-                      expanded={learningSpaceExpanded}
-                      mobile={mobileSidebarNavigationActive}
-                      mobileNavigationPlacement="sidebar"
-                      collapsedSidebar={sidebarCollapsed}
-                      iconColor={getNavigationIconColor(
-                        "Learning Space",
-                        sidebarPreferences,
-                      )}
-                      onExpandedChange={setLearningSpaceExpanded}
-                      onActivate={activateLearningSession}
-                      onClose={closeLearningSession}
-                    />
-                  );
-                }
                 return (
                   <Fragment key={label}>
                     <button
@@ -4144,25 +3966,6 @@ export function CoursesPage({
             const [label, Icon] = item;
             const active = isNavigationItemActive(item);
             const displayLabel = label;
-            if (label === "Learning Space") {
-              return (
-                <LearningSpace
-                  key={label}
-                  sessions={learningSessions}
-                  activeCourseId={fullLearningCourseId}
-                  panelActiveCourseId={panelActiveLearningCourseId}
-                  expanded={learningSpaceExpanded}
-                  mobile
-                  iconColor={getNavigationIconColor(
-                    "Learning Space",
-                    sidebarPreferences,
-                  )}
-                  onExpandedChange={setLearningSpaceExpanded}
-                  onActivate={activateLearningSession}
-                  onClose={closeLearningSession}
-                />
-              );
-            }
             return (
               <Fragment key={label}>
                 <button

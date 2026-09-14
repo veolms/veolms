@@ -211,7 +211,7 @@ describe("framework route descriptors", () => {
     expect(getRouteDescriptor("learning")).toEqual({
       kind: "learning",
       page: "learning",
-      section: "Learning Space",
+      section: "Courses",
     });
     expect(getRouteDescriptor("course-overview")).toMatchObject({
       kind: "course-overview",

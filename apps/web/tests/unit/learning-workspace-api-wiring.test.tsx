@@ -115,7 +115,7 @@ function renderWorkspaceWithClient(
   );
 }
 
-describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
+describe("Learning Workspace - Real Course Overview API Wiring", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {

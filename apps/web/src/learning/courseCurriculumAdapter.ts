@@ -21,7 +21,7 @@ export interface AdaptedCurriculum {
 
 /**
  * Pure adapter converting a backend `CourseOverviewResponse` into the
- * Learning Space curriculum representation.
+ * learning workspace curriculum representation.
  *
  * - Sections are sorted by numeric `position`.
  * - Lessons within each section are sorted by numeric `position`.

@@ -40,7 +40,6 @@ export type NavigationItemWithMetadata = NavigationItem;
 
 const requiredNavigationLabels = new Set([
   "Courses",
-  "Learning Space",
   "Settings",
 ]);
 
@@ -51,16 +50,6 @@ const publicNavigation: readonly NavigationItem[] = [
     {
       id: "default-courses",
       routeLink: "/courses",
-      parentId: null,
-      source: "default",
-    },
-  ],
-  [
-    "Learning Space",
-    BookOpen,
-    {
-      id: "default-learning-space",
-      routeLink: "/learning-space",
       parentId: null,
       source: "default",
     },
@@ -99,10 +88,7 @@ const getMenuIcon = (iconName: string | null): Icon =>
 
 /**
  * Converts the server's effective RBAC menu tree to the shell's flat
- * navigation shape. Learning Space remains a special shell control because it
- * owns transient course-player sessions; its database children are still
- * exposed as ordinary navigation items. The resolver adds the special control
- * back alongside any missing core defaults.
+ * navigation shape.
  */
 export function getNavigationItemsFromMenus(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -114,23 +100,30 @@ export function getNavigationItemsFromMenus(
 
   const visit = (nodes: readonly AuthMenuNode[]) => {
     for (const menu of nodes) {
-      if (menu.label !== "Learning Space") {
-        // The current shell is label-oriented for drag/drop and preference
-        // persistence. Keep the first effective entry when an admin receives
-        // both student and instructor variants of the same menu label.
-        if (!seenLabels.has(menu.label)) {
-          seenLabels.add(menu.label);
-          items.push([
-            menu.label,
-            getMenuIcon(menu.icon),
-            {
-              id: menu.id,
-              routeLink: menu.routeLink,
-              parentId: menu.parentId,
-              source: "server",
-            },
-          ]);
-        }
+      if (
+        menu.label === "Learning Space" ||
+        menu.routeLink === "/learning-space" ||
+        menu.id === "00000000-0000-4000-9000-000000000009"
+      ) {
+        if (menu.children?.length) visit(menu.children);
+        continue;
+      }
+
+      // The current shell is label-oriented for drag/drop and preference
+      // persistence. Keep the first effective entry when an admin receives
+      // both student and instructor variants of the same menu label.
+      if (!seenLabels.has(menu.label)) {
+        seenLabels.add(menu.label);
+        items.push([
+          menu.label,
+          getMenuIcon(menu.icon),
+          {
+            id: menu.id,
+            routeLink: menu.routeLink,
+            parentId: menu.parentId,
+            source: "server",
+          },
+        ]);
       }
 
       if (menu.children?.length) visit(menu.children);
@@ -168,11 +161,9 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 
 /**
  * Sidebar items for the current session: role menus from `/auth/me` when the
- * backend returns any, otherwise the public Courses, Learning Space, and
- * Settings defaults.
+ * backend returns any, otherwise the public Courses and Settings defaults.
  * Guests, empty `menus: []`, and menus that flatten to nothing all use the
- * same fallback so the sidebar never renders blank. The fallback includes the
- * special Learning Space control alongside Courses and Settings.
+ * same fallback so the sidebar never renders blank.
  */
 export function resolveShellNavigation(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -201,7 +192,6 @@ const navigationTones: Record<string, string> = {
   Reviews: "#f1be4b",
   "My Quiz": "#47d4d0",
   Discussions: "#58a8ff",
-  "Learning Space": "#329ca6",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
   "Order History": "#d68eea",

@@ -131,6 +131,13 @@ interface MenuRow {
 function buildMenuTree(rows: MenuRow[]): SidenavMenuNode[] {
   const menuMap = new Map<string, SidenavMenuNode>();
   for (const row of rows) {
+    if (
+      row.label === "Learning Space" ||
+      row.route_link === "/learning-space" ||
+      row.id === "00000000-0000-4000-9000-000000000009"
+    ) {
+      continue;
+    }
     const existing = menuMap.get(row.id);
     if (existing) {
       existing.permissions.canCreate =

@@ -173,7 +173,6 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
 const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
   ".elastic-scroller",
-  "[data-learning-space-panel]",
   "input",
   "textarea",
   "select",
@@ -558,7 +557,7 @@ export function LearningWorkspace({
   useEffect(
     () =>
       subscribeToPointerGestureClaims(({ owner, pointerId }) => {
-        if (owner !== "learning-space") return;
+        if (owner !== "curriculum") return;
         if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
           curriculumScreenSwipeRef.current = null;
         }
