@@ -2844,6 +2844,13 @@ export function CourseCreatePage({
       );
 
       if (!requestIsActive()) return;
+      setThumbnailUploadStatus("processing");
+      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(
+        presigned.mediaAssetId,
+        { signal: uploadAbortController.signal },
+      );
+
+      if (!requestIsActive()) return;
       setThumbnailUploadStatus("saving");
 
       const updated = await updateBasicsMutation.mutateAsync({
