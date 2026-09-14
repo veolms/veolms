@@ -73,7 +73,7 @@ import { useCourseOverview } from "../services/courses";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
   getVideoPlaybackBootstrap,
-  refreshVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
 } from "./videoPlaybackBootstrap";
 import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
@@ -631,11 +631,11 @@ export function LearningWorkspace({
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
-  const refreshPlaybackBootstrap = useCallback(async () => {
+  const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
     }
-    return refreshVideoPlaybackBootstrap({
+    return refreshVideoPlaybackToken({
       courseSlug,
       lessonNumber: selectedLesson,
     });
@@ -1894,7 +1894,7 @@ export function LearningWorkspace({
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
       playbackBootstrap,
-      refreshPlaybackBootstrap,
+      refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
       courseTitle,
@@ -1957,7 +1957,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
-      refreshPlaybackBootstrap,
+      refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
       playerCourseLessonsSidePanel,

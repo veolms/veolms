@@ -14,7 +14,10 @@ import {
   type VideoEngine,
   type VideoSource,
 } from "@veolms/video-player";
-import type { VideoPlaybackBootstrap } from "@veolms/contracts";
+import type {
+  VideoPlaybackBootstrap,
+  VideoPlaybackToken,
+} from "@veolms/contracts";
 import type { CourseVideo } from "../courseContent";
 import {
   LEARNING_SEEK_INTERVAL_DEFAULT,
@@ -118,8 +121,8 @@ export interface LessonVideoPlayerProps {
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
-  /** Refreshes the short-lived CDN segment token when playback runs long. */
-  refreshPlaybackBootstrap?: () => Promise<VideoPlaybackBootstrap>;
+  /** Refreshes only the short-lived CDN segment token when playback runs long. */
+  refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
   /** Legacy caller hint retained while all protected access moves to tokens. */
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
@@ -164,7 +167,7 @@ export function LessonVideoPlayer({
   theaterMode,
   presentation = "full",
   playbackBootstrap,
-  refreshPlaybackBootstrap,
+  refreshPlaybackToken,
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -224,16 +227,8 @@ export function LessonVideoPlayer({
       segmentToken: playbackBootstrap?.segmentToken,
       segmentTokenExpiresAt: playbackBootstrap?.segmentTokenExpiresAt,
       refreshSegmentToken:
-        playbackBootstrap?.segmentToken && refreshPlaybackBootstrap
-          ? async () => {
-              const refreshed = await refreshPlaybackBootstrap();
-              return refreshed.segmentToken
-                ? {
-                    token: refreshed.segmentToken,
-                    expiresAt: refreshed.segmentTokenExpiresAt,
-                  }
-                : null;
-            }
+        playbackBootstrap?.segmentToken && refreshPlaybackToken
+          ? refreshPlaybackToken
           : undefined,
     });
   }, [
@@ -242,7 +237,7 @@ export function LessonVideoPlayer({
     playbackBootstrap,
     playbackMedia,
     protectedPlayback,
-    refreshPlaybackBootstrap,
+    refreshPlaybackToken,
   ]);
 
   useEffect(() => {

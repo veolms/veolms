@@ -6,6 +6,7 @@ import {
   mediaUploadCompleteResponseSchema,
   videoJobProgressResponseSchema,
   videoPlaybackBootstrapSchema,
+  videoPlaybackTokenSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -63,6 +64,39 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getPlaybackBootstrap,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/lessons/:lessonNumber/playback-token",
+    {
+      schema: {
+        operationId: "getVideoPlaybackToken",
+        tags: ["Media"],
+        summary: "Refresh an authorized lesson video segment token",
+        description:
+          "Returns only a new short-lived token for protected HLS segments. The same course access and media readiness rules as playback bootstrap are applied.",
+        params: z.object({
+          idOrSlug: z.string().min(1).max(160),
+          lessonNumber: z.coerce.number().int().positive(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Protected video playback token",
+            videoPlaybackTokenSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("Lesson or media not found"),
+          409: errorResponse("Video is not ready or does not require a token"),
+          503: errorResponse("CDN delivery is not configured"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getPlaybackToken,
   );
 
   app.post(

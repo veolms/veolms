@@ -27,6 +27,10 @@ export function createLearningHlsPreloadSource(options: {
   protectedPlayback?: boolean;
   segmentToken?: string;
   segmentTokenExpiresAt?: number;
+  refreshSegmentToken?: () => Promise<{
+    token: string;
+    expiresAt?: number;
+  } | null>;
 }) {
   const startTime =
     options.mediaKey && shouldResumeFromLastPosition()
@@ -44,6 +48,7 @@ export function createLearningHlsPreloadSource(options: {
         protectedPlayback: options.protectedPlayback,
         segmentToken: options.segmentToken,
         segmentTokenExpiresAt: options.segmentTokenExpiresAt,
+        refreshSegmentToken: options.refreshSegmentToken,
       }),
     },
   };

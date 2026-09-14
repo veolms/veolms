@@ -28,8 +28,16 @@ export const videoPlaybackBootstrapSchema = z.strictObject({
   source: z.enum(["ssg", "public-cdn", "paid-bootstrap-api"]),
 });
 
+/** The minimal response used to renew a protected HLS segment token. */
+export const videoPlaybackTokenSchema = z.strictObject({
+  token: z.string().min(1),
+  expiresAt: z.number().int().positive(),
+});
+
 export type VideoPlaybackBootstrap = z.infer<
   typeof videoPlaybackBootstrapSchema
 >;
+
+export type VideoPlaybackToken = z.infer<typeof videoPlaybackTokenSchema>;
 
 export type VideoPlaybackTrack = z.infer<typeof videoPlaybackTrackSchema>;

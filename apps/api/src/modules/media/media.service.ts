@@ -9,6 +9,7 @@ import type {
 import type {
   PresignMediaRequest,
   VideoPlaybackBootstrap,
+  VideoPlaybackToken,
 } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
@@ -718,11 +719,11 @@ export function createMediaService({
     };
   }
 
-  async function getPlaybackBootstrap(
+  async function resolveAuthorizedPlaybackLesson(
     courseIdOrSlug: string,
     lessonNumber: number,
     user?: PlaybackUser,
-  ): Promise<VideoPlaybackBootstrap> {
+  ) {
     if (!Number.isInteger(lessonNumber) || lessonNumber < 1) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
@@ -778,11 +779,48 @@ export function createMediaService({
       );
     }
 
+    return context;
+  }
+
+  function createPlaybackSegmentToken(
+    manifestKey: string,
+  ): VideoPlaybackToken | null {
+    const manifestPrefix = manifestKey.replace(/\/[^/]+$/u, "");
+    if (services.storage.isCdnPublicKey(manifestPrefix)) return null;
+
+    const expiresAt =
+      Math.floor(Date.now() / 1000) +
+      services.storage.getCdnHlsTokenTtlSeconds();
+    const token = services.storage.createCdnAccessToken(
+      manifestPrefix,
+      expiresAt,
+    );
+    if (!token) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Protected media delivery is not configured.",
+      );
+    }
+    return { token, expiresAt };
+  }
+
+  async function getPlaybackBootstrap(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ): Promise<VideoPlaybackBootstrap> {
+    const context = await resolveAuthorizedPlaybackLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
+
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
     const { media, manifestKey } = await getReadyPlaybackOutput(
-      context.content_media_id,
+      context.content_media_id!,
       {
         verifyManifest: false,
       },
@@ -795,28 +833,7 @@ export function createMediaService({
         "Media delivery is not configured.",
       );
     }
-    const manifestPrefix = manifestKey.replace(/\/[^/]+$/u, "");
-    const segmentTokenRequired =
-      !services.storage.isCdnPublicKey(manifestPrefix);
-    const segmentTokenExpiresAt = segmentTokenRequired
-      ? Math.floor(Date.now() / 1000) +
-        services.storage.getCdnHlsTokenTtlSeconds()
-      : undefined;
-    const segmentToken = segmentTokenRequired
-      ? services.storage.createCdnAccessToken(
-          manifestPrefix,
-          segmentTokenExpiresAt,
-        )
-      : undefined;
-    if (segmentTokenRequired && !segmentToken) {
-      throw new AppError(
-        503,
-        "CDN_NOT_CONFIGURED",
-        "Protected media delivery is not configured.",
-      );
-    }
-    const protectedLesson =
-      !context.is_preview && context.pricing_type !== "free";
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
 
     return {
       version: 1,
@@ -824,8 +841,12 @@ export function createMediaService({
       lessonId: context.lesson_id,
       mediaKey: `${encodeURIComponent(context.course_slug)}-lesson-${lessonNumber}`,
       manifestUrl,
-      ...(segmentToken ? { segmentToken } : {}),
-      ...(segmentTokenExpiresAt ? { segmentTokenExpiresAt } : {}),
+      ...(playbackToken
+        ? {
+            segmentToken: playbackToken.token,
+            segmentTokenExpiresAt: playbackToken.expiresAt,
+          }
+        : {}),
       ...(media.duration_seconds !== null &&
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
@@ -833,6 +854,31 @@ export function createMediaService({
       title: context.lesson_title,
       source: "paid-bootstrap-api",
     };
+  }
+
+  async function getPlaybackToken(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ): Promise<VideoPlaybackToken> {
+    const context = await resolveAuthorizedPlaybackLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
+    const { manifestKey } = await getReadyPlaybackOutput(
+      context.content_media_id!,
+      { verifyManifest: false },
+    );
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
+    if (!playbackToken) {
+      throw new AppError(
+        409,
+        "CDN_TOKEN_NOT_REQUIRED",
+        "This lesson does not require a protected playback token.",
+      );
+    }
+    return playbackToken;
   }
 
   async function getHlsStream(
@@ -950,6 +996,7 @@ export function createMediaService({
     getMediaAssets,
     getVideoJobProgress,
     getPlaybackBootstrap,
+    getPlaybackToken,
     getMediaDelivery,
     getHlsStream,
     getMediaStream,

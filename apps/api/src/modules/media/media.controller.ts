@@ -60,6 +60,23 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
+  async function getPlaybackToken(
+    request: FastifyRequest<{
+      Params: { idOrSlug: string; lessonNumber: number };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getPlaybackToken(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
+      user,
+    );
+  }
+
   async function getMediaDelivery(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
   ) {
@@ -218,6 +235,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     confirmMediaUpload,
     getVideoJobProgress,
     getPlaybackBootstrap,
+    getPlaybackToken,
     getMediaDelivery,
     retryVideoJob,
     cancelVideoJob,
