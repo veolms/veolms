@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
-import { resolveMfaSetupView } from "../auth/mfaGate";
+import { resolveMfaSetupView, type MfaSetupView } from "../auth/mfaGate";
 import { APP_HOME_PATH } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 export default function MfaSetupRoute() {

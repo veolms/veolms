@@ -196,6 +196,30 @@ export function useEnableTotp() {
   });
 }
 
+export function useDisableTotp() {
+  const queryClient = useQueryClient();
+
+  return useMutation<AuthMessageResponse, ApiError, void>({
+    mutationFn: () => authService.disableTotp(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+    },
+  });
+}
+
+export function useDeletePasskeys() {
+  const queryClient = useQueryClient();
+
+  return useMutation<AuthMessageResponse, ApiError, void>({
+    mutationFn: () => authService.deletePasskeys(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+    },
+  });
+}
+
 export function useVerifyMfaTotp() {
   const queryClient = useQueryClient();
 

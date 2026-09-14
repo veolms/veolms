@@ -60,7 +60,8 @@ vi.mock("../../src/services/auth", async () => {
       isPending: false,
     }),
     useSetupTotp: () => ({ mutateAsync: vi.fn(), isPending: false }),
-    useEnableTotp: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDisableTotp: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeletePasskeys: () => ({ mutateAsync: vi.fn(), isPending: false }),
     usePasskeyRegisterOptions: () => ({
       mutateAsync: vi.fn(),
       isPending: false,
@@ -92,6 +93,17 @@ describe("security settings layout", () => {
     expect(screen.getByText("Recommended")).toBeInTheDocument();
     expect(screen.queryByText("ProCodrr")).not.toBeInTheDocument();
     expect(screen.queryByText(/before you continue/i)).not.toBeInTheDocument();
+  });
+
+  it("shows Remove buttons when passkey and totp are active", () => {
+    authState.totpEnabled = true;
+    authState.passkeyEnabled = true;
+
+    renderWithAppProviders(<SecuritySettings />);
+
+    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Replace" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconfigure" })).toBeInTheDocument();
   });
 
   it("shows a short device label instead of the raw user agent", () => {

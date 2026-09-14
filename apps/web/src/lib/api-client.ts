@@ -72,7 +72,26 @@ axiosInstance.interceptors.response.use(
   (error: AxiosError) => {
     const apiError = getApiError(error);
     redirectToMfaSetup(apiError);
-    if (apiError.status === 401 && error.config?.url !== "/auth/login") {
+
+    const isVerificationOrAuthAction =
+      error.config?.url?.includes("/otp/") ||
+      error.config?.url?.includes("/totp/") ||
+      error.config?.url?.includes("/passkey/") ||
+      error.config?.url?.includes("/mfa/") ||
+      error.config?.url === "/auth/login";
+
+    const isExplicitSessionFailure =
+      apiError.code === "UNAUTHORIZED" ||
+      apiError.code === "UNAUTHENTICATED" ||
+      apiError.code === "SESSION_EXPIRED" ||
+      apiError.code === "NO_SESSION" ||
+      apiError.code === "SESSION_REVOKED";
+
+    if (
+      apiError.status === 401 &&
+      !isVerificationOrAuthAction &&
+      (isExplicitSessionFailure || error.config?.url === "/auth/me")
+    ) {
       authStore.clearAuth();
     }
     return Promise.reject(apiError);

@@ -34,6 +34,8 @@ import {
 import type { SessionService } from "../session/session.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
+import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
+
 export interface MfaServiceOptions {
   database: Kysely<Database>;
   sessionService: SessionService;
@@ -45,6 +47,8 @@ interface AuthenticatedMfaUser {
   email: string | null;
   phoneNo: string | null;
   name: string;
+  roles?: string[];
+  mfaMandatory?: boolean;
 }
 
 export function createMfaService({
@@ -68,6 +72,62 @@ export function createMfaService({
   function setupTotp(user: AuthenticatedMfaUser) {
     const label = user.email || user.username || user.phoneNo || "user";
     return generateTotpSecret(label, config.RP_NAME);
+  }
+
+  async function disableTotp(
+    user: AuthenticatedMfaUser,
+    mfaVerified: boolean,
+  ): Promise<{ message: string }> {
+    await assertStepUpForFactorChange(user.id, mfaVerified);
+
+    const isMandatory = isMfaMandatoryAccount(
+      Boolean(user.mfaMandatory),
+      user.roles,
+    );
+    if (isMandatory) {
+      const passkeyCount = await mfaRepository.countUserPasskeys(
+        database,
+        user.id,
+      );
+      if (passkeyCount === 0) {
+        throw new AppError(
+          400,
+          "MFA_MANDATORY",
+          "MFA is required for your account. Register a passkey before removing your authenticator app.",
+        );
+      }
+    }
+
+    await mfaRepository.deleteTotpCredential(database, user.id);
+    return { message: "Authenticator app removed successfully." };
+  }
+
+  async function deletePasskeys(
+    user: AuthenticatedMfaUser,
+    mfaVerified: boolean,
+  ): Promise<{ message: string }> {
+    await assertStepUpForFactorChange(user.id, mfaVerified);
+
+    const isMandatory = isMfaMandatoryAccount(
+      Boolean(user.mfaMandatory),
+      user.roles,
+    );
+    if (isMandatory) {
+      const totpActive = await mfaRepository.isTotpEnabled(
+        database,
+        user.id,
+      );
+      if (!totpActive) {
+        throw new AppError(
+          400,
+          "MFA_MANDATORY",
+          "MFA is required for your account. Set up an authenticator app before removing your passkey.",
+        );
+      }
+    }
+
+    await mfaRepository.deleteAllUserPasskeys(database, user.id);
+    return { message: "Passkeys removed successfully." };
   }
 
   async function enableTotp({
@@ -454,6 +514,8 @@ export function createMfaService({
   return {
     setupTotp,
     enableTotp,
+    disableTotp,
+    deletePasskeys,
     verifyTotpCode,
     getPasskeyRegisterOptions,
     verifyPasskeyRegistration,
