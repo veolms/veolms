@@ -10,6 +10,7 @@ import {
   EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
   getEarlyHlsPreloadInlineScript,
 } from "./learning/learningHlsBootstrap";
+import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -34,6 +35,7 @@ interface LayoutProps {
 }
 
 const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
+const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
 
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
@@ -173,6 +175,13 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        {videoPlaybackCdnOrigin ? (
+          <link
+            rel="preconnect"
+            href={videoPlaybackCdnOrigin}
+            crossOrigin="anonymous"
+          />
+        ) : null}
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
         <link
           rel="preload"

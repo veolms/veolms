@@ -111,7 +111,7 @@ pnpm build:web -- --first-section
 pnpm --filter @veolms/web preview -- --first-section
 ```
 
-React Router writes the deployable client-only application to `apps/web/build/client`. `CDN_URL` accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. With `/cdn`, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
+React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_CDN_URL` is the browser-facing CDN value and accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. `CDN_URL` is the corresponding API/Worker value; keep both values equal. The Vite development server uses `VITE_CDN_URL` (falling back to `CDN_URL`) to provide the `/cdn/*` proxy when it is an absolute URL. With `/cdn` in deployment, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
 
 ## Direct media CDN Worker
 
@@ -131,9 +131,13 @@ pnpm dlx wrangler@4 deploy --config wrangler.cdn.jsonc
 Keep the R2 bucket private. Configure the Worker route as `/cdn/*` when
 `CDN_URL=/cdn`, or attach a custom domain and set `CDN_URL` to that full
 domain. `.m3u8` files are public, while non-manifest objects in
+`CDN_PUBLIC_FOLDERS` are served without a token and
 `CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
 `CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
+New direct uploads use `public/...` or `protected/...` keys. Existing legacy
+`thumbnails/...`, `media/...`, and `transcoded/...` keys remain supported by
+the Worker defaults.
 
 ## Development UI deployment
 
@@ -146,7 +150,8 @@ The workflow uses the GitHub `development` environment and exchanges GitHub's OI
 - `AWS_REGION`
 - `AWS_S3_BUCKET`
 - `AWS_CLOUDFRONT_DISTRIBUTION_ID`
-- `CDN_URL` (optional; use a full CDN domain or `/cdn` when the host routes `/cdn/*` to the Worker)
+- `VITE_CDN_URL` (optional; use a full CDN domain or `/cdn` when the host routes `/cdn/*` to the Worker)
+- `CDN_URL` remains the API/Worker setting and is used as a build fallback when `VITE_CDN_URL` is not configured.
 
 Do not add long-lived AWS access keys as GitHub secrets. Restrict the role's trust policy to the repository's immutable `development` environment subject, `repo:veolms@301170291/veolms@1320067532:environment:development`. Its permissions should be limited to listing the deployment bucket, putting and deleting objects in that bucket, and creating and reading invalidations for the development CloudFront distribution.
 

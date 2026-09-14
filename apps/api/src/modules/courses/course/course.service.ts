@@ -64,43 +64,71 @@ const FALLBACK_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
 function resolveFallbackThumbnailVariants(
   services: AppServices,
   thumbnailMediaId?: string | null,
+  thumbnailStorageKey?: string | null,
 ): PublicThumbnailVariant[] {
   if (!thumbnailMediaId) return [];
 
+  const processedPrefix = resolveProcessedThumbnailPrefix(
+    thumbnailMediaId,
+    thumbnailStorageKey,
+  );
+
   return FALLBACK_THUMBNAIL_WIDTHS.flatMap((width) => {
     const url = services.storage.getPublicObjectUrl(
-      `thumbnails/${thumbnailMediaId}/processed/${width}.webp`,
+      `${processedPrefix}/${width}.webp`,
     );
     return url ? [{ url, width, height: Math.round((width * 9) / 16) }] : [];
   });
+}
+
+function resolveProcessedThumbnailPrefix(
+  thumbnailMediaId: string,
+  thumbnailStorageKey?: string | null,
+): string {
+  const normalizedKey = thumbnailStorageKey?.replace(/^\/+/, "") ?? "";
+  const visibilityPrefix = normalizedKey.startsWith("public/")
+    ? "public/"
+    : normalizedKey.startsWith("protected/")
+      ? "protected/"
+      : "";
+  return `${visibilityPrefix}thumbnails/${thumbnailMediaId}/processed`;
 }
 
 function resolvePublicThumbnailUrls(
   services: AppServices,
   metadata: unknown,
   thumbnailMediaId?: string | null,
+  thumbnailStorageKey?: string | null,
 ): {
   thumbnailUrl: string | null;
   thumbnailSrcSet: PublicThumbnailVariant[];
 } {
+  const processedPrefix = thumbnailMediaId
+    ? resolveProcessedThumbnailPrefix(thumbnailMediaId, thumbnailStorageKey)
+    : null;
   const fallbackUrl = thumbnailMediaId
-    ? services.storage.getPublicObjectUrl(
-        `thumbnails/${thumbnailMediaId}/processed/full.webp`,
-      )
+    ? services.storage.getPublicObjectUrl(`${processedPrefix}/full.webp`)
     : null;
   const fallbackVariants = resolveFallbackThumbnailVariants(
     services,
     thumbnailMediaId,
+    thumbnailStorageKey,
   );
 
-  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+  if (
+    typeof metadata !== "object" ||
+    metadata === null ||
+    Array.isArray(metadata)
+  ) {
     return { thumbnailUrl: fallbackUrl, thumbnailSrcSet: fallbackVariants };
   }
 
   const record = metadata as Record<string, unknown>;
   const full = record.full;
   const fullKey =
-    typeof full === "object" && full !== null && !Array.isArray(full) &&
+    typeof full === "object" &&
+    full !== null &&
+    !Array.isArray(full) &&
     typeof (full as Record<string, unknown>).key === "string"
       ? (full as Record<string, string>).key
       : null;
@@ -109,7 +137,11 @@ function resolvePublicThumbnailUrls(
     : fallbackUrl;
   const variants = Array.isArray(record.variants)
     ? record.variants.flatMap((variant): PublicThumbnailVariant[] => {
-        if (typeof variant !== "object" || variant === null || Array.isArray(variant)) {
+        if (
+          typeof variant !== "object" ||
+          variant === null ||
+          Array.isArray(variant)
+        ) {
           return [];
         }
         const item = variant as Record<string, unknown>;
@@ -238,34 +270,36 @@ export function createCourseService({
               salePrice: null,
             };
 
-      const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
-        services,
-        row.thumbnail_metadata,
-        row.thumbnail_media_id,
-      );
+        const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
+          services,
+          row.thumbnail_metadata,
+          row.thumbnail_media_id,
+          row.thumbnail_storage_key,
+        );
 
-      const instructorName =
-        row.instructor_alias || row.creator_display_name || null;
+        const instructorName =
+          row.instructor_alias || row.creator_display_name || null;
 
-      return {
-        id: row.id,
-        slug: row.slug,
-        title: row.title,
-        shortDescription: row.short_description ?? "",
-        difficulty:
-          (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
-          null,
-        thumbnailUrl,
-        thumbnailSrcSet,
-        instructorName,
-        categoryName: row.category_name ?? null,
-        totalSections: Number(row.total_sections ?? 0),
-        totalLessons: Number(row.total_lessons ?? 0),
-        totalDurationSeconds,
-        pricing,
-        certificateEnabled: Boolean(row.certificate_enabled ?? false),
-      };
-    }));
+        return {
+          id: row.id,
+          slug: row.slug,
+          title: row.title,
+          shortDescription: row.short_description ?? "",
+          difficulty:
+            (row.difficulty as
+              "beginner" | "intermediate" | "advanced" | null) ?? null,
+          thumbnailUrl,
+          thumbnailSrcSet,
+          instructorName,
+          categoryName: row.category_name ?? null,
+          totalSections: Number(row.total_sections ?? 0),
+          totalLessons: Number(row.total_lessons ?? 0),
+          totalDurationSeconds,
+          pricing,
+          certificateEnabled: Boolean(row.certificate_enabled ?? false),
+        };
+      }),
+    );
   }
 
   /**
@@ -444,12 +478,20 @@ export function createCourseService({
               ? c.estimated_duration * 60
               : 0;
 
-        const { thumbnailUrl, trailerUrl } = await resolveCourseMediaUrls(
-          c.thumbnail_media_id,
-          c.trailer_media_id,
-          c.creator_id ?? creatorId,
-          userRoles,
-        );
+        const { thumbnailUrl: directThumbnailUrl, trailerUrl } =
+          await resolveCourseMediaUrls(
+            c.thumbnail_media_id,
+            c.trailer_media_id,
+            c.creator_id ?? creatorId,
+            userRoles,
+          );
+        const { thumbnailUrl: processedThumbnailUrl, thumbnailSrcSet } =
+          resolvePublicThumbnailUrls(
+            services,
+            c.thumbnail_metadata,
+            c.thumbnail_media_id,
+            c.thumbnail_storage_key,
+          );
 
         return {
           id: c.id,
@@ -464,7 +506,8 @@ export function createCourseService({
           categoryId: c.category_id,
           thumbnailMediaId: c.thumbnail_media_id,
           trailerMediaId: c.trailer_media_id,
-          thumbnailUrl,
+          thumbnailUrl: processedThumbnailUrl ?? directThumbnailUrl,
+          thumbnailSrcSet,
           trailerUrl,
           instructorAlias: c.instructor_alias ?? null,
           version: c.version,

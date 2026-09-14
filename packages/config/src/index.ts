@@ -38,7 +38,7 @@ const cdnUrlSchema = z
     } catch {
       return false;
     }
-  }, "CDN_URL must be an absolute HTTP(S) URL or a root-relative path such as /cdn")
+  }, "CDN URL must be an absolute HTTP(S) URL or a root-relative path such as /cdn")
   .transform((value) => value.replace(/\/+$/u, "") || "/");
 
 const folderListSchema = (defaultValue: string) =>
@@ -179,7 +179,9 @@ const serverConfigSchema = z.object({
     .min(60)
     .max(86_400)
     .default(900),
-  CDN_PUBLIC_FOLDERS: folderListSchema("public,course-hls,course-videos"),
+  CDN_PUBLIC_FOLDERS: folderListSchema(
+    "public,thumbnails,course-hls,course-videos",
+  ),
   CDN_PRIVATE_FOLDERS: folderListSchema("protected,media,transcoded"),
   STORAGE_REGION: z.string().default("us-east-1"),
   STORAGE_ACCESS_KEY_ID: z.string().optional(),
@@ -205,6 +207,7 @@ const serverConfigSchema = z.object({
 const webConfigSchema = z.object({
   WEB_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   VITE_API_BASE_URL: z.string().default("http://localhost:4000/api/v1"),
+  VITE_CDN_URL: cdnUrlSchema.default("/cdn"),
   CDN_URL: cdnUrlSchema.default("/cdn"),
   STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/api/v1"),
 });
@@ -299,7 +302,12 @@ export function loadServerConfig(
 }
 
 export function loadWebConfig(environment: Record<string, string | undefined>) {
-  return webConfigSchema.parse(environment);
+  return webConfigSchema.parse({
+    ...environment,
+    // VITE_CDN_URL is the browser-facing setting. Fall back to CDN_URL so
+    // existing local/server environments continue to configure the web app.
+    VITE_CDN_URL: environment.VITE_CDN_URL || environment.CDN_URL,
+  });
 }
 
 export {

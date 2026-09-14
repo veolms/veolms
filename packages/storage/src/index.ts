@@ -83,7 +83,12 @@ export class S3StorageService {
       options.cdnHlsTokenTtlSeconds,
     );
     this.cdnPublicFolders = (
-      options.cdnPublicFolders ?? ["public", "course-hls", "course-videos"]
+      options.cdnPublicFolders ?? [
+        "public",
+        "thumbnails",
+        "course-hls",
+        "course-videos",
+      ]
     )
       .map((folder) => folder.trim().replace(/^\/+|\/+$/g, ""))
       .filter(Boolean);

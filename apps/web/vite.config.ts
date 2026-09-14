@@ -70,6 +70,23 @@ function joinPublicPath(base: string, fileName: string) {
   return `${prefix}${fileName}`.replace(/\/{2,}/g, "/");
 }
 
+function createCdnDevProxy(configuredUrl: string) {
+  try {
+    const url = new URL(configuredUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    const targetPath = url.pathname.replace(/\/+$/u, "");
+    return {
+      target: url.origin,
+      changeOrigin: true,
+      secure: url.protocol === "https:",
+      rewrite: (requestPath: string) =>
+        `${targetPath}${requestPath.slice("/cdn".length)}` || "/",
+    };
+  } catch {
+    return null;
+  }
+}
+
 function earlyHlsPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
@@ -165,6 +182,7 @@ export default defineConfig(({ mode }) => {
     ...loadEnv(mode, workspaceRoot, ""),
   };
   const config = loadWebConfig(environment);
+  const cdnDevProxy = createCdnDevProxy(config.VITE_CDN_URL);
 
   return {
     envDir: workspaceRoot,
@@ -175,7 +193,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
         config.STATIC_BUILD_API_URL,
       ),
-      "import.meta.env.CDN_URL": JSON.stringify(config.CDN_URL),
+      "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
     },
     plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
     resolve: {
@@ -243,6 +261,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        ...(cdnDevProxy ? { "/cdn": cdnDevProxy } : {}),
       },
     },
   };

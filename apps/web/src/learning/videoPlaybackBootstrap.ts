@@ -6,7 +6,7 @@ import {
 } from "@veolms/contracts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-const CDN_URL = import.meta.env.CDN_URL || "/cdn";
+const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
 const playbackTokenRequests = new Map<string, Promise<VideoPlaybackToken>>();
@@ -52,6 +52,23 @@ export function resolveVideoPlaybackCdnUrl(path: string): string {
 export function getVideoPlaybackApiOrigin(): string | null {
   try {
     const url = new URL(API_BASE_URL, "http://veolms.local");
+    return /^https?:$/i.test(url.protocol) &&
+      url.origin !== "http://veolms.local"
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns the external CDN origin for the document head preconnect. A
+ * same-origin path such as `/cdn` deliberately returns null because it does
+ * not require a separate DNS/TLS connection.
+ */
+export function getVideoPlaybackCdnOrigin(): string | null {
+  try {
+    const url = new URL(CDN_URL, "http://veolms.local");
     return /^https?:$/i.test(url.protocol) &&
       url.origin !== "http://veolms.local"
       ? url.origin
