@@ -12,6 +12,9 @@ import type {
 import { httpError } from "../../../../lib/errors.ts";
 import {
   discussionUploadPublicUrl,
+  isSupportedDiscussionUploadMimeType,
+  DISCUSSION_DEFAULT_EXTENSION_FOR_MIME,
+  isAllowedExtensionForMimeType,
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
@@ -68,6 +71,7 @@ export function createAttachmentsService(
     }
     const ext = path.extname(filename).toLowerCase();
     if (
+      mimetype === "application/json" ||
       (
         DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]
       ).includes(ext)
@@ -84,6 +88,15 @@ export function createAttachmentsService(
     return "document";
   }
 
+  function resolveExtension(filename: string, mimetype: string): string {
+    const rawExt = path.extname(filename).toLowerCase();
+    if (rawExt && isAllowedExtensionForMimeType(rawExt, mimetype)) {
+      return sanitizeExtension(rawExt);
+    }
+    const fallback = DISCUSSION_DEFAULT_EXTENSION_FOR_MIME[mimetype] || ".bin";
+    return sanitizeExtension(fallback);
+  }
+
   function sanitizeExtension(ext: string): string {
     const cleaned = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 17);
     return cleaned.startsWith(".") ? cleaned : ".bin";
@@ -91,9 +104,25 @@ export function createAttachmentsService(
 
   return {
     async initiateUpload(db, userId, input) {
+      if (!isSupportedDiscussionUploadMimeType(input.mimeType)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (input.fileSize > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
       const id = crypto.randomUUID();
-      const ext = path.extname(input.fileName) || ".bin";
-      const storageKey = `discussion-uploads/${id}${sanitizeExtension(ext)}`;
+      const ext = resolveExtension(input.fileName, input.mimeType);
+      const storageKey = `discussion-uploads/${id}${ext}`;
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
@@ -121,6 +150,22 @@ export function createAttachmentsService(
     },
 
     async uploadFile(db, attachmentId, userId, file) {
+      if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
       const existing = await attachmentsRepo.findAttachmentById(
         db,
         attachmentId,
@@ -141,7 +186,7 @@ export function createAttachmentsService(
         );
       }
 
-      const ext = sanitizeExtension(path.extname(file.filename));
+      const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${attachmentId}${ext}`;
       await uploadStore.putFromBuffer({
         fileName: sanitizedName,
@@ -250,8 +295,24 @@ export function createAttachmentsService(
     },
 
     async processUpload(db, userId, file) {
+      if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
       const id = crypto.randomUUID();
-      const ext = sanitizeExtension(path.extname(file.filename));
+      const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${id}${ext}`;
       const storageKey = `discussion-uploads/${sanitizedName}`;
       const kind = getAttachmentKind(file.mimetype, file.filename);

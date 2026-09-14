@@ -47,9 +47,9 @@ export function adaptLearningThreadToComment(
     entryKind,
     role: thread.author.role,
     attachment,
+    attachments: thread.attachments || [],
     isOwn:
-      thread.isOwn ??
-      (currentUserId ? thread.userId === currentUserId : false),
+      thread.isOwn ?? (currentUserId ? thread.userId === currentUserId : false),
     createdAt: thread.createdAt,
     timestampSeconds: thread.timestampSeconds ?? null,
     acceptedAnswerId: thread.acceptedAnswerId ?? null,

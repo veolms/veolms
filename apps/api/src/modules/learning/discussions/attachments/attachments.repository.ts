@@ -61,7 +61,9 @@ export function createAttachmentsRepository(): AttachmentsRepository {
           mime_type: attachment.mimeType,
           file_size: attachment.fileSize,
           status: attachment.status || "uploading",
-          metadata: attachment.metadata ? JSON.stringify(attachment.metadata) : null,
+          metadata: attachment.metadata
+            ? JSON.stringify(attachment.metadata)
+            : null,
         })
         .execute();
     },

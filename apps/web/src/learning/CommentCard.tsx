@@ -28,10 +28,7 @@ import {
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
-import {
-  useUndoableDeletion,
-  UndoDeleteButton,
-} from "./useUndoableDeletion";
+import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
 import {
   useDeleteReply,
   useThreadReplies,
@@ -40,6 +37,10 @@ import {
 } from "../services/learning-interactions";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
+import {
+  DiscussionAttachmentsList,
+  type DiscussionAttachmentItem,
+} from "./discussion-attachments";
 
 export interface CommentReply {
   id: string | number;
@@ -53,6 +54,7 @@ export interface CommentReply {
   role?: "Instructor";
   isOwn?: boolean;
   isAccepted?: boolean;
+  attachments?: DiscussionAttachmentItem[];
 }
 
 export interface Comment {
@@ -74,6 +76,7 @@ export interface Comment {
     name: string;
     meta: string;
   };
+  attachments?: DiscussionAttachmentItem[];
   isOwn?: boolean;
   createdAt?: string | number;
   timestampSeconds?: number | null;
@@ -142,11 +145,7 @@ export function CommentCard({
     comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
   const isNote = entryKind === "note";
   const entryLabel =
-    entryKind === "question"
-      ? "Q&A"
-      : isNote
-        ? "Note"
-        : "Comment";
+    entryKind === "question" ? "Q&A" : isNote ? "Note" : "Comment";
 
   const threadId = String(comment.id);
   const { data: authUser } = useCurrentUser();
@@ -154,15 +153,15 @@ export function CommentCard({
   const isQuestion = entryKind === "question" || Boolean(comment.isQuestion);
   const isModerator = Boolean(
     userRole === "Instructor" ||
-      userRole === "Admin" ||
-      authUser?.roles?.some(
-        (r) =>
-          r.toLowerCase() === "admin" ||
-          r.toLowerCase() === "instructor" ||
-          r.toLowerCase() === "creator",
-      ) ||
-      (authUser as any)?.role === "Instructor" ||
-      (authUser as any)?.role === "Admin",
+    userRole === "Admin" ||
+    authUser?.roles?.some(
+      (r) =>
+        r.toLowerCase() === "admin" ||
+        r.toLowerCase() === "instructor" ||
+        r.toLowerCase() === "creator",
+    ) ||
+    (authUser as any)?.role === "Instructor" ||
+    (authUser as any)?.role === "Admin",
   );
   const canLock = !isNote && (Boolean(comment.isOwn) || isModerator);
   const canAcceptAnswer = isQuestion && (Boolean(comment.isOwn) || isModerator);
@@ -198,7 +197,9 @@ export function CommentCard({
       ? repliesData.totalCount
       : repliesData?.replies?.length;
   const replyCount = isBackendMode
-    ? (backendCount !== undefined ? backendCount : (comment.replies ?? 0))
+    ? backendCount !== undefined
+      ? backendCount
+      : (comment.replies ?? 0)
     : unloadedReplyCount + localReplies.length;
   const hasReplies = !isNote && replyCount > 0;
 
@@ -447,7 +448,9 @@ export function CommentCard({
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
-              {comment.attachment && !isNote && (
+              {comment.attachments && comment.attachments.length > 0 ? (
+                <DiscussionAttachmentsList attachments={comment.attachments} />
+              ) : comment.attachment && !isNote ? (
                 <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
                   <FileText
                     size={26}
@@ -464,7 +467,7 @@ export function CommentCard({
                     </p>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {!isNote && (
                 <div
@@ -525,8 +528,10 @@ export function CommentCard({
                       }
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (onOpenThread) onOpenThread(comment.id, !comment.isLocked);
-                        else if (!comment.isLocked) setReplyComposerOpen((open) => !open);
+                        if (onOpenThread)
+                          onOpenThread(comment.id, !comment.isLocked);
+                        else if (!comment.isLocked)
+                          setReplyComposerOpen((open) => !open);
                       }}
                       aria-expanded={replyComposerOpen}
                       className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
@@ -543,50 +548,60 @@ export function CommentCard({
                 </div>
               )}
 
-              {replyComposerOpen && !onOpenThread && !isNote && !comment.isLocked && (
-                <div className="mt-3 flex max-w-2xl items-end gap-2">
-                  <label className="min-w-0 flex-1">
-                    <span className="sr-only">Reply to {comment.name}</span>
-                    <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
-                      <DiscussionEditor
-                        value={replyDraft}
-                        documentId={`reply-new-${comment.id}`}
-                        label={`Reply to ${comment.name}`}
-                        placeholderText={`Reply to ${comment.name}…`}
-                        className="min-h-12 max-h-40"
-                        onChange={setReplyDraft}
-                      />
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addReply}
-                    disabled={!hasDiscussionDraftContent(replyDraft)}
-                    className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-                  >
-                    Reply
-                  </button>
-                </div>
-              )}
+              {replyComposerOpen &&
+                !onOpenThread &&
+                !isNote &&
+                !comment.isLocked && (
+                  <div className="mt-3 flex max-w-2xl items-end gap-2">
+                    <label className="min-w-0 flex-1">
+                      <span className="sr-only">Reply to {comment.name}</span>
+                      <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
+                        <DiscussionEditor
+                          value={replyDraft}
+                          documentId={`reply-new-${comment.id}`}
+                          label={`Reply to ${comment.name}`}
+                          placeholderText={`Reply to ${comment.name}…`}
+                          className="min-h-12 max-h-40"
+                          onChange={setReplyDraft}
+                        />
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addReply}
+                      disabled={!hasDiscussionDraftContent(replyDraft)}
+                      className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                    >
+                      Reply
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
 
           {repliesOpen && !isNote && (
-            <div className="mt-2.5 space-y-2.5" data-testid="inline-replies-container">
+            <div
+              className="mt-2.5 space-y-2.5"
+              data-testid="inline-replies-container"
+            >
               {isBackendMode && isRepliesLoading ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-loading"
                 >
                   <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  <p className="text-xs font-medium text-(--muted)">Loading replies…</p>
+                  <p className="text-xs font-medium text-(--muted)">
+                    Loading replies…
+                  </p>
                 </div>
               ) : isBackendMode && isRepliesError ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-error"
                 >
-                  <p className="text-sm font-semibold text-(--text)">Failed to load replies</p>
+                  <p className="text-sm font-semibold text-(--text)">
+                    Failed to load replies
+                  </p>
                   <button
                     type="button"
                     onClick={() => refetchReplies()}
@@ -653,7 +668,10 @@ interface ReplyCardProps {
   canAcceptAnswer?: boolean;
   onToggleAccept?: (replyId: string | number, accepted: boolean) => void;
   onReply: () => void;
-  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean> | void;
+  onEdit: (
+    replyId: string | number,
+    draft: DiscussionDraft,
+  ) => Promise<boolean> | void;
   onDelete: (replyId: string | number) => Promise<boolean> | void;
   onLike: (replyId: string | number) => void;
   onReport: () => void;
@@ -805,6 +823,10 @@ function ReplyCard({
                 />
               )}
 
+              {reply.attachments && reply.attachments.length > 0 && (
+                <DiscussionAttachmentsList attachments={reply.attachments} />
+              )}
+
               <div
                 data-reply-engagement
                 className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
@@ -832,8 +854,12 @@ function ReplyCard({
                   <button
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
-                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
-                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    aria-label={
+                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                    }
+                    title={
+                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                    }
                     onClick={() => onToggleAccept(reply.id, !reply.isAccepted)}
                     className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
                       reply.isAccepted
@@ -841,7 +867,10 @@ function ReplyCard({
                         : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
                     }`}
                   >
-                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
+                    <CheckCircle
+                      size={16}
+                      weight={reply.isAccepted ? "fill" : "bold"}
+                    />
                     <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
                   </button>
                 )}
@@ -972,8 +1001,7 @@ export function CommentActionMenu({
 }: CommentActionMenuProps) {
   const [open, setOpen] = useState(false);
   const isNote = kind === "note";
-  const actionLabel =
-    kind === "question" ? "Q&A" : isNote ? "note" : kind;
+  const actionLabel = kind === "question" ? "Q&A" : isNote ? "note" : kind;
   const menuLabel =
     actionLabel === "Q&A"
       ? actionLabel
@@ -990,11 +1018,7 @@ export function CommentActionMenu({
     >
       {isNote ? (
         <>
-          <MenuAction
-            Icon={PencilSimple}
-            label="Edit note"
-            onClick={onEdit}
-          />
+          <MenuAction Icon={PencilSimple} label="Edit note" onClick={onEdit} />
           <MenuDivider />
           <MenuAction
             Icon={Trash}

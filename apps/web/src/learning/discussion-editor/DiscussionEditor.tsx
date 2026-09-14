@@ -21,7 +21,10 @@ import {
 import { insertDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
-import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
+import {
+  DISCUSSION_ATTACHMENTS_ENABLED,
+  type StoredDiscussionAttachment,
+} from "./image-storage";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
   attach(file: File): Promise<{ inserted: boolean; message: string | null }>;
@@ -41,6 +44,7 @@ interface DiscussionEditorProps {
   onControllerChange?: (controller: DiscussionEditorController | null) => void;
   onFormattingStateChange?: (state: DiscussionFormattingState) => void;
   onAttachmentNotice?: (message: string | null) => void;
+  onAttachmentUploaded?: (attachment: StoredDiscussionAttachment) => void;
 }
 
 export function DiscussionEditor({
@@ -56,6 +60,7 @@ export function DiscussionEditor({
   onControllerChange,
   onFormattingStateChange,
   onAttachmentNotice,
+  onAttachmentUploaded,
 }: DiscussionEditorProps) {
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -63,6 +68,7 @@ export function DiscussionEditor({
   const onControllerChangeRef = useLatest(onControllerChange);
   const onFormattingStateChangeRef = useLatest(onFormattingStateChange);
   const onAttachmentNoticeRef = useLatest(onAttachmentNotice);
+  const onAttachmentUploadedRef = useLatest(onAttachmentUploaded);
   const [commands] = useState(() =>
     createDiscussionEditorCommands(() => viewRef.current),
   );
@@ -79,10 +85,13 @@ export function DiscussionEditor({
         onAttachmentNoticeRef.current?.("Uploading attachment…");
         const result = await insertDiscussionAttachment(commands, file);
         onAttachmentNoticeRef.current?.(result.message);
+        if (result.inserted && result.attachment) {
+          onAttachmentUploadedRef.current?.(result.attachment);
+        }
         return result;
       },
     }),
-    [commands, onAttachmentNoticeRef],
+    [commands, onAttachmentNoticeRef, onAttachmentUploadedRef],
   );
 
   const extensions = useMemo(

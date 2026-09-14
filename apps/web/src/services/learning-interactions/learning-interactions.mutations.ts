@@ -14,6 +14,7 @@ import type {
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
+  LearningUploadResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -50,7 +51,8 @@ export function useUpdateThread(threadId?: string) {
       return learningInteractionsService.updateThread(threadId, variables);
     },
     onSuccess: (_data, variables) => {
-      const id = "payload" in variables ? (variables.threadId ?? threadId) : threadId;
+      const id =
+        "payload" in variables ? (variables.threadId ?? threadId) : threadId;
       if (id) {
         queryClient.invalidateQueries({
           queryKey: learningInteractionKeys.threadDetails(id),
@@ -66,7 +68,8 @@ export function useUpdateThread(threadId?: string) {
 export function useDeleteThread() {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) => learningInteractionsService.deleteThread(threadId),
+    mutationFn: (threadId) =>
+      learningInteractionsService.deleteThread(threadId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -93,7 +96,11 @@ export function useCreateReply(threadId: string) {
 
 export function useUpdateReply(threadId: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, { replyId: string; payload: UpdateLearningReplyRequest }>({
+  return useMutation<
+    any,
+    ApiError,
+    { replyId: string; payload: UpdateLearningReplyRequest }
+  >({
     mutationFn: ({ replyId, payload }) =>
       learningInteractionsService.updateReply(replyId, payload),
     onSuccess: () => {
@@ -134,7 +141,8 @@ export function useToggleLike() {
 export function useToggleBookmark() {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) => learningInteractionsService.toggleBookmark(threadId),
+    mutationFn: (threadId) =>
+      learningInteractionsService.toggleBookmark(threadId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -146,7 +154,8 @@ export function useToggleBookmark() {
 export function useToggleFollow() {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) => learningInteractionsService.toggleFollow(threadId),
+    mutationFn: (threadId) =>
+      learningInteractionsService.toggleFollow(threadId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -186,8 +195,7 @@ export function useLockThread(defaultThreadId?: string) {
   return useMutation<
     any,
     ApiError,
-    | { threadId?: string; payload: LockThreadRequest }
-    | LockThreadRequest
+    { threadId?: string; payload: LockThreadRequest } | LockThreadRequest
   >({
     mutationFn: (variables) => {
       const threadId =
@@ -308,6 +316,16 @@ export function useSuspendUser() {
 export function useUnsuspendUser() {
   return useMutation<any, ApiError, UnsuspendUserRequest>({
     mutationFn: (payload) =>
-      learningInteractionsService.unsuspendPlatformUser(payload.userId, payload),
+      learningInteractionsService.unsuspendPlatformUser(
+        payload.userId,
+        payload,
+      ),
+  });
+}
+
+export function useUploadDiscussionAttachment() {
+  return useMutation<LearningUploadResponse, ApiError, File>({
+    mutationFn: (file: File) =>
+      learningInteractionsService.uploadAttachmentDirect(file),
   });
 }

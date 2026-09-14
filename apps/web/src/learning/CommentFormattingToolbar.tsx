@@ -188,7 +188,7 @@ export function CommentFormattingToolbar({
         </ToolbarButton>
         {DISCUSSION_ATTACHMENTS_ENABLED && (
           <ToolbarButton
-            label="Attach image or video"
+            label="Attach file"
             onClick={() => attachmentInputRef.current?.click()}
           >
             <Paperclip size={17} />
@@ -236,8 +236,8 @@ export function CommentFormattingToolbar({
         <input
           ref={attachmentInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
-          aria-label="Choose image or video"
+          accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json"
+          aria-label="Choose image, video, document, or code file"
           className="sr-only"
           onChange={handleAttachment}
         />

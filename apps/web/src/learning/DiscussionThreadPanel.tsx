@@ -43,10 +43,12 @@ import {
   useUpdateReply,
 } from "../services/learning-interactions";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
+import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
 import {
-  useUndoableDeletion,
-  UndoDeleteButton,
-} from "./useUndoableDeletion";
+  DiscussionAttachmentsList,
+  AttachmentComposerPreview,
+  type DiscussionAttachmentItem,
+} from "./discussion-attachments";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import {
   DiscussionEditor,
@@ -116,10 +118,7 @@ interface DiscussionThreadPanelProps {
     replyId: string | number,
     accepted: boolean,
   ) => void;
-  onToggleLockThread?: (
-    threadId: string | number,
-    locked: boolean,
-  ) => void;
+  onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
 }
 
 export function DiscussionThreadPanel({
@@ -713,10 +712,7 @@ interface ThreadSlideProps {
     replyId: string | number,
     accepted: boolean,
   ) => void;
-  onToggleLockThread?: (
-    threadId: string | number,
-    locked: boolean,
-  ) => void;
+  onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
 }
 
 function ThreadSlide({
@@ -778,11 +774,18 @@ function ThreadSlide({
     );
   }, [isBackend, entry.thread, repliesData?.replies, currentUserId]);
 
-  const handleAddReply = async (draft: DiscussionDraft): Promise<boolean> => {
+  const handleAddReply = async (
+    draft: DiscussionDraft,
+    attachmentIds?: string[],
+  ): Promise<boolean> => {
     if (isBackend) {
       try {
         await createReplyMutation.mutateAsync({
           content: draft.markdown || draft.plainText.trim(),
+          attachmentIds:
+            attachmentIds && attachmentIds.length > 0
+              ? attachmentIds
+              : undefined,
         });
         return true;
       } catch {
@@ -901,14 +904,18 @@ function ThreadSlide({
               data-testid="learning-replies-loading"
             >
               <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-              <p className="text-sm font-medium text-(--muted)">Loading replies…</p>
+              <p className="text-sm font-medium text-(--muted)">
+                Loading replies…
+              </p>
             </div>
           ) : isBackend && isRepliesError ? (
             <div
               className="py-12 text-center"
               data-testid="learning-replies-error"
             >
-              <p className="font-semibold text-(--text)">Failed to load replies</p>
+              <p className="font-semibold text-(--text)">
+                Failed to load replies
+              </p>
               <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
                 There was a problem loading replies for this discussion.
               </p>
@@ -958,8 +965,8 @@ function ThreadSlide({
         </div>
       </div>
 
-      {active && (
-        entry.isLocked ? (
+      {active &&
+        (entry.isLocked ? (
           <div
             data-testid="thread-locked-notice"
             className="-mx-4 -mb-4 mt-0 flex items-center justify-center gap-2 rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-3.5 text-xs font-semibold text-(--muted) border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:mx-0 sm:mb-0 sm:rounded-xl"
@@ -976,8 +983,7 @@ function ThreadSlide({
             onSubmit={handleAddReply}
             isPending={createReplyMutation.isPending}
           />
-        )
-      )}
+        ))}
     </div>
   );
 }
@@ -1076,7 +1082,9 @@ function ThreadRootEntry({
             label={`Discussion entry by ${entry.name}`}
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
-          {entry.attachment && (
+          {entry.attachments && entry.attachments.length > 0 ? (
+            <DiscussionAttachmentsList attachments={entry.attachments} />
+          ) : entry.attachment ? (
             <div className="mt-3 flex w-fit max-w-full items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_36%,transparent)] px-3 py-2 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)]">
               <FileText size={24} className="shrink-0" aria-hidden="true" />
               <div className="min-w-0">
@@ -1088,7 +1096,7 @@ function ThreadRootEntry({
                 </p>
               </div>
             </div>
-          )}
+          ) : null}
           <div className="mt-2 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
             <button
               type="button"
@@ -1152,7 +1160,10 @@ function ThreadReplyEntry({
   onToggleAcceptReply?: (replyId: string | number, accepted: boolean) => void;
   isLikePending?: boolean;
   onReply: () => void;
-  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean>;
+  onEdit: (
+    replyId: string | number,
+    draft: DiscussionDraft,
+  ) => Promise<boolean>;
   onDelete: (replyId: string | number) => Promise<boolean>;
   onLikeReply: (replyId: string | number) => void;
   onReport: (
@@ -1302,6 +1313,9 @@ function ThreadReplyEntry({
                   className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
                 />
               )}
+              {reply.attachments && reply.attachments.length > 0 && (
+                <DiscussionAttachmentsList attachments={reply.attachments} />
+              )}
               {deleteError && (
                 <p role="alert" className="mt-1 text-xs text-red-500">
                   {deleteError}
@@ -1316,23 +1330,35 @@ function ThreadReplyEntry({
                   onClick={() => onLikeReply(reply.id)}
                   className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
                 >
-                  <ThumbsUp size={18} weight={reply.liked ? "fill" : "regular"} />
+                  <ThumbsUp
+                    size={18}
+                    weight={reply.liked ? "fill" : "regular"}
+                  />
                   <span>{reply.likes}</span>
                 </button>
                 {isQuestion && canAcceptAnswer && onToggleAcceptReply && (
                   <button
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
-                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
-                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
-                    onClick={() => onToggleAcceptReply(reply.id, !reply.isAccepted)}
+                    aria-label={
+                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                    }
+                    title={
+                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                    }
+                    onClick={() =>
+                      onToggleAcceptReply(reply.id, !reply.isAccepted)
+                    }
                     className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
                       reply.isAccepted
                         ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
                         : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
                     }`}
                   >
-                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
+                    <CheckCircle
+                      size={16}
+                      weight={reply.isAccepted ? "fill" : "bold"}
+                    />
                     <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
                   </button>
                 )}
@@ -1381,13 +1407,19 @@ function ThreadReplyComposer({
   currentUser?: { name: string; avatar: string };
   focusRequest: number;
   onFocusHandled: (entryId: string | number, requestId: number) => void;
-  onSubmit: (draft: DiscussionDraft) => Promise<boolean>;
+  onSubmit: (
+    draft: DiscussionDraft,
+    attachmentIds?: string[],
+  ) => Promise<boolean>;
   isPending?: boolean;
 }) {
   const [composerKey, setComposerKey] = useState(0);
   const [draft, setDraft] = useState<DiscussionDraft>(
     createEmptyDiscussionDraft,
   );
+  const [replyAttachments, setReplyAttachments] = useState<
+    DiscussionAttachmentItem[]
+  >([]);
   const [editorController, setEditorController] =
     useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
@@ -1398,6 +1430,7 @@ function ThreadReplyComposer({
 
   useEffect(() => {
     setDraft(createEmptyDiscussionDraft());
+    setReplyAttachments([]);
     setComposerKey(0);
     setSubmitError("");
   }, [entry.id]);
@@ -1416,10 +1449,14 @@ function ThreadReplyComposer({
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      const success = await onSubmit(draft);
+      const success = await onSubmit(
+        draft,
+        replyAttachments.map((a) => a.id),
+      );
       if (success) {
         shouldFocusRef.current = true;
         setDraft(createEmptyDiscussionDraft());
+        setReplyAttachments([]);
         setComposerKey((k) => k + 1);
         setSubmitError("");
         window.setTimeout(() => {
@@ -1447,8 +1484,7 @@ function ThreadReplyComposer({
     }
   };
 
-  const composerAvatar =
-    currentUser?.avatar || "/assets/sofia-avatar-160.webp";
+  const composerAvatar = currentUser?.avatar || "/assets/sofia-avatar-160.webp";
 
   return (
     <div
@@ -1465,6 +1501,26 @@ function ThreadReplyComposer({
         onChange={setDraft}
         onControllerChange={handleControllerChange}
         onFormattingStateChange={setFormattingState}
+        onAttachmentUploaded={(att) => {
+          setReplyAttachments((prev) => [
+            ...prev,
+            {
+              id: att.id || crypto.randomUUID(),
+              fileName: att.fileName,
+              fileUrl: att.url,
+              mimeType: att.mimeType,
+              fileSize: att.size,
+              kind: att.kind,
+              mediaType: att.mediaType,
+            },
+          ]);
+        }}
+      />
+      <AttachmentComposerPreview
+        attachments={replyAttachments}
+        onRemove={(id) => {
+          setReplyAttachments((prev) => prev.filter((a) => a.id !== id));
+        }}
       />
       {submitError && (
         <p role="alert" className="px-3 pt-1 text-xs text-red-500">
@@ -1496,7 +1552,6 @@ function ThreadReplyComposer({
     </div>
   );
 }
-
 
 interface PanelWidthResize {
   pointerId: number;

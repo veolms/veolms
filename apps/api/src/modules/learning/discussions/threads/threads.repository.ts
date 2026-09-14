@@ -1,4 +1,8 @@
-import type { Database, DatabaseExecutor, LearningThreadTable } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  LearningThreadTable,
+} from "@veolms/database";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,

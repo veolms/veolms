@@ -12,8 +12,10 @@ export function formatRelativeTime(dateInput: string | Date): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffSec < 60) return "Just now";
-  if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? "minute" : "minutes"} ago`;
-  if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+  if (diffMin < 60)
+    return `${diffMin} ${diffMin === 1 ? "minute" : "minutes"} ago`;
+  if (diffHours < 24)
+    return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
   if (diffDays < 7) return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
   return date.toLocaleDateString();
 }
@@ -43,5 +45,6 @@ export function adaptLearningNoteToComment(
     isOwn: true,
     createdAt: note.createdAt,
     timestampSeconds: note.timestampSeconds ?? null,
+    attachments: note.attachments || [],
   };
 }

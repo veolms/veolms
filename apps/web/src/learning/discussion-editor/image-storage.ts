@@ -1,22 +1,32 @@
-import { discussionService } from "../../services/discussion";
+import { learningInteractionsService } from "../../services/learning-interactions/learning-interactions.service";
 
 export interface StoredDiscussionAttachment {
+  id?: string;
   url: string;
   fileName: string;
-  mediaType: "image" | "video";
+  mediaType?: "image" | "video" | "code" | "document";
   mimeType: string;
   size: number;
+  kind?: "image" | "screenshot" | "code" | "document";
 }
 
 export interface DiscussionAttachmentStorage {
   upload(file: File): Promise<StoredDiscussionAttachment>;
 }
 
-export const DISCUSSION_ATTACHMENTS_ENABLED = import.meta.env.DEV;
+export const DISCUSSION_ATTACHMENTS_ENABLED = true;
 
 export const localDiscussionAttachmentStorage: DiscussionAttachmentStorage = {
-  upload: (file) => discussionService.uploadAttachment(file),
+  upload: async (file) => {
+    const res = await learningInteractionsService.uploadAttachmentDirect(file);
+    return {
+      id: res.id,
+      url: res.url,
+      fileName: res.fileName,
+      mediaType: res.mediaType,
+      mimeType: res.mimeType,
+      size: res.size,
+      kind: res.kind,
+    };
+  },
 };
-
-// TODO(storage): swap this adapter for an authenticated S3-compatible upload
-// service when discussion entries are persisted by the backend.

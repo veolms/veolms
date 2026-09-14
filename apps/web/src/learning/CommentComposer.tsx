@@ -16,6 +16,11 @@ import {
 } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import type { InteractionCapabilities } from "./discussionFeed";
+import {
+  AttachmentComposerPreview,
+  type DiscussionAttachmentItem,
+} from "./discussion-attachments";
+import type { StoredDiscussionAttachment } from "./discussion-editor/image-storage";
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -27,6 +32,8 @@ interface CommentComposerProps {
   capabilities?: InteractionCapabilities;
   editing?: boolean;
   isSubmitting?: boolean;
+  attachments?: DiscussionAttachmentItem[];
+  onAttachmentsChange?: (attachments: DiscussionAttachmentItem[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
@@ -46,6 +53,8 @@ export function CommentComposer({
   capabilities,
   editing = false,
   isSubmitting = false,
+  attachments: attachmentsProp,
+  onAttachmentsChange: onAttachmentsChangeProp,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
@@ -66,6 +75,41 @@ export function CommentComposer({
   const [transitionDirection, setTransitionDirection] = useState<
     "forward" | "back"
   >("forward");
+  const [internalAttachments, setInternalAttachments] = useState<
+    DiscussionAttachmentItem[]
+  >([]);
+  const effectiveAttachments = attachmentsProp ?? internalAttachments;
+  const setEffectiveAttachments = (
+    next:
+      | DiscussionAttachmentItem[]
+      | ((prev: DiscussionAttachmentItem[]) => DiscussionAttachmentItem[]),
+  ) => {
+    if (onAttachmentsChangeProp) {
+      const resolved =
+        typeof next === "function" ? next(effectiveAttachments) : next;
+      onAttachmentsChangeProp(resolved);
+    } else {
+      setInternalAttachments(next);
+    }
+  };
+
+  const handleAttachmentUploaded = (stored: StoredDiscussionAttachment) => {
+    const item: DiscussionAttachmentItem = {
+      id: stored.id || crypto.randomUUID(),
+      fileName: stored.fileName,
+      fileUrl: stored.url,
+      mimeType: stored.mimeType,
+      fileSize: stored.size,
+      kind: stored.kind,
+      mediaType: stored.mediaType,
+    };
+    setEffectiveAttachments((prev) => [...prev, item]);
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setEffectiveAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
   useEffect(() => {
     if (composerStep !== "publish") return;
     reviewHeadingRef.current?.focus({ preventScroll: true });
@@ -128,6 +172,7 @@ export function CommentComposer({
               onControllerChange={setEditorController}
               onFormattingStateChange={setFormattingState}
               onAttachmentNotice={setAttachmentNotice}
+              onAttachmentUploaded={handleAttachmentUploaded}
             />
             {attachmentNotice && (
               <div
@@ -137,6 +182,10 @@ export function CommentComposer({
                 {attachmentNotice}
               </div>
             )}
+            <AttachmentComposerPreview
+              attachments={effectiveAttachments}
+              onRemove={handleRemoveAttachment}
+            />
           </div>
 
           <div

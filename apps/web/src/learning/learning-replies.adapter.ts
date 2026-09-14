@@ -23,8 +23,8 @@ export function adaptLearningReplyToCommentReply(
     liked: Boolean(reply.isLiked),
     role: reply.author.role === "Instructor" ? "Instructor" : undefined,
     isOwn:
-      reply.isOwn ??
-      (currentUserId ? reply.userId === currentUserId : false),
+      reply.isOwn ?? (currentUserId ? reply.userId === currentUserId : false),
     isAccepted: Boolean(reply.isAccepted),
+    attachments: reply.attachments || [],
   };
 }

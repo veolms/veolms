@@ -15,9 +15,13 @@ import {
 } from "../learning/discussions/shared/discussion.access.ts";
 import { createAttachmentsRepository } from "../learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "../learning/discussions/attachments/attachments.service.ts";
+import { createNotesRepository } from "../learning/discussions/notes/notes.repository.ts";
 import { createRepliesRepository } from "../learning/discussions/replies/replies.repository.ts";
 import { createThreadsRepository } from "../learning/discussions/threads/threads.repository.ts";
-import { createDiscussionUploadStore } from "./discussion-upload.storage.ts";
+import {
+  createDiscussionUploadStore,
+  getDiscussionAttachmentDisposition,
+} from "./discussion-upload.storage.ts";
 
 const fileNameSchema = z.string().regex(/^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i);
 
@@ -32,6 +36,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
   const attachmentsService = createAttachmentsService(attachmentsRepo, store);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
+  const notesRepo = createNotesRepository();
   const discussionAccess = createDiscussionAccess();
 
   async function isAuthorizedToReadAttachment(
@@ -59,6 +64,15 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         const thread = await threadsRepo.findThreadById(db, reply.threadId);
         if (!thread) return false;
         await discussionAccess.assertCanAccessThread(db, actor, thread);
+        return true;
+      }
+
+      if (attachment.targetType === "note") {
+        const note = await notesRepo.findNoteById(db, attachment.targetId);
+        if (!note) return false;
+        if (note.userId === actor.userId) return true;
+        if (note.visibility === "private") return false;
+        await discussionAccess.assertCanAccessCourse(db, actor, note.courseId);
         return true;
       }
     } catch {
@@ -195,6 +209,13 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       return (reply as FastifyReply)
         .header("Content-Type", file.mimeType)
         .header("Content-Length", file.size)
+        .header(
+          "Content-Disposition",
+          getDiscussionAttachmentDisposition(
+            file.mimeType,
+            attachment.fileName,
+          ),
+        )
         .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", "no-store")
         .send(file.stream);

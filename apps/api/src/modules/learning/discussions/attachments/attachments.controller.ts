@@ -23,10 +23,7 @@ export interface AttachmentsController {
     reply: FastifyReply,
   ): Promise<void>;
 
-  uploadAttachment(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void>;
+  uploadAttachment(request: FastifyRequest, reply: FastifyReply): Promise<void>;
 
   getLinkPreview(
     request: FastifyRequest<{ Body: CreateLinkPreviewRequest }>,
@@ -44,7 +41,11 @@ export function createAttachmentsController({
   return {
     async initiateUpload(request, reply) {
       const user = request.user!;
-      const result = await service.initiateUpload(database, user.id, request.body);
+      const result = await service.initiateUpload(
+        database,
+        user.id,
+        request.body,
+      );
       reply.status(201).send(result);
     },
 
@@ -58,11 +59,16 @@ export function createAttachmentsController({
       }
 
       const buffer = await multipartFile.toBuffer();
-      const attachment = await service.uploadFile(database, attachmentId, user.id, {
-        filename: multipartFile.filename,
-        mimetype: multipartFile.mimetype,
-        data: buffer,
-      });
+      const attachment = await service.uploadFile(
+        database,
+        attachmentId,
+        user.id,
+        {
+          filename: multipartFile.filename,
+          mimetype: multipartFile.mimetype,
+          data: buffer,
+        },
+      );
 
       reply.status(200).send(attachment);
     },
@@ -70,7 +76,11 @@ export function createAttachmentsController({
     async completeUpload(request, reply) {
       const user = request.user!;
       const { attachmentId } = request.body;
-      const attachment = await service.completeUpload(database, attachmentId, user.id);
+      const attachment = await service.completeUpload(
+        database,
+        attachmentId,
+        user.id,
+      );
       reply.status(200).send(attachment);
     },
 

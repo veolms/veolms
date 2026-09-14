@@ -28,6 +28,7 @@ import {
 
 export type { InteractionCapabilities };
 import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
+import type { DiscussionAttachmentItem } from "./discussion-attachments";
 import {
   DESCRIPTION_SURFACE_BASE,
   LessonDescription,
@@ -307,7 +308,11 @@ export function Discussion({
     if (capabilities.allowNotes) kinds.push("note");
     if (capabilities.allowQa) kinds.push("question");
     return kinds;
-  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
+  }, [
+    capabilities.allowComments,
+    capabilities.allowNotes,
+    capabilities.allowQa,
+  ]);
 
   const isAllDisabled =
     !isInteractionCapabilitiesLoading && enabledKinds.length === 0;
@@ -317,9 +322,15 @@ export function Discussion({
     if (capabilities.allowQa) return "question";
     if (capabilities.allowNotes) return "note";
     return "comment";
-  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
+  }, [
+    capabilities.allowComments,
+    capabilities.allowNotes,
+    capabilities.allowQa,
+  ]);
 
-  const availableFilters = useMemo<readonly (readonly [DiscussionEntryFilter, string])[]>(() => {
+  const availableFilters = useMemo<
+    readonly (readonly [DiscussionEntryFilter, string])[]
+  >(() => {
     if (enabledKinds.length === 0) return [];
     if (enabledKinds.length === 1) {
       const singleKind = enabledKinds[0]!;
@@ -331,7 +342,9 @@ export function Discussion({
             : "Q&As";
       return [[singleKind, label]] as const;
     }
-    const filters: (readonly [DiscussionEntryFilter, string])[] = [["all", "All"]];
+    const filters: (readonly [DiscussionEntryFilter, string])[] = [
+      ["all", "All"],
+    ];
     if (capabilities.allowComments) filters.push(["comment", "Comments"]);
     if (capabilities.allowNotes) filters.push(["note", "Notes"]);
     if (capabilities.allowQa) filters.push(["question", "Q&As"]);
@@ -372,8 +385,8 @@ export function Discussion({
 
   const shouldFetchThreads = Boolean(
     courseId &&
-      lessonId &&
-      (capabilities.allowComments || capabilities.allowQa),
+    lessonId &&
+    (capabilities.allowComments || capabilities.allowQa),
   );
 
   const {
@@ -431,11 +444,19 @@ export function Discussion({
     updateThreadMutation.isPending;
 
   const backendNotes = useMemo<Comment[]>(() => {
-    if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes) return [];
+    if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes)
+      return [];
     return notesData.notes.map((note) =>
       adaptLearningNoteToComment(note, authorName, authorAvatar),
     );
-  }, [capabilities.allowNotes, courseId, lessonId, notesData?.notes, authorName, authorAvatar]);
+  }, [
+    capabilities.allowNotes,
+    courseId,
+    lessonId,
+    notesData?.notes,
+    authorName,
+    authorAvatar,
+  ]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -471,6 +492,9 @@ export function Discussion({
     initialDraft,
     isStoredDiscussionDraft,
   );
+  const [composerAttachments, setComposerAttachments] = useState<
+    DiscussionAttachmentItem[]
+  >([]);
 
   const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
     items.filter((entry) => entry.entryKind !== "note");
@@ -500,7 +524,8 @@ export function Discussion({
     ]);
   }, [isBackendMode, postedEntries, setPostedEntries]);
 
-  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>(firstAvailableKind);
+  const [entryKind, setEntryKind] =
+    useState<DiscussionEntryKind>(firstAvailableKind);
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
   const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
     enabledKinds.length === 1 ? enabledKinds[0]! : "all",
@@ -546,7 +571,9 @@ export function Discussion({
     if (enabledKinds.length === 0) return;
     if (!enabledKinds.includes(entryKind)) {
       setEntryKind(firstAvailableKind);
-      setVisibility((current) => getAllowedVisibility(firstAvailableKind, current));
+      setVisibility((current) =>
+        getAllowedVisibility(firstAvailableKind, current),
+      );
     }
   }, [enabledKinds, entryKind, firstAvailableKind]);
 
@@ -557,7 +584,13 @@ export function Discussion({
       return all.filter((entry) => !optimisticallyHiddenIds.has(entry.id));
     }
     return [...backendNotes, ...entries];
-  }, [backendNotes, backendThreads, entries, isBackendMode, optimisticallyHiddenIds]);
+  }, [
+    backendNotes,
+    backendThreads,
+    entries,
+    isBackendMode,
+    optimisticallyHiddenIds,
+  ]);
 
   const filteredEntries = useMemo(
     () =>
@@ -619,8 +652,13 @@ export function Discussion({
           lessonId,
           content: activeDraft.markdown,
           visibility: activeVisibility,
+          attachmentIds:
+            composerAttachments.length > 0
+              ? composerAttachments.map((a) => a.id)
+              : undefined,
         });
         setDraft(createEmptyDiscussionDraft());
+        setComposerAttachments([]);
         setEntryFilter(
           enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
         );
@@ -671,8 +709,13 @@ export function Discussion({
           kind: activeEntryKind === "question" ? "question" : "comment",
           content: activeDraft.markdown,
           visibility: threadVisibility,
+          attachmentIds:
+            composerAttachments.length > 0
+              ? composerAttachments.map((a) => a.id)
+              : undefined,
         });
         setDraft(createEmptyDiscussionDraft());
+        setComposerAttachments([]);
         setEntryFilter(
           enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
         );
@@ -877,10 +920,7 @@ export function Discussion({
     setPostedEntries(update);
   };
 
-  const deleteReply = (
-    entryId: string | number,
-    replyId: string | number,
-  ) => {
+  const deleteReply = (entryId: string | number, replyId: string | number) => {
     if (isBackendMode) return;
     const update = (current: Comment[]) =>
       current.map((entry) => {
@@ -1035,6 +1075,8 @@ export function Discussion({
         draftAttachmentCount={draftAttachmentCount}
         canSubmitDraft={canSubmitDraft}
         isSubmitting={isSubmitting}
+        attachments={composerAttachments}
+        onAttachmentsChange={setComposerAttachments}
         isNotesLoading={isNotesLoading}
         isNotesError={isNotesError}
         onRetryNotes={() => refetchNotes()}
@@ -1180,6 +1222,8 @@ interface ThreadSurfaceProps {
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
   promptText: string;
+  attachments?: DiscussionAttachmentItem[];
+  onAttachmentsChange?: (attachments: DiscussionAttachmentItem[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
@@ -1208,10 +1252,7 @@ interface ThreadSurfaceProps {
     replyId: string | number,
     accepted: boolean,
   ) => void;
-  onToggleLockThread?: (
-    threadId: string | number,
-    locked: boolean,
-  ) => void;
+  onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
 }
 
 function ThreadSurface({
@@ -1242,6 +1283,8 @@ function ThreadSurface({
   isAllDisabled,
   availableFilters,
   promptText,
+  attachments,
+  onAttachmentsChange,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
@@ -1483,6 +1526,8 @@ function ThreadSurface({
               isSubmitting={isSubmitting}
               editing={editingEntryId !== null}
               autoFocus
+              attachments={attachments}
+              onAttachmentsChange={onAttachmentsChange}
               onDraftChange={onDraftChange}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
@@ -1562,10 +1607,7 @@ function ThreadSurface({
             <p className="text-sm font-medium text-(--muted)">Loading notes…</p>
           </div>
         ) : entryFilter === "note" && isNotesError ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-notes-error"
-          >
+          <div className="py-12 text-center" data-testid="learning-notes-error">
             <p className="font-semibold text-(--text)">Failed to load notes</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
               There was a problem loading your notes for this lesson.
@@ -1580,20 +1622,26 @@ function ThreadSurface({
               </button>
             )}
           </div>
-        ) : entryFilter !== "note" && isThreadsLoading && entries.length === 0 ? (
+        ) : entryFilter !== "note" &&
+          isThreadsLoading &&
+          entries.length === 0 ? (
           <div
             className="py-12 text-center"
             data-testid="learning-threads-loading"
           >
             <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-            <p className="text-sm font-medium text-(--muted)">Loading discussions…</p>
+            <p className="text-sm font-medium text-(--muted)">
+              Loading discussions…
+            </p>
           </div>
         ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
           <div
             className="py-12 text-center"
             data-testid="learning-threads-error"
           >
-            <p className="font-semibold text-(--text)">Failed to load discussions</p>
+            <p className="font-semibold text-(--text)">
+              Failed to load discussions
+            </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
               There was a problem loading the discussion for this lesson.
             </p>
@@ -1629,7 +1677,9 @@ function ThreadSurface({
               <div className="py-12 text-center">
                 <p className="font-semibold text-(--text)">
                   No{" "}
-                  {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
+                  {entryFilter === "all"
+                    ? "entries"
+                    : getFilterName(entryFilter)}{" "}
                   yet
                 </p>
                 {availableFilters.some(([val]) => val === "all") && (
@@ -1722,6 +1772,8 @@ function ThreadSurface({
               editing={editingEntryId !== null}
               autoFocus
               presentation="drawer"
+              attachments={attachments}
+              onAttachmentsChange={onAttachmentsChange}
               onDraftChange={onDraftChange}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
@@ -1862,8 +1914,7 @@ function CompactComposer({
         className="pointer-events-none size-9 shrink-0 rounded-full object-cover"
       />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
-        {preview ||
-          (attachmentCount > 0 ? attachmentPreview : promptText)}
+        {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
       </span>
     </div>
   );
