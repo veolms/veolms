@@ -70,6 +70,23 @@ function joinPublicPath(base: string, fileName: string) {
   return `${prefix}${fileName}`.replace(/\/{2,}/g, "/");
 }
 
+function createCdnDevProxy(configuredUrl: string) {
+  try {
+    const url = new URL(configuredUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    const targetPath = url.pathname.replace(/\/+$/u, "");
+    return {
+      target: url.origin,
+      changeOrigin: true,
+      secure: url.protocol === "https:",
+      rewrite: (requestPath: string) =>
+        `${targetPath}${requestPath.slice("/cdn".length)}` || "/",
+    };
+  } catch {
+    return null;
+  }
+}
+
 function earlyHlsPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
@@ -121,10 +138,9 @@ function earlyHlsPreloadPlugin(): Plugin {
           "../client/.vite/manifest.json",
         );
         try {
-          const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<
-            string,
-            { file?: string; name?: string; src?: string }
-          >;
+          const manifest = JSON.parse(
+            fs.readFileSync(manifestPath, "utf8"),
+          ) as Record<string, { file?: string; name?: string; src?: string }>;
           const entry = Object.values(manifest).find(
             (item) =>
               item.name === "early-hls-preload" ||
@@ -142,7 +158,10 @@ function earlyHlsPreloadPlugin(): Plugin {
       if (!url) return;
 
       for (const item of Object.values(bundle)) {
-        if (item.type === "chunk" && item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)) {
+        if (
+          item.type === "chunk" &&
+          item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)
+        ) {
           item.code = replacePlaceholder(item.code, url);
         }
         if (
@@ -163,6 +182,7 @@ export default defineConfig(({ mode }) => {
     ...loadEnv(mode, workspaceRoot, ""),
   };
   const config = loadWebConfig(environment);
+  const cdnDevProxy = createCdnDevProxy(config.VITE_CDN_URL);
 
   return {
     envDir: workspaceRoot,
@@ -173,9 +193,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
         config.STATIC_BUILD_API_URL,
       ),
-      "import.meta.env.VITE_COURSE_MEDIA_BASE_URL": JSON.stringify(
-        config.VITE_COURSE_MEDIA_BASE_URL ?? "",
-      ),
+      "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
     },
     plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
     resolve: {
@@ -243,13 +261,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
-        "/course-hls": {
-          target: config.VITE_COURSE_MEDIA_BASE_URL
-            ? new URL(config.VITE_COURSE_MEDIA_BASE_URL).origin
-            : "https://dev.veolms.org",
-          changeOrigin: true,
-          secure: true,
-        },
+        ...(cdnDevProxy ? { "/cdn": cdnDevProxy } : {}),
       },
     },
   };

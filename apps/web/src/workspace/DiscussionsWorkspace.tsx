@@ -308,7 +308,7 @@ export function DiscussionsWorkspace({
         excerpt,
         course:
           role === "creator"
-            ? "Creator community"
+            ? "Instructor community"
             : "The Ultimate TypeScript Course",
         lesson: "General discussion",
         avatar: "/assets/sofia-avatar-160.webp",

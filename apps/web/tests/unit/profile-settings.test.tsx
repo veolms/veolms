@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { AVATAR_STYLES } from "@veolms/contracts";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
 import { autosyncManager, getAutosyncDraftKey } from "../../src/lib/autosync";
 import { renderWithQueryClient } from "./test-utils.tsx";
@@ -12,7 +13,7 @@ const authMocks = vi.hoisted(() => ({
   useUpdateProfile: vi.fn(),
   useVerifyEmail: vi.fn(),
   useVerifyPhoneNumber: vi.fn(),
-  authService: { updateProfile: vi.fn() },
+  authService: { updateProfile: vi.fn(), uploadAvatarPhoto: vi.fn() },
   authKeys: { me: () => ["auth", "me"] },
   sendEmailVerification: vi.fn(),
   sendPhoneVerification: vi.fn(),
@@ -87,6 +88,7 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       (...args: Parameters<typeof authMocks.mutateAsync>) =>
         authMocks.mutateAsync(...args),
     );
+    authMocks.authService.uploadAvatarPhoto.mockReset();
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPhoneVerification.mockReset();
     authMocks.verifyEmail.mockReset();
@@ -125,6 +127,10 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     });
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("disables profile editing while signed out", () => {
     renderWithQueryClient(
       <ProfileSettings role="student" isAuthenticated={false} />,
@@ -151,6 +157,9 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Discard" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate avatar" }),
     ).not.toBeInTheDocument();
   });
 
@@ -580,5 +589,84 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     expect(
       screen.getByText("Choose a profile photo that is 2 MB or smaller."),
     ).toBeInTheDocument();
+  });
+
+  it("picks a DiceBear avatar and saves its URL through the existing profile sync", async () => {
+    authMocks.mutateAsync.mockResolvedValue({
+      ...profileUser,
+      avatarDataUrl: "https://api.dicebear.com/10.x/notionists/svg?seed=x",
+    });
+
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate avatar" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Generate an avatar",
+    });
+
+    const styleOptions = within(dialog).getAllByRole("radio");
+    expect(styleOptions).toHaveLength(AVATAR_STYLES.length);
+
+    fireEvent.click(styleOptions[1]!);
+    fireEvent.click(within(dialog).getByRole("button", { name: /shuffle/i }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Use this avatar" }),
+    );
+
+    expect(dialog).not.toHaveAttribute("open");
+    await waitFor(
+      () =>
+        expect(authMocks.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            avatarDataUrl: expect.stringContaining(
+              "https://api.dicebear.com/",
+            ),
+          }),
+        ),
+      { timeout: 2_000 },
+    );
+  });
+
+  it("uploads a profile photo through the avatar endpoint and merges the result without a redundant sync", async () => {
+    const uploadedProfile = {
+      ...profileUser,
+      avatarDataUrl: "/api/v1/avatars/11111111-1111-4111-8111-111111111111",
+    };
+    authMocks.authService.uploadAvatarPhoto.mockResolvedValue(uploadedProfile);
+
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    const photo = new File([new Uint8Array(1024)], "photo.jpg", {
+      type: "image/jpeg",
+    });
+    fireEvent.change(screen.getByLabelText("Profile photo file"), {
+      target: { files: [photo] },
+    });
+
+    await waitFor(() =>
+      expect(authMocks.authService.uploadAvatarPhoto).toHaveBeenCalledWith(
+        photo,
+      ),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(authMocks.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows an inline error when the avatar upload fails", async () => {
+    authMocks.authService.uploadAvatarPhoto.mockRejectedValue(
+      new Error("Storage unavailable"),
+    );
+
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    const photo = new File([new Uint8Array(1024)], "photo.jpg", {
+      type: "image/jpeg",
+    });
+    fireEvent.change(screen.getByLabelText("Profile photo file"), {
+      target: { files: [photo] },
+    });
+
+    expect(await screen.findByText("Storage unavailable")).toBeInTheDocument();
   });
 });

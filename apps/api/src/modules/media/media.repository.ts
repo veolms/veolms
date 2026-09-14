@@ -1,5 +1,5 @@
 import type { Kysely } from "kysely";
-import type { Database, MediaAssetStatus } from "@veolms/database";
+import type { Database, Json, MediaAssetStatus } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -95,6 +95,7 @@ export async function insertMediaAsset(
     mime_type: string;
     size_bytes: number;
     status: MediaAssetStatus;
+    metadata?: Json;
   },
 ) {
   await database.insertInto("media_assets").values(values).execute();
@@ -110,6 +111,14 @@ export async function updateMediaAssetStatus(
     .set({ status, updated_at: new Date() })
     .where("id", "=", mediaId)
     .execute();
+}
+
+export async function updateMediaAssetMetadata(
+  database: Kysely<Database>,
+  mediaId: string,
+  metadata: Json,
+) {
+  await database.updateTable("media_assets").set({ metadata, updated_at: new Date() }).where("id", "=", mediaId).execute();
 }
 
 export async function insertVideoJob(
@@ -179,12 +188,13 @@ export async function findPlaybackLessonContext(
   database: Kysely<Database>,
   courseIdOrSlug: string,
   lessonNumber: number,
+  options?: { includeUnpublished?: boolean },
 ) {
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       courseIdOrSlug,
     );
-  const lessons = await database
+  let query = database
     .selectFrom("course_lessons")
     .innerJoin("courses", "courses.id", "course_lessons.course_id")
     .innerJoin(
@@ -210,6 +220,7 @@ export async function findPlaybackLessonContext(
       "course_lessons.content_type as lesson_content_type",
       "course_lessons.content_media_id as content_media_id",
       "course_lessons.is_preview as is_preview",
+      "course_lessons.is_published as is_published",
       "media_assets.status as media_status",
       "media_assets.duration_seconds as duration_seconds",
     ])
@@ -220,13 +231,22 @@ export async function findPlaybackLessonContext(
     )
     .where("courses.deleted_at", "is", null)
     .where("course_sections.deleted_at", "is", null)
-    .where("course_lessons.deleted_at", "is", null)
-    .where("course_lessons.is_published", "=", true)
+    .where("course_lessons.deleted_at", "is", null);
+
+  if (!options?.includeUnpublished) {
+    query = query.where("course_lessons.is_published", "=", true);
+  }
+
+  return await query
     .orderBy("course_sections.position", "asc")
     .orderBy("course_lessons.position", "asc")
-    .execute();
-
-  return lessons[lessonNumber - 1];
+    .orderBy("course_lessons.id", "asc")
+    // The public lesson number is the ordered position across all sections.
+    // Offset/limit keeps large courses from serializing every lesson for a
+    // single playback bootstrap request.
+    .offset(lessonNumber - 1)
+    .limit(1)
+    .executeTakeFirst();
 }
 
 /** Resolves the lesson that owns a media asset for HLS request authorization. */
@@ -253,6 +273,7 @@ export async function findPlaybackMediaContext(
       "course_lessons.title as lesson_title",
       "course_lessons.content_type as lesson_content_type",
       "course_lessons.is_preview as is_preview",
+      "course_lessons.is_published as is_published",
       "media_assets.id as media_id",
       "media_assets.status as media_status",
       "media_assets.duration_seconds as duration_seconds",
@@ -261,7 +282,6 @@ export async function findPlaybackMediaContext(
     .where("media_assets.id", "=", mediaId)
     .where("courses.deleted_at", "is", null)
     .where("course_lessons.deleted_at", "is", null)
-    .where("course_lessons.is_published", "=", true)
     .executeTakeFirst();
 }
 

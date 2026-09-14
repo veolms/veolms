@@ -16,6 +16,10 @@ export { getApiError, type ApiError };
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
+export function getApiRequestUrl(path: string): string {
+  return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
 function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
     return;
@@ -79,7 +83,7 @@ function shouldClearAuthOnUnauthorized(
 
   const url = error.config?.url;
   if (!url) {
-    return true;
+    return false;
   }
 
   const authInputEndpoints = [
@@ -98,7 +102,14 @@ function shouldClearAuthOnUnauthorized(
     return false;
   }
 
-  return true;
+  const isExplicitSessionFailure =
+    apiError.code === "UNAUTHORIZED" ||
+    apiError.code === "UNAUTHENTICATED" ||
+    apiError.code === "SESSION_EXPIRED" ||
+    apiError.code === "NO_SESSION" ||
+    apiError.code === "SESSION_REVOKED";
+
+  return isExplicitSessionFailure || url.endsWith("/auth/me");
 }
 
 axiosInstance.interceptors.response.use(

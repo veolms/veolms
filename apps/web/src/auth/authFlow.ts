@@ -130,11 +130,17 @@ export function formatResendCountdown(seconds: number): string {
 }
 
 const INCOMPLETE_OTP_MESSAGE = "Please enter the 6-digit code.";
+const INCOMPLETE_BACKUP_CODE_MESSAGE = "Please enter an 8-digit backup code.";
 
 export function validateOtpCode(code: string): string | null {
   const result = otpVerifyRequestSchema.shape.code.safeParse(code);
 
   return result.success ? null : INCOMPLETE_OTP_MESSAGE;
+}
+
+export function validateBackupCode(code: string): string | null {
+  const cleaned = code.trim().replace(/\s+/g, "");
+  return /^\d{8}$/.test(cleaned) ? null : INCOMPLETE_BACKUP_CODE_MESSAGE;
 }
 
 const MASK_CHARACTER = "●";

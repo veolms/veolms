@@ -11,6 +11,7 @@
     "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "notifications:watch": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts --watch",
     "instructor:cli": "node --env-file-if-exists=../../.env src/cli/instructor.ts",
+    "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
@@ -20,6 +21,7 @@
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "10.1.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@simplewebauthn/server": "^13.3.2",

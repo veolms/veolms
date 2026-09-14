@@ -12,6 +12,7 @@ import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { ComponentType } from "react";
 import type { CourseRole } from "./catalogue";
+import { getRoleDisplayName } from "../shell/workspaceRole";
 
 type PlaceholderIcon = ComponentType<{ size?: number; weight?: "duotone" }>;
 
@@ -102,11 +103,13 @@ const placeholderContent: Record<string, PlaceholderContent> = {
 export interface PlaceholderPageProps {
   section?: string;
   role: CourseRole;
+  userRoles?: readonly string[] | null;
 }
 
 export function PlaceholderPage({
   section = "This page",
   role,
+  userRoles,
 }: PlaceholderPageProps) {
   const content = placeholderContent[section] || {
     title: section,
@@ -124,7 +127,7 @@ export function PlaceholderPage({
       <header className="courses-placeholder-heading">
         <div>
           <p className="courses-placeholder-eyebrow">
-            {role === "creator" ? "Creator workspace" : "Student workspace"}
+            {`${getRoleDisplayName(role, userRoles)} workspace`}
           </p>
           <h1 id="placeholder-page-title">{content.title}</h1>
           <p>{content.description}</p>

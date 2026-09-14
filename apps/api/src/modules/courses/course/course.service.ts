@@ -22,6 +22,7 @@ import {
 } from "../shared/courses.utils.ts";
 import {
   ADMIN_ROLE,
+  INSTRUCTOR_ROLE,
   createAuthService,
   type AuthService,
 } from "../../auth/index.ts";
@@ -51,6 +52,116 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/gif",
   "image/avif",
 ]);
+
+type PublicThumbnailVariant = {
+  url: string;
+  width: number;
+  height: number;
+};
+
+const FALLBACK_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
+
+function resolveFallbackThumbnailVariants(
+  services: AppServices,
+  thumbnailMediaId?: string | null,
+  thumbnailStorageKey?: string | null,
+): PublicThumbnailVariant[] {
+  if (!thumbnailMediaId) return [];
+
+  const processedPrefix = resolveProcessedThumbnailPrefix(
+    thumbnailMediaId,
+    thumbnailStorageKey,
+  );
+
+  return FALLBACK_THUMBNAIL_WIDTHS.flatMap((width) => {
+    const url = services.storage.getPublicObjectUrl(
+      `${processedPrefix}/${width}.webp`,
+    );
+    return url ? [{ url, width, height: Math.round((width * 9) / 16) }] : [];
+  });
+}
+
+function resolveProcessedThumbnailPrefix(
+  thumbnailMediaId: string,
+  thumbnailStorageKey?: string | null,
+): string {
+  const normalizedKey = thumbnailStorageKey?.replace(/^\/+/, "") ?? "";
+  const visibilityPrefix = normalizedKey.startsWith("public/")
+    ? "public/"
+    : normalizedKey.startsWith("protected/")
+      ? "protected/"
+      : "";
+  return `${visibilityPrefix}thumbnails/${thumbnailMediaId}/processed`;
+}
+
+function resolvePublicThumbnailUrls(
+  services: AppServices,
+  metadata: unknown,
+  thumbnailMediaId?: string | null,
+  thumbnailStorageKey?: string | null,
+): {
+  thumbnailUrl: string | null;
+  thumbnailSrcSet: PublicThumbnailVariant[];
+} {
+  const processedPrefix = thumbnailMediaId
+    ? resolveProcessedThumbnailPrefix(thumbnailMediaId, thumbnailStorageKey)
+    : null;
+  const fallbackUrl = thumbnailMediaId
+    ? services.storage.getPublicObjectUrl(`${processedPrefix}/full.webp`)
+    : null;
+  const fallbackVariants = resolveFallbackThumbnailVariants(
+    services,
+    thumbnailMediaId,
+    thumbnailStorageKey,
+  );
+
+  if (
+    typeof metadata !== "object" ||
+    metadata === null ||
+    Array.isArray(metadata)
+  ) {
+    return { thumbnailUrl: fallbackUrl, thumbnailSrcSet: fallbackVariants };
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const full = record.full;
+  const fullKey =
+    typeof full === "object" &&
+    full !== null &&
+    !Array.isArray(full) &&
+    typeof (full as Record<string, unknown>).key === "string"
+      ? (full as Record<string, string>).key
+      : null;
+  const thumbnailUrl = fullKey
+    ? services.storage.getPublicObjectUrl(fullKey)
+    : fallbackUrl;
+  const variants = Array.isArray(record.variants)
+    ? record.variants.flatMap((variant): PublicThumbnailVariant[] => {
+        if (
+          typeof variant !== "object" ||
+          variant === null ||
+          Array.isArray(variant)
+        ) {
+          return [];
+        }
+        const item = variant as Record<string, unknown>;
+        if (
+          typeof item.key !== "string" ||
+          typeof item.width !== "number" ||
+          typeof item.height !== "number"
+        ) {
+          return [];
+        }
+        const url = services.storage.getPublicObjectUrl(item.key);
+        return url ? [{ url, width: item.width, height: item.height }] : [];
+      })
+    : [];
+
+  return {
+    thumbnailUrl,
+    thumbnailSrcSet: variants.length > 0 ? variants : fallbackVariants,
+  };
+}
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -85,8 +196,44 @@ export function createCourseService({
   /**
    * Verifies course existence and owner permissions.
    */
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
+  }
+
+  async function resolveCourseMediaUrls(
+    thumbnailMediaId: string | null | undefined,
+    trailerMediaId: string | null | undefined,
+    requestingUserId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const resolve = async (mediaId: string | null | undefined) => {
+      if (!mediaId) return null;
+      try {
+        return (
+          await mediaService.getMediaDelivery(
+            mediaId,
+            requestingUserId,
+            userRoles,
+          )
+        ).url;
+      } catch (error) {
+        // Keep an orphaned media reference from breaking an otherwise valid
+        // course response. Access and CDN configuration failures still
+        // propagate so the caller never silently receives a proxy URL.
+        if (error instanceof AppError && error.statusCode === 404) return null;
+        throw error;
+      }
+    };
+
+    const [thumbnailUrl, trailerUrl] = await Promise.all([
+      resolve(thumbnailMediaId),
+      resolve(trailerMediaId),
+    ]);
+    return { thumbnailUrl, trailerUrl };
   }
 
   /**
@@ -96,57 +243,63 @@ export function createCourseService({
     creatorId?: string;
   }): Promise<CourseSummary[]> {
     const rows = await courseRepo.listPublishedCourses(database, filters);
-    return rows.map((row) => {
-      const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
-      const totalDurationSeconds =
-        lessonDuration > 0
-          ? lessonDuration
-          : row.estimated_duration && row.estimated_duration > 0
-            ? row.estimated_duration * 60
-            : 0;
+    return await Promise.all(
+      rows.map(async (row) => {
+        const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
+        const totalDurationSeconds =
+          lessonDuration > 0
+            ? lessonDuration
+            : row.estimated_duration && row.estimated_duration > 0
+              ? row.estimated_duration * 60
+              : 0;
 
-      const pricing: CoursePricingSummary = row.pricing_type
-        ? {
-            pricingType: row.pricing_type as "free" | "paid",
-            price: Number(row.price ?? 0),
-            currency: row.currency ?? "INR",
-            salePrice:
-              row.sale_price !== null && row.sale_price !== undefined
-                ? Number(row.sale_price)
-                : null,
-          }
-        : {
-            pricingType: "free",
-            price: 0,
-            currency: "INR",
-            salePrice: null,
-          };
+        const pricing: CoursePricingSummary = row.pricing_type
+          ? {
+              pricingType: row.pricing_type as "free" | "paid",
+              price: Number(row.price ?? 0),
+              currency: row.currency ?? "INR",
+              salePrice:
+                row.sale_price !== null && row.sale_price !== undefined
+                  ? Number(row.sale_price)
+                  : null,
+            }
+          : {
+              pricingType: "free",
+              price: 0,
+              currency: "INR",
+              salePrice: null,
+            };
 
-      const thumbnailUrl = row.thumbnail_media_id
-        ? `/api/v1/media/${row.thumbnail_media_id}`
-        : null;
+        const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
+          services,
+          row.thumbnail_metadata,
+          row.thumbnail_media_id,
+          row.thumbnail_storage_key,
+        );
 
-      const instructorName =
-        row.instructor_alias || row.creator_display_name || null;
+        const instructorName =
+          row.instructor_alias || row.creator_display_name || null;
 
-      return {
-        id: row.id,
-        slug: row.slug,
-        title: row.title,
-        shortDescription: row.short_description ?? "",
-        difficulty:
-          (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
-          null,
-        thumbnailUrl,
-        instructorName,
-        categoryName: row.category_name ?? null,
-        totalSections: Number(row.total_sections ?? 0),
-        totalLessons: Number(row.total_lessons ?? 0),
-        totalDurationSeconds,
-        pricing,
-        certificateEnabled: Boolean(row.certificate_enabled ?? false),
-      };
-    });
+        return {
+          id: row.id,
+          slug: row.slug,
+          title: row.title,
+          shortDescription: row.short_description ?? "",
+          difficulty:
+            (row.difficulty as
+              "beginner" | "intermediate" | "advanced" | null) ?? null,
+          thumbnailUrl,
+          thumbnailSrcSet,
+          instructorName,
+          categoryName: row.category_name ?? null,
+          totalSections: Number(row.total_sections ?? 0),
+          totalLessons: Number(row.total_lessons ?? 0),
+          totalDurationSeconds,
+          pricing,
+          certificateEnabled: Boolean(row.certificate_enabled ?? false),
+        };
+      }),
+    );
   }
 
   /**
@@ -165,25 +318,36 @@ export function createCourseService({
       creatorId,
     );
     return {
-      courses: rows.map((row) => ({
-        id: row.id,
-        slug: row.slug,
-        title: row.title,
-        shortDescription: row.short_description,
-        description: row.description,
-        difficulty: row.difficulty as
-          "beginner" | "intermediate" | "advanced" | null,
-        status: row.status as "draft" | "published" | "archived",
-        creatorId: row.creator_id as string,
-        categoryId: row.category_id,
-        thumbnailMediaId: row.thumbnail_media_id,
-        trailerMediaId: row.trailer_media_id,
-        instructorAlias: row.instructor_alias ?? null,
-        version: row.version,
-        createdAt: row.created_at.toISOString(),
-        updatedAt: row.updated_at.toISOString(),
-        publishedAt: row.published_at?.toISOString() ?? null,
-      })),
+      courses: await Promise.all(
+        rows.map(async (row) => {
+          const { thumbnailUrl, trailerUrl } = await resolveCourseMediaUrls(
+            row.thumbnail_media_id,
+            row.trailer_media_id,
+            creatorId,
+          );
+          return {
+            id: row.id,
+            slug: row.slug,
+            title: row.title,
+            shortDescription: row.short_description,
+            description: row.description,
+            difficulty: row.difficulty as
+              "beginner" | "intermediate" | "advanced" | null,
+            status: row.status as "draft" | "published" | "archived",
+            creatorId: row.creator_id as string,
+            categoryId: row.category_id,
+            thumbnailMediaId: row.thumbnail_media_id,
+            trailerMediaId: row.trailer_media_id,
+            thumbnailUrl,
+            trailerUrl,
+            instructorAlias: row.instructor_alias ?? null,
+            version: row.version,
+            createdAt: row.created_at.toISOString(),
+            updatedAt: row.updated_at.toISOString(),
+            publishedAt: row.published_at?.toISOString() ?? null,
+          };
+        }),
+      ),
     };
   }
 
@@ -293,42 +457,69 @@ export function createCourseService({
   }
 
   /**
-   * Lists all courses owned by the authenticated creator.
+   * Lists all courses for the authoring/management view.
    */
-  async function listMyCourses(creatorId: string) {
-    const rows = await courseRepo.listCoursesByCreator(database, creatorId);
-    const courses = rows.map((c) => {
-      const lessonDuration = Number(c.lesson_duration_seconds ?? 0);
-      const totalDurationSeconds =
-        lessonDuration > 0
-          ? lessonDuration
-          : c.estimated_duration && c.estimated_duration > 0
-            ? c.estimated_duration * 60
-            : 0;
+  async function listMyCourses(
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourses(database)
+      : await courseRepo.listCoursesByCreator(database, creatorId);
+    const courses = await Promise.all(
+      rows.map(async (c) => {
+        const lessonDuration = Number(c.lesson_duration_seconds ?? 0);
+        const totalDurationSeconds =
+          lessonDuration > 0
+            ? lessonDuration
+            : c.estimated_duration && c.estimated_duration > 0
+              ? c.estimated_duration * 60
+              : 0;
 
-      return {
-        id: c.id,
-        slug: c.slug,
-        title: c.title,
-        shortDescription: c.short_description,
-        description: c.description,
-        difficulty: c.difficulty as
-          "beginner" | "intermediate" | "advanced" | null,
-        status: c.status as "draft" | "published" | "archived",
-        creatorId: c.creator_id as string,
-        categoryId: c.category_id,
-        thumbnailMediaId: c.thumbnail_media_id,
-        trailerMediaId: c.trailer_media_id,
-        instructorAlias: c.instructor_alias ?? null,
-        version: c.version,
-        createdAt: c.created_at.toISOString(),
-        updatedAt: c.updated_at.toISOString(),
-        publishedAt: c.published_at?.toISOString() ?? null,
-        totalSections: Number(c.total_sections ?? 0),
-        totalLessons: Number(c.total_lessons ?? 0),
-        totalDurationSeconds,
-      };
-    });
+        const { thumbnailUrl: directThumbnailUrl, trailerUrl } =
+          await resolveCourseMediaUrls(
+            c.thumbnail_media_id,
+            c.trailer_media_id,
+            c.creator_id ?? creatorId,
+            userRoles,
+          );
+        const { thumbnailUrl: processedThumbnailUrl, thumbnailSrcSet } =
+          resolvePublicThumbnailUrls(
+            services,
+            c.thumbnail_metadata,
+            c.thumbnail_media_id,
+            c.thumbnail_storage_key,
+          );
+
+        return {
+          id: c.id,
+          slug: c.slug,
+          title: c.title,
+          shortDescription: c.short_description,
+          description: c.description,
+          difficulty: c.difficulty as
+            "beginner" | "intermediate" | "advanced" | null,
+          status: c.status as "draft" | "published" | "archived",
+          creatorId: c.creator_id as string,
+          categoryId: c.category_id,
+          thumbnailMediaId: c.thumbnail_media_id,
+          trailerMediaId: c.trailer_media_id,
+          thumbnailUrl: processedThumbnailUrl ?? directThumbnailUrl,
+          thumbnailSrcSet,
+          trailerUrl,
+          instructorAlias: c.instructor_alias ?? null,
+          version: c.version,
+          createdAt: c.created_at.toISOString(),
+          updatedAt: c.updated_at.toISOString(),
+          publishedAt: c.published_at?.toISOString() ?? null,
+          totalSections: Number(c.total_sections ?? 0),
+          totalLessons: Number(c.total_lessons ?? 0),
+          totalDurationSeconds,
+        };
+      }),
+    );
     return { courses };
   }
 
@@ -340,9 +531,14 @@ export function createCourseService({
     creatorId: string,
     payload: UpdateCourseBasicsRequest,
     logger: FastifyBaseLogger,
+    userRoles?: readonly string[],
   ) {
     const { version, ...updates } = payload;
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     if (course.version !== version) {
       throw new AppError(
@@ -381,6 +577,7 @@ export function createCourseService({
       const thumb = await mediaService.getMediaAsset(
         updates.thumbnailMediaId,
         creatorId,
+        userRoles,
       );
       if (
         !thumb ||
@@ -399,6 +596,7 @@ export function createCourseService({
       const trailer = await mediaService.getMediaAsset(
         updates.trailerMediaId,
         creatorId,
+        userRoles,
       );
       if (!trailer || trailer.type !== "video") {
         throw new AppError(
@@ -441,6 +639,7 @@ export function createCourseService({
         updates.trailerMediaId,
         creatorId,
         logger,
+        userRoles,
       );
     }
 
@@ -503,8 +702,20 @@ export function createCourseService({
   /**
    * Assembles the full editor payload for authoring view.
    */
-  async function getCourseEditorData(courseId: string, creatorId: string) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+  async function getCourseEditorData(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isInstructor = userRoles?.includes("instructor");
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+    if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+      throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
+    }
 
     const [sections, lessons, accessRules, pricing, settings, includes] =
       await Promise.all([
@@ -520,7 +731,8 @@ export function createCourseService({
       await curriculumService.listResourcesForLessons(lessonIds);
     const resourceMediaAssets = await mediaService.getMediaAssets(
       Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
-      creatorId,
+      course.creator_id ?? creatorId,
+      userRoles,
     );
     const resourceMediaById = new Map(
       resourceMediaAssets.map((media) => [media.id, media]),
@@ -533,7 +745,8 @@ export function createCourseService({
             .filter((id): id is string => Boolean(id)),
         ),
       ),
-      creatorId,
+      course.creator_id ?? creatorId,
+      userRoles,
     );
     const contentMediaDurations = new Map(
       contentMediaAssets
@@ -602,6 +815,13 @@ export function createCourseService({
       };
     });
 
+    const { thumbnailUrl, trailerUrl } = await resolveCourseMediaUrls(
+      course.thumbnail_media_id,
+      course.trailer_media_id,
+      course.creator_id ?? creatorId,
+      userRoles,
+    );
+
     return {
       course: {
         id: course.id,
@@ -616,6 +836,8 @@ export function createCourseService({
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
         trailerMediaId: course.trailer_media_id,
+        thumbnailUrl,
+        trailerUrl,
         instructorAlias: course.instructor_alias ?? null,
         version: course.version,
         createdAt: course.created_at.toISOString(),
@@ -684,9 +906,14 @@ export function createCourseService({
     const isAdmin = Boolean(
       user && user.roles && user.roles.includes(ADMIN_ROLE),
     );
+    const isInstructor = Boolean(
+      user &&
+      user.roles &&
+      (user.roles.includes(INSTRUCTOR_ROLE) || user.roles.includes("creator")),
+    );
 
     if (course.status !== "published") {
-      if (!isOwner && !isAdmin) {
+      if (!isOwner && !isAdmin && !isInstructor) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
       }
     }
@@ -702,6 +929,7 @@ export function createCourseService({
       pricing,
       settings,
       includes,
+      thumbnailAsset,
     ] = await Promise.all([
       course.creator_id ? authService.findUserById(course.creator_id) : null,
       course.category_id
@@ -713,6 +941,9 @@ export function createCourseService({
       configurationService.findPricingByCourseId(courseId),
       configurationService.findSettingsByCourseId(courseId),
       includesService.listCourseIncludes(courseId),
+      course.thumbnail_media_id
+        ? mediaService.getMediaAsset(course.thumbnail_media_id)
+        : null,
     ]);
 
     const creator = creatorUser
@@ -808,6 +1039,13 @@ export function createCourseService({
       totalDurationSeconds = settings.estimated_duration * 60;
     }
 
+    const { thumbnailUrl, trailerUrl } = await resolveCourseMediaUrls(
+      course.thumbnail_media_id,
+      course.trailer_media_id,
+      course.creator_id ?? user?.id,
+      user?.roles,
+    );
+
     return {
       course: {
         id: course.id,
@@ -821,7 +1059,14 @@ export function createCourseService({
         creatorId: course.creator_id,
         categoryId: course.category_id,
         thumbnailMediaId: course.thumbnail_media_id,
+        ...resolvePublicThumbnailUrls(
+          services,
+          thumbnailAsset?.metadata,
+          course.thumbnail_media_id,
+        ),
         trailerMediaId: course.trailer_media_id,
+        thumbnailUrl,
+        trailerUrl,
         instructorAlias: course.instructor_alias ?? null,
         version: course.version,
         createdAt: course.created_at.toISOString(),
@@ -875,8 +1120,16 @@ export function createCourseService({
   /**
    * Soft deletes a course after verifying ownership.
    */
-  async function deleteCourse(courseId: string, creatorId: string) {
-    return await deletionService.scheduleCourseDeletion(courseId, creatorId);
+  async function deleteCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return await deletionService.scheduleCourseDeletion(
+      courseId,
+      creatorId,
+      userRoles,
+    );
   }
 
   async function findLessonById(courseId: string, lessonId: string) {

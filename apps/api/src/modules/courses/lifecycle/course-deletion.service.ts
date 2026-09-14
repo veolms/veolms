@@ -10,6 +10,7 @@ import {
   createMediaRetentionService,
   type MediaRetentionService,
 } from "../../media/index.ts";
+import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
 import * as deletionRepo from "./course-deletion.repository.ts";
 
 export const COURSE_DELETION_RETENTION_DAYS = 30;
@@ -90,7 +91,11 @@ export function createCourseDeletionService({
   storage,
   mediaRetentionService = createMediaRetentionService({ database }),
 }: CourseDeletionServiceOptions) {
-  async function scheduleCourseDeletion(courseId: string, creatorId: string) {
+  async function scheduleCourseDeletion(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
     const result = await database.transaction().execute(async (trx) => {
       const course = await deletionRepo.findCourseIncludingDeleted(
         trx,
@@ -101,7 +106,9 @@ export function createCourseDeletionService({
       if (!course) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
       }
-      if (course.creator_id !== creatorId) {
+      const isAdmin = userRoles?.includes(ADMIN_ROLE);
+      const isInstructor = userRoles?.includes(INSTRUCTOR_ROLE);
+      if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
         throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
       }
       if (course.deleted_at) {

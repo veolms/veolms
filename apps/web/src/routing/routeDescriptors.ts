@@ -37,7 +37,7 @@ export interface ShellRouteDescriptor {
 export interface LearningRouteDescriptor {
   kind: "learning";
   page: "learning";
-  section: "Learning Space";
+  section: "Courses";
   settingsTab?: undefined;
   discussionTab?: undefined;
 }
@@ -89,7 +89,7 @@ export const routeDescriptors = {
     kind: "shell",
     page: "home",
     title: "Dashboard",
-    description: "Review academy performance and creator activity in ProCodrr.",
+    description: "Review academy performance and instructor activity in ProCodrr.",
   },
   courses: {
     kind: "shell",
@@ -299,7 +299,7 @@ export const routeDescriptors = {
 const learningDescriptor = {
   kind: "learning",
   page: "learning",
-  section: "Learning Space",
+  section: "Courses",
 } as const satisfies LearningRouteDescriptor;
 
 const courseOverviewDescriptor = {

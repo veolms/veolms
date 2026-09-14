@@ -25,6 +25,7 @@ import {
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+import { ADMIN_ROLE } from "../../auth/index.ts";
 
 export interface LifecycleServiceOptions {
   database: Kysely<Database>;
@@ -44,14 +45,20 @@ export function createLifecycleService({
   mediaService = createMediaService({ database, services }),
 }: LifecycleServiceOptions) {
   const outbox = createOutboxService();
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
   async function validateCourseObject(
     course: NonNullable<Awaited<ReturnType<typeof verifyCourseOwner>>>,
     creatorId: string,
+    userRoles?: readonly string[],
   ): Promise<CourseValidationResponse> {
+    const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const errors: CourseValidationIssue[] = [];
     const warnings: CourseValidationIssue[] = [];
     const courseId = course.id;
@@ -146,7 +153,7 @@ export function createLifecycleService({
       const thumb = mediaMap.get(course.thumbnail_media_id);
       if (
         !thumb ||
-        thumb.owner_id !== creatorId ||
+        (!isAdmin && thumb.owner_id !== course.creator_id) ||
         (thumb.status !== "uploaded" && thumb.status !== "ready")
       ) {
         const msg = "Thumbnail media must be fully uploaded.";
@@ -175,7 +182,7 @@ export function createLifecycleService({
         });
       } else {
         const media = mediaMap.get(lesson.content_media_id);
-        if (!media || media.owner_id !== creatorId) {
+        if (!media || (!isAdmin && media.owner_id !== course.creator_id)) {
           const msg = `Media for lesson "${lesson.title}" was not found.`;
           curriculumErrors.push(msg);
           errors.push({
@@ -363,15 +370,20 @@ export function createLifecycleService({
   async function validateCourse(
     courseId: string,
     creatorId: string,
+    userRoles?: readonly string[],
   ): Promise<CourseValidationResponse> {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
-    return await validateCourseObject(course, creatorId);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    return await validateCourseObject(course, creatorId, userRoles);
   }
 
-  async function publishCourse(courseId: string, creatorId: string) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+  async function publishCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const validation = await validateCourseObject(course, creatorId);
+    const validation = await validateCourseObject(course, creatorId, userRoles);
     if (!validation.canPublish || validation.errors.length > 0) {
       throw new AppError(
         400,
@@ -403,7 +415,7 @@ export function createLifecycleService({
           courseId: course.id,
           courseSlug: course.slug,
           courseTitle: course.title,
-          creatorUserId: creatorId,
+          creatorUserId: course.creator_id,
         },
       });
       return result;
@@ -430,8 +442,12 @@ export function createLifecycleService({
     };
   }
 
-  async function unpublishCourse(courseId: string, creatorId: string) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId);
+  async function unpublishCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const now = new Date();
     const updateResult = await courseRepo.updateCourse(
@@ -467,8 +483,12 @@ export function createLifecycleService({
     };
   }
 
-  async function previewCourseDraft(courseId: string, creatorId: string) {
-    return await courseService.getCourseEditorData(courseId, creatorId);
+  async function previewCourseDraft(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return await courseService.getCourseEditorData(courseId, creatorId, userRoles);
   }
 
   return {

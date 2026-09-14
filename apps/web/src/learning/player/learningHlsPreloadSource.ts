@@ -3,6 +3,7 @@ import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
+  toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 function shouldResumeFromLastPosition(): boolean {
@@ -24,6 +25,12 @@ export function createLearningHlsPreloadSource(options: {
   manifestUrl: string;
   mediaKey?: string;
   protectedPlayback?: boolean;
+  segmentToken?: string;
+  segmentTokenExpiresAt?: number;
+  refreshSegmentToken?: () => Promise<{
+    token: string;
+    expiresAt?: number;
+  } | null>;
 }) {
   const startTime =
     options.mediaKey && shouldResumeFromLastPosition()
@@ -31,7 +38,7 @@ export function createLearningHlsPreloadSource(options: {
       : 0;
   return {
     id: options.mediaKey,
-    src: options.manifestUrl,
+    src: toAbsoluteLearningMediaUrl(options.manifestUrl),
     type: LEARNING_HLS_MIME_TYPE,
     kind: "hls" as const,
     startTime,
@@ -39,6 +46,9 @@ export function createLearningHlsPreloadSource(options: {
     networking: {
       requestFilter: createLearningHlsRequestFilter({
         protectedPlayback: options.protectedPlayback,
+        segmentToken: options.segmentToken,
+        segmentTokenExpiresAt: options.segmentTokenExpiresAt,
+        refreshSegmentToken: options.refreshSegmentToken,
       }),
     },
   };

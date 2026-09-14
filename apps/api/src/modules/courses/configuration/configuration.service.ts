@@ -16,16 +16,21 @@ export interface ConfigurationServiceOptions {
 export function createConfigurationService({
   database,
 }: ConfigurationServiceOptions) {
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
   async function upsertCourseAccessRules(
     courseId: string,
     creatorId: string,
     updates: UpdateCourseAccessRuleRequest,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const now = new Date();
 
@@ -58,8 +63,9 @@ export function createConfigurationService({
     courseId: string,
     creatorId: string,
     updates: UpdateCoursePricingRequest,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const now = new Date();
 
@@ -93,8 +99,9 @@ export function createConfigurationService({
     courseId: string,
     creatorId: string,
     updates: UpdateCourseSettingsRequest,
+    userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const now = new Date();
 

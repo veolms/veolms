@@ -4,6 +4,7 @@ import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
   LEARNING_HLS_STREAMING,
+  toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 export {
@@ -32,11 +33,19 @@ export function createLearningLessonVideoSource(options: {
   mediaKey: string;
   startTime: number;
   protectedPlayback?: boolean;
+  segmentToken?: string;
+  segmentTokenExpiresAt?: number;
+  refreshSegmentToken?: () => Promise<{
+    token: string;
+    expiresAt?: number;
+  } | null>;
 }): VideoSource {
   const hls = isHlsUrl(options.media.src);
   return {
     id: options.mediaKey,
-    src: options.media.src,
+    src: hls
+      ? toAbsoluteLearningMediaUrl(options.media.src)
+      : options.media.src,
     type: hls ? LEARNING_HLS_MIME_TYPE : "video/mp4",
     kind: hls ? "hls" : "file",
     // The catalog duration can be stale after an asset replacement. Shaka
@@ -52,9 +61,12 @@ export function createLearningLessonVideoSource(options: {
       ? {
           requestFilter: createLearningHlsRequestFilter({
             protectedPlayback: options.protectedPlayback,
+            segmentToken: options.segmentToken,
+            segmentTokenExpiresAt: options.segmentTokenExpiresAt,
+            refreshSegmentToken: options.refreshSegmentToken,
           }),
         }
       : undefined,
-    textTracks: [...LEARNING_LESSON_TEXT_TRACKS],
+    textTracks: undefined,
   };
 }

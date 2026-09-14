@@ -593,7 +593,7 @@ function CourseHeroSection({
 
   if (isCreatorNormal) {
     // 1. Creator viewing their course normally:
-    // Show only "Continue Learning". Clicking it opens the existing Learning Space.
+    // Show only "Continue Learning". Clicking it opens the course player.
     // Do not show Pay Now or Apply Coupon.
     ctaLabel = "Continue Learning";
     ctaIcon = (
@@ -641,7 +641,7 @@ function CourseHeroSection({
     ctaOnClick = undefined; // Preview actions stay non-functional.
   } else {
     // 3. Student / Learner:
-    // Free course: show "Free" and "Continue Learning", which opens existing Learning Space.
+    // Free course: show "Free" and "Continue Learning", which opens the course player.
     // Paid course: show price, "Apply coupon", and "Pay Now" which triggers direct checkout.
     if (isFree) {
       ctaLabel = "Continue Learning";
@@ -1306,9 +1306,7 @@ export function adaptCourseOverviewResponse(
   );
   const resolvedDuration = formatDuration(resolvedDurationSeconds);
 
-  const resolvedThumbnail = c.thumbnailMediaId
-    ? `/api/v1/media/${c.thumbnailMediaId}`
-    : "";
+  const resolvedThumbnail = c.thumbnailUrl || "";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1324,6 +1322,7 @@ export function adaptCourseOverviewResponse(
     duration: resolvedDuration,
     students: 0,
     thumbnail: resolvedThumbnail,
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
@@ -1443,7 +1442,8 @@ export function adaptPreviewDataToOverview(
     enrolled: false,
     duration: formatDuration(totalDurationSeconds),
     students: 0,
-    thumbnail: c.thumbnailMediaId ? `/api/v1/media/${c.thumbnailMediaId}` : "",
+    thumbnail: c.thumbnailUrl || "",
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,

@@ -117,6 +117,7 @@ describe("LessonResourceManager", () => {
         contentType: "text/plain",
         fileSize: file.size,
         type: "document",
+        visibility: "protected",
       });
     });
     expect(mediaMocks.uploadFileToPresignedUrl).toHaveBeenCalled();

@@ -15,6 +15,8 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
+
 /**
  * Verifies course existence and owner permissions. This is the single
  * ownership gate every course sub-service (course, curriculum, configuration,
@@ -28,13 +30,16 @@ export function slugify(text: string): string {
 export async function getCourseAndVerifyOwner(
   database: Kysely<Database>,
   courseId: string,
-  creatorId: string,
+  userId: string,
+  userRoles?: readonly string[],
 ) {
   const course = await courseRepo.findCourseById(database, courseId);
   if (!course) {
     throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
   }
-  if (course.creator_id !== creatorId) {
+  const isAdmin = userRoles?.includes(ADMIN_ROLE);
+  const isInstructor = userRoles?.includes(INSTRUCTOR_ROLE);
+  if (!isAdmin && !isInstructor && course.creator_id !== userId) {
     throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
   }
   return course;

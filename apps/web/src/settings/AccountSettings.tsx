@@ -9,16 +9,19 @@ import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
 import { autosyncManager } from "../lib/autosync";
 import type { ProfileRole } from "./profileTypes";
+import { getRoleDisplayName } from "../shell/workspaceRole";
 
 export interface AccountSettingsProps {
   role: ProfileRole;
   isAuthenticated: boolean;
+  userRoles?: readonly string[] | null;
   onNavigatePage?: (page: string) => void;
 }
 
 export function AccountSettings({
   role,
   isAuthenticated,
+  userRoles,
   onNavigatePage,
 }: AccountSettingsProps) {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -79,7 +82,9 @@ export function AccountSettings({
           <div>
             <span>Current access</span>
             <strong>
-              {role === "creator" ? "Creator workspace" : "Learning workspace"}
+              {role === "creator"
+                ? `${getRoleDisplayName("creator", userRoles)} workspace`
+                : "Learning workspace"}
             </strong>
             <small>
               Manage purchases and receipts from your order history.

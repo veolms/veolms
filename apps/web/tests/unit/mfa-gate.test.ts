@@ -72,6 +72,17 @@ describe("resolveMfaSetupView", () => {
     ).toBe("enroll");
   });
 
+  it("forces an instructor with no factor to enroll", () => {
+    expect(
+      resolveMfaSetupView({
+        mfaVerified: true,
+        totpEnabled: false,
+        passkeyEnabled: false,
+        roles: ["instructor"],
+      }),
+    ).toBe("enroll");
+  });
+
   it("keeps an admin with an enrolled factor on the normal verify path", () => {
     expect(
       resolveMfaSetupView({
@@ -96,8 +107,9 @@ describe("resolveMfaSetupView", () => {
 });
 
 describe("accountRequiresMfaEnrollment", () => {
-  it("treats the admin role as mandatory", () => {
+  it("treats admin and instructor roles as mandatory", () => {
     expect(accountRequiresMfaEnrollment({ roles: ["Admin"] })).toBe(true);
+    expect(accountRequiresMfaEnrollment({ roles: ["Instructor"] })).toBe(true);
     expect(accountRequiresMfaEnrollment({ roles: ["student"] })).toBe(false);
     expect(accountRequiresMfaEnrollment({ mfaMandatory: true })).toBe(true);
   });

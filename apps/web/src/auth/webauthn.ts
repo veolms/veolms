@@ -47,6 +47,39 @@ export function base64URLToBuffer(base64url: string): Uint8Array<ArrayBuffer> {
   return buffer;
 }
 
+export function formatWebAuthnError(
+  err: unknown,
+  action: "registration" | "authentication",
+): string {
+  if (err instanceof Error) {
+    if (err.name === "NotAllowedError") {
+      return action === "registration"
+        ? "Passkey registration was cancelled."
+        : "Passkey sign-in was cancelled.";
+    }
+    if (err.name === "InvalidStateError") {
+      return "This passkey is already registered on your authenticator.";
+    }
+    if (err.name === "NotSupportedError") {
+      return "Passkeys are not supported on this device or browser.";
+    }
+    if (err.name === "AbortError") {
+      return action === "registration"
+        ? "Passkey registration was cancelled."
+        : "Passkey sign-in was cancelled.";
+    }
+    if (err.name === "SecurityError") {
+      return "Passkey security error: Ensure you are using HTTPS and a valid domain.";
+    }
+    if (err.message) {
+      return err.message;
+    }
+  }
+  return action === "registration"
+    ? "Passkey registration failed. Please try again."
+    : "Passkey sign-in failed. Please try again.";
+}
+
 export function isPasskeySupported(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -78,9 +111,14 @@ export async function startPasskeyRegistration(
     })),
   };
 
-  const credential = (await navigator.credentials.create({
-    publicKey: publicKeyOptions,
-  })) as PublicKeyCredential | null;
+  let credential: PublicKeyCredential | null;
+  try {
+    credential = (await navigator.credentials.create({
+      publicKey: publicKeyOptions,
+    })) as PublicKeyCredential | null;
+  } catch (err) {
+    throw new Error(formatWebAuthnError(err, "registration"));
+  }
 
   if (!credential) {
     throw new Error("Passkey registration was cancelled.");
@@ -121,9 +159,14 @@ export async function startPasskeyAuthentication(
     })),
   };
 
-  const credential = (await navigator.credentials.get({
-    publicKey: publicKeyOptions,
-  })) as PublicKeyCredential | null;
+  let credential: PublicKeyCredential | null;
+  try {
+    credential = (await navigator.credentials.get({
+      publicKey: publicKeyOptions,
+    })) as PublicKeyCredential | null;
+  } catch (err) {
+    throw new Error(formatWebAuthnError(err, "authentication"));
+  }
 
   if (!credential) {
     throw new Error("Passkey sign-in was cancelled.");

@@ -78,7 +78,10 @@ import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import { getVideoPlaybackBootstrap } from "./videoPlaybackBootstrap";
+import {
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+} from "./videoPlaybackBootstrap";
 import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -91,6 +94,7 @@ import {
   getInitialLearningShellState,
 } from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
+import { useLearningProgress } from "./useLearningProgress";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
   getSideLessonDrawerBounds,
@@ -176,7 +180,6 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
 const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
   ".elastic-scroller",
-  "[data-learning-space-panel]",
   "input",
   "textarea",
   "select",
@@ -227,6 +230,7 @@ const getInitialFloatingLessonDrawerWidth = () => {
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
+  userId?: string;
   lessonId: number;
   initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
@@ -304,6 +308,7 @@ interface CurriculumScreenSwipeStartEvent {
 
 export function LearningWorkspace({
   courseSlug,
+  userId,
   lessonId,
   initialLessonView = "video",
   mobileBottomNavigation,
@@ -356,9 +361,9 @@ export function LearningWorkspace({
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
   const pendingLessonSelectionRef = useRef<number | null>(null);
-  const [lessonProgress, setLessonProgress] = useState<Record<number, number>>(
-    {},
-  );
+  const [localLessonProgress, setLocalLessonProgress] = useState<
+    Record<number, number>
+  >({});
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
@@ -579,7 +584,7 @@ export function LearningWorkspace({
   useEffect(
     () =>
       subscribeToPointerGestureClaims(({ owner, pointerId }) => {
-        if (owner !== "learning-space") return;
+        if (owner !== "curriculum") return;
         if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
           curriculumScreenSwipeRef.current = null;
         }
@@ -833,6 +838,15 @@ export function LearningWorkspace({
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
+  const refreshPlaybackToken = useCallback(async () => {
+    if (!courseSlug) {
+      throw new Error("A course is required to refresh playback access.");
+    }
+    return refreshVideoPlaybackToken({
+      courseSlug,
+      lessonNumber: selectedLesson,
+    });
+  }, [courseSlug, selectedLesson]);
 
   useEffect(() => {
     if (!courseSlug || publicPlaybackBootstrap) {
@@ -864,6 +878,37 @@ export function LearningWorkspace({
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
     [curriculumSections],
   );
+  const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
+    () =>
+      adaptedCurriculum
+        ? new Map(
+            [...adaptedCurriculum.lessonsByNumber.entries()].map(
+              ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
+            ),
+          )
+        : undefined,
+    [adaptedCurriculum],
+  );
+  const { lessonProgress: persistedLessonProgress, recordProgress } =
+    useLearningProgress({
+      courseKey: courseOverview?.course.slug,
+      userId,
+      lessonIdsByNumber,
+      enabled: Boolean(courseOverview?.course.slug),
+    });
+  const lessonProgress = useMemo(() => {
+    if (Object.keys(localLessonProgress).length === 0) {
+      return persistedLessonProgress;
+    }
+    const merged = { ...persistedLessonProgress };
+    for (const [lessonNumber, progress] of Object.entries(
+      localLessonProgress,
+    )) {
+      const number = Number(lessonNumber);
+      merged[number] = Math.max(merged[number] ?? 0, progress);
+    }
+    return merged;
+  }, [localLessonProgress, persistedLessonProgress]);
   const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
     currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
@@ -873,9 +918,7 @@ export function LearningWorkspace({
       : undefined;
   const courseThumbnail = useMemo(() => {
     if (courseOverview) {
-      return courseOverview.course.thumbnailMediaId
-        ? `/api/v1/media/${courseOverview.course.thumbnailMediaId}`
-        : undefined;
+      return courseOverview.course.thumbnailUrl || undefined;
     }
     if (isCourseOverviewError) {
       return undefined;
@@ -1134,12 +1177,13 @@ export function LearningWorkspace({
         roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
           ? 100
           : roundedProgress;
-      setLessonProgress((current) => {
+      setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
         return { ...current, [selectedLesson]: nextProgress };
       });
+      recordProgress(selectedLesson, nextProgress);
     },
-    [selectedLesson],
+    [recordProgress, selectedLesson],
   );
 
   const handleLessonEnded = useCallback(() => {
@@ -2135,6 +2179,7 @@ export function LearningWorkspace({
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
       playbackBootstrap,
+      refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
       courseTitle,
@@ -2198,6 +2243,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
+      refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
       playerCourseLessonsSidePanel,

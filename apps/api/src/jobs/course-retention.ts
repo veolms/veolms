@@ -6,6 +6,7 @@ import { createCourseDeletionService } from "../modules/courses/lifecycle/course
 const database = createDatabase(config.DATABASE_URL);
 const storage = new S3StorageService({
   endpoint: config.STORAGE_ENDPOINT,
+  requireVisibilityPrefix: true,
   region: config.STORAGE_REGION,
   accessKeyId: config.STORAGE_ACCESS_KEY_ID,
   secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,

@@ -105,6 +105,7 @@ export interface InsertUserInput {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   mfaMandatory: boolean;
+  avatarDataUrl?: string | null;
 }
 
 export async function insertUser(
@@ -122,6 +123,7 @@ export async function insertUser(
       email_verified_at: input.emailVerifiedAt,
       phone_verified_at: input.phoneVerifiedAt,
       mfa_mandatory: input.mfaMandatory,
+      avatar_data_url: input.avatarDataUrl ?? null,
     })
     .execute();
 }

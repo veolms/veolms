@@ -1,11 +1,15 @@
 import {
   videoPlaybackBootstrapSchema,
+  videoPlaybackTokenSchema,
   type VideoPlaybackBootstrap,
+  type VideoPlaybackToken,
 } from "@veolms/contracts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
+const playbackTokenRequests = new Map<string, Promise<VideoPlaybackToken>>();
 
 export class VideoPlaybackBootstrapError extends Error {
   readonly status: number;
@@ -28,12 +32,43 @@ export interface VideoPlaybackBootstrapRequest {
 export function resolveVideoPlaybackApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const base = String(API_BASE_URL).replace(/\/+$/, "");
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath === base || cleanPath.startsWith(`${base}/`)) {
+    return cleanPath;
+  }
+  return `${base}${cleanPath}`;
+}
+
+export function resolveVideoPlaybackCdnUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = String(CDN_URL).replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (base && (cleanPath === base || cleanPath.startsWith(`${base}/`))) {
+    return cleanPath;
+  }
+  return `${base}${cleanPath}` || cleanPath;
 }
 
 export function getVideoPlaybackApiOrigin(): string | null {
   try {
     const url = new URL(API_BASE_URL, "http://veolms.local");
+    return /^https?:$/i.test(url.protocol) &&
+      url.origin !== "http://veolms.local"
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns the external CDN origin for the document head preconnect. A
+ * same-origin path such as `/cdn` deliberately returns null because it does
+ * not require a separate DNS/TLS connection.
+ */
+export function getVideoPlaybackCdnOrigin(): string | null {
+  try {
+    const url = new URL(CDN_URL, "http://veolms.local");
     return /^https?:$/i.test(url.protocol) &&
       url.origin !== "http://veolms.local"
       ? url.origin
@@ -50,6 +85,36 @@ function requestKey({
   return `${courseSlug}\u0000${lessonNumber}`;
 }
 
+function playbackPath(
+  options: VideoPlaybackBootstrapRequest,
+  resource: "playback-bootstrap" | "playback-token",
+): string {
+  return `/courses/${encodeURIComponent(options.courseSlug)}/lessons/${options.lessonNumber}/${resource}`;
+}
+
+function unwrapResponseData(payload: unknown): unknown {
+  return payload && typeof payload === "object" && "data" in payload
+    ? (payload as { data?: unknown }).data
+    : payload;
+}
+
+function createPlaybackResponseError(
+  response: Response,
+  payload: unknown,
+  fallbackCode: string,
+  fallbackMessage: string,
+): VideoPlaybackBootstrapError {
+  const error =
+    payload && typeof payload === "object" && "error" in payload
+      ? (payload as { error?: { code?: unknown; message?: unknown } }).error
+      : undefined;
+  return new VideoPlaybackBootstrapError(
+    response.status,
+    typeof error?.code === "string" ? error.code : fallbackCode,
+    typeof error?.message === "string" ? error.message : fallbackMessage,
+  );
+}
+
 async function readResponsePayload(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -61,7 +126,7 @@ async function readResponsePayload(response: Response): Promise<unknown> {
 async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
-  const path = `/courses/${encodeURIComponent(options.courseSlug)}/lessons/${options.lessonNumber}/playback-bootstrap`;
+  const path = playbackPath(options, "playback-bootstrap");
   const response = await fetch(resolveVideoPlaybackApiUrl(path), {
     method: "GET",
     credentials: "include",
@@ -69,24 +134,14 @@ async function requestBootstrap(
     signal: options.signal,
   });
   const payload = await readResponsePayload(response);
-  const data =
-    payload && typeof payload === "object" && "data" in payload
-      ? (payload as { data?: unknown }).data
-      : payload;
+  const data = unwrapResponseData(payload);
 
   if (!response.ok) {
-    const error =
-      payload && typeof payload === "object" && "error" in payload
-        ? (payload as { error?: { code?: unknown; message?: unknown } }).error
-        : undefined;
-    throw new VideoPlaybackBootstrapError(
-      response.status,
-      typeof error?.code === "string"
-        ? error.code
-        : "PLAYBACK_BOOTSTRAP_FAILED",
-      typeof error?.message === "string"
-        ? error.message
-        : "Unable to prepare this video.",
+    throw createPlaybackResponseError(
+      response,
+      payload,
+      "PLAYBACK_BOOTSTRAP_FAILED",
+      "Unable to prepare this video.",
     );
   }
 
@@ -101,8 +156,74 @@ async function requestBootstrap(
 
   return {
     ...parsed.data,
-    manifestUrl: resolveVideoPlaybackApiUrl(parsed.data.manifestUrl),
+    manifestUrl: resolveVideoPlaybackCdnUrl(parsed.data.manifestUrl),
   };
+}
+
+async function requestPlaybackToken(
+  options: VideoPlaybackBootstrapRequest,
+): Promise<VideoPlaybackToken> {
+  const response = await fetch(
+    resolveVideoPlaybackApiUrl(playbackPath(options, "playback-token")),
+    {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: options.signal,
+    },
+  );
+  const payload = await readResponsePayload(response);
+
+  if (!response.ok) {
+    throw createPlaybackResponseError(
+      response,
+      payload,
+      "PLAYBACK_TOKEN_FAILED",
+      "Unable to refresh the video playback token.",
+    );
+  }
+
+  const parsed = videoPlaybackTokenSchema.safeParse(
+    unwrapResponseData(payload),
+  );
+  if (!parsed.success) {
+    throw new VideoPlaybackBootstrapError(
+      502,
+      "INVALID_PLAYBACK_TOKEN",
+      "The video playback token response was invalid.",
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * Fetches only a fresh protected HLS token. Playback metadata and the
+ * manifest URL remain in the mounted player's existing bootstrap state.
+ */
+export function refreshVideoPlaybackToken(
+  options: VideoPlaybackBootstrapRequest,
+): Promise<VideoPlaybackToken> {
+  const key = requestKey(options);
+  const existing = playbackTokenRequests.get(key);
+  if (existing) return existing;
+
+  const promise = requestPlaybackToken(options);
+  playbackTokenRequests.set(key, promise);
+  void promise.then(
+    () => {
+      if (playbackTokenRequests.get(key) === promise) {
+        playbackTokenRequests.delete(key);
+      }
+    },
+    () => {
+      if (playbackTokenRequests.get(key) === promise) {
+        playbackTokenRequests.delete(key);
+      }
+    },
+  );
+  return promise;
 }
 
 /**
@@ -129,4 +250,5 @@ export function getVideoPlaybackBootstrap(
 
 export function clearVideoPlaybackBootstrapCache(): void {
   bootstrapRequests.clear();
+  playbackTokenRequests.clear();
 }

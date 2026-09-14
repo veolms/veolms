@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
@@ -7,7 +14,10 @@ import {
   type VideoEngine,
   type VideoSource,
 } from "@veolms/video-player";
-import type { VideoPlaybackBootstrap } from "@veolms/contracts";
+import type {
+  VideoPlaybackBootstrap,
+  VideoPlaybackToken,
+} from "@veolms/contracts";
 import type { CourseVideo } from "../courseContent";
 import {
   LEARNING_SEEK_INTERVAL_DEFAULT,
@@ -112,7 +122,9 @@ export interface LessonVideoPlayerProps {
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
-  /** Keeps HLS requests credentialed while the protected bootstrap resolves. */
+  /** Refreshes only the short-lived CDN segment token when playback runs long. */
+  refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
+  /** Legacy caller hint retained while all protected access moves to tokens. */
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
@@ -157,6 +169,7 @@ export function LessonVideoPlayer({
   theaterMode,
   presentation = "full",
   playbackBootstrap,
+  refreshPlaybackToken,
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -210,10 +223,24 @@ export function LessonVideoPlayer({
       lessonTitle,
       mediaKey,
       startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
-      protectedPlayback:
-        protectedPlayback || playbackBootstrap?.source === "paid-bootstrap-api",
+      protectedPlayback: playbackBootstrap
+        ? playbackBootstrap.source === "paid-bootstrap-api"
+        : protectedPlayback,
+      segmentToken: playbackBootstrap?.segmentToken,
+      segmentTokenExpiresAt: playbackBootstrap?.segmentTokenExpiresAt,
+      refreshSegmentToken:
+        playbackBootstrap?.segmentToken && refreshPlaybackToken
+          ? refreshPlaybackToken
+          : undefined,
     });
-  }, [lessonTitle, mediaKey, playbackBootstrap, playbackMedia, protectedPlayback]);
+  }, [
+    lessonTitle,
+    mediaKey,
+    playbackBootstrap,
+    playbackMedia,
+    protectedPlayback,
+    refreshPlaybackToken,
+  ]);
 
   useEffect(() => {
     setShowEndScreen(false);

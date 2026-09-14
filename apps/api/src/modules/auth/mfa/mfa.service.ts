@@ -34,6 +34,8 @@ import {
 import type { SessionService } from "../session/session.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
+import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
+
 export interface MfaServiceOptions {
   database: Kysely<Database>;
   sessionService: SessionService;
@@ -45,6 +47,8 @@ interface AuthenticatedMfaUser {
   email: string | null;
   phoneNo: string | null;
   name: string;
+  roles?: string[];
+  mfaMandatory?: boolean;
 }
 
 export function createMfaService({
@@ -68,6 +72,62 @@ export function createMfaService({
   function setupTotp(user: AuthenticatedMfaUser) {
     const label = user.email || user.username || user.phoneNo || "user";
     return generateTotpSecret(label, config.RP_NAME);
+  }
+
+  async function disableTotp(
+    user: AuthenticatedMfaUser,
+    mfaVerified: boolean,
+  ): Promise<{ message: string }> {
+    await assertStepUpForFactorChange(user.id, mfaVerified);
+
+    const isMandatory = isMfaMandatoryAccount(
+      Boolean(user.mfaMandatory),
+      user.roles,
+    );
+    if (isMandatory) {
+      const passkeyCount = await mfaRepository.countUserPasskeys(
+        database,
+        user.id,
+      );
+      if (passkeyCount === 0) {
+        throw new AppError(
+          400,
+          "MFA_MANDATORY",
+          "MFA is required for your account. Register a passkey before removing your authenticator app.",
+        );
+      }
+    }
+
+    await mfaRepository.deleteTotpCredential(database, user.id);
+    return { message: "Authenticator app removed successfully." };
+  }
+
+  async function deletePasskeys(
+    user: AuthenticatedMfaUser,
+    mfaVerified: boolean,
+  ): Promise<{ message: string }> {
+    await assertStepUpForFactorChange(user.id, mfaVerified);
+
+    const isMandatory = isMfaMandatoryAccount(
+      Boolean(user.mfaMandatory),
+      user.roles,
+    );
+    if (isMandatory) {
+      const totpActive = await mfaRepository.isTotpEnabled(
+        database,
+        user.id,
+      );
+      if (!totpActive) {
+        throw new AppError(
+          400,
+          "MFA_MANDATORY",
+          "MFA is required for your account. Set up an authenticator app before removing your passkey.",
+        );
+      }
+    }
+
+    await mfaRepository.deleteAllUserPasskeys(database, user.id);
+    return { message: "Passkeys removed successfully." };
   }
 
   async function enableTotp({
@@ -194,16 +254,38 @@ export function createMfaService({
     return { message: "MFA verified successfully" };
   }
 
+  function resolveRpIdForOrigin(requestOrigin?: string): string {
+    if (requestOrigin) {
+      try {
+        const hostname = new URL(requestOrigin).hostname;
+        if (config.WEBAUTHN_RP_IDS.includes(hostname)) {
+          return hostname;
+        }
+        if (
+          hostname === config.RP_ID ||
+          (config.RP_ID && hostname.endsWith(`.${config.RP_ID}`))
+        ) {
+          return config.RP_ID;
+        }
+      } catch {
+        // ignore malformed URL
+      }
+    }
+    return config.RP_ID;
+  }
+
   async function getPasskeyRegisterOptions(
     user: AuthenticatedMfaUser,
     mfaVerified: boolean,
+    requestOrigin?: string,
   ) {
     await assertStepUpForFactorChange(user.id, mfaVerified);
 
+    const rpId = resolveRpIdForOrigin(requestOrigin);
     const existing = await mfaRepository.listUserPasskeys(database, user.id);
     const options = await generateRegistrationOptions({
       rpName: config.RP_NAME,
-      rpID: config.RP_ID,
+      rpID: rpId,
       userID: Uint8Array.from(Buffer.from(user.id)),
       userName: user.email || user.username || user.phoneNo || "user",
       userDisplayName: user.name,
@@ -265,8 +347,8 @@ export function createMfaService({
       verification = await verifyRegistrationResponse({
         response,
         expectedChallenge: record.challenge,
-        expectedOrigin: config.WEB_URL,
-        expectedRPID: config.RP_ID,
+        expectedOrigin: config.WEBAUTHN_ORIGINS,
+        expectedRPID: config.WEBAUTHN_RP_IDS,
         requireUserVerification: true,
       });
     } catch (cause) {
@@ -311,10 +393,14 @@ export function createMfaService({
     return { message: "Passkey registered successfully." };
   }
 
-  async function getPasskeyLoginOptions(userId: string) {
+  async function getPasskeyLoginOptions(
+    userId: string,
+    requestOrigin?: string,
+  ) {
+    const rpId = resolveRpIdForOrigin(requestOrigin);
     const passkeys = await mfaRepository.listUserPasskeys(database, userId);
     const options = await generateAuthenticationOptions({
-      rpID: config.RP_ID,
+      rpID: rpId,
       allowCredentials: passkeys.map((passkey) => ({
         id: passkey.credential_id,
         type: "public-key",
@@ -386,8 +472,8 @@ export function createMfaService({
       verification = await verifyAuthenticationResponse({
         response,
         expectedChallenge: record.challenge,
-        expectedOrigin: config.WEB_URL,
-        expectedRPID: config.RP_ID,
+        expectedOrigin: config.WEBAUTHN_ORIGINS,
+        expectedRPID: config.WEBAUTHN_RP_IDS,
         credential: {
           id: passkey.credential_id,
           publicKey: Buffer.from(passkey.public_key, "base64"),
@@ -428,6 +514,8 @@ export function createMfaService({
   return {
     setupTotp,
     enableTotp,
+    disableTotp,
+    deletePasskeys,
     verifyTotpCode,
     getPasskeyRegisterOptions,
     verifyPasskeyRegistration,

@@ -125,6 +125,7 @@ export interface SettingsPageProps {
   navigationItems?: readonly NavigationItemWithMetadata[];
   navigationVisibleItems?: readonly string[];
   onNavigationVisibilityChange?: (visibleItems: string[]) => void;
+  userRoles?: readonly string[] | null;
 }
 
 const SettingsTabContent = memo(function SettingsTabContent({
@@ -164,6 +165,7 @@ const SettingsTabContent = memo(function SettingsTabContent({
           onSidebarModeChange={pageProps.onSidebarModeChange}
           navigationItems={pageProps.navigationItems}
           role={pageProps.role}
+          userRoles={pageProps.userRoles}
           navigationVisibleItems={pageProps.navigationVisibleItems}
           onNavigationVisibilityChange={pageProps.onNavigationVisibilityChange}
         />
@@ -180,6 +182,7 @@ const SettingsTabContent = memo(function SettingsTabContent({
       return (
         <AccountSettings
           role={pageProps.role ?? "student"}
+          userRoles={pageProps.userRoles}
           isAuthenticated={pageProps.isAuthenticated}
           onNavigatePage={pageProps.onNavigatePage}
         />

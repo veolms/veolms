@@ -115,7 +115,7 @@ function renderWorkspaceWithClient(
   );
 }
 
-describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
+describe("Learning Workspace - Real Course Overview API Wiring", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -372,9 +372,11 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
       expect(coverImg).toBeNull();
     });
 
-    it("renders api thumbnail media image when course has thumbnailMediaId", async () => {
+    it("renders the direct CDN thumbnail when the API provides thumbnailUrl", async () => {
       const mockOverview = createMockOverview({
         thumbnailMediaId: "thumb-asset-999",
+        thumbnailUrl:
+          "https://cdn.example.com/thumbnails/thumb-asset-999/processed/full.webp",
       });
       queryClient.setQueryData(
         courseKeys.overview("modern-ts-deep-dive"),
@@ -388,13 +390,13 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
         screen.queryByTestId("course-thumbnail-placeholder"),
       ).toBeNull();
 
-      // Should render cover image pointing to API media endpoint
+      // Should render cover image pointing directly to the CDN
       const coverImg = document.querySelector(
         "img.learning-curriculum__cover",
       );
       expect(coverImg).not.toBeNull();
       expect(coverImg?.getAttribute("src")).toBe(
-        "/api/v1/media/thumb-asset-999",
+        "https://cdn.example.com/thumbnails/thumb-asset-999/processed/full.webp",
       );
     });
 
@@ -628,4 +630,3 @@ describe("Learning Space Milestone 2 - Real Course Overview API Wiring", () => {
     });
   });
 });
-

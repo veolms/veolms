@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { registerRequestSchema } from "@veolms/contracts";
+import {
+  buildDicebearSvgUrl,
+  DEFAULT_AVATAR_STYLE,
+  registerRequestSchema,
+} from "@veolms/contracts";
 import { Icon } from "../icons/Icon.tsx";
 import { productName } from "../routing/routeDescriptors.ts";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
@@ -55,6 +59,7 @@ export function AccountForm({
   const creating = status === "creating";
   const [invalidReason, setInvalidReason] = useState<string | null>(null);
   const error = invalidReason ?? errorMessage ?? null;
+  const hasName = Boolean(name.trim());
 
   const changeName = (next: string) => {
     setInvalidReason(null);
@@ -106,33 +111,47 @@ export function AccountForm({
       <div className="auth-card__form-slot">
         <form className="auth-form" noValidate onSubmit={submit}>
           <div className="auth-form__field">
-            <label className="auth-account-form__label" htmlFor={NAME_FIELD_ID}>
+            <label className="auth-form__label" htmlFor={NAME_FIELD_ID}>
               {NAME_LABEL}
             </label>
 
-            <div className="auth-form__input-shell">
-              <Icon aria-hidden name="person" size={18} />
-              <input
-                aria-describedby={error ? ERROR_ID : undefined}
-                aria-invalid={error !== null}
-                autoComplete="name"
-                className="auth-form__input"
-                id={NAME_FIELD_ID}
-                name="name"
-                onChange={(event) => changeName(event.target.value)}
-                placeholder="Enter your name"
-                type="text"
-                value={name}
-              />
-              {error ? (
-                <Icon
-                  aria-hidden
-                  className="auth-form__invalid-mark"
-                  emphasis="fill"
-                  name="validationError"
-                  size={18}
+            <div className="auth-account-form__identity-row">
+              <span className="auth-account-form__avatar-circle" aria-hidden="true">
+                {hasName ? (
+                  <img
+                    alt=""
+                    height={44}
+                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, name.trim())}
+                    width={44}
+                  />
+                ) : (
+                  <Icon name="person" size={20} />
+                )}
+              </span>
+
+              <div className="auth-form__input-shell">
+                <input
+                  aria-describedby={error ? ERROR_ID : undefined}
+                  aria-invalid={error !== null}
+                  autoComplete="name"
+                  className="auth-form__input"
+                  id={NAME_FIELD_ID}
+                  name="name"
+                  onChange={(event) => changeName(event.target.value)}
+                  placeholder="Enter your name"
+                  type="text"
+                  value={name}
                 />
-              ) : null}
+                {error ? (
+                  <Icon
+                    aria-hidden
+                    className="auth-form__invalid-mark"
+                    emphasis="fill"
+                    name="validationError"
+                    size={18}
+                  />
+                ) : null}
+              </div>
             </div>
 
             {error ? (
@@ -140,6 +159,10 @@ export function AccountForm({
                 {error}
               </p>
             ) : null}
+
+            <p className="auth-account-form__avatar-hint">
+              Your starting avatar — change it anytime after signing up.
+            </p>
           </div>
 
           <button
