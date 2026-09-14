@@ -24,6 +24,7 @@ import { createPortal } from "react-dom";
 import {
   MEDIA_MAX_SIZES,
   videoJobProgressResponseSchema,
+  type PresignMediaRequest,
   type VideoJobProgressResponse,
   type VideoJobStatus,
 } from "@veolms/contracts";
@@ -31,7 +32,7 @@ import { mediaService } from "../../services/media";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
-  visibility?: "public" | "protected";
+  visibility?: PresignMediaRequest["visibility"];
   disabled?: boolean;
   hideUploadWhenAttached?: boolean;
   attachedActionLabel?: string;
@@ -78,7 +79,7 @@ const SECONDARY_ACTION_CLASS =
 
 export function LessonVideoUpload({
   mediaAssetId,
-  visibility = "protected",
+  visibility,
   disabled = false,
   hideUploadWhenAttached = false,
   attachedActionLabel = "Change Video",
@@ -661,7 +662,7 @@ export function LessonVideoUpload({
           filename: file.name,
           contentType: file.type,
           fileSize: file.size,
-          ...(visibility === "public" ? { visibility } : {}),
+          visibility,
         });
 
         if (!mountedRef.current || requestId !== requestIdRef.current) return;
@@ -711,7 +712,14 @@ export function LessonVideoUpload({
         }
       }
     },
-    [activeMediaId, mediaAssetId, phase, resetReconnectBackoff, validateFile],
+    [
+      activeMediaId,
+      mediaAssetId,
+      phase,
+      resetReconnectBackoff,
+      validateFile,
+      visibility,
+    ],
   );
 
   const handleFileInputChange = useCallback(
