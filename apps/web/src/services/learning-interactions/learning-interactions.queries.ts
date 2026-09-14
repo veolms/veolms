@@ -9,7 +9,8 @@ import type {
   ListLearningThreadsQuery,
   ListReportsQuery,
   ReportsListResponse,
-  SearchMentionsResponse,
+  UserAutocompleteQuery,
+  UserAutocompleteResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -76,11 +77,15 @@ export function useUserNotes(
   });
 }
 
-export function useMentionsSearch(query: string, options?: { enabled?: boolean }) {
-  return useQuery<SearchMentionsResponse, ApiError>({
-    queryKey: learningInteractionKeys.mentions(query),
-    queryFn: () => learningInteractionsService.searchMentions(query),
-    enabled: options?.enabled ?? Boolean(query.length >= 1),
+export function useUserAutocomplete(
+  query: UserAutocompleteQuery,
+  options?: { enabled?: boolean },
+) {
+  const searchTerm = query.query ?? query.q ?? "";
+  return useQuery<UserAutocompleteResponse, ApiError>({
+    queryKey: learningInteractionKeys.autocompleteUsers(query.courseId, searchTerm),
+    queryFn: () => learningInteractionsService.autocompleteUsers(query),
+    enabled: options?.enabled ?? Boolean(query.courseId && searchTerm.length >= 1),
     staleTime: 60 * 1000,
   });
 }

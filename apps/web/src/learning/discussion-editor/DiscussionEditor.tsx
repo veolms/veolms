@@ -3,6 +3,7 @@ import {
   type AtomicCodeMirrorEditorHandle,
 } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
+import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView, placeholder, ViewPlugin } from "@codemirror/view";
 import {
   useEffect,
@@ -11,6 +12,7 @@ import {
   useState,
   type MutableRefObject,
 } from "react";
+import { createMentionCompletionSource } from "./mentions";
 import { createDiscussionClipboardExtension } from "./clipboard";
 import { DISCUSSION_CODE_LANGUAGES } from "./code-languages";
 import {
@@ -40,6 +42,8 @@ interface DiscussionEditorProps {
   autoFocus?: boolean;
   autoGrow?: boolean;
   className?: string;
+  courseId?: string;
+  mentionsEnabled?: boolean;
   onChange: (draft: DiscussionDraft) => void;
   onControllerChange?: (controller: DiscussionEditorController | null) => void;
   onFormattingStateChange?: (state: DiscussionFormattingState) => void;
@@ -56,6 +60,8 @@ export function DiscussionEditor({
   autoFocus = false,
   autoGrow = false,
   className = "",
+  courseId,
+  mentionsEnabled = true,
   onChange,
   onControllerChange,
   onFormattingStateChange,
@@ -94,6 +100,17 @@ export function DiscussionEditor({
     [commands, onAttachmentNoticeRef, onAttachmentUploadedRef],
   );
 
+  const mentionExtensions = useMemo(() => {
+    if (!courseId || mentionsEnabled === false) return [];
+    return [
+      autocompletion({
+        override: [createMentionCompletionSource(courseId)],
+        activateOnTyping: true,
+        defaultKeymap: true,
+      }),
+    ];
+  }, [courseId, mentionsEnabled]);
+
   const extensions = useMemo(
     () => [
       placeholder(placeholderText),
@@ -105,6 +122,7 @@ export function DiscussionEditor({
         role: "textbox",
         spellcheck: "true",
       }),
+      ...mentionExtensions,
       ...(DISCUSSION_ATTACHMENTS_ENABLED
         ? [
             createDiscussionClipboardExtension({
@@ -143,6 +161,7 @@ export function DiscussionEditor({
       controller,
       invalid,
       label,
+      mentionExtensions,
       onControllerChangeRef,
       onFormattingStateChangeRef,
       placeholderText,

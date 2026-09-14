@@ -15,8 +15,8 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.notesRoot(), filters] as const,
   noteDetails: (noteId: string) =>
     [...learningInteractionKeys.all, "note", noteId] as const,
-  mentions: (query: string) =>
-    [...learningInteractionKeys.all, "mentions", query] as const,
+  autocompleteUsers: (courseId: string, query?: string) =>
+    [...learningInteractionKeys.all, "autocomplete-users", courseId, query ?? ""] as const,
   moderationReports: (filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.all, "moderation", "reports", filters] as const,
   auditLogs: (filters?: Record<string, unknown>) =>

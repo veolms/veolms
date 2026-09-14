@@ -1259,6 +1259,7 @@ export function Discussion({
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
+        courseId={courseId}
       />
       <DiscussionThreadPanel
         open={openThread !== null}
@@ -1268,6 +1269,7 @@ export function Discussion({
         currentUserId={currentUser?.id}
         userRole={currentUserRole}
         currentUser={{ name: authorName, avatar: authorAvatar }}
+        courseId={courseId}
         focusComposerOnOpen={Boolean(openThread?.focusComposer)}
         onOpenChange={(open) => {
           if (!open) setOpenThread(null);
@@ -1369,6 +1371,7 @@ interface ThreadSurfaceProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  courseId?: string;
 }
 
 function ThreadSurface({
@@ -1420,6 +1423,7 @@ function ThreadSurface({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  courseId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
@@ -1651,6 +1655,7 @@ function ThreadSurface({
               onVisibilityChange={onVisibilityChange}
               onSubmit={submitAndCollapse}
               onClose={closeComposer}
+              courseId={courseId}
             />
           ) : (
             <CompactComposer
@@ -1791,6 +1796,7 @@ function ThreadSurface({
                 onToggleLockThread={onToggleLockThread}
                 onToggleBookmark={onToggleBookmark}
                 onToggleFollow={onToggleFollow}
+                courseId={courseId}
               />
             ))}
             {entries.length === 0 && (
@@ -1899,6 +1905,7 @@ function ThreadSurface({
               onVisibilityChange={onVisibilityChange}
               onSubmit={submitAndCollapse}
               onClose={closeComposer}
+              courseId={courseId}
             />
           </DrawerContent>
         </Drawer>

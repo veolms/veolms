@@ -129,6 +129,7 @@ interface DiscussionThreadPanelProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  courseId?: string;
 }
 
 export function DiscussionThreadPanel({
@@ -153,6 +154,7 @@ export function DiscussionThreadPanel({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  courseId,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
@@ -679,6 +681,7 @@ export function DiscussionThreadPanel({
                   onToggleLockThread={onToggleLockThread}
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
+                  courseId={courseId}
                 />
               </SwiperSlide>
             ))}
@@ -735,6 +738,7 @@ interface ThreadSlideProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  courseId?: string;
 }
 
 function ThreadSlide({
@@ -758,6 +762,7 @@ function ThreadSlide({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  courseId,
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
@@ -970,6 +975,7 @@ function ThreadSlide({
                 onDelete={handleDeleteReply}
                 onLikeReply={handleLikeReply}
                 onReport={onReport}
+                courseId={courseId}
               />
             ))
           ) : (
@@ -1008,6 +1014,7 @@ function ThreadSlide({
             onFocusHandled={onComposerFocusHandled}
             onSubmit={handleAddReply}
             isPending={createReplyMutation.isPending}
+            courseId={courseId}
           />
         ))}
     </div>
@@ -1229,6 +1236,7 @@ function ThreadReplyEntry({
   onDelete,
   onLikeReply,
   onReport,
+  courseId,
 }: {
   parentId: string | number;
   reply: CommentReply;
@@ -1252,6 +1260,7 @@ function ThreadReplyEntry({
         }
       | (string | number),
   ) => void;
+  courseId?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(
@@ -1367,6 +1376,8 @@ function ThreadReplyEntry({
                     documentId={`thread-reply-edit-${reply.id}`}
                     label={`Edit reply by ${reply.name}`}
                     value={editDraft}
+                    courseId={courseId}
+                    mentionsEnabled={true}
                     onChange={setEditDraft}
                     onCancel={() => {
                       setEditDraft(
@@ -1479,6 +1490,7 @@ function ThreadReplyComposer({
   onFocusHandled,
   onSubmit,
   isPending = false,
+  courseId,
 }: {
   entry: Comment;
   currentUser?: { name: string; avatar: string };
@@ -1489,6 +1501,7 @@ function ThreadReplyComposer({
     attachmentIds?: string[],
   ) => Promise<boolean>;
   isPending?: boolean;
+  courseId?: string;
 }) {
   const [composerKey, setComposerKey] = useState(0);
   const [draft, setDraft] = useState<DiscussionDraft>(
@@ -1575,6 +1588,8 @@ function ThreadReplyComposer({
         placeholderText="Write a reply…"
         autoGrow
         autoFocus={shouldFocusRef.current}
+        courseId={courseId}
+        mentionsEnabled={true}
         onChange={setDraft}
         onControllerChange={handleControllerChange}
         onFormattingStateChange={setFormattingState}

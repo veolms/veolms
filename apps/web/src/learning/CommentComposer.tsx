@@ -39,6 +39,7 @@ interface CommentComposerProps {
   onVisibilityChange: (value: DiscussionVisibility) => void;
   onSubmit: () => void;
   onClose: () => void;
+  courseId?: string;
   autoFocus?: boolean;
   presentation?: "inline" | "drawer";
 }
@@ -60,6 +61,7 @@ export function CommentComposer({
   onVisibilityChange,
   onSubmit,
   onClose,
+  courseId,
   autoFocus = false,
   presentation = "inline",
 }: CommentComposerProps) {
@@ -168,6 +170,8 @@ export function CommentComposer({
               invalid={invalid}
               autoFocus={autoFocus}
               className={presentation === "drawer" ? "min-h-full" : "min-h-34"}
+              courseId={courseId}
+              mentionsEnabled={entryKind !== "note"}
               onChange={onDraftChange}
               onControllerChange={setEditorController}
               onFormattingStateChange={setFormattingState}

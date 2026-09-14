@@ -125,6 +125,7 @@ interface CommentCardProps {
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
+  courseId?: string;
 }
 
 export function CommentCard({
@@ -141,6 +142,7 @@ export function CommentCard({
   isBackendMode = false,
   currentUserId,
   userRole,
+  courseId,
 }: CommentCardProps) {
   const [liked, setLiked] = useState(Boolean(comment.liked));
   const [repliesOpen, setRepliesOpen] = useState(
@@ -616,6 +618,8 @@ export function CommentCard({
                           label={`Reply to ${comment.name}`}
                           placeholderText={`Reply to ${comment.name}…`}
                           className="min-h-12 max-h-40"
+                          courseId={courseId}
+                          mentionsEnabled={true}
                           onChange={setReplyDraft}
                         />
                       </span>
@@ -689,6 +693,7 @@ export function CommentCard({
                         authorName: reply.name,
                       })
                     }
+                    courseId={courseId}
                   />
                 ))
               ) : (
@@ -729,6 +734,7 @@ interface ReplyCardProps {
   onDelete: (replyId: string | number) => Promise<boolean> | void;
   onLike: (replyId: string | number) => void;
   onReport: () => void;
+  courseId?: string;
 }
 
 function ReplyCard({
@@ -742,6 +748,7 @@ function ReplyCard({
   onDelete,
   onLike,
   onReport,
+  courseId,
 }: ReplyCardProps) {
   const [liked, setLiked] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -853,6 +860,8 @@ function ReplyCard({
                     documentId={`reply-edit-${reply.id}`}
                     label={`Edit reply by ${reply.name}`}
                     value={editDraft}
+                    courseId={courseId}
+                    mentionsEnabled={true}
                     onChange={setEditDraft}
                     onCancel={() => {
                       setEditDraft(
@@ -965,6 +974,8 @@ interface InlineEditFormProps {
   documentId: string;
   label: string;
   value: DiscussionDraft;
+  courseId?: string;
+  mentionsEnabled?: boolean;
   onChange: (value: DiscussionDraft) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -974,6 +985,8 @@ export function InlineEditForm({
   documentId,
   label,
   value,
+  courseId,
+  mentionsEnabled = true,
   onChange,
   onCancel,
   onSave,
@@ -996,6 +1009,8 @@ export function InlineEditForm({
           placeholderText="Write a reply…"
           autoFocus
           className="min-h-18 max-h-56"
+          courseId={courseId}
+          mentionsEnabled={mentionsEnabled}
           onChange={onChange}
         />
       </div>

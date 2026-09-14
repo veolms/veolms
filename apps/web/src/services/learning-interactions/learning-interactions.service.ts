@@ -178,12 +178,6 @@ export const learningInteractionsService = {
     });
   },
 
-  searchMentions(query: string): Promise<UserAutocompleteResponse> {
-    return api.get<UserAutocompleteResponse>("/interactions/users/autocomplete", {
-      params: { q: query },
-    });
-  },
-
   // Notes
   listNotes(query?: ListLearningNotesQuery): Promise<LearningNotesListResponse> {
     return api.get<LearningNotesListResponse>("/notes", {
