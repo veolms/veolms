@@ -8,7 +8,7 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { createDatabase } from "@veolms/database";
+import { createDatabase, enqueueImageJob } from "@veolms/database";
 import { config } from "../config.ts";
 import { createServices } from "../services/index.ts";
 import { createMediaService } from "../modules/media/index.ts";
@@ -2342,7 +2342,7 @@ ${bold("Examples:")}
       if (thumbData) {
         const thumbStat = await fsp.stat(thumbData.filePath);
         thumbnailMediaId = crypto.randomUUID();
-        const storageKey = `public/image/${instructor.id}/${thumbnailMediaId}.jpg`;
+        const storageKey = `public/thumbnails/${thumbnailMediaId}/original.jpg`;
 
         await services.storage.uploadFile(
           storageKey,
@@ -2359,7 +2359,11 @@ ${bold("Examples:")}
           original_filename: "playlist_thumbnail.jpg",
           mime_type: thumbData.mimeType,
           size_bytes: thumbStat.size,
-          status: "ready",
+          status: "uploaded",
+        });
+        await enqueueImageJob(database, {
+          id: crypto.randomUUID(),
+          media_id: thumbnailMediaId,
         });
 
         console.log(

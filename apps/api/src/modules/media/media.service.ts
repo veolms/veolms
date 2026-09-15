@@ -41,6 +41,40 @@ function resolveMediaVisibility(storageKey: string): "public" | "protected" {
     : "protected";
 }
 
+const IMAGE_EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+  "image/avif": "avif",
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/webp": "webp",
+};
+
+function resolveImageExtension(filename: string, contentType: string): string {
+  const filenameExtension = /\.([a-z0-9]{1,12})$/iu.exec(filename)?.[1];
+  if (filenameExtension) return filenameExtension.toLowerCase();
+
+  const normalizedContentType = contentType
+    .toLowerCase()
+    .split(";", 1)[0]
+    ?.trim();
+  const knownExtension = normalizedContentType
+    ? IMAGE_EXTENSION_BY_MIME_TYPE[normalizedContentType]
+    : undefined;
+  if (knownExtension) return knownExtension;
+
+  const mimeSubtype = normalizedContentType?.split("/", 2)[1] ?? "";
+  return mimeSubtype.replace(/[^a-z0-9]/giu, "").slice(0, 12) || "bin";
+}
+
+function resolveImageThumbnailPrefix(
+  storageKey: string,
+  mediaId: string,
+): string {
+  const visibilityPrefix = `${resolveMediaVisibility(storageKey)}/`;
+  return `${visibilityPrefix}thumbnails/${mediaId}`;
+}
+
 function isSafeHlsPath(path: string): boolean {
   const segments = path.split("/");
   return (
@@ -95,7 +129,7 @@ export function createMediaService({
       payload.visibility === "public" ? "public" : "protected";
     const storageKey =
       payload.type === "image"
-        ? `${visibilityPrefix}/thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
+        ? `${visibilityPrefix}/thumbnails/${mediaId}/original.${resolveImageExtension(payload.filename, payload.contentType)}`
         : `${visibilityPrefix}/media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
 
     const uploadUrl = await services.storage.getPresignedPutUrl(
@@ -952,16 +986,8 @@ export function createMediaService({
     }
 
     const fullKey =
-      media.type === "image" &&
-      media.status === "ready" &&
-      typeof media.metadata === "object" &&
-      media.metadata !== null &&
-      "full" in media.metadata &&
-      typeof media.metadata.full === "object" &&
-      media.metadata.full !== null &&
-      "key" in media.metadata.full &&
-      typeof media.metadata.full.key === "string"
-        ? media.metadata.full.key
+      media.type === "image" && media.status === "ready"
+        ? `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`
         : media.storage_key;
     const file = await services.storage.getObject(fullKey);
     if (!file) {
@@ -1013,18 +1039,12 @@ export function createMediaService({
         typeof item === "object" &&
         item !== null &&
         "width" in item &&
-        item.width === width &&
-        "key" in item &&
-        typeof item.key === "string",
+        item.width === width,
     );
-    if (
-      !variant ||
-      typeof variant !== "object" ||
-      !("key" in variant) ||
-      typeof variant.key !== "string"
-    )
+    if (!variant)
       throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
-    const file = await services.storage.getObject(variant.key);
+    const variantKey = `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/${width}.webp`;
+    const file = await services.storage.getObject(variantKey);
     if (!file)
       throw new AppError(
         404,

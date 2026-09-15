@@ -235,7 +235,9 @@ export class S3StorageService {
    * Verifies if an object exists in storage using Metadata/HEAD operation,
    * returning object metadata or null if not found.
    */
-  async headObject(key: string): Promise<{ contentLength?: number } | null> {
+  async headObject(
+    key: string,
+  ): Promise<{ contentLength?: number; contentType?: string } | null> {
     try {
       const response = await this.client.send(
         new HeadObjectCommand({
@@ -245,6 +247,7 @@ export class S3StorageService {
       );
       return {
         contentLength: response.ContentLength,
+        contentType: response.ContentType,
       };
     } catch (error: unknown) {
       if (

@@ -14,5 +14,6 @@
     "CDN_URL": "/cdn",
     "CDN_PUBLIC_FOLDERS": "public,thumbnails,course-hls,course-videos",
     "CDN_PRIVATE_FOLDERS": "protected,media,transcoded",
+    "AVATAR_IMAGE_WIDTHS": "45,96,160",
   },
 }

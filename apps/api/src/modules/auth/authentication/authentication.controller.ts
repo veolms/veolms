@@ -3,18 +3,14 @@ import {
   clearSessionCookie,
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
-import { presentLogin } from "../shared/auth.presenters.ts";
+import { presentAvatar, presentLogin } from "../shared/auth.presenters.ts";
 import {
   normalizePhoneIdentifier,
   resolveIdentifier,
 } from "../shared/auth.utils.ts";
-import {
-  AVATAR_CONTENT_TYPES,
-  AVATAR_UPLOAD_MAX_BYTES,
-  detectImageContentType,
-} from "../../avatars/index.ts";
-import { AppError } from "../../../lib/errors.ts";
 import type {
+  AvatarUploadCompleteRequest,
+  AvatarUploadPresignRequest,
   LoginRequest,
   ProfileUpdateRequest,
   RegisterRequest,
@@ -107,7 +103,7 @@ export function createAuthController(context: AuthContext) {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarDataUrl: user.avatarDataUrl,
+      ...presentAvatar(user.avatarDataUrl),
       bio: user.bio,
       emailPublic: Boolean(
         user.emailPublic && user.email && user.emailVerified,
@@ -143,7 +139,7 @@ export function createAuthController(context: AuthContext) {
       id: updated.id,
       username: updated.username,
       displayName: updated.display_name,
-      avatarDataUrl: updated.avatar_data_url,
+      ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
       emailPublic: Boolean(
         updated.email_public && updated.email && updated.email_verified_at,
@@ -169,39 +165,27 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
-  async function uploadAvatar(request: FastifyRequest) {
+  async function presignAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadPresignRequest }>,
+  ) {
     const user = request.user!;
+    return authService.presignAvatarUpload(user.id, request.body);
+  }
 
-    const file = await request.file();
-    if (!file) {
-      throw new AppError(
-        400,
-        "INVALID_AVATAR_FILE",
-        "Choose a JPEG, PNG, WebP, or GIF image.",
-      );
-    }
-
-    const buffer = await file.toBuffer();
-    const contentType = detectImageContentType(buffer);
-    if (!contentType || !AVATAR_CONTENT_TYPES.has(contentType)) {
-      throw new AppError(
-        400,
-        "INVALID_AVATAR_FILE",
-        "Choose a JPEG, PNG, WebP, or GIF image.",
-      );
-    }
-
-    const updated = await authService.uploadAvatarPhoto(
+  async function completeAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadCompleteRequest }>,
+  ) {
+    const user = request.user!;
+    const updated = await authService.completeAvatarUpload(
       user.id,
-      buffer,
-      contentType,
+      request.body,
     );
 
     return {
       id: updated.id,
       username: updated.username,
       displayName: updated.display_name,
-      avatarDataUrl: updated.avatar_data_url,
+      ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
       emailPublic: Boolean(
         updated.email_public && updated.email && updated.email_verified_at,
@@ -243,7 +227,8 @@ export function createAuthController(context: AuthContext) {
     logout,
     me,
     updateProfile,
-    uploadAvatar,
+    presignAvatarUpload,
+    completeAvatarUpload,
     deactivateAccount,
   };
 }

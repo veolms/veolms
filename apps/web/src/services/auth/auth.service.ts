@@ -1,5 +1,8 @@
 import { api } from "../../lib/api-client";
 import type {
+  AvatarUploadContentType,
+  AvatarUploadPresignRequest,
+  AvatarUploadPresignResponse,
   AuthMessageResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -22,6 +25,7 @@ import type {
   UserProfileResponse,
 } from "@veolms/contracts";
 import {
+  avatarUploadContentTypeSchema,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
   sessionResponseSchema,
@@ -30,6 +34,49 @@ import {
 export interface TotpSetupResponse {
   secret: string;
   uri: string;
+}
+
+const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<
+  string,
+  AvatarUploadContentType
+> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+/** Handles browsers (especially mobile browsers) that leave File.type empty. */
+export function resolveAvatarUploadContentType(
+  file: Pick<File, "name" | "type">,
+): AvatarUploadContentType | null {
+  const parsedType = avatarUploadContentTypeSchema.safeParse(
+    file.type.trim().toLowerCase(),
+  );
+  if (parsedType.success) return parsedType.data;
+
+  const extension = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
+  return AVATAR_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;
+}
+
+async function uploadToPresignedAvatarUrl(
+  uploadUrl: string,
+  file: File,
+  contentType: AvatarUploadContentType,
+): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: file,
+    credentials: "omit",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Storage upload failed with status ${response.status || "unknown"}.`,
+    );
+  }
 }
 
 export const authService = {
@@ -153,9 +200,26 @@ export const authService = {
   },
 
   uploadAvatarPhoto: (file: File): Promise<UserProfileResponse> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return api.post<UserProfileResponse>("/auth/me/avatar", formData);
+    const contentType = resolveAvatarUploadContentType(file);
+    if (!contentType) {
+      return Promise.reject(
+        new Error("Choose a JPEG, PNG, WebP, or GIF image."),
+      );
+    }
+
+    const payload: AvatarUploadPresignRequest = {
+      contentType,
+      fileSize: file.size,
+    };
+
+    return api
+      .post<AvatarUploadPresignResponse>("/auth/me/avatar/presign", payload)
+      .then(({ uploadUrl }) =>
+        uploadToPresignedAvatarUrl(uploadUrl, file, contentType),
+      )
+      .then(() =>
+        api.post<UserProfileResponse>("/auth/me/avatar/complete", payload),
+      );
   },
 
   logout: (): Promise<AuthMessageResponse> => {
